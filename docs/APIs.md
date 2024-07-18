@@ -828,7 +828,8 @@ Authorization
 <p>
 
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.HTTPSource">HTTPSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.HTTPSource">HTTPSource</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSource">ServingSource</a>)
 </p>
 
 <p>
@@ -3381,6 +3382,34 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
+<code>ServingSourceStreamName</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>PipelineSpec</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec"> PipelineSpec </a>
+</em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>DefaultResources</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
 Kubernetes core/v1.ResourceRequirements </a> </em>
@@ -5472,7 +5501,7 @@ Description
 <em>(Optional)</em>
 <p>
 
-Basic auth which contains a user name and a password
+Basic auth which contains a username and a password
 </p>
 
 </td>
@@ -6279,6 +6308,7 @@ PipelineSpec
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.GetVertexPodSpecReq">GetVertexPodSpecReq</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.Pipeline">Pipeline</a>)
 </p>
 
@@ -7531,6 +7561,211 @@ CooldownSeconds if not set.
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.ServingSource">
+
+ServingSource
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Source">Source</a>)
+</p>
+
+<p>
+
+<p>
+
+ServingSource is the HTTP endpoint for Numaflow.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>auth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Authorization"> Authorization
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>service</code></br> <em> bool </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Whether to create a ClusterIP Service
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>msgIDHeaderKey</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+The header key from which the message id will be extracted
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>store</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingStore"> ServingStore </a>
+</em>
+</td>
+
+<td>
+
+<p>
+
+Persistent store for the callbacks for serving and tracking
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.ServingStore">
+
+ServingStore
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSource">ServingSource</a>)
+</p>
+
+<p>
+
+<p>
+
+ServingStore to track and store data and metadata for tracking and
+serving.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>url</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+URL of the persistent store to write the callbacks
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>ttl</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+TTL for the data in the store and tracker
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.SessionWindow">
 
 SessionWindow
@@ -8211,6 +8446,22 @@ GeneratorSource </a> </em>
 <code>jetstream</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.JetStreamSource">
 JetStreamSource </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>serving</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSource"> ServingSource
+</a> </em>
 </td>
 
 <td>

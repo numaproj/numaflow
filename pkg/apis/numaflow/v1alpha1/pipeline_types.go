@@ -205,6 +205,16 @@ func (p Pipeline) GetSideInputsStoreName() string {
 	return fmt.Sprintf("%s-%s", p.Namespace, p.Name)
 }
 
+func (p Pipeline) GetServingSourceStreamNames() []string {
+	var servingSourceNames []string
+	for _, srcVertex := range p.Spec.Vertices {
+		if srcVertex.IsASource() && srcVertex.Source.Serving != nil {
+			servingSourceNames = append(servingSourceNames, fmt.Sprintf("%s-%s-serving-source", p.Name, srcVertex.Name))
+		}
+	}
+	return servingSourceNames
+}
+
 func (p Pipeline) GetSideInputsManagerDeployments(req GetSideInputDeploymentReq) ([]*appv1.Deployment, error) {
 	commonEnvVars := []corev1.EnvVar{
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},

@@ -41,6 +41,8 @@ type Source struct {
 	UDSource *UDSource `json:"udsource,omitempty" protobuf:"bytes,6,opt,name=udSource"`
 	// +optional
 	JetStream *JetStreamSource `json:"jetstream,omitempty" protobuf:"bytes,7,opt,name=jetstream"`
+	// +optional
+	Serving *ServingSource `json:"serving,omitempty" protobuf:"bytes,8,opt,name=serving"`
 }
 
 func (s Source) getContainers(req getContainerReq) ([]corev1.Container, error) {

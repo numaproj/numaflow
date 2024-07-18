@@ -84,14 +84,16 @@ pub(crate) async fn capture_metrics(request: Request, next: Next) -> Response {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::net::SocketAddr;
+    use std::time::Duration;
+
     use axum::body::Body;
     use axum::http::{HeaderMap, StatusCode};
     use axum::middleware;
-    use std::net::SocketAddr;
-    use std::time::Duration;
     use tokio::time::sleep;
     use tower::ServiceExt;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_start_metrics_server() {

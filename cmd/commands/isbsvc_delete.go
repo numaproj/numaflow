@@ -26,16 +26,18 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
+	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 func NewISBSvcDeleteCommand() *cobra.Command {
 	var (
-		isbSvcType      string
-		buffers         []string
-		buckets         []string
-		sideInputsStore string
+		isbSvcType           string
+		buffers              []string
+		buckets              []string
+		sideInputsStore      string
+		servingSourceStreams []string
 	)
 
 	command := &cobra.Command{
@@ -52,9 +54,18 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 			ctx := logging.WithLogger(context.Background(), logger)
 			switch v1alpha1.ISBSvcType(isbSvcType) {
 			case v1alpha1.ISBSvcTypeRedis:
-				isbsClient = isbsvc.NewISBRedisSvc(redisclient.NewInClusterRedisClient())
+				rsClient := redisclient.NewInClusterRedisClient()
+				defer rsClient.Close()
+
+				isbsClient = isbsvc.NewISBRedisSvc(rsClient)
 			case v1alpha1.ISBSvcTypeJetStream:
-				isbsClient, err = isbsvc.NewISBJetStreamSvc(pipelineName)
+				client, err := jsclient.NewNATSClient(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
+				}
+				defer client.Close()
+
+				isbsClient, err = isbsvc.NewISBJetStreamSvc(pipelineName, client)
 				if err != nil {
 					logger.Errorw("Failed to get a ISB Service client.", zap.Error(err))
 					return err
@@ -63,7 +74,7 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 				cmd.HelpFunc()(cmd, args)
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
-			if err = isbsClient.DeleteBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore); err != nil {
+			if err = isbsClient.DeleteBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore, servingSourceStreams); err != nil {
 				logger.Errorw("Failed on buffers, buckets and side inputs store deletion.", zap.Error(err))
 				return err
 			}
@@ -75,5 +86,6 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to delete") // --buffers=a,b, --buffers=c
 	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to delete") // --buckets=xxa,xxb --buckets=xxc	return command
 	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
+	command.Flags().StringSliceVar(&servingSourceStreams, "serving-source-streams", []string{}, "Serving source streams to delete") // --serving-source-streams=a,b, --serving-source-streams=c
 	return command
 }

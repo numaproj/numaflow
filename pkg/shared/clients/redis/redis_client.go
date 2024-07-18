@@ -138,6 +138,10 @@ func (cl *RedisClient) IsStreamGroupExists(ctx context.Context, streamKey string
 	return false
 }
 
+func (cl *RedisClient) Close() {
+	cl.Client.Close()
+}
+
 func IsAlreadyExistError(err error) bool {
 	return strings.Contains(err.Error(), "BUSYGROUP")
 }

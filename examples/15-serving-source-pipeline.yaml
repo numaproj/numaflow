@@ -3,15 +3,21 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
+  templates:
+    vertex:
+      metadata:
+        annotations:
+          numaflow.numaproj.io/callback: "true"
   vertices:
     - name: in
       scale:
         min: 1
-      # A self data generating source
       source:
-        generator:
-          rpu: 5
-          duration: 1s
+        serving:
+          service: true
+          msgIDHeaderKey: "X-Request-ID"
+          store:
+            url: "redis://redis:6379"
     - name: cat
       scale:
         min: 1
