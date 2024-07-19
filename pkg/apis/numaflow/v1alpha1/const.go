@@ -102,8 +102,6 @@ const (
 	EnvNamespace                        = "NUMAFLOW_NAMESPACE"
 	EnvPipelineName                     = "NUMAFLOW_PIPELINE_NAME"
 	EnvVertexName                       = "NUMAFLOW_VERTEX_NAME"
-	EnvMapStreaming                     = "NUMAFLOW_MAP_STREAMING"
-	EnvBatchMap                         = "NUMAFLOW_BATCH_MAP"
 	EnvCallbackEnabled                  = "NUMAFLOW_CALLBACK_ENABLED"
 	EnvCallbackURL                      = "NUMAFLOW_CALLBACK_URL"
 	EnvPod                              = "NUMAFLOW_POD"
@@ -210,12 +208,6 @@ const (
 
 	// KeysDelimitter is the delimitter used to join keys
 	KeysDelimitter = ":"
-
-	// UDF map streaming
-	MapUdfStreamKey = "numaflow.numaproj.io/map-stream"
-
-	// BatchMapUdfStreamKey is the annotation for enabling UDF Batch Map
-	BatchMapUdfStreamKey = "numaflow.numaproj.io/batch-map"
 
 	// Pipeline health status
 	PipelineStatusHealthy   = "healthy"
