@@ -1037,6 +1037,26 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#batch-map-mode" class="md-nav__link">
+    Batch Map Mode
+  </a>
+  
+    <nav class="md-nav" aria-label="Batch Map Mode">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#important-considerations" class="md-nav__link">
+    Important Considerations
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#available-environment-variables" class="md-nav__link">
     Available Environment Variables
   </a>
@@ -2288,6 +2308,26 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#batch-map-mode" class="md-nav__link">
+    Batch Map Mode
+  </a>
+  
+    <nav class="md-nav" aria-label="Batch Map Mode">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#important-considerations" class="md-nav__link">
+    Important Considerations
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#available-environment-variables" class="md-nav__link">
     Available Environment Variables
   </a>
@@ -2362,6 +2402,25 @@ instead of in a batch at the end.</p>
 <li><a href="https://github.com/numaproj/numaflow-python/tree/main/examples/mapstream/flatmap_stream/">Python</a></li>
 <li><a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/mapstreamer/examples/flatmap_stream/">Golang</a></li>
 <li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/mapstream/flatmapstream/">Java</a></li>
+</ul>
+<h3 id="batch-map-mode">Batch Map Mode<a class="headerlink" href="#batch-map-mode" title="Permanent link">&para;</a></h3>
+<p>BatchMap is an interface that allows developers to process multiple data items in a UDF single call,
+rather than each item in separate calls.</p>
+<p>The BatchMap interface can be helpful in scenarios where performing operations on a group of data can be more efficient.</p>
+<h4 id="important-considerations">Important Considerations<a class="headerlink" href="#important-considerations" title="Permanent link">&para;</a></h4>
+<p>When using BatchMap, there are a few important considerations to keep in mind:</p>
+<ul>
+<li>Ensure that the BatchResponses object is tagged with the correct request ID. 
+Each Datum has a unique ID tag, which will be used by Numaflow to ensure correctness.</li>
+<li>Ensure that the length of the BatchResponses list is equal to the number of requests received. This means that for 
+every input data item, there should be a corresponding response in the BatchResponses list.</li>
+</ul>
+<p>Check the links below to see the UDF examples in batch mode for different languages.</p>
+<ul>
+<li><a href="https://github.com/numaproj/numaflow-python/tree/main/examples/batchmap/">Python</a></li>
+<li><a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/batchmapper/examples/">Golang</a></li>
+<li><a href="https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/batchmap/">Java</a></li>
+<li><a href="https://github.com/numaproj/numaflow-rs/tree/main/examples/batchmap-cat/">Rust</a></li>
 </ul>
 <h3 id="available-environment-variables">Available Environment Variables<a class="headerlink" href="#available-environment-variables" title="Permanent link">&para;</a></h3>
 <p>Some environment variables are available in the user-defined function container, they might be useful in your own UDF implementation.</p>
