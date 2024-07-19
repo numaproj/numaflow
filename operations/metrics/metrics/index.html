@@ -2687,6 +2687,18 @@
 </thead>
 <tbody>
 <tr>
+<td><code>pipeline_lag_milliseconds</code></td>
+<td>Gauge</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td>Provides the pipeline processing lag in milliseconds</td>
+</tr>
+<tr>
+<td><code>watermark_cmp_now_milliseconds</code></td>
+<td>Gauge</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td>Provides the Watermark compared with current time in milliseconds</td>
+</tr>
+<tr>
 <td><code>source_forwarder_transformer_processing_time</code></td>
 <td>Histogram</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
