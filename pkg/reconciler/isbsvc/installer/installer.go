@@ -49,7 +49,6 @@ func Install(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client cl
 		return err
 	}
 	isbSvc.Status.Config = *bufferConfig
-	isbSvc.Status.SetObservedGeneration(isbSvc.Generation)
 	return nil
 }
 
