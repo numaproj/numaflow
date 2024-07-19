@@ -417,8 +417,11 @@ func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, data
 	concurrentUDFProcessingStart := time.Now()
 	var udfResults []isb.ReadWriteMessagePair
 	var err error
-	success := false
-udfLoop:
+	errorPair := isb.ReadWriteMessagePair{
+		ReadMessage:   nil,
+		WriteMessages: nil,
+		Err:           nil,
+	}
 	for {
 		// invoke the UDF call
 		udfResults, err = isdf.opts.batchMapUdfApplier.ApplyBatchMap(ctx, dataMessages)
@@ -429,38 +432,32 @@ udfLoop:
 				metrics.PlatformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName,
 					metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF),
 					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Inc()
-				break udfLoop
+				errorPair.Err = err
+				return []isb.ReadWriteMessagePair{errorPair}
 			}
 			isdf.opts.logger.Errorw("batchMapUDF.Apply got error during batch udf processing", zap.Error(err))
 			select {
 			case <-ctx.Done():
 				// no point in retrying if the context is cancelled
-				break udfLoop
-			case <-time.After(1 * time.Second):
-				// sleep for a second and keep retrying after that
+				errorPair.Err = err
+				return []isb.ReadWriteMessagePair{errorPair}
+			case <-time.After(time.Second):
+				// sleep for 1 second and keep retrying after that
+				// Keeping one second of timeout for consistency with other map modes (unary and stream)
+				// for retrying UDF errors.
+				// These errors can be induced due to grpc connections, pod restarts etc.
+				// Hence, a conservative sleep time chosen here.
+				// TODO: Would be a good exercise to understand the behaviour and see what can be
+				// a suitable time across all modes.
 				continue
 			}
 		}
-		// if no error, let's mark this as a success and break
-		success = true
+		// if no error is found, then we do not need to retry
 		break
-	}
-	if !success {
-		udfErr := fmt.Errorf("batchMapUDF.Apply got error during batch udf processing")
-		// We need to send this to indicate an error to the forwarder
-		udfResultsErr := []isb.ReadWriteMessagePair{
-			{
-				ReadMessage:   nil,
-				WriteMessages: nil,
-				Err:           udfErr,
-			},
-		}
-		return udfResultsErr
 	}
 	isdf.opts.logger.Debugw("batch map applyUDF completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(concurrentUDFProcessingStart)))
 	metrics.ConcurrentUDFProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(concurrentUDFProcessingStart).Microseconds()))
 	return udfResults
-
 }
 
 // streamMessage streams the data messages to the next step.
