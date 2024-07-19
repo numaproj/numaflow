@@ -226,5 +226,7 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	} else {
 		log.Info("Not enabling pprof debug endpoints")
 	}
+
+	go ds.exposeMetrics(ctx)
 	return &httpServer
 }
