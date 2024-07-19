@@ -51,6 +51,29 @@ Check the links below to see the UDF examples in streaming mode for different la
 - [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/mapstreamer/examples/flatmap_stream/)
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/mapstream/flatmapstream/)
 
+### Batch Map Mode
+
+BatchMap is an interface that allows developers to process multiple data items in a UDF single call,
+rather than each item in separate calls.
+
+The BatchMap interface can be helpful in scenarios where performing operations on a group of data can be more efficient.
+
+#### Important Considerations
+
+When using BatchMap, there are a few important considerations to keep in mind:
+
+- Ensure that the BatchResponses object is tagged with the correct request ID. 
+Each Datum has a unique ID tag, which will be used by Numaflow to ensure correctness.
+- Ensure that the length of the BatchResponses list is equal to the number of requests received. This means that for 
+every input data item, there should be a corresponding response in the BatchResponses list.
+
+Check the links below to see the UDF examples in batch mode for different languages.
+
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/batchmap/)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/batchmapper/examples/)
+- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/batchmap/)
+- [Rust](https://github.com/numaproj/numaflow-rs/tree/main/examples/batchmap-cat/)
+
 ### Available Environment Variables
 
 Some environment variables are available in the user-defined function container, they might be useful in your own UDF implementation.
