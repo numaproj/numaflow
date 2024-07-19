@@ -18699,7 +18699,7 @@
           "description": "ReloaderContainerTemplate contains customized spec for config reloader container"
         },
         "replicas": {
-          "description": "Redis StatefulSet size",
+          "description": "JetStream StatefulSet size",
           "format": "int32",
           "type": "integer"
         },

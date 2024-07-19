@@ -4161,7 +4161,7 @@ JetStream version, such as “2.7.1”
 
 <p>
 
-Redis StatefulSet size
+JetStream StatefulSet size
 </p>
 
 </td>

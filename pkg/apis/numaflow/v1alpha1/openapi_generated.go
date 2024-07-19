@@ -2123,7 +2123,7 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamBufferService(ref common.Referen
 					},
 					"replicas": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Redis StatefulSet size",
+							Description: "JetStream StatefulSet size",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
