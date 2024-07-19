@@ -112,7 +112,7 @@ func (ds *daemonServer) exposeMetrics(ctx context.Context) {
 			}
 
 			if maxWM == math.MinInt64 {
-				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(0)
+				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(-1)
 			} else {
 				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(float64(time.Now().UnixMilli() - maxWM))
 
