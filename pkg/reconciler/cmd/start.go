@@ -249,7 +249,9 @@ func Start(namespaced bool, managedNamespace string) {
 		logger.Fatalw("Unable to add autoscaling runner", zap.Error(err))
 	}
 
-	logger.Infow("Starting controller manager", "version", numaflow.GetVersion())
+	version := numaflow.GetVersion()
+	reconciler.BuildInfo.WithLabelValues(version.Version, version.Platform).Set(1)
+	logger.Infow("Starting controller manager", "version", version)
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		logger.Fatalw("Unable to run controller manager", zap.Error(err))
 	}

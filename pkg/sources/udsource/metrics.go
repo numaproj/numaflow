@@ -34,5 +34,5 @@ var udsourceReadCount = promauto.NewCounterVec(prometheus.CounterOpts{
 var udsourcePending = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "udsource",
 	Name:      "pending_total",
-	Help:      "number of messages pending",
+	Help:      "Number of messages pending",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex})
