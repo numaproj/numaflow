@@ -20,9 +20,10 @@ import (
 	"testing"
 
 	"github.com/IBM/sarama"
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 func TestSaslConfiguration(t *testing.T) {
@@ -101,12 +102,8 @@ func TestSaslConfiguration(t *testing.T) {
 		assert.Equal(t, "password", config.Password)
 	})
 
-	t.Run("gssapi", func(t *testing.T) {
-		plain := dfv1.SASLTypePlaintext
-		temp := dfv1.SASL{
-			Mechanism: &plain,
-			Plain:     credentials,
-		}
+	t.Run("nil gssapi", func(t *testing.T) {
+		temp := dfv1.SASL{}
 		config, err := GetGSSAPIConfig(temp.GSSAPI)
 		assert.NoError(t, err)
 		assert.Nil(t, config)
@@ -114,14 +111,7 @@ func TestSaslConfiguration(t *testing.T) {
 	})
 }
 
-func TestGetGSSAPIConfig_NilConfig(t *testing.T) {
-	config, err := GetGSSAPIConfig(nil)
-	assert.NoError(t, err)
-	assert.Nil(t, config)
-}
-
 func TestGetGSSAPIConfig_InvalidAuthType(t *testing.T) {
-
 	var authType dfv1.KRB5AuthType = "anytpe"
 
 	config := &dfv1.GSSAPI{

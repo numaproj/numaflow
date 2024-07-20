@@ -45,7 +45,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	commontls "github.com/numaproj/numaflow/pkg/shared/tls"
-	"github.com/numaproj/numaflow/webhook/validator"
+	"github.com/numaproj/numaflow/pkg/webhook/validator"
 )
 
 const (

@@ -14,5 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package webhook is used for running validating admission webhook.
+// Package webhook is used for running a validating admission webhook.
 package webhook

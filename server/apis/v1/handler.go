@@ -47,9 +47,9 @@ import (
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	"github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/pkg/webhook/validator"
 	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/common"
-	"github.com/numaproj/numaflow/webhook/validator"
 )
 
 // Constants for the validation of the pipeline

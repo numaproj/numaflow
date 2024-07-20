@@ -12,7 +12,7 @@ The UI has the following features:
 
 ## Development
 
-See [Development Guide](../docs/development.md).
+See [Development Guide](../docs/development/development.md).
 
 ```shell
 # Build image and deploy to a k3d cluster

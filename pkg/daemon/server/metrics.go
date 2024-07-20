@@ -16,110 +16,30 @@ limitations under the License.
 package server
 
 import (
-	"context"
-	"math"
-	"time"
-
-	"github.com/numaproj/numaflow/pkg/metrics"
-
-	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
-	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"go.uber.org/zap"
+
+	"github.com/numaproj/numaflow/pkg/metrics"
 )
 
 var (
+	pipeline_info = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "pipeline",
+		Name:      "build_info",
+		Help:      "A metric with a constant value '1', labeled by Numaflow binary version and platform, as well as the pipeline name",
+	}, []string{metrics.LabelVersion, metrics.LabelPlatform, metrics.LabelPipeline})
+
+	// Pipeline processing lag, max(watermark) - min(watermark)
 	pipelineProcessingLag = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name:      "pipeline_lag_milliseconds",
-		Help:      "pipeline processing lag metrics in milliseconds.",
-		Subsystem: "daemon",
+		Subsystem: "pipeline",
+		Name:      "processing_lag",
+		Help:      "Pipeline processing lag in milliseconds (max watermark - min watermark)",
 	}, []string{metrics.LabelPipeline})
-)
 
-var (
+	// Now - max(watermark)
 	watermarkCmpNow = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name:      "watermark_cmp_now_milliseconds",
-		Help:      "Watermark compared with current time in milliseconds.",
-		Subsystem: "daemon",
+		Subsystem: "pipeline",
+		Name:      "watermark_cmp_now",
+		Help:      "Max source watermark compared with current time in milliseconds",
 	}, []string{metrics.LabelPipeline})
 )
-
-// calculate processing lag and watermark_delay to current time using watermark values.
-func (ds *daemonServer) exposeMetrics(ctx context.Context) {
-	ticker := time.NewTicker(20 * time.Second)
-	defer ticker.Stop()
-
-	log := logging.FromContext(ctx)
-
-	var (
-		source = make(map[string]bool)
-		sink   = make(map[string]bool)
-	)
-	for _, vertex := range ds.pipeline.Spec.Vertices {
-		if vertex.IsASource() {
-			source[vertex.Name] = true
-		} else if vertex.IsASink() {
-			sink[vertex.Name] = true
-		}
-	}
-
-	for {
-		select {
-		case <-ticker.C:
-
-			resp, err := ds.metaDataQuery.GetPipelineWatermarks(ctx, &daemon.GetPipelineWatermarksRequest{Pipeline: ds.pipeline.Name})
-			if err != nil {
-				log.Errorw("Failed to calculate processing lag for pipeline", zap.Error(err))
-				continue
-			}
-
-			watermarks := resp.PipelineWatermarks
-
-			var (
-				minWM int64 = math.MaxInt64
-				maxWM int64 = math.MinInt64
-			)
-
-			for _, watermark := range watermarks {
-				// find the largest source vertex watermark
-				if _, ok := source[watermark.From]; ok {
-					for _, wm := range watermark.Watermarks {
-						if wm.GetValue() > maxWM {
-							maxWM = wm.GetValue()
-						}
-					}
-				}
-				// find the smallest sink vertex watermark
-				if _, ok := sink[watermark.To]; ok {
-					for _, wm := range watermark.Watermarks {
-						if wm.GetValue() < minWM {
-							minWM = wm.GetValue()
-						}
-					}
-				}
-			}
-			// if the data hasn't arrived the sink vertex
-			// set the lag to be -1
-			if minWM < 0 {
-				pipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(-1)
-			} else {
-				if maxWM < minWM {
-					pipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(-1)
-				} else {
-					pipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(float64(maxWM - minWM))
-				}
-			}
-
-			if maxWM == math.MinInt64 {
-				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(-1)
-			} else {
-				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(float64(time.Now().UnixMilli() - maxWM))
-
-			}
-
-		case <-ctx.Done():
-			return
-		}
-	}
-}

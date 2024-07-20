@@ -19,7 +19,7 @@ package commands
 import (
 	"github.com/spf13/cobra"
 
-	webhookcmd "github.com/numaproj/numaflow/webhook/cmd"
+	webhookcmd "github.com/numaproj/numaflow/pkg/webhook/cmd"
 )
 
 func NewWebhookCommand() *cobra.Command {

@@ -22,6 +22,9 @@ import (
 )
 
 const (
+	LabelVersion  = "version"
+	LabelPlatform = "platform"
+
 	LabelPipeline           = "pipeline"
 	LabelVertex             = "vertex"
 	LabelVertexReplicaIndex = "replica"
