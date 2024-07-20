@@ -33,13 +33,13 @@ var (
 	pipelineProcessingLag = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "pipeline",
 		Name:      "processing_lag",
-		Help:      "Pipeline processing lag metrics in milliseconds",
+		Help:      "Pipeline processing lag in milliseconds (max watermark - min watermark)",
 	}, []string{metrics.LabelPipeline})
 
 	// Now - max(watermark)
 	watermarkCmpNow = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "pipeline",
 		Name:      "watermark_cmp_now",
-		Help:      "Max source Watermark compared with current time in milliseconds",
+		Help:      "Max source watermark compared with current time in milliseconds",
 	}, []string{metrics.LabelPipeline})
 )
