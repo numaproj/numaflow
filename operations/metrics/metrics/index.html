@@ -2042,8 +2042,8 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#configure-the-below-service-monitors-for-scraping-your-pipeline-metrics" class="md-nav__link">
-    Configure the below Service Monitors for scraping your pipeline metrics:
+  <a href="#configure-the-below-servicepod-monitors-for-scraping-your-pipeline-metrics" class="md-nav__link">
+    Configure the below Service/Pod Monitors for scraping your pipeline metrics:
   </a>
   
 </li>
@@ -2476,8 +2476,8 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#configure-the-below-service-monitors-for-scraping-your-pipeline-metrics" class="md-nav__link">
-    Configure the below Service Monitors for scraping your pipeline metrics:
+  <a href="#configure-the-below-servicepod-monitors-for-scraping-your-pipeline-metrics" class="md-nav__link">
+    Configure the below Service/Pod Monitors for scraping your pipeline metrics:
   </a>
   
 </li>
@@ -2687,16 +2687,16 @@
 </thead>
 <tbody>
 <tr>
-<td><code>pipeline_lag_milliseconds</code></td>
+<td><code>pipeline_processing_lag</code></td>
 <td>Gauge</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code></td>
-<td>Provides the pipeline processing lag in milliseconds</td>
+<td>Pipeline processing lag in milliseconds (max watermark - min watermark)</td>
 </tr>
 <tr>
-<td><code>watermark_cmp_now_milliseconds</code></td>
+<td><code>pipeline_watermark_cmp_now</code></td>
 <td>Gauge</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code></td>
-<td>Provides the Watermark compared with current time in milliseconds</td>
+<td>Max watermark of source compared with current time in milliseconds</td>
 </tr>
 <tr>
 <td><code>source_forwarder_transformer_processing_time</code></td>
@@ -2888,7 +2888,7 @@
 <h2 id="prometheus-operator-for-scraping-metrics">Prometheus Operator for Scraping Metrics:<a class="headerlink" href="#prometheus-operator-for-scraping-metrics" title="Permanent link">&para;</a></h2>
 <p>You can follow the <a href="https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/user-guides/getting-started.md">prometheus operator</a> setup guide if you would like to use prometheus operator configured in your cluster.</p>
 <p>You can also set up prometheus operator via <a href="https://bitnami.com/stack/prometheus-operator/helm">helm</a>.</p>
-<h3 id="configure-the-below-service-monitors-for-scraping-your-pipeline-metrics">Configure the below Service Monitors for scraping your pipeline metrics:<a class="headerlink" href="#configure-the-below-service-monitors-for-scraping-your-pipeline-metrics" title="Permanent link">&para;</a></h3>
+<h3 id="configure-the-below-servicepod-monitors-for-scraping-your-pipeline-metrics">Configure the below Service/Pod Monitors for scraping your pipeline metrics:<a class="headerlink" href="#configure-the-below-servicepod-monitors-for-scraping-your-pipeline-metrics" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring.coreos.com/v1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServiceMonitor</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -2912,6 +2912,45 @@
 <span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span>
 <span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/vertex-name</span>
 <span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span>
+<span class="nn">---</span>
+<span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring.coreos.com/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServiceMonitor</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-pipeline-daemon-metrics</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">endpoints</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https</span>
+<span class="w">      </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tcp</span>
+<span class="w">      </span><span class="nt">targetPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4327</span>
+<span class="w">      </span><span class="nt">tlsConfig</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">insecureSkipVerify</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">selector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/component</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">daemon</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/managed-by</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pipeline-controller</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span>
+<span class="w">    </span><span class="nt">matchExpressions</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/pipeline-name</span>
+<span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span>
+<span class="nn">---</span>
+<span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring.coreos.com/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PodMonitor</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-controller-metrics</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">endpoints</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http</span>
+<span class="w">      </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metrics</span>
+<span class="w">      </span><span class="nt">targetPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">9090</span>
+<span class="w">  </span><span class="nt">selector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/component</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">controller-manager</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">controller-manager</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span>
 </code></pre></div>
 <h3 id="configure-the-below-service-monitor-if-you-use-the-nats-jetstream-isb-for-your-nats-jetstream-metrics">Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics:<a class="headerlink" href="#configure-the-below-service-monitor-if-you-use-the-nats-jetstream-isb-for-your-nats-jetstream-metrics" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring.coreos.com/v1</span>
