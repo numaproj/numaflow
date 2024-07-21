@@ -222,6 +222,8 @@ func Test_PipelineVertexCounts(t *testing.T) {
 	assert.Equal(t, uint32(1), *s.SourceCount)
 	assert.Equal(t, uint32(1), *s.SinkCount)
 	assert.Equal(t, uint32(1), *s.UDFCount)
+	assert.Equal(t, uint32(1), *s.MapUDFCount)
+	assert.Equal(t, uint32(0), *s.ReduceUDFCount)
 }
 
 func Test_PipelineSetPhase(t *testing.T) {

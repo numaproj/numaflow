@@ -2651,6 +2651,14 @@ spec:
       name: UDFs
       priority: 10
       type: integer
+    - jsonPath: .status.mapUDFCount
+      name: Map UDFs
+      priority: 10
+      type: integer
+    - jsonPath: .status.reduceUDFCount
+      name: Sink UDFs
+      priority: 10
+      type: integer
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -12331,6 +12339,9 @@ spec:
               lastUpdated:
                 format: date-time
                 type: string
+              mapUDFCount:
+                format: int32
+                type: integer
               message:
                 type: string
               observedGeneration:
@@ -12346,6 +12357,9 @@ spec:
                 - Paused
                 - Deleting
                 type: string
+              reduceUDFCount:
+                format: int32
+                type: integer
               sinkCount:
                 format: int32
                 type: integer

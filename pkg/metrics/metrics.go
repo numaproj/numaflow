@@ -22,9 +22,10 @@ import (
 )
 
 const (
-	LabelVersion  = "version"
-	LabelPlatform = "platform"
-
+	LabelVersion            = "version"
+	LabelPlatform           = "platform"
+	LabelNamespace          = "ns"
+	LabelISBService         = "isbsvc"
 	LabelPipeline           = "pipeline"
 	LabelVertex             = "vertex"
 	LabelVertexReplicaIndex = "replica"

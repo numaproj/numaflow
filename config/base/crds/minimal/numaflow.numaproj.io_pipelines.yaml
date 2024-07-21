@@ -35,6 +35,14 @@ spec:
       name: UDFs
       priority: 10
       type: integer
+    - jsonPath: .status.mapUDFCount
+      name: Map UDFs
+      priority: 10
+      type: integer
+    - jsonPath: .status.reduceUDFCount
+      name: Sink UDFs
+      priority: 10
+      type: integer
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date

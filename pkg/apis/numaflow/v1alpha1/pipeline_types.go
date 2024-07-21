@@ -60,6 +60,8 @@ const (
 // +kubebuilder:printcolumn:name="Sources",type=integer,JSONPath=`.status.sourceCount`,priority=10
 // +kubebuilder:printcolumn:name="Sinks",type=integer,JSONPath=`.status.sinkCount`,priority=10
 // +kubebuilder:printcolumn:name="UDFs",type=integer,JSONPath=`.status.udfCount`,priority=10
+// +kubebuilder:printcolumn:name="Map UDFs",type=integer,JSONPath=`.status.mapUDFCount`,priority=10
+// +kubebuilder:printcolumn:name="Sink UDFs",type=integer,JSONPath=`.status.reduceUDFCount`,priority=10
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
@@ -603,16 +605,18 @@ type PipelineLimits struct {
 }
 
 type PipelineStatus struct {
-	Status      `json:",inline" protobuf:"bytes,1,opt,name=status"`
-	Phase       PipelinePhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=PipelinePhase"`
-	Message     string        `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
-	LastUpdated metav1.Time   `json:"lastUpdated,omitempty" protobuf:"bytes,4,opt,name=lastUpdated"`
-	VertexCount *uint32       `json:"vertexCount,omitempty" protobuf:"varint,5,opt,name=vertexCount"`
-	SourceCount *uint32       `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
-	SinkCount   *uint32       `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
-	UDFCount    *uint32       `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
+	Status         `json:",inline" protobuf:"bytes,1,opt,name=status"`
+	Phase          PipelinePhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=PipelinePhase"`
+	Message        string        `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
+	LastUpdated    metav1.Time   `json:"lastUpdated,omitempty" protobuf:"bytes,4,opt,name=lastUpdated"`
+	VertexCount    *uint32       `json:"vertexCount,omitempty" protobuf:"varint,5,opt,name=vertexCount"`
+	SourceCount    *uint32       `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
+	SinkCount      *uint32       `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
+	UDFCount       *uint32       `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
+	MapUDFCount    *uint32       `json:"mapUDFCount,omitempty" protobuf:"varint,9,opt,name=mapUDFCount"`
+	ReduceUDFCount *uint32       `json:"reduceUDFCount,omitempty" protobuf:"varint,10,opt,name=reduceUDFCount"`
 	// ObservedGeneration stores the generation value observed by the controller.
-	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,9,opt,name=observedGeneration"`
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,11,opt,name=observedGeneration"`
 }
 
 // SetVertexCounts sets the counts of vertices.
@@ -621,14 +625,21 @@ func (pls *PipelineStatus) SetVertexCounts(vertices []AbstractVertex) {
 	var sinkCount uint32
 	var sourceCount uint32
 	var udfCount uint32
+	var mapUDFCount uint32
+	var reduceUDFCount uint32
 	for _, v := range vertices {
-		if v.Source != nil {
+		if v.IsASource() {
 			sourceCount++
 		}
-		if v.Sink != nil {
+		if v.IsASink() {
 			sinkCount++
 		}
-		if v.UDF != nil {
+		if v.IsMapUDF() {
+			mapUDFCount++
+			udfCount++
+		}
+		if v.IsReduceUDF() {
+			reduceUDFCount++
 			udfCount++
 		}
 	}
@@ -637,6 +648,8 @@ func (pls *PipelineStatus) SetVertexCounts(vertices []AbstractVertex) {
 	pls.SinkCount = &sinkCount
 	pls.SourceCount = &sourceCount
 	pls.UDFCount = &udfCount
+	pls.MapUDFCount = &mapUDFCount
+	pls.ReduceUDFCount = &reduceUDFCount
 }
 
 func (pls *PipelineStatus) SetPhase(phase PipelinePhase, msg string) {

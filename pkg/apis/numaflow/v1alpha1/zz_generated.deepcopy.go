@@ -1636,6 +1636,16 @@ func (in *PipelineStatus) DeepCopyInto(out *PipelineStatus) {
 		*out = new(uint32)
 		**out = **in
 	}
+	if in.MapUDFCount != nil {
+		in, out := &in.MapUDFCount, &out.MapUDFCount
+		*out = new(uint32)
+		**out = **in
+	}
+	if in.ReduceUDFCount != nil {
+		in, out := &in.ReduceUDFCount, &out.ReduceUDFCount
+		*out = new(uint32)
+		**out = **in
+	}
 	return
 }
 

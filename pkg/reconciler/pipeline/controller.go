@@ -125,11 +125,17 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 			}
 			controllerutil.RemoveFinalizer(pl, finalizerName)
+			// Clean up metrics
+			_ = reconciler.PipelineAge.DeleteLabelValues(pl.Namespace, pl.Name)
 		}
 		return ctrl.Result{}, nil
 	}
 
 	pl.Status.SetObservedGeneration(pl.Generation)
+	// Set age metrics
+	// TODO: update the mechanism to report this metric. With this approach, if there's no reconciliation for this pipeline,
+	// it won't report until next cache resync, which defaults to 10 hours.
+	reconciler.PipelineAge.WithLabelValues(pl.Namespace, pl.Name).Set(float64(time.Now().Unix() - pl.CreationTimestamp.Unix()))
 	// New, or reconciliation failed pipeline
 	if pl.Status.Phase == dfv1.PipelinePhaseUnknown || pl.Status.Phase == dfv1.PipelinePhaseFailed {
 		result, err := r.reconcileNonLifecycleChanges(ctx, pl)

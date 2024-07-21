@@ -29,9 +29,20 @@ var (
 		Name:      "build_info",
 		Help:      "A metric with a constant value '1', labeled by controller version and platform from which Numaflow was built",
 	}, []string{metrics.LabelVersion, metrics.LabelPlatform})
+
+	ISBSvcAge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "isbsvc_age",
+		Help:      "How long the ISB Service has been created in seconds",
+	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
+
+	PipelineAge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "pipeline_age",
+		Help:      "How long the pipeline has been created in seconds",
+	}, []string{metrics.LabelNamespace, metrics.LabelPipeline})
 )
 
 func init() {
-	// Register custom metrics with the global prometheus registry
-	ctrlmetrics.Registry.MustRegister(BuildInfo)
+	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcAge, PipelineAge)
 }
