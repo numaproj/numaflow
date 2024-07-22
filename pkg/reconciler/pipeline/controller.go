@@ -43,6 +43,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -127,6 +128,8 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			controllerutil.RemoveFinalizer(pl, finalizerName)
 			// Clean up metrics
 			_ = reconciler.PipelineHealth.DeleteLabelValues(pl.Namespace, pl.Name)
+			// Delete corresponding vertex metrics
+			_ = reconciler.VertexDisiredReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
 		}
 		return ctrl.Result{}, nil
 	}
@@ -293,6 +296,8 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		}
 		log.Infow("Deleted stale vertex successfully", zap.String("vertex", v.Name))
 		r.recorder.Eventf(pl, corev1.EventTypeNormal, "DeleteStaleVertexSuccess", "Deleted stale vertex %s successfully", v.Name)
+		// Clean up vertex replica metric
+		reconciler.VertexDisiredReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
 	}
 
 	// create batch job

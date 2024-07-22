@@ -45,21 +45,28 @@ var (
 		Help:      "A metric to indicate whether the Pipeline is healthy. '1' means healthy, '0' means unhealthy",
 	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
 
-	// JetStreamISBSvcReplicas indicates the replicas of a JetStream ISB Service
+	// JetStreamISBSvcReplicas indicates the replicas of a JetStream ISB Service.
 	JetStreamISBSvcReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
 		Name:      "isbsvc_jetstream_replicas",
 		Help:      "A metric indicates the replicas of a JetStream ISB Service",
 	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
 
-	// RedisISBSvcReplicas indicates the replicas of a Redis ISB Service
+	// RedisISBSvcReplicas indicates the replicas of a Redis ISB Service.
 	RedisISBSvcReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
 		Name:      "isbsvc_redis_replicas",
 		Help:      "A metric indicates the replicas of a Redis ISB Service",
 	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
+
+	// VertexDisiredReplicas indicates the desired replicas of a Vertex.
+	VertexDisiredReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "vertex_desired_replicas",
+		Help:      "A metric indicates the desired replicas of a Vertex",
+	}, []string{metrics.LabelNamespace, metrics.LabelPipeline, metrics.LabelVertex})
 )
 
 func init() {
-	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcHealth, PipelineHealth, JetStreamISBSvcReplicas, RedisISBSvcReplicas)
+	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcHealth, PipelineHealth, JetStreamISBSvcReplicas, RedisISBSvcReplicas, VertexDisiredReplicas)
 }
