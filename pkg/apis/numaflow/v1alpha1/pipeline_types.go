@@ -34,13 +34,12 @@ import (
 type PipelinePhase string
 
 const (
-	PipelinePhaseUnknown   PipelinePhase = ""
-	PipelinePhaseRunning   PipelinePhase = "Running"
-	PipelinePhaseSucceeded PipelinePhase = "Succeeded"
-	PipelinePhaseFailed    PipelinePhase = "Failed"
-	PipelinePhasePausing   PipelinePhase = "Pausing"
-	PipelinePhasePaused    PipelinePhase = "Paused"
-	PipelinePhaseDeleting  PipelinePhase = "Deleting"
+	PipelinePhaseUnknown  PipelinePhase = ""
+	PipelinePhaseRunning  PipelinePhase = "Running"
+	PipelinePhaseFailed   PipelinePhase = "Failed"
+	PipelinePhasePausing  PipelinePhase = "Pausing"
+	PipelinePhasePaused   PipelinePhase = "Paused"
+	PipelinePhaseDeleting PipelinePhase = "Deleting"
 
 	// PipelineConditionConfigured has the status True when the Pipeline
 	// has valid configuration.
@@ -61,7 +60,7 @@ const (
 // +kubebuilder:printcolumn:name="Sinks",type=integer,JSONPath=`.status.sinkCount`,priority=10
 // +kubebuilder:printcolumn:name="UDFs",type=integer,JSONPath=`.status.udfCount`,priority=10
 // +kubebuilder:printcolumn:name="Map UDFs",type=integer,JSONPath=`.status.mapUDFCount`,priority=10
-// +kubebuilder:printcolumn:name="Sink UDFs",type=integer,JSONPath=`.status.reduceUDFCount`,priority=10
+// +kubebuilder:printcolumn:name="Reduce UDFs",type=integer,JSONPath=`.status.reduceUDFCount`,priority=10
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
@@ -707,6 +706,23 @@ func (pls *PipelineStatus) MarkPhaseDeleting() {
 // SetObservedGeneration sets the Status ObservedGeneration
 func (pls *PipelineStatus) SetObservedGeneration(value int64) {
 	pls.ObservedGeneration = value
+}
+
+// IsHealthy indicates whether the pipeline is in healthy status
+func (pls *PipelineStatus) IsHealthy() bool {
+	switch pls.Phase {
+	case PipelinePhaseFailed:
+		return false
+	case PipelinePhaseRunning:
+		return pls.IsReady()
+	case PipelinePhaseDeleting, PipelinePhasePausing:
+		// Transient phases, return true
+		return true
+	case PipelinePhasePaused:
+		return true
+	default:
+		return false
+	}
 }
 
 // +kubebuilder:object:root=true

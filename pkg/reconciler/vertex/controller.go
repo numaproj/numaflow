@@ -111,10 +111,10 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		vertex.Status.MarkPhaseFailed("FindISBSvcFailed", err.Error())
 		return ctrl.Result{}, err
 	}
-	if !isbSvc.Status.IsReady() {
-		log.Errorw("ISB Service is not in ready status", zap.String("isbsvc", isbSvcName), zap.Error(err))
-		vertex.Status.MarkPhaseFailed("ISBSvcNotReady", "isbsvc not ready")
-		return ctrl.Result{}, fmt.Errorf("isbsvc not ready")
+	if !isbSvc.Status.IsHealthy() {
+		log.Errorw("ISB Service is not in healthy status", zap.String("isbsvc", isbSvcName), zap.Error(err))
+		vertex.Status.MarkPhaseFailed("ISBSvcNotHealthy", "isbsvc not healthy")
+		return ctrl.Result{}, fmt.Errorf("isbsvc not healthy")
 	}
 
 	if vertex.Scalable() { // Add to autoscaling watcher

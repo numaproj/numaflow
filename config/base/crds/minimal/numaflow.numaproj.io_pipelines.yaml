@@ -40,7 +40,7 @@ spec:
       priority: 10
       type: integer
     - jsonPath: .status.reduceUDFCount
-      name: Sink UDFs
+      name: Reduce UDFs
       priority: 10
       type: integer
     - jsonPath: .metadata.creationTimestamp

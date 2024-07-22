@@ -30,19 +30,19 @@ var (
 		Help:      "A metric with a constant value '1', labeled by controller version and platform from which Numaflow was built",
 	}, []string{metrics.LabelVersion, metrics.LabelPlatform})
 
-	ISBSvcAge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	ISBSvcHealth = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
-		Name:      "isbsvc_age",
-		Help:      "How long the ISB Service has been created in seconds",
+		Name:      "isbsvc_health",
+		Help:      "A metric to indicate whether the ISB Service is healthy. '0' means healthy, '1' means unhealthy",
 	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
 
-	PipelineAge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	PipelineHealth = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
-		Name:      "pipeline_age",
-		Help:      "How long the pipeline has been created in seconds",
-	}, []string{metrics.LabelNamespace, metrics.LabelPipeline})
+		Name:      "pipeline_health",
+		Help:      "A metric to indicate whether the Pipeline is healthy. '0' means healthy, '1' means unhealthy",
+	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
 )
 
 func init() {
-	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcAge, PipelineAge)
+	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcHealth, PipelineHealth)
 }

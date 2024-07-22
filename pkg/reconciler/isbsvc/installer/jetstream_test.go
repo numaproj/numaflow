@@ -173,6 +173,7 @@ func Test_JetStreamInstall_Uninstall(t *testing.T) {
 		assert.NotNil(t, c.JetStream.Auth.Basic.User)
 		assert.NotNil(t, c.JetStream.Auth.Basic.Password)
 		assert.True(t, testJetStreamIsbSvc.Status.IsReady())
+		assert.True(t, testJetStreamIsbSvc.Status.IsHealthy())
 		assert.False(t, c.JetStream.TLSEnabled)
 		events := getEvents(i.recorder)
 		assert.Contains(t, events, "Normal JetStreamConfigMap Created jetstream configmap successfully", "Normal JetStreamServiceSuccess Created jetstream service successfully", "Normal JetStreamStatefulSetSuccess Created jetstream stateful successfully")

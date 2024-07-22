@@ -152,3 +152,11 @@ func (isbsvc *InterStepBufferServiceStatus) MarkDeployFailed(reason, message str
 func (isbsvc *InterStepBufferServiceStatus) SetObservedGeneration(value int64) {
 	isbsvc.ObservedGeneration = value
 }
+
+// IsHealthy indicates whether the InterStepBufferService is healthy or not
+func (isbsvc *InterStepBufferServiceStatus) IsHealthy() bool {
+	if isbsvc.Phase != ISBSvcPhaseRunning {
+		return false
+	}
+	return isbsvc.IsReady()
+}

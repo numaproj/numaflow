@@ -470,3 +470,77 @@ func TestGetServingSourceStreamNames(t *testing.T) {
 		assert.Equal(t, expected, p.GetServingSourceStreamNames())
 	})
 }
+
+func TestPipelineStatus_IsHealthy(t *testing.T) {
+	tests := []struct {
+		name  string
+		phase PipelinePhase
+		ready bool
+		want  bool
+	}{
+		{
+			name:  "Failed phase",
+			phase: PipelinePhaseFailed,
+			ready: false,
+			want:  false,
+		},
+		{
+			name:  "Running phase and ready",
+			phase: PipelinePhaseRunning,
+			ready: true,
+			want:  true,
+		},
+		{
+			name:  "Running phase and not ready",
+			phase: PipelinePhaseRunning,
+			ready: false,
+			want:  false,
+		},
+		{
+			name:  "Deleting phase",
+			phase: PipelinePhaseDeleting,
+			ready: false,
+			want:  true,
+		},
+		{
+			name:  "Pausing phase",
+			phase: PipelinePhasePausing,
+			ready: false,
+			want:  true,
+		},
+		{
+			name:  "Paused phase",
+			phase: PipelinePhasePaused,
+			ready: false,
+			want:  true,
+		},
+		{
+			name:  "Unknown phase",
+			phase: "UnknownPhase",
+			ready: false,
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pls := &PipelineStatus{
+				Phase: tt.phase,
+			}
+			if tt.ready {
+				pls.Conditions = []metav1.Condition{
+					{
+						Type:   string(PipelineConditionConfigured),
+						Status: metav1.ConditionTrue,
+					},
+					{
+						Type:   string(PipelineConditionDeployed),
+						Status: metav1.ConditionTrue,
+					},
+				}
+			}
+			got := pls.IsHealthy()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

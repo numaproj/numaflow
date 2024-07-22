@@ -18,7 +18,6 @@ package isbsvc
 
 import (
 	"context"
-	"time"
 
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -95,17 +94,22 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 			}
 			controllerutil.RemoveFinalizer(isbSvc, finalizerName)
 			// Clean up metrics
-			_ = reconciler.ISBSvcAge.DeleteLabelValues(isbSvc.Namespace, isbSvc.Name)
+			_ = reconciler.ISBSvcHealth.DeleteLabelValues(isbSvc.Namespace, isbSvc.Name)
 		}
 		return nil
 	}
 	if needsFinalizer(isbSvc) {
 		controllerutil.AddFinalizer(isbSvc, finalizerName)
 	}
-	// Set age metrics.
-	// TODO: update the mechanism to report this metric. With this approach, if there's no reconciliation for this pipeline,
-	// it won't report until next cache resync, which defaults to 10 hours.
-	reconciler.ISBSvcAge.WithLabelValues(isbSvc.Namespace, isbSvc.Name).Set(float64(time.Now().Unix() - isbSvc.CreationTimestamp.Unix()))
+
+	defer func() {
+		if isbSvc.Status.IsHealthy() {
+			reconciler.ISBSvcHealth.WithLabelValues(isbSvc.Namespace, isbSvc.Name).Set(0)
+		} else {
+			reconciler.ISBSvcHealth.WithLabelValues(isbSvc.Namespace, isbSvc.Name).Set(1)
+		}
+	}()
+
 	isbSvc.Status.InitConditions()
 	isbSvc.Status.SetObservedGeneration(isbSvc.Generation)
 	if err := ValidateInterStepBufferService(isbSvc); err != nil {
