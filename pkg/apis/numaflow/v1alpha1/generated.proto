@@ -930,6 +930,8 @@ message PersistenceStrategy {
 // +kubebuilder:printcolumn:name="Sources",type=integer,JSONPath=`.status.sourceCount`,priority=10
 // +kubebuilder:printcolumn:name="Sinks",type=integer,JSONPath=`.status.sinkCount`,priority=10
 // +kubebuilder:printcolumn:name="UDFs",type=integer,JSONPath=`.status.udfCount`,priority=10
+// +kubebuilder:printcolumn:name="Map UDFs",type=integer,JSONPath=`.status.mapUDFCount`,priority=10
+// +kubebuilder:printcolumn:name="Reduce UDFs",type=integer,JSONPath=`.status.reduceUDFCount`,priority=10
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
@@ -1028,8 +1030,12 @@ message PipelineStatus {
 
   optional uint32 udfCount = 8;
 
+  optional uint32 mapUDFCount = 9;
+
+  optional uint32 reduceUDFCount = 10;
+
   // ObservedGeneration stores the generation value observed by the controller.
-  optional int64 observedGeneration = 9;
+  optional int64 observedGeneration = 11;
 }
 
 message RedisBufferService {

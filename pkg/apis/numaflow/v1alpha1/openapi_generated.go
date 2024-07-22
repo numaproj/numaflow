@@ -3382,6 +3382,18 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineStatus(ref common.ReferenceCallba
 							Format: "int64",
 						},
 					},
+					"mapUDFCount": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+					"reduceUDFCount": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
 					"observedGeneration": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ObservedGeneration stores the generation value observed by the controller.",

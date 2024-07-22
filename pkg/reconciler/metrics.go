@@ -29,9 +29,20 @@ var (
 		Name:      "build_info",
 		Help:      "A metric with a constant value '1', labeled by controller version and platform from which Numaflow was built",
 	}, []string{metrics.LabelVersion, metrics.LabelPlatform})
+
+	ISBSvcHealth = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "isbsvc_health",
+		Help:      "A metric to indicate whether the ISB Service is healthy. '1' means healthy, '0' means unhealthy",
+	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
+
+	PipelineHealth = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "pipeline_health",
+		Help:      "A metric to indicate whether the Pipeline is healthy. '1' means healthy, '0' means unhealthy",
+	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
 )
 
 func init() {
-	// Register custom metrics with the global prometheus registry
-	ctrlmetrics.Registry.MustRegister(BuildInfo)
+	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcHealth, PipelineHealth)
 }

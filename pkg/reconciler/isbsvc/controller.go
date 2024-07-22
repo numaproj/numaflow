@@ -85,7 +85,7 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc *dfv1.InterStepBufferService) error {
 	log := r.logger.With("namespace", isbSvc.Namespace).With("isbsvc", isbSvc.Name)
 	if !isbSvc.DeletionTimestamp.IsZero() {
-		log.Info("Deleting isbsvc")
+		log.Info("Deleting ISB Service")
 		if controllerutil.ContainsFinalizer(isbSvc, finalizerName) {
 			// Finalizer logic should be added here.
 			if err := installer.Uninstall(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder); err != nil {
@@ -93,12 +93,22 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 				return err
 			}
 			controllerutil.RemoveFinalizer(isbSvc, finalizerName)
+			// Clean up metrics
+			_ = reconciler.ISBSvcHealth.DeleteLabelValues(isbSvc.Namespace, isbSvc.Name)
 		}
 		return nil
 	}
 	if needsFinalizer(isbSvc) {
 		controllerutil.AddFinalizer(isbSvc, finalizerName)
 	}
+
+	defer func() {
+		if isbSvc.Status.IsHealthy() {
+			reconciler.ISBSvcHealth.WithLabelValues(isbSvc.Namespace, isbSvc.Name).Set(1)
+		} else {
+			reconciler.ISBSvcHealth.WithLabelValues(isbSvc.Namespace, isbSvc.Name).Set(0)
+		}
+	}()
 
 	isbSvc.Status.InitConditions()
 	isbSvc.Status.SetObservedGeneration(isbSvc.Generation)

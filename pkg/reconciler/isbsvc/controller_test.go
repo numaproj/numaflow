@@ -129,7 +129,7 @@ func TestReconcileNativeRedis(t *testing.T) {
 		}
 		err := r.reconcile(ctx, testIsb)
 		assert.NoError(t, err)
-		assert.True(t, testIsb.Status.IsReady())
+		assert.True(t, testIsb.Status.IsHealthy())
 		assert.NotNil(t, testIsb.Status.Config.Redis)
 		assert.NotEmpty(t, testIsb.Status.Config.Redis.SentinelURL)
 		assert.NotEmpty(t, testIsb.Status.Config.Redis.User)
@@ -170,7 +170,7 @@ func TestReconcileJetStream(t *testing.T) {
 		}
 		err := r.reconcile(ctx, testIsb)
 		assert.NoError(t, err)
-		assert.True(t, testIsb.Status.IsReady())
+		assert.True(t, testIsb.Status.IsHealthy())
 		assert.NotNil(t, testIsb.Status.Config.JetStream)
 		assert.NotEmpty(t, testIsb.Status.Config.JetStream.URL)
 		assert.NotNil(t, testIsb.Status.Config.JetStream.Auth)

@@ -125,9 +125,19 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 			}
 			controllerutil.RemoveFinalizer(pl, finalizerName)
+			// Clean up metrics
+			_ = reconciler.PipelineHealth.DeleteLabelValues(pl.Namespace, pl.Name)
 		}
 		return ctrl.Result{}, nil
 	}
+
+	defer func() {
+		if pl.Status.IsHealthy() {
+			reconciler.PipelineHealth.WithLabelValues(pl.Namespace, pl.Name).Set(1)
+		} else {
+			reconciler.PipelineHealth.WithLabelValues(pl.Namespace, pl.Name).Set(0)
+		}
+	}()
 
 	pl.Status.SetObservedGeneration(pl.Generation)
 	// New, or reconciliation failed pipeline
@@ -197,10 +207,10 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		log.Errorw("Failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
 		return ctrl.Result{}, err
 	}
-	if !isbSvc.Status.IsReady() {
-		pl.Status.MarkDeployFailed("ISBSvcNotReady", "ISB Service not ready.")
-		log.Errorw("ISB Service is not in ready status", zap.String("isbsvc", isbSvcName), zap.Error(err))
-		return ctrl.Result{}, fmt.Errorf("isbsvc not ready")
+	if !isbSvc.Status.IsHealthy() {
+		pl.Status.MarkDeployFailed("ISBSvcNotHealthy", "ISB Service not healthy.")
+		log.Errorw("ISB Service is not in healthy status", zap.String("isbsvc", isbSvcName), zap.Error(err))
+		return ctrl.Result{}, fmt.Errorf("isbsvc not healthy")
 	}
 
 	// Create or update the Side Inputs Manager deployments

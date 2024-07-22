@@ -19283,6 +19283,10 @@
         "lastUpdated": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
         },
+        "mapUDFCount": {
+          "type": "integer",
+          "format": "int64"
+        },
         "message": {
           "type": "string"
         },
@@ -19293,6 +19297,10 @@
         },
         "phase": {
           "type": "string"
+        },
+        "reduceUDFCount": {
+          "type": "integer",
+          "format": "int64"
         },
         "sinkCount": {
           "type": "integer",
