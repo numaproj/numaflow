@@ -104,9 +104,9 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 
 	defer func() {
 		if isbSvc.Status.IsHealthy() {
-			reconciler.ISBSvcHealth.WithLabelValues(isbSvc.Namespace, isbSvc.Name).Set(0)
-		} else {
 			reconciler.ISBSvcHealth.WithLabelValues(isbSvc.Namespace, isbSvc.Name).Set(1)
+		} else {
+			reconciler.ISBSvcHealth.WithLabelValues(isbSvc.Namespace, isbSvc.Name).Set(0)
 		}
 	}()
 

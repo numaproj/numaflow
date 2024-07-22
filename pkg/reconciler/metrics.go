@@ -33,13 +33,13 @@ var (
 	ISBSvcHealth = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
 		Name:      "isbsvc_health",
-		Help:      "A metric to indicate whether the ISB Service is healthy. '0' means healthy, '1' means unhealthy",
+		Help:      "A metric to indicate whether the ISB Service is healthy. '1' means healthy, '0' means unhealthy",
 	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
 
 	PipelineHealth = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
 		Name:      "pipeline_health",
-		Help:      "A metric to indicate whether the Pipeline is healthy. '0' means healthy, '1' means unhealthy",
+		Help:      "A metric to indicate whether the Pipeline is healthy. '1' means healthy, '0' means unhealthy",
 	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
 )
 

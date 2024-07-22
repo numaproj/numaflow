@@ -131,16 +131,15 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		return ctrl.Result{}, nil
 	}
 
-	pl.Status.SetObservedGeneration(pl.Generation)
-
 	defer func() {
 		if pl.Status.IsHealthy() {
-			reconciler.PipelineHealth.WithLabelValues(pl.Namespace, pl.Name).Set(0)
-		} else {
 			reconciler.PipelineHealth.WithLabelValues(pl.Namespace, pl.Name).Set(1)
+		} else {
+			reconciler.PipelineHealth.WithLabelValues(pl.Namespace, pl.Name).Set(0)
 		}
 	}()
 
+	pl.Status.SetObservedGeneration(pl.Generation)
 	// New, or reconciliation failed pipeline
 	if pl.Status.Phase == dfv1.PipelinePhaseUnknown || pl.Status.Phase == dfv1.PipelinePhaseFailed {
 		result, err := r.reconcileNonLifecycleChanges(ctx, pl)
