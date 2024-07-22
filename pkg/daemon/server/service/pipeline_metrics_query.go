@@ -287,3 +287,7 @@ func listBuffers(ctx context.Context, pipeline *v1alpha1.Pipeline, isbSvcClient 
 func (ps *PipelineMetadataQuery) StartHealthCheck(ctx context.Context) {
 	ps.healthChecker.startHealthCheck(ctx)
 }
+
+func (ps *PipelineMetadataQuery) GetHealthCheck(ctx context.Context) *dataHealthResponse {
+	return ps.healthChecker.getCurrentHealth()
+}

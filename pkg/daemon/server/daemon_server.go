@@ -305,6 +305,19 @@ func (ds *daemonServer) exposeMetrics(ctx context.Context) {
 			} else {
 				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(float64(time.Now().UnixMilli() - maxWM))
 			}
+
+			temp := ds.metaDataQuery.GetHealthCheck(ctx)
+			switch temp.Status {
+			case v1alpha1.PipelineStatusHealthy:
+				health.WithLabelValues(ds.pipeline.Name).Set(1)
+			case v1alpha1.PipelineStatusWarning:
+				health.WithLabelValues(ds.pipeline.Name).Set(2)
+			case v1alpha1.PipelineStatusCritical:
+				health.WithLabelValues(ds.pipeline.Name).Set(0)
+			default:
+				health.WithLabelValues(ds.pipeline.Name).Set(-1)
+			}
+
 		case <-ctx.Done():
 			return
 		}
