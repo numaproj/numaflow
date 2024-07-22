@@ -564,7 +564,7 @@ export const usePipelineViewFetch = (
       spec.edges.forEach((edge: any) => {
         const id = edge?.from + "-" + edge?.to;
         const markerEnd = {
-          type: MarkerType.Arrow,
+          type: MarkerType.ArrowClosed,
           width: 15,
           height: 15,
           color: edgeIsFull.get(edge?.to) ? "#DB334D" : "#8D9096",
@@ -602,6 +602,7 @@ export const usePipelineViewFetch = (
         } else if (fwdEdges.has(id)) {
           pipelineEdge.sourceHandle = "0";
           pipelineEdge.targetHandle = "0";
+          pipelineEdge.markerEnd = markerEnd;
         }
         newEdges.push(pipelineEdge);
       });
@@ -662,6 +663,8 @@ export const usePipelineViewFetch = (
     backEdgesHeight,
     nodeOutDegree,
   ]);
+
+  console.log("edges", edges)
 
   //sets loading variable
   useEffect(() => {

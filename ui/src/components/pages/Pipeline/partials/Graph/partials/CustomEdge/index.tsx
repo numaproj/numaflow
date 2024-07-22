@@ -1,7 +1,7 @@
 import React from "react";
 import { FC, memo, useCallback, useContext, useEffect, useMemo } from "react";
 import { Tooltip } from "@mui/material";
-import { EdgeProps, EdgeLabelRenderer, getSmoothStepPath } from "reactflow";
+import { EdgeProps, EdgeLabelRenderer, getSimpleBezierPath } from "reactflow";
 import { duration } from "moment";
 import { HighlightContext } from "../../index";
 import { HighlightContextProps } from "../../../../../../../types/declarations/graph";
@@ -21,17 +21,40 @@ const CustomEdge: FC<EdgeProps> = ({
   data,
   markerEnd,
 }) => {
-  const obj = getSmoothStepPath({
-    sourceX,
+  const straightWidth = 50
+  const obj = getSimpleBezierPath({
+    sourceX: sourceX + straightWidth,
     sourceY,
     sourcePosition,
-    targetX,
+    targetX: targetX - straightWidth,
     targetY,
     targetPosition,
   });
 
+  const debug = false
+
   let [edgePath, labelX, labelY] = obj;
+
+  // console.log(sourceX, sourceY, edgePath, sourcePosition, data)
   let labelRenderer = "";
+
+  // connect center of nodes
+  // edgePath = `M ${sourceX-252/2} ${sourceY} L ${targetX+252/2} ${targetY}`;
+
+  // connect small straight lines
+  // edgePath = `M ${sourceX} ${sourceY} L ${sourceX+straightWidth} ${sourceY}
+  // M ${sourceX+straightWidth} ${sourceY} L ${targetX-straightWidth} ${targetY}
+  // M ${targetX-straightWidth} ${targetY} L ${targetX} ${targetY}`;
+
+  // connect small straight lines with curve
+  // edgePath = `M ${sourceX} ${sourceY} L ${sourceX+straightWidth} ${sourceY}
+  // M ${sourceX+straightWidth} ${sourceY} C ${targetX-straightWidth} ${targetY}
+  // M ${targetX-straightWidth} ${targetY} L ${targetX} ${targetY}`;
+
+  // 259.1953125 125.8046875 'M259.1953125,125.8046875 C372,125.8046875 372,35.8046875 484.8046875,35.8046875'
+
+  edgePath = `M ${sourceX} ${sourceY} L ${sourceX+straightWidth} ${sourceY}
+  M ${sourceX+straightWidth} ${sourceY} ${edgePath} M ${targetX - straightWidth} ${targetY} L ${targetX} ${targetY}`;
 
   if (data?.fwdEdge) {
     if (sourceY !== targetY) {
@@ -205,7 +228,7 @@ const CustomEdge: FC<EdgeProps> = ({
           onClick={handleClick}
         />
       </svg>
-      <EdgeLabelRenderer>
+      {debug && (<EdgeLabelRenderer>
         <div
           className={"edge"}
           style={{
@@ -247,7 +270,7 @@ const CustomEdge: FC<EdgeProps> = ({
             </div>
           </Tooltip>
         </div>
-      </EdgeLabelRenderer>
+      </EdgeLabelRenderer>)}
     </>
   );
 };
