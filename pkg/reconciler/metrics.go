@@ -65,8 +65,15 @@ var (
 		Name:      "vertex_desired_replicas",
 		Help:      "A metric indicates the desired replicas of a Vertex",
 	}, []string{metrics.LabelNamespace, metrics.LabelPipeline, metrics.LabelVertex})
+
+	// VertexCurrentReplicas indicates the current replicas of a Vertex.
+	VertexCurrentReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "vertex_current_replicas",
+		Help:      "A metric indicates the current replicas of a Vertex",
+	}, []string{metrics.LabelNamespace, metrics.LabelPipeline, metrics.LabelVertex})
 )
 
 func init() {
-	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcHealth, PipelineHealth, JetStreamISBSvcReplicas, RedisISBSvcReplicas, VertexDisiredReplicas)
+	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcHealth, PipelineHealth, JetStreamISBSvcReplicas, RedisISBSvcReplicas, VertexDisiredReplicas, VertexCurrentReplicas)
 }
