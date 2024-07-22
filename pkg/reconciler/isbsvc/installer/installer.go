@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Installer is an interface for ISBS installation
+// Installer is an interface for ISB Service installation
 type Installer interface {
 	Install(ctx context.Context) (*dfv1.BufferServiceConfig, error)
 	// Uninstall only needs to handle those resources not cascade deleted.
@@ -36,7 +36,7 @@ type Installer interface {
 	Uninstall(ctx context.Context) error
 }
 
-// Install function installs the ISBS
+// Install function installs the ISB Service
 func Install(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger, recorder record.EventRecorder) error {
 	installer, err := getInstaller(isbSvc, client, kubeClient, config, logger, recorder)
 	if err != nil {
@@ -49,6 +49,7 @@ func Install(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client cl
 		return err
 	}
 	isbSvc.Status.Config = *bufferConfig
+
 	return nil
 }
 
@@ -74,9 +75,9 @@ func getInstaller(isbSvc *dfv1.InterStepBufferService, client client.Client, kub
 	return nil, fmt.Errorf("invalid isb service spec")
 }
 
-// Uninstall function will be run before the ISBS object is deleted,
+// Uninstall function will be run before the ISB Service object is deleted,
 // usually it could be used to uninstall the extra resources who would not be cleaned
-// up when an ISBS is deleted. Most of the time this is not needed as all
+// up when an ISB Service is deleted. Most of the time this is not needed as all
 // the dependency resources should have been deleted by owner references cascade
 // deletion, but things like PVC created by StatefulSet need to be cleaned up
 // separately.
