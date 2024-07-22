@@ -845,12 +845,12 @@ func (vs *VertexStatus) MarkPhaseRunning() {
 	vs.MarkPhase(VertexPhaseRunning, "", "")
 }
 
-// MarkPodNotHealthy marks the child resource as not healthy with the given reason and message.
+// MarkPodNotHealthy marks the pod not healthy with the given reason and message.
 func (vs *VertexStatus) MarkPodNotHealthy(reason, message string) {
 	vs.MarkFalse(VertexConditionPodHealthy, reason, message)
 }
 
-// MarkPodHealthy marks the child resource as healthy with the given reason and message.
+// MarkPodHealthy marks the pod as healthy with the given reason and message.
 func (vs *VertexStatus) MarkPodHealthy(reason, message string) {
 	vs.MarkTrueWithReason(VertexConditionPodHealthy, reason, message)
 }

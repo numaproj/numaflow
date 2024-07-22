@@ -51,6 +51,7 @@ const (
 	// PipelineConditionDaemonServiceHealthy has the status True when the daemon service is healthy.
 	PipelineConditionDaemonServiceHealthy    ConditionType = "DaemonServiceHealthy"
 	PipelineConditionSideInputServiceHealthy ConditionType = "SideInputManagerHealthy"
+	PipelineConditionVerticesServiceHealthy  ConditionType = "VerticesHealthy"
 )
 
 // +genclient
