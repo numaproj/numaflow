@@ -35,7 +35,7 @@ const CustomEdge: FC<EdgeProps> = ({
 
   let [edgePath, labelX, labelY] = obj;
 
-  // console.log(sourceX, sourceY, edgePath, sourcePosition, data)
+  // console.log( sourceX, sourceY, edgePath, sourcePosition, data)
   let labelRenderer = "";
 
   // connect center of nodes
