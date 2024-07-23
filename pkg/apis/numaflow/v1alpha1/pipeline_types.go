@@ -734,12 +734,12 @@ func (pls *PipelineStatus) IsHealthy() bool {
 	}
 }
 
-// MarkServiceNotHealthy marks the Daemon Service as not healthy with the given reason and message.
+// MarkServiceNotHealthy marks the Daemon, SideInput and Vertex Service as not healthy with the given reason and message.
 func (pls *PipelineStatus) MarkServiceNotHealthy(conditionType ConditionType, reason, message string) {
 	pls.MarkFalse(conditionType, reason, message)
 }
 
-// MarkServiceHealthy marks the Daemon or sideinput Service as healthy with the given reason and message.
+// MarkServiceHealthy marks the Daemon, SideInput and Vertex Service as healthy with the given reason and message.
 func (pls *PipelineStatus) MarkServiceHealthy(conditionType ConditionType, reason, message string) {
 	pls.MarkTrueWithReason(conditionType, reason, message)
 }

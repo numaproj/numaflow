@@ -38,7 +38,7 @@ const (
 	VertexPhaseSucceeded VertexPhase = "Succeeded"
 	VertexPhaseFailed    VertexPhase = "Failed"
 
-	// VertexConditionPodHealthy has the status True when the child resources is healthy.
+	// VertexConditionPodHealthy has the status True when all the vertex pods are healthy.
 	VertexConditionPodHealthy ConditionType = "PodHealthy"
 )
 

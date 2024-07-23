@@ -8510,7 +8510,8 @@ Status
 
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.InterStepBufferServiceStatus">InterStepBufferServiceStatus</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.PipelineStatus">PipelineStatus</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineStatus">PipelineStatus</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexStatus">VertexStatus</a>)
 </p>
 
 <p>
@@ -9948,6 +9949,25 @@ Kubernetes meta/v1.Time </a> </em>
 </td>
 
 <td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>Status</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Status"> Status </a> </em>
+</td>
+
+<td>
+
+<p>
+
+(Members of <code>Status</code> are embedded into this type.)
+</p>
 
 </td>
 

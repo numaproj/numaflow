@@ -120,7 +120,7 @@ func getDeploymentStatus(deployment *appv1.Deployment) (string, dfv1.ConditionTy
 		}
 		return fmt.Sprintf("deployment %q successfully rolled out\n", deployment.Name), serviceType, "DeploymentComplete", true
 	}
-	return fmt.Sprintf("Waiting for deployment spec update to be observed...\n"), serviceType, "DeploymentNotComplete", false
+	return "Waiting for deployment spec update to be observed...", serviceType, "DeploymentNotComplete", false
 }
 
 // GetDeploymentCondition returns the condition with the provided type.
