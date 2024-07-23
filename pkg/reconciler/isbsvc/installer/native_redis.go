@@ -121,8 +121,8 @@ func (r *redisInstaller) Install(ctx context.Context) (*dfv1.BufferServiceConfig
 		r.isbSvc.Status.MarkDeployFailed("RedisStatefulSetFailed", err.Error())
 		return nil, err
 	}
-
 	r.isbSvc.Status.MarkDeployed()
+	reconciler.RedisISBSvcReplicas.WithLabelValues(r.isbSvc.Namespace, r.isbSvc.Name).Set(float64(r.isbSvc.Spec.Redis.Native.GetReplicas()))
 	return &dfv1.BufferServiceConfig{
 		Redis: &dfv1.RedisConfig{
 			SentinelURL: fmt.Sprintf("%s.%s.svc:%v", generateRedisServiceName(r.isbSvc), r.isbSvc.Namespace, sentinelPort),
@@ -582,6 +582,8 @@ func (r *redisInstaller) createStatefulSet(ctx context.Context) error {
 }
 
 func (r *redisInstaller) Uninstall(ctx context.Context) error {
+	// Clean up metrics
+	_ = reconciler.RedisISBSvcReplicas.DeleteLabelValues(r.isbSvc.Namespace, r.isbSvc.Name)
 	return r.uninstallPVCs(ctx)
 }
 
