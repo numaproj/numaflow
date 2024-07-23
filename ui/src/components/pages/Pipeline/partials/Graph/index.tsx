@@ -1,5 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 import React, {
   createContext,
   MouseEvent,
@@ -85,6 +83,8 @@ const defaultEdgeTypes: EdgeTypes = {
 };
 
 //sets nodes and edges to highlight in the graph
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
 export const HighlightContext = createContext<HighlightContextProps>(null);
 
 const getLayoutedElements = (
@@ -156,6 +156,8 @@ const Flow = (props: FlowProps) => {
     handleNodeClick,
     handleEdgeClick,
     handlePaneClick,
+    handleEdgeEnter,
+    handleEdgeLeave,
     refresh,
     namespaceId,
     data,
@@ -285,6 +287,8 @@ const Flow = (props: FlowProps) => {
       onEdgeClick={handleEdgeClick}
       onNodeClick={handleNodeClick}
       onPaneClick={handlePaneClick}
+      onEdgeMouseEnter={handleEdgeEnter}
+      onEdgeMouseLeave={handleEdgeLeave}
       fitView
       preventScrolling={!isLocked}
       panOnDrag={!isLocked}
@@ -589,11 +593,12 @@ export default function Graph(props: GraphProps) {
     });
     setSideNodes(nodeSet);
   }, [layoutedNodes]);
+
   useEffect(() => {
     const edgeSet: Map<string, string> = new Map();
     layoutedEdges.forEach((edge) => {
       if (edge?.data?.sideInputEdge) {
-        edgeSet.set(edge?.id, edge?.targetHandle);
+        edgeSet.set(edge?.id, edge?.targetHandle ?? "");
       }
     });
     setSideEdges(edgeSet);
@@ -609,18 +614,14 @@ export default function Graph(props: GraphProps) {
       setNodes((nds) => applyNodeChanges(changes, nds)),
     [setNodes]
   );
+
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) =>
       setEdges((eds) => applyEdgeChanges(changes, eds)),
     [setEdges]
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [edgeOpen, setEdgeOpen] = useState(false);
-
   const [edgeId, setEdgeId] = useState<string>();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [edge, setEdge] = useState<Edge>();
 
   const openEdgeSidebar = useCallback(
     (edge: Edge) => {
@@ -645,12 +646,11 @@ export default function Graph(props: GraphProps) {
   );
 
   const handleEdgeClick = useCallback(
-    (event: MouseEvent, edge: Edge) => {
-      setEdge(edge);
+    (_: MouseEvent, edge: Edge) => {
       setEdgeId(edge.id);
-      setEdgeOpen(true);
-      setShowSpec(false);
-      setNodeOpen(false);
+      const updatedEdgeHighlightValues: any = {};
+      updatedEdgeHighlightValues[edge.id] = true;
+      setHighlightValues(updatedEdgeHighlightValues);
       openEdgeSidebar(edge);
     },
     [setSidebarProps, namespaceId, pipelineId, openEdgeSidebar]
@@ -666,7 +666,6 @@ export default function Graph(props: GraphProps) {
         edge.label = dataEdge.label;
         edge.id = dataEdge.id;
         flag = true;
-        setEdge(edge);
         if (sidebarProps && sidebarProps?.type === SidebarType?.EDGE_DETAILS) {
           // Update sidebar data if already open
           openEdgeSidebar(edge);
@@ -675,12 +674,7 @@ export default function Graph(props: GraphProps) {
     });
   }, [edges, edgeId, sidebarProps, openEdgeSidebar]);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [nodeOpen, setNodeOpen] = useState(false);
-
   const [nodeId, setNodeId] = useState<string>();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [node, setNode] = useState<Node>();
 
   useEffect(() => {
     setEdges((eds) => eds.map(hide(hidden)));
@@ -733,11 +727,7 @@ export default function Graph(props: GraphProps) {
 
   const handleNodeClick = useCallback(
     (event: MouseEvent | undefined, node: Node) => {
-      setNode(node);
       setNodeId(node.id);
-      setNodeOpen(true);
-      setShowSpec(false);
-      setEdgeOpen(false);
       const target = event?.target as HTMLElement;
       setHidden((prevState) => {
         const updatedState: any = {};
@@ -762,7 +752,6 @@ export default function Graph(props: GraphProps) {
       if (dataNode.id === nodeId) {
         node.data = dataNode.data;
         node.id = dataNode.id;
-        setNode(node);
         if (
           sidebarProps &&
           (sidebarProps.type === SidebarType.VERTEX_DETAILS ||
@@ -779,10 +768,7 @@ export default function Graph(props: GraphProps) {
     [key: string]: boolean;
   }>({});
 
-  const handlePaneClick = () => {
-    setShowSpec(true);
-    setEdgeOpen(false);
-    setNodeOpen(false);
+  const handlePaneClick = useCallback(() => {
     setHighlightValues({});
     setHidden((prevState) => {
       const updatedState: any = {};
@@ -791,10 +777,33 @@ export default function Graph(props: GraphProps) {
       });
       return updatedState;
     });
-  };
+  }, [setHidden]);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [showSpec, setShowSpec] = useState(true);
+  const [hoveredEdge, setHoveredEdge] = useState<string>("");
+
+  const handleEdgeEnter = useCallback(
+    (_: any, edge: Edge) => {
+      if (edge?.data?.sideInputEdge) return;
+      setHidden(initialHiddenValue);
+      setHoveredEdge(edge.id);
+      const updatedEdgeHighlightValues: any = {};
+      updatedEdgeHighlightValues[edge.id] = true;
+      setHighlightValues(updatedEdgeHighlightValues);
+    },
+    [initialHiddenValue]
+  );
+
+  const handleEdgeLeave = useCallback(
+    (_: any, edge: Edge) => {
+      if (edge?.data?.sideInputEdge) return;
+      setHidden(initialHiddenValue);
+      setHoveredEdge("");
+      if (sidebarProps === undefined) {
+        setHighlightValues({});
+      }
+    },
+    [sidebarProps, initialHiddenValue]
+  );
 
   return (
     <div style={{ height: "100%" }}>
@@ -806,23 +815,24 @@ export default function Graph(props: GraphProps) {
             setHidden,
             sideInputNodes: sideNodes,
             sideInputEdges: sideEdges,
+            hoveredEdge,
           }}
         >
           <ReactFlowProvider>
             <Flow
-              {...{
-                nodes,
-                edges,
-                onNodesChange,
-                onEdgesChange,
-                handleNodeClick,
-                handleEdgeClick,
-                handlePaneClick,
-                setSidebarProps,
-                refresh,
-                namespaceId,
-                data,
-              }}
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              handleNodeClick={handleNodeClick}
+              handleEdgeClick={handleEdgeClick}
+              handlePaneClick={handlePaneClick}
+              handleEdgeEnter={handleEdgeEnter}
+              handleEdgeLeave={handleEdgeLeave}
+              setSidebarProps={setSidebarProps}
+              refresh={refresh}
+              namespaceId={namespaceId}
+              data={data}
             />
           </ReactFlowProvider>
         </HighlightContext.Provider>

@@ -602,6 +602,7 @@ export const usePipelineViewFetch = (
         } else if (fwdEdges.has(id)) {
           pipelineEdge.sourceHandle = "0";
           pipelineEdge.targetHandle = "0";
+          pipelineEdge.markerEnd = markerEnd;
         }
         newEdges.push(pipelineEdge);
       });
