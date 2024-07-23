@@ -417,7 +417,7 @@ const CustomNode: FC<NodeProps> = ({
             id={`3-${idx}`}
             className={"sideInput_handle"}
             style={{
-              left: `${44.2 - idx * 9}%`,
+              left: `${44.3 - idx * 9}%`,
               ...blurHandle(`3-${idx}`),
             }}
             width={22}
