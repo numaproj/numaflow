@@ -36,8 +36,8 @@ const (
 	// has its RestfulSet/Deployment as well as services created.
 	ISBSvcConditionDeployed ConditionType = "Deployed"
 
-	// ISBSvcConditionChildResourceHealthy has the status True when the child resources is healthy.
-	ISBSvcConditionChildResourceHealthy ConditionType = "ChildResourcesHealthy"
+	// ISBSvcConditionStatefulSetResourceHealthy has the status True when the child resources is healthy.
+	ISBSvcConditionStatefulSetResourceHealthy ConditionType = "StatefulSetHealthy"
 )
 
 type ISBSvcType string
@@ -150,10 +150,10 @@ func (isbsvc *InterStepBufferServiceStatus) IsHealthy() bool {
 
 // MarkChildNotHealthy marks the child resources as not healthy
 func (isbsvc *InterStepBufferServiceStatus) MarkChildNotHealthy(reason, message string) {
-	isbsvc.MarkFalse(ISBSvcConditionChildResourceHealthy, reason, message)
+	isbsvc.MarkFalse(ISBSvcConditionStatefulSetResourceHealthy, reason, message)
 }
 
 // MarkChildHealthy marks the child resources as healthy
 func (isbsvc *InterStepBufferServiceStatus) MarkChildHealthy(reason, message string) {
-	isbsvc.MarkTrueWithReason(ISBSvcConditionChildResourceHealthy, reason, message)
+	isbsvc.MarkTrueWithReason(ISBSvcConditionStatefulSetResourceHealthy, reason, message)
 }

@@ -211,6 +211,10 @@ func (p Pipeline) GetSideInputsStoreName() string {
 	return fmt.Sprintf("%s-%s", p.Namespace, p.Name)
 }
 
+func (p Pipeline) GetVertexName(defname string) string {
+	return fmt.Sprintf("%s-%s", p.Name, defname)
+}
+
 func (p Pipeline) GetServingSourceStreamNames() []string {
 	var servingSourceNames []string
 	for _, srcVertex := range p.Spec.Vertices {

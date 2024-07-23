@@ -4,77 +4,91 @@ import (
 	"context"
 	"fmt"
 
-	"go.uber.org/zap"
 	appv1 "k8s.io/api/apps/v1"
-	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
-// DeploymentStatusHandler updates the Pipeline status based on the Deployment status
-func DeploymentStatusHandler(mgr manager.Manager, logger *zap.SugaredLogger) handler.EventHandler {
-	return handler.Funcs{
-		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
-			// Check if the resource version has changed
-			if e.ObjectOld.GetResourceVersion() == e.ObjectNew.GetResourceVersion() {
-				return
-			}
+func setResourceStatus(c client.Client, pipeline *dfv1.Pipeline) error {
+	// get the daemon deployment and update the status of it to the pipeline
+	var daemonDeployment appv1.Deployment
+	if err := c.Get(context.TODO(), client.ObjectKey{
+		Namespace: pipeline.GetNamespace(),
+		Name:      pipeline.GetDaemonDeploymentName(),
+	}, &daemonDeployment); err != nil {
+		return err
+	}
+	if msg, serviceType, reason, status := getDeploymentStatus(&daemonDeployment); status {
+		pipeline.Status.MarkServiceHealthy(serviceType, reason, msg)
+	} else {
+		pipeline.Status.MarkServiceNotHealthy(serviceType, reason, msg)
+	}
 
-			// Fetch the owner references from the metadata
-			ownerRefs := e.ObjectNew.GetOwnerReferences()
-			ownedByPipeline := false
-			for _, ref := range ownerRefs {
-				if ref.Kind == dfv1.PipelineGroupVersionKind.Kind && ref.APIVersion == dfv1.PipelineGroupVersionKind.GroupVersion().String() {
-					ownedByPipeline = true
-					break
+	// get the side input deployments and update the status of them to the pipeline
+	for _, sideInput := range pipeline.Spec.SideInputs {
+		var sideInputDeployment appv1.Deployment
+		if err := c.Get(context.TODO(), client.ObjectKey{
+			Namespace: pipeline.GetNamespace(),
+			Name:      pipeline.GetSideInputsManagerDeploymentName(sideInput.Name),
+		}, &sideInputDeployment); err != nil {
+			return err
+		}
+
+		if msg, serviceType, reason, status := getDeploymentStatus(&sideInputDeployment); status {
+			pipeline.Status.MarkServiceHealthy(serviceType, reason, msg)
+		} else {
+			pipeline.Status.MarkServiceNotHealthy(serviceType, reason, msg)
+
+		}
+
+	}
+
+	// calculate the status of the vertices and update the status of them to the pipeline
+	status, reason, err := getVertexStatus(c, pipeline)
+	if err != nil {
+		return err
+	}
+	if status == "True" {
+		pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionVerticesServiceHealthy, reason, "All Vertices are healthy")
+	} else if status == "False" {
+		pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionVerticesServiceHealthy, reason, "Some Vertices are not healthy")
+	}
+
+	return nil
+}
+
+// getVertexStatus will calculate the status of the vertices and return the status and reason
+func getVertexStatus(c client.Client, pipeline *dfv1.Pipeline) (string, string, error) {
+	totalVertices := len(pipeline.Spec.Vertices)
+	healthyVertices := 0
+	for _, pipelineVertex := range pipeline.Spec.Vertices {
+		var vertex dfv1.Vertex
+		if err := c.Get(context.TODO(), client.ObjectKey{
+			Namespace: pipeline.GetNamespace(),
+			Name:      pipeline.GetVertexName(pipelineVertex.Name),
+		}, &vertex); err != nil {
+			return "", "", err
+		}
+		for _, condition := range vertex.Status.Conditions {
+			if condition.Type == string(dfv1.VertexConditionPodHealthy) {
+				if condition.Status == "True" {
+					healthyVertices++
 				}
 			}
-			// Proceed only if the Pipeline owns the resources.
-			if !ownedByPipeline {
-				return
-			}
+		}
+	}
 
-			deploymentName := e.ObjectNew.GetName()
-			deploymentNamespace := e.ObjectNew.GetNamespace()
-			log := logger.With("namespace", deploymentNamespace).With("pipeline", deploymentName)
-
-			var deployment appv1.Deployment
-			if err := mgr.GetClient().Get(context.TODO(), client.ObjectKey{
-				Namespace: deploymentNamespace,
-				Name:      deploymentName,
-			}, &deployment); err != nil {
-				log.Errorw("Unable to fetch Deployment for Pipeline", zap.Error(err))
-				return
-			}
-
-			// fetch the latest Pipeline for updating the status
-			var pipeline dfv1.Pipeline
-			if err := mgr.GetClient().Get(context.TODO(), client.ObjectKey{
-				Namespace: deploymentNamespace,                          // Deployment and Pipeline are in the same namespace
-				Name:      deployment.GetLabels()[dfv1.KeyPipelineName], // Pipeline name is stored in the Deployment labels
-			}, &pipeline); err != nil {
-				log.Errorw("Unable to fetch Pipeline", zap.Error(err))
-				return
-			}
-
-			if msg, serviceType, reason, status := getDeploymentStatus(&deployment); status {
-				pipeline.Status.MarkServiceHealthy(serviceType, reason, msg)
-			} else {
-				pipeline.Status.MarkServiceNotHealthy(serviceType, reason, msg)
-			}
-			// patch the status of pipeline
-			if err := mgr.GetClient().Status().Patch(ctx, &pipeline, client.Merge); err != nil {
-				logger.Errorw("Unable to update Pipeline status", zap.Error(err))
-				return
-			}
-		},
+	if healthyVertices == totalVertices {
+		return "True", "Progressing", nil
+	} else {
+		return "False", "Progressing", nil
 	}
 }
 
+// getDeploymentStatus returns a message describing deployment status, and message with service type and reason where
+// bool value indicating if the status is considered done.
+// Borrowed at kubernetes/kubectl/rollout_status.go https://github.com/kubernetes/kubernetes/blob/cea1d4e20b4a7886d8ff65f34c6d4f95efcb4742/staging/src/k8s.io/kubectl/pkg/polymorphichelpers/rollout_status.go#L59
 func getDeploymentStatus(deployment *appv1.Deployment) (string, dfv1.ConditionType, string, bool) {
 	// get the service type using component label value
 	var serviceType dfv1.ConditionType
@@ -118,70 +132,4 @@ func getDeploymentCondition(status appv1.DeploymentStatus, condType appv1.Deploy
 		}
 	}
 	return nil
-}
-
-func VertexStatusHandler(mgr manager.Manager, logger *zap.SugaredLogger) handler.EventHandler {
-	return handler.Funcs{
-		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
-			// Check if the resource version has changed
-			if e.ObjectOld.GetResourceVersion() == e.ObjectNew.GetResourceVersion() {
-				return
-			}
-
-			// Fetch the owner references from the metadata
-			ownerRefs := e.ObjectNew.GetOwnerReferences()
-			ownedByPipeline := false
-			for _, ref := range ownerRefs {
-				if ref.Kind == dfv1.PipelineGroupVersionKind.Kind && ref.APIVersion == dfv1.PipelineGroupVersionKind.GroupVersion().String() {
-					ownedByPipeline = true
-					break
-				}
-			}
-			// Proceed only if the Pipeline owns the resources.
-			if !ownedByPipeline {
-				return
-			}
-
-			vertexName := e.ObjectNew.GetName()
-			vertexNamespace := e.ObjectNew.GetNamespace()
-
-			log := logger.With("namespace", vertexNamespace).With("vertex name", vertexName)
-
-			// fetch the vertex for calculating the status of child resources
-			var vertex dfv1.Vertex
-			if err := mgr.GetClient().Get(context.TODO(), client.ObjectKey{
-				Namespace: vertexNamespace,
-				Name:      vertexName,
-			}, &vertex); err != nil {
-				log.Errorw("Unable to fetch Vertex for Pipeline", zap.Error(err))
-				return
-			}
-
-			// fetch the pipeline to update the status
-			var pipeline dfv1.Pipeline
-			if err := mgr.GetClient().Get(context.TODO(), client.ObjectKey{
-				Namespace: vertexNamespace,
-				Name:      vertex.GetLabels()[dfv1.KeyPipelineName],
-			}, &pipeline); err != nil {
-				log.Errorw("Unable to fetch Pipeline", zap.Error(err))
-				return
-			}
-
-			if status, reason := getVertexStatus(vertex.Status); status == "True" {
-				pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionVerticesServiceHealthy, reason, "Vertex is healthy")
-			} else if status == "False" {
-				pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionVerticesServiceHealthy, reason, "Vertex is not healthy")
-			}
-		},
-	}
-}
-
-func getVertexStatus(vertexStatus dfv1.VertexStatus) (string, string) {
-	for _, condition := range vertexStatus.Conditions {
-		if condition.Type == string(dfv1.VertexConditionPodHealthy) {
-			return string(condition.Status), condition.Reason
-		}
-	}
-
-	return "", ""
 }

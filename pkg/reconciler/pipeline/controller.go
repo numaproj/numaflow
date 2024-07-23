@@ -91,6 +91,9 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return result, err
 		}
 	}
+	if err := setResourceStatus(r.client, plCopy); err != nil {
+		log.Errorw("Failed to update pipeline resource status", zap.Error(err))
+	}
 	if err := r.client.Status().Update(ctx, plCopy); err != nil {
 		return result, err
 	}

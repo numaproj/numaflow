@@ -77,6 +77,9 @@ func (r *vertexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		log.Errorw("Reconcile error", zap.Error(err))
 	}
 
+	if err = setPodStatus(r.client, vertexCopy); err != nil {
+		log.Errorw("Failed to update vertex pod status", zap.Error(err))
+	}
 	if !equality.Semantic.DeepEqual(vertex.Status, vertexCopy.Status) {
 		if err := r.client.Status().Update(ctx, vertexCopy); err != nil {
 			return reconcile.Result{}, err

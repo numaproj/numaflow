@@ -150,7 +150,7 @@ func Start(namespaced bool, managedNamespace string) {
 
 	// Watch StatefulSets with Generation changes, and enqueue owning InterStepBuffer key
 	if err := isbSvcController.Watch(source.Kind(mgr.GetCache(), &appv1.StatefulSet{}),
-		isbsvcctrl.StatefulSetStatusHandler(mgr, logger),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.InterStepBufferService{}, handler.OnlyControllerOwner()),
 		predicate.ResourceVersionChangedPredicate{}); err != nil {
 		logger.Fatalw("Unable to watch StatefulSets", zap.Error(err))
 	}
@@ -180,7 +180,7 @@ func Start(namespaced bool, managedNamespace string) {
 
 	// Watch Vertices with Generation changes (excluding scaling up/down)
 	if err := pipelineController.Watch(source.Kind(mgr.GetCache(), &dfv1.Vertex{}),
-		plctrl.VertexStatusHandler(mgr, logger),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Pipeline{}, handler.OnlyControllerOwner()),
 		predicate.ResourceVersionChangedPredicate{}); err != nil {
 		logger.Fatalw("Unable to watch Vertices", zap.Error(err))
 	}
@@ -194,7 +194,7 @@ func Start(namespaced bool, managedNamespace string) {
 
 	// Watch Deployments with Generation changes
 	if err := pipelineController.Watch(source.Kind(mgr.GetCache(), &appv1.Deployment{}),
-		plctrl.DeploymentStatusHandler(mgr, logger),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Pipeline{}, handler.OnlyControllerOwner()),
 		predicate.ResourceVersionChangedPredicate{}); err != nil {
 		logger.Fatalw("Unable to watch Deployments", zap.Error(err))
 	}
@@ -218,7 +218,7 @@ func Start(namespaced bool, managedNamespace string) {
 
 	// Watch Pods
 	if err := vertexController.Watch(source.Kind(mgr.GetCache(), &corev1.Pod{}),
-		vertexctrl.PodsStatusHandler(mgr, logger),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Vertex{}, handler.OnlyControllerOwner()),
 		predicate.ResourceVersionChangedPredicate{},
 		predicate.Funcs{
 			CreateFunc: func(event.CreateEvent) bool { return false }, // Do not watch pod create events
