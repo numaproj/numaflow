@@ -82,8 +82,8 @@ func (v *pipelineValidator) checkISBSVCExists(ctx context.Context, isbSvcName st
 	if err != nil {
 		return err
 	}
-	if !isb.Status.IsReady() {
-		return fmt.Errorf("ISB service %q is not ready", isbSvcName)
+	if !isb.Status.IsHealthy() {
+		return fmt.Errorf("ISB service %q is not healthy", isbSvcName)
 	}
 	return nil
 }

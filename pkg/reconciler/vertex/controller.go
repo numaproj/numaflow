@@ -111,10 +111,10 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		vertex.Status.MarkPhaseFailed("FindISBSvcFailed", err.Error())
 		return ctrl.Result{}, err
 	}
-	if !isbSvc.Status.IsReady() {
-		log.Errorw("ISB Service is not in ready status", zap.String("isbsvc", isbSvcName), zap.Error(err))
-		vertex.Status.MarkPhaseFailed("ISBSvcNotReady", "isbsvc not ready")
-		return ctrl.Result{}, fmt.Errorf("isbsvc not ready")
+	if !isbSvc.Status.IsHealthy() {
+		log.Errorw("ISB Service is not in healthy status", zap.String("isbsvc", isbSvcName), zap.Error(err))
+		vertex.Status.MarkPhaseFailed("ISBSvcNotHealthy", "isbsvc not healthy")
+		return ctrl.Result{}, fmt.Errorf("isbsvc not healthy")
 	}
 
 	if vertex.Scalable() { // Add to autoscaling watcher
@@ -339,14 +339,15 @@ func (r *vertexReconciler) buildReduceVertexPVCSpec(vertex *dfv1.Vertex, replica
 
 func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, isbSvcConfig dfv1.BufferServiceConfig, replicaIndex int) (*corev1.PodSpec, error) {
 	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
-
 	podSpec, err := vertex.GetPodSpec(dfv1.GetVertexPodSpecReq{
-		ISBSvcType:          isbSvcType,
-		Image:               r.image,
-		PullPolicy:          corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
-		Env:                 envs,
-		SideInputsStoreName: pl.GetSideInputsStoreName(),
-		DefaultResources:    r.config.GetDefaults().GetDefaultContainerResources(),
+		ISBSvcType:              isbSvcType,
+		Image:                   r.image,
+		PullPolicy:              corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
+		Env:                     envs,
+		SideInputsStoreName:     pl.GetSideInputsStoreName(),
+		ServingSourceStreamName: vertex.GetServingSourceStreamName(),
+		PipelineSpec:            pl.Spec,
+		DefaultResources:        r.config.GetDefaults().GetDefaultContainerResources(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate pod spec, error: %w", err)

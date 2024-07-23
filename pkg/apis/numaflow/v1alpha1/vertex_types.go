@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -131,7 +132,15 @@ func (v Vertex) GetServiceObjs() []*corev1.Service {
 	if x := v.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
 		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
 	}
+	// serving source uses the same port as the http source, because both can't be configured at the same time
+	if x := v.Spec.Source; x != nil && x.Serving != nil && x.Serving.Service {
+		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
+	}
 	return svcs
+}
+
+func (v Vertex) GetServingSourceStreamName() string {
+	return fmt.Sprintf("%s-%s-serving-source", v.Spec.PipelineName, v.Spec.Name)
 }
 
 func (v Vertex) getServiceObj(name string, headless bool, port int32, servicePortName string) *corev1.Service {
@@ -175,10 +184,8 @@ func (v Vertex) commonEnvs() []corev1.EnvVar {
 		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
 		{Name: EnvVertexName, Value: v.Spec.Name},
-		{Name: EnvMapStreaming, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + MapUdfStreamKey + "']"}}},
 		{Name: EnvCallbackEnabled, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + CallbackEnabledKey + "']"}}},
 		{Name: EnvCallbackURL, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + CallbackURLKey + "']"}}},
-		{Name: EnvBatchMap, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + BatchMapUdfStreamKey + "']"}}},
 	}
 }
 
@@ -237,6 +244,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	containers[0].ReadinessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -262,7 +270,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		TimeoutSeconds:      30,
 	}
 	containers[0].Ports = []corev1.ContainerPort{
-		{Name: "metrics", ContainerPort: VertexMetricsPort},
+		{Name: VertexMetricsPortName, ContainerPort: VertexMetricsPort},
 	}
 
 	if len(containers) > 1 { // udf, udsink, udsource, or source vertex specifies a udtransformer
@@ -306,6 +314,16 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		initContainers[1].VolumeMounts = append(initContainers[1].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 	}
 
+	if v.IsASource() && v.Spec.Source.Serving != nil {
+		servingContainer, err := v.getServingContainer(req)
+		if err != nil {
+			return nil, err
+		}
+		containers = append(containers, servingContainer)
+		// set the serving source stream name in the environment because the numa container will be reading from it
+		containers[0].Env = append(containers[0].Env, corev1.EnvVar{Name: EnvServingJetstreamStream, Value: req.ServingSourceStreamName})
+	}
+
 	spec := &corev1.PodSpec{
 		Subdomain:      v.GetHeadlessServiceName(),
 		Volumes:        append(volumes, v.Spec.Volumes...),
@@ -317,6 +335,110 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		v.Spec.ContainerTemplate.ApplyToNumaflowContainers(spec.Containers)
 	}
 	return spec, nil
+}
+
+func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, error) {
+	servingSource := v.Spec.Source.Serving
+	servingContainer := corev1.Container{
+		Name:            ServingSourceContainer,
+		Env:             req.Env,
+		Image:           "numaserve:0.1", // TODO: use appropriate image
+		ImagePullPolicy: corev1.PullIfNotPresent,
+		Resources:       req.DefaultResources,
+	}
+
+	// set the common envs
+	servingContainer.Env = append(servingContainer.Env, v.commonEnvs()...)
+
+	// set the serving source stream name in the environment
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingJetstreamStream, Value: req.ServingSourceStreamName})
+	// set the serving source spec in the environment
+	servingSourceCopy := servingSource.DeepCopy()
+	servingSourceBytes, err := json.Marshal(servingSourceCopy)
+	if err != nil {
+		return corev1.Container{}, errors.New("failed to marshal serving source spec")
+	}
+	encodedServingSourceSpec := base64.StdEncoding.EncodeToString(servingSourceBytes)
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingObject, Value: encodedServingSourceSpec})
+
+	// set the serving source port in the environment
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingPort, Value: strconv.Itoa(VertexHTTPSPort)})
+
+	// Create a SimplifiedPipelineSpec and populate it with the vertex names and edges
+	simplifiedPipelineSpec := PipelineSpec{
+		Vertices: req.PipelineSpec.Vertices,
+		Edges:    req.PipelineSpec.Edges,
+	}
+
+	pipelineSpecBytes, err := json.Marshal(simplifiedPipelineSpec)
+	if err != nil {
+		return corev1.Container{}, fmt.Errorf("failed to marshal pipeline spec, error: %w", err)
+	}
+	encodedPipelineSpec := base64.StdEncoding.EncodeToString(pipelineSpecBytes)
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{
+		Name:  EnvServingMinPipelineSpec,
+		Value: encodedPipelineSpec,
+	})
+
+	// set the pod IP in the environment, which will be used for receiving callbacks.
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{
+		Name: EnvServingHostIP,
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "status.podIP",
+			},
+		},
+	})
+
+	// set the serving store TTL in the environment
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{
+		Name:  EnvServingStoreTTL,
+		Value: strconv.Itoa(int(servingSource.Store.GetTTL().Seconds())),
+	})
+
+	// if auth is configured, set the auth token in the environment
+	if servingSource.Auth != nil && servingSource.Auth.Token != nil {
+		servingContainer.Env = append(servingContainer.Env,
+			corev1.EnvVar{
+				Name: EnvServingAuthToken, ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: servingSource.Auth.Token.Name,
+						},
+						Key: servingSource.Auth.Token.Key,
+					},
+				},
+			},
+		)
+	}
+
+	servingContainer.LivenessProbe = &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path:   "/readyz",
+				Port:   intstr.FromInt32(VertexHTTPSPort),
+				Scheme: corev1.URISchemeHTTP,
+			},
+		},
+		InitialDelaySeconds: 3,
+		PeriodSeconds:       3,
+		TimeoutSeconds:      1,
+	}
+
+	servingContainer.ReadinessProbe = &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path:   "/livez",
+				Port:   intstr.FromInt32(VertexHTTPSPort),
+				Scheme: corev1.URISchemeHTTP,
+			},
+		},
+		InitialDelaySeconds: 20,
+		PeriodSeconds:       60,
+		TimeoutSeconds:      30,
+	}
+
+	return servingContainer, nil
 }
 
 func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {

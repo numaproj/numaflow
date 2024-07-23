@@ -2,11 +2,19 @@ use std::fmt::Debug;
 use std::path::Path;
 use std::{env, sync::OnceLock};
 
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use config::Config;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::{Error, Result};
+
+const ENV_PREFIX: &str = "NUMAFLOW_SERVING";
+const ENV_NUMAFLOW_SERVING_SOURCE_OBJECT: &str = "NUMAFLOW_SERVING_SOURCE_OBJECT";
+const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
+const ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM: &str = "NUMAFLOW_SERVING_JETSTREAM_STREAM";
+const ENV_NUMAFLOW_SERVING_STORE_TTL: &str = "NUMAFLOW_SERVING_STORE_TTL";
 
 pub fn config() -> &'static Settings {
     static CONF: OnceLock<Settings> = OnceLock::new();
@@ -28,7 +36,9 @@ pub fn config() -> &'static Settings {
 #[derive(Debug, Deserialize)]
 pub struct JetStreamConfig {
     pub stream: String,
-    pub addr: String,
+    pub url: String,
+    pub user: Option<String>,
+    pub password: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -37,6 +47,7 @@ pub struct RedisConfig {
     pub max_tasks: usize,
     pub retries: usize,
     pub retries_duration_millis: u16,
+    pub ttl_secs: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,9 +59,21 @@ pub struct Settings {
     pub drain_timeout_secs: u64,
     pub jetstream: JetStreamConfig,
     pub redis: RedisConfig,
-    pub pipeline_spec_path: String,
     /// The IP address of the numaserve pod. This will be used to construct the value for X-Numaflow-Callback-Url header
     pub host_ip: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Serving {
+    #[serde(rename = "msgIDHeaderKey")]
+    pub msg_id_header_key: Option<String>,
+    #[serde(rename = "store")]
+    pub callback_storage: CallbackStorageConfig,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CallbackStorageConfig {
+    pub url: String,
 }
 
 impl Settings {
@@ -62,18 +85,63 @@ impl Settings {
                 config_dir.to_string_lossy()
             )));
         }
+
         let settings = Config::builder()
             .add_source(config::File::from(config_dir.join("default.toml")))
             .add_source(
-                config::Environment::with_prefix("APP")
+                config::Environment::with_prefix(ENV_PREFIX)
                     .prefix_separator("_")
                     .separator("."),
             )
             .build()
             .map_err(|e| format!("generating runtime configuration: {e:?}"))?;
-        Ok(settings
+
+        let mut settings = settings
             .try_deserialize::<Self>()
-            .map_err(|e| format!("parsing runtime configuration: {e:?}"))?)
+            .map_err(|e| format!("parsing runtime configuration: {e:?}"))?;
+
+        // Update JetStreamConfig from environment variables
+        if let Ok(url) = env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_URL) {
+            settings.jetstream.url = url;
+        }
+        if let Ok(stream) = env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM) {
+            settings.jetstream.stream = stream;
+        }
+
+        let source_spec_encoded = env::var(ENV_NUMAFLOW_SERVING_SOURCE_OBJECT);
+
+        match source_spec_encoded {
+            Ok(source_spec_encoded) => {
+                let source_spec_decoded = BASE64_STANDARD
+                    .decode(source_spec_encoded.as_bytes())
+                    .map_err(|e| format!("decoding NUMAFLOW_SERVING_SOURCE: {e:?}"))?;
+
+                let source_spec = serde_json::from_slice::<Serving>(&source_spec_decoded)
+                    .map_err(|e| format!("parsing NUMAFLOW_SERVING_SOURCE: {e:?}"))?;
+
+                // Update tid_header from source_spec
+                if let Some(msg_id_header_key) = source_spec.msg_id_header_key {
+                    settings.tid_header = msg_id_header_key;
+                }
+
+                // Update redis.addr from source_spec, currently we only support redis as callback storage
+                settings.redis.addr = source_spec.callback_storage.url;
+
+                // Update redis.ttl_secs from environment variable
+                settings.redis.ttl_secs = match env::var(ENV_NUMAFLOW_SERVING_STORE_TTL) {
+                    Ok(ttl_secs) => Some(ttl_secs.parse().map_err(|e| {
+                        format!(
+                            "parsing NUMAFLOW_SERVING_STORE_TTL: expected u32, got {:?}",
+                            e
+                        )
+                    })?),
+                    Err(_) => None,
+                };
+
+                Ok(settings)
+            }
+            Err(_) => Ok(settings),
+        }
     }
 }
 
@@ -100,11 +168,10 @@ mod tests {
         assert_eq!(settings.upstream_addr, "localhost:8888");
         assert_eq!(settings.drain_timeout_secs, 10);
         assert_eq!(settings.jetstream.stream, "default");
-        assert_eq!(settings.jetstream.addr, "localhost:4222");
+        assert_eq!(settings.jetstream.url, "localhost:4222");
         assert_eq!(settings.redis.addr, "redis://127.0.0.1/");
         assert_eq!(settings.redis.max_tasks, 50);
         assert_eq!(settings.redis.retries, 5);
         assert_eq!(settings.redis.retries_duration_millis, 100);
-        assert_eq!(settings.pipeline_spec_path, "./config/pipeline_spec.json");
     }
 }

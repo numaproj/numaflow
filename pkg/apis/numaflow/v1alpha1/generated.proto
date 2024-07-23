@@ -321,7 +321,7 @@ message Edge {
 
   optional string to = 2;
 
-  // Conditional forwarding, only allowed when "From" is a Sink or UDF.
+  // Conditional forwarding, only allowed when "From" is a Source or UDF.
   // +optional
   optional ForwardConditions conditions = 3;
 
@@ -543,7 +543,11 @@ message GetVertexPodSpecReq {
 
   optional string sideInputsStoreName = 5;
 
-  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 6;
+  optional string servingSourceStreamName = 6;
+
+  optional PipelineSpec pipelineSpec = 7;
+
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 8;
 }
 
 // GroupBy indicates it is a reducer UDF
@@ -631,13 +635,16 @@ message InterStepBufferServiceStatus {
   optional BufferServiceConfig config = 4;
 
   optional string type = 5;
+
+  // ObservedGeneration stores the generation value observed by the controller.
+  optional int64 observedGeneration = 6;
 }
 
 message JetStreamBufferService {
   // JetStream version, such as "2.7.1"
   optional string version = 1;
 
-  // Redis StatefulSet size
+  // JetStream StatefulSet size
   // +kubebuilder:default=3
   optional int32 replicas = 2;
 
@@ -848,7 +855,7 @@ message NativeRedis {
 
 // NatsAuth defines how to authenticate the nats access
 message NatsAuth {
-  // Basic auth which contains a user name and a password
+  // Basic auth which contains a username and a password
   // +optional
   optional BasicAuth basic = 1;
 
@@ -923,6 +930,8 @@ message PersistenceStrategy {
 // +kubebuilder:printcolumn:name="Sources",type=integer,JSONPath=`.status.sourceCount`,priority=10
 // +kubebuilder:printcolumn:name="Sinks",type=integer,JSONPath=`.status.sinkCount`,priority=10
 // +kubebuilder:printcolumn:name="UDFs",type=integer,JSONPath=`.status.udfCount`,priority=10
+// +kubebuilder:printcolumn:name="Map UDFs",type=integer,JSONPath=`.status.mapUDFCount`,priority=10
+// +kubebuilder:printcolumn:name="Reduce UDFs",type=integer,JSONPath=`.status.reduceUDFCount`,priority=10
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
@@ -1020,6 +1029,13 @@ message PipelineStatus {
   optional uint32 sinkCount = 7;
 
   optional uint32 udfCount = 8;
+
+  optional uint32 mapUDFCount = 9;
+
+  optional uint32 reduceUDFCount = 10;
+
+  // ObservedGeneration stores the generation value observed by the controller.
+  optional int64 observedGeneration = 11;
 }
 
 message RedisBufferService {
@@ -1162,6 +1178,32 @@ message Scale {
   optional uint32 scaleDownCooldownSeconds = 11;
 }
 
+// ServingSource is the HTTP endpoint for Numaflow.
+message ServingSource {
+  // +optional
+  optional Authorization auth = 1;
+
+  // Whether to create a ClusterIP Service
+  // +optional
+  optional bool service = 2;
+
+  // The header key from which the message id will be extracted
+  optional string msgIDHeaderKey = 3;
+
+  // Persistent store for the callbacks for serving and tracking
+  optional ServingStore store = 4;
+}
+
+// ServingStore to track and store data and metadata for tracking and serving.
+message ServingStore {
+  // URL of the persistent store to write the callbacks
+  optional string url = 1;
+
+  // TTL for the data in the store and tracker
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration ttl = 2;
+}
+
 // SessionWindow describes a session window
 message SessionWindow {
   // Timeout is the duration of inactivity after which a session window closes.
@@ -1248,6 +1290,9 @@ message Source {
 
   // +optional
   optional JetStreamSource jetstream = 7;
+
+  // +optional
+  optional ServingSource serving = 8;
 }
 
 // Status is a common structure which can be used for Status field.

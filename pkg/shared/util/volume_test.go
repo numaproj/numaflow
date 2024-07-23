@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -151,4 +152,42 @@ func Test_GetSecretVolumePath(t *testing.T) {
 	p, e := GetSecretVolumePath(testSecretKeySelector)
 	assert.Nil(t, e)
 	assert.Equal(t, "/var/numaflow/secrets/test-secret/test-key", p)
+}
+
+type MockFileReader struct {
+	mock.Mock
+}
+
+func (m *MockFileReader) getConfigMapFromVolume(selector *corev1.ConfigMapKeySelector) (string, error) {
+	args := m.Called(selector)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockFileReader) getSecretFromVolume(selector *corev1.SecretKeySelector) (string, error) {
+	args := m.Called(selector)
+	return args.String(0), args.Error(1)
+}
+
+func TestGetConfigMapFromVolume_FileNotFound(t *testing.T) {
+	// file not found error
+	selector := &corev1.ConfigMapKeySelector{
+		LocalObjectReference: corev1.LocalObjectReference{Name: "test-configmap"},
+		Key:                  "test-key",
+	}
+
+	_, err := GetConfigMapFromVolume(selector)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get configMap value")
+}
+
+func TestGetSecretFromVolume_FileNotFound(t *testing.T) {
+
+	selector := &corev1.SecretKeySelector{
+		LocalObjectReference: corev1.LocalObjectReference{Name: "test-secret"},
+		Key:                  "test-key",
+	}
+
+	_, err := GetSecretFromVolume(selector)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get secret value")
 }

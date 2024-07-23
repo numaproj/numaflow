@@ -125,10 +125,21 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 			}
 			controllerutil.RemoveFinalizer(pl, finalizerName)
+			// Clean up metrics
+			_ = reconciler.PipelineHealth.DeleteLabelValues(pl.Namespace, pl.Name)
 		}
 		return ctrl.Result{}, nil
 	}
 
+	defer func() {
+		if pl.Status.IsHealthy() {
+			reconciler.PipelineHealth.WithLabelValues(pl.Namespace, pl.Name).Set(1)
+		} else {
+			reconciler.PipelineHealth.WithLabelValues(pl.Namespace, pl.Name).Set(0)
+		}
+	}()
+
+	pl.Status.SetObservedGeneration(pl.Generation)
 	// New, or reconciliation failed pipeline
 	if pl.Status.Phase == dfv1.PipelinePhaseUnknown || pl.Status.Phase == dfv1.PipelinePhaseFailed {
 		result, err := r.reconcileNonLifecycleChanges(ctx, pl)
@@ -161,6 +172,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	if err != nil {
 		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
 	}
+
 	return result, err
 }
 
@@ -195,10 +207,10 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		log.Errorw("Failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
 		return ctrl.Result{}, err
 	}
-	if !isbSvc.Status.IsReady() {
-		pl.Status.MarkDeployFailed("ISBSvcNotReady", "ISB Service not ready.")
-		log.Errorw("ISB Service is not in ready status", zap.String("isbsvc", isbSvcName), zap.Error(err))
-		return ctrl.Result{}, fmt.Errorf("isbsvc not ready")
+	if !isbSvc.Status.IsHealthy() {
+		pl.Status.MarkDeployFailed("ISBSvcNotHealthy", "ISB Service not healthy.")
+		log.Errorw("ISB Service is not in healthy status", zap.String("isbsvc", isbSvcName), zap.Error(err))
+		return ctrl.Result{}, fmt.Errorf("isbsvc not healthy")
 	}
 
 	// Create or update the Side Inputs Manager deployments
@@ -295,12 +307,13 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		}
 		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
+		args = append(args, fmt.Sprintf("--serving-source-streams=%s", strings.Join(pl.GetServingSourceStreamNames(), ",")))
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "cre")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			pl.Status.MarkDeployFailed("CreateISBSvcCreatingJobFailed", err.Error())
 			return ctrl.Result{}, fmt.Errorf("failed to create ISB Svc creating job, err: %w", err)
 		}
-		log.Infow("Created a job successfully for ISB Svc creating", zap.Any("buffers", bfs), zap.Any("buckets", bks))
+		log.Infow("Created a job successfully for ISB Svc creating", zap.Any("buffers", bfs), zap.Any("buckets", bks), zap.Any("servingStreams", pl.GetServingSourceStreamNames()))
 	}
 
 	if len(oldBuffers) > 0 || len(oldBuckets) > 0 {
@@ -439,7 +452,7 @@ func (r *pipelineReconciler) findExistingVertices(ctx context.Context, pl *dfv1.
 	return result, nil
 }
 
-// Create or update Side Inputs Mapager deployments
+// Create or update Side Inputs Manager deployments
 func (r *pipelineReconciler) createOrUpdateSIMDeployments(ctx context.Context, pl *dfv1.Pipeline, isbSvcConfig dfv1.BufferServiceConfig) error {
 	log := logging.FromContext(ctx)
 	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
@@ -542,6 +555,7 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 		args = append(args, fmt.Sprintf("--buffers=%s", strings.Join(allBuffers, ",")))
 		args = append(args, fmt.Sprintf("--buckets=%s", strings.Join(allBuckets, ",")))
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
+		args = append(args, fmt.Sprintf("--serving-source-streams=%s", strings.Join(pl.GetServingSourceStreamNames(), ",")))
 
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "cln")
 		batchJob.OwnerReferences = []metav1.OwnerReference{}

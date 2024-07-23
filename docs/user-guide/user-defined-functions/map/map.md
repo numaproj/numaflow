@@ -32,8 +32,7 @@ spec:
 In cases the map function generates more than one output (e.g., flat map), the UDF can be
 configured to run in a streaming mode instead of batching, which is the default mode.
 In streaming mode, the messages will be pushed to the downstream vertices once generated
-instead of in a batch at the end. The streaming mode can be enabled by setting the annotation
-`numaflow.numaproj.io/map-stream` to `true` in the vertex spec.
+instead of in a batch at the end.
 
 Note that to maintain data orderliness, we restrict the read batch size to be `1`.
 
@@ -41,9 +40,6 @@ Note that to maintain data orderliness, we restrict the read batch size to be `1
 spec:
   vertices:
     - name: my-vertex
-      metadata:
-        annotations:
-          numaflow.numaproj.io/map-stream: "true"
       limits:
         # mapstreaming won't work if readBatchSize is != 1      
         readBatchSize: 1
@@ -54,6 +50,29 @@ Check the links below to see the UDF examples in streaming mode for different la
 - [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/mapstream/flatmap_stream/)
 - [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/mapstreamer/examples/flatmap_stream/)
 - [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/mapstream/flatmapstream/)
+
+### Batch Map Mode
+
+BatchMap is an interface that allows developers to process multiple data items in a UDF single call,
+rather than each item in separate calls.
+
+The BatchMap interface can be helpful in scenarios where performing operations on a group of data can be more efficient.
+
+#### Important Considerations
+
+When using BatchMap, there are a few important considerations to keep in mind:
+
+- Ensure that the BatchResponses object is tagged with the correct request ID. 
+Each Datum has a unique ID tag, which will be used by Numaflow to ensure correctness.
+- Ensure that the length of the BatchResponses list is equal to the number of requests received. This means that for 
+every input data item, there should be a corresponding response in the BatchResponses list.
+
+Check the links below to see the UDF examples in batch mode for different languages.
+
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/batchmap/)
+- [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/batchmapper/examples/)
+- [Java](https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/batchmap/)
+- [Rust](https://github.com/numaproj/numaflow-rs/tree/main/examples/batchmap-cat/)
 
 ### Available Environment Variables
 

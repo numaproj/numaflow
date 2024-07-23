@@ -32,7 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	"github.com/numaproj/numaflow/webhook"
+	"github.com/numaproj/numaflow/pkg/webhook"
 )
 
 const (

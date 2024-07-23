@@ -74,6 +74,7 @@ const (
 	CtrUdSideInput       = "udsi"
 	CtrInitSideInputs    = "init-side-inputs"
 	CtrSideInputsWatcher = "side-inputs-synchronizer"
+	CtrServing           = "serving"
 
 	// user-defined container types
 	UDContainerFunction     = "udf"
@@ -82,6 +83,7 @@ const (
 	UDContainerTransformer  = "transformer"
 	UDContainerSource       = "udsource"
 	UDContainerSideInputs   = "udsi"
+	ServingSourceContainer  = "serving"
 
 	// components
 	ComponentISBSvc           = "isbsvc"
@@ -100,8 +102,6 @@ const (
 	EnvNamespace                        = "NUMAFLOW_NAMESPACE"
 	EnvPipelineName                     = "NUMAFLOW_PIPELINE_NAME"
 	EnvVertexName                       = "NUMAFLOW_VERTEX_NAME"
-	EnvMapStreaming                     = "NUMAFLOW_MAP_STREAMING"
-	EnvBatchMap                         = "NUMAFLOW_BATCH_MAP"
 	EnvCallbackEnabled                  = "NUMAFLOW_CALLBACK_ENABLED"
 	EnvCallbackURL                      = "NUMAFLOW_CALLBACK_URL"
 	EnvPod                              = "NUMAFLOW_POD"
@@ -137,13 +137,19 @@ const (
 	EnvMemoryRequest                    = "NUMAFLOW_MEMORY_REQUEST"
 	EnvMemoryLimit                      = "NUMAFLOW_MEMORY_LIMIT"
 	EnvGoDebug                          = "GODEBUG"
-
-	PathVarRun            = "/var/run/numaflow"
-	VertexMetricsPort     = 2469
-	VertexMetricsPortName = "metrics"
-	VertexHTTPSPort       = 8443
-	VertexHTTPSPortName   = "https"
-	DaemonServicePort     = 4327
+	EnvServingJetstreamStream           = "NUMAFLOW_SERVING_JETSTREAM_STREAM"
+	EnvServingObject                    = "NUMAFLOW_SERVING_SOURCE_OBJECT"
+	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
+	EnvServingAuthToken                 = "NUMAFLOW_SERVING_AUTH_TOKEN"
+	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
+	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
+	EnvServingStoreTTL                  = "NUMAFLOW_SERVING_STORE_TTL"
+	PathVarRun                          = "/var/run/numaflow"
+	VertexMetricsPort                   = 2469
+	VertexMetricsPortName               = "metrics"
+	VertexHTTPSPort                     = 8443
+	VertexHTTPSPortName                 = "https"
+	DaemonServicePort                   = 4327
 
 	DefaultRequeueAfter = 10 * time.Second
 
@@ -203,12 +209,6 @@ const (
 	// KeysDelimitter is the delimitter used to join keys
 	KeysDelimitter = ":"
 
-	// UDF map streaming
-	MapUdfStreamKey = "numaflow.numaproj.io/map-stream"
-
-	// BatchMapUdfStreamKey is the annotation for enabling UDF Batch Map
-	BatchMapUdfStreamKey = "numaflow.numaproj.io/batch-map"
-
 	// Pipeline health status
 	PipelineStatusHealthy   = "healthy"
 	PipelineStatusUnknown   = "unknown"
@@ -221,6 +221,9 @@ const (
 	// Callback annotation keys
 	CallbackEnabledKey = "numaflow.numaproj.io/callback"
 	CallbackURLKey     = "numaflow.numaproj.io/callback-url"
+
+	// Serving source
+	DefaultServingTTL = 24 * time.Hour
 )
 
 var (

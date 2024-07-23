@@ -39,6 +39,14 @@ spec:
       name: UDFs
       priority: 10
       type: integer
+    - jsonPath: .status.mapUDFCount
+      name: Map UDFs
+      priority: 10
+      type: integer
+    - jsonPath: .status.reduceUDFCount
+      name: Reduce UDFs
+      priority: 10
+      type: integer
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -8148,6 +8156,39 @@ spec:
                           - subject
                           - url
                           type: object
+                        serving:
+                          properties:
+                            auth:
+                              properties:
+                                token:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                              type: object
+                            msgIDHeaderKey:
+                              type: string
+                            service:
+                              type: boolean
+                            store:
+                              properties:
+                                ttl:
+                                  type: string
+                                url:
+                                  type: string
+                              required:
+                              - url
+                              type: object
+                          required:
+                          - msgIDHeaderKey
+                          - store
+                          type: object
                         transformer:
                           properties:
                             builtin:
@@ -9686,8 +9727,14 @@ spec:
               lastUpdated:
                 format: date-time
                 type: string
+              mapUDFCount:
+                format: int32
+                type: integer
               message:
                 type: string
+              observedGeneration:
+                format: int64
+                type: integer
               phase:
                 enum:
                 - ""
@@ -9698,6 +9745,9 @@ spec:
                 - Paused
                 - Deleting
                 type: string
+              reduceUDFCount:
+                format: int32
+                type: integer
               sinkCount:
                 format: int32
                 type: integer

@@ -113,7 +113,7 @@ func WaitForISBSvcReady(ctx context.Context, isbSvcClient flowpkg.InterStepBuffe
 		case event := <-watch.ResultChan():
 			i, ok := event.Object.(*dfv1.InterStepBufferService)
 			if ok {
-				if i.Status.IsReady() {
+				if i.Status.IsHealthy() {
 					return nil
 				}
 			} else {

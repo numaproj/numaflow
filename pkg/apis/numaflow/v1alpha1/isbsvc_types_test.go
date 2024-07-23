@@ -79,3 +79,71 @@ func Test_ISBSvcMarkStatus(t *testing.T) {
 	}
 	assert.True(t, s.IsReady())
 }
+
+func Test_ISBSvcIsHealthy(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   InterStepBufferServiceStatus
+		expected bool
+	}{
+		{
+			name: "Running and Ready",
+			status: InterStepBufferServiceStatus{
+				Phase: ISBSvcPhaseRunning,
+				Status: Status{
+					Conditions: []metav1.Condition{
+						{Type: string(ISBSvcConditionConfigured), Status: metav1.ConditionTrue},
+						{Type: string(ISBSvcConditionDeployed), Status: metav1.ConditionTrue},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "Running but not Ready",
+			status: InterStepBufferServiceStatus{
+				Phase: ISBSvcPhaseRunning,
+				Status: Status{
+					Conditions: []metav1.Condition{
+						{Type: string(ISBSvcConditionConfigured), Status: metav1.ConditionTrue},
+						{Type: string(ISBSvcConditionDeployed), Status: metav1.ConditionFalse},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Not Running but Ready",
+			status: InterStepBufferServiceStatus{
+				Phase: ISBSvcPhasePending,
+				Status: Status{
+					Conditions: []metav1.Condition{
+						{Type: string(ISBSvcConditionConfigured), Status: metav1.ConditionTrue},
+						{Type: string(ISBSvcConditionDeployed), Status: metav1.ConditionTrue},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "Not Running and not Ready",
+			status: InterStepBufferServiceStatus{
+				Phase: ISBSvcPhasePending,
+				Status: Status{
+					Conditions: []metav1.Condition{
+						{Type: string(ISBSvcConditionConfigured), Status: metav1.ConditionFalse},
+						{Type: string(ISBSvcConditionDeployed), Status: metav1.ConditionFalse},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.status.IsHealthy()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

@@ -46,13 +46,14 @@ mod tests {
 
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::app::tracker::MessageGraph;
+    use crate::pipeline::pipeline_spec;
 
     use super::*;
 
     #[tokio::test]
     async fn test_message_path_not_present() {
         let store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_file("config/pipeline_spec.json").unwrap();
+        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
         let state = CallbackState::new(msg_graph, store).await.unwrap();
         let app = get_message_path(state);
 

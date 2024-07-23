@@ -53,28 +53,28 @@ var isbWriteErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 var isbSoftUsage = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "isb_jetstream",
 	Name:      "buffer_soft_usage",
-	Help:      "percentage of buffer soft usage",
+	Help:      "Percentage of buffer soft usage",
 }, []string{"buffer"})
 
 // isbSolidUsage is used to indicate of buffer that is used up, it is calculated based on the messages remain in the stream (if it's not Limits retention policy)
 var isbSolidUsage = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "isb_jetstream",
 	Name:      "buffer_solid_usage",
-	Help:      "percentage of buffer solid usage",
+	Help:      "Percentage of buffer solid usage",
 }, []string{"buffer"})
 
 // isbPending is calculated based on the messages in pending
 var isbPending = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "isb_jetstream",
 	Name:      "buffer_pending",
-	Help:      "number of pending messages",
+	Help:      "Number of pending messages",
 }, []string{"buffer"})
 
 // isbAckPending is calculated based on the messages that are pending ack
 var isbAckPending = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "isb_jetstream",
 	Name:      "buffer_ack_pending",
-	Help:      "number of messages pending ack",
+	Help:      "Number of messages pending ack",
 }, []string{"buffer"})
 
 // isbWriteTimeout records how many times of writing timeout

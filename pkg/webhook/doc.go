@@ -14,17 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package test
-
-import (
-	"testing"
-
-	"github.com/nats-io/nats-server/v2/server"
-
-	"github.com/numaproj/numaflow/pkg/shared/clients/nats"
-)
-
-// JetStreamClient is used to get a testing JetStream client instance
-func JetStreamClient(t *testing.T, s *server.Server) *nats.Client {
-	return nats.NewTestClient(t, s.ClientURL())
-}
+// Package webhook is used for running a validating admission webhook.
+package webhook

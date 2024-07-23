@@ -27,7 +27,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	natsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
+
 	"github.com/numaproj/numaflow/pkg/udf/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -61,16 +63,29 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 		name          string
 		batchSize     int64
 		streamEnabled bool
+		unaryEnabled  bool
+		batchEnabled  bool
 	}{
 		{
-			name:          "batch",
+			name:          "unary",
 			batchSize:     10,
 			streamEnabled: false,
+			unaryEnabled:  true,
+			batchEnabled:  false,
 		},
 		{
 			name:          "stream",
 			batchSize:     1,
 			streamEnabled: true,
+			unaryEnabled:  false,
+			batchEnabled:  false,
+		},
+		{
+			name:          "batch_map",
+			batchSize:     10,
+			streamEnabled: false,
+			unaryEnabled:  false,
+			batchEnabled:  true,
 		},
 	}
 	for _, tt := range tests {
@@ -80,7 +95,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 			defer cancel()
-			defaultJetStreamClient := natstest.JetStreamClient(t, s)
+			defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 			defer defaultJetStreamClient.Close()
 			js, err := defaultJetStreamClient.JetStreamContext()
 			assert.NoError(t, err)
@@ -152,12 +167,19 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			idleManager, err := wmb.NewIdleManager(1, len(toSteps))
 			assert.NoError(t, err)
-			appliers := forward.MapAppliers{
-				MapUDF:       myForwardJetStreamTest{},
-				MapStreamUDF: myForwardJetStreamTest{},
-				BatchMapUDF:  myForwardJetStreamTest{},
+
+			opts := []forward.Option{forward.WithReadBatchSize(tt.batchSize)}
+			if tt.batchEnabled {
+				opts = append(opts, forward.WithUDFBatchMap(myForwardJetStreamTest{}))
 			}
-			f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardJetStreamTest{}, appliers, fetchWatermark, publishWatermark, idleManager, forward.WithReadBatchSize(tt.batchSize), forward.WithUDFStreaming(tt.streamEnabled))
+			if tt.streamEnabled {
+				opts = append(opts, forward.WithUDFStreamingMap(myForwardJetStreamTest{}))
+			}
+			if tt.unaryEnabled {
+				opts = append(opts, forward.WithUDFUnaryMap(myForwardJetStreamTest{}))
+			}
+
+			f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardJetStreamTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
 			assert.NoError(t, err)
 
 			stopped := f.Start()
@@ -208,7 +230,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
@@ -265,7 +287,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
@@ -321,7 +343,7 @@ func TestWriteGetName(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
@@ -347,7 +369,7 @@ func TestWriteClose(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)

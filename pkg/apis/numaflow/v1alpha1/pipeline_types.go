@@ -34,13 +34,12 @@ import (
 type PipelinePhase string
 
 const (
-	PipelinePhaseUnknown   PipelinePhase = ""
-	PipelinePhaseRunning   PipelinePhase = "Running"
-	PipelinePhaseSucceeded PipelinePhase = "Succeeded"
-	PipelinePhaseFailed    PipelinePhase = "Failed"
-	PipelinePhasePausing   PipelinePhase = "Pausing"
-	PipelinePhasePaused    PipelinePhase = "Paused"
-	PipelinePhaseDeleting  PipelinePhase = "Deleting"
+	PipelinePhaseUnknown  PipelinePhase = ""
+	PipelinePhaseRunning  PipelinePhase = "Running"
+	PipelinePhaseFailed   PipelinePhase = "Failed"
+	PipelinePhasePausing  PipelinePhase = "Pausing"
+	PipelinePhasePaused   PipelinePhase = "Paused"
+	PipelinePhaseDeleting PipelinePhase = "Deleting"
 
 	// PipelineConditionConfigured has the status True when the Pipeline
 	// has valid configuration.
@@ -60,6 +59,8 @@ const (
 // +kubebuilder:printcolumn:name="Sources",type=integer,JSONPath=`.status.sourceCount`,priority=10
 // +kubebuilder:printcolumn:name="Sinks",type=integer,JSONPath=`.status.sinkCount`,priority=10
 // +kubebuilder:printcolumn:name="UDFs",type=integer,JSONPath=`.status.udfCount`,priority=10
+// +kubebuilder:printcolumn:name="Map UDFs",type=integer,JSONPath=`.status.mapUDFCount`,priority=10
+// +kubebuilder:printcolumn:name="Reduce UDFs",type=integer,JSONPath=`.status.reduceUDFCount`,priority=10
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
@@ -203,6 +204,16 @@ func (p Pipeline) GetSideInputsManagerDeploymentName(sideInputName string) strin
 
 func (p Pipeline) GetSideInputsStoreName() string {
 	return fmt.Sprintf("%s-%s", p.Namespace, p.Name)
+}
+
+func (p Pipeline) GetServingSourceStreamNames() []string {
+	var servingSourceNames []string
+	for _, srcVertex := range p.Spec.Vertices {
+		if srcVertex.IsASource() && srcVertex.Source.Serving != nil {
+			servingSourceNames = append(servingSourceNames, fmt.Sprintf("%s-%s-serving-source", p.Name, srcVertex.Name))
+		}
+	}
+	return servingSourceNames
 }
 
 func (p Pipeline) GetSideInputsManagerDeployments(req GetSideInputDeploymentReq) ([]*appv1.Deployment, error) {
@@ -593,14 +604,18 @@ type PipelineLimits struct {
 }
 
 type PipelineStatus struct {
-	Status      `json:",inline" protobuf:"bytes,1,opt,name=status"`
-	Phase       PipelinePhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=PipelinePhase"`
-	Message     string        `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
-	LastUpdated metav1.Time   `json:"lastUpdated,omitempty" protobuf:"bytes,4,opt,name=lastUpdated"`
-	VertexCount *uint32       `json:"vertexCount,omitempty" protobuf:"varint,5,opt,name=vertexCount"`
-	SourceCount *uint32       `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
-	SinkCount   *uint32       `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
-	UDFCount    *uint32       `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
+	Status         `json:",inline" protobuf:"bytes,1,opt,name=status"`
+	Phase          PipelinePhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=PipelinePhase"`
+	Message        string        `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
+	LastUpdated    metav1.Time   `json:"lastUpdated,omitempty" protobuf:"bytes,4,opt,name=lastUpdated"`
+	VertexCount    *uint32       `json:"vertexCount,omitempty" protobuf:"varint,5,opt,name=vertexCount"`
+	SourceCount    *uint32       `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
+	SinkCount      *uint32       `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
+	UDFCount       *uint32       `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
+	MapUDFCount    *uint32       `json:"mapUDFCount,omitempty" protobuf:"varint,9,opt,name=mapUDFCount"`
+	ReduceUDFCount *uint32       `json:"reduceUDFCount,omitempty" protobuf:"varint,10,opt,name=reduceUDFCount"`
+	// ObservedGeneration stores the generation value observed by the controller.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,11,opt,name=observedGeneration"`
 }
 
 // SetVertexCounts sets the counts of vertices.
@@ -609,14 +624,21 @@ func (pls *PipelineStatus) SetVertexCounts(vertices []AbstractVertex) {
 	var sinkCount uint32
 	var sourceCount uint32
 	var udfCount uint32
+	var mapUDFCount uint32
+	var reduceUDFCount uint32
 	for _, v := range vertices {
-		if v.Source != nil {
+		if v.IsASource() {
 			sourceCount++
 		}
-		if v.Sink != nil {
+		if v.IsASink() {
 			sinkCount++
 		}
-		if v.UDF != nil {
+		if v.IsMapUDF() {
+			mapUDFCount++
+			udfCount++
+		}
+		if v.IsReduceUDF() {
+			reduceUDFCount++
 			udfCount++
 		}
 	}
@@ -625,6 +647,8 @@ func (pls *PipelineStatus) SetVertexCounts(vertices []AbstractVertex) {
 	pls.SinkCount = &sinkCount
 	pls.SourceCount = &sourceCount
 	pls.UDFCount = &udfCount
+	pls.MapUDFCount = &mapUDFCount
+	pls.ReduceUDFCount = &reduceUDFCount
 }
 
 func (pls *PipelineStatus) SetPhase(phase PipelinePhase, msg string) {
@@ -677,6 +701,28 @@ func (pls *PipelineStatus) MarkPhasePausing() {
 // MarkPhaseDeleting set the Pipeline is deleting.
 func (pls *PipelineStatus) MarkPhaseDeleting() {
 	pls.SetPhase(PipelinePhaseDeleting, "Deleting in progress")
+}
+
+// SetObservedGeneration sets the Status ObservedGeneration
+func (pls *PipelineStatus) SetObservedGeneration(value int64) {
+	pls.ObservedGeneration = value
+}
+
+// IsHealthy indicates whether the pipeline is in healthy status
+func (pls *PipelineStatus) IsHealthy() bool {
+	switch pls.Phase {
+	case PipelinePhaseFailed:
+		return false
+	case PipelinePhaseRunning:
+		return pls.IsReady()
+	case PipelinePhaseDeleting, PipelinePhasePausing:
+		// Transient phases, return true
+		return true
+	case PipelinePhasePaused:
+		return true
+	default:
+		return false
+	}
 }
 
 // +kubebuilder:object:root=true

@@ -222,6 +222,8 @@ func Test_PipelineVertexCounts(t *testing.T) {
 	assert.Equal(t, uint32(1), *s.SourceCount)
 	assert.Equal(t, uint32(1), *s.SinkCount)
 	assert.Equal(t, uint32(1), *s.UDFCount)
+	assert.Equal(t, uint32(1), *s.MapUDFCount)
+	assert.Equal(t, uint32(0), *s.ReduceUDFCount)
 }
 
 func Test_PipelineSetPhase(t *testing.T) {
@@ -430,4 +432,115 @@ func Test_GetSideInputManagerDeployments(t *testing.T) {
 		assert.Equal(t, 1, len(deployments))
 		assert.Equal(t, 2, len(deployments[0].Spec.Template.Spec.Containers))
 	})
+}
+
+func TestGetServingSourceStreamNames(t *testing.T) {
+	t.Run("no serving sources", func(t *testing.T) {
+		p := &Pipeline{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-pipeline",
+			},
+			Spec: PipelineSpec{
+				Vertices: []AbstractVertex{
+					{Name: "v1", Source: &Source{}},
+					{Name: "v2", UDF: &UDF{}},
+					{Name: "v3", Sink: &Sink{}},
+				},
+			},
+		}
+		var expected []string
+		assert.Equal(t, expected, p.GetServingSourceStreamNames())
+	})
+
+	t.Run("with serving sources", func(t *testing.T) {
+		p := &Pipeline{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-pipeline",
+			},
+			Spec: PipelineSpec{
+				Vertices: []AbstractVertex{
+					{Name: "v1", Source: &Source{Serving: &ServingSource{}}},
+					{Name: "v2", Source: &Source{Serving: &ServingSource{}}},
+					{Name: "v3", UDF: &UDF{}},
+					{Name: "v4", Sink: &Sink{}},
+				},
+			},
+		}
+		expected := []string{"test-pipeline-v1-serving-source", "test-pipeline-v2-serving-source"}
+		assert.Equal(t, expected, p.GetServingSourceStreamNames())
+	})
+}
+
+func TestPipelineStatus_IsHealthy(t *testing.T) {
+	tests := []struct {
+		name  string
+		phase PipelinePhase
+		ready bool
+		want  bool
+	}{
+		{
+			name:  "Failed phase",
+			phase: PipelinePhaseFailed,
+			ready: false,
+			want:  false,
+		},
+		{
+			name:  "Running phase and ready",
+			phase: PipelinePhaseRunning,
+			ready: true,
+			want:  true,
+		},
+		{
+			name:  "Running phase and not ready",
+			phase: PipelinePhaseRunning,
+			ready: false,
+			want:  false,
+		},
+		{
+			name:  "Deleting phase",
+			phase: PipelinePhaseDeleting,
+			ready: false,
+			want:  true,
+		},
+		{
+			name:  "Pausing phase",
+			phase: PipelinePhasePausing,
+			ready: false,
+			want:  true,
+		},
+		{
+			name:  "Paused phase",
+			phase: PipelinePhasePaused,
+			ready: false,
+			want:  true,
+		},
+		{
+			name:  "Unknown phase",
+			phase: "UnknownPhase",
+			ready: false,
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pls := &PipelineStatus{
+				Phase: tt.phase,
+			}
+			if tt.ready {
+				pls.Conditions = []metav1.Condition{
+					{
+						Type:   string(PipelineConditionConfigured),
+						Status: metav1.ConditionTrue,
+					},
+					{
+						Type:   string(PipelineConditionDeployed),
+						Status: metav1.ConditionTrue,
+					},
+				}
+			}
+			got := pls.IsHealthy()
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
