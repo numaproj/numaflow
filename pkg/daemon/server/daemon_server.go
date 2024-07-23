@@ -309,13 +309,13 @@ func (ds *daemonServer) exposeMetrics(ctx context.Context) {
 			temp := ds.metaDataQuery.GetHealthCheck(ctx)
 			switch temp.Status {
 			case v1alpha1.PipelineStatusHealthy:
-				health.WithLabelValues(ds.pipeline.Name).Set(1)
+				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(1)
 			case v1alpha1.PipelineStatusWarning:
-				health.WithLabelValues(ds.pipeline.Name).Set(2)
+				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(-1)
 			case v1alpha1.PipelineStatusCritical:
-				health.WithLabelValues(ds.pipeline.Name).Set(0)
+				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(-2)
 			default:
-				health.WithLabelValues(ds.pipeline.Name).Set(-1)
+				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(0)
 			}
 
 		case <-ctx.Done():
