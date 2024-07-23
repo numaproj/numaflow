@@ -306,13 +306,13 @@ func (ds *daemonServer) exposeMetrics(ctx context.Context) {
 				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(float64(time.Now().UnixMilli() - maxWM))
 			}
 
-			PipelineStatus, err := ds.metaDataQuery.GetPipelineStatus(ctx, &daemon.GetPipelineStatusRequest{Pipeline: ds.pipeline.Name})
+			pipelineStatus, err := ds.metaDataQuery.GetPipelineStatus(ctx, &daemon.GetPipelineStatusRequest{Pipeline: ds.pipeline.Name})
 
 			if err != nil {
 				log.Errorw("Failed to get data processing health status", zap.Error(err))
 				continue
 			}
-			switch PipelineStatus.Status.Status {
+			switch pipelineStatus.Status.Status {
 			case v1alpha1.PipelineStatusHealthy:
 				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(1)
 			case v1alpha1.PipelineStatusWarning:
