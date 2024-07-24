@@ -39,7 +39,7 @@ func Test_ISBSvcSetType(t *testing.T) {
 func Test_ISBSvcInitConditions(t *testing.T) {
 	s := InterStepBufferServiceStatus{}
 	s.InitConditions()
-	assert.Equal(t, 2, len(s.Conditions))
+	assert.Equal(t, 3, len(s.Conditions))
 	for _, c := range s.Conditions {
 		assert.Equal(t, metav1.ConditionUnknown, c.Status)
 	}
@@ -77,6 +77,7 @@ func Test_ISBSvcMarkStatus(t *testing.T) {
 			assert.Equal(t, metav1.ConditionTrue, c.Status)
 		}
 	}
+	s.MarkChildrenResourceHealthy("RolloutFinished", "All service healthy")
 	assert.True(t, s.IsReady())
 }
 

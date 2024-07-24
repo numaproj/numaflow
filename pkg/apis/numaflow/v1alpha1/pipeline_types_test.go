@@ -236,7 +236,7 @@ func Test_PipelineSetPhase(t *testing.T) {
 func Test_PipelineInitConditions(t *testing.T) {
 	s := PipelineStatus{}
 	s.InitConditions()
-	assert.Equal(t, 2, len(s.Conditions))
+	assert.Equal(t, 5, len(s.Conditions))
 	for _, c := range s.Conditions {
 		assert.Equal(t, metav1.ConditionUnknown, c.Status)
 	}
@@ -273,6 +273,10 @@ func Test_PipelineMarkStatus(t *testing.T) {
 			assert.Equal(t, metav1.ConditionTrue, c.Status)
 		}
 	}
+	s.MarkServiceHealthy(PipelineConditionDaemonServiceHealthy, "test-reason", "All service healthy")
+	s.MarkServiceHealthy(PipelineConditionSideInputServiceHealthy, "test-reason", "All service healthy")
+	s.MarkServiceHealthy(PipelineConditionVerticesServiceHealthy, "test-reason", "All service healthy")
+
 	assert.True(t, s.IsReady())
 }
 
