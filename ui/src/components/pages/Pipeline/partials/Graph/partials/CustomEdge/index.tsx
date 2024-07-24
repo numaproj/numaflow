@@ -1,7 +1,12 @@
 import React from "react";
 import { FC, memo, useCallback, useContext, useEffect, useMemo } from "react";
 import { Tooltip } from "@mui/material";
-import { EdgeProps, EdgeLabelRenderer, getSmoothStepPath } from "reactflow";
+import {
+  BaseEdge,
+  EdgeProps,
+  EdgeLabelRenderer,
+  getSimpleBezierPath,
+} from "reactflow";
 import { duration } from "moment";
 import { HighlightContext } from "../../index";
 import { HighlightContextProps } from "../../../../../../../types/declarations/graph";
@@ -21,31 +26,44 @@ const CustomEdge: FC<EdgeProps> = ({
   data,
   markerEnd,
 }) => {
-  const obj = getSmoothStepPath({
-    sourceX,
+  const straightWidth = 50;
+
+  // eslint-disable-next-line prefer-const
+  let [sX, sY, tX, tY] = [
+    sourceX + straightWidth,
     sourceY,
-    sourcePosition,
-    targetX,
+    targetX - straightWidth,
     targetY,
+  ];
+
+  if (data?.sideInputEdge) {
+    tX = tX + straightWidth;
+    tY = tY + straightWidth;
+  }
+
+  const obj = getSimpleBezierPath({
+    sourceX: sX,
+    sourceY: sY,
+    sourcePosition,
+    targetX: tX,
+    targetY: tY,
     targetPosition,
   });
 
-  let [edgePath, labelX, labelY] = obj;
+  let [edgePath] = obj;
+
   let labelRenderer = "";
 
+  edgePath = `M ${
+    sX - straightWidth
+  } ${sY} L ${sX} ${sY} ${edgePath} M ${tX} ${tY} L ${
+    data?.sideInputEdge ? tX : tX + straightWidth
+  } ${data?.sideInputEdge ? tY - straightWidth : tY}`;
+
   if (data?.fwdEdge) {
-    if (sourceY !== targetY) {
-      if (data?.fromNodeOutDegree > 1) {
-        labelY = targetY;
-        labelX = targetX - 63;
-      } else {
-        labelY = sourceY;
-        labelX = sourceX + 63;
-      }
-    } else if (data?.fromNodeOutDegree > 1) {
-      labelX = sourceX + ((targetX - sourceX) * 3) / 4;
-    }
-    labelRenderer = `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`;
+    const centerX = (sourceX + targetX) / 2;
+    const centerY = (sourceY + targetY) / 2;
+    labelRenderer = `translate(-50%, -50%) translate(${centerX}px,${centerY}px)`;
   }
 
   if (data?.backEdge) {
@@ -71,7 +89,7 @@ const CustomEdge: FC<EdgeProps> = ({
     } L ${targetX} ${sourceY - 8}`;
     const centerX = (sourceX + targetX) / 2;
     labelRenderer = `translate(-50%, -50%) translate(${centerX}px,${
-      labelY - 10
+      sourceY - 30
     }px)`;
   }
 
@@ -80,6 +98,7 @@ const CustomEdge: FC<EdgeProps> = ({
     setHighlightValues,
     sideInputNodes,
     sideInputEdges,
+    hoveredEdge,
   } = useContext<HighlightContextProps>(HighlightContext);
 
   const getColor = useMemo(() => {
@@ -130,21 +149,6 @@ const CustomEdge: FC<EdgeProps> = ({
     };
   }, [highlightValues, getColor, data, commonStyle]);
 
-  const wmStyle = useMemo(() => {
-    return {
-      color: getColor,
-      ...commonStyle,
-    };
-  }, [getColor, commonStyle]);
-
-  const pendingStyle = useMemo(() => {
-    return {
-      color: getColor,
-      fontWeight: data?.isFull ? 700 : 400,
-      ...commonStyle,
-    };
-  }, [data, getColor, commonStyle]);
-
   const getMinWM = useMemo(() => {
     if (data?.edgeWatermark?.watermarks) {
       return Math.min.apply(null, data?.edgeWatermark?.watermarks);
@@ -194,22 +198,20 @@ const CustomEdge: FC<EdgeProps> = ({
 
   return (
     <>
-      <svg>
-        <path
-          id={id}
-          className="react-flow__edge-path"
-          d={edgePath}
-          style={edgeStyle}
-          data-testid={id}
-          markerEnd={markerEnd}
-          onClick={handleClick}
-        />
-      </svg>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={edgeStyle}
+        data-testid={id}
+        markerEnd={markerEnd}
+        interactionWidth={40}
+      />
       <EdgeLabelRenderer>
         <div
           className={"edge"}
           style={{
             transform: labelRenderer,
+            flexDirection: sourceY === targetY ? "column" : "row",
           }}
           onClick={handleClick}
         >
@@ -222,29 +224,44 @@ const CustomEdge: FC<EdgeProps> = ({
                     <div>Not Available</div>
                   ) : (
                     <>
-                      <div>{new Date(getMinWM).toISOString()}</div>
-                      <div>{getDelay}</div>
+                      <div style={{ fontWeight: 700 }}>{getMinWM}</div>
+                      <div style={{ fontWeight: 700 }}>
+                        {new Date(getMinWM).toISOString()}
+                      </div>
+                      <div style={{ fontWeight: 700 }}>{getDelay}</div>
                     </>
                   )}
                 </div>
               }
               arrow
-              placement={"top"}
+              placement={sourceY === targetY ? "top" : "left"}
+              open={hoveredEdge === id}
             >
-              <div className={"edge-watermark-label"} style={wmStyle}>
-                {getMinWM}
-              </div>
+              <div />
             </Tooltip>
           )}
           <Tooltip
-            title={<div className={"edge-tooltip"}>Pending</div>}
+            title={
+              <div className={"edge-tooltip"}>
+                <div>Pending</div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "100%",
+                  }}
+                >
+                  {data?.isFull && <img src={error} alt={"error"} />}
+                  {data?.backpressureLabel}
+                </div>
+              </div>
+            }
             arrow
-            placement={"bottom"}
+            placement={sourceY === targetY ? "bottom" : "right"}
+            open={hoveredEdge === id}
           >
-            <div className={"edge-pending-label"} style={pendingStyle}>
-              {data?.isFull && <img src={error} alt={"error"} />}
-              {data?.backpressureLabel}
-            </div>
+            <div />
           </Tooltip>
         </div>
       </EdgeLabelRenderer>

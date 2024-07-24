@@ -31,6 +31,9 @@ export interface FlowProps {
   handleNodeClick: (e: Element | EventType, node: Node) => void;
   handleEdgeClick: (e: Element | EventType, edge: Edge) => void;
   handlePaneClick: () => void;
+  handleEdgeEnter: (e: Element | EventType, edge: Edge) => void;
+  handleEdgeLeave: (e: Element | EventType, edge: Edge) => void;
+  setSidebarProps: (props: any) => void;
   refresh: () => void;
   namespaceId: string | undefined;
   data: any;
@@ -42,4 +45,5 @@ export interface HighlightContextProps {
   highlightValues: { [key: string]: boolean };
   setHighlightValues: Dispatch<SetStateAction<{ [key: string]: boolean }>>;
   setHidden: Dispatch<SetStateAction<{ [key: string]: boolean }>>;
+  hoveredEdge: string;
 }

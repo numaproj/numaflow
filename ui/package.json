@@ -1,6 +1,6 @@
 {
   "name": "numaflow-ui-test",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Numaflow UI",
   "main": "./dist/cjs/src/index.js",
   "module": "./dist/esm/src/index.js",
@@ -61,7 +61,7 @@
     "react-router-dom": "5.3.4",
     "react-test-renderer": "^18.0.0",
     "react-toastify": "^9.1.1",
-    "reactflow": "^11.5.5",
+    "reactflow": "^11.11.4",
     "resize-observer-polyfill": "^1.5.1",
     "typescript": "^4.4.2",
     "web-vitals": "^2.1.0",
