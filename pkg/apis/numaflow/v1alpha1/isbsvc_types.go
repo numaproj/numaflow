@@ -36,8 +36,8 @@ const (
 	// has its RestfulSet/Deployment as well as services created.
 	ISBSvcConditionDeployed ConditionType = "Deployed"
 
-	// ISBSvcConditionStatefulSetResourceHealthy has the status True when the child resources is healthy.
-	ISBSvcConditionStatefulSetResourceHealthy ConditionType = "StatefulSetHealthy"
+	// ISBSvcConditionChildrenResourcesHealthy has the status True when the child resources is healthy.
+	ISBSvcConditionChildrenResourcesHealthy ConditionType = "ChildrenResourcesHealthy"
 )
 
 type ISBSvcType string
@@ -107,7 +107,7 @@ func (isbsvc *InterStepBufferServiceStatus) SetType(typ ISBSvcType) {
 
 // InitConditions sets conditions to Unknown state.
 func (isbsvc *InterStepBufferServiceStatus) InitConditions() {
-	isbsvc.InitializeConditions(ISBSvcConditionConfigured, ISBSvcConditionDeployed)
+	isbsvc.InitializeConditions(ISBSvcConditionConfigured, ISBSvcConditionDeployed, ISBSvcConditionChildrenResourcesHealthy)
 	isbsvc.SetPhase(ISBSvcPhasePending, "")
 }
 
@@ -148,12 +148,12 @@ func (isbsvc *InterStepBufferServiceStatus) IsHealthy() bool {
 	return isbsvc.IsReady()
 }
 
-// MarkChildNotHealthy marks the child resources as not healthy
-func (isbsvc *InterStepBufferServiceStatus) MarkChildNotHealthy(reason, message string) {
-	isbsvc.MarkFalse(ISBSvcConditionStatefulSetResourceHealthy, reason, message)
+// MarkChildrenResourceNotHealthy marks the children resources as not healthy
+func (isbsvc *InterStepBufferServiceStatus) MarkChildrenResourceNotHealthy(reason, message string) {
+	isbsvc.MarkFalse(ISBSvcConditionChildrenResourcesHealthy, reason, message)
 }
 
-// MarkChildHealthy marks the child resources as healthy
-func (isbsvc *InterStepBufferServiceStatus) MarkChildHealthy(reason, message string) {
-	isbsvc.MarkTrueWithReason(ISBSvcConditionStatefulSetResourceHealthy, reason, message)
+// MarkChildrenResourceHealthy marks the children resources as healthy
+func (isbsvc *InterStepBufferServiceStatus) MarkChildrenResourceHealthy(reason, message string) {
+	isbsvc.MarkTrueWithReason(ISBSvcConditionChildrenResourcesHealthy, reason, message)
 }

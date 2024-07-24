@@ -77,9 +77,6 @@ func (r *vertexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		log.Errorw("Reconcile error", zap.Error(err))
 	}
 
-	if err = setPodStatus(r.client, vertexCopy); err != nil {
-		log.Errorw("Failed to update vertex pod status", zap.Error(err))
-	}
 	if !equality.Semantic.DeepEqual(vertex.Status, vertexCopy.Status) {
 		if err := r.client.Status().Update(ctx, vertexCopy); err != nil {
 			return reconcile.Result{}, err
@@ -323,6 +320,9 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	vertex.Status.Selector = selector.String()
 
 	vertex.Status.MarkPhaseRunning()
+	if err = checkChildrenResourceStatus(ctx, r.client, vertex); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to check children resource status: %w", err)
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -441,4 +441,23 @@ func (r *vertexReconciler) markPhaseLogEvent(vertex *dfv1.Vertex, log *zap.Sugar
 	log.Errorw(logMsg, logWith)
 	vertex.Status.MarkPhaseFailed(reason, message)
 	r.recorder.Event(vertex, corev1.EventTypeWarning, reason, message)
+}
+
+func checkChildrenResourceStatus(ctx context.Context, c client.Client, vertex *dfv1.Vertex) error {
+	// fetch the pods for calculating the status of child resources
+	var podList corev1.PodList
+	if err := c.List(ctx, &podList,
+		client.InNamespace(vertex.GetNamespace()),
+		client.MatchingLabels{dfv1.KeyAppName: vertex.GetName()},
+	); err != nil {
+		return err
+	}
+
+	if msg, reason, status := getVertexStatus(vertex, &podList); status {
+		vertex.Status.MarkPodHealthy(reason, msg)
+	} else {
+		vertex.Status.MarkPodNotHealthy(reason, msg)
+	}
+
+	return nil
 }

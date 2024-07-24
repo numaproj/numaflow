@@ -34,6 +34,8 @@ type Installer interface {
 	// Uninstall only needs to handle those resources not cascade deleted.
 	// For example, undeleted PVCs not automatically deleted when deleting a StatefulSet
 	Uninstall(ctx context.Context) error
+	// CheckChildrenResourceStatus checks the status of the resources created by the ISBS
+	CheckChildrenResourceStatus(ctx context.Context) error
 }
 
 // Install function installs the ISB Service
@@ -46,6 +48,9 @@ func Install(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client cl
 	bufferConfig, err := installer.Install(ctx)
 	if err != nil {
 		logger.Errorw("installation error", zap.Error(err))
+		return err
+	}
+	if err := installer.CheckChildrenResourceStatus(ctx); err != nil {
 		return err
 	}
 	isbSvc.Status.Config = *bufferConfig

@@ -75,9 +75,6 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 			return reconcile.Result{}, err
 		}
 	}
-	if err := setStatefulSetStatus(r.client, isbSvcCopy); err != nil {
-		log.Errorw("Failed to generate StatefulSet status", zap.Error(err))
-	}
 	if err := r.client.Status().Update(ctx, isbSvcCopy); err != nil {
 		return reconcile.Result{}, err
 	}

@@ -667,7 +667,8 @@ func (pls *PipelineStatus) SetPhase(phase PipelinePhase, msg string) {
 
 // InitConditions sets conditions to Unknown state.
 func (pls *PipelineStatus) InitConditions() {
-	pls.InitializeConditions(PipelineConditionConfigured, PipelineConditionDeployed)
+	pls.InitializeConditions(PipelineConditionConfigured, PipelineConditionDeployed, PipelineConditionDaemonServiceHealthy,
+		PipelineConditionSideInputServiceHealthy, PipelineConditionVerticesServiceHealthy)
 }
 
 // MarkConfigured set the Pipeline has valid configuration.

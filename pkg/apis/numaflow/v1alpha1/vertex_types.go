@@ -855,6 +855,11 @@ func (vs *VertexStatus) MarkPodHealthy(reason, message string) {
 	vs.MarkTrueWithReason(VertexConditionPodHealthy, reason, message)
 }
 
+// InitConditions sets conditions to Unknown state.
+func (vs *VertexStatus) InitConditions() {
+	vs.InitializeConditions(VertexConditionPodHealthy)
+}
+
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type VertexList struct {
