@@ -129,6 +129,7 @@ func (r *jetStreamInstaller) Install(ctx context.Context) (*dfv1.BufferServiceCo
 		return nil, err
 	}
 	r.isbSvc.Status.MarkDeployed()
+	reconciler.JetStreamISBSvcReplicas.WithLabelValues(r.isbSvc.Namespace, r.isbSvc.Name).Set(float64(r.isbSvc.Spec.JetStream.GetReplicas()))
 	return &dfv1.BufferServiceConfig{
 		JetStream: &dfv1.JetStreamConfig{
 			URL: fmt.Sprintf("nats://%s.%s.svc:%s", generateJetStreamServiceName(r.isbSvc), r.isbSvc.Namespace, strconv.Itoa(int(clientPort))),
@@ -514,6 +515,8 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 }
 
 func (r *jetStreamInstaller) Uninstall(ctx context.Context) error {
+	// Clean up metrics
+	_ = reconciler.JetStreamISBSvcReplicas.DeleteLabelValues(r.isbSvc.Namespace, r.isbSvc.Name)
 	return r.uninstallPVCs(ctx)
 }
 

@@ -56,7 +56,10 @@
 }
 
 .node-tooltip {
-    font-size: 1.3rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+    font-family: "Avenir", sans-serif;
+    cursor: pointer;
 }
 
 .react-flow__node-input {
