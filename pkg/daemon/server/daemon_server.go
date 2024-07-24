@@ -288,8 +288,8 @@ func (ds *daemonServer) exposeMetrics(ctx context.Context) {
 					}
 				}
 			}
-			// if the data hasn't arrived the sink vertex
-			// set the lag to be -1
+
+			//exposing pipeline processing lag metric.
 			if minWM < 0 {
 				pipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(-1)
 			} else {
@@ -300,19 +300,21 @@ func (ds *daemonServer) exposeMetrics(ctx context.Context) {
 				}
 			}
 
+			// exposing the watermark delay to current time metric.
 			if maxWM == math.MinInt64 {
 				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(-1)
 			} else {
 				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(float64(time.Now().UnixMilli() - maxWM))
 			}
 
-			pipelineStatus, err := ds.metaDataQuery.GetPipelineStatus(ctx, &daemon.GetPipelineStatusRequest{Pipeline: ds.pipeline.Name})
+			//exposing Pipeline data processing health metric.
+			pipelineDataHealth, err := ds.metaDataQuery.GetPipelineStatus(ctx, &daemon.GetPipelineStatusRequest{Pipeline: ds.pipeline.Name})
 
 			if err != nil {
 				log.Errorw("Failed to get data processing health status", zap.Error(err))
 				continue
 			}
-			switch pipelineStatus.Status.Status {
+			switch pipelineDataHealth.Status.Status {
 			case v1alpha1.PipelineStatusHealthy:
 				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(1)
 			case v1alpha1.PipelineStatusWarning:
