@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"reflect"
 	"time"
 
 	"go.uber.org/zap"
@@ -181,7 +182,18 @@ func Start(namespaced bool, managedNamespace string) {
 	// Watch Vertices with Generation changes (excluding scaling up/down)
 	if err := pipelineController.Watch(source.Kind(mgr.GetCache(), &dfv1.Vertex{}),
 		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Pipeline{}, handler.OnlyControllerOwner()),
-		predicate.ResourceVersionChangedPredicate{}); err != nil {
+		predicate.And(
+			predicate.ResourceVersionChangedPredicate{},
+			predicate.Funcs{
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					if e.ObjectOld == nil || e.ObjectNew == nil {
+						return true
+					}
+					old, _ := e.ObjectOld.(*dfv1.Vertex)
+					new, _ := e.ObjectNew.(*dfv1.Vertex)
+					return !reflect.DeepEqual(new.Spec.WithOutReplicas(), old.Spec.WithOutReplicas())
+				}},
+		)); err != nil {
 		logger.Fatalw("Unable to watch Vertices", zap.Error(err))
 	}
 

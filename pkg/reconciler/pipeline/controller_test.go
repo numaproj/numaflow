@@ -19,6 +19,7 @@ package pipeline
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/goccy/go-json"
 	"github.com/stretchr/testify/assert"
@@ -93,6 +94,54 @@ var (
 					Name: "test-name",
 				},
 				Key: "test-key",
+			},
+		},
+	}
+
+	testPipelineWithSideinput = &dfv1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pl",
+			Namespace: "test-ns",
+		},
+		Spec: dfv1.PipelineSpec{
+			Vertices: []dfv1.AbstractVertex{
+				{
+					Name: "input",
+					Source: &dfv1.Source{
+						UDTransformer: &dfv1.UDTransformer{
+							Builtin: &dfv1.Transformer{Name: "filter"},
+						}},
+				},
+				{
+					Name: "p1",
+					UDF: &dfv1.UDF{
+						Builtin: &dfv1.Function{Name: "cat"},
+					},
+					SideInputs: []string{"my-sideinput"},
+				},
+				{
+					Name: "output",
+					Sink: &dfv1.Sink{},
+				},
+			},
+			SideInputs: []dfv1.SideInput{
+				{
+					Name: "my-sideinput",
+					Container: &dfv1.Container{
+						Image: "my-image",
+					},
+					Trigger: &dfv1.SideInputTrigger{
+						Schedule: "@every 5s",
+					},
+				},
+			},
+			Edges: []dfv1.Edge{
+				{From: "input", To: "p1"},
+				{From: "p1", To: "output"},
+			},
+			Watermark: dfv1.Watermark{
+				Disabled: false,
+				MaxDelay: &metav1.Duration{Duration: 5 * time.Second},
 			},
 		},
 	}
@@ -860,5 +909,39 @@ func Test_copyVertexTemplate(t *testing.T) {
 		assert.Equal(t, 1, len(vtx.InitContainerTemplate.EnvFrom))
 		assert.NotNil(t, vtx.InitContainerTemplate.EnvFrom[0].SecretRef)
 		assert.Equal(t, "test", vtx.InitContainerTemplate.EnvFrom[0].SecretRef.Name)
+	})
+}
+
+func Test_checkChildrenResourceStatus(t *testing.T) {
+	t.Run("test check children resource status", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		r := &pipelineReconciler{
+			client:   cl,
+			scheme:   scheme.Scheme,
+			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+			image:    testFlowImage,
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
+		}
+		testObj := testPipelineWithSideinput.DeepCopy()
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		err = checkChildrenResourceStatus(ctx, cl, testObj)
+		assert.NoError(t, err)
+		for _, c := range testObj.Status.Conditions {
+			if c.Type == string(dfv1.PipelineConditionDaemonServiceHealthy) {
+				assert.Equal(t, string(corev1.ConditionTrue), string(c.Status))
+			} else if c.Type == string(dfv1.PipelineConditionSideInputServiceHealthy) {
+				assert.Equal(t, string(corev1.ConditionTrue), string(c.Status))
+			} else if c.Type == string(dfv1.PipelineConditionVerticesServiceHealthy) {
+				assert.Equal(t, string(corev1.ConditionFalse), string(c.Status))
+			}
+		}
 	})
 }

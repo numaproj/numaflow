@@ -860,6 +860,14 @@ func (vs *VertexStatus) InitConditions() {
 	vs.InitializeConditions(VertexConditionPodHealthy)
 }
 
+// IsHealthy indicates whether the vertex is healthy or not
+func (vs *VertexStatus) IsHealthy() bool {
+	if vs.Phase != VertexPhaseRunning {
+		return false
+	}
+	return vs.IsReady()
+}
+
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type VertexList struct {

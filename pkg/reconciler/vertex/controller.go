@@ -446,14 +446,12 @@ func (r *vertexReconciler) markPhaseLogEvent(vertex *dfv1.Vertex, log *zap.Sugar
 func checkChildrenResourceStatus(ctx context.Context, c client.Client, vertex *dfv1.Vertex) error {
 	// fetch the pods for calculating the status of child resources
 	var podList corev1.PodList
-	if err := c.List(ctx, &podList,
-		client.InNamespace(vertex.GetNamespace()),
-		client.MatchingLabels{dfv1.KeyAppName: vertex.GetName()},
-	); err != nil {
+	selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + vertex.Spec.PipelineName + "," + dfv1.KeyVertexName + "=" + vertex.Spec.Name)
+	if err := c.List(ctx, &podList, &client.ListOptions{Namespace: vertex.GetNamespace(), LabelSelector: selector}); err != nil {
 		return err
 	}
 
-	if msg, reason, status := getVertexStatus(vertex, &podList); status {
+	if msg, reason, status := getVertexStatus(&podList); status {
 		vertex.Status.MarkPodHealthy(reason, msg)
 	} else {
 		vertex.Status.MarkPodNotHealthy(reason, msg)

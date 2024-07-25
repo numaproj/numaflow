@@ -949,10 +949,8 @@ func (r *pipelineReconciler) safeToDelete(ctx context.Context, pl *dfv1.Pipeline
 func checkChildrenResourceStatus(ctx context.Context, c client.Client, pipeline *dfv1.Pipeline) error {
 	// get the daemon deployment and update the status of it to the pipeline
 	var daemonDeployment appv1.Deployment
-	if err := c.Get(ctx, client.ObjectKey{
-		Namespace: pipeline.GetNamespace(),
-		Name:      pipeline.GetDaemonDeploymentName(),
-	}, &daemonDeployment); err != nil {
+	if err := c.Get(ctx, client.ObjectKey{Namespace: pipeline.GetNamespace(), Name: pipeline.GetDaemonDeploymentName()},
+		&daemonDeployment); err != nil {
 		return err
 	}
 	if msg, reason, status := getDeploymentStatus(&daemonDeployment); status {
@@ -964,33 +962,33 @@ func checkChildrenResourceStatus(ctx context.Context, c client.Client, pipeline 
 	// get the side input deployments and update the status of them to the pipeline
 	if len(pipeline.Spec.SideInputs) == 0 {
 		pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionSideInputServiceHealthy,
-			"SideInputNotAvailable", "No any side input attached to the pipeline")
+			"NoSideInputs", "No Side Inputs attached to the pipeline")
 	} else {
-		for _, sideInput := range pipeline.Spec.SideInputs {
-			var sideInputDeployment appv1.Deployment
-			if err := c.Get(ctx, client.ObjectKey{
-				Namespace: pipeline.GetNamespace(),
-				Name:      pipeline.GetSideInputsManagerDeploymentName(sideInput.Name),
-			}, &sideInputDeployment); err != nil {
-				return err
-			}
-			if msg, reason, status := getDeploymentStatus(&sideInputDeployment); status {
+		var sideInputs appv1.DeploymentList
+		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + pipeline.Name + "," + dfv1.KeyComponent + "=" + dfv1.ComponentSideInputManager)
+		if err := c.List(ctx, &sideInputs, &client.ListOptions{Namespace: pipeline.Namespace, LabelSelector: selector}); err != nil {
+			return err
+		}
+		for _, sideInput := range sideInputs.Items {
+			if msg, reason, status := getDeploymentStatus(&sideInput); status {
 				pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionSideInputServiceHealthy, reason, msg)
 			} else {
 				pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionSideInputServiceHealthy, reason, msg)
-
+				break
 			}
 		}
 	}
 
 	// calculate the status of the vertices and update the status of them to the pipeline
-	status, reason, err := getVertexStatus(ctx, c, pipeline)
-	if err != nil {
+	var vertices dfv1.VertexList
+	selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + pipeline.GetName() + "," + dfv1.KeyComponent + "=" + dfv1.ComponentVertex)
+	if err := c.List(ctx, &vertices, &client.ListOptions{Namespace: pipeline.Namespace, LabelSelector: selector}); err != nil {
 		return err
 	}
-	if status == "True" {
+	status, reason := getVertexStatus(&vertices)
+	if status {
 		pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionVerticesServiceHealthy, reason, "All Vertices are healthy")
-	} else if status == "False" {
+	} else {
 		pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionVerticesServiceHealthy, reason, "Some Vertices are not healthy")
 	}
 

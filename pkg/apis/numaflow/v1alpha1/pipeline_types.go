@@ -50,8 +50,8 @@ const (
 
 	// PipelineConditionDaemonServiceHealthy has the status True when the daemon service is healthy.
 	PipelineConditionDaemonServiceHealthy    ConditionType = "DaemonServiceHealthy"
-	PipelineConditionSideInputServiceHealthy ConditionType = "SideInputManagerHealthy"
-	PipelineConditionVerticesServiceHealthy  ConditionType = "VerticesHealthy"
+	PipelineConditionSideInputServiceHealthy ConditionType = "SideInputServiceHealthy"
+	PipelineConditionVerticesServiceHealthy  ConditionType = "VerticesServiceHealthy"
 )
 
 // +genclient
@@ -209,10 +209,6 @@ func (p Pipeline) GetSideInputsManagerDeploymentName(sideInputName string) strin
 
 func (p Pipeline) GetSideInputsStoreName() string {
 	return fmt.Sprintf("%s-%s", p.Namespace, p.Name)
-}
-
-func (p Pipeline) GetVertexName(defname string) string {
-	return fmt.Sprintf("%s-%s", p.Name, defname)
 }
 
 func (p Pipeline) GetServingSourceStreamNames() []string {
@@ -735,12 +731,12 @@ func (pls *PipelineStatus) IsHealthy() bool {
 	}
 }
 
-// MarkServiceNotHealthy marks the Daemon, SideInput and Vertex Service as not healthy with the given reason and message.
+// MarkServiceNotHealthy marks a service as not healthy with the given reason and message.
 func (pls *PipelineStatus) MarkServiceNotHealthy(conditionType ConditionType, reason, message string) {
 	pls.MarkFalse(conditionType, reason, message)
 }
 
-// MarkServiceHealthy marks the Daemon, SideInput and Vertex Service as healthy with the given reason and message.
+// MarkServiceHealthy marks a service as healthy with the given reason and message.
 func (pls *PipelineStatus) MarkServiceHealthy(conditionType ConditionType, reason, message string) {
 	pls.MarkTrueWithReason(conditionType, reason, message)
 }

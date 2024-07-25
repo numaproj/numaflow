@@ -20,12 +20,13 @@ import (
 	"context"
 	"fmt"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/reconciler"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reconciler"
 )
 
 // Installer is an interface for ISB Service installation
@@ -34,7 +35,7 @@ type Installer interface {
 	// Uninstall only needs to handle those resources not cascade deleted.
 	// For example, undeleted PVCs not automatically deleted when deleting a StatefulSet
 	Uninstall(ctx context.Context) error
-	// CheckChildrenResourceStatus checks the status of the resources created by the ISBS
+	// CheckChildrenResourceStatus checks the status of the resources created by the ISB Service
 	CheckChildrenResourceStatus(ctx context.Context) error
 }
 

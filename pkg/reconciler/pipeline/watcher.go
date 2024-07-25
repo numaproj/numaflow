@@ -1,38 +1,21 @@
 package pipeline
 
 import (
-	"context"
 	"fmt"
 
 	appv1 "k8s.io/api/apps/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
 // getVertexStatus will calculate the status of the vertices and return the status and reason
-func getVertexStatus(ctx context.Context, c client.Client, pipeline *dfv1.Pipeline) (string, string, error) {
-	totalVertices := len(pipeline.Spec.Vertices)
-	healthyVertices := 0
-	var vertices dfv1.VertexList
-	if err := c.List(ctx, &vertices, client.InNamespace(pipeline.GetNamespace()),
-		client.MatchingLabels{dfv1.KeyPipelineName: pipeline.GetName()}); err != nil {
-		return "", "", err
-	}
+func getVertexStatus(vertices *dfv1.VertexList) (bool, string) {
 	for _, vertex := range vertices.Items {
-		for _, condition := range vertex.Status.Conditions {
-			if condition.Type == string(dfv1.VertexConditionPodHealthy) {
-				if condition.Status == "True" {
-					healthyVertices++
-				}
-			}
+		if !vertex.Status.IsHealthy() {
+			return false, "Progressing"
 		}
 	}
-	if healthyVertices == totalVertices {
-		return "True", "Successful", nil
-	} else {
-		return "False", "Progressing", nil
-	}
+	return true, "Successful"
 }
 
 // getDeploymentStatus returns a message describing deployment status, and message with reason where bool value

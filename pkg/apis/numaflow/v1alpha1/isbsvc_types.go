@@ -36,7 +36,7 @@ const (
 	// has its RestfulSet/Deployment as well as services created.
 	ISBSvcConditionDeployed ConditionType = "Deployed"
 
-	// ISBSvcConditionChildrenResourcesHealthy has the status True when the child resources is healthy.
+	// ISBSvcConditionChildrenResourcesHealthy has the status True when the child resources are healthy.
 	ISBSvcConditionChildrenResourcesHealthy ConditionType = "ChildrenResourcesHealthy"
 )
 

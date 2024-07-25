@@ -205,6 +205,17 @@ func TestInstall(t *testing.T) {
 		assert.NotNil(t, testObj.Status.Config.JetStream.Auth.Basic.User)
 		assert.NotNil(t, testObj.Status.Config.JetStream.Auth.Basic.Password)
 	})
+
+	t.Run("test child resource not ready", func(t *testing.T) {
+		testObj := testJetStreamIsbSvc.DeepCopy()
+		testObj.Name = "fake-isb"
+		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
+		assert.NoError(t, err)
+		testObj.Status.MarkChildrenResourceNotHealthy("reason", "message")
+		assert.False(t, testObj.Status.IsReady())
+		assert.False(t, testObj.Status.IsHealthy())
+
+	})
 }
 
 func TestUnInstall(t *testing.T) {

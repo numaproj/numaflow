@@ -77,7 +77,22 @@ func Test_ISBSvcMarkStatus(t *testing.T) {
 			assert.Equal(t, metav1.ConditionTrue, c.Status)
 		}
 	}
+	s.MarkChildrenResourceNotHealthy("reason", "message")
+	for _, c := range s.Conditions {
+		if c.Type == string(ISBSvcConditionChildrenResourcesHealthy) {
+			assert.Equal(t, metav1.ConditionFalse, c.Status)
+			assert.Equal(t, "reason", c.Reason)
+			assert.Equal(t, "message", c.Message)
+		}
+	}
 	s.MarkChildrenResourceHealthy("RolloutFinished", "All service healthy")
+	for _, c := range s.Conditions {
+		if c.Type == string(ISBSvcConditionChildrenResourcesHealthy) {
+			assert.Equal(t, metav1.ConditionTrue, c.Status)
+			assert.Equal(t, "RolloutFinished", c.Reason)
+			assert.Equal(t, "All service healthy", c.Message)
+		}
+	}
 	assert.True(t, s.IsReady())
 }
 
