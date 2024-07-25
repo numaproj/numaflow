@@ -42,4 +42,10 @@ var (
 		Name:      "watermark_cmp_now",
 		Help:      "Max source watermark compared with current time in milliseconds",
 	}, []string{metrics.LabelPipeline})
+
+	dataProcessingHealth = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "pipeline",
+		Name:      "data_processing_health",
+		Help:      "Pipeline data processing health status. 1: Healthy, 0: Unknown, -1: Warning, -2: Critical",
+	}, []string{metrics.LabelPipeline})
 )
