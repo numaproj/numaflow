@@ -325,10 +325,6 @@ func (ds *daemonServer) exposeMetrics(ctx context.Context) {
 				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(0)
 			}
 
-			//exposing messages dropped
-
-			DroppedMessageCounter.WithLabelValues(ds.pipeline.Name).Add(0)
-
 		case <-ctx.Done():
 			return
 		}
