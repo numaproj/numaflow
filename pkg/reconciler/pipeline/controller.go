@@ -950,7 +950,7 @@ func checkChildrenResourceStatus(ctx context.Context, c client.Client, pipeline 
 	// get the daemon deployment and update the status of it to the pipeline
 	var daemonDeployment appv1.Deployment
 	if err := c.Get(ctx, client.ObjectKey{Namespace: pipeline.GetNamespace(), Name: pipeline.GetDaemonDeploymentName()},
-		&daemonDeployment); err != nil {
+		&daemonDeployment); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
 	if msg, reason, status := getDeploymentStatus(&daemonDeployment); status {

@@ -559,7 +559,7 @@ func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) er
 	if err := r.client.Get(ctx, client.ObjectKey{
 		Namespace: r.isbSvc.Namespace,
 		Name:      generateJetStreamStatefulSetName(r.isbSvc),
-	}, &isbStatefulSet); err != nil {
+	}, &isbStatefulSet); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
 	// calculate the status of the InterStepBufferService by statefulset status and update the status of isbSvc
