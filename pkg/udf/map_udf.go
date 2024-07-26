@@ -239,7 +239,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 			// Drop message if it contains the special tag
 			if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
-				metrics.DroppedMessageCounter.WithLabelValues(vertexName, pipelineName).Inc()
+				metrics.DroppedMessageCounter.WithLabelValues(vertexName).Inc()
 				return result, nil
 			}
 
