@@ -168,7 +168,7 @@ var (
 
 	DroppedMessageCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
-		Name:      "message_drop_counter",
+		Name:      "ud_dropped_messages_total",
 		Help:      "Total number of Messages Dropped by UDF and Source vertex",
 	}, []string{LabelVertex})
 )
