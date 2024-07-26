@@ -248,7 +248,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 		// Drop message if it contains the special tag
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
-			metrics.DroppedMessageCounter.With(map[string]string{
+			metrics.UserDroppedMessages.With(map[string]string{
 				metrics.LabelVertex:             vertexName,
 				metrics.LabelPipeline:           pipelineName,
 				metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),

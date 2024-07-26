@@ -166,7 +166,7 @@ var (
 		Help:      "Total number of Messages Written by UDF",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
-	DroppedMessageCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+	UserDroppedMessages = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "ud_drop_total",
 		Help:      "Total messages dropped by the user",
