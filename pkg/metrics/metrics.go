@@ -168,9 +168,9 @@ var (
 
 	DroppedMessageCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
-		Name:      "ud_dropped_messages_total",
-		Help:      "Total number of Messages Dropped by UDF and Source vertex",
-	}, []string{LabelVertex})
+		Name:      "ud_drop_total",
+		Help:      "Total messages dropped by the user",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex})
 )
 
 // Source forwarder specific metrics
