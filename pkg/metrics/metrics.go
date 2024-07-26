@@ -165,6 +165,12 @@ var (
 		Name:      "udf_write_total",
 		Help:      "Total number of Messages Written by UDF",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	DroppedMessageCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "drop_counter",
+		Help:      "Total number of Messages Dropped",
+	}, []string{LabelVertex})
 )
 
 // Source forwarder specific metrics

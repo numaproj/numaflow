@@ -48,10 +48,4 @@ var (
 		Name:      "data_processing_health",
 		Help:      "Pipeline data processing health status. 1: Healthy, 0: Unknown, -1: Warning, -2: Critical",
 	}, []string{metrics.LabelPipeline})
-
-	droppedMessageCounter = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: "pipeline",
-		Name:      "data_processing_health",
-		Help:      "Pipeline data processing health status. 1: Healthy, 0: Unknown, -1: Warning, -2: Critical",
-	}, []string{metrics.LabelPipeline})
 )

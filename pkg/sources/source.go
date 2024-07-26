@@ -400,6 +400,7 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 
 		// Drop message if it contains the special tag
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
+			metrics.DroppedMessageCounter.WithLabelValues(sp.VertexInstance.Vertex.Name).Inc()
 			return result, nil
 		}
 
