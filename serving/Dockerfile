@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry cargo build --release
 
 ### Final
 
-FROM debian:bookworm
+FROM debian:bookworm as serving-source
 
 USER root
 

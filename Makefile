@@ -201,7 +201,7 @@ clean:
 
 .PHONY: crds
 crds:
-	./hack/crdgen.sh	
+	./hack/crdgen.sh
 
 .PHONY: manifests
 manifests: crds
