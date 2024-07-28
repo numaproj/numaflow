@@ -17,7 +17,7 @@ limitations under the License.
 package isb
 
 import (
-	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -89,7 +89,7 @@ type MessageID struct {
 
 // String returns the string representation of the MessageID
 func (id MessageID) String() string {
-	return fmt.Sprintf("%s-%s-%d", id.VertexName, id.Offset, id.Index)
+	return id.VertexName + "-" + id.Offset + "-" + strconv.Itoa(int(id.Index))
 }
 
 // Body is the body of the message

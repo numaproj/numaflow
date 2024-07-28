@@ -1,6 +1,6 @@
 package kafka
 
-import "fmt"
+import "strconv"
 
 // kafkaOffset implements isb.Offset
 // we need topic information to ack the message
@@ -11,7 +11,7 @@ type kafkaOffset struct {
 }
 
 func (k *kafkaOffset) String() string {
-	return fmt.Sprintf("%s:%d:%d", k.topic, k.offset, k.partitionIdx)
+	return k.topic + ":" + strconv.FormatInt(k.offset, 10) + ":" + strconv.Itoa(int(k.partitionIdx))
 }
 
 func (k *kafkaOffset) Sequence() (int64, error) {
