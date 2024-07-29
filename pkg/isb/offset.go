@@ -17,7 +17,6 @@ limitations under the License.
 package isb
 
 import (
-	"fmt"
 	"strconv"
 )
 
@@ -38,7 +37,7 @@ func NewSimpleIntPartitionOffset(seq int64, partitionIdx int32) Offset {
 }
 
 func (s *simpleIntPartitionOffset) String() string {
-	return fmt.Sprintf("%d-%d", s.seq, s.partitionIdx)
+	return strconv.FormatInt(s.seq, 10) + "-" + strconv.Itoa(int(s.partitionIdx))
 }
 
 func (s *simpleIntPartitionOffset) Sequence() (int64, error) {
@@ -71,7 +70,7 @@ func NewSimpleStringPartitionOffset(seq string, partitionIdx int32) Offset {
 }
 
 func (s *simpleStringPartitionOffset) String() string {
-	return fmt.Sprintf("%s-%d", s.seq, s.partitionIdx)
+	return s.seq + "-" + strconv.Itoa(int(s.partitionIdx))
 }
 
 func (s *simpleStringPartitionOffset) Sequence() (int64, error) {

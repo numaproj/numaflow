@@ -370,12 +370,11 @@ func (sp *SourceProcessor) getSourceGoWhereDecider(shuffleFuncMap map[string]*sh
 
 		// Iterate through the edges
 		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
-			edgeKey := fmt.Sprintf("%s:%s", edge.From, edge.To)
-
 			// if the edge has more than one partition, shuffle the message
 			// else forward the message to the default partition
 			partitionIdx := isb.DefaultPartitionIdx
 			if edge.GetToVertexPartitionCount() > 1 {
+				edgeKey := edge.From + ":" + edge.To
 				if edge.ToVertexType == dfv1.VertexTypeReduceUDF { // Shuffle on keys
 					partitionIdx = shuffleFuncMap[edgeKey].ShuffleOnKeys(keys)
 				} else { // Shuffle on msgId
@@ -413,8 +412,6 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 
 		// Iterate through the edges
 		for _, edge := range sp.VertexInstance.Vertex.Spec.ToEdges {
-			edgeKey := fmt.Sprintf("%s:%s", edge.From, edge.To)
-
 			// Condition to proceed for forwarding message: No conditions on edge, or message tags match edge conditions
 			proceed := edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 || sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values)
 
@@ -423,6 +420,7 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 				// else forward the message to the default partition
 				partitionIdx := isb.DefaultPartitionIdx
 				if edge.GetToVertexPartitionCount() > 1 {
+					edgeKey := edge.From + ":" + edge.To
 					if edge.ToVertexType == dfv1.VertexTypeReduceUDF { // Shuffle on keys
 						partitionIdx = shuffleFuncMap[edgeKey].ShuffleOnKeys(keys)
 					} else { // Shuffle on msgId
