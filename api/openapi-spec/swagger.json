@@ -654,6 +654,9 @@
     "io.k8s.api.admissionregistration.v1alpha1.ValidatingAdmissionPolicyBindingList": {
       "description": "ValidatingAdmissionPolicyBindingList is a list of ValidatingAdmissionPolicyBinding.",
       "type": "object",
+      "required": [
+        "items"
+      ],
       "properties": {
         "apiVersion": {
           "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
@@ -712,6 +715,9 @@
     "io.k8s.api.admissionregistration.v1alpha1.ValidatingAdmissionPolicyList": {
       "description": "ValidatingAdmissionPolicyList is a list of ValidatingAdmissionPolicy.",
       "type": "object",
+      "required": [
+        "items"
+      ],
       "properties": {
         "apiVersion": {
           "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
@@ -1127,6 +1133,9 @@
     "io.k8s.api.admissionregistration.v1beta1.ValidatingAdmissionPolicyBindingList": {
       "description": "ValidatingAdmissionPolicyBindingList is a list of ValidatingAdmissionPolicyBinding.",
       "type": "object",
+      "required": [
+        "items"
+      ],
       "properties": {
         "apiVersion": {
           "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
@@ -1185,6 +1194,9 @@
     "io.k8s.api.admissionregistration.v1beta1.ValidatingAdmissionPolicyList": {
       "description": "ValidatingAdmissionPolicyList is a list of ValidatingAdmissionPolicy.",
       "type": "object",
+      "required": [
+        "items"
+      ],
       "properties": {
         "apiVersion": {
           "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
