@@ -144,6 +144,8 @@ const (
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
 	EnvServingStoreTTL                  = "NUMAFLOW_SERVING_STORE_TTL"
+	EnvServingImage                     = "NUMAFLOW_SERVING_IMAGE"
+	EnvServingImagePullPolicy           = "NUMAFLOW_SERVING_IMAGE_PULL_POLICY"
 	PathVarRun                          = "/var/run/numaflow"
 	VertexMetricsPort                   = 2469
 	VertexMetricsPortName               = "metrics"

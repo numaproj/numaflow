@@ -3354,6 +3354,34 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 <td>
 
+<code>ServingImage</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>ServingPullPolicy</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#pullpolicy-v1-core">
+Kubernetes core/v1.PullPolicy </a> </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>Env</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
 \[\]Kubernetes core/v1.EnvVar </a> </em>

@@ -1774,6 +1774,20 @@ func schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref common.ReferenceC
 							Format:  "",
 						},
 					},
+					"ServingImage": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"ServingPullPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
 					"Env": {
 						SchemaProps: spec.SchemaProps{
 							Type: []string{"array"},
@@ -1814,7 +1828,7 @@ func schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref common.ReferenceC
 						},
 					},
 				},
-				Required: []string{"ISBSvcType", "Image", "PullPolicy", "Env", "SideInputsStoreName", "ServingSourceStreamName", "PipelineSpec", "DefaultResources"},
+				Required: []string{"ISBSvcType", "Image", "PullPolicy", "ServingImage", "ServingPullPolicy", "Env", "SideInputsStoreName", "ServingSourceStreamName", "PipelineSpec", "DefaultResources"},
 			},
 		},
 		Dependencies: []string{

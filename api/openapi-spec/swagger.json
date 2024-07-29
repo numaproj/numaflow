@@ -18440,6 +18440,8 @@
         "ISBSvcType",
         "Image",
         "PullPolicy",
+        "ServingImage",
+        "ServingPullPolicy",
         "Env",
         "SideInputsStoreName",
         "ServingSourceStreamName",
@@ -18466,6 +18468,12 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineSpec"
         },
         "PullPolicy": {
+          "type": "string"
+        },
+        "ServingImage": {
+          "type": "string"
+        },
+        "ServingPullPolicy": {
           "type": "string"
         },
         "ServingSourceStreamName": {

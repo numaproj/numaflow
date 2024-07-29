@@ -338,12 +338,15 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 }
 
 func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, error) {
+	if req.ServingImage == "" {
+		return corev1.Container{}, errors.New("serving image is required for serving source")
+	}
 	servingSource := v.Spec.Source.Serving
 	servingContainer := corev1.Container{
 		Name:            ServingSourceContainer,
 		Env:             req.Env,
-		Image:           "numaserve:0.1", // TODO: use appropriate image
-		ImagePullPolicy: corev1.PullIfNotPresent,
+		Image:           req.ServingImage,
+		ImagePullPolicy: req.ServingPullPolicy,
 		Resources:       req.DefaultResources,
 	}
 

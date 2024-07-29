@@ -49,11 +49,13 @@ type GetVertexPodSpecReq struct {
 	ISBSvcType              ISBSvcType                  `protobuf:"bytes,1,opt,name=isbSvcType"`
 	Image                   string                      `protobuf:"bytes,2,opt,name=image"`
 	PullPolicy              corev1.PullPolicy           `protobuf:"bytes,3,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
-	Env                     []corev1.EnvVar             `protobuf:"bytes,4,rep,name=env"`
-	SideInputsStoreName     string                      `protobuf:"bytes,5,opt,name=sideInputsStoreName"`
-	ServingSourceStreamName string                      `protobuf:"bytes,6,opt,name=servingSourceStreamName"`
-	PipelineSpec            PipelineSpec                `protobuf:"bytes,7,opt,name=pipelineSpec"`
-	DefaultResources        corev1.ResourceRequirements `protobuf:"bytes,8,opt,name=defaultResources"`
+	ServingImage            string                      `protobuf:"bytes,4,opt,name=servingImage"`
+	ServingPullPolicy       corev1.PullPolicy           `protobuf:"bytes,5,opt,name=servingPullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
+	Env                     []corev1.EnvVar             `protobuf:"bytes,6,rep,name=env"`
+	SideInputsStoreName     string                      `protobuf:"bytes,7,opt,name=sideInputsStoreName"`
+	ServingSourceStreamName string                      `protobuf:"bytes,8,opt,name=servingSourceStreamName"`
+	PipelineSpec            PipelineSpec                `protobuf:"bytes,9,opt,name=pipelineSpec"`
+	DefaultResources        corev1.ResourceRequirements `protobuf:"bytes,10,opt,name=defaultResources"`
 }
 
 type GetDaemonDeploymentReq struct {

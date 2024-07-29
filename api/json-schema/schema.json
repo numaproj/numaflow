@@ -18453,6 +18453,12 @@
         "PullPolicy": {
           "type": "string"
         },
+        "ServingImage": {
+          "type": "string"
+        },
+        "ServingPullPolicy": {
+          "type": "string"
+        },
         "ServingSourceStreamName": {
           "type": "string"
         },
@@ -18464,6 +18470,8 @@
         "ISBSvcType",
         "Image",
         "PullPolicy",
+        "ServingImage",
+        "ServingPullPolicy",
         "Env",
         "SideInputsStoreName",
         "ServingSourceStreamName",

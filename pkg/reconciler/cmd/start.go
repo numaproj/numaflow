@@ -189,9 +189,9 @@ func Start(namespaced bool, managedNamespace string) {
 					if e.ObjectOld == nil || e.ObjectNew == nil {
 						return true
 					}
-					old, _ := e.ObjectOld.(*dfv1.Vertex)
-					new, _ := e.ObjectNew.(*dfv1.Vertex)
-					return !reflect.DeepEqual(new.Spec.WithOutReplicas(), old.Spec.WithOutReplicas())
+					oldObj, _ := e.ObjectOld.(*dfv1.Vertex)
+					newObj, _ := e.ObjectNew.(*dfv1.Vertex)
+					return !reflect.DeepEqual(newObj.Spec.WithOutReplicas(), oldObj.Spec.WithOutReplicas())
 				}},
 		)); err != nil {
 		logger.Fatalw("Unable to watch Vertices", zap.Error(err))

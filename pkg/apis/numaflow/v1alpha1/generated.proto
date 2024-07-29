@@ -539,15 +539,19 @@ message GetVertexPodSpecReq {
 
   optional string pullPolicy = 3;
 
-  repeated k8s.io.api.core.v1.EnvVar env = 4;
+  optional string servingImage = 4;
 
-  optional string sideInputsStoreName = 5;
+  optional string servingPullPolicy = 5;
 
-  optional string servingSourceStreamName = 6;
+  repeated k8s.io.api.core.v1.EnvVar env = 6;
 
-  optional PipelineSpec pipelineSpec = 7;
+  optional string sideInputsStoreName = 7;
 
-  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 8;
+  optional string servingSourceStreamName = 8;
+
+  optional PipelineSpec pipelineSpec = 9;
+
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 10;
 }
 
 // GroupBy indicates it is a reducer UDF
