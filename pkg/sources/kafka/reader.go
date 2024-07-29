@@ -174,20 +174,31 @@ func (ks *kafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 	ks.handler.inflightAcks = make(chan bool)
 	defer close(ks.handler.inflightAcks)
 
-	for _, offset := range offsets {
-		topic := offset.(*kafkaOffset).Topic()
+	// Create a map to hold the highest offset for each partition
+	partitionOffsets := make(map[int32]int64)
 
-		pOffset, err := offset.Sequence()
+	for _, offset := range offsets {
+		partitionIdx := offset.PartitionIdx()
+		sequence, err := offset.Sequence()
 		if err != nil {
 			kafkaSourceOffsetAckErrors.With(map[string]string{metrics.LabelVertex: ks.vertexName, metrics.LabelPipeline: ks.pipelineName}).Inc()
 			ks.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("supplied-offset", offset.String()), zap.Error(err))
 			continue
 		}
-		// we need to mark the offset of the next message to read
-		ks.handler.sess.MarkOffset(topic, offset.PartitionIdx(), pOffset+1, "")
-		kafkaSourceAckCount.With(map[string]string{metrics.LabelVertex: ks.vertexName, metrics.LabelPipeline: ks.pipelineName}).Inc()
 
+		// If the current offset is higher than what's in the map, update the map
+		if pOffset, ok := partitionOffsets[partitionIdx]; !ok || sequence > pOffset {
+			partitionOffsets[partitionIdx] = sequence
+		}
 	}
+
+	// Now mark the offset for each partition
+	for partitionIdx, offset := range partitionOffsets {
+		// we need to mark the offset of the next message to read
+		ks.handler.sess.MarkOffset(ks.topic, partitionIdx, offset+1, "")
+	}
+
+	kafkaSourceAckCount.With(map[string]string{metrics.LabelVertex: ks.vertexName, metrics.LabelPipeline: ks.pipelineName}).Add(float64(len(offsets)))
 	// How come it does not return errors at all?
 	return make([]error, len(offsets))
 }
