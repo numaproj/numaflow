@@ -9,7 +9,7 @@ DOCKER_PUSH?=false
 DOCKER_BUILD_ARGS?=
 IMAGE_NAMESPACE?=quay.io/numaproj
 VERSION?=latest
-SERVING_BINARY_NAME:=serving-source
+NUMAFLOW_EXT_BINARY_NAME:=numaflow-ext
 DOCKERFILE:=Dockerfile
 
 ifeq (${DOCKER_PUSH},true)
@@ -32,17 +32,17 @@ set-qemu:
 	$(DOCKER) run --rm --privileged tonistiigi/binfmt:latest --install amd64,arm64
 
 .PHONY: clean
-serving-clean:
+clean:
 	cargo clean
 
 .PHONY: image
 image: clean
-	 DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "VERSION=$(VERSION)" --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(SERVING_BINARY_NAME):$(VERSION) --target $(SERVING_BINARY_NAME) -f $(DOCKERFILE) .
-	 @if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(SERVING_BINARY_NAME):$(VERSION); fi
+	 DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "VERSION=$(VERSION)" --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(NUMAFLOW_EXT_BINARY_NAME):$(VERSION) --target $(NUMAFLOW_EXT_BINARY_NAME) -f $(DOCKERFILE) .
+	 @if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(NUMAFLOW_EXT_BINARY_NAME):$(VERSION); fi
 ifdef IMAGE_IMPORT_CMD
-	 $(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(SERVING_BINARY_NAME):$(VERSION)
+	 $(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(NUMAFLOW_EXT_BINARY_NAME):$(VERSION)
 endif
 
 .PHONY: image-multi
 image-multi: set-qemu
-	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" --build-arg "VERSION=$(VERSION)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(SERVING_BINARY_NAME):$(VERSION) --platform linux/amd64,linux/arm64 --file $(DOCKERFILE) ${PUSH_OPTION} .
+	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" --build-arg "VERSION=$(VERSION)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(NUMAFLOW_EXT_BINARY_NAME):$(VERSION) --platform linux/amd64,linux/arm64 --file $(DOCKERFILE) ${PUSH_OPTION} .

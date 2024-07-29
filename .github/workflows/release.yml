@@ -87,7 +87,7 @@ jobs:
         run: |
           IMAGE_NAMESPACE=${{ secrets.QUAYIO_ORG }} VERSION=${{ steps.version.outputs.VERSION }} DOCKER_PUSH=true make image-multi
 
-  build-push-serving:
+  build-push-ext:
     name: Build & push linux/amd64 and linux/arm64 for serving
     needs: [ build-push-linux-multi ]
     runs-on: ubuntu-20.04
@@ -113,8 +113,8 @@ jobs:
           username: ${{ secrets.QUAYIO_USERNAME }}
           password: ${{ secrets.QUAYIO_PASSWORD }}
 
-      - name: Set Version for serving
-        id: serving_version
+      - name: Set Version for Numaflow Extension
+        id: numaflow-ext-version
         run: |
           tag=$(basename $GITHUB_REF)
           if [ $tag = "main" ]; then
@@ -125,12 +125,12 @@ jobs:
       - name: Container build and push serving with arm64/amd64
         run: |
           cd serving
-          IMAGE_NAMESPACE=${{ secrets.QUAYIO_ORG }} VERSION=${{ steps.version.outputs.VERSION }} DOCKER_PUSH=true make image-multi
+          IMAGE_NAMESPACE=${{ secrets.QUAYIO_ORG }} VERSION=${{ steps.numaflow-ext-version.outputs.VERSION }} DOCKER_PUSH=true make image-multi
 
   Bom:
     runs-on: ubuntu-latest
     if: github.repository == 'numaproj/numaflow'
-    needs: [ build-push-linux-multi, build-push-serving ]
+    needs: [ build-push-linux-multi, build-push-ext ]
     steps:
       # https://stackoverflow.com/questions/58033366/how-to-get-current-branch-within-github-actions
       - run: |
@@ -148,7 +148,7 @@ jobs:
       - run: mkdir -p dist
       - run: generator -o /tmp -p .
       - run: bom generate --image quay.io/numaproj/numaflow:$VERSION -o /tmp/numaflow.spdx
-      - run: bom generate --image quay.io/numaproj/serving-source:$VERSION -o /tmp/serving-source.spdx
+      - run: bom generate --image quay.io/numaproj/numaflow-ext:$VERSION -o /tmp/numaflow-ext.spdx
       # pack the boms into one file to make it easy to download
       - run: cd /tmp && tar -zcf sbom.tar.gz *.spdx
       - uses: actions/upload-artifact@v3
@@ -159,7 +159,7 @@ jobs:
   Release:
     runs-on: ubuntu-latest
     if: github.repository == 'numaproj/numaflow'
-    needs: [ build-push-linux-multi, build-push-serving, bom ]
+    needs: [ build-push-linux-multi, build-push-ext, bom ]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -196,11 +196,11 @@ jobs:
       - name: Get digests of container images
         run: |
           echo "NUMAFLOW_IMAGE_DIGEST=$(crane digest quay.io/numaproj/numaflow:$VERSION)" >> $GITHUB_ENV
-          echo "SERVING_IMAGE_DIGEST=$(crane digest quay.io/numaproj/serving-source:$VERSION)" >> $GITHUB_ENV
+          echo "NUMAFLOW_EXT_IMAGE_DIGEST=$(crane digest quay.io/numaproj/numaflow-ext:$VERSION)" >> $GITHUB_ENV
       - name: Sign Numaflow container images and assets
         run: |
           cosign sign --key env://COSIGN_PRIVATE_KEY quay.io/numaproj/numaflow@${{ env.NUMAFLOW_IMAGE_DIGEST }}
-          cosign sign --key env://COSIGN_PRIVATE_KEY quay.io/numaproj/serving-source@${{ env.SERVING_IMAGE_DIGEST }}
+          cosign sign --key env://COSIGN_PRIVATE_KEY quay.io/numaproj/numaflow-ext@${{ env.NUMAFLOW_EXT_IMAGE_DIGEST }}
           cosign sign-blob --key env://COSIGN_PRIVATE_KEY ./dist/numaflow-checksums.txt > ./dist/numaflow-checksums.sig
           cosign sign-blob --key env://COSIGN_PRIVATE_KEY /tmp/sbom.tar.gz > /tmp/sbom.tar.gz.sig
           # Retrieves the public key to release as an asset
