@@ -274,8 +274,8 @@ func Test_PipelineMarkStatus(t *testing.T) {
 		}
 	}
 	s.MarkServiceHealthy(PipelineConditionDaemonServiceHealthy, "test-reason", "All service healthy")
-	s.MarkServiceHealthy(PipelineConditionSideInputServiceHealthy, "test-reason", "All service healthy")
-	s.MarkServiceHealthy(PipelineConditionVerticesServiceHealthy, "test-reason", "All service healthy")
+	s.MarkServiceHealthy(PipelineConditionSideInputsManagersHealthy, "test-reason", "All service healthy")
+	s.MarkServiceHealthy(PipelineConditionVerticesHealthy, "test-reason", "All service healthy")
 
 	assert.True(t, s.IsReady())
 }

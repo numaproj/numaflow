@@ -951,6 +951,7 @@ func checkChildrenResourceStatus(ctx context.Context, c client.Client, pipeline 
 	var daemonDeployment appv1.Deployment
 	if err := c.Get(ctx, client.ObjectKey{Namespace: pipeline.GetNamespace(), Name: pipeline.GetDaemonDeploymentName()},
 		&daemonDeployment); err != nil && !apierrors.IsNotFound(err) {
+		pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionDaemonServiceHealthy, "GetDaemonServiceFailed", err.Error())
 		return err
 	}
 	if msg, reason, status := getDeploymentStatus(&daemonDeployment); status {
@@ -961,19 +962,20 @@ func checkChildrenResourceStatus(ctx context.Context, c client.Client, pipeline 
 
 	// get the side input deployments and update the status of them to the pipeline
 	if len(pipeline.Spec.SideInputs) == 0 {
-		pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionSideInputServiceHealthy,
+		pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionSideInputsManagersHealthy,
 			"NoSideInputs", "No Side Inputs attached to the pipeline")
 	} else {
 		var sideInputs appv1.DeploymentList
 		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + pipeline.Name + "," + dfv1.KeyComponent + "=" + dfv1.ComponentSideInputManager)
 		if err := c.List(ctx, &sideInputs, &client.ListOptions{Namespace: pipeline.Namespace, LabelSelector: selector}); err != nil {
+			pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionSideInputsManagersHealthy, "ListSideInputsManagersFailed", err.Error())
 			return err
 		}
 		for _, sideInput := range sideInputs.Items {
 			if msg, reason, status := getDeploymentStatus(&sideInput); status {
-				pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionSideInputServiceHealthy, reason, msg)
+				pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionSideInputsManagersHealthy, reason, msg)
 			} else {
-				pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionSideInputServiceHealthy, reason, msg)
+				pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionSideInputsManagersHealthy, reason, msg)
 				break
 			}
 		}
@@ -987,9 +989,9 @@ func checkChildrenResourceStatus(ctx context.Context, c client.Client, pipeline 
 	}
 	status, reason := getVertexStatus(&vertices)
 	if status {
-		pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionVerticesServiceHealthy, reason, "All Vertices are healthy")
+		pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionVerticesHealthy, reason, "All Vertices are healthy")
 	} else {
-		pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionVerticesServiceHealthy, reason, "Some Vertices are not healthy")
+		pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionVerticesHealthy, reason, "Some Vertices are not healthy")
 	}
 
 	return nil

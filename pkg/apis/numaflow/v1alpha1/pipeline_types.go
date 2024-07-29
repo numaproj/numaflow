@@ -49,9 +49,9 @@ const (
 	PipelineConditionDeployed ConditionType = "Deployed"
 
 	// PipelineConditionDaemonServiceHealthy has the status True when the daemon service is healthy.
-	PipelineConditionDaemonServiceHealthy    ConditionType = "DaemonServiceHealthy"
-	PipelineConditionSideInputServiceHealthy ConditionType = "SideInputServiceHealthy"
-	PipelineConditionVerticesServiceHealthy  ConditionType = "VerticesServiceHealthy"
+	PipelineConditionDaemonServiceHealthy      ConditionType = "DaemonServiceHealthy"
+	PipelineConditionSideInputsManagersHealthy ConditionType = "SideInputsManagersHealthy"
+	PipelineConditionVerticesHealthy           ConditionType = "VerticesHealthy"
 )
 
 // +genclient
@@ -664,7 +664,7 @@ func (pls *PipelineStatus) SetPhase(phase PipelinePhase, msg string) {
 // InitConditions sets conditions to Unknown state.
 func (pls *PipelineStatus) InitConditions() {
 	pls.InitializeConditions(PipelineConditionConfigured, PipelineConditionDeployed, PipelineConditionDaemonServiceHealthy,
-		PipelineConditionSideInputServiceHealthy, PipelineConditionVerticesServiceHealthy)
+		PipelineConditionSideInputsManagersHealthy, PipelineConditionVerticesHealthy)
 }
 
 // MarkConfigured set the Pipeline has valid configuration.

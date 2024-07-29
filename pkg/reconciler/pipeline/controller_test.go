@@ -937,9 +937,9 @@ func Test_checkChildrenResourceStatus(t *testing.T) {
 		for _, c := range testObj.Status.Conditions {
 			if c.Type == string(dfv1.PipelineConditionDaemonServiceHealthy) {
 				assert.Equal(t, string(corev1.ConditionTrue), string(c.Status))
-			} else if c.Type == string(dfv1.PipelineConditionSideInputServiceHealthy) {
+			} else if c.Type == string(dfv1.PipelineConditionSideInputsManagersHealthy) {
 				assert.Equal(t, string(corev1.ConditionTrue), string(c.Status))
-			} else if c.Type == string(dfv1.PipelineConditionVerticesServiceHealthy) {
+			} else if c.Type == string(dfv1.PipelineConditionVerticesHealthy) {
 				assert.Equal(t, string(corev1.ConditionFalse), string(c.Status))
 			}
 		}

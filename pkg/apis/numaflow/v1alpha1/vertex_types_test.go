@@ -514,7 +514,7 @@ func Test_VertexMarkPodNotHealthy(t *testing.T) {
 	s := VertexStatus{}
 	s.MarkPodNotHealthy("reason", "message")
 	for _, c := range s.Conditions {
-		if c.Type == string(VertexConditionPodHealthy) {
+		if c.Type == string(VertexConditionPodsHealthy) {
 			assert.Equal(t, metav1.ConditionFalse, c.Status)
 			assert.Equal(t, "reason", c.Reason)
 			assert.Equal(t, "message", c.Message)
@@ -526,7 +526,7 @@ func Test_VertexMarkPodHealthy(t *testing.T) {
 	s := VertexStatus{}
 	s.MarkPodHealthy("reason", "message")
 	for _, c := range s.Conditions {
-		if c.Type == string(VertexConditionPodHealthy) {
+		if c.Type == string(VertexConditionPodsHealthy) {
 			assert.Equal(t, metav1.ConditionTrue, c.Status)
 			assert.Equal(t, "reason", c.Reason)
 			assert.Equal(t, "message", c.Message)
@@ -846,7 +846,7 @@ func Test_VertexStatus_IsHealthy(t *testing.T) {
 			if tt.ready {
 				vertex.Conditions = []metav1.Condition{
 					{
-						Type:   string(VertexConditionPodHealthy),
+						Type:   string(VertexConditionPodsHealthy),
 						Status: metav1.ConditionTrue,
 					},
 				}

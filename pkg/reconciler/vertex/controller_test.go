@@ -734,7 +734,7 @@ func Test_checkChildrenResourceStatus(t *testing.T) {
 		err = checkChildrenResourceStatus(ctx, r.client, testObj)
 		assert.NoError(t, err)
 		for _, c := range testObj.Status.Conditions {
-			if c.Type == string(dfv1.VertexConditionPodHealthy) {
+			if c.Type == string(dfv1.VertexConditionPodsHealthy) {
 				assert.Equal(t, string(corev1.ConditionTrue), string(c.Status))
 			}
 		}

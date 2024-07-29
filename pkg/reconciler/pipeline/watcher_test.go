@@ -72,7 +72,7 @@ func TestGetVertexStatus(t *testing.T) {
 		}
 		vertices.Items[0].Status.Conditions = []metav1.Condition{
 			{
-				Type:   string(dfv1.VertexConditionPodHealthy),
+				Type:   string(dfv1.VertexConditionPodsHealthy),
 				Status: metav1.ConditionTrue,
 			},
 		}
@@ -93,7 +93,7 @@ func TestGetVertexStatus(t *testing.T) {
 		}
 		vertices.Items[0].Status.Conditions = []metav1.Condition{
 			{
-				Type:   string(dfv1.VertexConditionPodHealthy),
+				Type:   string(dfv1.VertexConditionPodsHealthy),
 				Status: metav1.ConditionTrue,
 			},
 		}

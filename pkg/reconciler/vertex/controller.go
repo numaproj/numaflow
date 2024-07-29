@@ -448,6 +448,7 @@ func checkChildrenResourceStatus(ctx context.Context, c client.Client, vertex *d
 	var podList corev1.PodList
 	selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + vertex.Spec.PipelineName + "," + dfv1.KeyVertexName + "=" + vertex.Spec.Name)
 	if err := c.List(ctx, &podList, &client.ListOptions{Namespace: vertex.GetNamespace(), LabelSelector: selector}); err != nil {
+		vertex.Status.MarkPodNotHealthy("ListVerticesPodsFailed", err.Error())
 		return err
 	}
 

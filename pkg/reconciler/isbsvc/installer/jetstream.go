@@ -560,6 +560,7 @@ func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) er
 		Namespace: r.isbSvc.Namespace,
 		Name:      generateJetStreamStatefulSetName(r.isbSvc),
 	}, &isbStatefulSet); err != nil && !apierrors.IsNotFound(err) {
+		r.isbSvc.Status.MarkChildrenResourceNotHealthy("GetStatefulSetFailed", err.Error())
 		return err
 	}
 	// calculate the status of the InterStepBufferService by statefulset status and update the status of isbSvc

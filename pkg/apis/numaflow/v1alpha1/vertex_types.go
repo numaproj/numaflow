@@ -38,8 +38,8 @@ const (
 	VertexPhaseSucceeded VertexPhase = "Succeeded"
 	VertexPhaseFailed    VertexPhase = "Failed"
 
-	// VertexConditionPodHealthy has the status True when all the vertex pods are healthy.
-	VertexConditionPodHealthy ConditionType = "PodHealthy"
+	// VertexConditionPodsHealthy has the status True when all the vertex pods are healthy.
+	VertexConditionPodsHealthy ConditionType = "PodsHealthy"
 )
 
 type VertexType string
@@ -847,17 +847,17 @@ func (vs *VertexStatus) MarkPhaseRunning() {
 
 // MarkPodNotHealthy marks the pod not healthy with the given reason and message.
 func (vs *VertexStatus) MarkPodNotHealthy(reason, message string) {
-	vs.MarkFalse(VertexConditionPodHealthy, reason, message)
+	vs.MarkFalse(VertexConditionPodsHealthy, reason, message)
 }
 
 // MarkPodHealthy marks the pod as healthy with the given reason and message.
 func (vs *VertexStatus) MarkPodHealthy(reason, message string) {
-	vs.MarkTrueWithReason(VertexConditionPodHealthy, reason, message)
+	vs.MarkTrueWithReason(VertexConditionPodsHealthy, reason, message)
 }
 
 // InitConditions sets conditions to Unknown state.
 func (vs *VertexStatus) InitConditions() {
-	vs.InitializeConditions(VertexConditionPodHealthy)
+	vs.InitializeConditions(VertexConditionPodsHealthy)
 }
 
 // IsHealthy indicates whether the vertex is healthy or not
