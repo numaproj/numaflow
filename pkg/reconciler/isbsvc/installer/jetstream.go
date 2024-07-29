@@ -559,7 +559,12 @@ func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) er
 	if err := r.client.Get(ctx, client.ObjectKey{
 		Namespace: r.isbSvc.Namespace,
 		Name:      generateJetStreamStatefulSetName(r.isbSvc),
-	}, &isbStatefulSet); err != nil && !apierrors.IsNotFound(err) {
+	}, &isbStatefulSet); err != nil {
+		if apierrors.IsNotFound(err) {
+			r.isbSvc.Status.MarkChildrenResourceNotHealthy("GetStatefulSetFailed",
+				"StatefulSet not found, might be still under creation")
+			return nil
+		}
 		r.isbSvc.Status.MarkChildrenResourceNotHealthy("GetStatefulSetFailed", err.Error())
 		return err
 	}

@@ -950,7 +950,12 @@ func checkChildrenResourceStatus(ctx context.Context, c client.Client, pipeline 
 	// get the daemon deployment and update the status of it to the pipeline
 	var daemonDeployment appv1.Deployment
 	if err := c.Get(ctx, client.ObjectKey{Namespace: pipeline.GetNamespace(), Name: pipeline.GetDaemonDeploymentName()},
-		&daemonDeployment); err != nil && !apierrors.IsNotFound(err) {
+		&daemonDeployment); err != nil {
+		if apierrors.IsNotFound(err) {
+			pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionDaemonServiceHealthy,
+				"GetDaemonServiceFailed", "Deployment not found, might be still under creation")
+			return nil
+		}
 		pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionDaemonServiceHealthy, "GetDaemonServiceFailed", err.Error())
 		return err
 	}
@@ -985,6 +990,7 @@ func checkChildrenResourceStatus(ctx context.Context, c client.Client, pipeline 
 	var vertices dfv1.VertexList
 	selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + pipeline.GetName() + "," + dfv1.KeyComponent + "=" + dfv1.ComponentVertex)
 	if err := c.List(ctx, &vertices, &client.ListOptions{Namespace: pipeline.Namespace, LabelSelector: selector}); err != nil {
+		pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionVerticesHealthy, "ListVerticesFailed", err.Error())
 		return err
 	}
 	status, reason := getVertexStatus(&vertices)
