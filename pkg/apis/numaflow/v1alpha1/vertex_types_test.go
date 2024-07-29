@@ -33,6 +33,7 @@ const (
 	testPipelineName   = "test-pl"
 	testVertexName     = testPipelineName + "-" + testVertexSpecName
 	testFlowImage      = "test-f-image"
+	testServingImage   = "test-serving-source"
 )
 
 var (
@@ -191,9 +192,11 @@ func TestGetHeadlessServiceName(t *testing.T) {
 
 func TestGetPodSpec(t *testing.T) {
 	req := GetVertexPodSpecReq{
-		ISBSvcType: ISBSvcTypeRedis,
-		Image:      testFlowImage,
-		PullPolicy: corev1.PullIfNotPresent,
+		ISBSvcType:        ISBSvcTypeRedis,
+		Image:             testFlowImage,
+		PullPolicy:        corev1.PullIfNotPresent,
+		ServingImage:      testServingImage,
+		ServingPullPolicy: corev1.PullIfNotPresent,
 		Env: []corev1.EnvVar{
 			{Name: "test-env", Value: "test-val"},
 		},
@@ -446,7 +449,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 
 		assert.Equal(t, CtrServing, s.Containers[1].Name)
-		assert.Equal(t, "numaserve:0.1", s.Containers[1].Image)
+		assert.Equal(t, testServingImage, s.Containers[1].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[1].ImagePullPolicy)
 		envNames = []string{}
 		for _, e := range s.Containers[1].Env {
