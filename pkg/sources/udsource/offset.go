@@ -18,7 +18,7 @@ package udsource
 
 import (
 	"encoding/base64"
-	"fmt"
+	"strconv"
 
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
 
@@ -43,7 +43,7 @@ func NewUserDefinedSourceOffset(offset *sourcepb.Offset) isb.Offset {
 }
 
 func (s *userDefinedSourceOffset) String() string {
-	return fmt.Sprintf("%s-%d", s.encodedOffsetStr, s.partitionIdx)
+	return s.encodedOffsetStr + "-" + strconv.Itoa(int(s.partitionIdx))
 }
 
 func (s *userDefinedSourceOffset) PartitionIdx() int32 {

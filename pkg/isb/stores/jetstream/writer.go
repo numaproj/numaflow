@@ -230,7 +230,6 @@ func (jw *jetStreamWriter) asyncWrite(_ context.Context, messages []isb.Message,
 				} else {
 					writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence, partitionIdx: jw.partitionIdx}
 					errs[idx] = nil
-					jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.String("domain", pubAck.Domain))
 				}
 			case err := <-fu.Err():
 				errs[idx] = err
@@ -293,7 +292,6 @@ func (jw *jetStreamWriter) syncWrite(_ context.Context, messages []isb.Message, 
 				} else {
 					writeOffsets[idx] = &writeOffset{seq: pubAck.Sequence, partitionIdx: jw.partitionIdx}
 					errs[idx] = nil
-					jw.log.Debugw("Succeeded to publish a message", zap.String("stream", pubAck.Stream), zap.Any("seq", pubAck.Sequence), zap.Bool("duplicate", pubAck.Duplicate), zap.Any("msgID", message.Header.ID), zap.String("domain", pubAck.Domain))
 				}
 			}
 		}(msg, index)
