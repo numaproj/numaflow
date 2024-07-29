@@ -510,6 +510,39 @@ func TestVertexMarkPhaseFailed(t *testing.T) {
 	assert.Equal(t, "message", s.Message)
 }
 
+func Test_VertexMarkPodNotHealthy(t *testing.T) {
+	s := VertexStatus{}
+	s.MarkPodNotHealthy("reason", "message")
+	for _, c := range s.Conditions {
+		if c.Type == string(VertexConditionPodsHealthy) {
+			assert.Equal(t, metav1.ConditionFalse, c.Status)
+			assert.Equal(t, "reason", c.Reason)
+			assert.Equal(t, "message", c.Message)
+		}
+	}
+}
+
+func Test_VertexMarkPodHealthy(t *testing.T) {
+	s := VertexStatus{}
+	s.MarkPodHealthy("reason", "message")
+	for _, c := range s.Conditions {
+		if c.Type == string(VertexConditionPodsHealthy) {
+			assert.Equal(t, metav1.ConditionTrue, c.Status)
+			assert.Equal(t, "reason", c.Reason)
+			assert.Equal(t, "message", c.Message)
+		}
+	}
+}
+
+func Test_VertexInitConditions(t *testing.T) {
+	v := VertexStatus{}
+	v.InitConditions()
+	assert.Equal(t, 1, len(v.Conditions))
+	for _, c := range v.Conditions {
+		assert.Equal(t, metav1.ConditionUnknown, c.Status)
+	}
+}
+
 func Test_VertexIsSource(t *testing.T) {
 	o := testVertex.DeepCopy()
 	o.Spec.Source = &Source{}
@@ -764,4 +797,62 @@ func TestGetServingSourceStreamName(t *testing.T) {
 	}
 	expected := "test-pipeline-test-vertex-serving-source"
 	assert.Equal(t, expected, v.GetServingSourceStreamName())
+}
+
+func Test_VertexStatus_IsHealthy(t *testing.T) {
+	tests := []struct {
+		name  string
+		phase VertexPhase
+		ready bool
+		want  bool
+	}{
+		{
+			name:  "Failed phase",
+			phase: VertexPhaseFailed,
+			ready: false,
+			want:  false,
+		},
+		{
+			name:  "Running phase and ready",
+			phase: VertexPhaseRunning,
+			ready: true,
+			want:  true,
+		},
+		{
+			name:  "Running phase and not ready",
+			phase: VertexPhaseRunning,
+			ready: false,
+			want:  false,
+		},
+		{
+			name:  "Failed phase",
+			phase: VertexPhaseFailed,
+			ready: false,
+			want:  false,
+		},
+		{
+			name:  "Unknown phase",
+			phase: VertexPhaseUnknown,
+			ready: false,
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vertex := &VertexStatus{
+				Phase: tt.phase,
+			}
+			if tt.ready {
+				vertex.Conditions = []metav1.Condition{
+					{
+						Type:   string(VertexConditionPodsHealthy),
+						Status: metav1.ConditionTrue,
+					},
+				}
+			}
+			got := vertex.IsHealthy()
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }

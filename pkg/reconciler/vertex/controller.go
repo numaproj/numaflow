@@ -320,6 +320,9 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	vertex.Status.Selector = selector.String()
 
 	vertex.Status.MarkPhaseRunning()
+	if err = checkChildrenResourceStatus(ctx, r.client, vertex); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to check children resource status: %w", err)
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -438,4 +441,22 @@ func (r *vertexReconciler) markPhaseLogEvent(vertex *dfv1.Vertex, log *zap.Sugar
 	log.Errorw(logMsg, logWith)
 	vertex.Status.MarkPhaseFailed(reason, message)
 	r.recorder.Event(vertex, corev1.EventTypeWarning, reason, message)
+}
+
+func checkChildrenResourceStatus(ctx context.Context, c client.Client, vertex *dfv1.Vertex) error {
+	// fetch the pods for calculating the status of child resources
+	var podList corev1.PodList
+	selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + vertex.Spec.PipelineName + "," + dfv1.KeyVertexName + "=" + vertex.Spec.Name)
+	if err := c.List(ctx, &podList, &client.ListOptions{Namespace: vertex.GetNamespace(), LabelSelector: selector}); err != nil {
+		vertex.Status.MarkPodNotHealthy("ListVerticesPodsFailed", err.Error())
+		return err
+	}
+
+	if msg, reason, status := getVertexStatus(&podList); status {
+		vertex.Status.MarkPodHealthy(reason, msg)
+	} else {
+		vertex.Status.MarkPodNotHealthy(reason, msg)
+	}
+
+	return nil
 }
