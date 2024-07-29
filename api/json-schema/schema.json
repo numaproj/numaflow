@@ -670,6 +670,9 @@
           "description": "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
         }
       },
+      "required": [
+        "items"
+      ],
       "type": "object",
       "x-kubernetes-group-version-kind": [
         {
@@ -728,6 +731,9 @@
           "description": "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
         }
       },
+      "required": [
+        "items"
+      ],
       "type": "object",
       "x-kubernetes-group-version-kind": [
         {
@@ -1143,6 +1149,9 @@
           "description": "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
         }
       },
+      "required": [
+        "items"
+      ],
       "type": "object",
       "x-kubernetes-group-version-kind": [
         {
@@ -1201,6 +1210,9 @@
           "description": "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
         }
       },
+      "required": [
+        "items"
+      ],
       "type": "object",
       "x-kubernetes-group-version-kind": [
         {
@@ -20160,6 +20172,15 @@
     },
     "io.numaproj.numaflow.v1alpha1.VertexStatus": {
       "properties": {
+        "conditions": {
+          "description": "Conditions are the latest available observations of a resource's current state.",
+          "items": {
+            "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Condition"
+          },
+          "type": "array",
+          "x-kubernetes-patch-merge-key": "type",
+          "x-kubernetes-patch-strategy": "merge"
+        },
         "lastScaledAt": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
         },
