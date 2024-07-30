@@ -173,6 +173,7 @@ func (df *DataForward) Start() <-chan struct{} {
 // buffer-not-reachable, etc., but does not include errors due to WhereTo, etc.
 func (df *DataForward) forwardAChunk(ctx context.Context) {
 	start := time.Now()
+	totalBytes := 0
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
 	// at-least-once semantics for reading, during restart we will have to reprocess all unacknowledged messages. It is the
 	// responsibility of the Read function to do that.
@@ -213,19 +214,19 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// store the offsets of the messages we read from ISB
 	var readOffsets = make([]isb.Offset, len(readMessages))
 	for idx, m := range readMessages {
-		metrics.ReadBytesCount.With(map[string]string{
-			metrics.LabelVertex:             df.vertexName,
-			metrics.LabelPipeline:           df.pipelineName,
-			metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-			metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
-		}).Add(float64(len(m.Payload)))
-
+		totalBytes += len(m.Payload)
 		readOffsets[idx] = m.ReadOffset
 		if m.Kind == isb.Data {
 			dataMessages = append(dataMessages, m)
 		}
 	}
+	metrics.ReadBytesCount.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
+	}).Add(float64(totalBytes))
 	metrics.ReadDataMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(dataMessages)))
 	metrics.ReadMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(readMessages)))
 

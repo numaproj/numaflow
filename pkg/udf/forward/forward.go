@@ -177,6 +177,7 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 // buffer-not-reachable, etc., but does not include errors due to user code UDFs, WhereTo, etc.
 func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	start := time.Now()
+	totalBytes := 0
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
 	// at-least-once semantics for reading, during restart we will have to reprocess all unacknowledged messages. It is the
 	// responsibility of the Read function to do that.
@@ -242,8 +243,11 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	for _, msg := range dataMessages {
 		msg.Watermark = time.Time(processorWM)
 		// emit message size metric
-		metrics.ReadBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(msg.Payload)))
+
+		totalBytes += len(msg.Payload)
 	}
+
+	metrics.ReadBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(totalBytes))
 
 	var udfResults []isb.ReadWriteMessagePair
 	var writeOffsets map[string][][]isb.Offset
