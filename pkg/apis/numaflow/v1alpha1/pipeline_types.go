@@ -59,7 +59,6 @@ const (
 // +kubebuilder:resource:shortName=pl
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +kubebuilder:printcolumn:name="Vertices",type=integer,JSONPath=`.status.vertexCount`
 // +kubebuilder:printcolumn:name="Sources",type=integer,JSONPath=`.status.sourceCount`,priority=10
 // +kubebuilder:printcolumn:name="Sinks",type=integer,JSONPath=`.status.sinkCount`,priority=10
@@ -67,6 +66,7 @@ const (
 // +kubebuilder:printcolumn:name="Map UDFs",type=integer,JSONPath=`.status.mapUDFCount`,priority=10
 // +kubebuilder:printcolumn:name="Reduce UDFs",type=integer,JSONPath=`.status.reduceUDFCount`,priority=10
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`,priority=10
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 type Pipeline struct {

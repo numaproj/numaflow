@@ -598,8 +598,8 @@ message IdleSource {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.status.type`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`,priority=10
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 message InterStepBufferService {
@@ -925,7 +925,6 @@ message PersistenceStrategy {
 // +kubebuilder:resource:shortName=pl
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +kubebuilder:printcolumn:name="Vertices",type=integer,JSONPath=`.status.vertexCount`
 // +kubebuilder:printcolumn:name="Sources",type=integer,JSONPath=`.status.sourceCount`,priority=10
 // +kubebuilder:printcolumn:name="Sinks",type=integer,JSONPath=`.status.sinkCount`,priority=10
@@ -933,6 +932,7 @@ message PersistenceStrategy {
 // +kubebuilder:printcolumn:name="Map UDFs",type=integer,JSONPath=`.status.mapUDFCount`,priority=10
 // +kubebuilder:printcolumn:name="Reduce UDFs",type=integer,JSONPath=`.status.reduceUDFCount`,priority=10
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`,priority=10
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 message Pipeline {
@@ -1394,10 +1394,10 @@ message UDTransformer {
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`
-// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
+// +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`,priority=10
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`,priority=10
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 message Vertex {

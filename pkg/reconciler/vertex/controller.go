@@ -78,6 +78,7 @@ func (r *vertexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	if !equality.Semantic.DeepEqual(vertex.Status, vertexCopy.Status) {
+		fmt.Println("cccc")
 		if err := r.client.Status().Update(ctx, vertexCopy); err != nil {
 			return reconcile.Result{}, err
 		}
@@ -147,7 +148,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 						return ctrl.Result{}, err
 					}
 					if err := r.client.Create(ctx, newPvc); err != nil && !apierrors.IsAlreadyExists(err) {
-						r.markPhaseLogEvent(vertex, log, "CreatePVCFailed", err.Error(), "Error creating a PVC", zap.Error(err))
+						r.markPhaseFailedAndLogEvent(vertex, log, "CreatePVCFailed", err.Error(), "Error creating a PVC", zap.Error(err))
 						return ctrl.Result{}, err
 					}
 					r.recorder.Eventf(vertex, corev1.EventTypeNormal, "CreatePVCSuccess", "Successfully created PVC %s", newPvc.Name)
@@ -183,7 +184,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 			if existingSvc.GetAnnotations()[dfv1.KeyHash] != svcHash {
 				if err := r.client.Delete(ctx, &existingSvc); err != nil {
 					if !apierrors.IsNotFound(err) {
-						r.markPhaseLogEvent(vertex, log, "DelSvcFailed", err.Error(), "Failed to delete existing service", zap.String("service", existingSvc.Name), zap.Error(err))
+						r.markPhaseFailedAndLogEvent(vertex, log, "DelSvcFailed", err.Error(), "Failed to delete existing service", zap.String("service", existingSvc.Name), zap.Error(err))
 						return ctrl.Result{}, err
 					}
 				} else {
@@ -201,7 +202,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 				if apierrors.IsAlreadyExists(err) {
 					continue
 				}
-				r.markPhaseLogEvent(vertex, log, "CreateSvcFailed", err.Error(), "Failed to create a service", zap.String("service", s.Name), zap.Error(err))
+				r.markPhaseFailedAndLogEvent(vertex, log, "CreateSvcFailed", err.Error(), "Failed to create a service", zap.String("service", s.Name), zap.Error(err))
 				return ctrl.Result{}, err
 			} else {
 				log.Infow("Succeeded to create a service", zap.String("service", s.Name))
@@ -212,7 +213,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	for _, v := range existingSvcs { // clean up stale services
 		if err := r.client.Delete(ctx, &v); err != nil {
 			if !apierrors.IsNotFound(err) {
-				r.markPhaseLogEvent(vertex, log, "DelSvcFailed", err.Error(), "Failed to delete service not in use", zap.String("service", v.Name), zap.Error(err))
+				r.markPhaseFailedAndLogEvent(vertex, log, "DelSvcFailed", err.Error(), "Failed to delete service not in use", zap.String("service", v.Name), zap.Error(err))
 				return ctrl.Result{}, err
 			}
 		} else {
@@ -295,7 +296,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 			}
 			pod.Spec.Hostname = fmt.Sprintf("%s-%d", vertex.Name, replica)
 			if err := r.client.Create(ctx, pod); err != nil {
-				r.markPhaseLogEvent(vertex, log, "CreatePodFailed", err.Error(), "Failed to created pod", zap.Error(err))
+				r.markPhaseFailedAndLogEvent(vertex, log, "CreatePodFailed", err.Error(), "Failed to created pod", zap.Error(err))
 				return ctrl.Result{}, err
 			}
 			log.Infow("Succeeded to create a pod", zap.String("pod", pod.Name))
@@ -304,7 +305,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	}
 	for _, v := range existingPods {
 		if err := r.client.Delete(ctx, &v); err != nil && !apierrors.IsNotFound(err) {
-			r.markPhaseLogEvent(vertex, log, "DelPodFailed", err.Error(), "Failed to delete pod", zap.Error(err))
+			r.markPhaseFailedAndLogEvent(vertex, log, "DelPodFailed", err.Error(), "Failed to delete pod", zap.Error(err))
 			return ctrl.Result{}, err
 		}
 	}
@@ -319,10 +320,22 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + vertex.Spec.PipelineName + "," + dfv1.KeyVertexName + "=" + vertex.Spec.Name)
 	vertex.Status.Selector = selector.String()
 
+	// Mark it running before checking the status of the pods
 	vertex.Status.MarkPhaseRunning()
-	if err = checkChildrenResourceStatus(ctx, r.client, vertex); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to check children resource status: %w", err)
+
+	// Check status of the pods
+	var podList corev1.PodList
+	if err := r.client.List(ctx, &podList, &client.ListOptions{Namespace: vertex.GetNamespace(), LabelSelector: selector}); err != nil {
+		vertex.Status.MarkPodNotHealthy("ListVerticesPodsFailed", err.Error())
+		return ctrl.Result{}, fmt.Errorf("failed to check the status of the pods: %w", err)
 	}
+	if msg, reason, status := getVertexStatus(&podList); status {
+		vertex.Status.MarkPodHealthy(reason, msg)
+	} else {
+		// Do not need to explicitly requeue, since the it keeps watching the status change of the pods
+		vertex.Status.MarkPodNotHealthy(reason, msg)
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -436,27 +449,9 @@ func (r *vertexReconciler) findExistingServices(ctx context.Context, vertex *dfv
 	return result, nil
 }
 
-// helper function for warning event types
-func (r *vertexReconciler) markPhaseLogEvent(vertex *dfv1.Vertex, log *zap.SugaredLogger, reason, message, logMsg string, logWith ...interface{}) {
+// Helper function for warning event types
+func (r *vertexReconciler) markPhaseFailedAndLogEvent(vertex *dfv1.Vertex, log *zap.SugaredLogger, reason, message, logMsg string, logWith ...interface{}) {
 	log.Errorw(logMsg, logWith)
 	vertex.Status.MarkPhaseFailed(reason, message)
 	r.recorder.Event(vertex, corev1.EventTypeWarning, reason, message)
-}
-
-func checkChildrenResourceStatus(ctx context.Context, c client.Client, vertex *dfv1.Vertex) error {
-	// fetch the pods for calculating the status of child resources
-	var podList corev1.PodList
-	selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + vertex.Spec.PipelineName + "," + dfv1.KeyVertexName + "=" + vertex.Spec.Name)
-	if err := c.List(ctx, &podList, &client.ListOptions{Namespace: vertex.GetNamespace(), LabelSelector: selector}); err != nil {
-		vertex.Status.MarkPodNotHealthy("ListVerticesPodsFailed", err.Error())
-		return err
-	}
-
-	if msg, reason, status := getVertexStatus(&podList); status {
-		vertex.Status.MarkPodHealthy(reason, msg)
-	} else {
-		vertex.Status.MarkPodNotHealthy(reason, msg)
-	}
-
-	return nil
 }

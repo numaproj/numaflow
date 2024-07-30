@@ -17,9 +17,6 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
-    - jsonPath: .status.message
-      name: Message
-      type: string
     - jsonPath: .status.vertexCount
       name: Vertices
       type: integer
@@ -46,6 +43,10 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - jsonPath: .status.message
+      name: Message
+      priority: 10
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:

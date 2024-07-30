@@ -32,11 +32,10 @@ import (
 type VertexPhase string
 
 const (
-	VertexPhaseUnknown   VertexPhase = ""
-	VertexPhasePending   VertexPhase = "Pending"
-	VertexPhaseRunning   VertexPhase = "Running"
-	VertexPhaseSucceeded VertexPhase = "Succeeded"
-	VertexPhaseFailed    VertexPhase = "Failed"
+	VertexPhaseUnknown  VertexPhase = ""
+	VertexPhaseRunning  VertexPhase = "Running"
+	VertexPhaseFailed   VertexPhase = "Failed"
+	VertexPhaseDegraded VertexPhase = "Degraded"
 
 	// VertexConditionPodsHealthy has the status True when all the vertex pods are healthy.
 	VertexConditionPodsHealthy ConditionType = "PodsHealthy"
@@ -57,10 +56,10 @@ const (
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`
-// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
+// +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`,priority=10
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`,priority=10
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 type Vertex struct {
@@ -848,6 +847,7 @@ func (vs *VertexStatus) MarkPhaseRunning() {
 // MarkPodNotHealthy marks the pod not healthy with the given reason and message.
 func (vs *VertexStatus) MarkPodNotHealthy(reason, message string) {
 	vs.MarkFalse(VertexConditionPodsHealthy, reason, message)
+	vs.MarkPhase(VertexPhaseDegraded, reason, message)
 }
 
 // MarkPodHealthy marks the pod as healthy with the given reason and message.
