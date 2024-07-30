@@ -63,7 +63,7 @@ COPY ui/build /ui/build
 COPY --from=extension-base /serve/target/release/serve /bin/serve
 COPY ./serving/config config
 
-CMD [ "/bin/numaflow" ]
+ENTRYPOINT [ "/bin/numaflow" ]
 
 ####################################################################################################
 # testbase
