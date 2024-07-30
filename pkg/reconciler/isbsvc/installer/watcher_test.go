@@ -30,7 +30,8 @@ var (
 func TestGetStatefulSetStatus(t *testing.T) {
 	t.Run("Test statefulset status as true", func(t *testing.T) {
 		testSts := statefulSet.DeepCopy()
-		msg, status := getStatefulSetStatus(testSts)
+		msg, reason, status := getStatefulSetStatus(testSts)
+		assert.Equal(t, "RolloutFinished", reason)
 		assert.True(t, status)
 		assert.Equal(t, "statefulset rolling update complete 3 pods at revision isbsvc-default-js-597b7f74d7...\n", msg)
 	})
@@ -38,7 +39,8 @@ func TestGetStatefulSetStatus(t *testing.T) {
 	t.Run("Test statefulset status as false", func(t *testing.T) {
 		testSts := statefulSet.DeepCopy()
 		testSts.Status.UpdateRevision = "isbsvc-default-js-597b7f73a1"
-		msg, status := getStatefulSetStatus(testSts)
+		msg, reason, status := getStatefulSetStatus(testSts)
+		assert.Equal(t, "Updating", reason)
 		assert.False(t, status)
 		assert.Equal(t, "waiting for statefulset rolling update to complete 3 pods at revision isbsvc-default-js-597b7f73a1...\n", msg)
 	})
@@ -46,7 +48,8 @@ func TestGetStatefulSetStatus(t *testing.T) {
 	t.Run("Test statefulset with ObservedGeneration as zero", func(t *testing.T) {
 		testSts := statefulSet.DeepCopy()
 		testSts.Status.ObservedGeneration = 0
-		msg, status := getStatefulSetStatus(testSts)
+		msg, reason, status := getStatefulSetStatus(testSts)
+		assert.Equal(t, "Progressing", reason)
 		assert.False(t, status)
 		assert.Equal(t, "Waiting for statefulset spec update to be observed...\n", msg)
 	})

@@ -569,10 +569,10 @@ func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) er
 		return err
 	}
 	// calculate the status of the InterStepBufferService by statefulset status and update the status of isbSvc
-	if msg, status := getStatefulSetStatus(&isbStatefulSet); status {
-		r.isbSvc.Status.MarkChildrenResourceHealthy("RolloutFinished", msg)
+	if msg, reason, status := getStatefulSetStatus(&isbStatefulSet); status {
+		r.isbSvc.Status.MarkChildrenResourceHealthy(reason, msg)
 	} else {
-		r.isbSvc.Status.MarkChildrenResourceNotHealthy("Progressing", msg)
+		r.isbSvc.Status.MarkChildrenResourceNotHealthy(reason, msg)
 	}
 	return nil
 }
