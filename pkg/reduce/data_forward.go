@@ -366,8 +366,23 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			m.Message.Keys = []string{dfv1.DefaultKeyForNonKeyedData}
 		}
 		m.Watermark = time.Time(processorWM)
+	}
+
+	var dataMessages = make([]*isb.ReadMessage, 0, len(readMessages))
+
+	// store the offsets of the messages we read from ISB
+	var readOffsets = make([]isb.Offset, len(readMessages))
+	for idx, m := range readMessages {
+		readOffsets[idx] = m.ReadOffset
+		if m.Kind == isb.Data {
+			dataMessages = append(dataMessages, m)
+		}
+	}
+
+	for _, m := range dataMessages {
 		totalBytes += len(m.Payload)
 	}
+
 	metrics.ReadBytesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,

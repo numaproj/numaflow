@@ -265,9 +265,16 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	}).Add(float64(len(readMessages)))
 
 	// store the offsets of the messages we read from source
+
+	var dataMessages = make([]*isb.ReadMessage, 0, len(readMessages))
+
+	// store the offsets of the messages we read from ISB
 	var readOffsets = make([]isb.Offset, len(readMessages))
 	for idx, m := range readMessages {
 		readOffsets[idx] = m.ReadOffset
+		if m.Kind == isb.Data {
+			dataMessages = append(dataMessages, m)
+		}
 	}
 
 	// source data transformer applies filtering and assigns event time to source data, which doesn't require watermarks.
@@ -298,10 +305,13 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				df.concurrentApplyTransformer(ctx, transformerCh)
 			}()
 		}
+
+		for _, m := range dataMessages {
+			totalBytes += len(m.Payload)
+		}
+
 		concurrentTransformerProcessingStart := time.Now()
 		for idx, m := range readMessages {
-
-			totalBytes += len(m.Payload)
 
 			// assign watermark to the message
 			m.Watermark = time.Time(processorWM)
@@ -335,8 +345,12 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			metrics.LabelPartitionName:      df.reader.GetName(),
 		}).Observe(float64(time.Since(concurrentTransformerProcessingStart).Microseconds()))
 	} else {
-		for idx, m := range readMessages {
+
+		for _, m := range dataMessages {
 			totalBytes += len(m.Payload)
+		}
+
+		for idx, m := range readMessages {
 			// assign watermark to the message
 			m.Watermark = time.Time(processorWM)
 			readWriteMessagePairs[idx].ReadMessage = m
