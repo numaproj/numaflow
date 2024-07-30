@@ -371,9 +371,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	var dataMessages = make([]*isb.ReadMessage, 0, len(readMessages))
 
 	// store the offsets of the messages we read from ISB
-	var readOffsets = make([]isb.Offset, len(readMessages))
-	for idx, m := range readMessages {
-		readOffsets[idx] = m.ReadOffset
+	for _, m := range readMessages {
 		if m.Kind == isb.Data {
 			dataMessages = append(dataMessages, m)
 		}
