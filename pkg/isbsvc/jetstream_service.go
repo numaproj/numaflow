@@ -120,11 +120,23 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			if !errors.Is(err, nats.ErrStreamNotFound) {
 				return fmt.Errorf("failed to query information of stream %q during buffer creating, %w", streamName, err)
 			}
+			// get the retention policy from the stream config
+			retention := nats.RetentionPolicy(v.GetInt("stream.retention"))
+			// default discard policy is set to DiscardOld
+			discard := nats.DiscardOld
+
+			// Based on the retention policy we use the following discard policy
+			// 1) Limits/Interest Policy -> DiscardOld
+			// 2) WorkQueuePolicy -> DiscardNew
+			if retention == nats.WorkQueuePolicy {
+				discard = nats.DiscardNew
+			}
+
 			if _, err := jss.js.AddStream(&nats.StreamConfig{
 				Name:       streamName,
 				Subjects:   []string{streamName}, // Use the stream name as the only subject
-				Retention:  nats.RetentionPolicy(v.GetInt("stream.retention")),
-				Discard:    nats.DiscardOld,
+				Retention:  retention,
+				Discard:    discard,
 				MaxMsgs:    v.GetInt64("stream.maxMsgs"),
 				MaxAge:     v.GetDuration("stream.maxAge"),
 				MaxBytes:   v.GetInt64("stream.maxBytes"),
