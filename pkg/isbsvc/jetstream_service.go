@@ -122,14 +122,26 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			}
 			// get the retention policy from the stream config
 			retention := nats.RetentionPolicy(v.GetInt("stream.retention"))
-			// default discard policy is set to DiscardOld
-			discard := nats.DiscardOld
+			discard := nats.DiscardNew
 
 			// Based on the retention policy we use the following discard policy
-			// 1) Limits/Interest Policy -> DiscardOld
-			// 2) WorkQueuePolicy -> DiscardNew
-			if retention == nats.WorkQueuePolicy {
-				discard = nats.DiscardNew
+			// 1) Limits Policy -> DiscardOld
+			// 2) WorkQueuePolicy/Interest -> DiscardNew
+
+			// In WorkQueuePolicy the messages will be removed as soon as the Consumer received an Acknowledgement.
+			// In InterestPolicy messages will be removed as soon as all Consumers of the stream for that subject have
+			// received an Acknowledgement for the message.
+			// For Numaflow, workqueue and interest is the same, because we only have one consumer
+			// Old messages should be deleted once, they are acknowledged, hence we use DiscardNew with these two
+			// policies in which during a buffer full we will not write more message to the stream and wait
+			// for the older messages to get cleared
+
+			// When operating with DiscardNew and Limits, on reaching the maxMsgs limit, it will result in the stream
+			// returning an error when attempting to write new messages and old messages will not be deleted from the stream
+			// so the pipeline will get stuck. Hence, we cannot use Limits with DiscardNew.
+			//
+			if retention == nats.LimitsPolicy {
+				discard = nats.DiscardOld
 			}
 
 			if _, err := jss.js.AddStream(&nats.StreamConfig{
