@@ -421,7 +421,9 @@ func TestGetPodSpec(t *testing.T) {
 	t.Run("test serving source", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Source = &Source{
-			Serving: &ServingSource{},
+			Serving: &ServingSource{
+				Store: &ServingStore{},
+			},
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
