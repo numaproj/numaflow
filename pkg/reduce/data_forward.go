@@ -374,13 +374,9 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	for _, m := range readMessages {
 		if m.Kind == isb.Data {
 			dataMessages = append(dataMessages, m)
+			totalBytes += len(m.Payload)
 		}
 	}
-
-	for _, m := range dataMessages {
-		totalBytes += len(m.Payload)
-	}
-
 	metrics.ReadBytesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
