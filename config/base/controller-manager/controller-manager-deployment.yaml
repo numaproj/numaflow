@@ -49,7 +49,25 @@ spec:
               valueFrom:
                 configMapKeyRef:
                   name: numaflow-cmd-params-config
-                  key: controller.disable.leader.election
+                  key: controller.leader.election.disabled
+                  optional: true
+            - name: NUMAFLOW_LEADER_ELECTION_LEASE_DURATION
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: controller.leader.election.lease.duration
+                  optional: true
+            - name: NUMAFLOW_LEADER_ELECTION_LEASE_RENEW_DEADLINE
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: controller.leader.election.lease.renew.deadline
+                  optional: true
+            - name: NUMAFLOW_LEADER_ELECTION_LEASE_RENEW_PERIOD
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: controller.leader.election.lease.renew.period
                   optional: true
           volumeMounts:
             - mountPath: /etc/numaflow
@@ -61,6 +79,9 @@ spec:
             requests:
               cpu: 100m
               memory: 200Mi
+          ports:
+            - containerPort: 9090
+              name: metrics
           livenessProbe:
             httpGet:
               path: /healthz

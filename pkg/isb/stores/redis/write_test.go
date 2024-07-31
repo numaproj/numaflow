@@ -174,7 +174,7 @@ func TestRedisQWrite_WithInfoRefreshInterval(t *testing.T) {
 
 	// assert the actual error that the buffer is full
 	for _, err := range errs {
-		assert.Equal(t, err, isb.BufferWriteErr{Name: stream, Full: true, Message: "Buffer full!"})
+		assert.Equal(t, err, isb.BufferWriteErr{Name: stream, Full: true, Message: isb.BufferFullMessage})
 	}
 }
 
@@ -212,9 +212,9 @@ func TestRedisQWrite_WithInfoRefreshInterval_WithBufferFullWritingStrategyIsDisc
 	defer func() { _ = client.DeleteKeys(ctx, internalKeys...) }()
 	_, errs = rqw.Write(ctx, writeMessages)
 
-	// assert the NoRetryableBufferWriteErr
+	// assert the NonRetryableBufferWriteErr
 	for _, err := range errs {
-		assert.Equal(t, err, isb.NoRetryableBufferWriteErr{Name: stream, Message: "Buffer full!"})
+		assert.Equal(t, err, isb.NonRetryableBufferWriteErr{Name: stream, Message: isb.BufferFullMessage})
 	}
 }
 
@@ -223,7 +223,7 @@ func buildTestWriteMessages(rqw *BufferWrite, count int64, startTime time.Time) 
 	var messages = make([]isb.Message, 0, count)
 	var internalHashKeysMap map[string]bool
 	var internalHashKeys = make([]string, 0)
-	messages = append(messages, testutils.BuildTestWriteMessages(count, startTime, nil)...)
+	messages = append(messages, testutils.BuildTestWriteMessages(count, startTime, nil, "testVertex")...)
 	for i := int64(0); i < count; i++ {
 		tmpTime := startTime.Add(time.Duration(i) * time.Minute)
 		messages[i].EventTime = tmpTime
@@ -239,7 +239,7 @@ func buildTestWriteMessages(rqw *BufferWrite, count int64, startTime time.Time) 
 func TestLua(t *testing.T) {
 	ctx := context.Background()
 	client := redis.NewUniversalClient(redisOptions)
-	message := isb.Message{Header: isb.Header{ID: "0", MessageInfo: isb.MessageInfo{EventTime: testStartTime}}, Body: isb.Body{Payload: []byte("foo")}}
+	message := isb.Message{Header: isb.Header{ID: isb.MessageID{VertexName: "testVertex", Offset: "0"}, MessageInfo: isb.MessageInfo{EventTime: testStartTime}}, Body: isb.Body{Payload: []byte("foo")}}
 	script := redis.NewScript(exactlyOnceInsertLuaScript)
 
 	var hashName = "{step-1}:1234567890:hash-foo"
@@ -309,7 +309,7 @@ func Test_updateIsFullFlag(t *testing.T) {
 
 	// assert the actual error that the buffer is full
 	for _, err := range errs {
-		assert.Equal(t, err, isb.BufferWriteErr{Name: stream, Full: true, Message: "Buffer full!"})
+		assert.Equal(t, err, isb.BufferWriteErr{Name: stream, Full: true, Message: isb.BufferFullMessage})
 	}
 }
 
@@ -344,7 +344,7 @@ func Test_GetRefreshFullError(t *testing.T) {
 type myForwardRedisTest struct {
 }
 
-func (f myForwardRedisTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f myForwardRedisTest) WhereTo(_ []string, _ []string, _ string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
@@ -352,11 +352,15 @@ func (f myForwardRedisTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexB
 }
 
 func (f myForwardRedisTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, message)
+	return testutils.CopyUDFTestApply(ctx, "", message)
 }
 
 func (f myForwardRedisTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
-	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
+	return testutils.CopyUDFTestApplyStream(ctx, "", writeMessageCh, message)
+}
+
+func (f myForwardRedisTest) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApplyBatchMap(ctx, "", messages)
 }
 
 // TestNewInterStepDataForwardRedis is used to read data from one step to another using redis as the Inter-Step Buffer
@@ -410,7 +414,7 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{}, myForwardRedisTest{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
+	f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardRedisTest{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithUDFUnaryMap(myForwardRedisTest{}))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 
@@ -459,7 +463,7 @@ func TestReadTimeout(t *testing.T) {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardRedisTest{}, myForwardRedisTest{}, myForwardRedisTest{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
+	f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardRedisTest{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithUDFUnaryMap(myForwardRedisTest{}))
 	assert.NoError(t, err)
 	stopped := f.Start()
 	// Call stop to end the test as we have a blocking read. The forwarder is up and running with no messages written
@@ -487,7 +491,7 @@ func TestXTrimOnIsFull(t *testing.T) {
 
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil)
+	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil, "testVertex")
 	// Add 10 messages
 	for _, msg := range messages {
 		err := client.Client.XAdd(ctx, &redis.XAddArgs{
@@ -510,7 +514,7 @@ func TestXTrimOnIsFull(t *testing.T) {
 	// Buffer is full at this point so write will fail with errors because of usage limit
 	_, errs := rqw.Write(ctx, messages)
 	for _, err := range errs {
-		assert.Equal(t, err, isb.BufferWriteErr{Name: buffer, Full: true, Message: "Buffer full!"})
+		assert.Equal(t, err, isb.BufferWriteErr{Name: buffer, Full: true, Message: isb.BufferFullMessage})
 	}
 
 	// Read all the messages.
@@ -552,7 +556,7 @@ func TestSetWriteInfo(t *testing.T) {
 
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil)
+	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil, "testVertex")
 	// Add 10 messages
 	for _, msg := range messages {
 		err := client.Client.XAdd(ctx, &redis.XAddArgs{

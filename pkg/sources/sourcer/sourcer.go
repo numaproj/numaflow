@@ -20,7 +20,6 @@ import (
 	"context"
 	"io"
 
-	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 )
 
@@ -40,12 +39,9 @@ type SourceReader interface {
 	// idle watermarks should be published. Partition assignment to a pod is dynamic, so this method may return different
 	// partitions at different times. (Example - Kafka, every time topic rebalancing happens, the partitions gets updated)
 	Partitions(ctx context.Context) []int32
+	// Pending returns the pending messages number.
+	Pending(context.Context) (int64, error)
 }
 
-// Sourcer interface provides an isb.BufferReader abstraction over the underlying data source.
-// This is intended to be consumed by a connector like isb.forward
-type Sourcer interface {
-	SourceReader
-	forwarder.StarterStopper
-	isb.LagReader
-}
+// SourceReader can be used as LagReader.
+var _ isb.LagReader = (SourceReader)(nil)

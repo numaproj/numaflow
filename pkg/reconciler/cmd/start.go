@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"reflect"
+	"time"
 
 	"go.uber.org/zap"
 	appv1 "k8s.io/api/apps/v1"
@@ -35,14 +36,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	numaflow "github.com/numaproj/numaflow"
+	"github.com/numaproj/numaflow"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	isbsvcctrl "github.com/numaproj/numaflow/pkg/reconciler/isbsvc"
 	plctrl "github.com/numaproj/numaflow/pkg/reconciler/pipeline"
 	vertexctrl "github.com/numaproj/numaflow/pkg/reconciler/vertex"
 	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
-	logging "github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
@@ -71,6 +72,31 @@ func Start(namespaced bool, managedNamespace string) {
 
 	if sharedutil.LookupEnvStringOr(dfv1.EnvLeaderElectionDisabled, "false") == "true" {
 		opts.LeaderElection = false
+	} else {
+		leaseDurationStr := sharedutil.LookupEnvStringOr(dfv1.EnvLeaderElectionLeaseDuration, "15s") // Defaults to 15s
+		leaseDuration, err := time.ParseDuration(leaseDurationStr)
+		if err != nil {
+			logger.Fatalf("Invalid ENV %s value: %s", dfv1.EnvLeaderElectionLeaseDuration, leaseDurationStr)
+		}
+		opts.LeaseDuration = &leaseDuration
+		leaseRenewDeadlineStr := sharedutil.LookupEnvStringOr(dfv1.EnvLeaderElectionLeaseRenewDeadline, "10s") // Defaults to 10s
+		leaseRenewDeadline, err := time.ParseDuration(leaseRenewDeadlineStr)
+		if err != nil {
+			logger.Fatalf("Invalid ENV %s value: %s", dfv1.EnvLeaderElectionLeaseRenewDeadline, leaseRenewDeadlineStr)
+		}
+		if leaseDuration <= leaseRenewDeadline {
+			logger.Fatalf("Invalid config: %s should always be greater than %s", dfv1.EnvLeaderElectionLeaseDuration, dfv1.EnvLeaderElectionLeaseRenewDeadline)
+		}
+		opts.RenewDeadline = &leaseRenewDeadline
+		leaseRenewPeriodStr := sharedutil.LookupEnvStringOr(dfv1.EnvLeaderElectionLeaseRenewPeriod, "2s") // Defaults to 2s
+		leaseRenewPeriod, err := time.ParseDuration(leaseRenewPeriodStr)
+		if err != nil {
+			logger.Fatalf("Invalid ENV %s value: %s", dfv1.EnvLeaderElectionLeaseRenewPeriod, leaseRenewPeriodStr)
+		}
+		if leaseRenewDeadline <= leaseRenewPeriod {
+			logger.Fatalf("Invalid config: %s should always be greater than %s", dfv1.EnvLeaderElectionLeaseRenewDeadline, dfv1.EnvLeaderElectionLeaseRenewPeriod)
+		}
+		opts.RetryPeriod = &leaseRenewPeriod
 	}
 
 	if namespaced {
@@ -126,7 +152,7 @@ func Start(namespaced bool, managedNamespace string) {
 	// Watch StatefulSets with Generation changes, and enqueue owning InterStepBuffer key
 	if err := isbSvcController.Watch(source.Kind(mgr.GetCache(), &appv1.StatefulSet{}),
 		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.InterStepBufferService{}, handler.OnlyControllerOwner()),
-		predicate.GenerationChangedPredicate{}); err != nil {
+		predicate.ResourceVersionChangedPredicate{}); err != nil {
 		logger.Fatalw("Unable to watch StatefulSets", zap.Error(err))
 	}
 
@@ -157,7 +183,7 @@ func Start(namespaced bool, managedNamespace string) {
 	if err := pipelineController.Watch(source.Kind(mgr.GetCache(), &dfv1.Vertex{}),
 		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Pipeline{}, handler.OnlyControllerOwner()),
 		predicate.And(
-			predicate.GenerationChangedPredicate{},
+			predicate.ResourceVersionChangedPredicate{},
 			predicate.Funcs{
 				UpdateFunc: func(e event.UpdateEvent) bool {
 					if e.ObjectOld == nil || e.ObjectNew == nil {
@@ -181,7 +207,7 @@ func Start(namespaced bool, managedNamespace string) {
 	// Watch Deployments with Generation changes
 	if err := pipelineController.Watch(source.Kind(mgr.GetCache(), &appv1.Deployment{}),
 		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Pipeline{}, handler.OnlyControllerOwner()),
-		predicate.GenerationChangedPredicate{}); err != nil {
+		predicate.ResourceVersionChangedPredicate{}); err != nil {
 		logger.Fatalw("Unable to watch Deployments", zap.Error(err))
 	}
 
@@ -205,6 +231,7 @@ func Start(namespaced bool, managedNamespace string) {
 	// Watch Pods
 	if err := vertexController.Watch(source.Kind(mgr.GetCache(), &corev1.Pod{}),
 		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Vertex{}, handler.OnlyControllerOwner()),
+		predicate.ResourceVersionChangedPredicate{},
 		predicate.Funcs{
 			CreateFunc: func(event.CreateEvent) bool { return false }, // Do not watch pod create events
 		}); err != nil {
@@ -223,7 +250,9 @@ func Start(namespaced bool, managedNamespace string) {
 		logger.Fatalw("Unable to add autoscaling runner", zap.Error(err))
 	}
 
-	logger.Infow("Starting controller manager", "version", numaflow.GetVersion())
+	version := numaflow.GetVersion()
+	reconciler.BuildInfo.WithLabelValues(version.Version, version.Platform).Set(1)
+	logger.Infow("Starting controller manager", "version", version)
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		logger.Fatalw("Unable to run controller manager", zap.Error(err))
 	}

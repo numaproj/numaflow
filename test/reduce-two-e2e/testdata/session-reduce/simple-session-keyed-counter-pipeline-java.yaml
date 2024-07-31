@@ -17,12 +17,14 @@ spec:
       udf:
         container:
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
+          imagePullPolicy: Always
     - name: compute-count
       partitions: 1
       udf:
         container:
           # see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reducesession/counter
           image: quay.io/numaio/numaflow-java/session-reduce-count:stable
+          imagePullPolicy: Always
         groupBy:
           window:
             session:
@@ -43,8 +45,9 @@ spec:
       sink:
         udsink:
           container:
-            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis-sink
+            image: quay.io/numaio/numaflow-go/redis-sink:stable
+            imagePullPolicy: Always
   edges:
     - from: in
       to: even-odd

@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -78,7 +79,11 @@ func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 	if err != nil {
 		panic(err)
 	}
-	defer resp.Body.Close()
+
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
+
 	for s := bufio.NewScanner(resp.Body); s.Scan(); {
 		x := s.Text()
 		if strings.Contains(x, "ERROR") { // hacky way to return an error from an octet-stream

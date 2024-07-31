@@ -43,20 +43,20 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	buffers := []string{buffer}
 	redisClient := redisclient.NewRedisClient(redisOptions)
 	isbsRedisSvc := NewISBRedisSvc(redisClient)
-	assert.NoError(t, isbsRedisSvc.CreateBuffersAndBuckets(ctx, buffers, nil, ""))
+	assert.NoError(t, isbsRedisSvc.CreateBuffersAndBuckets(ctx, buffers, nil, "", []string{}))
 
 	// validate buffer
-	assert.NoError(t, isbsRedisSvc.ValidateBuffersAndBuckets(ctx, buffers, nil, ""))
+	assert.NoError(t, isbsRedisSvc.ValidateBuffersAndBuckets(ctx, buffers, nil, "", []string{}))
 
 	// Verify
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil)
+	messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil, "testVertex")
 	// Add 10 messages
 	for _, msg := range messages {
 		err := redisClient.Client.XAdd(ctx, &goredis.XAddArgs{
 			Stream: stream,
-			Values: []interface{}{msg.Header, msg.Body},
+			Values: []interface{}{msg.Header, msg.Body.Payload},
 		}).Err()
 		assert.NoError(t, err)
 	}
@@ -79,5 +79,5 @@ func TestIsbsRedisSvc_Buffers(t *testing.T) {
 	}
 
 	// delete buffer
-	assert.NoError(t, isbsRedisSvc.DeleteBuffersAndBuckets(ctx, buffers, nil, ""))
+	assert.NoError(t, isbsRedisSvc.DeleteBuffersAndBuckets(ctx, buffers, nil, "", []string{}))
 }

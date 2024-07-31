@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 
@@ -43,14 +44,17 @@ var (
 )
 
 type ServerOptions struct {
-	Insecure         bool
-	Port             int
-	Namespaced       bool
-	ManagedNamespace string
-	BaseHref         string
-	DisableAuth      bool
-	DexServerAddr    string
-	ServerAddr       string
+	Insecure             bool
+	Port                 int
+	Namespaced           bool
+	ManagedNamespace     string
+	BaseHref             string
+	DisableAuth          bool
+	DexServerAddr        string
+	ServerAddr           string
+	CorsAllowedOrigins   string
+	ReadOnly             bool
+	DaemonClientProtocol string
 }
 
 type server struct {
@@ -67,6 +71,24 @@ func (s *server) Start(ctx context.Context) {
 	log := logging.FromContext(ctx)
 	router := gin.New()
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/livez"}}))
+	allowedOrigins := make([]string, 0)
+	if s.options.CorsAllowedOrigins != "" {
+		for _, o := range strings.Split(s.options.CorsAllowedOrigins, ",") {
+			s := strings.TrimSpace(o)
+			s = strings.TrimRight(s, "/") // Remove trailing slash if any
+			if len(s) > 0 {
+				allowedOrigins = append(allowedOrigins, s)
+			}
+		}
+	}
+	if len(allowedOrigins) > 0 {
+		router.Use(cors.New(cors.Config{
+			AllowOrigins:     allowedOrigins,
+			AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"},
+			AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type"},
+			AllowCredentials: true,
+		}))
+	}
 	router.RedirectTrailingSlash = true
 	// sets the route map for authorization with the base href
 	authRouteMap := CreateAuthRouteMap(s.options.BaseHref)
@@ -81,9 +103,12 @@ func (s *server) Start(ctx context.Context) {
 		ctx,
 		router,
 		routes.SystemInfo{
-			ManagedNamespace: s.options.ManagedNamespace,
-			Namespaced:       s.options.Namespaced,
-			Version:          numaflow.GetVersion().String()},
+			ManagedNamespace:     s.options.ManagedNamespace,
+			Namespaced:           s.options.Namespaced,
+			IsReadOnly:           s.options.ReadOnly,
+			Version:              numaflow.GetVersion().String(),
+			DaemonClientProtocol: s.options.DaemonClientProtocol,
+		},
 		routes.AuthInfo{
 			DisableAuth:   s.options.DisableAuth,
 			DexServerAddr: s.options.DexServerAddr,

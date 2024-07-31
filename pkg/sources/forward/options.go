@@ -22,26 +22,33 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/shared/callback"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 )
 
 // options for forwarding the message
 type options struct {
 	// readBatchSize is the default batch size
 	readBatchSize int64
+	// transformer defines the way to transform data at source
+	transformer applier.SourceTransformApplier
 	// transformerConcurrency sets the concurrency for concurrent transformer processing
 	transformerConcurrency int
 	// retryInterval is the time.Duration to sleep before retrying
 	retryInterval time.Duration
 	// logger is used to pass the logger variable
 	logger *zap.SugaredLogger
+	// cbPublisher is the callback publisher for the vertex.
+	cbPublisher *callback.Uploader
 }
 
 type Option func(*options) error
 
-func DefaultOptions() *options {
+func defaultOptions() *options {
 	return &options{
 		readBatchSize:          dfv1.DefaultReadBatchSize,
+		transformer:            nil,
 		transformerConcurrency: dfv1.DefaultReadBatchSize,
 		retryInterval:          time.Millisecond,
 		logger:                 logging.NewLogger(),
@@ -76,6 +83,22 @@ func WithTransformerConcurrency(f int) Option {
 func WithLogger(l *zap.SugaredLogger) Option {
 	return func(o *options) error {
 		o.logger = l
+		return nil
+	}
+}
+
+// WithTransformer sets the transformer to be applied
+func WithTransformer(f applier.SourceTransformApplier) Option {
+	return func(o *options) error {
+		o.transformer = f
+		return nil
+	}
+}
+
+// WithCallbackUploader sets the callback uploader for the vertex
+func WithCallbackUploader(cp *callback.Uploader) Option {
+	return func(o *options) error {
+		o.cbPublisher = cp
 		return nil
 	}
 }

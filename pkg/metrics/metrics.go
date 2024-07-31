@@ -22,6 +22,10 @@ import (
 )
 
 const (
+	LabelVersion            = "version"
+	LabelPlatform           = "platform"
+	LabelNamespace          = "ns"
+	LabelISBService         = "isbsvc"
 	LabelPipeline           = "pipeline"
 	LabelVertex             = "vertex"
 	LabelVertexReplicaIndex = "replica"
@@ -87,14 +91,14 @@ var (
 		Subsystem: "forwarder",
 		Name:      "drop_total",
 		Help:      "Total number of Messages Dropped",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName, LabelReason})
 
 	// DropBytesCount is to indicate the number of bytes dropped
 	DropBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "drop_bytes_total",
 		Help:      "Total number of Bytes Dropped",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName, LabelReason})
 
 	// AckMessagesCount is used to indicate the number of  messages acknowledged
 	AckMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -161,6 +165,12 @@ var (
 		Name:      "udf_write_total",
 		Help:      "Total number of Messages Written by UDF",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	UserDroppedMessages = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "ud_drop_total",
+		Help:      "Total messages dropped by the user",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex})
 )
 
 // Source forwarder specific metrics

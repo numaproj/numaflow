@@ -53,28 +53,28 @@ var isbWriteErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 var isbSoftUsage = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "isb_jetstream",
 	Name:      "buffer_soft_usage",
-	Help:      "percentage of buffer soft usage",
+	Help:      "Percentage of buffer soft usage",
 }, []string{"buffer"})
 
 // isbSolidUsage is used to indicate buffer usage, it is calculated based on the messages remaining in the stream.
 var isbSolidUsage = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "isb_jetstream",
 	Name:      "buffer_solid_usage",
-	Help:      "percentage of buffer solid usage",
+	Help:      "Percentage of buffer solid usage",
 }, []string{"buffer"})
 
 // isbPending is calculated based on the messages in pending
 var isbPending = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "isb_jetstream",
 	Name:      "buffer_pending",
-	Help:      "number of pending messages",
+	Help:      "Number of pending messages",
 }, []string{"buffer"})
 
 // isbAckPending is calculated based on the messages that are pending ack
 var isbAckPending = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "isb_jetstream",
 	Name:      "buffer_ack_pending",
-	Help:      "number of messages pending ack",
+	Help:      "Number of messages pending ack",
 }, []string{"buffer"})
 
 // isbWriteTimeout records how many times of writing timeout
@@ -106,11 +106,4 @@ var isbAckTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Name:      "ack_time_total",
 	Help:      "Processing times of acks for jetstream",
 	Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*2, 10),
-}, []string{"buffer"})
-
-// isbDedupCount is used to indicate the number of messages that are duplicate
-var isbDedupCount = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "isb_jetstream",
-	Name:      "dedup_total",
-	Help:      "Total number of jetstream dedup",
 }, []string{"buffer"})

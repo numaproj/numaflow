@@ -17,30 +17,14 @@ limitations under the License.
 package http
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forwarder"
-	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/stores/simplebuffer"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
-	"github.com/numaproj/numaflow/pkg/watermark/generic"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
-
-type myForwardToAllTest struct {
-}
-
-func (f myForwardToAllTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
-	return []forwarder.VertexBuffer{{
-		ToVertexName:         "test",
-		ToVertexPartitionIdx: 0,
-	}}, nil
-}
 
 func TestWithBufferSize(t *testing.T) {
 	h := &httpSource{
@@ -61,6 +45,7 @@ func TestWithReadTimeout(t *testing.T) {
 }
 
 func Test_NewHTTP(t *testing.T) {
+	ctx := context.Background()
 	v := &dfv1.Vertex{
 		Spec: dfv1.VertexSpec{
 			AbstractVertex: dfv1.AbstractVertex{
@@ -76,25 +61,9 @@ func Test_NewHTTP(t *testing.T) {
 		Hostname: "test-host",
 		Replica:  0,
 	}
-	dest := simplebuffer.NewInMemoryBuffer("test", 100, 0)
-	toBuffers := map[string][]isb.BufferWriter{
-		"test": {dest},
-	}
-	publishWMStores, _ := store.BuildNoOpWatermarkStore()
-	fetchWatermark, _ := generic.BuildNoOpSourceWatermarkProgressorsFromBufferMap(map[string][]isb.BufferWriter{})
-	toVertexWmStores := map[string]store.WatermarkStore{
-		"test": publishWMStores,
-	}
 
-	idleManager, _ := wmb.NewIdleManager(1, len(toBuffers))
-	h, err := New(vi, toBuffers, myForwardToAllTest{}, applier.Terminal, fetchWatermark, toVertexWmStores, publishWMStores, idleManager)
+	h, err := NewHttpSource(ctx, vi)
 	assert.NoError(t, err)
-	assert.False(t, h.(*httpSource).ready)
-	assert.Equal(t, v.Spec.Name, h.GetName())
-	assert.NotNil(t, h.(*httpSource).forwarder)
 	assert.NotNil(t, h.(*httpSource).shutdown)
-	_ = h.Start()
-	assert.True(t, h.(*httpSource).ready)
-	h.Stop()
-	assert.False(t, h.(*httpSource).ready)
+	assert.True(t, h.(*httpSource).ready.Load())
 }

@@ -52,7 +52,7 @@ var _ ReadWriteCloser = (*PBQ)(nil)
 // Write accepts a window request and writes it to the PBQ, only the isb message is written to the store.
 // The other metadata like operation etc are recomputed from WAL.
 // request can never be nil.
-func (p *PBQ) Write(_ context.Context, request *window.TimedWindowRequest, persist bool) error {
+func (p *PBQ) Write(ctx context.Context, request *window.TimedWindowRequest, persist bool) error {
 	var writeErr error
 
 	// if cob we should return
@@ -68,8 +68,14 @@ func (p *PBQ) Write(_ context.Context, request *window.TimedWindowRequest, persi
 	}
 
 	// write the request to the output channel
-	// NOTE: this is a blocking call! it should only block if UDF is blocking.
-	p.output <- request
+	// since it is a blocking write, we should have a select with context,
+	select {
+	case p.output <- request:
+	case <-ctx.Done():
+		// we can persist the message even if the context is done that way we will not rely on
+		// the no-ack functionality of the buffer instead we will completely rely on the pbq to
+		// replay the messages in case of failure.
+	}
 
 	switch request.Operation {
 	case window.Open, window.Append, window.Expand:

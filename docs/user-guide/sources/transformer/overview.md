@@ -16,7 +16,8 @@ There are some [Built-in Transformers](builtin-transformers/README.md) that can 
 
 ## Build Your Own Transformer
 
-You can build your own transformer in multiple languages. A User Defined Transformer could be as simple as the example below in Golang.
+You can build your own transformer in multiple languages.
+A user-defined transformer could be as simple as the example below in Golang.
 In the example, the transformer extracts event times from `timestamp` of the JSON payload and assigns them to messages as new event times. It also filters out unwanted messages based on `filterOut` of the payload.
 
 ```golang

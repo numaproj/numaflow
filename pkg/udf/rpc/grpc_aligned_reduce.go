@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -35,8 +36,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/window"
 )
-
-// FIXME(session): rename file, type, NewXXX to Aligned
 
 // GRPCBasedAlignedReduce is a reduce applier that uses gRPC client to invoke the aligned reduce UDF. It implements the applier.ReduceApplier interface.
 type GRPCBasedAlignedReduce struct {
@@ -112,13 +111,17 @@ func (u *GRPCBasedAlignedReduce) ApplyReduce(ctx context.Context, partitionID *p
 					return
 				}
 				// create a unique message id for each response message which will be used for deduplication
-				msgId := fmt.Sprintf("%s-%d-%s-%d", u.vertexName, u.vertexReplica, partitionID.String(), index)
+				msgId := isb.MessageID{
+					VertexName: u.vertexName,
+					Offset:     fmt.Sprintf("%s-%d", partitionID.String(), u.vertexReplica),
+					Index:      int32(index),
+				}
 				index++
 				responseCh <- parseReduceResponse(result, msgId)
 			case err := <-reduceErrCh:
 				// ctx.Done() event will be handled by the AsyncReduceFn method
 				// so we don't need a separate case for ctx.Done() here
-				if err == ctx.Err() {
+				if errors.Is(err, ctx.Err()) {
 					errCh <- err
 					return
 				}
@@ -204,14 +207,14 @@ func createAlignedReduceRequest(windowRequest *window.TimedWindowRequest) *reduc
 }
 
 // convertToUdfError converts the error returned by the reduceFn to ApplyUDFErr
-func convertToUdfError(err error) ApplyUDFErr {
+func convertToUdfError(err error) error {
 	// if any error happens in reduce
 	// will exit and restart the numa container
 	udfErr, _ := sdkerr.FromError(err)
 	switch udfErr.ErrorKind() {
 	case sdkerr.Retryable:
 		// TODO: currently we don't handle retryable errors for reduce
-		return ApplyUDFErr{
+		return &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
 			InternalErr: InternalErr{
@@ -220,7 +223,7 @@ func convertToUdfError(err error) ApplyUDFErr {
 			},
 		}
 	case sdkerr.NonRetryable:
-		return ApplyUDFErr{
+		return &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
 			InternalErr: InternalErr{
@@ -229,7 +232,7 @@ func convertToUdfError(err error) ApplyUDFErr {
 			},
 		}
 	case sdkerr.Canceled:
-		return ApplyUDFErr{
+		return &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    context.Canceled.Error(),
 			InternalErr: InternalErr{
@@ -238,7 +241,7 @@ func convertToUdfError(err error) ApplyUDFErr {
 			},
 		}
 	default:
-		return ApplyUDFErr{
+		return &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("gRPC client.ReduceFn failed, %s", err),
 			InternalErr: InternalErr{
@@ -250,7 +253,7 @@ func convertToUdfError(err error) ApplyUDFErr {
 }
 
 // parseReduceResponse parse the SDK response to TimedWindowResponse
-func parseReduceResponse(response *reducepb.ReduceResponse, msgId string) *window.TimedWindowResponse {
+func parseReduceResponse(response *reducepb.ReduceResponse, msgId isb.MessageID) *window.TimedWindowResponse {
 	taggedMessage := &isb.WriteMessage{
 		Message: isb.Message{
 			Header: isb.Header{

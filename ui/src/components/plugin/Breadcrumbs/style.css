@@ -1,22 +1,22 @@
 .Breadcrumbs {
-  margin: 0.5rem 1.25rem !important;
+  margin: 0.8rem 2rem !important;
   overflow: hidden !important;
 }
 
 .Breadcrumbs-typ {
   color: var(--badge-pending, #6B6C72);
-  font-size: 0.75rem !important;
+  font-size: 1.2rem !important;
   font-style: normal !important;
   font-weight: 400 !important;
-  line-height: 1rem !important;
+  line-height: 1.6rem !important;
 }
 
 .Breadcrumbs-link {
   text-decoration: none;
-  font-size: 0.75rem !important;
+  font-size: 1.2rem !important;
   font-style: normal !important;
   font-weight: 400 !important;
-  line-height: 1rem !important;
+  line-height: 1.6rem !important;
   color: #0077C5;
 }
 
@@ -29,13 +29,13 @@
 }
 
 .MuiBreadcrumbs-separator {
-  margin: 0 0.3125rem !important;
-  font-size: 1rem !important;
+  margin: 0 0.5rem !important;
+  font-size: 1.6rem !important;
 }
 
 .crumb-separator {
-  width: 1.875rem;
-  height: 1.8125rem;
-  margin: -0.3125rem;
-  margin-top: -0.25rem;
+  width: 3rem;
+  height: 2.9rem;
+  margin: -0.5rem;
+  margin-top: -0.4rem;
 }

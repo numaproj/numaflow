@@ -4,7 +4,7 @@ metadata:
   name: even-odd-sum
 spec:
   watermark:
-    maxDelay: 20s
+    maxDelay: 30s
   limits:
     readBatchSize: 50
   vertices:
@@ -18,12 +18,14 @@ spec:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
+          imagePullPolicy: Always
     - name: compute-sum
       partitions: 2
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
           image: quay.io/numaio/numaflow-go/reduce-sum:stable
+          imagePullPolicy: Always
         groupBy:
           window:
             fixed:
@@ -39,8 +41,9 @@ spec:
       sink:
         udsink:
           container:
-            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-sinks/tree/main/redis-e2e-test-sink
-            image: quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis-sink
+            image: quay.io/numaio/numaflow-go/redis-sink:stable
+            imagePullPolicy: Always
   edges:
     - from: in
       to: atoi

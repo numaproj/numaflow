@@ -1,10 +1,10 @@
 .namespace-k8s-events {
   color: #393A3D;
-  font-size: 0.875rem;
+  font-size: 1.4rem;
   font-style: normal;
   font-weight: 600;
   text-decoration: underline;
   cursor: pointer;
-  padding-left: 2rem;
-  padding-right: 2rem;
+  padding-left: 3.2rem;
+  padding-right: 3.2rem;
 }

@@ -96,12 +96,13 @@ func (in UDF) getUDFContainer(mainContainerReq getContainerReq) corev1.Container
 			c = c.imagePullPolicy(*x.ImagePullPolicy)
 		}
 	}
+	c = c.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerFunction})
 	container := c.build()
 	container.LivenessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/sidecar-livez",
-				Port:   intstr.FromInt(VertexMetricsPort),
+				Port:   intstr.FromInt32(VertexMetricsPort),
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},

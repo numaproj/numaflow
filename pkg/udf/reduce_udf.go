@@ -19,6 +19,7 @@ package udf
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -40,8 +41,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
+	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sessionreducer"
-	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -98,14 +99,14 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		// if streaming is enabled, use the reduceStreaming address
 		if (windowType.Fixed != nil && windowType.Fixed.Streaming) || (windowType.Sliding != nil && windowType.Sliding.Streaming) {
 			// Wait for server info to be ready
-			serverInfo, err = sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.ReduceStreamServerInfoFile))
+			serverInfo, err = sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.ReduceStreamServerInfoFile))
 			if err != nil {
 				return err
 			}
 			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.ReduceStreamAddr))
 		} else {
 			// Wait for server info to be ready
-			serverInfo, err = sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.ReduceServerInfoFile))
+			serverInfo, err = sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.ReduceServerInfoFile))
 			if err != nil {
 				return err
 			}
@@ -131,7 +132,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		healthChecker = reduceHandler
 	} else if windowType.Session != nil {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.SessionReduceServerInfoFile))
+		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.SessionReduceServerInfoFile))
 		if err != nil {
 			return err
 		}
@@ -141,7 +142,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			return fmt.Errorf("failed to create a new session reducer gRPC client: %w", err)
 		}
 
-		reduceHandler := rpc.NewGRPCBasedUnalignedReduce(client)
+		reduceHandler := rpc.NewGRPCBasedUnalignedReduce(vertexName, client)
 		// Readiness check
 		if err := reduceHandler.WaitUntilReady(ctx); err != nil {
 			return fmt.Errorf("failed on udf readiness check, %w", err)
@@ -205,7 +206,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		}
 
 		// created watermark related components only if watermark is enabled
-		// otherwise no pnFManager will used
+		// otherwise noop will used
 		if !u.VertexInstance.Vertex.Spec.Watermark.Disabled {
 			// create from vertex watermark stores
 			fromVertexWmStores, err = jetstream.BuildFromVertexWatermarkStores(ctx, u.VertexInstance, natsClientPool.NextAvailableClient())
@@ -235,48 +236,50 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	// Populate shuffle function map
 	shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 	for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
-		if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 {
+		if edge.GetToVertexPartitionCount() > 1 {
 			s := shuffle.NewShuffle(edge.To, edge.GetToVertexPartitionCount())
-			shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
+			shuffleFuncMap[edge.From+":"+edge.To] = s
 		}
 	}
-	getVertexPartition := GetPartitionedBufferIdx(u.VertexInstance)
-	conditionalForwarder := forwarder.GoWhere(func(keys []string, tags []string) ([]forwarder.VertexBuffer, error) {
+
+	// create the conditional forwarder
+	conditionalForwarder := forwarder.GoWhere(func(keys []string, tags []string, msgId string) ([]forwarder.VertexBuffer, error) {
 		var result []forwarder.VertexBuffer
+
+		// Drop message if it contains the special tag
 		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
+			metrics.UserDroppedMessages.With(map[string]string{
+				metrics.LabelVertex:             vertexName,
+				metrics.LabelPipeline:           pipelineName,
+				metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(u.VertexInstance.Replica)),
+			}).Inc()
 			return result, nil
 		}
 
+		// Iterate through the edges
 		for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
-			// If returned tags is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
-			if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
-				if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
-					toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-					result = append(result, forwarder.VertexBuffer{
-						ToVertexName:         edge.To,
-						ToVertexPartitionIdx: toVertexPartition,
-					})
-				} else {
-					result = append(result, forwarder.VertexBuffer{
-						ToVertexName:         edge.To,
-						ToVertexPartitionIdx: getVertexPartition(edge.To, int32(edge.GetToVertexPartitionCount())),
-					})
-				}
-			} else {
-				if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
-					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
-						toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-						result = append(result, forwarder.VertexBuffer{
-							ToVertexName:         edge.To,
-							ToVertexPartitionIdx: toVertexPartition,
-						})
-					} else {
-						result = append(result, forwarder.VertexBuffer{
-							ToVertexName:         edge.To,
-							ToVertexPartitionIdx: getVertexPartition(edge.To, int32(edge.GetToVertexPartitionCount())),
-						})
+			edgeKey := edge.From + ":" + edge.To
+
+			// Condition to proceed for forwarding message: No conditions on edge, or message tags match edge conditions
+			proceed := edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 || sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values)
+
+			if proceed {
+				// if the edge has more than one partition, shuffle the message
+				// else forward the message to the default partition
+				partitionIdx := isb.DefaultPartitionIdx
+				if edge.GetToVertexPartitionCount() > 1 {
+					if edge.ToVertexType == dfv1.VertexTypeReduceUDF { // Shuffle on keys
+						partitionIdx = shuffleFuncMap[edgeKey].ShuffleOnKeys(keys)
+					} else { // Shuffle on msgId
+						partitionIdx = shuffleFuncMap[edgeKey].ShuffleOnId(msgId)
 					}
 				}
+
+				result = append(result, forwarder.VertexBuffer{
+					ToVertexName:         edge.To,
+					ToVertexPartitionIdx: partitionIdx,
+				})
 			}
 		}
 
@@ -367,11 +370,11 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		}(compactor)
 	}
 
-	// create the pnf manager
-	pnFManager := pnf.NewPnFManager(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower, pnfOption...)
+	// create the pnf
+	processAndForward := pnf.NewProcessAndForward(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower, pnfOption...)
 
 	// for reduce, we read only from one partition
-	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, walManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, pnFManager, opts...)
+	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, walManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, processAndForward, opts...)
 	if err != nil {
 		return fmt.Errorf("failed get a new DataForward, %w", err)
 	}
@@ -391,8 +394,8 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		dataForwarder.Start()
 		log.Info("Forwarder stopped, exiting reduce udf data processor...")
 
-		// after exiting from pbq write loop, we need to gracefully shut down the pnf manager
-		pnFManager.Shutdown()
+		// after exiting from pbq write loop, we need to gracefully shut down the pnf
+		processAndForward.Shutdown()
 	}()
 
 	<-ctx.Done()

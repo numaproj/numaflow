@@ -11,13 +11,15 @@ import Drawer from "@mui/material/Drawer";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import CircularProgress from "@mui/material/CircularProgress";
-import { Switch, Route, useLocation } from "react-router-dom";
+import { Switch, Route, useLocation, useHistory } from "react-router-dom";
+import { isEqual } from "lodash";
 import { Breadcrumbs } from "./components/common/Breadcrumbs";
 import { Routes } from "./components/common/Routes";
 import { Login } from "./components/pages/Login";
 import { useSystemInfoFetch } from "./utils/fetchWrappers/systemInfoFetch";
 import { notifyError } from "./utils/error";
 import {
+  SidebarType,
   SlidingSidebar,
   SlidingSidebarProps,
 } from "./components/common/SlidingSidebar";
@@ -28,6 +30,7 @@ import {
   AppProps,
   UserInfo,
 } from "./types/declarations/app";
+import { VersionDetailsProps } from "./components/common/SlidingSidebar/partials/VersionDetails";
 import AccountMenu from "./components/common/AccountMenu";
 import { getBaseHref } from "./utils";
 import logo from "./images/icon.png";
@@ -42,6 +45,7 @@ export const AppContext = React.createContext<AppContextProps>({
   host: "",
   namespace: "",
   isPlugin: false,
+  isReadOnly: false,
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   setSidebarProps: () => {},
   errors: [],
@@ -63,14 +67,6 @@ const EXCLUDE_APP_BARS: { [key: string]: boolean } = {
 };
 
 function App(props: AppProps) {
-  // TODO remove, used for testing ns only installation
-  // const { systemInfo, error: systemInfoError } = {
-  //   systemInfo: {
-  //     namespaced: true,
-  //     managedNamespace: "test",
-  //   },
-  //   error: undefined,
-  // };
   const { hostUrl = "", namespace = "" } = props;
   const pageRef = useRef<any>();
   const [pageWidth, setPageWidth] = useState(0);
@@ -82,6 +78,9 @@ function App(props: AppProps) {
   >();
   const [errors, setErrors] = useState<AppError[]>([]);
   const [userInfo, setUserInfo] = useState<UserInfo | undefined>();
+  const [versionDetails, setVersionDetails] = useState<
+    VersionDetailsProps | undefined
+  >(undefined);
   const {
     systemInfo,
     error: systemInfoError,
@@ -89,6 +88,29 @@ function App(props: AppProps) {
   } = useSystemInfoFetch({ host: hostUrl });
 
   const location = useLocation();
+  const history = useHistory();
+
+  useEffect(() => {
+    if (systemInfo?.namespaced && systemInfo?.managedNamespace) {
+      const query = new URLSearchParams(location.search);
+      const ns = query.get("namespace") || "";
+
+      if (location.pathname === "/" && ns !== systemInfo.managedNamespace) {
+        history.push(`?namespace=${systemInfo.managedNamespace}`);
+      }
+    }
+    if (systemInfo?.version) {
+      const parts = systemInfo?.version.split(", ");
+      const kv_pairs: { [key: string]: string } = {};
+      for (const part of parts) {
+        const [key, value] = part.split(": ");
+        kv_pairs[key.trim()] = value.trim() === "" ? "unknown" : value.trim();
+      }
+      if (!isEqual(versionDetails, kv_pairs)) {
+        setVersionDetails(kv_pairs);
+      }
+    }
+  }, [location, history, systemInfo]);
 
   useEffect(() => {
     // Attempt to load user info on app load
@@ -164,6 +186,24 @@ function App(props: AppProps) {
     setErrors([]);
   }, []);
 
+  const handleVersionDetails = useCallback(() => {
+    setSidebarProps({
+      type: SidebarType.VERSION_DETAILS,
+      slide: false,
+      pageWidth,
+      versionDetailsProps: {
+        Version: versionDetails?.Version,
+        BuildDate: versionDetails?.BuildDate,
+        GitCommit: versionDetails?.GitCommit,
+        GitTag: versionDetails?.GitTag,
+        GitTreeState: versionDetails?.GitTreeState,
+        GoVersion: versionDetails?.GoVersion,
+        Compiler: versionDetails?.Compiler,
+        Platform: versionDetails?.Platform,
+      },
+    });
+  }, [versionDetails, pageWidth]);
+
   const routes = useMemo(() => {
     if (loading) {
       // System info loading
@@ -213,7 +253,7 @@ function App(props: AppProps) {
             <Routes managedNamespace={systemInfo.managedNamespace} />
           </Route>
           <Route path="*">
-            <main style={{ padding: "1rem" }}>
+            <main style={{ padding: "1.6rem", fontSize: "1.6rem" }}>
               <p>There's nothing here!</p>
             </main>
           </Route>
@@ -230,7 +270,7 @@ function App(props: AppProps) {
           <Routes />
         </Route>
         <Route path="*">
-          <main style={{ padding: "1rem" }}>
+          <main style={{ padding: "1.6rem", fontSize: "1.6rem" }}>
             <p>There's nothing here!</p>
           </main>
         </Route>
@@ -247,6 +287,7 @@ function App(props: AppProps) {
           host: hostUrl,
           namespace,
           isPlugin: false,
+          isReadOnly: systemInfo?.isReadOnly || false,
           sidebarProps,
           setSidebarProps,
           errors,
@@ -256,7 +297,7 @@ function App(props: AppProps) {
           setUserInfo,
         }}
       >
-        <ScopedCssBaseline>
+        <ScopedCssBaseline sx={{ fontFamily: "Avenir, sans-serif" }}>
           <Box
             sx={{
               display: "flex",
@@ -268,7 +309,7 @@ function App(props: AppProps) {
             {!EXCLUDE_APP_BARS[location.pathname] && (
               <Box
                 sx={{
-                  height: "4rem",
+                  height: "6.4rem",
                 }}
               >
                 <AppBar
@@ -279,11 +320,31 @@ function App(props: AppProps) {
                 >
                   <Toolbar>
                     <img src={logo} alt="logo" className={"logo"} />
-                    <img
-                      src={textLogo}
-                      alt="text-logo"
-                      className={"text-logo"}
-                    />
+
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        mt: versionDetails?.Version ? "1.5rem" : 0,
+                      }}
+                    >
+                      <img
+                        src={textLogo}
+                        alt="text-logo"
+                        className={"text-logo"}
+                      />
+                      <Box
+                        sx={{
+                          cursor: "pointer",
+                          ml: "1.296rem",
+                          color: "#A9A9A9",
+                        }}
+                        onClick={handleVersionDetails}
+                      >
+                        {versionDetails?.Version}
+                      </Box>
+                    </Box>
+
                     <Box sx={{ flexGrow: 1 }} />
                     <AccountMenu />
                   </Toolbar>
@@ -297,11 +358,11 @@ function App(props: AppProps) {
                   flexDirection: "column",
                   width: "100%",
                   overflow: "auto",
-                  height: "2.0625rem",
+                  height: "3.3rem",
                   background: "#F8F8FB",
                   zIndex: (theme) => theme.zIndex.drawer - 1,
                   position: "fixed",
-                  top: "3.75rem",
+                  top: "6rem",
                 }}
               >
                 <Breadcrumbs />
@@ -314,7 +375,7 @@ function App(props: AppProps) {
                 width: "100%",
                 height: "100%",
                 overflow: "auto",
-                marginTop: EXCLUDE_CRUMBS[location.pathname] ? 0 : "2.5rem",
+                marginTop: EXCLUDE_CRUMBS[location.pathname] ? 0 : "4rem",
               }}
             >
               {routes}

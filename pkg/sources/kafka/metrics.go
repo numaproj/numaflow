@@ -48,5 +48,5 @@ var kafkaSourceOffsetAckErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 var kafkaPending = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "kafka_source",
 	Name:      "pending_total",
-	Help:      "number of messages pending",
+	Help:      "Number of messages pending",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, "topic", "consumer"})

@@ -6,8 +6,8 @@ spec:
   sideInputs:
     - name: myticker
       container:
-        # see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/sideInput-function
-        image: "quay.io/numaio/numaflow-sideinput/sideinput-sink-e2e-test:latest"
+        # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/sideinput_function
+        image: quay.io/numaio/numaflow-go/sideinput-function:stable
         imagePullPolicy: Always
       trigger:
         schedule: "@every 5s"
@@ -19,20 +19,20 @@ spec:
       source:
         udsource:
           container:
-            # see https://github.com/numaproj-contrib/e2e-tests-go/tree/main/simple-source-with-sideinput
-            image: "quay.io/numaio/numaflow-source/simple_source_with_sideinput:latest"
+            # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/simple_source_with_sideinput
+            image: quay.io/numaio/numaflow-go/simple-source-with-sideinput:stable
+            imagePullPolicy: Always
       sideInputs:
         - myticker
     - name: redis-uds
       sink:
         udsink:
           container:
-            # see https://github.com/numaproj/numaflow-sinks/tree/78693ec48a5b8bc7ca7be2898dd8dd722392b53a/redis-e2e-test-sink
-            image: "quay.io/numaio/numaflow-sink/redis-e2e-test-sink:latest"
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis-sink
+            image: quay.io/numaio/numaflow-go/redis-sink:stable
+            imagePullPolicy: Always
       sideInputs:
         - myticker
   edges:
     - from: in
       to: redis-uds
-
-

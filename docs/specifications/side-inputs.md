@@ -1,6 +1,6 @@
 # Side Inputs
 
-Side Inputs allow the user defined functions (including UDF, UDSink, Transformer, etc.) to access slow updated data or configuration (such as database, file system, etc.) without needing to load it during each message processing. Side Inputs are read-only and can be used in both batch and streaming jobs.
+Side Inputs allow the user-defined functions (including UDF, UDSink, Transformer, etc.) to access slow updated data or configuration (such as database, file system, etc.) without needing to load it during each message processing. Side Inputs are read-only and can be used in both batch and streaming jobs.
 
 ## Requirements
 
@@ -47,8 +47,8 @@ A pipeline may have multiple Side Inputs sources, each of them will have a Side 
 Each of the Side Inputs Manager pods contains:
 
 - An init container, which checks if the data store is ready.
-- A user defined container, which runs a predefined Numaflow SDK to start a service, calling a user implemented function to get Side Input data.
-- A numa container, which runs a cron like job to call the service in the user defined container, and store the returned data in the data store.
+- A user-defined container, which runs a predefined Numaflow SDK to start a service, calling a user implemented function to get Side Input data.
+- A numa container, which runs a cron like job to call the service in the user-defined container, and store the returned data in the data store.
 
 ![Diagram](../assets/side-inputs-manager.png)
 
@@ -58,7 +58,7 @@ The communication protocol between the 2 containers could be based on UDS or FIF
 
 Side Inputs Manager needs to run with Active-Passive HA, which requires a leader election mechanism support. Kubernetes has a native leader election API backed by etcd, but it requires extra RBAC privileges to use it.
 
-Considering a similar leader election mechanism is needed in some other scenarios such as Active-Passive User Defined Source, a proposal is to implement our own leader election mechanism by leveraging ISB Service.
+Considering a similar leader election mechanism is needed in some other scenarios such as Active-Passive User-defined Source, a proposal is to implement our own leader election mechanism by leveraging ISB Service.
 
 #### Why NOT CronJob?
 
@@ -70,11 +70,14 @@ Using K8s CronJob/Job will be a [challenge](https://github.com/istio/istio/issue
 
 ![Diagram](../assets/side-inputs-vertex-pod.png)
 
-When Side Inputs is enabled for a pipeline, each of its vertex pods will have a second init container added, the init container will have a shared volume (emptyDir) mounted, and the same volume will be mounted to the User Defined Function/Sink/Transformer container. The init container reads from the data store, and saves to the shared volume.
+When Side Inputs is enabled for a pipeline, each of its vertex pods will have a second init container added,
+the init container will have a shared volume (emptyDir) mounted,
+and the same volume will be mounted to the User-defined Function/Sink/Transformer container.
+The init container reads from the data store, and saves to the shared volume.
 
 A sidecar container will also be injected by the controller, and it mounts the same volume as above. The sidecar runs a service provided by numaflow, watching the Side Inputs data from the data store, if there’s any update, reads the data and updates the shared volume.
 
-In the User Defined Function/Sink/Sink container, a helper function will be provided by Numaflow SDK, to return the Side Input data. The helper function caches the Side Inputs data in the memory, but performs thread safe updates if it watches the changes in the shared volume.
+In the User-defined Function/Sink/Sink container, a helper function will be provided by Numaflow SDK, to return the Side Input data. The helper function caches the Side Inputs data in the memory, but performs thread safe updates if it watches the changes in the shared volume.
 
 ### Numaflow SDK
 

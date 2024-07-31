@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package ewma
 
 import (
@@ -37,3 +53,46 @@ func TestSimpleEWMA(t *testing.T) {
 }
 
 // TestSimpleEWMAInit tests the SimpleEWMA initialization.
+func TestSimpleEWMAAdd(t *testing.T) {
+	ewma := NewSimpleEWMA()
+
+	// Test initialization
+	ewma.Add(10)
+	assert.Equal(t, 10.0, ewma.Get())
+}
+
+func TestSimpleEWMAGet(t *testing.T) {
+	ewma := NewSimpleEWMA()
+
+	// Test get before initialization
+	assert.Equal(t, 0.0, ewma.Get())
+}
+
+func TestSimpleEWMAReset(t *testing.T) {
+	ewma := NewSimpleEWMA()
+
+	ewma.Add(100)
+	assert.Equal(t, 100.0, ewma.Get())
+
+	ewma.Reset()
+	assert.Equal(t, 0.0, ewma.Get())
+
+	// Test that the next Add after Reset initializes properly
+	ewma.Add(200)
+	assert.Equal(t, 200.0, ewma.Get())
+}
+
+func TestSimpleEWMASet(t *testing.T) {
+	ewma := NewSimpleEWMA()
+
+	ewma.Set(75)
+	assert.Equal(t, 75.0, ewma.Get())
+}
+
+func TestSimpleEWMAWithCustomAlpha(t *testing.T) {
+	ewma := NewSimpleEWMA(10) // span of 10 gives alpha of 0.18181818...
+
+	ewma.Add(50)
+	ewma.Add(100)
+	assert.InDelta(t, 59.09090909, ewma.Get(), 0.00000001)
+}

@@ -70,18 +70,18 @@ resources:
 openapi:
   path: https://raw.githubusercontent.com/numaproj/numaflow/main/api/json-schema/schema.json
 
-patchesStrategicMerge:
-  - |-
-    apiVersion: numaflow.numaproj.io/v1alpha1
-    kind: Pipeline
-    metadata:
-      name: my-pipeline
-    spec:
-      vertices:
-        - name: in
-          source:
-            generator:
-              rpu: 500
+patches:
+  - patch: |-
+      apiVersion: numaflow.numaproj.io/v1alpha1
+      kind: Pipeline
+      metadata:
+        name: my-pipeline
+      spec:
+        vertices:
+          - name: in
+            source:
+              generator:
+                rpu: 500
 ```
 
 See the full example [here](https://github.com/numaproj/numaflow/tree/main/docs/user-guide/reference/kustomize/examples/patch).

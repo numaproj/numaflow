@@ -190,8 +190,8 @@ export function Login() {
         <Box
           style={{
             alignItems: "center",
-            marginTop: "5rem",
-            marginBottom: "5rem",
+            marginTop: "8rem",
+            marginBottom: "8rem",
             display: "flex",
             flexDirection: "column",
             height: "100%",
@@ -237,8 +237,8 @@ export function Login() {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          marginTop: "5rem",
-          marginBottom: "5rem",
+          marginTop: "8rem",
+          marginBottom: "8rem",
         }}
         className="formContainer"
       >
@@ -255,7 +255,7 @@ export function Login() {
           <Box
             style={{
               color: "#fff",
-              fontSize: "2rem",
+              fontSize: "3.2rem",
               width: "100%",
               alignItems: "center",
               display: "flex",
@@ -267,7 +267,7 @@ export function Login() {
           <Box
             style={{
               width: "100%",
-              margin: "2rem 0",
+              margin: "3.2rem 0",
               display: "flex",
               flexDirection: "column",
             }}
@@ -277,7 +277,7 @@ export function Login() {
                 display: "flex",
                 flexDirection: "column",
                 color: "#fff",
-                borderRadius: "0 3.125rem 3.125rem 0",
+                borderRadius: "0 5rem 5rem 0",
                 borderTop: "1px solid #0077C5",
               }}
             >
@@ -285,11 +285,11 @@ export function Login() {
                 sx={{
                   display: "flex",
                   flexDirection: "column",
-                  paddingBottom: "0.625rem",
-                  paddingTop: "0.5rem",
-                  paddingRight: "2rem",
-                  marginLeft: "2rem",
-                  borderRadius: "0 3.125rem 3.125rem 0",
+                  paddingBottom: "0.1rem",
+                  paddingTop: "0.8rem",
+                  paddingRight: "3.2rem",
+                  marginLeft: "3.2rem",
+                  borderRadius: "0 5rem 5rem 0",
                   borderRight: "1px solid #0077C5",
                   borderBottom: "1px solid #0077C5",
                 }}
@@ -308,22 +308,22 @@ export function Login() {
                 display: "flex",
                 flexDirection: "column",
                 color: "#fff",
-                borderRadius: "3.125rem0 0 3.125rem",
+                borderRadius: "5rem0 0 5rem",
                 borderBottom: "1px solid #0077C5",
-                marginTop: "-0.0625rem",
+                marginTop: "-0.1rem",
               }}
             >
               <Box
                 sx={{
                   display: "flex",
                   flexDirection: "column",
-                  paddingTop: "0.625rem",
-                  paddingBottom: "0.5rem",
-                  paddingLeft: "2rem",
-                  borderRadius: "3.125rem 0 0 3.125rem",
+                  paddingTop: "1rem",
+                  paddingBottom: "0.8rem",
+                  paddingLeft: "3.2rem",
+                  borderRadius: "5rem 0 0 5rem",
                   borderLeft: "1px solid #0077C5",
                   borderTop: "1px solid #0077C5",
-                  width: "16.9375rem",
+                  width: "27.1rem",
                 }}
               >
                 <label className="loginFormLabel">Password:</label>
@@ -341,7 +341,7 @@ export function Login() {
                 flexDirection: "column",
                 color: "#fff",
                 alignItems: "center",
-                marginTop: "2rem",
+                marginTop: "3.2rem",
               }}
               className="flex column"
             >
@@ -375,13 +375,10 @@ export function Login() {
               width: "100%",
               alignItems: "center",
               justifyContent: "center",
-              marginTop: "2rem",
+              marginTop: "3.2rem",
             }}
           >
-            <img
-              src={gitIcon}
-              style={{ width: "4.125rem", height: "4.125rem" }}
-            />
+            <img src={gitIcon} style={{ width: "6rem", height: "6rem" }} />
             <Button
               onClick={handleLoginClick}
               variant="text"
@@ -390,7 +387,7 @@ export function Login() {
                 color: "#0077C5",
                 fontWeight: "500",
                 textDecoration: "underline",
-                fontSize: "1.25rem",
+                fontSize: "2rem",
               }}
             >
               Login via Github
@@ -423,13 +420,13 @@ export function Login() {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          marginTop: "5rem",
+          marginTop: "8rem",
         }}
       >
         <Box
           sx={{
             color: "#fff",
-            fontSize: "2rem",
+            fontSize: "3.2rem",
             display: "flex",
             flexDirection: "row",
           }}
@@ -439,7 +436,7 @@ export function Login() {
         <Box
           sx={{
             color: "#fff",
-            fontSize: "2rem",
+            fontSize: "3.2rem",
             display: "flex",
             flexDirection: "row",
           }}
@@ -456,8 +453,8 @@ export function Login() {
         display: "flex",
         flexDirection: "row",
         flexGrow: "1",
-        width: "100%",
-        height: "100%",
+        width: "100vw",
+        height: "100vh",
         backgroundColor: "#001D3C",
       }}
     >

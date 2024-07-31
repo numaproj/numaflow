@@ -1,6 +1,6 @@
-A `Pipeline` consists of multiple vertices, `Source`, `Sink` and `UDF(User Defined Functions)`.
+A `Pipeline` consists of multiple vertices, `Source`, `Sink` and `UDF(user-defined functions)`.
 
-User Defined Functions (UDF) is the vertex where users can run custom code to 
+User-defined functions (UDF) is the vertex where users can run custom code to 
 transform the data. Data processing in the UDF is supposed to be idempotent.
 
 UDF runs as a sidecar container in a Vertex Pod, processes the received data. 

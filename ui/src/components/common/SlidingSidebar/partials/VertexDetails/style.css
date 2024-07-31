@@ -1,12 +1,12 @@
 .vertex-details-header-text {
-  font-size: 1.25rem;
+  font-size: 2rem;
   font-style: normal;
   font-weight: 500;
-  margin-left: 1rem;
+  margin-left: 1.6rem;
 }
 
 .vertex-details-header-icon {
-  width: 2.25rem;
+  width: 3.6rem;
 }
 
 .vertex-details-tab-panel {
@@ -14,7 +14,7 @@
 }
 
 .vertex-details-tab.MuiTab-root {
-  font-size: 0.875rem !important;
+  font-size: 1.4rem !important;
   font-style: normal !important;
   font-weight: 600 !important;
   color: #6B6C72 !important;
@@ -22,7 +22,7 @@
 }
 
 .vertex-details-tab-selected.MuiTab-root {
-  font-size: 0.875rem !important;
+  font-size: 1.4rem !important;
   font-style: normal !important;
   font-weight: 600 !important;
   color: #393A3D !important;

@@ -51,8 +51,9 @@ export function PipelineCard({
   isbData,
   refresh,
 }: PipelineCardProps) {
-  const { addError, setSidebarProps, systemInfo, host } =
+  const { addError, setSidebarProps, host, isReadOnly } =
     useContext<AppContextProps>(AppContext);
+  const [viewOption] = useState("view");
   const [editOption] = useState("edit");
   const [deleteOption] = useState("delete");
   const [deleteProps, setDeleteProps] = useState<DeleteProps | undefined>();
@@ -86,6 +87,37 @@ export function PipelineCard({
     // Close sidebar
     setSidebarProps(undefined);
   }, [setSidebarProps, refresh]);
+
+  const handleViewChange = useCallback(
+    (event: SelectChangeEvent<string>) => {
+      if (event.target.value === "pipeline" && setSidebarProps) {
+        setSidebarProps({
+          type: SidebarType.PIPELINE_UPDATE,
+          specEditorProps: {
+            titleOverride: `View Pipeline: ${data?.name}`,
+            initialYaml: statusData?.pipeline,
+            namespaceId: namespace,
+            pipelineId: data?.name,
+            viewType: ViewType.READ_ONLY,
+            onUpdateComplete: handleUpdateComplete,
+          },
+        });
+      } else if (event.target.value === "isb" && setSidebarProps) {
+        setSidebarProps({
+          type: SidebarType.ISB_UPDATE,
+          specEditorProps: {
+            titleOverride: `View ISB Service: ${isbData?.name}`,
+            initialYaml: isbData?.isbService,
+            namespaceId: namespace,
+            isbId: isbData?.name,
+            viewType: ViewType.READ_ONLY,
+            onUpdateComplete: handleUpdateComplete,
+          },
+        });
+      }
+    },
+    [setSidebarProps, handleUpdateComplete, isbData, data]
+  );
 
   const handleEditChange = useCallback(
     (event: SelectChangeEvent<string>) => {
@@ -273,7 +305,7 @@ export function PipelineCard({
           flexDirection: "column",
           // padding: "1.5rem",
           width: "100%",
-          borderRadius: "1rem",
+          borderRadius: "1.6rem",
         }}
       >
         <Box
@@ -281,10 +313,10 @@ export function PipelineCard({
             display: "flex",
             flexDirection: "row",
             flexGrow: 1,
-            paddingTop: "1rem",
-            paddingLeft: "1rem",
-            paddingRight: "1rem",
-            paddingBottom: "0.8rem",
+            paddingTop: "1.6rem",
+            paddingLeft: "1.6rem",
+            paddingRight: "1.6rem",
+            paddingBottom: "1.28rem",
             alignItems: "center",
           }}
         >
@@ -298,15 +330,11 @@ export function PipelineCard({
               display: "flex",
               flexDirection: "row",
               flexGrow: 1,
-              marginLeft: "1rem",
+              marginLeft: "1.6rem",
             }}
           >
             <Link
-              to={
-                systemInfo?.namespaced
-                  ? `?pipeline=${data.name}`
-                  : `?namespace=${namespace}&pipeline=${data.name}`
-              }
+              to={`?namespace=${namespace}&pipeline=${data.name}`}
               style={
                 pipelineStatus === DELETING || !pipelineAbleToLoad
                   ? { pointerEvents: "none", textDecoration: "none" }
@@ -316,105 +344,119 @@ export function PipelineCard({
               <span className="pipeline-card-name">{data?.name}</span>
             </Link>
           </Box>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-              flexGrow: 1,
-              justifyContent: "flex-end",
-              alignItems: "center",
-              height: "4rem",
-            }}
-          >
-            {error && statusPayload ? (
-              <div
-                style={{
-                  borderRadius: "0.8125rem",
-                  width: "14.25rem",
-                  background: "#F0F0F0",
-                  display: "flex",
-                  flexDirection: "row",
-                }}
-              >
-                {error}
-              </div>
-            ) : successMessage &&
-              statusPayload &&
-              ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
-                statusData?.pipeline?.status?.phase !== PAUSED) ||
-                (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
-                  statusData?.pipeline?.status?.phase !== RUNNING)) ? (
-              <div
-                style={{
-                  borderRadius: "0.8125rem",
-                  width: "14.25rem",
-                  background: "#F0F0F0",
-                  display: "flex",
-                  flexDirection: "row",
-                  marginLeft: "1rem",
-                  padding: "0.5rem",
-                  color: "#516F91",
-                  alignItems: "center",
-                }}
-              >
-                <CircularProgress
-                  sx={{
-                    width: "1.25rem !important",
-                    height: "1.25rem !important",
-                  }}
-                />{" "}
-                <Box
-                  sx={{
+          {!isReadOnly && (
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                flexGrow: 1,
+                justifyContent: "flex-end",
+                alignItems: "center",
+                height: "6.4rem",
+              }}
+            >
+              {error && statusPayload ? (
+                <div
+                  style={{
+                    borderRadius: "1.3rem",
+                    padding: "0.8rem",
+                    height: "6.4rem",
+                    width: "22.8rem",
+                    background: "#F0F0F0",
                     display: "flex",
                     flexDirection: "column",
+                    fontSize: "1.6rem",
+                    overflowX: "hidden",
+                    overflowY: "scroll",
+                    textOverflow: "ellipsis",
+                    wordWrap: "break-word",
+                    scrollbarWidth: "none",
+                    msOverflowStyle: "none",
                   }}
                 >
-                  <span style={{ marginLeft: "1rem" }}>
-                    {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
-                      ? "Pipeline Pausing..."
-                      : "Pipeline Resuming..."}
-                  </span>
-                  <span style={{ marginLeft: "1rem" }}>{timerDateStamp}</span>
-                </Box>
-              </div>
-            ) : (
-              ""
-            )}
+                  {error}
+                </div>
+              ) : successMessage &&
+                statusPayload &&
+                ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
+                  statusData?.pipeline?.status?.phase !== PAUSED) ||
+                  (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
+                    statusData?.pipeline?.status?.phase !== RUNNING)) ? (
+                <div
+                  style={{
+                    borderRadius: "1.3rem",
+                    width: "22.8rem",
+                    background: "#F0F0F0",
+                    display: "flex",
+                    flexDirection: "row",
+                    marginLeft: "1.6rem",
+                    padding: "0.8rem",
+                    color: "#516F91",
+                    alignItems: "center",
+                  }}
+                >
+                  <CircularProgress
+                    sx={{
+                      width: "2rem !important",
+                      height: "2rem !important",
+                    }}
+                  />{" "}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                  >
+                    <span style={{ marginLeft: "1.6rem", fontSize: "1.6rem" }}>
+                      {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
+                        ? "Pipeline Pausing..."
+                        : "Pipeline Resuming..."}
+                    </span>
+                    <span style={{ marginLeft: "1.6rem", fontSize: "1.6rem" }}>
+                      {timerDateStamp}
+                    </span>
+                  </Box>
+                </div>
+              ) : (
+                ""
+              )}
 
-            <Button
-              variant="contained"
-              sx={{
-                marginRight: "1.3rem",
-                marginLeft: "1rem",
-                height: "2.125rem",
-              }}
-              onClick={handlePlayClick}
-              disabled={
-                statusData?.pipeline?.status?.phase === RUNNING ||
-                pipelineStatus === DELETING
-              }
-            >
-              Resume
-            </Button>
-            <Button
-              variant="contained"
-              sx={{ marginRight: "4.875rem", height: "2.125rem" }}
-              onClick={handlePauseClick}
-              disabled={
-                statusData?.pipeline?.status?.phase === PAUSED ||
-                statusData?.pipeline?.status?.phase === PAUSING ||
-                pipelineStatus === DELETING
-              }
-            >
-              Pause
-            </Button>
-          </Box>
+              <Button
+                variant="contained"
+                sx={{
+                  marginRight: "2.08rem",
+                  marginLeft: "1.6rem",
+                  height: "3.4rem",
+                  fontSize: "1.4rem",
+                }}
+                onClick={handlePlayClick}
+                disabled={
+                  statusData?.pipeline?.status?.phase === RUNNING ||
+                  pipelineStatus === DELETING
+                }
+              >
+                Resume
+              </Button>
+              <Button
+                variant="contained"
+                sx={{
+                  marginRight: "7.8rem",
+                  height: "3.4rem",
+                  fontSize: "1.4rem",
+                }}
+                onClick={handlePauseClick}
+                disabled={
+                  statusData?.pipeline?.status?.phase === PAUSED ||
+                  statusData?.pipeline?.status?.phase === PAUSING ||
+                  pipelineStatus === DELETING
+                }
+              >
+                Pause
+              </Button>
+            </Box>
+          )}
           <Link
-            to={
-              systemInfo?.namespaced
-                ? `?pipeline=${data.name}`
-                : `?namespace=${namespace}&pipeline=${data.name}`
-            }
+            to={`?namespace=${namespace}&pipeline=${data.name}`}
             style={
               pipelineStatus === DELETING || !pipelineAbleToLoad
                 ? { pointerEvents: "none", textDecoration: "none" }
@@ -423,11 +465,13 @@ export function PipelineCard({
           >
             {pipelineAbleToLoad ? (
               <ArrowForwardIcon
-                sx={
-                  pipelineStatus === DELETING
+                sx={{
+                  height: "2.4rem",
+                  width: "2.4rem",
+                  ...(pipelineStatus === DELETING
                     ? { color: "#D52B1E" }
-                    : { color: "#0077C5" }
-                }
+                    : { color: "#0077C5" }),
+                }}
               />
             ) : (
               <CircularProgress size={24} />
@@ -441,11 +485,11 @@ export function PipelineCard({
             background: "#F9F9F9",
             flexDirection: "row",
             flexGrow: 1,
-            padding: "1rem",
+            padding: "1.6rem",
             paddingTop: "0",
             width: "100%",
-            borderBottomLeftRadius: "1rem",
-            borderBottomRightRadius: "1rem",
+            borderBottomLeftRadius: "1.6rem",
+            borderBottomRightRadius: "1.6rem",
           }}
         >
           <Grid
@@ -453,7 +497,7 @@ export function PipelineCard({
             spacing={2}
             sx={{
               background: "#F9F9F9",
-              marginTop: "0.625rem",
+              marginTop: "1rem",
               marginLeft: "0",
               flexWrap: "no-wrap",
             }}
@@ -462,8 +506,9 @@ export function PipelineCard({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
+                paddingTop: "1.6rem",
+                paddingLeft: "1.6rem",
+                fontSize: "1.6rem",
               }}
             >
               <span>Status:</span>
@@ -473,8 +518,8 @@ export function PipelineCard({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
+                paddingTop: "1.6rem",
+                paddingLeft: "1.6rem",
               }}
             >
               <img
@@ -496,8 +541,10 @@ export function PipelineCard({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
+                paddingTop: "1.6rem",
+                paddingLeft: "1.6rem",
+                fontSize: "1.6rem",
+                marginTop: "0.1rem",
               }}
             >
               <span>{StatusString[pipelineStatus]}</span>
@@ -515,7 +562,7 @@ export function PipelineCard({
             spacing={2}
             sx={{
               background: "#F9F9F9",
-              marginTop: "0.625rem",
+              marginTop: "1rem",
               flexWrap: "no-wrap",
             }}
           >
@@ -523,8 +570,9 @@ export function PipelineCard({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
+                paddingTop: "1.6rem",
+                paddingLeft: "1.6rem",
+                fontSize: "1.6rem",
               }}
             >
               <span style={{ fontWeight: "500" }}>ISB Services</span>
@@ -535,12 +583,19 @@ export function PipelineCard({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
+                paddingTop: "1.6rem",
+                paddingLeft: "1.6rem",
+                marginTop: "0.9rem",
               }}
             >
               <Box sx={{ display: "flex", flexDirection: "row" }}>&nbsp;</Box>
-              <Box sx={{ display: "flex", flexDirection: "row" }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  fontSize: "1.6rem",
+                }}
+              >
                 <img
                   src={IconsStatusMap[isbStatus]}
                   alt="Status"
@@ -548,7 +603,13 @@ export function PipelineCard({
                 />
                 &nbsp; &nbsp;<span>{ISBStatusString[isbStatus]}</span>
               </Box>
-              <Box sx={{ display: "flex", flexDirection: "row" }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  fontSize: "1.6rem",
+                }}
+              >
                 <img
                   src={IconsStatusMap[isbHealthStatus]}
                   alt="Health"
@@ -563,7 +624,7 @@ export function PipelineCard({
             spacing={2}
             sx={{
               background: "#F9F9F9",
-              marginTop: "0.625rem",
+              marginTop: "1rem",
               flexWrap: "no-wrap",
             }}
           >
@@ -571,8 +632,9 @@ export function PipelineCard({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
+                paddingTop: "1.6rem",
+                paddingLeft: "1.6rem",
+                fontSize: "1.6rem",
               }}
             >
               <span>Name:</span>
@@ -583,8 +645,9 @@ export function PipelineCard({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
+                paddingTop: "1.6rem",
+                paddingLeft: "1.6rem",
+                fontSize: "1.6rem",
               }}
             >
               <span>{isbData?.name}</span>
@@ -597,54 +660,97 @@ export function PipelineCard({
             spacing={0.5}
             sx={{
               background: "#F9F9F9",
-              marginTop: "0.625rem",
+              marginTop: "1rem",
               alignItems: "center",
               justifyContent: "end",
-              marginRight: "0.75rem",
+              marginRight: "1.2rem",
             }}
           >
-            <Grid item>
-              <Select
-                defaultValue="edit"
-                onChange={handleEditChange}
-                value={editOption}
-                variant="outlined"
-                data-testid="pipeline-card-edit-select"
-                disabled={pipelineStatus === DELETING}
-                sx={{
-                  color: "#0077C5",
-                  height: "2.125rem",
-                  background: "#fff",
-                  marginRight: "1.25rem",
-                }}
-              >
-                <MenuItem sx={{ display: "none" }} hidden value="edit">
-                  EDIT
-                </MenuItem>
-                <MenuItem value="pipeline">Pipeline</MenuItem>
-                <MenuItem value="isb">ISB Service</MenuItem>
-              </Select>
-            </Grid>
-            <Grid item>
-              <Select
-                defaultValue="delete"
-                onChange={handleDeleteChange}
-                value={deleteOption}
-                disabled={pipelineStatus === DELETING}
-                sx={{
-                  color: "#0077C5",
-                  height: "2.125rem",
-                  marginRight: "4rem",
-                  background: "#fff",
-                }}
-              >
-                <MenuItem value="delete" sx={{ display: "none" }}>
-                  DELETE
-                </MenuItem>
-                <MenuItem value="pipeline">Pipeline</MenuItem>
-                <MenuItem value="isb">ISB Service</MenuItem>
-              </Select>
-            </Grid>
+            {isReadOnly && (
+              <Grid item>
+                <Select
+                  defaultValue="view"
+                  onChange={handleViewChange}
+                  value={viewOption}
+                  variant="outlined"
+                  data-testid="pipeline-card-view-select"
+                  disabled={pipelineStatus === DELETING}
+                  sx={{
+                    color: "#0077C5",
+                    height: "3.4rem",
+                    background: "#fff",
+                    marginRight: "2rem",
+                    fontSize: "1.6rem",
+                  }}
+                >
+                  <MenuItem sx={{ display: "none" }} hidden value="view">
+                    VIEW
+                  </MenuItem>
+                  <MenuItem value="pipeline" sx={{ fontSize: "1.6rem" }}>
+                    Pipeline
+                  </MenuItem>
+                  <MenuItem value="isb" sx={{ fontSize: "1.6rem" }}>
+                    ISB Service
+                  </MenuItem>
+                </Select>
+              </Grid>
+            )}
+            {!isReadOnly && (
+              <Grid item>
+                <Select
+                  defaultValue="edit"
+                  onChange={handleEditChange}
+                  value={editOption}
+                  variant="outlined"
+                  data-testid="pipeline-card-edit-select"
+                  disabled={pipelineStatus === DELETING}
+                  sx={{
+                    color: "#0077C5",
+                    height: "3.4rem",
+                    background: "#fff",
+                    marginRight: "2rem",
+                    fontSize: "1.6rem",
+                  }}
+                >
+                  <MenuItem sx={{ display: "none" }} hidden value="edit">
+                    EDIT
+                  </MenuItem>
+                  <MenuItem value="pipeline" sx={{ fontSize: "1.6rem" }}>
+                    Pipeline
+                  </MenuItem>
+                  <MenuItem value="isb" sx={{ fontSize: "1.6rem" }}>
+                    ISB Service
+                  </MenuItem>
+                </Select>
+              </Grid>
+            )}
+            {!isReadOnly && (
+              <Grid item>
+                <Select
+                  defaultValue="delete"
+                  onChange={handleDeleteChange}
+                  value={deleteOption}
+                  disabled={pipelineStatus === DELETING}
+                  sx={{
+                    color: "#0077C5",
+                    height: "3.4rem",
+                    marginRight: "6.4rem",
+                    background: "#fff",
+                    fontSize: "1.6rem",
+                  }}
+                >
+                  <MenuItem value="delete" sx={{ display: "none" }}>
+                    DELETE
+                  </MenuItem>
+                  <MenuItem value="pipeline" sx={{ fontSize: "1.6rem" }}>
+                    Pipeline
+                  </MenuItem>
+                  <MenuItem value="isb" sx={{ fontSize: "1.6rem" }}>
+                    ISB Service
+                  </MenuItem>
+                </Select>
+              </Grid>
+            )}
           </Grid>
         </Box>
         {deleteProps && (

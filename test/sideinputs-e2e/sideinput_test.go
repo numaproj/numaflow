@@ -114,7 +114,7 @@ func (s *SideInputSuite) TestSimpleReduceSideInputPipeline() {
 	}()
 
 	// here reduce-side-input text is generated based on reduce and side input data.
-	w.Expect().SinkContains("sink", "reduce-side-input")
+	w.Expect().SinkContains("sink", "reduce_sideinput")
 
 	done <- struct{}{}
 }

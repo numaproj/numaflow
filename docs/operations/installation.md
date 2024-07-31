@@ -53,7 +53,7 @@ If there are multiple namespace scoped installations in one cluster, potentially
 # Minimal CRD
 kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/main/config/advanced-install/minimal-crds.yaml
 # Controller in namespaced scope
-kubectl apply -n numaflow-system -f https://github.com/numaproj/numaflow/blob/main/config/advanced-install/namespaced-controller-wo-crds.yaml
+kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/stable/config/advanced-install/namespaced-controller-wo-crds.yaml
 ```
 
 If you use [kustomize](https://kustomize.io/), `kustomization.yaml` looks like below.
@@ -100,6 +100,31 @@ Similarly, another approach is to add `--managed-namespace` and the specific nam
 
 By default, the Numaflow controller is installed with `Active-Passive` HA strategy enabled, which means you can run the controller with multiple replicas (defaults to 1 in the manifests).
 
+There are some parameters can be tuned for the leader election mechanism of HA.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-cmd-params-config
+data:
+  ### The duration that non-leader candidates will wait to force acquire leadership.
+  #   This is measured against time of last observed ack. Default is 15 seconds.
+  #   The configuration has to be: lease.duration > lease.renew.deadline > lease.renew.period
+  controller.leader.election.lease.duration: 15s
+  #
+  ### The duration that the acting controlplane will retry refreshing leadership before giving up.
+  #   Default is 10 seconds.
+  #   The configuration has to be: lease.duration > lease.renew.deadline > lease.renew.period
+  controller.leader.election.lease.renew.deadline: 10s
+  ### The duration the LeaderElector clients should wait between tries of actions, which means every
+  #   this period of time, it tries to renew the lease. Default is 2 seconds.
+  #   The configuration has to be: lease.duration > lease.renew.deadline > lease.renew.period
+  controller.leader.election.lease.renew.period: 2s
+```
+
+These parameters are useful when you want to tune the frequency of leader election renewal calls to K8s API server, which are usually configured at a high priority level of [API Priority and Fairness](https://kubernetes.io/docs/concepts/cluster-administration/flow-control/).
+
 To turn off HA, configure the ConfigMap `numaflow-cmd-params-config` as following.
 
 ```yaml
@@ -109,7 +134,7 @@ metadata:
   name: numaflow-cmd-params-config
 data:
   # Whether to disable leader election for the controller, defaults to false
-  controller.disable.leader.election: "true"
+  controller.leader.election.disabled: "true"
 ```
 
 If HA is turned off, the controller deployment should not run with multiple replicas.

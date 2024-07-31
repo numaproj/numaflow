@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -28,13 +29,14 @@ import (
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/soheilhy/cmux"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/numaproj/numaflow"
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/daemon/server/service"
@@ -79,7 +81,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 			return err
 		}
 		defer natsClientPool.CloseAll()
-		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(ds.pipeline.Name, isbsvc.WithJetStreamClient(natsClientPool.NextAvailableClient()))
+		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(ds.pipeline.Name, natsClientPool.NextAvailableClient())
 		if err != nil {
 			log.Errorw("Failed to get an ISB Service client.", zap.Error(err))
 			return err
@@ -144,12 +146,19 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		ds.metaDataQuery.StartHealthCheck(ctx)
 	}()
 
-	log.Infof("Daemon server started successfully on %s", address)
 	// Start the rater
-	if err := rater.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start the rater: %w", err)
-	}
+	go func() {
+		if err := rater.Start(ctx); err != nil {
+			log.Panic(fmt.Errorf("failed to start the rater: %w", err))
+		}
+	}()
 
+	go ds.exposeMetrics(ctx)
+
+	version := numaflow.GetVersion()
+	pipeline_info.WithLabelValues(version.Version, version.Platform, ds.pipeline.Name).Set(1)
+
+	log.Infof("Daemon server started successfully on %s", address)
 	<-ctx.Done()
 	return nil
 }
@@ -198,7 +207,6 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 			}
 			return key, true
 		}),
-		runtime.WithProtoErrorHandler(runtime.DefaultHTTPProtoErrorHandler),
 	)
 	if err := daemon.RegisterDaemonServiceHandlerFromEndpoint(ctx, gwmux, endpoint, dialOpts); err != nil {
 		log.Errorw("Failed to register daemon handler on HTTP Server", zap.Error(err))
@@ -227,5 +235,98 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	} else {
 		log.Info("Not enabling pprof debug endpoints")
 	}
+
 	return &httpServer
+}
+
+// calculate processing lag and watermark_delay to current time using watermark values.
+func (ds *daemonServer) exposeMetrics(ctx context.Context) {
+	log := logging.FromContext(ctx)
+	var (
+		source = make(map[string]bool)
+		sink   = make(map[string]bool)
+	)
+	for _, vertex := range ds.pipeline.Spec.Vertices {
+		if vertex.IsASource() {
+			source[vertex.Name] = true
+		} else if vertex.IsASink() {
+			sink[vertex.Name] = true
+		}
+	}
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			resp, err := ds.metaDataQuery.GetPipelineWatermarks(ctx, &daemon.GetPipelineWatermarksRequest{Pipeline: ds.pipeline.Name})
+			if err != nil {
+				log.Errorw("Failed to calculate processing lag for pipeline", zap.Error(err))
+				continue
+			}
+			watermarks := resp.PipelineWatermarks
+			var (
+				minWM int64 = math.MaxInt64
+				maxWM int64 = math.MinInt64
+			)
+
+			for _, watermark := range watermarks {
+				// find the largest source vertex watermark
+				if _, ok := source[watermark.From]; ok {
+					for _, wm := range watermark.Watermarks {
+						if wm.GetValue() > maxWM {
+							maxWM = wm.GetValue()
+						}
+					}
+				}
+				// find the smallest sink vertex watermark
+				if _, ok := sink[watermark.To]; ok {
+					for _, wm := range watermark.Watermarks {
+						if wm.GetValue() < minWM {
+							minWM = wm.GetValue()
+						}
+					}
+				}
+			}
+
+			//exposing pipeline processing lag metric.
+			if minWM < 0 {
+				pipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(-1)
+			} else {
+				if maxWM < minWM {
+					pipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(-1)
+				} else {
+					pipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(float64(maxWM - minWM))
+				}
+			}
+
+			// exposing the watermark delay to current time metric.
+			if maxWM == math.MinInt64 {
+				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(-1)
+			} else {
+				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(float64(time.Now().UnixMilli() - maxWM))
+			}
+
+			//exposing Pipeline data processing health metric.
+			pipelineDataHealth, err := ds.metaDataQuery.GetPipelineStatus(ctx, &daemon.GetPipelineStatusRequest{Pipeline: ds.pipeline.Name})
+
+			if err != nil {
+				log.Errorw("Failed to get data processing health status", zap.Error(err))
+				continue
+			}
+			switch pipelineDataHealth.Status.Status {
+			case v1alpha1.PipelineStatusHealthy:
+				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(1)
+			case v1alpha1.PipelineStatusWarning:
+				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(-1)
+			case v1alpha1.PipelineStatusCritical:
+				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(-2)
+			default:
+				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(0)
+			}
+
+		case <-ctx.Done():
+			return
+		}
+	}
 }

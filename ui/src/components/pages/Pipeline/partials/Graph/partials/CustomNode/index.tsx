@@ -58,7 +58,7 @@ const inputColor = {
 };
 
 const isSelected = (selected: boolean) => {
-  return selected ? "0.1875rem solid" : "0.0625rem solid";
+  return selected ? "0.3rem solid" : "0.01rem solid";
 };
 
 const CustomNode: FC<NodeProps> = ({
@@ -161,8 +161,8 @@ const CustomNode: FC<NodeProps> = ({
             <div
               className={"sideInput_node_ele"}
               style={{
-                borderTopLeftRadius: "1rem",
-                borderBottomLeftRadius: "1rem",
+                borderTopLeftRadius: "1.6rem",
+                borderBottomLeftRadius: "1.6rem",
                 ...genStyle(""),
               }}
               data-testid={`sideInput-${data?.name}`}
@@ -185,8 +185,9 @@ const CustomNode: FC<NodeProps> = ({
               className={"sideInput_node_ele"}
               style={{
                 color: getSideInputColor(data?.name),
-                borderTopRightRadius: "1rem",
-                borderBottomRightRadius: "1rem",
+                borderTopRightRadius: "1.6rem",
+                borderBottomRightRadius: "1.6rem",
+                fontSize: "1.6rem",
                 ...genStyle("---"),
               }}
             >
@@ -209,7 +210,7 @@ const CustomNode: FC<NodeProps> = ({
       <div
         className={"generator_node"}
         style={{
-          height: `${(data?.sideInputCount + 1) * 3.4}rem`,
+          height: `${(data?.sideInputCount + 1) * 3.4 * 1.6}rem`,
           ...commonStyle,
         }}
         onClick={(e) => e.stopPropagation()}
@@ -416,7 +417,7 @@ const CustomNode: FC<NodeProps> = ({
             id={`3-${idx}`}
             className={"sideInput_handle"}
             style={{
-              left: `${44.2 - idx * 9}%`,
+              left: `${44.3 - idx * 9}%`,
               ...blurHandle(`3-${idx}`),
             }}
             width={22}

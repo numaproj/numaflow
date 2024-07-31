@@ -11,7 +11,7 @@ import "./style.css";
 
 export interface EdgeDetailsProps {
   edgeId: string;
-  watermarks: number[];
+  watermarks: (string|number)[];
 }
 
 export function EdgeDetails({ edgeId, watermarks }: EdgeDetailsProps) {
@@ -33,9 +33,9 @@ export function EdgeDetails({ edgeId, watermarks }: EdgeDetailsProps) {
       </Box>
       <TableContainer
         sx={{
-          maxHeight: "37.5rem",
+          maxHeight: "60rem",
           backgroundColor: "#FFF",
-          marginTop: "1rem",
+          marginTop: "1.6rem",
         }}
       >
         <Table stickyHeader>
@@ -55,13 +55,13 @@ export function EdgeDetails({ edgeId, watermarks }: EdgeDetailsProps) {
             )}
             {!!watermarks &&
               !!watermarks.length &&
-              watermarks.map((watermark: number, index: number) => (
+              watermarks.map((watermark: (string|number), index: number) => (
                 <TableRow key={index}>
                   <TableCell>{index}</TableCell>
                   <TableCell>
-                    {watermark < 0
+                    {Number(watermark) < 0
                       ? watermark
-                      : `${watermark} (${new Date(watermark).toISOString()})`}
+                      : `${watermark} (${new Date(Number(watermark)).toISOString()})`}
                   </TableCell>
                 </TableRow>
               ))}

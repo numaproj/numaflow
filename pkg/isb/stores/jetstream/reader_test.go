@@ -28,6 +28,7 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	natsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 )
 
@@ -44,14 +45,14 @@ func TestJetStreamBufferRead(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
 
 	streamName := "testJetStreamBufferReader"
 	addStream(t, js, streamName)
-	defer deleteStream(js, streamName)
+	defer deleteStream(t, js, streamName)
 
 	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 	assert.NoError(t, err)
@@ -59,7 +60,7 @@ func TestJetStreamBufferRead(t *testing.T) {
 	defer jw.Close()
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(20), startTime, nil)
+	messages := testutils.BuildTestWriteMessages(int64(20), startTime, nil, "testVertex")
 	// Verify if buffer is full.
 	for jw.isFull.Load() {
 		select {
@@ -137,14 +138,14 @@ func TestGetName(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
 	defer defaultJetStreamClient.Close()
 
 	streamName := "getName"
 	addStream(t, js, streamName)
-	defer deleteStream(js, streamName)
+	defer deleteStream(t, js, streamName)
 
 	bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 	assert.NoError(t, err)
@@ -162,14 +163,14 @@ func TestClose(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
 
 	streamName := "close"
 	addStream(t, js, streamName)
-	defer deleteStream(js, streamName)
+	defer deleteStream(t, js, streamName)
 
 	bufferReader, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 	assert.NoError(t, err)
@@ -180,6 +181,7 @@ func TestClose(t *testing.T) {
 }
 
 func addStream(t *testing.T, js nats.JetStreamContext, streamName string) {
+	t.Helper()
 
 	_, err := js.AddStream(&nats.StreamConfig{
 		Name:       streamName,
@@ -203,7 +205,8 @@ func addStream(t *testing.T, js nats.JetStreamContext, streamName string) {
 
 }
 
-func deleteStream(js nats.JetStreamContext, streamName string) {
+func deleteStream(t *testing.T, js nats.JetStreamContext, streamName string) {
+	t.Helper()
 	_ = js.DeleteConsumer(streamName, streamName)
 	_ = js.DeleteStream(streamName)
 }

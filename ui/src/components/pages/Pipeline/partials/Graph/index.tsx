@@ -1,5 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 import React, {
   createContext,
   MouseEvent,
@@ -85,6 +83,8 @@ const defaultEdgeTypes: EdgeTypes = {
 };
 
 //sets nodes and edges to highlight in the graph
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
 export const HighlightContext = createContext<HighlightContextProps>(null);
 
 const getLayoutedElements = (
@@ -147,7 +147,7 @@ const Flow = (props: FlowProps) => {
   const [isReduce, setIsReduce] = useState(false);
   const [isSideInput, setIsSideInput] = useState(false);
   const isCollapsed = useContext(CollapseContext);
-  const { host } = useContext<AppContextProps>(AppContext);
+  const { host, isReadOnly } = useContext<AppContextProps>(AppContext);
   const {
     nodes,
     edges,
@@ -156,6 +156,8 @@ const Flow = (props: FlowProps) => {
     handleNodeClick,
     handleEdgeClick,
     handlePaneClick,
+    handleEdgeEnter,
+    handleEdgeLeave,
     refresh,
     namespaceId,
     data,
@@ -285,6 +287,8 @@ const Flow = (props: FlowProps) => {
       onEdgeClick={handleEdgeClick}
       onNodeClick={handleNodeClick}
       onPaneClick={handlePaneClick}
+      onEdgeMouseEnter={handleEdgeEnter}
+      onEdgeMouseLeave={handleEdgeLeave}
       fitView
       preventScrolling={!isLocked}
       panOnDrag={!isLocked}
@@ -292,108 +296,122 @@ const Flow = (props: FlowProps) => {
       minZoom={0.1}
       maxZoom={3.1}
     >
-      <Panel
-        position="top-left"
-        style={{ marginTop: isCollapsed ? "3rem" : "6.75rem" }}
-      >
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "row",
-          }}
+      {!isReadOnly && (
+        <Panel
+          position="top-left"
+          style={{ marginTop: isCollapsed ? "4.8rem" : "10.8rem" }}
         >
-          <Button
-            variant="contained"
-            data-testid="resume"
+          <Box
             sx={{
-              height: "2rem",
-              width: "5rem",
-              fontWeight: "bold",
+              display: "flex",
+              flexDirection: "row",
             }}
-            onClick={handlePlayClick}
-            disabled={data?.pipeline?.status?.phase === RUNNING}
           >
-            Resume
-          </Button>
-          <Button
-            variant="contained"
-            data-testid="pause"
-            sx={{
-              height: "2rem",
-              width: "5rem",
-              marginLeft: "1rem",
-              fontWeight: "bold",
-            }}
-            onClick={handlePauseClick}
-            disabled={
-              data?.pipeline?.status?.phase === PAUSED ||
-              data?.pipeline?.status?.phase === PAUSING
-            }
-          >
-            Pause
-          </Button>
-          <Box sx={{ marginLeft: "1rem" }}>
-            {error && statusPayload ? (
-              <Alert
-                severity="error"
-                sx={{ backgroundColor: "#FDEDED", color: "#5F2120" }}
-              >
-                {error}
-              </Alert>
-            ) : successMessage &&
-              statusPayload &&
-              ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
-                data?.pipeline?.status?.phase !== PAUSED) ||
-                (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
-                  data?.pipeline?.status?.phase !== RUNNING)) ? (
-              <div
-                style={{
-                  borderRadius: "0.8125rem",
-                  width: "14.25rem",
-                  background: "#F0F0F0",
-                  display: "flex",
-                  flexDirection: "row",
-                  padding: "0.5rem",
-                  color: "#516F91",
-                  alignItems: "center",
-                }}
-                data-testid="pipeline-status"
-              >
-                <CircularProgress
+            <Button
+              variant="contained"
+              data-testid="resume"
+              sx={{
+                height: "3.2rem",
+                width: "8rem",
+                fontWeight: "bold",
+                fontSize: "1.4rem",
+              }}
+              onClick={handlePlayClick}
+              disabled={data?.pipeline?.status?.phase === RUNNING}
+            >
+              Resume
+            </Button>
+            <Button
+              variant="contained"
+              data-testid="pause"
+              sx={{
+                height: "3.2rem",
+                width: "8rem",
+                marginLeft: "1.6rem",
+                fontWeight: "bold",
+                fontSize: "1.4rem",
+              }}
+              onClick={handlePauseClick}
+              disabled={
+                data?.pipeline?.status?.phase === PAUSED ||
+                data?.pipeline?.status?.phase === PAUSING
+              }
+            >
+              Pause
+            </Button>
+            <Box sx={{ marginLeft: "1.6rem" }}>
+              {error && statusPayload ? (
+                <Alert
+                  severity="error"
                   sx={{
-                    width: "1.25rem !important",
-                    height: "1.25rem !important",
-                  }}
-                />{" "}
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexDirection: "column",
+                    backgroundColor: "#FDEDED",
+                    color: "#5F2120",
+                    fontSize: "1.6rem",
                   }}
                 >
-                  <span style={{ marginLeft: "1rem" }}>
-                    {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
-                      ? "Pipeline Pausing..."
-                      : "Pipeline Resuming..."}
-                  </span>
-                  <span style={{ marginLeft: "1rem" }}>{timerDateStamp}</span>
-                </Box>
-              </div>
-            ) : (
-              ""
-            )}
+                  {error}
+                </Alert>
+              ) : successMessage &&
+                statusPayload &&
+                ((statusPayload.spec.lifecycle.desiredPhase === PAUSED &&
+                  data?.pipeline?.status?.phase !== PAUSED) ||
+                  (statusPayload.spec.lifecycle.desiredPhase === RUNNING &&
+                    data?.pipeline?.status?.phase !== RUNNING)) ? (
+                <div
+                  style={{
+                    borderRadius: "1.3rem",
+                    width: "22.8rem",
+                    background: "#F0F0F0",
+                    display: "flex",
+                    flexDirection: "row",
+                    padding: "0.8rem",
+                    color: "#516F91",
+                    alignItems: "center",
+                  }}
+                  data-testid="pipeline-status"
+                >
+                  <CircularProgress
+                    sx={{
+                      width: "2rem !important",
+                      height: "2rem !important",
+                    }}
+                  />{" "}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                  >
+                    <span style={{ marginLeft: "1.6rem", fontSize: "1.6rem" }}>
+                      {statusPayload?.spec?.lifecycle?.desiredPhase === PAUSED
+                        ? "Pipeline Pausing..."
+                        : "Pipeline Resuming..."}
+                    </span>
+                    <span style={{ marginLeft: "1.6rem", fontSize: "1.6rem" }}>
+                      {timerDateStamp}
+                    </span>
+                  </Box>
+                </div>
+              ) : (
+                ""
+              )}
+            </Box>
           </Box>
-        </Box>
-      </Panel>
+        </Panel>
+      )}
       <Panel
         position="top-right"
-        style={{ marginTop: isCollapsed ? "0.5rem" : "6.75rem" }}
+        style={{ marginTop: isCollapsed ? "0.8rem" : "10.8rem" }}
       >
         <ErrorIndicator />
       </Panel>
       <Panel position="bottom-left" className={"interaction"}>
         <Tooltip
-          title={isLocked ? "Unlock Graph" : "Lock Graph"}
+          title={
+            <div className={"interaction-button-tooltip"}>
+              {isLocked ? "Unlock Graph" : "Lock Graph"}
+            </div>
+          }
           placement={"top"}
           arrow
         >
@@ -402,7 +420,11 @@ const Flow = (props: FlowProps) => {
           </IconButton>
         </Tooltip>
         <Tooltip
-          title={isPanOnScrollLocked ? "Zoom On Scroll" : "Pan on Scroll"}
+          title={
+            <div className={"interaction-button-tooltip"}>
+              {isPanOnScrollLocked ? "Zoom On Scroll" : "Pan on Scroll"}
+            </div>
+          }
           placement={"top"}
           arrow
         >
@@ -417,18 +439,30 @@ const Flow = (props: FlowProps) => {
           </IconButton>
         </Tooltip>
         <div className={"divider"} />
-        <Tooltip title={"Fit Graph"} placement={"top"} arrow>
+        <Tooltip
+          title={<div className={"interaction-button-tooltip"}>Fit Graph</div>}
+          placement={"top"}
+          arrow
+        >
           <IconButton onClick={onFullScreen} data-testid={"fitView"}>
             <img src={fullscreen} alt={"fullscreen"} />
           </IconButton>
         </Tooltip>
         <div className={"divider"} />
-        <Tooltip title={"Zoom In"} placement={"top"} arrow>
+        <Tooltip
+          title={<div className={"interaction-button-tooltip"}>Zoom In</div>}
+          placement={"top"}
+          arrow
+        >
           <IconButton onClick={onZoomIn} data-testid={"zoomIn"}>
             <img src={zoomInIcon} alt="zoom-in" />
           </IconButton>
         </Tooltip>
-        <Tooltip title={"Zoom Out"} placement="top" arrow>
+        <Tooltip
+          title={<div className={"interaction-button-tooltip"}>Zoom Out</div>}
+          placement="top"
+          arrow
+        >
           <IconButton onClick={onZoomOut} data-testid={"zoomOut"}>
             <img src={zoomOutIcon} alt="zoom-out" />
           </IconButton>
@@ -460,7 +494,13 @@ const Flow = (props: FlowProps) => {
         position="top-left"
         className={"legend"}
         style={{
-          marginTop: isCollapsed ? "5.75rem" : "9.5rem",
+          marginTop: isCollapsed
+            ? isReadOnly
+              ? "5.2rem"
+              : "9.2rem"
+            : isReadOnly
+            ? "12rem"
+            : "15.2rem",
           cursor: "default",
         }}
       >
@@ -470,7 +510,7 @@ const Flow = (props: FlowProps) => {
             aria-controls="panel1a-content"
             id="panel1a-header"
           >
-            <Typography>Legend</Typography>
+            <Typography sx={{ fontSize: "1.6rem" }}>Legend</Typography>
           </AccordionSummary>
           <AccordionDetails>
             <div className={"legend-title"}>
@@ -530,7 +570,7 @@ const getHiddenValue = (edges: Edge[]) => {
 
 export default function Graph(props: GraphProps) {
   const { data, namespaceId, pipelineId, refresh } = props;
-  const { sidebarProps, setSidebarProps, isPlugin } =
+  const { sidebarProps, setSidebarProps } =
     useContext<AppContextProps>(AppContext);
 
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(() => {
@@ -553,11 +593,12 @@ export default function Graph(props: GraphProps) {
     });
     setSideNodes(nodeSet);
   }, [layoutedNodes]);
+
   useEffect(() => {
     const edgeSet: Map<string, string> = new Map();
     layoutedEdges.forEach((edge) => {
       if (edge?.data?.sideInputEdge) {
-        edgeSet.set(edge?.id, edge?.targetHandle);
+        edgeSet.set(edge?.id, edge?.targetHandle ?? "");
       }
     });
     setSideEdges(edgeSet);
@@ -573,18 +614,14 @@ export default function Graph(props: GraphProps) {
       setNodes((nds) => applyNodeChanges(changes, nds)),
     [setNodes]
   );
+
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) =>
       setEdges((eds) => applyEdgeChanges(changes, eds)),
     [setEdges]
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [edgeOpen, setEdgeOpen] = useState(false);
-
   const [edgeId, setEdgeId] = useState<string>();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [edge, setEdge] = useState<Edge>();
 
   const openEdgeSidebar = useCallback(
     (edge: Edge) => {
@@ -609,12 +646,11 @@ export default function Graph(props: GraphProps) {
   );
 
   const handleEdgeClick = useCallback(
-    (event: MouseEvent, edge: Edge) => {
-      setEdge(edge);
+    (_: MouseEvent, edge: Edge) => {
       setEdgeId(edge.id);
-      setEdgeOpen(true);
-      setShowSpec(false);
-      setNodeOpen(false);
+      const updatedEdgeHighlightValues: any = {};
+      updatedEdgeHighlightValues[edge.id] = true;
+      setHighlightValues(updatedEdgeHighlightValues);
       openEdgeSidebar(edge);
     },
     [setSidebarProps, namespaceId, pipelineId, openEdgeSidebar]
@@ -630,7 +666,6 @@ export default function Graph(props: GraphProps) {
         edge.label = dataEdge.label;
         edge.id = dataEdge.id;
         flag = true;
-        setEdge(edge);
         if (sidebarProps && sidebarProps?.type === SidebarType?.EDGE_DETAILS) {
           // Update sidebar data if already open
           openEdgeSidebar(edge);
@@ -639,12 +674,7 @@ export default function Graph(props: GraphProps) {
     });
   }, [edges, edgeId, sidebarProps, openEdgeSidebar]);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [nodeOpen, setNodeOpen] = useState(false);
-
   const [nodeId, setNodeId] = useState<string>();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [node, setNode] = useState<Node>();
 
   useEffect(() => {
     setEdges((eds) => eds.map(hide(hidden)));
@@ -697,11 +727,7 @@ export default function Graph(props: GraphProps) {
 
   const handleNodeClick = useCallback(
     (event: MouseEvent | undefined, node: Node) => {
-      setNode(node);
       setNodeId(node.id);
-      setNodeOpen(true);
-      setShowSpec(false);
-      setEdgeOpen(false);
       const target = event?.target as HTMLElement;
       setHidden((prevState) => {
         const updatedState: any = {};
@@ -726,7 +752,6 @@ export default function Graph(props: GraphProps) {
       if (dataNode.id === nodeId) {
         node.data = dataNode.data;
         node.id = dataNode.id;
-        setNode(node);
         if (
           sidebarProps &&
           (sidebarProps.type === SidebarType.VERTEX_DETAILS ||
@@ -743,10 +768,7 @@ export default function Graph(props: GraphProps) {
     [key: string]: boolean;
   }>({});
 
-  const handlePaneClick = () => {
-    setShowSpec(true);
-    setEdgeOpen(false);
-    setNodeOpen(false);
+  const handlePaneClick = useCallback(() => {
     setHighlightValues({});
     setHidden((prevState) => {
       const updatedState: any = {};
@@ -755,20 +777,37 @@ export default function Graph(props: GraphProps) {
       });
       return updatedState;
     });
-  };
+  }, [setHidden]);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [showSpec, setShowSpec] = useState(true);
+  const [hoveredEdge, setHoveredEdge] = useState<string>("");
+
+  const handleEdgeEnter = useCallback(
+    (_: any, edge: Edge) => {
+      if (edge?.data?.sideInputEdge) return;
+      setHidden(initialHiddenValue);
+      setHoveredEdge(edge.id);
+      const updatedEdgeHighlightValues: any = {};
+      updatedEdgeHighlightValues[edge.id] = true;
+      setHighlightValues(updatedEdgeHighlightValues);
+    },
+    [initialHiddenValue]
+  );
+
+  const handleEdgeLeave = useCallback(
+    (_: any, edge: Edge) => {
+      if (edge?.data?.sideInputEdge) return;
+      setHidden(initialHiddenValue);
+      setHoveredEdge("");
+      if (sidebarProps === undefined) {
+        setHighlightValues({});
+      }
+    },
+    [sidebarProps, initialHiddenValue]
+  );
 
   return (
     <div style={{ height: "100%" }}>
-      <div
-        className="Graph"
-        data-testid="graph"
-        style={
-          isPlugin ? { height: "90vh", width: "100%", position: undefined } : {}
-        }
-      >
+      <div className="Graph" data-testid="graph">
         <HighlightContext.Provider
           value={{
             highlightValues,
@@ -776,23 +815,24 @@ export default function Graph(props: GraphProps) {
             setHidden,
             sideInputNodes: sideNodes,
             sideInputEdges: sideEdges,
+            hoveredEdge,
           }}
         >
           <ReactFlowProvider>
             <Flow
-              {...{
-                nodes,
-                edges,
-                onNodesChange,
-                onEdgesChange,
-                handleNodeClick,
-                handleEdgeClick,
-                handlePaneClick,
-                setSidebarProps,
-                refresh,
-                namespaceId,
-                data,
-              }}
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              handleNodeClick={handleNodeClick}
+              handleEdgeClick={handleEdgeClick}
+              handlePaneClick={handlePaneClick}
+              handleEdgeEnter={handleEdgeEnter}
+              handleEdgeLeave={handleEdgeLeave}
+              setSidebarProps={setSidebarProps}
+              refresh={refresh}
+              namespaceId={namespaceId}
+              data={data}
             />
           </ReactFlowProvider>
         </HighlightContext.Provider>

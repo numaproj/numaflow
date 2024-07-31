@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -96,7 +94,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		Status(204)
 
 	// Test Daemon service with gRPC
-	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
+	client, err := daemonclient.NewGRPCDaemonServiceClient("localhost:1234")
 	assert.NoError(s.T(), err)
 	defer func() {
 		_ = client.Close()
@@ -106,10 +104,10 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	assert.Equal(s.T(), 2, len(buffers))
 	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "p1", 0))
 	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), pipelineName, *bufferInfo.Pipeline)
+	assert.Equal(s.T(), pipelineName, bufferInfo.Pipeline)
 	m, err := client.GetVertexMetrics(context.Background(), pipelineName, "p1")
 	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), pipelineName, *m[0].Pipeline)
+	assert.Equal(s.T(), pipelineName, m[0].Pipeline)
 
 	// verify that the rate is calculated
 	timer := time.NewTimer(120 * time.Second)
@@ -124,10 +122,10 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 			for _, vertexName := range vertexNames {
 				m, err := client.GetVertexMetrics(context.Background(), pipelineName, vertexName)
 				assert.NoError(s.T(), err)
-				assert.Equal(s.T(), pipelineName, *m[0].Pipeline)
+				assert.Equal(s.T(), pipelineName, m[0].Pipeline)
 				oneMinRate := m[0].ProcessingRates["1m"]
 				// the rate should be around 5
-				if oneMinRate > 4 || oneMinRate < 6 {
+				if oneMinRate.GetValue() > 4 || oneMinRate.GetValue() < 6 {
 					accurateCount++
 				}
 			}
@@ -240,7 +238,8 @@ func (s *FunctionalSuite) TestDropOnFull() {
 	time.Sleep(time.Second * 5)
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")))
 
-	expectedDropMetric := `forwarder_drop_total{partition_name="numaflow-system-drop-on-full-sink-0",pipeline="drop-on-full",replica="0",vertex="in",vertex_type="Source"} 1`
+	expectedDropMetricOne := `forwarder_drop_total{partition_name="numaflow-system-drop-on-full-sink-0",pipeline="drop-on-full",reason="Buffer full!",replica="0",vertex="in",vertex_type="Source"} 1`
+	expectedDropMetricTwo := `forwarder_drop_total{partition_name="numaflow-system-drop-on-full-sink-1",pipeline="drop-on-full",reason="Buffer full!",replica="0",vertex="in",vertex_type="Source"} 1`
 	// wait for the drop metric to be updated, time out after 10s.
 	timeoutChan := time.After(time.Second * 10)
 	ticker := time.NewTicker(time.Second * 2)
@@ -251,7 +250,7 @@ func (s *FunctionalSuite) TestDropOnFull() {
 			metricsString := HTTPExpect(s.T(), "https://localhost:8001").GET("/metrics").
 				Expect().
 				Status(200).Body().Raw()
-			if strings.Contains(metricsString, expectedDropMetric) {
+			if strings.Contains(metricsString, expectedDropMetricOne) || strings.Contains(metricsString, expectedDropMetricTwo) {
 				return
 			}
 		case <-timeoutChan:
@@ -283,7 +282,7 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 		TerminateAllPodPortForwards()
 
 	// Test Daemon service with gRPC
-	client, err := daemonclient.NewDaemonServiceClient("localhost:1234")
+	client, err := daemonclient.NewGRPCDaemonServiceClient("localhost:1234")
 	assert.NoError(s.T(), err)
 	defer func() {
 		_ = client.Close()
@@ -293,7 +292,7 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 	assert.Equal(s.T(), 8, len(buffers))
 	bufferInfo, err := client.GetPipelineBuffer(context.Background(), pipelineName, dfv1.GenerateBufferName(Namespace, pipelineName, "cat1", 0))
 	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), pipelineName, *bufferInfo.Pipeline)
+	assert.Equal(s.T(), pipelineName, bufferInfo.Pipeline)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	isProgressing, err := isWatermarkProgressing(ctx, client, pipelineName, edgeList, 3)
@@ -303,7 +302,7 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 
 // isWatermarkProgressing checks whether the watermark for each edge in a pipeline is progressing monotonically.
 // progressCount is the number of progressions the watermark value should undertake within the timeout deadline for it
-func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClient, pipelineName string, edgeList []string, progressCount int) (bool, error) {
+func isWatermarkProgressing(ctx context.Context, client daemonclient.DaemonClient, pipelineName string, edgeList []string, progressCount int) (bool, error) {
 	prevWatermark := make([]int64, len(edgeList))
 	for i := 0; i < len(edgeList); i++ {
 		prevWatermark[i] = -1
@@ -325,7 +324,7 @@ func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClie
 			pipelineWatermarks := make([]int64, len(edgeList))
 			idx := 0
 			for _, e := range wm {
-				pipelineWatermarks[idx] = e.Watermarks[0]
+				pipelineWatermarks[idx] = e.Watermarks[0].GetValue()
 				idx++
 			}
 			currentWatermark = pipelineWatermarks
@@ -339,6 +338,23 @@ func isWatermarkProgressing(ctx context.Context, client *daemonclient.DaemonClie
 		prevWatermark = currentWatermark
 	}
 	return true, nil
+}
+
+func (s *FunctionalSuite) TestFallbackSink() {
+
+	w := s.Given().Pipeline("@testdata/simple-fallback.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "simple-fallback"
+
+	// send a message to the pipeline
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("fallback-message")))
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	w.Expect().SinkContains("output", "fallback-message")
 }
 
 func TestFunctionalSuite(t *testing.T) {

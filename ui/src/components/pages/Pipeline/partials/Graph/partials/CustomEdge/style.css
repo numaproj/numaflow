@@ -1,41 +1,14 @@
 .edge {
-    position: absolute;
-    cursor: pointer;
-    pointer-events: all;
-    display: flex;
-    flex-direction: column;
+  position: absolute;
+  cursor: pointer;
+  pointer-events: all;
+  display: flex;
 }
 
 .edge-tooltip {
-    font-size: 0.8rem;
-    text-align: center;
-
-}
-
-.edge-watermark-label {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 1.5rem;
-    width: 6.625rem;
-    color: #8D9096;
-    font-family: "IBM Plex Sans", sans-serif;
-    font-size: 0.75rem;
-    font-style: normal;
-    font-weight: 400;
-    line-height: normal;
-}
-
-.edge-pending-label {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 1.5rem;
-    width: 6.625rem;
-    color: #8D9096;
-    font-family: "IBM Plex Sans", sans-serif;
-    font-size: 1rem;
-    font-style: normal;
-    font-weight: 400;
-    line-height: normal;
+  font-size: 1.2rem;
+  text-align: center;
+  font-weight: 600;
+  font-family: "Avenir", sans-serif;
+  cursor: pointer;
 }

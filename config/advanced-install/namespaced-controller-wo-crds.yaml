@@ -218,7 +218,7 @@ data:
             replicas: 3
         versions:
         - version: latest
-          natsImage: nats:2.10.3
+          natsImage: nats:2.10.17
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server
@@ -277,6 +277,11 @@ data:
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server
+        - version: 2.10.17
+          natsImage: nats:2.10.17
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
 kind: ConfigMap
 metadata:
   name: numaflow-controller-config
@@ -324,7 +329,25 @@ spec:
         - name: NUMAFLOW_LEADER_ELECTION_DISABLED
           valueFrom:
             configMapKeyRef:
-              key: controller.disable.leader.election
+              key: controller.leader.election.disabled
+              name: numaflow-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_LEADER_ELECTION_LEASE_DURATION
+          valueFrom:
+            configMapKeyRef:
+              key: controller.leader.election.lease.duration
+              name: numaflow-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_LEADER_ELECTION_LEASE_RENEW_DEADLINE
+          valueFrom:
+            configMapKeyRef:
+              key: controller.leader.election.lease.renew.deadline
+              name: numaflow-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_LEADER_ELECTION_LEASE_RENEW_PERIOD
+          valueFrom:
+            configMapKeyRef:
+              key: controller.leader.election.lease.renew.period
               name: numaflow-cmd-params-config
               optional: true
         image: quay.io/numaproj/numaflow:latest
@@ -336,6 +359,9 @@ spec:
           initialDelaySeconds: 3
           periodSeconds: 3
         name: controller-manager
+        ports:
+        - containerPort: 9090
+          name: metrics
         readinessProbe:
           httpGet:
             path: /readyz

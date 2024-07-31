@@ -18,6 +18,10 @@ package error
 
 import (
 	"fmt"
+	"log"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // ErrKind represents if the error is retryable
@@ -82,4 +86,36 @@ func FromError(err error) (udfErr *UDFError, ok bool) {
 		return &UDFError{se.ErrorKind(), se.ErrorMessage()}, true
 	}
 	return &UDFError{Unknown, err.Error()}, false
+}
+
+// ToUDFErr converts gRPC error to UDF Error
+func ToUDFErr(name string, err error) error {
+	if err == nil {
+		return nil
+	}
+	statusCode, ok := status.FromError(err)
+	// default udfError
+	udfError := New(NonRetryable, statusCode.Message())
+	// check if it's a standard status code
+	if !ok {
+		// if not, the status code will be unknown which we consider as non retryable
+		// return default udfError
+		log.Printf("failed %s: %s", name, udfError.Error())
+		return udfError
+	}
+	switch statusCode.Code() {
+	case codes.OK:
+		return nil
+	case codes.DeadlineExceeded, codes.Unavailable, codes.Unknown:
+		// update to retryable err
+		udfError = New(Retryable, statusCode.Message())
+		log.Printf("failed %s: %s", name, udfError.Error())
+		return udfError
+	case codes.Canceled:
+		udfError = New(Canceled, statusCode.Message())
+		return udfError
+	default:
+		log.Printf("failed %s: %s", name, udfError.Error())
+		return udfError
+	}
 }

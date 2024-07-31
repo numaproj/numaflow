@@ -116,6 +116,25 @@ message AbstractPodTemplate {
   optional k8s.io.api.core.v1.PodDNSConfig dnsConfig = 13;
 }
 
+message AbstractSink {
+  // Log sink is used to write the data to the log.
+  // +optional
+  optional Log log = 1;
+
+  // Kafka sink is used to write the data to the Kafka.
+  // +optional
+  optional KafkaSink kafka = 2;
+
+  // Blackhole sink is used to write the data to the blackhole sink,
+  // which is a sink that discards all the data written to it.
+  // +optional
+  optional Blackhole blackhole = 3;
+
+  // UDSink sink is used to write the data to the user-defined sink.
+  // +optional
+  optional UDSink udsink = 4;
+}
+
 message AbstractVertex {
   optional string name = 1;
 
@@ -231,7 +250,7 @@ message CombinedEdge {
   optional VertexLimits toVertexLimits = 7;
 }
 
-// Container is used to define the container properties for user defined functions, sinks, etc.
+// Container is used to define the container properties for user-defined functions, sinks, etc.
 message Container {
   // +optional
   optional string image = 1;
@@ -302,7 +321,7 @@ message Edge {
 
   optional string to = 2;
 
-  // Conditional forwarding, only allowed when "From" is a Sink or UDF.
+  // Conditional forwarding, only allowed when "From" is a Source or UDF.
   // +optional
   optional ForwardConditions conditions = 3;
 
@@ -393,6 +412,14 @@ message GeneratorSource {
   // +kubebuilder:default="0s"
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration jitter = 6;
+
+  // ValueBlob is an optional string which is the base64 encoding of direct payload to send.
+  // This is useful for attaching a GeneratorSource to a true pipeline to test load behavior
+  // with true messages without requiring additional work to generate messages through
+  // the external source
+  // if present, the Value and MsgSize fields will be ignored.
+  // +optional
+  optional string valueBlob = 7;
 }
 
 message GetDaemonDeploymentReq {
@@ -516,7 +543,11 @@ message GetVertexPodSpecReq {
 
   optional string sideInputsStoreName = 5;
 
-  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 6;
+  optional string servingSourceStreamName = 6;
+
+  optional PipelineSpec pipelineSpec = 7;
+
+  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 8;
 }
 
 // GroupBy indicates it is a reducer UDF
@@ -604,13 +635,16 @@ message InterStepBufferServiceStatus {
   optional BufferServiceConfig config = 4;
 
   optional string type = 5;
+
+  // ObservedGeneration stores the generation value observed by the controller.
+  optional int64 observedGeneration = 6;
 }
 
 message JetStreamBufferService {
   // JetStream version, such as "2.7.1"
   optional string version = 1;
 
-  // Redis StatefulSet size
+  // JetStream StatefulSet size
   // +kubebuilder:default=3
   optional int32 replicas = 2;
 
@@ -676,6 +710,22 @@ message JetStreamConfig {
 
   // TLS enabled or not
   optional bool tlsEnabled = 4;
+}
+
+message JetStreamSource {
+  // URL to connect to NATS cluster, multiple urls could be separated by comma.
+  optional string url = 1;
+
+  // Stream represents the name of the stream.
+  optional string stream = 2;
+
+  // TLS configuration for the nats client.
+  // +optional
+  optional TLS tls = 3;
+
+  // Auth information
+  // +optional
+  optional NatsAuth auth = 4;
 }
 
 message JobTemplate {
@@ -805,7 +855,7 @@ message NativeRedis {
 
 // NatsAuth defines how to authenticate the nats access
 message NatsAuth {
-  // Basic auth which contains a user name and a password
+  // Basic auth which contains a username and a password
   // +optional
   optional BasicAuth basic = 1;
 
@@ -880,6 +930,8 @@ message PersistenceStrategy {
 // +kubebuilder:printcolumn:name="Sources",type=integer,JSONPath=`.status.sourceCount`,priority=10
 // +kubebuilder:printcolumn:name="Sinks",type=integer,JSONPath=`.status.sinkCount`,priority=10
 // +kubebuilder:printcolumn:name="UDFs",type=integer,JSONPath=`.status.udfCount`,priority=10
+// +kubebuilder:printcolumn:name="Map UDFs",type=integer,JSONPath=`.status.mapUDFCount`,priority=10
+// +kubebuilder:printcolumn:name="Reduce UDFs",type=integer,JSONPath=`.status.reduceUDFCount`,priority=10
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
@@ -977,6 +1029,13 @@ message PipelineStatus {
   optional uint32 sinkCount = 7;
 
   optional uint32 udfCount = 8;
+
+  optional uint32 mapUDFCount = 9;
+
+  optional uint32 reduceUDFCount = 10;
+
+  // ObservedGeneration stores the generation value observed by the controller.
+  optional int64 observedGeneration = 11;
 }
 
 message RedisBufferService {
@@ -1119,6 +1178,32 @@ message Scale {
   optional uint32 scaleDownCooldownSeconds = 11;
 }
 
+// ServingSource is the HTTP endpoint for Numaflow.
+message ServingSource {
+  // +optional
+  optional Authorization auth = 1;
+
+  // Whether to create a ClusterIP Service
+  // +optional
+  optional bool service = 2;
+
+  // The header key from which the message id will be extracted
+  optional string msgIDHeaderKey = 3;
+
+  // Persistent store for the callbacks for serving and tracking
+  optional ServingStore store = 4;
+}
+
+// ServingStore to track and store data and metadata for tracking and serving.
+message ServingStore {
+  // URL of the persistent store to write the callbacks
+  optional string url = 1;
+
+  // TTL for the data in the store and tracker
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration ttl = 2;
+}
+
 // SessionWindow describes a session window
 message SessionWindow {
   // Timeout is the duration of inactivity after which a session window closes.
@@ -1163,13 +1248,12 @@ message SideInputsManagerTemplate {
 }
 
 message Sink {
-  optional Log log = 1;
+  optional AbstractSink abstractSink = 1;
 
-  optional KafkaSink kafka = 2;
-
-  optional Blackhole blackhole = 3;
-
-  optional UDSink udsink = 4;
+  // Fallback sink can be imagined as DLQ for primary Sink. The writes to Fallback sink will only be
+  // initiated if the ud-sink response field sets it.
+  // +optional
+  optional AbstractSink fallback = 2;
 }
 
 // SlidingWindow describes a sliding window
@@ -1203,6 +1287,12 @@ message Source {
 
   // +optional
   optional UDSource udSource = 6;
+
+  // +optional
+  optional JetStreamSource jetstream = 7;
+
+  // +optional
+  optional ServingSource serving = 8;
 }
 
 // Status is a common structure which can be used for Status field.
@@ -1394,6 +1484,8 @@ message VertexStatus {
   optional string selector = 5;
 
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 4;
+
+  optional Status status = 7;
 }
 
 message VertexTemplate {

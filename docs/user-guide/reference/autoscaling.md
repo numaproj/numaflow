@@ -45,18 +45,18 @@ spec:
 - `lookbackSeconds` - How many seconds to lookback for vertex average processing rate (tps) and pending messages calculation,
   defaults to `120`. Rate and pending messages metrics are critical for autoscaling, you might need to tune this parameter
   a bit to see better results. For example, your data source only have 1 minute data input in every 5 minutes, and you
-  don't want the vertices to be scaled down to `0`. In this case, you need to increase `lookbackSeconds` to cover all the
-  5 minutes, so that the calculated average rate and pending messages won't be `0` during the silent period, to prevent
-  scaling down to 0 from happening.
+  don't want the vertices to be scaled down to `0`. In this case, you need to increase `lookbackSeconds` to overlap
+  5 minutes, so that the calculated average rate and pending messages won't be `0` during the silent period, in order to prevent from
+  scaling down to 0.
 - `scaleUpCooldownSeconds` - After a scaling operation, how many seconds to wait for the same vertex, if the follow-up
-  operation is a scaling up, defaults to `90`. Please make sure that the time is greater that the pod to be `Running` and
+  operation is a scaling up, defaults to `90`. Please make sure that the time is greater than the pod to be `Running` and
   start processing, because the autoscaling algorithm will divide the TPS by the number of pods even if the pod is not `Running`.
 - `scaleDownCooldownSeconds` - After a scaling operation, how many seconds to wait for the same vertex, if the follow-up
   operation is a scaling down, defaults to `90`.
-- `zeroReplicaSleepSeconds` - How many seconds it will wait after scaling a source vertex replicas down to `0`, defaults to `120`.
+- `zeroReplicaSleepSeconds` - After scaling a source vertex replicas down to `0`, how many seconds to wait before scaling up to 1 replica to peek, defaults to `120`.
   Numaflow autoscaler periodically scales up a source vertex pod to "peek" the incoming data, this is the period of time to wait before peeking.
 - `targetProcessingSeconds` - It is used to tune the aggressiveness of autoscaling for source vertices, it measures how
-  fast you want the vertex to process all the pending messages, defaults to `20`. It is only effective for the `Source` vertices which
+  fast you want the vertex to process all the pending messages, defaults to `20`. It is only effective for the `Source` vertices that
   support autoscaling, typically increasing the value leads to lower processing rate, thus less replicas.
 - `targetBufferAvailability` - Targeted buffer availability in percentage, defaults to `50`. It is only effective for `UDF`
   and `Sink` vertices, it determines how aggressive you want to do for autoscaling, increasing the value will bring more replicas.
@@ -79,11 +79,13 @@ spec:
 
 **Notes**
 
-Numaflow autoscaling does not apply to reduce vertices, and following source vertices which do not have a way to calculate their pending messages.
+Numaflow autoscaling does not apply to reduce vertices, and the source vertices which do not have a way to calculate their pending messages.
 
 - Generator
 - HTTP
 - Nats
+
+For User-defined Sources, if the function `Pending()` returns a negative value, autoscaling will not be applied.
 
 ### Kubernetes HPA
 

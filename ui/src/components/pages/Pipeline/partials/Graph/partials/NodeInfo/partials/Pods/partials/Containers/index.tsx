@@ -18,6 +18,7 @@ export function Containers(props: ContainerProps) {
               label={c}
               variant={container === c ? undefined : "outlined"}
               onClick={() => handleContainerClick(c)}
+              sx={{ fontSize: "1.3rem" }}
             />
           );
         })}

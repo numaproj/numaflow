@@ -1,6 +1,6 @@
 {
   "name": "numaflow-ui-test",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Numaflow UI",
   "main": "./dist/cjs/src/index.js",
   "module": "./dist/esm/src/index.js",
@@ -52,6 +52,7 @@
     "d3-selection": "^3.0.0",
     "dagre": "^0.8.5",
     "moment": "^2.29.4",
+    "monaco-editor": "0.40.0",
     "msw": "^0.47.4",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
@@ -60,7 +61,7 @@
     "react-router-dom": "5.3.4",
     "react-test-renderer": "^18.0.0",
     "react-toastify": "^9.1.1",
-    "reactflow": "^11.5.5",
+    "reactflow": "^11.11.4",
     "resize-observer-polyfill": "^1.5.1",
     "typescript": "^4.4.2",
     "web-vitals": "^2.1.0",
@@ -107,6 +108,9 @@
     "transformIgnorePatterns": [
       "/node_modules/(?!d3|d3-array|internmap|delaunator|robust-predicates|reactflow|react-toastify|moment)"
     ],
+    "moduleNameMapper": {
+      "^monaco-editor$": "<rootDir>/node_modules/@monaco-editor/react"
+    },
     "resetMocks": false
   }
 }

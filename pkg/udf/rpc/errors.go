@@ -32,20 +32,20 @@ type InternalErr struct {
 }
 
 // IsUserUDFErr is true if the problem is due to the user code in the UDF.
-func (e ApplyUDFErr) IsUserUDFErr() bool {
+func (e *ApplyUDFErr) IsUserUDFErr() bool {
 	return e.UserUDFErr
 }
 
 // IsInternalErr is true if this is a platform issue. This is a blocking error.
-func (e ApplyUDFErr) IsInternalErr() bool {
+func (e *ApplyUDFErr) IsInternalErr() bool {
 	return e.InternalErr.Flag
 }
 
-func (e ApplyUDFErr) Error() string {
+func (e *ApplyUDFErr) Error() string {
 	return fmt.Sprint(e.Message)
 }
 
 // Is checks if the error is of the same type
-func (e ApplyUDFErr) Is(target error) bool {
+func (e *ApplyUDFErr) Is(target error) bool {
 	return target.Error() == e.Error()
 }

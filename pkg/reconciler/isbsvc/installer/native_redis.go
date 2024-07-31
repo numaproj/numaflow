@@ -23,9 +23,6 @@ import (
 	"fmt"
 	"text/template"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/reconciler"
-	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"go.uber.org/zap"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -35,6 +32,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reconciler"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 const (
@@ -121,8 +122,8 @@ func (r *redisInstaller) Install(ctx context.Context) (*dfv1.BufferServiceConfig
 		r.isbSvc.Status.MarkDeployFailed("RedisStatefulSetFailed", err.Error())
 		return nil, err
 	}
-
 	r.isbSvc.Status.MarkDeployed()
+	reconciler.RedisISBSvcReplicas.WithLabelValues(r.isbSvc.Namespace, r.isbSvc.Name).Set(float64(r.isbSvc.Spec.Redis.Native.GetReplicas()))
 	return &dfv1.BufferServiceConfig{
 		Redis: &dfv1.RedisConfig{
 			SentinelURL: fmt.Sprintf("%s.%s.svc:%v", generateRedisServiceName(r.isbSvc), r.isbSvc.Namespace, sentinelPort),
@@ -582,6 +583,8 @@ func (r *redisInstaller) createStatefulSet(ctx context.Context) error {
 }
 
 func (r *redisInstaller) Uninstall(ctx context.Context) error {
+	// Clean up metrics
+	_ = reconciler.RedisISBSvcReplicas.DeleteLabelValues(r.isbSvc.Namespace, r.isbSvc.Name)
 	return r.uninstallPVCs(ctx)
 }
 
@@ -616,6 +619,23 @@ func (r *redisInstaller) getPVCs(ctx context.Context) ([]corev1.PersistentVolume
 		return nil, err
 	}
 	return pvcl.Items, nil
+}
+
+func (r *redisInstaller) CheckChildrenResourceStatus(ctx context.Context) error {
+	var isbStatefulSet appv1.StatefulSet
+	if err := r.client.Get(ctx, client.ObjectKey{
+		Namespace: r.isbSvc.Namespace,
+		Name:      generateRedisStatefulSetName(r.isbSvc),
+	}, &isbStatefulSet); err != nil {
+		return err
+	}
+	// calculate the status of the InterStepBufferService by statefulset status and update the status of isbSvc
+	if msg, status := getStatefulSetStatus(&isbStatefulSet); status {
+		r.isbSvc.Status.MarkChildrenResourceHealthy("RolloutFinished", msg)
+	} else {
+		r.isbSvc.Status.MarkChildrenResourceNotHealthy("Progressing", msg)
+	}
+	return nil
 }
 
 func generateRedisServiceName(isbSvc *dfv1.InterStepBufferService) string {

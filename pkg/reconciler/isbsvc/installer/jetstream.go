@@ -26,10 +26,6 @@ import (
 	"text/template"
 	"time"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/reconciler"
-	"github.com/numaproj/numaflow/pkg/shared/tls"
-	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	appv1 "k8s.io/api/apps/v1"
@@ -41,6 +37,11 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/reconciler"
+	"github.com/numaproj/numaflow/pkg/shared/tls"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 const (
@@ -129,6 +130,7 @@ func (r *jetStreamInstaller) Install(ctx context.Context) (*dfv1.BufferServiceCo
 		return nil, err
 	}
 	r.isbSvc.Status.MarkDeployed()
+	reconciler.JetStreamISBSvcReplicas.WithLabelValues(r.isbSvc.Namespace, r.isbSvc.Name).Set(float64(r.isbSvc.Spec.JetStream.GetReplicas()))
 	return &dfv1.BufferServiceConfig{
 		JetStream: &dfv1.JetStreamConfig{
 			URL: fmt.Sprintf("nats://%s.%s.svc:%s", generateJetStreamServiceName(r.isbSvc), r.isbSvc.Namespace, strconv.Itoa(int(clientPort))),
@@ -514,6 +516,8 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 }
 
 func (r *jetStreamInstaller) Uninstall(ctx context.Context) error {
+	// Clean up metrics
+	_ = reconciler.JetStreamISBSvcReplicas.DeleteLabelValues(r.isbSvc.Namespace, r.isbSvc.Name)
 	return r.uninstallPVCs(ctx)
 }
 
@@ -548,6 +552,29 @@ func (r *jetStreamInstaller) getPVCs(ctx context.Context) ([]corev1.PersistentVo
 		return nil, err
 	}
 	return pvcl.Items, nil
+}
+
+func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) error {
+	var isbStatefulSet appv1.StatefulSet
+	if err := r.client.Get(ctx, client.ObjectKey{
+		Namespace: r.isbSvc.Namespace,
+		Name:      generateJetStreamStatefulSetName(r.isbSvc),
+	}, &isbStatefulSet); err != nil {
+		if apierrors.IsNotFound(err) {
+			r.isbSvc.Status.MarkChildrenResourceNotHealthy("GetStatefulSetFailed",
+				"StatefulSet not found, might be still under creation")
+			return nil
+		}
+		r.isbSvc.Status.MarkChildrenResourceNotHealthy("GetStatefulSetFailed", err.Error())
+		return err
+	}
+	// calculate the status of the InterStepBufferService by statefulset status and update the status of isbSvc
+	if msg, status := getStatefulSetStatus(&isbStatefulSet); status {
+		r.isbSvc.Status.MarkChildrenResourceHealthy("RolloutFinished", msg)
+	} else {
+		r.isbSvc.Status.MarkChildrenResourceNotHealthy("Progressing", msg)
+	}
+	return nil
 }
 
 func generateJetStreamServerSecretName(isbSvc *dfv1.InterStepBufferService) string {

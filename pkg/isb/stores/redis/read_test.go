@@ -68,7 +68,7 @@ func TestRedisQRead_Read(t *testing.T) {
 
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(count, startTime, nil)
+	messages := testutils.BuildTestWriteMessages(count, startTime, nil, "testVertex")
 	for _, msg := range messages {
 		err := client.Client.XAdd(ctx, &redis.XAddArgs{
 			Stream: rqr.GetStreamName(),
@@ -100,7 +100,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(count, startTime, nil)
+	messages := testutils.BuildTestWriteMessages(count, startTime, nil, "testVertex")
 	for _, msg := range messages {
 		err := client.Client.XAdd(ctx, &redis.XAddArgs{
 			Stream: rqr.GetStreamName(),
@@ -140,7 +140,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithReadBatchSize(10))
+	f, err := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithReadBatchSize(10), forward.WithUDFUnaryMap(forwardReadWritePerformance{}))
 
 	stopped := f.Start()
 	// validate the length of the toStep stream.
@@ -300,7 +300,7 @@ type ReadWritePerformance struct {
 type forwardReadWritePerformance struct {
 }
 
-func (f forwardReadWritePerformance) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f forwardReadWritePerformance) WhereTo(_ []string, _ []string, _ string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
@@ -308,11 +308,15 @@ func (f forwardReadWritePerformance) WhereTo(_ []string, _ []string) ([]forwarde
 }
 
 func (f forwardReadWritePerformance) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, message)
+	return testutils.CopyUDFTestApply(ctx, "testVertex", message)
 }
 
 func (f forwardReadWritePerformance) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
-	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
+	return testutils.CopyUDFTestApplyStream(ctx, "testVertex", writeMessageCh, message)
+}
+
+func (f forwardReadWritePerformance) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApplyBatchMap(ctx, "test-vertex", messages)
 }
 
 func (suite *ReadWritePerformance) SetupSuite() {
@@ -344,7 +348,7 @@ func (suite *ReadWritePerformance) SetupSuite() {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	isdf, _ := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
+	isdf, _ := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithUDFUnaryMap(forwardReadWritePerformance{}))
 
 	suite.ctx = ctx
 	suite.rclient = client
@@ -392,7 +396,7 @@ func (suite *ReadWritePerformance) TestReadWriteLatency() {
 	suite.False(suite.rqw.IsFull())
 	var writeMessages = make([]isb.Message, 0, suite.count)
 
-	writeMessages = append(writeMessages, testutils.BuildTestWriteMessages(suite.count, testStartTime, nil)...)
+	writeMessages = append(writeMessages, testutils.BuildTestWriteMessages(suite.count, testStartTime, nil, "testVertex")...)
 
 	stopped := suite.isdf.Start()
 
@@ -438,12 +442,12 @@ func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	suite.isdf, _ = forward.NewInterStepDataForward(vertexInstance, suite.rqr, toSteps, forwardReadWritePerformance{}, forwardReadWritePerformance{}, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager())
+	suite.isdf, _ = forward.NewInterStepDataForward(vertexInstance, suite.rqr, toSteps, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithUDFUnaryMap(forwardReadWritePerformance{}))
 
 	suite.False(suite.rqw.IsFull())
 	var writeMessages = make([]isb.Message, 0, suite.count)
 
-	writeMessages = append(writeMessages, testutils.BuildTestWriteMessages(suite.count, testStartTime, nil)...)
+	writeMessages = append(writeMessages, testutils.BuildTestWriteMessages(suite.count, testStartTime, nil, "testVertex")...)
 
 	stopped := suite.isdf.Start()
 
@@ -513,7 +517,7 @@ func generateLatencySlice(xMessages []redis.XMessage, suite *ReadWritePerformanc
 			suite.NoError(err)
 		}
 		id, err := splitId(xMessage.ID)
-		offset, err := splitId(m.ID)
+		offset, err := splitId(m.ID.Offset)
 		suite.NoError(err)
 
 		// We store a difference of the id and the offset in the to stream.

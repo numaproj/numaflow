@@ -14,6 +14,7 @@ spec:
         container:
           # Split input message into an array with comma, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/flatmap
           image: quay.io/numaio/numaflow-go/map-flatmap:stable
+          imagePullPolicy: Always
     - name: go-udsink
       scale:
         min: 1
@@ -22,7 +23,9 @@ spec:
           container:
             # https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/log
             image: quay.io/numaio/numaflow-go/sink-log:stable
+            imagePullPolicy: Always
 
+# FIXME(fb-sink): python
     - name: python-split
       scale:
         min: 1
@@ -33,6 +36,7 @@ spec:
             - example.py
           # Split input message into an array with comma, https://github.com/numaproj/numaflow-python/tree/main/examples/map/flatmap
           image: quay.io/numaio/numaflow-python/map-flatmap:stable
+          imagePullPolicy: Always
     - name: python-udsink
       scale:
         min: 1
@@ -44,6 +48,7 @@ spec:
             - example.py
             # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/log
             image: quay.io/numaio/numaflow-python/sink-log:stable
+            imagePullPolicy: Always
     - name: java-split
       scale:
         min: 1
@@ -51,6 +56,7 @@ spec:
         container:
           # Split input message into an array with comma, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/map/flatmap
           image: quay.io/numaio/numaflow-java/map-flatmap:stable
+          imagePullPolicy: Always
     - name: java-udsink
       scale:
         min: 1
@@ -59,6 +65,7 @@ spec:
           container:
             # https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple
             image: quay.io/numaio/numaflow-java/simple-sink:stable
+            imagePullPolicy: Always
   edges:
     - from: in
       to: go-split

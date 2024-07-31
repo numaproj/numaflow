@@ -43,33 +43,11 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.22'
       - name: Add bins to PATH
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
           echo /usr/local/bin >> $GITHUB_PATH
-      - name: Install protoc
-        run: |
-          set -eux -o pipefail
-          PROTOC_VERSION=3.19.4
-          PROTOC_ZIP=protoc-$PROTOC_VERSION-linux-x86_64.zip
-          curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v$PROTOC_VERSION/$PROTOC_ZIP
-          sudo unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
-          sudo unzip -o $PROTOC_ZIP -d /usr/local 'include/*'
-          sudo chmod +x /usr/local/bin/protoc
-          sudo find /usr/local/include -type f | xargs sudo chmod a+r
-          sudo find /usr/local/include -type d | xargs sudo chmod a+rx
-          rm -f $PROTOC_ZIP
-          ls /usr/local/include/google/protobuf/
-      - name: Install pandoc
-        run: |
-          set -eux -o pipefail
-          PANDOC_VERSION=2.17.1
-          PANDOC_ZIP=pandoc-$PANDOC_VERSION-linux-amd64.tar.gz
-          curl -OL https://github.com/jgm/pandoc/releases/download/$PANDOC_VERSION/$PANDOC_ZIP
-          sudo tar xvzf $PANDOC_ZIP --strip-components 1 -C /usr/local
-          rm -f $PANDOC_ZIP
-          echo /usr/local/pandoc-$PANDOC_VERSION/bin >> $GITHUB_PATH
       - name: Get dependencies
         run: go mod download
       - name: Make codegen
@@ -93,23 +71,54 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      nats:
+        image: 'bitnami/nats:latest'
+        ports:
+          - 4222:4222
+        env:
+          NATS_EXTRA_ARGS: -js
     steps:
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.22'
         id: go
-      - name: Check out code into the Go module directory
+
+      - name: Check out code
         uses: actions/checkout@v4
+
       - name: Restore Go build cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/go-build
           key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
+
       - name: Get dependencies
         run: go mod download
-      - name: Test
-        run: make test-code
+
+      - name: Test Go
+        run: make test-coverage-with-isb
+      
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: llvm-tools-preview
+
+      - name: Install grcov
+        run: cargo install grcov
+
+      - name: Test Rust
+        working-directory: ./serving
+        run: |
+          CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='./target/debug/coverage/cargo-test-%p-%m.profraw' cargo test --all-features
+          grcov . -s ./target/debug/coverage/ --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing -o ./target/debug/coverage/lcov.info
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./test/profile.cov,./serving/target/debug/coverage/lcov.info
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   lint:
     name: Lint
@@ -122,7 +131,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.22'
       - name: Restore Go build cache
         uses: actions/cache@v4
         with:
@@ -139,7 +148,7 @@ jobs:
       fail-fast: false
       matrix:
         driver: [jetstream]
-        case: [e2e, diamond-e2e, transformer-e2e, kafka-e2e, http-e2e, nats-e2e, sdks-e2e, reduce-one-e2e, reduce-two-e2e, udsource-e2e, api-e2e, sideinputs-e2e, idle-source-e2e]
+        case: [e2e, diamond-e2e, transformer-e2e, kafka-e2e, http-e2e, nats-e2e, jetstream-e2e, sdks-e2e, reduce-one-e2e, reduce-two-e2e, udsource-e2e, api-e2e, sideinputs-e2e, idle-source-e2e]
         include:
           - driver: redis
             case: e2e
@@ -147,6 +156,7 @@ jobs:
             case: kafka-e2e
           - driver: redis
             case: api-e2e
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -158,7 +168,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.22'
       - name: Add bins to PATH
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
@@ -174,18 +184,16 @@ jobs:
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
       - name: Install k3d
         run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
-      - name: Create a registry and a cluster
+      - name: Create a cluster
         run: |
-          k3d registry create e2e-registry --port 5111
-          k3d cluster create e2e --registry-use k3d-e2e-registry:5111
+          k3d cluster create e2e
           k3d kubeconfig get e2e > ~/.kube/numaflow-e2e-config
-          echo '127.0.0.1 k3d-e2e-registry' | sudo tee -a /etc/hosts
       - name: Install Numaflow
         env:
           GOPATH: /home/runner/go
         run: |
-          KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=true make start
+          KUBECONFIG=~/.kube/numaflow-e2e-config VERSION=${{ github.sha }} make start
       - name: Run tests
         env:
           GOPATH: /home/runner/go
-        run: KUBECONFIG=~/.kube/numaflow-e2e-config IMAGE_NAMESPACE=k3d-e2e-registry:5111 VERSION=${{ github.sha }} DOCKER_PUSH=true ISBSVC=${{matrix.driver}} make test-${{matrix.case}}
+        run: KUBECONFIG=~/.kube/numaflow-e2e-config VERSION=${{ github.sha }} ISBSVC=${{matrix.driver}} make test-${{matrix.case}}

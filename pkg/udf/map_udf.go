@@ -19,9 +19,10 @@ package udf
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"sync"
 
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -29,9 +30,11 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
+	"github.com/numaproj/numaflow/pkg/sdkclient/batchmapper"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
-	"github.com/numaproj/numaflow/pkg/sdkserverinfo"
+	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
+	"github.com/numaproj/numaflow/pkg/shared/callback"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -67,7 +70,10 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		toVertexWmStores   map[string]store.WatermarkStore
 		mapHandler         *rpc.GRPCBasedMap
 		mapStreamHandler   *rpc.GRPCBasedMapStream
+		batchMapHandler    *rpc.GRPCBasedBatchMap
 		idleManager        wmb.IdleManager
+		vertexName         = u.VertexInstance.Vertex.Spec.Name
+		pipelineName       = u.VertexInstance.Vertex.Spec.PipelineName
 	)
 
 	// watermark variables
@@ -126,24 +132,31 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isbsvc type %q", u.ISBSvcType)
 	}
 
-	enableMapUdfStream, err := u.VertexInstance.Vertex.MapUdfStreamEnabled()
+	opts := []forward.Option{forward.WithLogger(log)}
+	enableMapUdfStream := false
+	enableBatchMapUdf := false
+	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
+
+	// Wait for map server info to be ready, we use the same info file for all the map modes
+	serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.MapServerInfoFile))
 	if err != nil {
-		return fmt.Errorf("failed to parse UDF map streaming metadata, %w", err)
+		return err
 	}
 
-	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
-	if enableMapUdfStream {
-		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.MapStreamServerInfoFile))
-		if err != nil {
-			return err
-		}
+	// Read the server info file to read which map mode is enabled
+	// Based on the value set, we will create the corresponding handler and clients
+	mapMode, ok := serverInfo.Metadata[sdkserverinfo.MapModeMetadata]
+
+	if ok && (sdkserverinfo.MapMode(mapMode) == sdkserverinfo.StreamMap) {
+		log.Info("Map mode enabled: Stream Map")
+		// Map Stream mode
+		enableMapUdfStream = true
 
 		mapStreamClient, err := mapstreamer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create map stream client, %w", err)
 		}
-		mapStreamHandler = rpc.NewUDSgRPCBasedMapStream(mapStreamClient)
+		mapStreamHandler = rpc.NewUDSgRPCBasedMapStream(vertexName, mapStreamClient)
 
 		// Readiness check
 		if err := mapStreamHandler.WaitUntilReady(ctx); err != nil {
@@ -155,19 +168,43 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 			}
 		}()
+		opts = append(opts, forward.WithUDFStreamingMap(mapStreamHandler))
+
+	} else if ok && (sdkserverinfo.MapMode(mapMode) == sdkserverinfo.BatchMap) {
+		log.Info("Map mode enabled: Batch Map")
+		// if Batch Map mode is enabled create the client and handler for that accordingly
+		enableBatchMapUdf = true
+
+		// create the client and handler for batch map interface
+		batchMapClient, err := batchmapper.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+		if err != nil {
+			return fmt.Errorf("failed to create batch map client, %w", err)
+		}
+		batchMapHandler = rpc.NewUDSgRPCBasedBatchMap(vertexName, batchMapClient)
+		// Readiness check
+		if err := batchMapHandler.WaitUntilReady(ctx); err != nil {
+			return fmt.Errorf("failed on batch map UDF readiness check, %w", err)
+		}
+		defer func() {
+			err = batchMapHandler.CloseConn(ctx)
+			if err != nil {
+				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
+			}
+		}()
+		opts = append(opts, forward.WithUDFBatchMap(batchMapHandler))
 
 	} else {
-		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkserverinfo.MapServerInfoFile))
-		if err != nil {
-			return err
-		}
+		log.Info("Map mode enabled: Unary Map")
+		// Default is to enable unary map mode
+		// If the MapMode metadata is not available, we will start map by default this will ensure
+		// backward compatibility in case of version mismatch for map
 
+		// create the client and handler for map interface
 		mapClient, err := mapper.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create map client, %w", err)
 		}
-		mapHandler = rpc.NewUDSgRPCBasedMap(mapClient)
+		mapHandler = rpc.NewUDSgRPCBasedMap(vertexName, mapClient)
 
 		// Readiness check
 		if err := mapHandler.WaitUntilReady(ctx); err != nil {
@@ -179,72 +216,88 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 				log.Warnw("Failed to close gRPC client conn", zap.Error(err))
 			}
 		}()
+		opts = append(opts, forward.WithUDFUnaryMap(mapHandler))
+	}
+
+	// We can have the vertex running only of the map modes
+	if enableMapUdfStream && enableBatchMapUdf {
+		return fmt.Errorf("vertex cannot have both map stream and batch map modes enabled")
 	}
 
 	for index, bufferPartition := range fromBuffer {
 		// Populate shuffle function map
 		shuffleFuncMap := make(map[string]*shuffle.Shuffle)
 		for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
-			if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 {
+			if edge.GetToVertexPartitionCount() > 1 {
 				s := shuffle.NewShuffle(edge.To, edge.GetToVertexPartitionCount())
-				shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
+				shuffleFuncMap[edge.From+":"+edge.To] = s
 			}
 		}
 
 		// create a conditional forwarder for each partition
-		getVertexPartitionIdx := GetPartitionedBufferIdx(u.VertexInstance)
-		conditionalForwarder := forwarder.GoWhere(func(keys []string, tags []string) ([]forwarder.VertexBuffer, error) {
+		conditionalForwarder := forwarder.GoWhere(func(keys []string, tags []string, msgId string) ([]forwarder.VertexBuffer, error) {
 			var result []forwarder.VertexBuffer
 
+			// Drop message if it contains the special tag
 			if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
+				metrics.UserDroppedMessages.With(map[string]string{
+					metrics.LabelVertex:             vertexName,
+					metrics.LabelPipeline:           pipelineName,
+					metrics.LabelVertexType:         string(dfv1.VertexTypeMapUDF),
+					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(u.VertexInstance.Replica)),
+				}).Inc()
+
 				return result, nil
 			}
 
+			// Iterate through the edges
 			for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
-				// If returned tags is not "DROP", and there's no conditions defined in the edge, treat it as "ALL"?
-				if edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 {
-					if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
-						toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-						result = append(result, forwarder.VertexBuffer{
-							ToVertexName:         edge.To,
-							ToVertexPartitionIdx: toVertexPartition,
-						})
-					} else {
-						result = append(result, forwarder.VertexBuffer{
-							ToVertexName:         edge.To,
-							ToVertexPartitionIdx: getVertexPartitionIdx(edge.To, int32(edge.GetToVertexPartitionCount())),
-						})
-					}
-				} else {
-					if sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values) {
-						if edge.ToVertexType == dfv1.VertexTypeReduceUDF && edge.GetToVertexPartitionCount() > 1 { // Need to shuffle
-							toVertexPartition := shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)].Shuffle(keys)
-							result = append(result, forwarder.VertexBuffer{
-								ToVertexName:         edge.To,
-								ToVertexPartitionIdx: toVertexPartition,
-							})
-						} else {
-							result = append(result, forwarder.VertexBuffer{
-								ToVertexName:         edge.To,
-								ToVertexPartitionIdx: getVertexPartitionIdx(edge.To, int32(edge.GetToVertexPartitionCount())),
-							})
+				// Condition to proceed for forwarding message: No conditions on edge, or message tags match edge conditions
+				proceed := edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 || sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values)
+
+				if proceed {
+					// if the edge has more than one partition, shuffle the message
+					// else forward the message to the default partition
+					partitionIdx := isb.DefaultPartitionIdx
+					if edge.GetToVertexPartitionCount() > 1 {
+						edgeKey := edge.From + ":" + edge.To
+						if edge.ToVertexType == dfv1.VertexTypeReduceUDF { // Shuffle on keys
+							partitionIdx = shuffleFuncMap[edgeKey].ShuffleOnKeys(keys)
+						} else { // Shuffle on msgId
+							partitionIdx = shuffleFuncMap[edgeKey].ShuffleOnId(msgId)
 						}
 					}
+
+					result = append(result, forwarder.VertexBuffer{
+						ToVertexName:         edge.To,
+						ToVertexPartitionIdx: partitionIdx,
+					})
 				}
 			}
+
 			return result, nil
 		})
-
-		opts := []forward.Option{forward.WithLogger(log),
-			forward.WithUDFStreaming(enableMapUdfStream)}
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 			if x.ReadBatchSize != nil {
 				opts = append(opts, forward.WithReadBatchSize(int64(*x.ReadBatchSize)))
 				opts = append(opts, forward.WithUDFConcurrency(int(*x.ReadBatchSize)))
 			}
 		}
+
+		// if the callback is enabled, create a callback publisher
+		cbEnabled := sharedutil.LookupEnvBoolOr(dfv1.EnvCallbackEnabled, false)
+		if cbEnabled {
+			cbOpts := make([]callback.OptionFunc, 0)
+			cbUrl := os.Getenv(dfv1.EnvCallbackURL)
+			if cbUrl != "" {
+				cbOpts = append(cbOpts, callback.WithCallbackURL(cbUrl))
+			}
+			cbPublisher := callback.NewUploader(ctx, vertexName, pipelineName, cbOpts...)
+			opts = append(opts, forward.WithCallbackUploader(cbPublisher))
+		}
+
 		// create a forwarder for each partition
-		df, err := forward.NewInterStepDataForward(u.VertexInstance, readers[index], writers, conditionalForwarder, mapHandler, mapStreamHandler, fetchWatermark, publishWatermark, idleManager, opts...)
+		df, err := forward.NewInterStepDataForward(u.VertexInstance, readers[index], writers, conditionalForwarder, fetchWatermark, publishWatermark, idleManager, opts...)
 		if err != nil {
 			return err
 		}
@@ -281,8 +334,11 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	}
 
 	var metricsOpts []metrics.Option
+	// Add the correct client handler for the metrics server, based on the mode being used.
 	if enableMapUdfStream {
 		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{mapStreamHandler}, lagReaders)
+	} else if enableBatchMapUdf {
+		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{batchMapHandler}, lagReaders)
 	} else {
 		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{mapHandler}, lagReaders)
 
@@ -321,18 +377,4 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 	log.Info("All udf data processors exited...")
 	return nil
-}
-
-// GetPartitionedBufferIdx returns a function that returns a partitioned buffer index based on the toVertex name and the partition count
-// it distributes the messages evenly to the partitions of the toVertex based on the message count(round-robin)
-func GetPartitionedBufferIdx(vertexInstance *dfv1.VertexInstance) func(toVertex string, toVertexPartitionCount int32) int32 {
-	messagePerPartitionMap := make(map[string]*atomic.Int32)
-	for _, edge := range vertexInstance.Vertex.Spec.ToEdges {
-		messagePerPartitionMap[edge.To] = atomic.NewInt32(0)
-	}
-	return func(toVertex string, toVertexPartitionCount int32) int32 {
-		toVertexPartition := (messagePerPartitionMap[toVertex].Load() + 1) % toVertexPartitionCount
-		messagePerPartitionMap[toVertex].Store(toVertexPartition)
-		return toVertexPartition
-	}
 }

@@ -36,7 +36,9 @@ var vertexInstance = &dfv1.VertexInstance{
 		AbstractVertex: dfv1.AbstractVertex{
 			Name: "testVertex",
 			Sink: &dfv1.Sink{
-				Kafka: &dfv1.KafkaSink{},
+				AbstractSink: dfv1.AbstractSink{
+					Kafka: &dfv1.KafkaSink{},
+				},
 			},
 		},
 	}},

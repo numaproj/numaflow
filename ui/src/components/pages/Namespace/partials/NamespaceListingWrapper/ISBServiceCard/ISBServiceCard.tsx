@@ -32,7 +32,8 @@ export function ISBServiceCard({
   data,
   refresh,
 }: ISBServiceCardProps) {
-  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
+  const { setSidebarProps, isReadOnly } =
+    useContext<AppContextProps>(AppContext);
   const [deleteProps, setDeleteProps] = useState<DeleteProps | undefined>();
 
   const handleUpdateComplete = useCallback(() => {
@@ -43,6 +44,20 @@ export function ISBServiceCard({
     // Close sidebar
     setSidebarProps(undefined);
   }, [setSidebarProps, refresh]);
+
+  const handleViewChange = useCallback(() => {
+    setSidebarProps({
+      type: SidebarType.ISB_UPDATE,
+      specEditorProps: {
+        titleOverride: `View ISB Service: ${data?.name}`,
+        initialYaml: data?.isbService,
+        namespaceId: namespace,
+        isbId: data?.name,
+        viewType: ViewType.READ_ONLY,
+        onUpdateComplete: handleUpdateComplete,
+      },
+    });
+  }, [setSidebarProps, handleUpdateComplete, data]);
 
   const handleEditChange = useCallback(() => {
     setSidebarProps({
@@ -89,7 +104,7 @@ export function ISBServiceCard({
           display: "flex",
           flexDirection: "column",
           width: "100%",
-          borderRadius: "1rem",
+          borderRadius: "1.6rem",
         }}
       >
         <Box
@@ -97,10 +112,10 @@ export function ISBServiceCard({
             display: "flex",
             flexDirection: "row",
             flexGrow: 1,
-            paddingTop: "1rem",
-            paddingLeft: "1rem",
-            paddingRight: "1rem",
-            paddingBottom: "0.8rem",
+            paddingTop: "1.6rem",
+            paddingLeft: "1.6rem",
+            paddingRight: "1.6rem",
+            paddingBottom: "1.28rem",
             alignItems: "center",
           }}
         >
@@ -114,7 +129,7 @@ export function ISBServiceCard({
               display: "flex",
               flexDirection: "row",
               flexGrow: 1,
-              marginLeft: "1rem",
+              marginLeft: "1.6rem",
             }}
           >
             <span className="pipeline-card-name">{data?.name}</span>
@@ -127,11 +142,11 @@ export function ISBServiceCard({
             background: "#F9F9F9",
             flexDirection: "row",
             flexGrow: 1,
-            padding: "1rem",
+            padding: "1.6rem",
             paddingTop: "0",
             width: "100%",
-            borderBottomLeftRadius: "1rem",
-            borderBottomRightRadius: "1rem",
+            borderBottomLeftRadius: "1.6rem",
+            borderBottomRightRadius: "1.6rem",
           }}
         >
           <Grid
@@ -139,7 +154,7 @@ export function ISBServiceCard({
             spacing={2}
             sx={{
               background: "#F9F9F9",
-              marginTop: "0.625rem",
+              marginTop: "1rem",
               flexWrap: "no-wrap",
             }}
           >
@@ -147,8 +162,9 @@ export function ISBServiceCard({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
+                paddingTop: "1.6rem",
+                paddingLeft: "1.6rem",
+                fontSize: "1.6rem",
               }}
             >
               <span>Status:</span>
@@ -158,8 +174,8 @@ export function ISBServiceCard({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
+                paddingTop: "1.6rem",
+                paddingLeft: "1.6rem",
               }}
             >
               <img
@@ -177,8 +193,9 @@ export function ISBServiceCard({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
+                paddingTop: "1.6rem",
+                paddingLeft: "1.6rem",
+                fontSize: "1.6rem",
               }}
             >
               <span>{ISBStatusString[isbStatus]}</span>
@@ -190,7 +207,7 @@ export function ISBServiceCard({
             spacing={2}
             sx={{
               background: "#F9F9F9",
-              marginTop: "0.625rem",
+              marginTop: "1rem",
               flexWrap: "no-wrap",
             }}
           >
@@ -198,8 +215,9 @@ export function ISBServiceCard({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
+                paddingTop: "1.6rem",
+                paddingLeft: "1.6rem",
+                fontSize: "1.6rem",
               }}
             >
               <span>Name:</span>
@@ -210,8 +228,9 @@ export function ISBServiceCard({
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                paddingTop: "1rem",
-                paddingLeft: "1rem",
+                paddingTop: "1.6rem",
+                paddingLeft: "1.6rem",
+                fontSize: "1.6rem",
               }}
             >
               <span>{data?.name}</span>
@@ -224,31 +243,48 @@ export function ISBServiceCard({
             spacing={0.5}
             sx={{
               background: "#F9F9F9",
-              marginTop: "0.625rem",
+              marginTop: "1rem",
               alignItems: "center",
               justifyContent: "end",
-              marginRight: "0.75rem",
+              marginRight: "1.2rem",
             }}
           >
-            <Grid item>
-              <Button
-                onClick={handleEditChange}
-                variant="contained"
-                data-testid="edit-isb"
-              >
-                Edit
-              </Button>
-            </Grid>
-            <Grid item>
-              <Button
-                onClick={handleDeleteChange}
-                variant="contained"
-                sx={{ marginRight: "1rem" }}
-                data-testid="delete-isb"
-              >
-                Delete
-              </Button>
-            </Grid>
+            {isReadOnly && (
+              <Grid item>
+                <Button
+                  onClick={handleViewChange}
+                  variant="contained"
+                  data-testid="view-isb"
+                  sx={{ fontSize: "1.4rem" }}
+                >
+                  View
+                </Button>
+              </Grid>
+            )}
+            {!isReadOnly && (
+              <Grid item>
+                <Button
+                  onClick={handleEditChange}
+                  variant="contained"
+                  data-testid="edit-isb"
+                  sx={{ fontSize: "1.4rem" }}
+                >
+                  Edit
+                </Button>
+              </Grid>
+            )}
+            {!isReadOnly && (
+              <Grid item>
+                <Button
+                  onClick={handleDeleteChange}
+                  variant="contained"
+                  sx={{ marginRight: "1.6rem", fontSize: "1.4rem" }}
+                  data-testid="delete-isb"
+                >
+                  Delete
+                </Button>
+              </Grid>
+            )}
           </Grid>
         </Box>
         {deleteProps && (

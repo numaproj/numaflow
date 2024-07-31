@@ -127,7 +127,7 @@ type myForwardTestRoundRobin struct {
 	count atomic.Int32
 }
 
-func (f *myForwardTestRoundRobin) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f *myForwardTestRoundRobin) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	var output = []forwarder.VertexBuffer{{
 		ToVertexName:         "reduce-to-vertex",
 		ToVertexPartitionIdx: f.count.Load() % 2,
@@ -156,7 +156,10 @@ func (f CounterReduceTest) ApplyReduce(_ context.Context, partitionID *partition
 			MessageInfo: isb.MessageInfo{
 				EventTime: partitionID.End.Add(-1 * time.Millisecond),
 			},
-			ID:   "msgID",
+			ID: isb.MessageID{
+				VertexName: "test-vertex",
+				Offset:     "test-offset",
+			},
 			Keys: []string{"result"},
 		},
 		Body: isb.Body{Payload: b},
@@ -180,7 +183,7 @@ func (f CounterReduceTest) CloseConn(_ context.Context) error {
 	return nil
 }
 
-func (f CounterReduceTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f CounterReduceTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "reduce-to-vertex",
 		ToVertexPartitionIdx: 0,
@@ -213,7 +216,10 @@ func (s SessionSumReduceTest) ApplyReduce(ctx context.Context, partitionID *part
 								MessageInfo: isb.MessageInfo{
 									EventTime: partitionID.End.Add(-1 * time.Millisecond),
 								},
-								ID:   "msgID",
+								ID: isb.MessageID{
+									VertexName: "test-vertex",
+									Offset:     "test-offset",
+								},
 								Keys: []string{win.Keys()[0]},
 							},
 							Body: isb.Body{Payload: b},
@@ -241,7 +247,7 @@ func (s SessionSumReduceTest) CloseConn(ctx context.Context) error {
 	return nil
 }
 
-func (s SessionSumReduceTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (s SessionSumReduceTest) WhereTo(_ []string, _ []string, s2 string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "reduce-to-vertex",
 		ToVertexPartitionIdx: 0,
@@ -275,7 +281,10 @@ func (s SumReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 					MessageInfo: isb.MessageInfo{
 						EventTime: partitionID.End.Add(-1 * time.Millisecond),
 					},
-					ID:   "msgID",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "test-offset",
+					},
 					Keys: []string{k},
 				},
 				Body: isb.Body{Payload: b},
@@ -333,7 +342,10 @@ func (m MaxReduceTest) ApplyReduce(_ context.Context, partitionID *partition.ID,
 					MessageInfo: isb.MessageInfo{
 						EventTime: partitionID.End.Add(-1 * time.Millisecond),
 					},
-					ID:   "msgID",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "test-offset",
+					},
 					Keys: []string{k},
 				},
 				Body: isb.Body{Payload: b},
@@ -410,7 +422,7 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewPnFManager(child, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisher, idleManager, windower)
+	op := pnf.NewProcessAndForward(child, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisher, idleManager, windower)
 
 	var reduceDataForwarder *DataForward
 	reduceDataForwarder, err = NewDataForward(child, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, wmpublisher, publisher,
@@ -507,7 +519,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	windower := fixed.NewWindower(5*time.Second, keyedVertex)
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffers))
 	assert.NoError(t, err)
-	op := pnf.NewPnFManager(ctx, keyedVertex, CounterReduceTest{}, toBuffers, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, CounterReduceTest{}, toBuffers, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffers, pbqManager, storeManager, CounterReduceTest{}, f, publisherMap,
@@ -620,7 +632,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		assert.Equal(t, isb.Header{
 			MessageInfo: isb.MessageInfo{},
 			Kind:        0,
-			ID:          "",
+			ID:          isb.MessageID{},
 		}, msgs[i].Header)
 	}
 
@@ -635,7 +647,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	assert.Equal(t, isb.WMB, msgs[0].Kind)
 	// the second message should be the data message from the closed window above
 	// in the test ApplyUDF above we've set the final message to have key="result"
-	for len(msgs[1].Keys) == 0 {
+	for len(msgs) < 2 || len(msgs[1].Keys) == 0 {
 		select {
 		case <-ctx.Done():
 			if ctx.Err() == context.DeadlineExceeded {
@@ -648,7 +660,10 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	}
 	assert.Equal(t, isb.Data, msgs[1].Kind)
 	// in the test ApplyUDF above we've set the final message to have ID="msgID"
-	assert.Equal(t, "msgID", msgs[1].ID)
+	assert.Equal(t, isb.MessageID{
+		VertexName: "test-vertex",
+		Offset:     "test-offset",
+	}, msgs[1].ID)
 	// in the test ApplyUDF above we've set the final message to have eventTime = partitionID.End-1ms
 	assert.Equal(t, int64(1679961604999), msgs[1].EventTime.UnixMilli())
 	var result PayloadForTest
@@ -663,7 +678,7 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 		assert.Equal(t, isb.Header{
 			MessageInfo: isb.MessageInfo{},
 			Kind:        0,
-			ID:          "",
+			ID:          isb.MessageID{},
 		}, msgs[i].Header)
 	}
 
@@ -717,7 +732,7 @@ func TestReduceDataForward_Count(t *testing.T) {
 	windower := fixed.NewWindower(60*time.Second, keyedVertex)
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewPnFManager(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publisherMap,
@@ -803,7 +818,7 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewPnFManager(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	allowedLatency := 1000
@@ -891,7 +906,7 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	windower := fixed.NewWindower(2*time.Minute, keyedVertex)
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
@@ -977,7 +992,7 @@ func TestReduceDataForward_Max(t *testing.T) {
 	windower := fixed.NewWindower(5*time.Minute, keyedVertex)
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewPnFManager(ctx, keyedVertex, MaxReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, MaxReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
@@ -1064,7 +1079,7 @@ func TestReduceDataForward_FixedSumWithDifferentKeys(t *testing.T) {
 
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
@@ -1171,7 +1186,7 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewPnFManager(ctx, keyedVertex, SessionSumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, SessionSumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, SessionSumReduceTest{}, f, publishersMap,
@@ -1276,7 +1291,7 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, nonKeyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
@@ -1367,7 +1382,7 @@ func TestDataForward_WithContextClose(t *testing.T) {
 
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(cctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
@@ -1465,7 +1480,7 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewPnFManager(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, &myForwardTestRoundRobin{}, publishersMap, idleManager, windower)
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, &myForwardTestRoundRobin{}, publishersMap, idleManager, windower)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, &myForwardTestRoundRobin{}, f, publishersMap,
@@ -1628,7 +1643,11 @@ func buildMessagesForReduce(count int, key string, publishTime time.Time) []isb.
 				MessageInfo: isb.MessageInfo{
 					EventTime: publishTime,
 				},
-				ID:   fmt.Sprintf("%d", i),
+				ID: isb.MessageID{
+					VertexName: "test-vertex",
+					Offset:     "test-offset",
+					Index:      int32(i),
+				},
 				Keys: []string{key},
 			},
 			Body: isb.Body{Payload: result},
@@ -1764,7 +1783,10 @@ func buildIsbMessage(messageValue int, eventTime time.Time) isb.Message {
 			MessageInfo: isb.MessageInfo{
 				EventTime: eventTime,
 			},
-			ID:   fmt.Sprintf("%d", messageValue),
+			ID: isb.MessageID{
+				VertexName: "test-vertex",
+				Offset:     "test-offset",
+			},
 			Keys: messageKey,
 		},
 		Body: isb.Body{Payload: result},
@@ -1851,7 +1873,10 @@ func buildIsbMessageAllowedLatency(messageValue int, eventTime time.Time) isb.Me
 				EventTime: eventTime,
 				IsLate:    true,
 			},
-			ID:   fmt.Sprintf("%d", messageValue),
+			ID: isb.MessageID{
+				VertexName: "test-vertex",
+				Offset:     "test-offset",
+			},
 			Keys: messageKey,
 		},
 		Body: isb.Body{Payload: result},

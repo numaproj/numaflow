@@ -18,6 +18,7 @@ package forward
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -134,7 +135,7 @@ func TestNewDataForward(t *testing.T) {
 		metricsReset()
 		// set the buffer size to be 5 * batchSize, so we have enough space for testing
 		fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-		// as of now, all of our sinkers have only 1 toBuffer
+		// as of now, all of our sinkers have only 1 sinkWriter
 		to1 := simplebuffer.NewInMemoryBuffer(testVertexName, 5*batchSize, 0)
 		toSteps := map[string][]isb.BufferWriter{
 			testVertexName: {to1},
@@ -155,7 +156,7 @@ func TestNewDataForward(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 
-		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil)
+		writeMessages := testutils.BuildTestWriteMessages(4*batchSize, testStartTime, nil, "testVertex")
 
 		_, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 		fetchWatermark := &testForwardFetcher{}
@@ -173,16 +174,20 @@ func TestNewDataForward(t *testing.T) {
 
 		testReadBatchSize := int(batchSize / 2)
 		msgs := to1.GetMessages(testReadBatchSize)
-		for ; msgs[testReadBatchSize-1].ID == ""; msgs = to1.GetMessages(testReadBatchSize) {
+		emptyId := isb.MessageID{}
+
+		for msgs == nil || len(msgs) != testReadBatchSize || msgs[testReadBatchSize-1].ID == emptyId {
 			select {
 			case <-ctx.Done():
-				if ctx.Err() == context.DeadlineExceeded {
+				if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 					t.Fatal("expected to have messages in to buffer", ctx.Err())
 				}
 			default:
 				time.Sleep(1 * time.Millisecond)
+				msgs = to1.GetMessages(testReadBatchSize)
 			}
 		}
+
 		// read some data
 		readMessages, err := to1.Read(ctx, int64(testReadBatchSize))
 		assert.NoError(t, err, "expected no error")
@@ -278,25 +283,11 @@ func TestWriteToBuffer(t *testing.T) {
 		throwError bool
 	}{
 		{
-			name:      "test-discard-latest",
-			batchSize: 10,
-			strategy:  dfv1.DiscardLatest,
-			// should not throw any error as we drop messages and finish writing before context is cancelled
-			throwError: false,
-		},
-		{
 			name:      "test-retry-until-success",
 			batchSize: 10,
 			strategy:  dfv1.RetryUntilSuccess,
 			// should throw context closed error as we keep retrying writing until context is cancelled
 			throwError: true,
-		},
-		{
-			name:      "test-discard-latest",
-			batchSize: 1,
-			strategy:  dfv1.DiscardLatest,
-			// should not throw any error as we drop messages and finish writing before context is cancelled
-			throwError: false,
 		},
 		{
 			name:      "test-retry-until-success",
@@ -351,9 +342,9 @@ func TestWriteToBuffer(t *testing.T) {
 
 			// try to write to buffer after it is full.
 			var messageToStep []isb.Message
-			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime, nil)
+			writeMessages := testutils.BuildTestWriteMessages(4*value.batchSize, testStartTime, nil, "testVertex")
 			messageToStep = append(messageToStep, writeMessages[0:value.batchSize+1]...)
-			_, err = f.writeToBuffer(ctx, buffer, messageToStep)
+			_, _, err = f.writeToSink(ctx, buffer, messageToStep, false)
 
 			assert.Equal(t, value.throwError, err != nil)
 			if value.throwError {

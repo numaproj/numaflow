@@ -172,7 +172,9 @@ func TestInstall(t *testing.T) {
 		testObj := testNativeRedisIsbSvc.DeepCopy()
 		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.NoError(t, err)
+		testObj.Status.MarkChildrenResourceHealthy("RolloutFinished", "partitioned roll out complete: 3 new pods have been updated...")
 		assert.True(t, testObj.Status.IsReady())
+		assert.True(t, testObj.Status.IsHealthy())
 		assert.NotNil(t, testObj.Status.Config.Redis)
 		assert.NotEmpty(t, testObj.Status.Config.Redis.SentinelURL)
 		assert.NotEmpty(t, testObj.Status.Config.Redis.MasterName)
@@ -192,7 +194,9 @@ func TestInstall(t *testing.T) {
 		testObj := testJetStreamIsbSvc.DeepCopy()
 		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.NoError(t, err)
+		testObj.Status.MarkChildrenResourceHealthy("RolloutFinished", "partitioned roll out complete: 3 new pods have been updated...")
 		assert.True(t, testObj.Status.IsReady())
+		assert.True(t, testObj.Status.IsHealthy())
 		assert.NotNil(t, testObj.Status.Config.JetStream)
 		assert.NotEmpty(t, testObj.Status.Config.JetStream.StreamConfig)
 		assert.NotEmpty(t, testObj.Status.Config.JetStream.URL)
@@ -200,6 +204,17 @@ func TestInstall(t *testing.T) {
 		assert.NotNil(t, testObj.Status.Config.JetStream.Auth.Basic)
 		assert.NotNil(t, testObj.Status.Config.JetStream.Auth.Basic.User)
 		assert.NotNil(t, testObj.Status.Config.JetStream.Auth.Basic.Password)
+	})
+
+	t.Run("test child resource not ready", func(t *testing.T) {
+		testObj := testJetStreamIsbSvc.DeepCopy()
+		testObj.Name = "fake-isb"
+		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
+		assert.NoError(t, err)
+		testObj.Status.MarkChildrenResourceNotHealthy("reason", "message")
+		assert.False(t, testObj.Status.IsReady())
+		assert.False(t, testObj.Status.IsHealthy())
+
 	})
 }
 

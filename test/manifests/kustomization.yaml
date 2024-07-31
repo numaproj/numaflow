@@ -19,7 +19,7 @@ patches:
         path: /spec/template/spec/containers/0/env/-
         value:
           name: NUMAFLOW_DEBUG
-          value: "true"
+          value: !!str "true"
     target:
       kind: Deployment
       name: numaflow-controller
@@ -50,15 +50,13 @@ patches:
     target:
       kind: Deployment
       name: numaflow-webhook
-
-patchesStrategicMerge:
-  - |
-    apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: numaflow-cmd-params-config
-    data:
-      controller.disable.leader.election: "true"
+  - patch: |
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: numaflow-cmd-params-config
+      data:
+        controller.leader.election.disabled: "true"
 
 namespace: numaflow-system
 

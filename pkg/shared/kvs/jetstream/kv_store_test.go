@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package jetstream
 
 import (
@@ -10,6 +26,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 
+	natsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 )
@@ -23,7 +40,7 @@ func TestJetStreamKVStoreOperations(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)
 
-	testClient := natstest.JetStreamClient(t, s)
+	testClient := natsclient.NewTestClientWithServer(t, s)
 	defer testClient.Close()
 
 	js, err := testClient.JetStreamContext()
@@ -84,7 +101,7 @@ func TestJetStreamKVStoreWatch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	testClient := natstest.JetStreamClient(t, s)
+	testClient := natsclient.NewTestClientWithServer(t, s)
 	defer testClient.Close()
 
 	js, err := testClient.JetStreamContext()
@@ -107,7 +124,6 @@ func TestJetStreamKVStoreWatch(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	// write some key value entries inside a go routine
 	go func() {
 		defer wg.Done()
 		// write 100 key value pairs
@@ -116,7 +132,6 @@ func TestJetStreamKVStoreWatch(t *testing.T) {
 			assert.NoError(t, err)
 		}
 
-		// delete 50 key value pairs
 		for i := 0; i < 50; i++ {
 			err = kvStore.DeleteKey(ctx, fmt.Sprintf("key-%d", i))
 		}
@@ -161,7 +176,7 @@ func TestJetStreamKVWithoutUpdates(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	testClient := natstest.JetStreamClient(t, s)
+	testClient := natsclient.NewTestClientWithServer(t, s)
 	defer testClient.Close()
 
 	js, err := testClient.JetStreamContext()
@@ -228,4 +243,178 @@ watchLoop:
 	}
 	wg.Wait()
 	assert.Equal(t, 100, kvPutCount)
+}
+
+func TestJetStreamKVStoreErrorBinding(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	kvName := "errorKVStore"
+
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
+
+	testClient := natsclient.NewTestClientWithServer(t, s)
+	defer testClient.Close()
+
+	// Intentionally binding to a non-existing bucket to simulate error
+	_, err := NewKVJetStreamKVStore(ctx, kvName+"-non-existent", testClient)
+	assert.Error(t, err)
+}
+
+func TestJetStreamKVStoreGetValueError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	kvName := "testJetStreamKVStore"
+
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
+
+	testClient := natsclient.NewTestClientWithServer(t, s)
+	defer testClient.Close()
+
+	js, err := testClient.JetStreamContext()
+	assert.NoError(t, err)
+
+	_, err = js.CreateKeyValue(&nats.KeyValueConfig{
+		Bucket: kvName,
+	})
+	assert.NoError(t, err)
+
+	defer func() {
+		err = js.DeleteKeyValue(kvName)
+		assert.NoError(t, err)
+	}()
+
+	kvStore, err := NewKVJetStreamKVStore(ctx, kvName, testClient)
+	assert.NoError(t, err)
+	defer kvStore.Close()
+
+	// Attempt to get a non-existent key to simulate error
+	_, err = kvStore.GetValue(ctx, "non-existent-key")
+	assert.Error(t, err)
+}
+
+func TestJetStreamKVStoreListKeysError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	kvName := "testJetStreamKVStore"
+
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
+
+	testClient := natsclient.NewTestClientWithServer(t, s)
+	defer testClient.Close()
+
+	js, err := testClient.JetStreamContext()
+	assert.NoError(t, err)
+
+	_, err = js.CreateKeyValue(&nats.KeyValueConfig{
+		Bucket: kvName,
+	})
+	assert.NoError(t, err)
+
+	defer func() {
+		err = js.DeleteKeyValue(kvName)
+		assert.NoError(t, err)
+	}()
+
+	kvStore, err := NewKVJetStreamKVStore(ctx, kvName, testClient)
+	assert.NoError(t, err)
+	defer kvStore.Close()
+
+	// Attempt to list keys in a non-existent bucket to simulate error
+	_, err = NewKVJetStreamKVStore(ctx, "non-existent-bucket", testClient)
+	assert.Error(t, err)
+}
+
+func TestJetStreamKVStorePutKVError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	kvName := "testJetStreamKVStore"
+
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
+
+	testClient := natsclient.NewTestClientWithServer(t, s)
+	defer testClient.Close()
+
+	js, err := testClient.JetStreamContext()
+	assert.NoError(t, err)
+
+	_, err = js.CreateKeyValue(&nats.KeyValueConfig{
+		Bucket: kvName,
+	})
+	assert.NoError(t, err)
+
+	defer func() {
+		err = js.DeleteKeyValue(kvName)
+		assert.NoError(t, err)
+	}()
+
+	kvStore, err := NewKVJetStreamKVStore(ctx, kvName, testClient)
+	assert.NoError(t, err)
+	defer kvStore.Close()
+
+	// Forcing a Put error by using a bad key name
+	err = kvStore.PutKV(ctx, "", []byte("value"))
+	assert.Error(t, err)
+}
+
+func TestJetStreamKVStoreWatchError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	kvName := "testJetStreamKVStore"
+
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
+
+	testClient := natsclient.NewTestClientWithServer(t, s)
+	defer testClient.Close()
+
+	js, err := testClient.JetStreamContext()
+	assert.NoError(t, err)
+
+	_, err = js.CreateKeyValue(&nats.KeyValueConfig{
+		Bucket: kvName,
+	})
+	assert.NoError(t, err)
+
+	defer func() {
+		err = js.DeleteKeyValue(kvName)
+		assert.NoError(t, err)
+	}()
+
+	kvStore, err := NewKVJetStreamKVStore(ctx, kvName, testClient)
+	assert.NoError(t, err)
+	defer kvStore.Close()
+
+	// Forcing a watch error by canceling the context immediately
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+	cancel()
+
+	kvCh := kvStore.Watch(ctx)
+	_, ok := <-kvCh
+	assert.False(t, ok)
+}
+func TestJetStreamKVStoreWithContextDone(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	defer cancel()
+
+	kvName := "testJetStreamKVStore"
+
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
+
+	testClient := natsclient.NewTestClientWithServer(t, s)
+	defer testClient.Close()
+
+	kvStore, err := NewKVJetStreamKVStore(ctx, kvName, testClient)
+	assert.Error(t, err)
+	assert.Nil(t, kvStore)
 }

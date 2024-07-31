@@ -42,8 +42,9 @@ const (
 	RemovePauseTimestampPatch = `[{"op": "remove", "path": "/metadata/annotations/numaflow.numaproj.io~1pause-timestamp"}]`
 
 	// ID key in the header of sources like http
-	KeyMetaID        = "x-numaflow-id"
-	KeyMetaEventTime = "x-numaflow-event-time"
+	KeyMetaID          = "X-Numaflow-Id"
+	KeyMetaEventTime   = "X-Numaflow-Event-Time"
+	KeyMetaCallbackURL = "X-Numaflow-Callback-Url"
 
 	DefaultISBSvcName = "default"
 
@@ -67,11 +68,22 @@ const (
 	CtrMain              = "numa"
 	CtrUdf               = "udf"
 	CtrUdsink            = "udsink"
+	CtrFallbackUdsink    = "fb-udsink"
 	CtrUdsource          = "udsource"
 	CtrUdtransformer     = "transformer"
 	CtrUdSideInput       = "udsi"
 	CtrInitSideInputs    = "init-side-inputs"
 	CtrSideInputsWatcher = "side-inputs-synchronizer"
+	CtrServing           = "serving"
+
+	// user-defined container types
+	UDContainerFunction     = "udf"
+	UDContainerSink         = "udsink"
+	UDContainerFallbackSink = "fb-udsink"
+	UDContainerTransformer  = "transformer"
+	UDContainerSource       = "udsource"
+	UDContainerSideInputs   = "udsi"
+	ServingSourceContainer  = "serving"
 
 	// components
 	ComponentISBSvc           = "isbsvc"
@@ -87,45 +99,57 @@ const (
 	ControllerVertex   = "vertex-controller"
 
 	// ENV vars
-	EnvNamespace                      = "NUMAFLOW_NAMESPACE"
-	EnvPipelineName                   = "NUMAFLOW_PIPELINE_NAME"
-	EnvVertexName                     = "NUMAFLOW_VERTEX_NAME"
-	EnvPod                            = "NUMAFLOW_POD"
-	EnvReplica                        = "NUMAFLOW_REPLICA"
-	EnvVertexObject                   = "NUMAFLOW_VERTEX_OBJECT"
-	EnvPipelineObject                 = "NUMAFLOW_PIPELINE_OBJECT"
-	EnvSideInputObject                = "NUMAFLOW_SIDE_INPUT_OBJECT"
-	EnvImage                          = "NUMAFLOW_IMAGE"
-	EnvImagePullPolicy                = "NUMAFLOW_IMAGE_PULL_POLICY"
-	EnvISBSvcRedisSentinelURL         = "NUMAFLOW_ISBSVC_REDIS_SENTINEL_URL"
-	EnvISBSvcSentinelMaster           = "NUMAFLOW_ISBSVC_REDIS_SENTINEL_MASTER"
-	EnvISBSvcRedisURL                 = "NUMAFLOW_ISBSVC_REDIS_URL"
-	EnvISBSvcRedisUser                = "NUMAFLOW_ISBSVC_REDIS_USER"
-	EnvISBSvcRedisPassword            = "NUMAFLOW_ISBSVC_REDIS_PASSWORD"
-	EnvISBSvcRedisSentinelPassword    = "NUMAFLOW_ISBSVC_REDIS_SENTINEL_PASSWORD"
-	EnvISBSvcRedisClusterMaxRedirects = "NUMAFLOW_ISBSVC_REDIS_CLUSTER_MAX_REDIRECTS"
-	EnvISBSvcJetStreamUser            = "NUMAFLOW_ISBSVC_JETSTREAM_USER"
-	EnvISBSvcJetStreamPassword        = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD"
-	EnvISBSvcJetStreamURL             = "NUMAFLOW_ISBSVC_JETSTREAM_URL"
-	EnvISBSvcJetStreamTLSEnabled      = "NUMAFLOW_ISBSVC_JETSTREAM_TLS_ENABLED"
-	EnvISBSvcConfig                   = "NUMAFLOW_ISBSVC_CONFIG"
-	EnvLeaderElectionDisabled         = "NUMAFLOW_LEADER_ELECTION_DISABLED"
-	EnvDebug                          = "NUMAFLOW_DEBUG"
-	EnvPPROF                          = "NUMAFLOW_PPROF"
-	EnvHealthCheckDisabled            = "NUMAFLOW_HEALTH_CHECK_DISABLED"
-	EnvGRPCMaxMessageSize             = "NUMAFLOW_GRPC_MAX_MESSAGE_SIZE"
-	EnvCPURequest                     = "NUMAFLOW_CPU_REQUEST"
-	EnvCPULimit                       = "NUMAFLOW_CPU_LIMIT"
-	EnvMemoryRequest                  = "NUMAFLOW_MEMORY_REQUEST"
-	EnvMemoryLimit                    = "NUMAFLOW_MEMORY_LIMIT"
-	EnvGoDebug                        = "GODEBUG"
-
-	PathVarRun            = "/var/run/numaflow"
-	VertexMetricsPort     = 2469
-	VertexMetricsPortName = "metrics"
-	VertexHTTPSPort       = 8443
-	VertexHTTPSPortName   = "https"
-	DaemonServicePort     = 4327
+	EnvNamespace                        = "NUMAFLOW_NAMESPACE"
+	EnvPipelineName                     = "NUMAFLOW_PIPELINE_NAME"
+	EnvVertexName                       = "NUMAFLOW_VERTEX_NAME"
+	EnvCallbackEnabled                  = "NUMAFLOW_CALLBACK_ENABLED"
+	EnvCallbackURL                      = "NUMAFLOW_CALLBACK_URL"
+	EnvPod                              = "NUMAFLOW_POD"
+	EnvReplica                          = "NUMAFLOW_REPLICA"
+	EnvVertexObject                     = "NUMAFLOW_VERTEX_OBJECT"
+	EnvPipelineObject                   = "NUMAFLOW_PIPELINE_OBJECT"
+	EnvSideInputObject                  = "NUMAFLOW_SIDE_INPUT_OBJECT"
+	EnvImage                            = "NUMAFLOW_IMAGE"
+	EnvImagePullPolicy                  = "NUMAFLOW_IMAGE_PULL_POLICY"
+	EnvISBSvcRedisSentinelURL           = "NUMAFLOW_ISBSVC_REDIS_SENTINEL_URL"
+	EnvISBSvcSentinelMaster             = "NUMAFLOW_ISBSVC_REDIS_SENTINEL_MASTER"
+	EnvISBSvcRedisURL                   = "NUMAFLOW_ISBSVC_REDIS_URL"
+	EnvISBSvcRedisUser                  = "NUMAFLOW_ISBSVC_REDIS_USER"
+	EnvISBSvcRedisPassword              = "NUMAFLOW_ISBSVC_REDIS_PASSWORD"
+	EnvISBSvcRedisSentinelPassword      = "NUMAFLOW_ISBSVC_REDIS_SENTINEL_PASSWORD"
+	EnvISBSvcRedisClusterMaxRedirects   = "NUMAFLOW_ISBSVC_REDIS_CLUSTER_MAX_REDIRECTS"
+	EnvISBSvcJetStreamUser              = "NUMAFLOW_ISBSVC_JETSTREAM_USER"
+	EnvISBSvcJetStreamPassword          = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD"
+	EnvISBSvcJetStreamURL               = "NUMAFLOW_ISBSVC_JETSTREAM_URL"
+	EnvISBSvcJetStreamTLSEnabled        = "NUMAFLOW_ISBSVC_JETSTREAM_TLS_ENABLED"
+	EnvISBSvcConfig                     = "NUMAFLOW_ISBSVC_CONFIG"
+	EnvLeaderElectionDisabled           = "NUMAFLOW_LEADER_ELECTION_DISABLED"
+	EnvLeaderElectionLeaseDuration      = "NUMAFLOW_LEADER_ELECTION_LEASE_DURATION"
+	EnvLeaderElectionLeaseRenewDeadline = "NUMAFLOW_LEADER_ELECTION_LEASE_RENEW_DEADLINE"
+	EnvLeaderElectionLeaseRenewPeriod   = "NUMAFLOW_LEADER_ELECTION_LEASE_RENEW_PERIOD"
+	EnvUDContainerType                  = "NUMAFLOW_UD_CONTAINER_TYPE"
+	EnvDebug                            = "NUMAFLOW_DEBUG"
+	EnvPPROF                            = "NUMAFLOW_PPROF"
+	EnvHealthCheckDisabled              = "NUMAFLOW_HEALTH_CHECK_DISABLED"
+	EnvGRPCMaxMessageSize               = "NUMAFLOW_GRPC_MAX_MESSAGE_SIZE"
+	EnvCPURequest                       = "NUMAFLOW_CPU_REQUEST"
+	EnvCPULimit                         = "NUMAFLOW_CPU_LIMIT"
+	EnvMemoryRequest                    = "NUMAFLOW_MEMORY_REQUEST"
+	EnvMemoryLimit                      = "NUMAFLOW_MEMORY_LIMIT"
+	EnvGoDebug                          = "GODEBUG"
+	EnvServingJetstreamStream           = "NUMAFLOW_SERVING_JETSTREAM_STREAM"
+	EnvServingObject                    = "NUMAFLOW_SERVING_SOURCE_OBJECT"
+	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
+	EnvServingAuthToken                 = "NUMAFLOW_SERVING_AUTH_TOKEN"
+	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
+	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
+	EnvServingStoreTTL                  = "NUMAFLOW_SERVING_STORE_TTL"
+	PathVarRun                          = "/var/run/numaflow"
+	VertexMetricsPort                   = 2469
+	VertexMetricsPortName               = "metrics"
+	VertexHTTPSPort                     = 8443
+	VertexHTTPSPortName                 = "https"
+	DaemonServicePort                   = 4327
 
 	DefaultRequeueAfter = 10 * time.Second
 
@@ -172,14 +196,18 @@ const (
 	DefaultWALCompactionDuration    = 60 * time.Second               // Default compaction duration
 	DefaultCompactWALPath           = PathPBQMount + "/compact-wals" // Default compaction wal path
 
+	// Default Pnf options
+	DefaultPnfBatchSize     = 100         // Default flush batch size for pnf
+	DefaultPnfFlushDuration = time.Second // Default flush duration for pnf
+
+	// DefaultKafkaHandlerChannelSize is the default channel size for kafka handler
+	DefaultKafkaHandlerChannelSize = 100
+
 	// DefaultKeyForNonKeyedData Default key for non keyed stream
 	DefaultKeyForNonKeyedData = "NON_KEYED_STREAM"
 
 	// KeysDelimitter is the delimitter used to join keys
 	KeysDelimitter = ":"
-
-	// UDF map streaming
-	MapUdfStreamKey = "numaflow.numaproj.io/map-stream"
 
 	// Pipeline health status
 	PipelineStatusHealthy   = "healthy"
@@ -189,6 +217,13 @@ const (
 	PipelineStatusInactive  = "inactive"
 	PipelineStatusDeleting  = "deleting"
 	PipelineStatusUnhealthy = "unhealthy"
+
+	// Callback annotation keys
+	CallbackEnabledKey = "numaflow.numaproj.io/callback"
+	CallbackURLKey     = "numaflow.numaproj.io/callback-url"
+
+	// Serving source
+	DefaultServingTTL = 24 * time.Hour
 )
 
 var (

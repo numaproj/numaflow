@@ -17,6 +17,7 @@ limitations under the License.
 package isb
 
 import (
+	"strconv"
 	"time"
 )
 
@@ -63,14 +64,32 @@ type Header struct {
 	MessageInfo
 	// Kind indicates the kind of Message
 	Kind MessageKind
-	// ID is used for exactly-once-semantics. ID is usually populated from the offset, if offset is available.
-	ID string
+	// ID is used for exactly-once-semantics. ID is a combination of vertex name, offset and index of the message.
+	ID MessageID
 	// Keys is (key,value) in the map-reduce paradigm will be used for reduce operation, last key in the list
 	// will be used for conditional forwarding
 	Keys []string
 	// Headers is the headers of the message which can be used to store and propagate source headers like kafka headers,
 	// http headers and Numaflow platform headers like tracing headers etc.
+	//TODO: can we rename this? Gets confusing for understanding headers under header
 	Headers map[string]string
+}
+
+// MessageID is the message ID of the message which is used for exactly-once-semantics.
+type MessageID struct {
+	// VertexName is the name of the vertex
+	VertexName string
+	// Offset is the offset of the message
+	// NOTE: should be unique across the replicas of the vertex, that is the
+	// reason we don't have a separate replica field in the MessageID
+	Offset string
+	// Index is the index of a flatmap message, otherwise use 0
+	Index int32
+}
+
+// String returns the string representation of the MessageID
+func (id MessageID) String() string {
+	return id.VertexName + "-" + id.Offset + "-" + strconv.Itoa(int(id.Index))
 }
 
 // Body is the body of the message
@@ -103,4 +122,13 @@ func (m *Message) ToReadMessage(ot Offset, wm time.Time) *ReadMessage {
 type WriteMessage struct {
 	Message
 	Tags []string
+}
+
+// ReadWriteMessagePair is a pair of ReadMessage and a list of WriteMessage which will be used
+// to map the read message to a list of write messages that the udf returns.
+// The error field is used to capture any error that occurs during the processing of the message.
+type ReadWriteMessagePair struct {
+	ReadMessage   *ReadMessage
+	WriteMessages []*WriteMessage
+	Err           error
 }

@@ -14,12 +14,11 @@ images:
   - name: quay.io/numaproj/numaflow
     newTag: latest
 
-patchesStrategicMerge:
-  - |
-    apiVersion: v1
-    kind: ConfigMap
-    metadata:
-      name: numaflow-cmd-params-config
-    data:
-      namespaced: "true"
-
+patches:
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: numaflow-cmd-params-config
+      data:
+        namespaced: "true"

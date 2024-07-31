@@ -59,7 +59,7 @@ func (r *rpcMsg) String() string {
 
 func NewMockUDSGRPCBasedMap(mockClient *mapmock.MockMapClient) *GRPCBasedMap {
 	c, _ := mapper.NewFromClient(mockClient)
-	return &GRPCBasedMap{c}
+	return &GRPCBasedMap{"test-vertex", c}
 }
 
 func TestGRPCBasedMap_WaitUntilReadyWithMockClient(t *testing.T) {
@@ -121,7 +121,10 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169600, 0),
 					},
-					ID:   "test_id",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "test-offset",
+					},
 					Keys: []string{"test_success_key"},
 				},
 				Body: isb.Body{
@@ -173,7 +176,10 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169660, 0),
 					},
-					ID:   "test_id",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "test-offset",
+					},
 					Keys: []string{"test_error_key"},
 				},
 				Body: isb.Body{
@@ -183,7 +189,7 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, ApplyUDFErr{
+		assert.ErrorIs(t, err, &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
 			InternalErr: InternalErr{
@@ -223,7 +229,10 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169660, 0),
 					},
-					ID:   "test_id",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "test-offset",
+					},
 					Keys: []string{"test_error_key"},
 				},
 				Body: isb.Body{
@@ -233,7 +242,7 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, ApplyUDFErr{
+		assert.ErrorIs(t, err, &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
 			InternalErr: InternalErr{
@@ -280,7 +289,10 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169720, 0),
 					},
-					ID:   "test_id",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "test-offset",
+					},
 					Keys: []string{"test_success_key"},
 				},
 				Body: isb.Body{
@@ -327,7 +339,10 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 					MessageInfo: isb.MessageInfo{
 						EventTime: time.Unix(1661169660, 0),
 					},
-					ID:   "test_id",
+					ID: isb.MessageID{
+						VertexName: "test-vertex",
+						Offset:     "test-offset",
+					},
 					Keys: []string{"test_error_key"},
 				},
 				Body: isb.Body{
@@ -337,7 +352,7 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
 		},
 		)
-		assert.ErrorIs(t, err, ApplyUDFErr{
+		assert.ErrorIs(t, err, &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("%s", err),
 			InternalErr: InternalErr{

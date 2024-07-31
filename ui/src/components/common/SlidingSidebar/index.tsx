@@ -13,6 +13,7 @@ import {
   GeneratorDetails,
   GeneratorDetailsProps,
 } from "./partials/GeneratorDetails";
+import { VersionDetails, VersionDetailsProps } from "./partials/VersionDetails";
 import { Errors } from "./partials/Errors";
 import { PipelineCreate } from "./partials/PipelineCreate";
 import { PipelineUpdate } from "./partials/PipelineUpdate";
@@ -40,6 +41,7 @@ export enum SidebarType {
   EDGE_DETAILS,
   GENERATOR_DETAILS,
   ERRORS,
+  VERSION_DETAILS,
 }
 
 const MIN_WIDTH_BY_TYPE = {
@@ -53,6 +55,7 @@ const MIN_WIDTH_BY_TYPE = {
   [SidebarType.EDGE_DETAILS]: 750,
   [SidebarType.GENERATOR_DETAILS]: 750,
   [SidebarType.ERRORS]: 350,
+  [SidebarType.VERSION_DETAILS]: 350,
 };
 
 export interface SpecEditorModalProps {
@@ -79,6 +82,7 @@ export interface SlidingSidebarProps {
   vertexDetailsProps?: VertexDetailsProps;
   edgeDetailsProps?: EdgeDetailsProps;
   generatorDetailsProps?: GeneratorDetailsProps;
+  versionDetailsProps?: VersionDetailsProps;
   specEditorProps?: SpecEditorSidebarProps;
   parentCloseIndicator?: string;
 }
@@ -91,6 +95,7 @@ export function SlidingSidebar({
   vertexDetailsProps,
   edgeDetailsProps,
   generatorDetailsProps,
+  versionDetailsProps,
   specEditorProps,
   parentCloseIndicator,
 }: SlidingSidebarProps) {
@@ -98,6 +103,8 @@ export function SlidingSidebar({
   const [width, setWidth] = useState<number>(
     type === SidebarType.ERRORS
       ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
+      : type === SidebarType.VERSION_DETAILS
+      ? MIN_WIDTH_BY_TYPE[SidebarType.VERSION_DETAILS]
       : pageWidth * 0.75
   );
   const [minWidth] = useState<number>(0);
@@ -242,6 +249,11 @@ export function SlidingSidebar({
         return <GeneratorDetails {...generatorDetailsProps} />;
       case SidebarType.ERRORS:
         return <Errors />;
+      case SidebarType.VERSION_DETAILS:
+        if (!versionDetailsProps) {
+          break;
+        }
+        return <VersionDetails {...versionDetailsProps} />;
       default:
         break;
     }
@@ -264,6 +276,7 @@ export function SlidingSidebar({
         width: width,
         minWidth: minWidth,
         height: "100%",
+        fontSize: "1.6rem",
       }}
     >
       {slide && (
@@ -289,12 +302,12 @@ export function SlidingSidebar({
         sx={{
           display: "flex",
           flexDirection: "column",
-          paddingTop: "5.25rem",
-          paddingRight: "1.5rem",
-          paddingBottom: "1.5rem",
-          paddingLeft: "1rem",
+          paddingTop: "8.4rem",
+          paddingRight: "2.4rem",
+          paddingBottom: "2.4rem",
+          paddingLeft: "1.6rem",
           width: "100%",
-          height: "calc(100% - 6.75rem)",
+          height: "calc(100% - 10.8rem)",
           overflowX: "scroll",
         }}
       >
@@ -303,11 +316,11 @@ export function SlidingSidebar({
             display: "flex",
             flexDirection: "row",
             justifyContent: "flex-end",
-            marginBottom: "-2rem",
+            marginBottom: "-3.2rem",
           }}
         >
           <IconButton data-testid="close-button" onClick={handleClose}>
-            <CloseIcon />
+            <CloseIcon sx={{ height: "2.4rem", width: "2.4rem" }} />
           </IconButton>
         </Box>
         {content}

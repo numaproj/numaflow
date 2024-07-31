@@ -34,11 +34,15 @@ import (
 
 // GRPCBasedMap is a map applier that uses gRPC client to invoke the map UDF. It implements the applier.MapApplier interface.
 type GRPCBasedMap struct {
-	client mapper.Client
+	vertexName string
+	client     mapper.Client
 }
 
-func NewUDSgRPCBasedMap(client mapper.Client) *GRPCBasedMap {
-	return &GRPCBasedMap{client: client}
+func NewUDSgRPCBasedMap(vertexName string, client mapper.Client) *GRPCBasedMap {
+	return &GRPCBasedMap{
+		vertexName: vertexName,
+		client:     client,
+	}
 }
 
 // CloseConn closes the gRPC client connection.
@@ -110,7 +114,7 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessag
 				return true, nil
 			})
 			if !success {
-				return nil, ApplyUDFErr{
+				return nil, &ApplyUDFErr{
 					UserUDFErr: false,
 					Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
 					InternalErr: InternalErr{
@@ -120,7 +124,7 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessag
 				}
 			}
 		case sdkerr.NonRetryable:
-			return nil, ApplyUDFErr{
+			return nil, &ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
 				InternalErr: InternalErr{
@@ -129,7 +133,7 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessag
 				},
 			}
 		default:
-			return nil, ApplyUDFErr{
+			return nil, &ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
 				InternalErr: InternalErr{
@@ -141,13 +145,18 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessag
 	}
 
 	writeMessages := make([]*isb.WriteMessage, 0)
-	for _, result := range response.GetResults() {
+	for index, result := range response.GetResults() {
 		keys := result.Keys
 		taggedMessage := &isb.WriteMessage{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: parentMessageInfo,
 					Keys:        keys,
+					ID: isb.MessageID{
+						VertexName: u.vertexName,
+						Offset:     readMessage.ReadOffset.String(),
+						Index:      int32(index),
+					},
 				},
 				Body: isb.Body{
 					Payload: result.Value,

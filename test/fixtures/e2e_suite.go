@@ -42,7 +42,7 @@ const (
 	Label          = "numaflow-e2e"
 	LabelValue     = "true"
 	ISBSvcName     = "numaflow-e2e"
-	defaultTimeout = 60 * time.Second
+	defaultTimeout = 90 * time.Second
 
 	LogSourceVertexStarted    = "Start processing source messages"
 	SinkVertexStarted         = "Start processing sink messages"
@@ -58,6 +58,8 @@ var (
 kind: InterStepBufferService
 metadata:
   name: default
+  labels:
+    numaflow-e2e: "true"
 spec:
   redis:
     native:
@@ -67,6 +69,8 @@ spec:
 kind: InterStepBufferService
 metadata:
   name: default
+  labels:
+    numaflow-e2e: "true"
 spec:
   jetstream:
     version: latest
@@ -104,7 +108,7 @@ func (s *E2ESuite) SetupSuite() {
 	s.Given().ISBSvc(getISBSvcSpec()).
 		When().
 		Expect().
-		ISBSvcDeleted(1 * time.Minute)
+		ISBSvcDeleted(defaultTimeout)
 
 	s.Given().ISBSvc(getISBSvcSpec()).
 		When().
@@ -135,7 +139,7 @@ func (s *E2ESuite) TearDownSuite() {
 		DeleteISBSvc().
 		Wait(3 * time.Second).
 		Expect().
-		ISBSvcDeleted(1 * time.Minute)
+		ISBSvcDeleted(defaultTimeout)
 	s.T().Log("ISB svc is deleted")
 	deleteCMD := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", Namespace)
 	s.Given().When().Exec("sh", []string{"-c", deleteCMD}, OutputRegexp(`service "redis" deleted`))

@@ -26,20 +26,14 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	sourceforward "github.com/numaproj/numaflow/pkg/sources/forward"
-	"github.com/numaproj/numaflow/pkg/sources/forward/applier"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
+// FIXME: handle context.
 type natsSource struct {
 	vertexName    string
 	pipelineName  string
@@ -50,20 +44,9 @@ type natsSource struct {
 	bufferSize    int
 	messages      chan *isb.ReadMessage
 	readTimeout   time.Duration
-	cancelFn      context.CancelFunc
-	forwarder     *sourceforward.DataForward
 }
 
-func New(
-	vertexInstance *dfv1.VertexInstance,
-	writers map[string][]isb.BufferWriter,
-	fsd forwarder.ToWhichStepDecider,
-	transformerApplier applier.SourceTransformApplier,
-	fetchWM fetch.SourceFetcher,
-	toVertexPublisherStores map[string]store.WatermarkStore,
-	publishWMStores store.WatermarkStore,
-	idleManager wmb.IdleManager,
-	opts ...Option) (sourcer.Sourcer, error) {
+func New(ctx context.Context, vertexInstance *dfv1.VertexInstance, opts ...Option) (sourcer.SourceReader, error) {
 
 	n := &natsSource{
 		vertexName:    vertexInstance.Vertex.Spec.Name,
@@ -71,37 +54,15 @@ func New(
 		vertexReplica: vertexInstance.Replica,
 		bufferSize:    1000,            // default size
 		readTimeout:   1 * time.Second, // default timeout
+		logger:        logging.FromContext(ctx),
 	}
 	for _, o := range opts {
 		if err := o(n); err != nil {
 			return nil, err
 		}
 	}
-	if n.logger == nil {
-		n.logger = logging.NewLogger()
-	}
+
 	n.messages = make(chan *isb.ReadMessage, n.bufferSize)
-
-	forwardOpts := []sourceforward.Option{sourceforward.WithLogger(n.logger)}
-	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
-		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, sourceforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
-		}
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	n.cancelFn = cancel
-
-	// create a source watermark publisher
-	sourceWmPublisher := publish.NewSourcePublish(ctx, n.pipelineName, n.vertexName,
-		publishWMStores, publish.WithDelay(vertexInstance.Vertex.Spec.Watermark.GetMaxDelay()), publish.WithDefaultPartitionIdx(vertexInstance.Replica))
-
-	sourceForwarder, err := sourceforward.NewDataForward(vertexInstance, n, writers, fsd, transformerApplier, fetchWM, sourceWmPublisher, toVertexPublisherStores, idleManager, forwardOpts...)
-	if err != nil {
-		n.logger.Errorw("Error instantiating the sourceForwarder", zap.Error(err))
-		return nil, err
-	}
-	n.forwarder = sourceForwarder
 
 	source := vertexInstance.Vertex.Spec.Source.Nats
 	opt := []natslib.Option{
@@ -166,7 +127,11 @@ func New(
 				Header: isb.Header{
 					// TODO: Be able to specify event time.
 					MessageInfo: isb.MessageInfo{EventTime: time.Now()},
-					ID:          readOffset.String(),
+					ID: isb.MessageID{
+						VertexName: n.vertexName,
+						Offset:     readOffset.String(),
+						Index:      readOffset.PartitionIdx(),
+					},
 				},
 				Body: isb.Body{
 					Payload: msg.Data,
@@ -248,24 +213,10 @@ func (ns *natsSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 
 func (ns *natsSource) Close() error {
 	ns.logger.Info("Shutting down nats source server...")
-	ns.cancelFn()
 	if err := ns.sub.Unsubscribe(); err != nil {
 		ns.logger.Errorw("Failed to unsubscribe nats subscription", zap.Error(err))
 	}
 	ns.natsConn.Close()
 	ns.logger.Info("Nats source server shutdown")
 	return nil
-}
-
-func (ns *natsSource) Stop() {
-	ns.logger.Info("Stopping nats reader...")
-	ns.forwarder.Stop()
-}
-
-func (ns *natsSource) ForceStop() {
-	ns.Stop()
-}
-
-func (ns *natsSource) Start() <-chan struct{} {
-	return ns.forwarder.Start()
 }

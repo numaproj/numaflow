@@ -23,12 +23,16 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
+	nats2 "github.com/numaproj/numaflow/pkg/shared/clients/nats"
+	"github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
@@ -54,15 +58,15 @@ func (ms *mockIsbSvcClient) GetBufferInfo(ctx context.Context, buffer string) (*
 	}, nil
 }
 
-func (ms *mockIsbSvcClient) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, opts ...isbsvc.CreateOption) error {
+func (ms *mockIsbSvcClient) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, servingSourceStreams []string, opts ...isbsvc.CreateOption) error {
 	return nil
 }
 
-func (ms *mockIsbSvcClient) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error {
+func (ms *mockIsbSvcClient) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, servingSourceStreams []string) error {
 	return nil
 }
 
-func (ms *mockIsbSvcClient) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string) error {
+func (ms *mockIsbSvcClient) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, servingSourceStreams []string) error {
 	return nil
 }
 
@@ -78,16 +82,26 @@ func (mr *mockRater_TestGetVertexMetrics) Start(ctx context.Context) error {
 	return nil
 }
 
-func (mr *mockRater_TestGetVertexMetrics) GetRates(vertexName string, partitionName string) map[string]float64 {
-	res := make(map[string]float64)
-	res["default"] = 4.894736842105263
-	res["1m"] = 5.084745762711864
-	res["5m"] = 4.894736842105263
-	res["15m"] = 4.894736842105263
+func (mr *mockRater_TestGetVertexMetrics) GetRates(vertexName string, partitionName string) map[string]*wrapperspb.DoubleValue {
+	res := make(map[string]*wrapperspb.DoubleValue)
+	res["default"] = wrapperspb.Double(4.894736842105263)
+	res["1m"] = wrapperspb.Double(5.084745762711864)
+	res["5m"] = wrapperspb.Double(4.894736842105263)
+	res["15m"] = wrapperspb.Double(4.894736842105263)
 	return res
 }
 
 func TestGetVertexMetrics(t *testing.T) {
+	s := test.RunJetStreamServer(t)
+	defer test.ShutdownJetStreamServer(t, s)
+
+	// write some messages to the stream
+	conn, err := nats.Connect(s.ClientURL())
+	assert.NoError(t, err)
+	defer conn.Close()
+
+	jsc := nats2.NewTestClient(t, s.ClientURL())
+
 	pipelineName := "simple-pipeline"
 	vertexName := "cat"
 	vertexPartition := int32(1)
@@ -95,7 +109,7 @@ func TestGetVertexMetrics(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: pipelineName},
 		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: vertexName, Partitions: &vertexPartition}}},
 	}
-	client, _ := isbsvc.NewISBJetStreamSvc(pipelineName)
+	client, _ := isbsvc.NewISBJetStreamSvc(pipelineName, jsc)
 	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(client, pipeline, nil, &mockRater_TestGetVertexMetrics{})
 	assert.NoError(t, err)
 
@@ -119,24 +133,24 @@ vertex_pending_messages{period="default",partition_name="-simple-pipeline-cat-0"
 
 	vertex := "cat"
 
-	req := &daemon.GetVertexMetricsRequest{Vertex: &vertex}
+	req := &daemon.GetVertexMetricsRequest{Vertex: vertex}
 
 	resp, err := pipelineMetricsQueryService.GetVertexMetrics(context.Background(), req)
 	assert.NoError(t, err)
 
-	processingRates := make(map[string]float64)
+	processingRates := make(map[string]*wrapperspb.DoubleValue)
 
-	processingRates["15m"] = 4.894736842105263
-	processingRates["1m"] = 5.084745762711864
-	processingRates["5m"] = 4.894736842105263
-	processingRates["default"] = 4.894736842105263
+	processingRates["15m"] = wrapperspb.Double(4.894736842105263)
+	processingRates["1m"] = wrapperspb.Double(5.084745762711864)
+	processingRates["5m"] = wrapperspb.Double(4.894736842105263)
+	processingRates["default"] = wrapperspb.Double(4.894736842105263)
 	assert.Equal(t, resp.VertexMetrics[0].GetProcessingRates(), processingRates)
 
-	pendings := make(map[string]int64)
-	pendings["15m"] = 4
-	pendings["1m"] = 5
-	pendings["5m"] = 6
-	pendings["default"] = 7
+	pendings := make(map[string]*wrapperspb.Int64Value)
+	pendings["15m"] = wrapperspb.Int64(4)
+	pendings["1m"] = wrapperspb.Int64(5)
+	pendings["5m"] = wrapperspb.Int64(6)
+	pendings["default"] = wrapperspb.Int64(7)
 	assert.Equal(t, resp.VertexMetrics[0].GetPendings(), pendings)
 }
 
@@ -169,11 +183,11 @@ func TestGetBuffer(t *testing.T) {
 
 	bufferName := "numaflow-system-simple-pipeline-cat-0"
 
-	req := &daemon.GetBufferRequest{Pipeline: &pipelineName, Buffer: &bufferName}
+	req := &daemon.GetBufferRequest{Pipeline: pipelineName, Buffer: bufferName}
 
 	resp, err := pipelineMetricsQueryService.GetBuffer(context.Background(), req)
 	assert.NoError(t, err)
-	assert.Equal(t, *resp.Buffer.BufferUsage, 0.0006666666666666666)
+	assert.Equal(t, resp.Buffer.BufferUsage.GetValue(), 0.0006666666666666666)
 }
 
 func TestListBuffers(t *testing.T) {
@@ -208,7 +222,7 @@ func TestListBuffers(t *testing.T) {
 	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil, nil)
 	assert.NoError(t, err)
 
-	req := &daemon.ListBuffersRequest{Pipeline: &pipelineName}
+	req := &daemon.ListBuffersRequest{Pipeline: pipelineName}
 
 	resp, err := pipelineMetricsQueryService.ListBuffers(context.Background(), req)
 	assert.NoError(t, err)

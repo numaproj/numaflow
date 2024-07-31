@@ -28,65 +28,22 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sinkforward "github.com/numaproj/numaflow/pkg/sinks/forward"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
-	"github.com/numaproj/numaflow/pkg/watermark/publish"
-	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 )
 
 // ToLog prints the output to a log sinks.
 type ToLog struct {
 	name         string
 	pipelineName string
-	isdf         *sinkforward.DataForward
 	logger       *zap.SugaredLogger
 }
 
-type Option func(*ToLog) error
-
-func WithLogger(log *zap.SugaredLogger) Option {
-	return func(t *ToLog) error {
-		t.logger = log
-		return nil
-	}
-}
-
 // NewToLog returns ToLog type.
-func NewToLog(vertexInstance *dfv1.VertexInstance,
-	fromBuffer isb.BufferReader,
-	fetchWatermark fetch.Fetcher,
-	publishWatermark publish.Publisher,
-	idleManager wmb.IdleManager,
-	opts ...Option) (*ToLog, error) {
-
-	toLog := new(ToLog)
-	name := vertexInstance.Vertex.Spec.Name
-	toLog.name = name
-	toLog.pipelineName = vertexInstance.Vertex.Spec.PipelineName
-	// use opts in future for specifying logger format etc
-	for _, o := range opts {
-		if err := o(toLog); err != nil {
-			return nil, err
-		}
-	}
-	if toLog.logger == nil {
-		toLog.logger = logging.NewLogger()
-	}
-
-	forwardOpts := []sinkforward.Option{sinkforward.WithLogger(toLog.logger)}
-	if x := vertexInstance.Vertex.Spec.Limits; x != nil {
-		if x.ReadBatchSize != nil {
-			forwardOpts = append(forwardOpts, sinkforward.WithReadBatchSize(int64(*x.ReadBatchSize)))
-		}
-	}
-
-	isdf, err := sinkforward.NewDataForward(vertexInstance, fromBuffer, toLog, fetchWatermark, publishWatermark, idleManager, forwardOpts...)
-	if err != nil {
-		return nil, err
-	}
-	toLog.isdf = isdf
-
-	return toLog, nil
+func NewToLog(ctx context.Context, vertexInstance *dfv1.VertexInstance) (*ToLog, error) {
+	return &ToLog{
+		name:         vertexInstance.Vertex.Spec.Name,
+		pipelineName: vertexInstance.Vertex.Spec.PipelineName,
+		logger:       logging.FromContext(ctx),
+	}, nil
 }
 
 // GetName returns the name.
@@ -115,26 +72,11 @@ func (t *ToLog) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, 
 			hStr.WriteString(fmt.Sprintf("%s: %s, ", k, v))
 		}
 		logSinkWriteCount.With(map[string]string{metrics.LabelVertex: t.name, metrics.LabelPipeline: t.pipelineName}).Inc()
-		log.Println(prefix, " Payload - ", string(message.Payload), " Keys - ", message.Keys, " EventTime - ", message.EventTime.UnixMilli(), " Headers - ", hStr.String())
+		log.Println(prefix, " Payload - ", string(message.Payload), " Keys - ", message.Keys, " EventTime - ", message.EventTime.UnixMilli(), " Headers - ", hStr.String(), " ID - ", message.ID.String())
 	}
 	return nil, make([]error, len(messages))
 }
 
 func (t *ToLog) Close() error {
 	return nil
-}
-
-// Start starts sinking to Log.
-func (t *ToLog) Start() <-chan struct{} {
-	return t.isdf.Start()
-}
-
-// Stop stops sinking
-func (t *ToLog) Stop() {
-	t.isdf.Stop()
-}
-
-// ForceStop stops sinking
-func (t *ToLog) ForceStop() {
-	t.isdf.ForceStop()
 }

@@ -10,27 +10,27 @@ spec:
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
-            value: "true" # DO NOT forget the double quotes!!!
+            value: !!str "true"
       source:
         http: {}
     - name: map
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
-            value: "true" # DO NOT forget the double quotes!!!
+            value: !!str "true"
       scale:
         min: 1
         max: 1
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:v0.6.0
+          image: quay.io/numaio/numaflow-go/map-even-odd:stable
     - name: reduce-sliding
       partitions: 2
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:v0.6.0
+          image: quay.io/numaio/numaflow-go/reduce-sum:stable
         groupBy:
           window:
             sliding:
@@ -44,7 +44,7 @@ spec:
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
-            value: "true" # DO NOT forget the double quotes!!!
+            value: !!str "true"
     - name: sink
       scale:
         min: 1

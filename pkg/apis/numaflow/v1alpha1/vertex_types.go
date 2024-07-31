@@ -37,6 +37,9 @@ const (
 	VertexPhaseRunning   VertexPhase = "Running"
 	VertexPhaseSucceeded VertexPhase = "Succeeded"
 	VertexPhaseFailed    VertexPhase = "Failed"
+
+	// VertexConditionPodsHealthy has the status True when all the vertex pods are healthy.
+	VertexConditionPodsHealthy ConditionType = "PodsHealthy"
 )
 
 type VertexType string
@@ -75,6 +78,10 @@ func (v Vertex) IsASource() bool {
 
 func (v Vertex) HasUDTransformer() bool {
 	return v.Spec.HasUDTransformer()
+}
+
+func (v Vertex) HasFallbackUDSink() bool {
+	return v.Spec.HasFallbackUDSink()
 }
 
 func (v Vertex) IsUDSource() bool {
@@ -128,10 +135,18 @@ func (v Vertex) GetServiceObjs() []*corev1.Service {
 	if x := v.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
 		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
 	}
+	// serving source uses the same port as the http source, because both can't be configured at the same time
+	if x := v.Spec.Source; x != nil && x.Serving != nil && x.Serving.Service {
+		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
+	}
 	return svcs
 }
 
-func (v Vertex) getServiceObj(name string, headless bool, port int, servicePortName string) *corev1.Service {
+func (v Vertex) GetServingSourceStreamName() string {
+	return fmt.Sprintf("%s-%s-serving-source", v.Spec.PipelineName, v.Spec.Name)
+}
+
+func (v Vertex) getServiceObj(name string, headless bool, port int32, servicePortName string) *corev1.Service {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       v.Namespace,
@@ -147,7 +162,7 @@ func (v Vertex) getServiceObj(name string, headless bool, port int, servicePortN
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Port: int32(port), TargetPort: intstr.FromInt(port), Name: servicePortName},
+				{Port: port, TargetPort: intstr.FromInt32(port), Name: servicePortName},
 			},
 			Selector: map[string]string{
 				KeyPartOf:       Project,
@@ -172,6 +187,8 @@ func (v Vertex) commonEnvs() []corev1.EnvVar {
 		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
 		{Name: EnvVertexName, Value: v.Spec.Name},
+		{Name: EnvCallbackEnabled, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + CallbackEnabledKey + "']"}}},
+		{Name: EnvCallbackURL, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + CallbackURLKey + "']"}}},
 	}
 }
 
@@ -230,11 +247,12 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	containers[0].ReadinessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/readyz",
-				Port:   intstr.FromInt(VertexMetricsPort),
+				Port:   intstr.FromInt32(VertexMetricsPort),
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
@@ -246,13 +264,16 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/livez",
-				Port:   intstr.FromInt(VertexMetricsPort),
+				Port:   intstr.FromInt32(VertexMetricsPort),
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
 		InitialDelaySeconds: 20,
 		PeriodSeconds:       60,
 		TimeoutSeconds:      30,
+	}
+	containers[0].Ports = []corev1.ContainerPort{
+		{Name: VertexMetricsPortName, ContainerPort: VertexMetricsPort},
 	}
 
 	if len(containers) > 1 { // udf, udsink, udsource, or source vertex specifies a udtransformer
@@ -288,12 +309,22 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 			if containers[i].Name == CtrSideInputsWatcher {
 				containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 			} else {
-				// Readonly mount for user defined containers
+				// Readonly mount for user-defined containers
 				containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
 			}
 		}
 		// Side Inputs init container
 		initContainers[1].VolumeMounts = append(initContainers[1].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
+	}
+
+	if v.IsASource() && v.Spec.Source.Serving != nil {
+		servingContainer, err := v.getServingContainer(req)
+		if err != nil {
+			return nil, err
+		}
+		containers = append(containers, servingContainer)
+		// set the serving source stream name in the environment because the numa container will be reading from it
+		containers[0].Env = append(containers[0].Env, corev1.EnvVar{Name: EnvServingJetstreamStream, Value: req.ServingSourceStreamName})
 	}
 
 	spec := &corev1.PodSpec{
@@ -307,6 +338,110 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		v.Spec.ContainerTemplate.ApplyToNumaflowContainers(spec.Containers)
 	}
 	return spec, nil
+}
+
+func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, error) {
+	servingSource := v.Spec.Source.Serving
+	servingContainer := corev1.Container{
+		Name:            ServingSourceContainer,
+		Env:             req.Env,
+		Image:           "numaserve:0.1", // TODO: use appropriate image
+		ImagePullPolicy: corev1.PullIfNotPresent,
+		Resources:       req.DefaultResources,
+	}
+
+	// set the common envs
+	servingContainer.Env = append(servingContainer.Env, v.commonEnvs()...)
+
+	// set the serving source stream name in the environment
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingJetstreamStream, Value: req.ServingSourceStreamName})
+	// set the serving source spec in the environment
+	servingSourceCopy := servingSource.DeepCopy()
+	servingSourceBytes, err := json.Marshal(servingSourceCopy)
+	if err != nil {
+		return corev1.Container{}, errors.New("failed to marshal serving source spec")
+	}
+	encodedServingSourceSpec := base64.StdEncoding.EncodeToString(servingSourceBytes)
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingObject, Value: encodedServingSourceSpec})
+
+	// set the serving source port in the environment
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingPort, Value: strconv.Itoa(VertexHTTPSPort)})
+
+	// Create a SimplifiedPipelineSpec and populate it with the vertex names and edges
+	simplifiedPipelineSpec := PipelineSpec{
+		Vertices: req.PipelineSpec.Vertices,
+		Edges:    req.PipelineSpec.Edges,
+	}
+
+	pipelineSpecBytes, err := json.Marshal(simplifiedPipelineSpec)
+	if err != nil {
+		return corev1.Container{}, fmt.Errorf("failed to marshal pipeline spec, error: %w", err)
+	}
+	encodedPipelineSpec := base64.StdEncoding.EncodeToString(pipelineSpecBytes)
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{
+		Name:  EnvServingMinPipelineSpec,
+		Value: encodedPipelineSpec,
+	})
+
+	// set the pod IP in the environment, which will be used for receiving callbacks.
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{
+		Name: EnvServingHostIP,
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "status.podIP",
+			},
+		},
+	})
+
+	// set the serving store TTL in the environment
+	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{
+		Name:  EnvServingStoreTTL,
+		Value: strconv.Itoa(int(servingSource.Store.GetTTL().Seconds())),
+	})
+
+	// if auth is configured, set the auth token in the environment
+	if servingSource.Auth != nil && servingSource.Auth.Token != nil {
+		servingContainer.Env = append(servingContainer.Env,
+			corev1.EnvVar{
+				Name: EnvServingAuthToken, ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: servingSource.Auth.Token.Name,
+						},
+						Key: servingSource.Auth.Token.Key,
+					},
+				},
+			},
+		)
+	}
+
+	servingContainer.LivenessProbe = &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path:   "/readyz",
+				Port:   intstr.FromInt32(VertexHTTPSPort),
+				Scheme: corev1.URISchemeHTTP,
+			},
+		},
+		InitialDelaySeconds: 3,
+		PeriodSeconds:       3,
+		TimeoutSeconds:      1,
+	}
+
+	servingContainer.ReadinessProbe = &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path:   "/livez",
+				Port:   intstr.FromInt32(VertexHTTPSPort),
+				Scheme: corev1.URISchemeHTTP,
+			},
+		},
+		InitialDelaySeconds: 20,
+		PeriodSeconds:       60,
+		TimeoutSeconds:      30,
+	}
+
+	return servingContainer, nil
 }
 
 func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
@@ -408,15 +543,6 @@ func (v Vertex) GetReplicas() int {
 	return int(*v.Spec.Replicas)
 }
 
-func (v Vertex) MapUdfStreamEnabled() (bool, error) {
-	if v.Spec.Metadata != nil && v.Spec.Metadata.Annotations != nil {
-		if mapUdfStream, existing := v.Spec.Metadata.Annotations[MapUdfStreamKey]; existing {
-			return strconv.ParseBool(mapUdfStream)
-		}
-	}
-	return false, nil
-}
-
 type VertexSpec struct {
 	AbstractVertex `json:",inline" protobuf:"bytes,1,opt,name=abstractVertex"`
 	PipelineName   string `json:"pipelineName" protobuf:"bytes,2,opt,name=pipelineName"`
@@ -510,6 +636,10 @@ func (av AbstractVertex) IsASource() bool {
 
 func (av AbstractVertex) HasUDTransformer() bool {
 	return av.Source != nil && av.Source.UDTransformer != nil
+}
+
+func (av AbstractVertex) HasFallbackUDSink() bool {
+	return av.IsASink() && av.Sink.Fallback != nil && av.Sink.Fallback.UDSink != nil
 }
 
 func (av AbstractVertex) IsUDSource() bool {
@@ -698,6 +828,7 @@ type VertexStatus struct {
 	Replicas     uint32      `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
 	Selector     string      `json:"selector,omitempty" protobuf:"bytes,5,opt,name=selector"`
 	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,4,opt,name=lastScaledAt"`
+	Status       `json:",inline" protobuf:"bytes,7,opt,name=status"`
 }
 
 func (vs *VertexStatus) MarkPhase(phase VertexPhase, reason, message string) {
@@ -712,6 +843,29 @@ func (vs *VertexStatus) MarkPhaseFailed(reason, message string) {
 
 func (vs *VertexStatus) MarkPhaseRunning() {
 	vs.MarkPhase(VertexPhaseRunning, "", "")
+}
+
+// MarkPodNotHealthy marks the pod not healthy with the given reason and message.
+func (vs *VertexStatus) MarkPodNotHealthy(reason, message string) {
+	vs.MarkFalse(VertexConditionPodsHealthy, reason, message)
+}
+
+// MarkPodHealthy marks the pod as healthy with the given reason and message.
+func (vs *VertexStatus) MarkPodHealthy(reason, message string) {
+	vs.MarkTrueWithReason(VertexConditionPodsHealthy, reason, message)
+}
+
+// InitConditions sets conditions to Unknown state.
+func (vs *VertexStatus) InitConditions() {
+	vs.InitializeConditions(VertexConditionPodsHealthy)
+}
+
+// IsHealthy indicates whether the vertex is healthy or not
+func (vs *VertexStatus) IsHealthy() bool {
+	if vs.Phase != VertexPhaseRunning {
+		return false
+	}
+	return vs.IsReady()
 }
 
 // +kubebuilder:object:root=true

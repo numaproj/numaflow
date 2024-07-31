@@ -1,5 +1,96 @@
 # Changelog
 
+## v1.2.1 (2024-05-07)
+
+ * [89ea33f1](https://github.com/numaproj/numaflow/commit/89ea33f1d69785f6f5f17f1d5854ac189003918a) Update manifests to v1.2.1
+ * [05610ad3](https://github.com/numaproj/numaflow/commit/05610ad3e1a40915ad48c7fa62a8fee0b9235226) fix: height fixes to render pipeline view (#1721)
+
+### Contributors
+
+ * Vedant Gupta
+ * Yashash H L
+
+## v1.2.0 (2024-05-03)
+
+ * [636ef873](https://github.com/numaproj/numaflow/commit/636ef873b4a59e4350d4030ddcc7d86cf5400994) Update manifests to v1.2.0
+ * [c9fc458b](https://github.com/numaproj/numaflow/commit/c9fc458be27b828e143db3fe5b4bb6668e0d1dde) fix: summary bar overlay fix for plugin (#1710)
+ * [120244a3](https://github.com/numaproj/numaflow/commit/120244a3c77192fdfbfb59e96a23d2d37a699154) chore(deps): bump ejs from 3.1.9 to 3.1.10 in /ui (#1711)
+
+### Contributors
+
+ * Vedant Gupta
+ * Yashash H L
+ * dependabot[bot]
+
+## v1.2.0-rc5 (2024-04-24)
+
+ * [2780c8e7](https://github.com/numaproj/numaflow/commit/2780c8e7992187e8b3c135df5d3d95321f418e8c) Update manifests to v1.2.0-rc5
+ * [59e4b453](https://github.com/numaproj/numaflow/commit/59e4b4538575c5ddbf59a5897014da8ae81e5c9c) doc: add "nav" for fallback-sink (#1694)
+ * [df40e089](https://github.com/numaproj/numaflow/commit/df40e0894f8811b8530c44f5d044c1f3feef37e6) doc: reduce streaming (#1689)
+ * [8a6872e8](https://github.com/numaproj/numaflow/commit/8a6872e87e3e91eb380f14593d85e2236891a5a1) doc: Fallback Sink (#1691)
+ * [746ddb0a](https://github.com/numaproj/numaflow/commit/746ddb0abf4a26af65ab6dd3e32514e5bdd44577) chore(deps): bump golang.org/x/net from 0.22.0 to 0.23.0 (#1692)
+ * [e21ac91c](https://github.com/numaproj/numaflow/commit/e21ac91ca03bd4f58fd5aca019d713f08609bfd1) doc: session doc (#1650)
+
+### Contributors
+
+ * Derek Wang
+ * Vigith Maurice
+ * Yashash H L
+ * dependabot[bot]
+
+## v1.2.0-rc4 (2024-04-18)
+
+ * [211bfaca](https://github.com/numaproj/numaflow/commit/211bfacaad4a160d4e94a4dc139e6157b67e43d6) Update manifests to v1.2.0-rc4
+ * [31e1a498](https://github.com/numaproj/numaflow/commit/31e1a498518e2051627efdb9ca334c7dcf8025f9) fix: version downgrade for monaco-editor  (#1673)
+ * [c8634256](https://github.com/numaproj/numaflow/commit/c8634256ee6492af4ef7028ff980aeb7ae0a9828) feat: Fallback Sink  (#1669)
+ * [d68a3468](https://github.com/numaproj/numaflow/commit/d68a34685b1acfd640298caa7eea23cbf4259c22) fix: routing fixes (#1671)
+ * [680e5d4b](https://github.com/numaproj/numaflow/commit/680e5d4b6e2e7729ad059ced90bace064f5b7ac3) feat: controller change for fallback sink (#1664)
+ * [2faf759b](https://github.com/numaproj/numaflow/commit/2faf759b1257a8d0f657f3fa1993c5c26b194518) Enable cors for numaflow api (#1631)
+ * [6910744d](https://github.com/numaproj/numaflow/commit/6910744d0d31c59d6a3b08c1ee47bc208a8aa772) feat: expose controller leader election duration and renew opts (#1657)
+
+### Contributors
+
+ * Ali Ibrahim
+ * Derek Wang
+ * Vedant Gupta
+ * Yashash H L
+
+## v1.2.0-rc3 (2024-04-09)
+
+ * [4e172e80](https://github.com/numaproj/numaflow/commit/4e172e808d31659b2364088d8a07fcf6381d4040) Update manifests to v1.2.0-rc3
+ * [109582c8](https://github.com/numaproj/numaflow/commit/109582c861a0603184e412602488df81eca8c474) fix: add headers to custom sinkrequest (#1653)
+ * [6e12f09e](https://github.com/numaproj/numaflow/commit/6e12f09e42efba50fe251dc1954a3d15ee29c1a8) fix: pass headers to transfomer (#1651)
+ * [0b76352c](https://github.com/numaproj/numaflow/commit/0b76352c5f1d557152f028df3166f098380c0bb8) fix: avoid publishing watermarks for duplicate messages. (#1649)
+ * [1717e511](https://github.com/numaproj/numaflow/commit/1717e511579fb78bc2e51c2da18ea4ef66e81afc) fix: flaky TestDropOnFull  (#1647)
+ * [b4b21a5e](https://github.com/numaproj/numaflow/commit/b4b21a5eb346d6b9d2be149b2c00f7dcbf66ec28) fix: Dedup not working for multi-partitioned edge (#1639)
+ * [7a23eda0](https://github.com/numaproj/numaflow/commit/7a23eda07ae7fc8e7ea89af60af15813b67aae91) fix: readonly view (#1640)
+
+### Contributors
+
+ * Naga
+ * Vedant Gupta
+ * Yashash H L
+
+## v1.2.0-rc2 (2024-04-03)
+
+ * [66cc4903](https://github.com/numaproj/numaflow/commit/66cc4903d480cd4b4eca73b829bfd78b483f4a95) Update manifests to v1.2.0-rc2
+ * [a4c1d480](https://github.com/numaproj/numaflow/commit/a4c1d4803d94226547db0d6db02e440aba933a93) feat: read only view for UI (#1628)
+ * [45032fc6](https://github.com/numaproj/numaflow/commit/45032fc6070494f3e7c16e56b6a7bd0b376f2f2f) fix: race condition while publishing wm inside reduce (#1599)
+ * [3e6cd333](https://github.com/numaproj/numaflow/commit/3e6cd333bfbd20aac9de57432b0c3d85c94695e4) fix: bug in late message handling for sliding window (#1471)
+ * [3d82431b](https://github.com/numaproj/numaflow/commit/3d82431b4fc00e7010f7318266396ebc50e0a392) fix: numaflow package style fixes (#1622)
+ * [73e434a9](https://github.com/numaproj/numaflow/commit/73e434a9742142da873fc9a7c27866a83d15ad45) doc: add new user to the list (#1623)
+ * [f6ed4bbe](https://github.com/numaproj/numaflow/commit/f6ed4bbeb0f163d0326ef07641ac0ecf64217b10) fix: watermark progression during pods creation/deletion (#1619)
+ * [941fc674](https://github.com/numaproj/numaflow/commit/941fc674e845170f9566e21e72622d175f266383) fix: allow pipeline to start with redis isbsvc (Fixes: #1513) (#1567)
+ * [d1e10ffc](https://github.com/numaproj/numaflow/commit/d1e10ffca6887b24a41059293e1964c056d888da) fix: dedup in user defined source (#1613)
+ * [e6b3d39c](https://github.com/numaproj/numaflow/commit/e6b3d39c64fbcd0bf553e2493649787de5a1a399) chore(deps): bump express from 4.18.2 to 4.19.2 in /ui (#1609)
+
+### Contributors
+
+ * Quentin FAIDIDE
+ * Vedant Gupta
+ * Yashash H L
+ * dependabot[bot]
+
 ## v1.2.0-rc1 (2024-03-26)
 
  * [0a1a2e8b](https://github.com/numaproj/numaflow/commit/0a1a2e8b85f98e15d3e6a71eb8c07f591e796ea6) Update manifests to v1.2.0-rc1

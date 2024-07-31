@@ -22,7 +22,9 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/shared/callback"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sinks/sinker"
 )
 
 // options for forwarding the message
@@ -33,8 +35,12 @@ type options struct {
 	sinkConcurrency int
 	// retryInterval is the time.Duration to sleep before retrying
 	retryInterval time.Duration
+	// fbSinkWriter is the writer for the fallback sink
+	fbSinkWriter sinker.SinkWriter
 	// logger is used to pass the logger variable
 	logger *zap.SugaredLogger
+	// cbPublisher is the callback publisher for the vertex.
+	cbPublisher *callback.Uploader
 }
 
 type Option func(*options) error
@@ -76,6 +82,22 @@ func WithRetryInterval(f time.Duration) Option {
 func WithLogger(l *zap.SugaredLogger) Option {
 	return func(o *options) error {
 		o.logger = l
+		return nil
+	}
+}
+
+// WithFbSinkWriter sets the fallback sink writer
+func WithFbSinkWriter(sinkWriter sinker.SinkWriter) Option {
+	return func(o *options) error {
+		o.fbSinkWriter = sinkWriter
+		return nil
+	}
+}
+
+// WithCallbackUploader sets the callback uploader for the vertex
+func WithCallbackUploader(cp *callback.Uploader) Option {
+	return func(o *options) error {
+		o.cbPublisher = cp
 		return nil
 	}
 }

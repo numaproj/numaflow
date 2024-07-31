@@ -179,7 +179,9 @@ export function VertexDetails({
       }}
     >
       {header}
-      <Box sx={{ marginTop: "1rem", borderBottom: 1, borderColor: "divider" }}>
+      <Box
+        sx={{ marginTop: "1.6rem", borderBottom: 1, borderColor: "divider" }}
+      >
         <Tabs
           className="vertex-details-tabs"
           value={tabValue}

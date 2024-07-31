@@ -28,13 +28,29 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
+var (
+	WriteToFallbackErr = ApplyUDSinkErr{
+		UserUDSinkErr: true,
+		Message:       "write to fallback sink",
+	}
+
+	UnknownUDSinkErr = ApplyUDSinkErr{
+		UserUDSinkErr: true,
+		Message:       "unknown error in udsink",
+	}
+	NotFoundErr = ApplyUDSinkErr{
+		UserUDSinkErr: true,
+		Message:       "not found in response",
+	}
+)
+
 // SinkApplier applies the sink on the read message and gives back a response. Any UserError will be retried here, while
 // InternalErr can be returned and could be retried by the callee.
 type SinkApplier interface {
 	ApplySink(ctx context.Context, requests []*sinkpb.SinkRequest) []error
 }
 
-// UDSgRPCBasedUDSink applies user defined sink over gRPC (over Unix Domain Socket) client/server where server is the UDSink.
+// UDSgRPCBasedUDSink applies user-defined sink over gRPC (over Unix Domain Socket) client/server where server is the UDSink.
 type UDSgRPCBasedUDSink struct {
 	client sinkclient.Client
 }
@@ -78,7 +94,7 @@ func (u *UDSgRPCBasedUDSink) ApplySink(ctx context.Context, requests []*sinkpb.S
 	response, err := u.client.SinkFn(ctx, requests)
 	if err != nil {
 		for i := range requests {
-			errs[i] = ApplyUDSinkErr{
+			errs[i] = &ApplyUDSinkErr{
 				UserUDSinkErr: false,
 				Message:       fmt.Sprintf("gRPC client.SinkFn failed, %s", err),
 				InternalErr: InternalErr{
@@ -89,21 +105,28 @@ func (u *UDSgRPCBasedUDSink) ApplySink(ctx context.Context, requests []*sinkpb.S
 		}
 		return errs
 	}
-	// Use ID to map the response messages, so that there's no strict requirement for the user defined sink to return the response in order.
+	// Use ID to map the response messages, so that there's no strict requirement for the user-defined sink to return the response in order.
 	resMap := make(map[string]*sinkpb.SinkResponse_Result)
 	for _, res := range response.GetResults() {
 		resMap[res.GetId()] = res
 	}
 	for i, m := range requests {
 		if r, existing := resMap[m.GetId()]; !existing {
-			errs[i] = fmt.Errorf("not found in response")
+			errs[i] = &NotFoundErr
 		} else {
-			if !r.Success {
+			if r.GetStatus() == sinkpb.Status_FAILURE {
 				if r.GetErrMsg() != "" {
-					errs[i] = fmt.Errorf(r.GetErrMsg())
+					errs[i] = &ApplyUDSinkErr{
+						UserUDSinkErr: true,
+						Message:       r.GetErrMsg(),
+					}
 				} else {
-					errs[i] = fmt.Errorf("unsuccessful due to unknown reason")
+					errs[i] = &UnknownUDSinkErr
 				}
+			} else if r.GetStatus() == sinkpb.Status_FALLBACK {
+				errs[i] = &WriteToFallbackErr
+			} else {
+				errs[i] = nil
 			}
 		}
 	}

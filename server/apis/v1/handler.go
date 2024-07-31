@@ -47,9 +47,9 @@ import (
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	"github.com/numaproj/numaflow/pkg/shared/util"
+	"github.com/numaproj/numaflow/pkg/webhook/validator"
 	"github.com/numaproj/numaflow/server/authn"
 	"github.com/numaproj/numaflow/server/common"
-	"github.com/numaproj/numaflow/webhook/validator"
 )
 
 // Constants for the validation of the pipeline
@@ -58,18 +58,49 @@ const (
 	ValidTypeUpdate = "valid-update"
 )
 
+type handlerOptions struct {
+	// readonly is used to indicate whether the server is in read-only mode
+	readonly bool
+	// daemonClientProtocol is used to indicate the protocol of the daemon client, 'grpc' or 'http'
+	daemonClientProtocol string
+}
+
+func defaultHandlerOptions() *handlerOptions {
+	return &handlerOptions{
+		readonly:             false,
+		daemonClientProtocol: "grpc",
+	}
+}
+
+type HandlerOption func(*handlerOptions)
+
+// WithDaemonClientProtocol sets the protocol of the daemon client.
+func WithDaemonClientProtocol(protocol string) HandlerOption {
+	return func(o *handlerOptions) {
+		o.daemonClientProtocol = protocol
+	}
+}
+
+// WithReadOnlyMode sets the server to read-only mode.
+func WithReadOnlyMode() HandlerOption {
+	return func(o *handlerOptions) {
+		o.readonly = true
+	}
+}
+
 type handler struct {
 	kubeClient           kubernetes.Interface
 	metricsClient        *metricsversiond.Clientset
 	numaflowClient       dfv1clients.NumaflowV1alpha1Interface
-	daemonClientsCache   *lru.Cache[string, *daemonclient.DaemonClient]
+	daemonClientsCache   *lru.Cache[string, daemonclient.DaemonClient]
 	dexObj               *DexObject
 	localUsersAuthObject *LocalUsersAuthObject
 	healthChecker        *HealthChecker
+	opts                 *handlerOptions
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject) (*handler, error) {
+func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, opts ...HandlerOption) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -84,9 +115,15 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	}
 	metricsClient := metricsversiond.NewForConfigOrDie(k8sRestConfig)
 	numaflowClient := dfv1versiond.NewForConfigOrDie(k8sRestConfig).NumaflowV1alpha1()
-	daemonClientsCache, _ := lru.NewWithEvict[string, *daemonclient.DaemonClient](500, func(key string, value *daemonclient.DaemonClient) {
+	daemonClientsCache, _ := lru.NewWithEvict[string, daemonclient.DaemonClient](500, func(key string, value daemonclient.DaemonClient) {
 		_ = value.Close()
 	})
+	o := defaultHandlerOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(o)
+		}
+	}
 	return &handler{
 		kubeClient:           kubeClient,
 		metricsClient:        metricsClient,
@@ -95,6 +132,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 		dexObj:               dexObj,
 		localUsersAuthObject: localUsersAuthObject,
 		healthChecker:        NewHealthChecker(ctx),
+		opts:                 o,
 	}, nil
 }
 
@@ -282,6 +320,12 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 
 // CreatePipeline is used to create a given pipeline
 func (h *handler) CreatePipeline(c *gin.Context) {
+	if h.opts.readonly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	ns := c.Param("namespace")
 	// dryRun is used to check if the operation is just a validation or an actual creation
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
@@ -380,18 +424,18 @@ func (h *handler) GetPipeline(c *gin.Context) {
 	}
 	for _, watermark := range watermarks {
 		// find the largest source vertex watermark
-		if _, ok := source[*watermark.From]; ok {
+		if _, ok := source[watermark.From]; ok {
 			for _, wm := range watermark.Watermarks {
-				if wm > maxWM {
-					maxWM = wm
+				if wm.GetValue() > maxWM {
+					maxWM = wm.GetValue()
 				}
 			}
 		}
 		// find the smallest sink vertex watermark
-		if _, ok := sink[*watermark.To]; ok {
+		if _, ok := sink[watermark.To]; ok {
 			for _, wm := range watermark.Watermarks {
-				if wm < minWM {
-					minWM = wm
+				if wm.GetValue() < minWM {
+					minWM = wm.GetValue()
 				}
 			}
 		}
@@ -410,6 +454,12 @@ func (h *handler) GetPipeline(c *gin.Context) {
 
 // UpdatePipeline is used to update a given pipeline
 func (h *handler) UpdatePipeline(c *gin.Context) {
+	if h.opts.readonly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 	// dryRun is used to check if the operation is just a validation or an actual update
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
@@ -460,6 +510,12 @@ func (h *handler) UpdatePipeline(c *gin.Context) {
 
 // DeletePipeline is used to delete a given pipeline
 func (h *handler) DeletePipeline(c *gin.Context) {
+	if h.opts.readonly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
 	if err := h.numaflowClient.Pipelines(ns).Delete(context.Background(), pipeline, metav1.DeleteOptions{}); err != nil {
@@ -475,6 +531,12 @@ func (h *handler) DeletePipeline(c *gin.Context) {
 
 // PatchPipeline is used to patch the pipeline spec to achieve operations such as "pause" and "resume"
 func (h *handler) PatchPipeline(c *gin.Context) {
+	if h.opts.readonly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
 	patchSpec, err := io.ReadAll(c.Request.Body)
@@ -498,6 +560,12 @@ func (h *handler) PatchPipeline(c *gin.Context) {
 }
 
 func (h *handler) CreateInterStepBufferService(c *gin.Context) {
+	if h.opts.readonly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	ns := c.Param("namespace")
 	// dryRun is used to check if the operation is just a validation or an actual update
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
@@ -567,6 +635,12 @@ func (h *handler) GetInterStepBufferService(c *gin.Context) {
 }
 
 func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
+	if h.opts.readonly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 	// dryRun is used to check if the operation is just a validation or an actual update
 	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
@@ -603,6 +677,12 @@ func (h *handler) UpdateInterStepBufferService(c *gin.Context) {
 }
 
 func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
+	if h.opts.readonly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	ns, isbsvcName := c.Param("namespace"), c.Param("isb-service")
 
 	pipelines, err := h.numaflowClient.Pipelines(ns).List(context.Background(), metav1.ListOptions{})
@@ -662,7 +742,6 @@ func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to get the watermarks for pipeline %q: %s", pipeline, err.Error()))
 		return
 	}
-
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, watermarks))
 }
 
@@ -672,6 +751,12 @@ func (h *handler) respondWithError(c *gin.Context, message string) {
 
 // UpdateVertex is used to update the vertex spec
 func (h *handler) UpdateVertex(c *gin.Context) {
+	if h.opts.readonly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
 	var (
 		requestBody     dfv1.AbstractVertex
 		inputVertexName = c.Param("vertex")
@@ -1096,9 +1181,16 @@ func daemonSvcAddress(ns, pipeline string) string {
 	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-daemon-svc", pipeline), ns, dfv1.DaemonServicePort)
 }
 
-func (h *handler) getDaemonClient(ns, pipeline string) (*daemonclient.DaemonClient, error) {
+func (h *handler) getDaemonClient(ns, pipeline string) (daemonclient.DaemonClient, error) {
 	if dClient, ok := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline)); !ok {
-		c, err := daemonclient.NewDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+		var err error
+		var c daemonclient.DaemonClient
+		// Default to use gRPC client
+		if strings.EqualFold(h.opts.daemonClientProtocol, "http") {
+			c, err = daemonclient.NewRESTfulDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+		} else {
+			c, err = daemonclient.NewGRPCDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+		}
 		if err != nil {
 			return nil, err
 		}

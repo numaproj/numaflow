@@ -25,8 +25,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-// consumerHandler struct
-type consumerHandler struct {
+// ConsumerHandler struct
+type ConsumerHandler struct {
 	inflightAcks chan bool
 	ready        chan bool
 	readyCloser  sync.Once
@@ -35,15 +35,15 @@ type consumerHandler struct {
 	logger       *zap.SugaredLogger
 }
 
-// new handler initializes the channel for passing messages
-func newConsumerHandler(readChanSize int) *consumerHandler {
+// NewConsumerHandler creates new handler and initializes the channel for passing messages
+func NewConsumerHandler(readChanSize int) *ConsumerHandler {
 	// Initializing the inflightAcks channel to closed channel instead of nil will ensure that
 	// the Cleanup func below will not hang on the inflight acks to be completed in the case
 	// the Ack func was not called due to no messages being consumed.
 	var inflightAcks = make(chan bool)
 	close(inflightAcks)
 
-	return &consumerHandler{
+	return &ConsumerHandler{
 		inflightAcks: inflightAcks,
 		ready:        make(chan bool),
 		messages:     make(chan *sarama.ConsumerMessage, readChanSize),
@@ -52,7 +52,7 @@ func newConsumerHandler(readChanSize int) *consumerHandler {
 }
 
 // Setup is run at the beginning of a new session, before ConsumeClaim
-func (consumer *consumerHandler) Setup(sess sarama.ConsumerGroupSession) error {
+func (consumer *ConsumerHandler) Setup(sess sarama.ConsumerGroupSession) error {
 	consumer.sess = sess
 	consumer.readyCloser.Do(func() {
 		close(consumer.ready)
@@ -62,7 +62,7 @@ func (consumer *consumerHandler) Setup(sess sarama.ConsumerGroupSession) error {
 }
 
 // Cleanup is run at the end of a session, once all ConsumeClaim goroutines have exited
-func (consumer *consumerHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
+func (consumer *ConsumerHandler) Cleanup(sess sarama.ConsumerGroupSession) error {
 	consumer.logger.Info("Kafka Consumer Starting Cleanup routine, waiting for in-flight-acks to complete")
 	// wait for inflight acks to be completed.
 	<-consumer.inflightAcks
@@ -72,7 +72,7 @@ func (consumer *consumerHandler) Cleanup(sess sarama.ConsumerGroupSession) error
 }
 
 // ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
-func (consumer *consumerHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+func (consumer *ConsumerHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	// The `ConsumeClaim` itself is called within a goroutine, see:
 	// https://github.com/IBM/sarama/blob/main/consumer_group.go#L27-L29
 	consumer.logger.Info("Kafka Consumer about to claim Messages from the Kafka broker", zap.Int32("partition", claim.Partition()), zap.Int64("offset", claim.InitialOffset()))

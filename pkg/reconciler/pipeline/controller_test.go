@@ -19,6 +19,7 @@ package pipeline
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/goccy/go-json"
 	"github.com/stretchr/testify/assert"
@@ -96,6 +97,54 @@ var (
 			},
 		},
 	}
+
+	testPipelineWithSideinput = &dfv1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pl",
+			Namespace: "test-ns",
+		},
+		Spec: dfv1.PipelineSpec{
+			Vertices: []dfv1.AbstractVertex{
+				{
+					Name: "input",
+					Source: &dfv1.Source{
+						UDTransformer: &dfv1.UDTransformer{
+							Builtin: &dfv1.Transformer{Name: "filter"},
+						}},
+				},
+				{
+					Name: "p1",
+					UDF: &dfv1.UDF{
+						Builtin: &dfv1.Function{Name: "cat"},
+					},
+					SideInputs: []string{"my-sideinput"},
+				},
+				{
+					Name: "output",
+					Sink: &dfv1.Sink{},
+				},
+			},
+			SideInputs: []dfv1.SideInput{
+				{
+					Name: "my-sideinput",
+					Container: &dfv1.Container{
+						Image: "my-image",
+					},
+					Trigger: &dfv1.SideInputTrigger{
+						Schedule: "@every 5s",
+					},
+				},
+			},
+			Edges: []dfv1.Edge{
+				{From: "input", To: "p1"},
+				{From: "p1", To: "output"},
+			},
+			Watermark: dfv1.Watermark{
+				Disabled: false,
+				MaxDelay: &metav1.Duration{Duration: 5 * time.Second},
+			},
+		},
+	}
 )
 
 func init() {
@@ -170,7 +219,7 @@ func Test_reconcileEvents(t *testing.T) {
 		testObj.Name = "very-very-very-loooooooooooooooooooooooooooooooooooong"
 		_, err = r.reconcile(ctx, testObj)
 		assert.Error(t, err)
-		events := getEvents(r)
+		events := getEvents(t, r)
 		assert.Contains(t, events, "Normal UpdatePipelinePhase Updated pipeline phase from Paused to Running")
 		assert.Contains(t, events, "Warning ReconcilePipelineFailed Failed to reconcile pipeline: the length of the pipeline name plus the vertex name is over the max limit. (very-very-very-loooooooooooooooooooooooooooooooooooong-input), [must be no more than 63 characters]")
 	})
@@ -197,7 +246,7 @@ func Test_reconcileEvents(t *testing.T) {
 		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "input", Source: &dfv1.Source{}})
 		_, err = r.reconcile(ctx, testObj)
 		assert.Error(t, err)
-		events := getEvents(r)
+		events := getEvents(t, r)
 		assert.Contains(t, events, "Warning ReconcilePipelineFailed Failed to reconcile pipeline: duplicate vertex name \"input\"")
 	})
 }
@@ -651,7 +700,8 @@ func Test_createOrUpdateSIMDeployments(t *testing.T) {
 	})
 }
 
-func getEvents(reconciler *pipelineReconciler) []string {
+func getEvents(t *testing.T, reconciler *pipelineReconciler) []string {
+	t.Helper()
 	c := reconciler.recorder.(*record.FakeRecorder).Events
 	close(c)
 	events := make([]string, len(c))
@@ -659,4 +709,239 @@ func getEvents(reconciler *pipelineReconciler) []string {
 		events = append(events, msg)
 	}
 	return events
+}
+
+func Test_copyVertexTemplate(t *testing.T) {
+	t.Run("no template", func(t *testing.T) {
+		pl := &dfv1.Pipeline{}
+		vtx := &dfv1.AbstractVertex{}
+		copyVertexTemplate(pl, vtx)
+		assert.Nil(t, vtx.Metadata)
+		assert.Nil(t, vtx.AbstractPodTemplate.Affinity)
+		assert.Nil(t, vtx.AbstractPodTemplate.Tolerations)
+		assert.Nil(t, vtx.AbstractPodTemplate.Priority)
+		assert.Nil(t, vtx.AbstractPodTemplate.DNSConfig)
+		assert.Nil(t, vtx.AbstractPodTemplate.SecurityContext)
+	})
+
+	t.Run("template defined with no vertex customization", func(t *testing.T) {
+		pl := &dfv1.Pipeline{
+			Spec: dfv1.PipelineSpec{
+				Templates: &dfv1.Templates{
+					VertexTemplate: &dfv1.VertexTemplate{
+						AbstractPodTemplate: dfv1.AbstractPodTemplate{
+							Metadata: &dfv1.Metadata{
+								Labels: map[string]string{
+									"label1": "value1",
+									"label2": "value2",
+								},
+								Annotations: map[string]string{
+									"annotation1": "value1",
+									"annotation2": "value2",
+								},
+							},
+							PriorityClassName: "test",
+							DNSConfig: &corev1.PodDNSConfig{
+								Nameservers: []string{"1.1.1.1", "8.8.8.8"},
+							},
+							SecurityContext: &corev1.PodSecurityContext{
+								RunAsUser: ptr.To[int64](1000),
+							},
+						},
+						ContainerTemplate: &dfv1.ContainerTemplate{
+							ImagePullPolicy: corev1.PullNever,
+							Env: []corev1.EnvVar{
+								{Name: "ENV1", Value: "VALUE1"},
+								{Name: "ENV2", Value: "VALUE2"},
+							},
+						},
+						InitContainerTemplate: &dfv1.ContainerTemplate{
+							ImagePullPolicy: corev1.PullNever,
+							Env: []corev1.EnvVar{
+								{Name: "ENV3", Value: "VALUE3"},
+								{Name: "ENV4", Value: "VALUE4"},
+							},
+						},
+					},
+				},
+			},
+		}
+		vtx := &dfv1.AbstractVertex{}
+		copyVertexTemplate(pl, vtx)
+		assert.NotNil(t, vtx.Metadata)
+		assert.Equal(t, 2, len(vtx.Metadata.Labels))
+		assert.Equal(t, "value1", vtx.Metadata.Labels["label1"])
+		assert.Equal(t, "value2", vtx.Metadata.Labels["label2"])
+		assert.Equal(t, 2, len(vtx.Metadata.Annotations))
+		assert.Equal(t, "value1", vtx.Metadata.Annotations["annotation1"])
+		assert.Equal(t, "value2", vtx.Metadata.Annotations["annotation2"])
+		assert.Equal(t, "test", vtx.PriorityClassName)
+		assert.Equal(t, 2, len(vtx.DNSConfig.Nameservers))
+		assert.Equal(t, "1.1.1.1", vtx.DNSConfig.Nameservers[0])
+		assert.Equal(t, "8.8.8.8", vtx.DNSConfig.Nameservers[1])
+		assert.Equal(t, int64(1000), *vtx.SecurityContext.RunAsUser)
+		assert.Equal(t, corev1.PullNever, vtx.ContainerTemplate.ImagePullPolicy)
+		assert.Equal(t, 2, len(vtx.ContainerTemplate.Env))
+		assert.Equal(t, "ENV1", vtx.ContainerTemplate.Env[0].Name)
+		assert.Equal(t, "VALUE1", vtx.ContainerTemplate.Env[0].Value)
+		assert.Equal(t, corev1.PullNever, vtx.InitContainerTemplate.ImagePullPolicy)
+		assert.Equal(t, 2, len(vtx.InitContainerTemplate.Env))
+		assert.Equal(t, "ENV3", vtx.InitContainerTemplate.Env[0].Name)
+		assert.Equal(t, "VALUE3", vtx.InitContainerTemplate.Env[0].Value)
+	})
+
+	t.Run("template with vertex override", func(t *testing.T) {
+		pl := &dfv1.Pipeline{
+			Spec: dfv1.PipelineSpec{
+				Templates: &dfv1.Templates{
+					VertexTemplate: &dfv1.VertexTemplate{
+						AbstractPodTemplate: dfv1.AbstractPodTemplate{
+							Metadata: &dfv1.Metadata{
+								Labels: map[string]string{
+									"label1": "value1",
+									"label2": "value2",
+								},
+								Annotations: map[string]string{
+									"annotation1": "value1",
+									"annotation2": "value2",
+								},
+							},
+							PriorityClassName: "test",
+							DNSConfig: &corev1.PodDNSConfig{
+								Nameservers: []string{"1.1.1.1", "8.8.8.8", "4.4.4.4"},
+							},
+							SecurityContext: &corev1.PodSecurityContext{
+								RunAsUser: ptr.To[int64](1000),
+							},
+						},
+						ContainerTemplate: &dfv1.ContainerTemplate{
+							ImagePullPolicy: corev1.PullNever,
+							Env: []corev1.EnvVar{
+								{Name: "ENV1", Value: "VALUE1"},
+								{Name: "ENV2", Value: "VALUE2"},
+							},
+						},
+						InitContainerTemplate: &dfv1.ContainerTemplate{
+							ImagePullPolicy: corev1.PullNever,
+							Env: []corev1.EnvVar{
+								{Name: "ENV3", Value: "VALUE3"},
+								{Name: "ENV4", Value: "VALUE4"},
+							},
+							EnvFrom: []corev1.EnvFromSource{
+								{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: "test"}}},
+							},
+						},
+					},
+				},
+			},
+		}
+		vtx := &dfv1.AbstractVertex{
+			AbstractPodTemplate: dfv1.AbstractPodTemplate{
+				Metadata: &dfv1.Metadata{
+					Labels: map[string]string{
+						"existing-label": "existing-value",
+						"label2":         "value22",
+					},
+					Annotations: map[string]string{
+						"existing-annotation": "existing-value",
+						"annotation2":         "value22",
+					},
+				},
+				PriorityClassName: "test2",
+				DNSConfig: &corev1.PodDNSConfig{
+					Nameservers: []string{"1.1.1.1", "8.8.8.8", "9.9.9.9"},
+				},
+				SecurityContext: &corev1.PodSecurityContext{
+					RunAsUser: ptr.To[int64](2000),
+				},
+			},
+			ContainerTemplate: &dfv1.ContainerTemplate{
+				ImagePullPolicy: corev1.PullAlways,
+				Env: []corev1.EnvVar{
+					{Name: "ENV1", Value: "VALUE11"},
+					{Name: "ENV3", Value: "VALUE33"},
+				},
+			},
+			InitContainerTemplate: &dfv1.ContainerTemplate{
+				Env: []corev1.EnvVar{
+					{Name: "ENV3", Value: "VALUE33"},
+					{Name: "ENV4", Value: "VALUE44"},
+				},
+				SecurityContext: &corev1.SecurityContext{
+					Capabilities: &corev1.Capabilities{
+						Add: []corev1.Capability{"NET_ADMIN"},
+					},
+				},
+				EnvFrom: []corev1.EnvFromSource{},
+			},
+		}
+		copyVertexTemplate(pl, vtx)
+		assert.NotNil(t, vtx.Metadata)
+		assert.Equal(t, 3, len(vtx.Metadata.Labels))
+		assert.Equal(t, "existing-value", vtx.Metadata.Labels["existing-label"])
+		assert.Equal(t, "value1", vtx.Metadata.Labels["label1"])
+		assert.Equal(t, "value22", vtx.Metadata.Labels["label2"])
+		assert.Equal(t, 3, len(vtx.Metadata.Annotations))
+		assert.Equal(t, "existing-value", vtx.Metadata.Annotations["existing-annotation"])
+		assert.Equal(t, "value1", vtx.Metadata.Annotations["annotation1"])
+		assert.Equal(t, "value22", vtx.Metadata.Annotations["annotation2"])
+		assert.Equal(t, "test2", vtx.PriorityClassName)
+		assert.Equal(t, 3, len(vtx.DNSConfig.Nameservers))
+		assert.Equal(t, "1.1.1.1", vtx.DNSConfig.Nameservers[0])
+		assert.Equal(t, "8.8.8.8", vtx.DNSConfig.Nameservers[1])
+		assert.Equal(t, "9.9.9.9", vtx.DNSConfig.Nameservers[2])
+		assert.Equal(t, int64(2000), *vtx.SecurityContext.RunAsUser)
+		assert.Equal(t, corev1.PullAlways, vtx.ContainerTemplate.ImagePullPolicy)
+		assert.Equal(t, 2, len(vtx.ContainerTemplate.Env))
+		assert.Equal(t, "ENV1", vtx.ContainerTemplate.Env[0].Name)
+		assert.Equal(t, "VALUE11", vtx.ContainerTemplate.Env[0].Value)
+		assert.Equal(t, "ENV3", vtx.ContainerTemplate.Env[1].Name)
+		assert.Equal(t, "VALUE33", vtx.ContainerTemplate.Env[1].Value)
+		assert.Nil(t, vtx.ContainerTemplate.SecurityContext)
+		assert.Equal(t, corev1.PullNever, vtx.InitContainerTemplate.ImagePullPolicy)
+		assert.Equal(t, 2, len(vtx.InitContainerTemplate.Env))
+		assert.Equal(t, "ENV3", vtx.InitContainerTemplate.Env[0].Name)
+		assert.Equal(t, "VALUE33", vtx.InitContainerTemplate.Env[0].Value)
+		assert.Equal(t, "ENV4", vtx.InitContainerTemplate.Env[1].Name)
+		assert.Equal(t, "VALUE44", vtx.InitContainerTemplate.Env[1].Value)
+		assert.NotNil(t, vtx.InitContainerTemplate.SecurityContext)
+		assert.Equal(t, 1, len(vtx.InitContainerTemplate.SecurityContext.Capabilities.Add))
+		assert.Equal(t, 1, len(vtx.InitContainerTemplate.EnvFrom))
+		assert.NotNil(t, vtx.InitContainerTemplate.EnvFrom[0].SecretRef)
+		assert.Equal(t, "test", vtx.InitContainerTemplate.EnvFrom[0].SecretRef.Name)
+	})
+}
+
+func Test_checkChildrenResourceStatus(t *testing.T) {
+	t.Run("test check children resource status", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		r := &pipelineReconciler{
+			client:   cl,
+			scheme:   scheme.Scheme,
+			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+			image:    testFlowImage,
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
+		}
+		testObj := testPipelineWithSideinput.DeepCopy()
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		err = checkChildrenResourceStatus(ctx, cl, testObj)
+		assert.NoError(t, err)
+		for _, c := range testObj.Status.Conditions {
+			if c.Type == string(dfv1.PipelineConditionDaemonServiceHealthy) {
+				assert.Equal(t, string(corev1.ConditionTrue), string(c.Status))
+			} else if c.Type == string(dfv1.PipelineConditionSideInputsManagersHealthy) {
+				assert.Equal(t, string(corev1.ConditionTrue), string(c.Status))
+			} else if c.Type == string(dfv1.PipelineConditionVerticesHealthy) {
+				assert.Equal(t, string(corev1.ConditionFalse), string(c.Status))
+			}
+		}
+	})
 }

@@ -9,17 +9,21 @@ import ScopedCssBaseline from "@mui/material/ScopedCssBaseline";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
 import CircularProgress from "@mui/material/CircularProgress";
-import { Route, useLocation, Switch, useHistory } from "react-router-dom";
+import { Route, useLocation, useHistory, Switch } from "react-router-dom";
+import { isEqual } from "lodash";
 import { Breadcrumbs } from "../Breadcrumbs/Breadcrumbs";
 import { Routes } from "../Routes/Routes";
 import { useSystemInfoFetch } from "../../../utils/fetchWrappers/systemInfoFetch";
 import { notifyError } from "../../../utils/error";
 import {
+  SidebarType,
   SlidingSidebar,
   SlidingSidebarProps,
 } from "../../common/SlidingSidebar";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
 import { AppError, AppProps, UserInfo } from "../../../types/declarations/app";
+import { VersionDetailsProps } from "../../common/SlidingSidebar/partials/VersionDetails";
+
 import { AppContext } from "../../../App";
 
 import "./App.css";
@@ -47,6 +51,9 @@ function App(props: AppProps) {
   >();
   const [errors, setErrors] = useState<AppError[]>([]);
   const [userInfo, setUserInfo] = useState<UserInfo | undefined>();
+  const [versionDetails, setVersionDetails] = useState<
+    VersionDetailsProps | undefined
+  >(undefined);
   const {
     systemInfo,
     error: systemInfoError,
@@ -54,16 +61,30 @@ function App(props: AppProps) {
   } = useSystemInfoFetch({ host: hostUrl });
 
   const location = useLocation();
-  // const history = useHistory();
-  //
-  // useEffect(() => {
-  //   const query = new URLSearchParams(location.search);
-  //   const ns = query.get("namespace") || "";
-  //
-  //   if (location.pathname === "/" && ns !== namespace) {
-  //     history.push(`?namespace=${namespace}`);
-  //   }
-  // }, [location, history, namespace]);
+  const history = useHistory();
+
+  useEffect(() => {
+    const query = new URLSearchParams(location.search);
+    const ns = query.get("namespace") || "";
+
+    if (location.pathname === "/" && ns !== namespace) {
+      history.push(`?namespace=${namespace}`);
+    }
+  }, [location, history, namespace]);
+
+  useEffect(() => {
+    if (systemInfo?.version) {
+      const parts = systemInfo?.version.split(", ");
+      const kv_pairs: any = {};
+      for (const part of parts) {
+        const [key, value] = part.split(": ");
+        kv_pairs[key.trim()] = value.trim() === "" ? "unknown" : value.trim();
+      }
+      if (!isEqual(versionDetails, kv_pairs)) {
+        setVersionDetails(kv_pairs);
+      }
+    }
+  }, [systemInfo]);
 
   useEffect(() => {
     // Route changed
@@ -114,6 +135,24 @@ function App(props: AppProps) {
     setErrors([]);
   }, []);
 
+  const handleVersionDetails = useCallback(() => {
+    setSidebarProps({
+      type: SidebarType.VERSION_DETAILS,
+      slide: false,
+      pageWidth,
+      versionDetailsProps: {
+        Version: versionDetails?.Version,
+        BuildDate: versionDetails?.BuildDate,
+        GitCommit: versionDetails?.GitCommit,
+        GitTag: versionDetails?.GitTag,
+        GitTreeState: versionDetails?.GitTreeState,
+        GoVersion: versionDetails?.GoVersion,
+        Compiler: versionDetails?.Compiler,
+        Platform: versionDetails?.Platform,
+      },
+    });
+  }, [versionDetails, pageWidth]);
+
   const routes = useMemo(() => {
     if (loading) {
       // System info loading
@@ -160,18 +199,22 @@ function App(props: AppProps) {
             <Routes namespace={namespace} />
           </Route>
           <Route path="*">
-            <main style={{ padding: "1rem" }}>
+            <main style={{ padding: "1.6rem", fontSize: "1.6rem" }}>
               <p>There's nothing here!</p>
             </main>
           </Route>
         </Switch>
       );
     }
-    return <Box>Missing host or namespace</Box>;
+    return (
+      <Box sx={{ padding: "1.6rem", fontSize: "1.6rem" }}>
+        Missing host or namespace
+      </Box>
+    );
   }, [systemInfo, systemInfoError, loading, hostUrl, namespace]);
 
   return (
-    <div ref={pageRef} className="app-container">
+    <div ref={pageRef} className="app-container" style={{ height: "1000px" }}>
       <AppContext.Provider
         value={{
           systemInfo,
@@ -179,6 +222,7 @@ function App(props: AppProps) {
           host: hostUrl,
           namespace,
           isPlugin: true,
+          isReadOnly: systemInfo?.isReadOnly || false,
           sidebarProps,
           setSidebarProps,
           errors,
@@ -188,7 +232,7 @@ function App(props: AppProps) {
           setUserInfo,
         }}
       >
-        <ScopedCssBaseline>
+        <ScopedCssBaseline sx={{ fontFamily: "Avenir, sans-serif" }}>
           <Box
             sx={{
               display: "flex",
@@ -198,16 +242,19 @@ function App(props: AppProps) {
             }}
           >
             <Box
+              sx={{ cursor: "pointer", ml: "2rem", color: "#A9A9A9" }}
+              onClick={handleVersionDetails}
+            >
+              {versionDetails?.Version}
+            </Box>
+            <Box
               sx={{
                 display: "flex",
                 flexDirection: "column",
                 width: "100%",
                 overflow: "auto",
-                height: "2.0625rem",
                 background: "#F8F8FB",
-                zIndex: (theme) => theme.zIndex.drawer - 1,
-                // position: "fixed",
-                top: "3.75rem",
+                zIndex: "auto",
               }}
             >
               <Breadcrumbs namespace={namespace} />
@@ -220,7 +267,6 @@ function App(props: AppProps) {
                 width: "100%",
                 height: "100%",
                 overflow: "auto",
-                marginTop: 0,
               }}
             >
               {routes}

@@ -111,10 +111,10 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		vertex.Status.MarkPhaseFailed("FindISBSvcFailed", err.Error())
 		return ctrl.Result{}, err
 	}
-	if !isbSvc.Status.IsReady() {
-		log.Errorw("ISB Service is not in ready status", zap.String("isbsvc", isbSvcName), zap.Error(err))
-		vertex.Status.MarkPhaseFailed("ISBSvcNotReady", "isbsvc not ready")
-		return ctrl.Result{}, fmt.Errorf("isbsvc not ready")
+	if !isbSvc.Status.IsHealthy() {
+		log.Errorw("ISB Service is not in healthy status", zap.String("isbsvc", isbSvcName), zap.Error(err))
+		vertex.Status.MarkPhaseFailed("ISBSvcNotHealthy", "isbsvc not healthy")
+		return ctrl.Result{}, fmt.Errorf("isbsvc not healthy")
 	}
 
 	if vertex.Scalable() { // Add to autoscaling watcher
@@ -122,6 +122,11 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	}
 
 	desiredReplicas := vertex.GetReplicas()
+	// Set metrics
+	defer func() {
+		reconciler.VertexDisiredReplicas.WithLabelValues(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name).Set(float64(desiredReplicas))
+		reconciler.VertexCurrentReplicas.WithLabelValues(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name).Set(float64(vertex.Status.Replicas))
+	}()
 
 	if vertex.IsReduceUDF() {
 		if x := vertex.Spec.UDF.GroupBy.Storage; x != nil && x.PersistentVolumeClaim != nil {
@@ -251,20 +256,6 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		if needToCreate {
 			labels := map[string]string{}
 			annotations := map[string]string{}
-			if pipeline.Spec.Templates != nil && pipeline.Spec.Templates.VertexTemplate != nil {
-				apt := pipeline.Spec.Templates.VertexTemplate.AbstractPodTemplate
-				apt.ApplyToPodSpec(podSpec)
-				if apt.Metadata != nil && len(apt.Metadata.Labels) > 0 {
-					for k, v := range apt.Metadata.Labels {
-						labels[k] = v
-					}
-				}
-				if apt.Metadata != nil && len(apt.Metadata.Annotations) > 0 {
-					for k, v := range apt.Metadata.Annotations {
-						annotations[k] = v
-					}
-				}
-			}
 			if x := vertex.Spec.Metadata; x != nil {
 				for k, v := range x.Annotations {
 					annotations[k] = v
@@ -289,6 +280,8 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 				annotations[dfv1.KeyDefaultContainer] = dfv1.CtrUdsource
 			} else if vertex.HasUDTransformer() {
 				annotations[dfv1.KeyDefaultContainer] = dfv1.CtrUdtransformer
+			} else if vertex.HasFallbackUDSink() {
+				annotations[dfv1.KeyDefaultContainer] = dfv1.CtrFallbackUdsink
 			}
 			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -327,6 +320,9 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	vertex.Status.Selector = selector.String()
 
 	vertex.Status.MarkPhaseRunning()
+	if err = checkChildrenResourceStatus(ctx, r.client, vertex); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to check children resource status: %w", err)
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -351,25 +347,18 @@ func (r *vertexReconciler) buildReduceVertexPVCSpec(vertex *dfv1.Vertex, replica
 
 func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, isbSvcConfig dfv1.BufferServiceConfig, replicaIndex int) (*corev1.PodSpec, error) {
 	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
-
 	podSpec, err := vertex.GetPodSpec(dfv1.GetVertexPodSpecReq{
-		ISBSvcType:          isbSvcType,
-		Image:               r.image,
-		PullPolicy:          corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
-		Env:                 envs,
-		SideInputsStoreName: pl.GetSideInputsStoreName(),
-		DefaultResources:    r.config.GetDefaults().GetDefaultContainerResources(),
+		ISBSvcType:              isbSvcType,
+		Image:                   r.image,
+		PullPolicy:              corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
+		Env:                     envs,
+		SideInputsStoreName:     pl.GetSideInputsStoreName(),
+		ServingSourceStreamName: vertex.GetServingSourceStreamName(),
+		PipelineSpec:            pl.Spec,
+		DefaultResources:        r.config.GetDefaults().GetDefaultContainerResources(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate pod spec, error: %w", err)
-	}
-
-	if pl.Spec.Templates != nil && pl.Spec.Templates.VertexTemplate != nil && pl.Spec.Templates.VertexTemplate.ContainerTemplate != nil {
-		pl.Spec.Templates.VertexTemplate.ContainerTemplate.ApplyToNumaflowContainers(podSpec.Containers)
-	}
-
-	if pl.Spec.Templates != nil && pl.Spec.Templates.VertexTemplate != nil && pl.Spec.Templates.VertexTemplate.InitContainerTemplate != nil {
-		pl.Spec.Templates.VertexTemplate.InitContainerTemplate.ApplyToNumaflowContainers(podSpec.InitContainers)
 	}
 
 	// Attach secret or configmap volumes if any
@@ -452,4 +441,22 @@ func (r *vertexReconciler) markPhaseLogEvent(vertex *dfv1.Vertex, log *zap.Sugar
 	log.Errorw(logMsg, logWith)
 	vertex.Status.MarkPhaseFailed(reason, message)
 	r.recorder.Event(vertex, corev1.EventTypeWarning, reason, message)
+}
+
+func checkChildrenResourceStatus(ctx context.Context, c client.Client, vertex *dfv1.Vertex) error {
+	// fetch the pods for calculating the status of child resources
+	var podList corev1.PodList
+	selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + vertex.Spec.PipelineName + "," + dfv1.KeyVertexName + "=" + vertex.Spec.Name)
+	if err := c.List(ctx, &podList, &client.ListOptions{Namespace: vertex.GetNamespace(), LabelSelector: selector}); err != nil {
+		vertex.Status.MarkPodNotHealthy("ListVerticesPodsFailed", err.Error())
+		return err
+	}
+
+	if msg, reason, status := getVertexStatus(&podList); status {
+		vertex.Status.MarkPodHealthy(reason, msg)
+	} else {
+		vertex.Status.MarkPodNotHealthy(reason, msg)
+	}
+
+	return nil
 }

@@ -14,22 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/*
-
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package v1alpha1
 
 import (
@@ -51,6 +35,9 @@ const (
 	// ISBSvcConditionDeployed has the status True when the InterStepBufferService
 	// has its RestfulSet/Deployment as well as services created.
 	ISBSvcConditionDeployed ConditionType = "Deployed"
+
+	// ISBSvcConditionChildrenResourcesHealthy has the status True when the child resources are healthy.
+	ISBSvcConditionChildrenResourcesHealthy ConditionType = "ChildrenResourcesHealthy"
 )
 
 type ISBSvcType string
@@ -105,6 +92,8 @@ type InterStepBufferServiceStatus struct {
 	Message string              `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
 	Config  BufferServiceConfig `json:"config,omitempty" protobuf:"bytes,4,opt,name=config"`
 	Type    ISBSvcType          `json:"type,omitempty" protobuf:"bytes,5,opt,name=type"`
+	// ObservedGeneration stores the generation value observed by the controller.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,6,opt,name=observedGeneration"`
 }
 
 func (isbsvc *InterStepBufferServiceStatus) SetPhase(phase ISBSvcPhase, msg string) {
@@ -118,7 +107,7 @@ func (isbsvc *InterStepBufferServiceStatus) SetType(typ ISBSvcType) {
 
 // InitConditions sets conditions to Unknown state.
 func (isbsvc *InterStepBufferServiceStatus) InitConditions() {
-	isbsvc.InitializeConditions(ISBSvcConditionConfigured, ISBSvcConditionDeployed)
+	isbsvc.InitializeConditions(ISBSvcConditionConfigured, ISBSvcConditionDeployed, ISBSvcConditionChildrenResourcesHealthy)
 	isbsvc.SetPhase(ISBSvcPhasePending, "")
 }
 
@@ -144,4 +133,27 @@ func (isbsvc *InterStepBufferServiceStatus) MarkDeployed() {
 func (isbsvc *InterStepBufferServiceStatus) MarkDeployFailed(reason, message string) {
 	isbsvc.MarkFalse(ISBSvcConditionDeployed, reason, message)
 	isbsvc.SetPhase(ISBSvcPhaseFailed, message)
+}
+
+// SetObservedGeneration sets the Status ObservedGeneration
+func (isbsvc *InterStepBufferServiceStatus) SetObservedGeneration(value int64) {
+	isbsvc.ObservedGeneration = value
+}
+
+// IsHealthy indicates whether the InterStepBufferService is healthy or not
+func (isbsvc *InterStepBufferServiceStatus) IsHealthy() bool {
+	if isbsvc.Phase != ISBSvcPhaseRunning {
+		return false
+	}
+	return isbsvc.IsReady()
+}
+
+// MarkChildrenResourceNotHealthy marks the children resources as not healthy
+func (isbsvc *InterStepBufferServiceStatus) MarkChildrenResourceNotHealthy(reason, message string) {
+	isbsvc.MarkFalse(ISBSvcConditionChildrenResourcesHealthy, reason, message)
+}
+
+// MarkChildrenResourceHealthy marks the children resources as healthy
+func (isbsvc *InterStepBufferServiceStatus) MarkChildrenResourceHealthy(reason, message string) {
+	isbsvc.MarkTrueWithReason(ISBSvcConditionChildrenResourcesHealthy, reason, message)
 }

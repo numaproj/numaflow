@@ -67,12 +67,12 @@ var isbWriteErrors = promauto.NewCounterVec(prometheus.CounterOpts{
 var isbBufferUsage = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "isb_redis",
 	Name:      "buffer_usage",
-	Help:      "% of buffer usage",
+	Help:      "Percentage of buffer usage",
 }, []string{"buffer"})
 
 // isbConsumerLag is used to indicate the consumerLag
 var isbConsumerLag = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "isb_redis",
 	Name:      "consumer_lag",
-	Help:      "indicates consumer consumerLag",
+	Help:      "Indicates consumer consumerLag",
 }, []string{"buffer"})

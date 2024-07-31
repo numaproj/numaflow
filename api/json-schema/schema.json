@@ -670,6 +670,9 @@
           "description": "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
         }
       },
+      "required": [
+        "items"
+      ],
       "type": "object",
       "x-kubernetes-group-version-kind": [
         {
@@ -728,6 +731,9 @@
           "description": "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
         }
       },
+      "required": [
+        "items"
+      ],
       "type": "object",
       "x-kubernetes-group-version-kind": [
         {
@@ -1143,6 +1149,9 @@
           "description": "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
         }
       },
+      "required": [
+        "items"
+      ],
       "type": "object",
       "x-kubernetes-group-version-kind": [
         {
@@ -1201,6 +1210,9 @@
           "description": "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"
         }
       },
+      "required": [
+        "items"
+      ],
       "type": "object",
       "x-kubernetes-group-version-kind": [
         {
@@ -17610,6 +17622,27 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.AbstractSink": {
+      "properties": {
+        "blackhole": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole",
+          "description": "Blackhole sink is used to write the data to the blackhole sink, which is a sink that discards all the data written to it."
+        },
+        "kafka": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink",
+          "description": "Kafka sink is used to write the data to the Kafka."
+        },
+        "log": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log",
+          "description": "Log sink is used to write the data to the log."
+        },
+        "udsink": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink",
+          "description": "UDSink sink is used to write the data to the user-defined sink."
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.AbstractVertex": {
       "properties": {
         "affinity": {
@@ -17791,7 +17824,7 @@
       "properties": {
         "conditions": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions",
-          "description": "Conditional forwarding, only allowed when \"From\" is a Sink or UDF."
+          "description": "Conditional forwarding, only allowed when \"From\" is a Source or UDF."
         },
         "from": {
           "type": "string"
@@ -17837,7 +17870,7 @@
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.Container": {
-      "description": "Container is used to define the container properties for user defined functions, sinks, etc.",
+      "description": "Container is used to define the container properties for user-defined functions, sinks, etc.",
       "properties": {
         "args": {
           "items": {
@@ -17995,7 +18028,7 @@
       "properties": {
         "conditions": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ForwardConditions",
-          "description": "Conditional forwarding, only allowed when \"From\" is a Sink or UDF."
+          "description": "Conditional forwarding, only allowed when \"From\" is a Source or UDF."
         },
         "from": {
           "type": "string"
@@ -18132,6 +18165,10 @@
           "description": "Value is an optional uint64 value to be written in to the payload",
           "format": "int64",
           "type": "integer"
+        },
+        "valueBlob": {
+          "description": "ValueBlob is an optional string which is the base64 encoding of direct payload to send. This is useful for attaching a GeneratorSource to a true pipeline to test load behavior with true messages without requiring additional work to generate messages through the external source if present, the Value and MsgSize fields will be ignored.",
+          "type": "string"
         }
       },
       "type": "object"
@@ -18422,7 +18459,13 @@
         "Image": {
           "type": "string"
         },
+        "PipelineSpec": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineSpec"
+        },
         "PullPolicy": {
+          "type": "string"
+        },
+        "ServingSourceStreamName": {
           "type": "string"
         },
         "SideInputsStoreName": {
@@ -18435,6 +18478,8 @@
         "PullPolicy",
         "Env",
         "SideInputsStoreName",
+        "ServingSourceStreamName",
+        "PipelineSpec",
         "DefaultResources"
       ],
       "type": "object"
@@ -18581,6 +18626,11 @@
         "message": {
           "type": "string"
         },
+        "observedGeneration": {
+          "description": "ObservedGeneration stores the generation value observed by the controller.",
+          "format": "int64",
+          "type": "integer"
+        },
         "phase": {
           "type": "string"
         },
@@ -18661,7 +18711,7 @@
           "description": "ReloaderContainerTemplate contains customized spec for config reloader container"
         },
         "replicas": {
-          "description": "Redis StatefulSet size",
+          "description": "JetStream StatefulSet size",
           "format": "int32",
           "type": "integer"
         },
@@ -18723,6 +18773,31 @@
           "type": "string"
         }
       },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.JetStreamSource": {
+      "properties": {
+        "auth": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsAuth",
+          "description": "Auth information"
+        },
+        "stream": {
+          "description": "Stream represents the name of the stream.",
+          "type": "string"
+        },
+        "tls": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TLS",
+          "description": "TLS configuration for the nats client."
+        },
+        "url": {
+          "description": "URL to connect to NATS cluster, multiple urls could be separated by comma.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "stream"
+      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.JobTemplate": {
@@ -19010,7 +19085,7 @@
       "properties": {
         "basic": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.BasicAuth",
-          "description": "Basic auth which contains a user name and a password"
+          "description": "Basic auth which contains a username and a password"
         },
         "nkey": {
           "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
@@ -19233,11 +19308,24 @@
         "lastUpdated": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
         },
+        "mapUDFCount": {
+          "format": "int64",
+          "type": "integer"
+        },
         "message": {
           "type": "string"
         },
+        "observedGeneration": {
+          "description": "ObservedGeneration stores the generation value observed by the controller.",
+          "format": "int64",
+          "type": "integer"
+        },
         "phase": {
           "type": "string"
+        },
+        "reduceUDFCount": {
+          "format": "int64",
+          "type": "integer"
         },
         "sinkCount": {
           "format": "int64",
@@ -19429,6 +19517,48 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.ServingSource": {
+      "description": "ServingSource is the HTTP endpoint for Numaflow.",
+      "properties": {
+        "auth": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
+        },
+        "msgIDHeaderKey": {
+          "description": "The header key from which the message id will be extracted",
+          "type": "string"
+        },
+        "service": {
+          "description": "Whether to create a ClusterIP Service",
+          "type": "boolean"
+        },
+        "store": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore",
+          "description": "Persistent store for the callbacks for serving and tracking"
+        }
+      },
+      "required": [
+        "msgIDHeaderKey",
+        "store"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingStore": {
+      "description": "ServingStore to track and store data and metadata for tracking and serving.",
+      "properties": {
+        "ttl": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "TTL for the data in the store and tracker"
+        },
+        "url": {
+          "description": "URL of the persistent store to write the callbacks",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.SessionWindow": {
       "description": "SessionWindow describes a session window",
       "properties": {
@@ -19562,16 +19692,24 @@
     "io.numaproj.numaflow.v1alpha1.Sink": {
       "properties": {
         "blackhole": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole",
+          "description": "Blackhole sink is used to write the data to the blackhole sink, which is a sink that discards all the data written to it."
+        },
+        "fallback": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AbstractSink",
+          "description": "Fallback sink can be imagined as DLQ for primary Sink. The writes to Fallback sink will only be initiated if the ud-sink response field sets it."
         },
         "kafka": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink",
+          "description": "Kafka sink is used to write the data to the Kafka."
         },
         "log": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log",
+          "description": "Log sink is used to write the data to the log."
         },
         "udsink": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink"
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink",
+          "description": "UDSink sink is used to write the data to the user-defined sink."
         }
       },
       "type": "object"
@@ -19602,11 +19740,17 @@
         "http": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.HTTPSource"
         },
+        "jetstream": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.JetStreamSource"
+        },
         "kafka": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSource"
         },
         "nats": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
+        },
+        "serving": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingSource"
         },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"
@@ -20028,6 +20172,15 @@
     },
     "io.numaproj.numaflow.v1alpha1.VertexStatus": {
       "properties": {
+        "conditions": {
+          "description": "Conditions are the latest available observations of a resource's current state.",
+          "items": {
+            "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Condition"
+          },
+          "type": "array",
+          "x-kubernetes-patch-merge-key": "type",
+          "x-kubernetes-patch-strategy": "merge"
+        },
         "lastScaledAt": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
         },

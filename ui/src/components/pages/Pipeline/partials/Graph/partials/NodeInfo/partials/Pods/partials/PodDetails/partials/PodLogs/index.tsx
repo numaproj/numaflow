@@ -30,6 +30,7 @@ import { AppContextProps } from "../../../../../../../../../../../../../types/de
 import { AppContext } from "../../../../../../../../../../../../../App";
 
 import "./style.css";
+import Typography from "@mui/material/Typography";
 
 const MAX_LOGS = 1000;
 
@@ -200,6 +201,8 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
     setLogsOrder(logsOrder === "asc" ? "desc" : "asc");
   }, [logsOrder]);
 
+  const logsBtnStyle = { height: "2.4rem", width: "2.4rem" };
+
   return (
     <Box>
       <Box sx={{ display: "flex", flexDirection: "row" }}>
@@ -207,20 +210,20 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
           className="PodLogs-search"
           variant="outlined"
           sx={{
-            p: "0.125rem 0.25rem",
+            p: "0.2rem 0.4rem",
             display: "flex",
             alignItems: "center",
             width: 400,
           }}
         >
           <InputBase
-            sx={{ ml: 1, flex: 1 }}
+            sx={{ ml: 1, flex: 1, fontSize: "1.6rem" }}
             placeholder="Search logs"
             value={search}
             onChange={handleSearchChange}
           />
           <IconButton data-testid="clear-button" onClick={handleSearchClear}>
-            <ClearIcon />
+            <ClearIcon sx={logsBtnStyle} />
           </IconButton>
         </Paper>
         <FormControlLabel
@@ -229,9 +232,12 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
               data-testid="negate-search"
               checked={negateSearch}
               onChange={handleNegateSearchChange}
+              sx={{ "& .MuiSvgIcon-root": { fontSize: 24 } }}
             />
           }
-          label="Negate search"
+          label={
+            <Typography sx={{ fontSize: "1.6rem" }}>Negate search</Typography>
+          }
         />
         <Tooltip
           title={
@@ -243,7 +249,11 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
           arrow
         >
           <IconButton data-testid="pause-button" onClick={handlePause}>
-            {paused ? <PlayArrowIcon /> : <PauseIcon />}
+            {paused ? (
+              <PlayArrowIcon sx={logsBtnStyle} />
+            ) : (
+              <PauseIcon sx={logsBtnStyle} />
+            )}
           </IconButton>
         </Tooltip>
         <Tooltip
@@ -256,7 +266,11 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
           arrow
         >
           <IconButton data-testid="color-mode-button" onClick={handleColorMode}>
-            {colorMode === "light" ? <DarkMode /> : <LightMode />}
+            {colorMode === "light" ? (
+              <DarkMode sx={logsBtnStyle} />
+            ) : (
+              <LightMode sx={logsBtnStyle} />
+            )}
           </IconButton>
         </Tooltip>
         <Tooltip
@@ -269,7 +283,11 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
           arrow
         >
           <IconButton data-testid="order-button" onClick={handleOrder}>
-            {logsOrder === "asc" ? <ArrowDownward /> : <ArrowUpward />}
+            {logsOrder === "asc" ? (
+              <ArrowDownward sx={logsBtnStyle} />
+            ) : (
+              <ArrowUpward sx={logsBtnStyle} />
+            )}
           </IconButton>
         </Tooltip>
       </Box>
@@ -280,10 +298,10 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
           overflow: "scroll",
           display: "flex",
           flexDirection: "column",
-          borderRadius: "0.25rem",
-          padding: "0.625rem 0.3125rem",
-          marginTop: "1.5rem",
-          height: "25rem",
+          borderRadius: "0.4rem",
+          padding: "1rem 0.5rem",
+          marginTop: "2.4rem",
+          height: "40rem",
         }}
       >
         {logsOrder === "asc" &&
@@ -293,7 +311,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
               component="span"
               sx={{
                 whiteSpace: "nowrap",
-                paddingTop: "0.5rem",
+                paddingTop: "0.8rem",
               }}
             >
               <Highlighter
@@ -320,7 +338,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
                 component="span"
                 sx={{
                   whiteSpace: "nowrap",
-                  paddingTop: "0.5rem",
+                  paddingTop: "0.8rem",
                 }}
               >
                 <Highlighter

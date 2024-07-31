@@ -59,8 +59,10 @@ These metrics can be used to determine the latency of your pipeline.
 
 | Metric name                                    | Metric type | Labels                                                                                                                                                        | Description                                                                                    |
 | ---------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `source_forwarder_transformer_processing_time` | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides a histogram distribution of the processing times of User Defined Source Transformer   |
-| `forwarder_udf_processing_time`                | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>`                                        | Provides a histogram distribution of the processing times of User Defined Functions. (UDF's)   |
+| `pipeline_processing_lag`                      | Gauge       | `pipeline=<pipeline-name>`                                                                                                                                    | Pipeline processing lag in milliseconds (max watermark - min watermark)                        |
+| `pipeline_watermark_cmp_now`                   | Gauge       | `pipeline=<pipeline-name>`                                                                                                                                    | Max watermark of source compared with current time in milliseconds                             |
+| `source_forwarder_transformer_processing_time` | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Provides a histogram distribution of the processing times of User-defined Source Transformer   |
+| `forwarder_udf_processing_time`                | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>`                                        | Provides a histogram distribution of the processing times of User-defined Functions. (UDF's)   |
 | `forwarder_forward_chunk_processing_time`      | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>`                                        | Provides a histogram distribution of the processing times of the forwarder function as a whole |
 | `reduce_pnf_process_time`                      | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>`                                                                         | Provides a histogram distribution of the processing times of the reducer                       |
 | `reduce_pnf_forward_time`                      | Histogram   | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `replica=<replica-index>`                                                                         | Provides a histogram distribution of the forwarding times of the reducer                       |
@@ -71,6 +73,7 @@ These metrics can be used to determine if there are any errors in the pipeline
 
 | Metric name                       | Metric type | Labels                                                                                                                                                        | Description                                                        |
 | --------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `pipeline_data_processing_health`                      | Gauge       | `pipeline=<pipeline-name>`                                                                                                                                    | Pipeline data processing health status. 1: Healthy, 0: Unknown, -1: Warning, -2: Critical                        | 
 | `forwarder_platform_error_total`  | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>`                                        | Indicates any internal errors which could stop pipeline processing |
 | `forwarder_read_error_total`      | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` <br> `vertex_type=<vertex-type>` <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Indicates any errors while reading messages by the forwarder       |
 | `forwarder_write_error_total`     | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>` `vertex_type=<vertex-type>` <br> <br> `replica=<replica-index>` <br> `partition_name=<partition-name>` | Indicates any errors while writing messages by the forwarder       |
@@ -109,7 +112,7 @@ You can follow the [prometheus operator](https://github.com/prometheus-operator/
 
 You can also set up prometheus operator via [helm](https://bitnami.com/stack/prometheus-operator/helm).
 
-### Configure the below Service Monitors for scraping your pipeline metrics:
+### Configure the below Service/Pod Monitors for scraping your pipeline metrics:
 
 ```yaml
 apiVersion: monitoring.coreos.com/v1
@@ -135,6 +138,45 @@ spec:
         operator: Exists
       - key: numaflow.numaproj.io/vertex-name
         operator: Exists
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/part-of: numaflow
+  name: numaflow-pipeline-daemon-metrics
+spec:
+  endpoints:
+    - scheme: https
+      port: tcp
+      targetPort: 4327
+      tlsConfig:
+        insecureSkipVerify: true
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: daemon
+      app.kubernetes.io/managed-by: pipeline-controller
+      app.kubernetes.io/part-of: numaflow
+    matchExpressions:
+      - key: numaflow.numaproj.io/pipeline-name
+        operator: Exists
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  labels:
+    app.kubernetes.io/part-of: numaflow
+  name: numaflow-controller-metrics
+spec:
+  endpoints:
+    - scheme: http
+      port: metrics
+      targetPort: 9090
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: controller-manager
+      app.kubernetes.io/name: controller-manager
+      app.kubernetes.io/part-of: numaflow
 ```
 
 ### Configure the below Service Monitor if you use the NATS Jetstream ISB for your NATS Jetstream metrics:

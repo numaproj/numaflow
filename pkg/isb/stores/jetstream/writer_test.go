@@ -27,7 +27,9 @@ import (
 	"github.com/numaproj/numaflow/pkg/forwarder"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
+	natsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
+
 	"github.com/numaproj/numaflow/pkg/udf/forward"
 	"github.com/numaproj/numaflow/pkg/watermark/generic"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
@@ -36,7 +38,7 @@ import (
 type myForwardJetStreamTest struct {
 }
 
-func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string) ([]forwarder.VertexBuffer, error) {
+func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
@@ -44,11 +46,15 @@ func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string) ([]forwarder.Ver
 }
 
 func (f myForwardJetStreamTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, message)
+	return testutils.CopyUDFTestApply(ctx, "test-vertex", message)
 }
 
 func (f myForwardJetStreamTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
-	return testutils.CopyUDFTestApplyStream(ctx, message, writeMessageCh)
+	return testutils.CopyUDFTestApplyStream(ctx, "", writeMessageCh, message)
+}
+
+func (f myForwardJetStreamTest) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApplyBatchMap(ctx, "test-vertex", messages)
 }
 
 // TestForwarderJetStreamBuffer is a test that is used to test forwarder with jetstream buffer
@@ -57,16 +63,29 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 		name          string
 		batchSize     int64
 		streamEnabled bool
+		unaryEnabled  bool
+		batchEnabled  bool
 	}{
 		{
-			name:          "batch",
+			name:          "unary",
 			batchSize:     10,
 			streamEnabled: false,
+			unaryEnabled:  true,
+			batchEnabled:  false,
 		},
 		{
 			name:          "stream",
 			batchSize:     1,
 			streamEnabled: true,
+			unaryEnabled:  false,
+			batchEnabled:  false,
+		},
+		{
+			name:          "batch_map",
+			batchSize:     10,
+			streamEnabled: false,
+			unaryEnabled:  false,
+			batchEnabled:  true,
 		},
 	}
 	for _, tt := range tests {
@@ -76,18 +95,18 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 			defer cancel()
-			defaultJetStreamClient := natstest.JetStreamClient(t, s)
+			defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 			defer defaultJetStreamClient.Close()
 			js, err := defaultJetStreamClient.JetStreamContext()
 			assert.NoError(t, err)
 
 			streamName := "TestForwarderJetStreamBuffer"
 			addStream(t, js, streamName)
-			defer deleteStream(js, streamName)
+			defer deleteStream(t, js, streamName)
 
 			toStreamName := "TestForwarderJetStreamBuffer-to"
 			addStream(t, js, toStreamName)
-			defer deleteStream(js, toStreamName)
+			defer deleteStream(t, js, toStreamName)
 
 			bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx, WithMaxLength(10))
 			assert.NoError(t, err)
@@ -95,7 +114,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			defer jw.Close()
 			// Add some data
 			startTime := time.Unix(1636470000, 0)
-			messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil)
+			messages := testutils.BuildTestWriteMessages(int64(10), startTime, nil, "testVertex")
 			// Verify if buffer is not full.
 			for jw.isFull.Load() {
 				select {
@@ -148,7 +167,19 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 			idleManager, err := wmb.NewIdleManager(1, len(toSteps))
 			assert.NoError(t, err)
-			f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardJetStreamTest{}, myForwardJetStreamTest{}, myForwardJetStreamTest{}, fetchWatermark, publishWatermark, idleManager, forward.WithReadBatchSize(tt.batchSize), forward.WithUDFStreaming(tt.streamEnabled))
+
+			opts := []forward.Option{forward.WithReadBatchSize(tt.batchSize)}
+			if tt.batchEnabled {
+				opts = append(opts, forward.WithUDFBatchMap(myForwardJetStreamTest{}))
+			}
+			if tt.streamEnabled {
+				opts = append(opts, forward.WithUDFStreamingMap(myForwardJetStreamTest{}))
+			}
+			if tt.unaryEnabled {
+				opts = append(opts, forward.WithUDFUnaryMap(myForwardJetStreamTest{}))
+			}
+
+			f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardJetStreamTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
 			assert.NoError(t, err)
 
 			stopped := f.Start()
@@ -199,14 +230,14 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
 
 	streamName := "TestJetStreamBufferWriterBufferFull"
 	addStream(t, js, streamName)
-	defer deleteStream(js, streamName)
+	defer deleteStream(t, js, streamName)
 
 	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx, WithMaxLength(10), WithBufferUsageLimit(0.2))
 	assert.NoError(t, err)
@@ -223,7 +254,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 	}
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(2), startTime, nil)
+	messages := testutils.BuildTestWriteMessages(int64(2), startTime, nil, "testVertex")
 	// Add some data to buffer using write and verify no writes are performed when buffer is full
 	_, errs := jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
@@ -239,7 +270,7 @@ func TestJetStreamBufferWriterBufferFull(t *testing.T) {
 			time.Sleep(500 * time.Millisecond)
 		}
 	}
-	messages = testutils.BuildTestWriteMessages(int64(2), time.Unix(1636470001, 0), nil)
+	messages = testutils.BuildTestWriteMessages(int64(2), time.Unix(1636470001, 0), nil, "testVertex")
 	_, errs = jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
@@ -256,14 +287,14 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
 
 	streamName := "TestJetStreamBufferWriterBufferFull"
 	addStream(t, js, streamName)
-	defer deleteStream(js, streamName)
+	defer deleteStream(t, js, streamName)
 
 	bw, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx, WithMaxLength(10), WithBufferUsageLimit(0.2), WithBufferFullWritingStrategy(dfv1.DiscardLatest))
 	assert.NoError(t, err)
@@ -280,7 +311,7 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 	}
 	// Add some data
 	startTime := time.Unix(1636470000, 0)
-	messages := testutils.BuildTestWriteMessages(int64(2), startTime, nil)
+	messages := testutils.BuildTestWriteMessages(int64(2), startTime, nil, "testVertex")
 	// Add some data to buffer using write and verify no writes are performed when buffer is full
 	_, errs := jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
@@ -296,11 +327,11 @@ func TestJetStreamBufferWriterBufferFull_DiscardLatest(t *testing.T) {
 			time.Sleep(500 * time.Millisecond)
 		}
 	}
-	messages = testutils.BuildTestWriteMessages(int64(2), time.Unix(1636470001, 0), nil)
+	messages = testutils.BuildTestWriteMessages(int64(2), time.Unix(1636470001, 0), nil, "testVertex")
 	_, errs = jw.Write(ctx, messages)
 	assert.Equal(t, len(errs), 2)
 	for _, errMsg := range errs {
-		assert.Equal(t, errMsg, isb.NoRetryableBufferWriteErr{Name: streamName, Message: "Buffer full!"})
+		assert.Equal(t, errMsg, isb.NonRetryableBufferWriteErr{Name: streamName, Message: isb.BufferFullMessage})
 	}
 }
 
@@ -312,14 +343,14 @@ func TestWriteGetName(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
 
 	streamName := "TestWriteGetName"
 	addStream(t, js, streamName)
-	defer deleteStream(js, streamName)
+	defer deleteStream(t, js, streamName)
 
 	bufferWriter, err := NewJetStreamBufferReader(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 	assert.NoError(t, err)
@@ -338,14 +369,14 @@ func TestWriteClose(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	defaultJetStreamClient := natstest.JetStreamClient(t, s)
+	defaultJetStreamClient := natsclient.NewTestClientWithServer(t, s)
 	defer defaultJetStreamClient.Close()
 	js, err := defaultJetStreamClient.JetStreamContext()
 	assert.NoError(t, err)
 
 	streamName := "TestWriteClose"
 	addStream(t, js, streamName)
-	defer deleteStream(js, streamName)
+	defer deleteStream(t, js, streamName)
 
 	bufferWriter, err := NewJetStreamBufferWriter(ctx, defaultJetStreamClient, streamName, streamName, streamName, defaultPartitionIdx)
 	assert.NoError(t, err)

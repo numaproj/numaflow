@@ -2,13 +2,16 @@ import React, { useMemo, useState, useEffect, useCallback } from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import YAML from "yaml";
-import Editor from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
+import Editor, { loader } from "@monaco-editor/react";
 import CircularProgress from "@mui/material/CircularProgress";
 import Button from "@mui/material/Button";
 import SuccessIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "../../../images/warning-triangle.png";
 
 import "./style.css";
+
+loader.config({ monaco });
 
 export enum ViewType {
   READ_ONLY,
@@ -204,6 +207,7 @@ export function SpecEditor({
     }
     const btnStyle = {
       height: "fit-content",
+      fontSize: "1.4rem",
     };
     const statusShowing =
       !!statusIndicator &&
@@ -217,8 +221,8 @@ export function SpecEditor({
         sx={{
           display: "flex",
           flexDirection: "row",
-          marginBottom: "1.5rem",
-          marginLeft: "1.25rem",
+          marginBottom: "2.4rem",
+          marginLeft: "2rem",
           justifyContent: validationMessage ? "space-between" : "flex-end",
         }}
       >
@@ -244,7 +248,11 @@ export function SpecEditor({
               <SuccessIcon
                 fontSize="large"
                 color="success"
-                sx={{ marginRight: "0.5rem" }}
+                sx={{
+                  marginRight: "0.8rem",
+                  height: "3.5rem",
+                  width: "3.5rem",
+                }}
               />
             )}
             <span
@@ -254,7 +262,7 @@ export function SpecEditor({
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
               }}
-              >
+            >
               {validationMessage.message}
             </span>
           </Box>
@@ -280,7 +288,7 @@ export function SpecEditor({
             disabled={!mutated || loading || !editable || statusShowing}
             onClick={handleReset}
             variant="contained"
-            sx={{ marginLeft: "0.5rem", ...btnStyle }}
+            sx={{ marginLeft: "0.8rem", ...btnStyle }}
           >
             Reset
           </Button>
@@ -293,7 +301,7 @@ export function SpecEditor({
             }
             onClick={handleValidate}
             variant="contained"
-            sx={{ marginLeft: "0.5rem", ...btnStyle }}
+            sx={{ marginLeft: "0.8rem", ...btnStyle }}
             data-testid="spec-editor-validate-button"
           >
             Validate
@@ -307,7 +315,7 @@ export function SpecEditor({
             }
             onClick={handleSubmit}
             variant="contained"
-            sx={{ marginLeft: "0.5rem", ...btnStyle }}
+            sx={{ marginLeft: "0.8rem", ...btnStyle }}
           >
             Submit
           </Button>
@@ -346,20 +354,20 @@ export function SpecEditor({
       <SuccessIcon
         fontSize="large"
         color="success"
-        sx={{ marginRight: "0.5rem" }}
+        sx={{ marginRight: "0.8rem", height: "3.5rem", width: "3.5rem" }}
       />
     );
     const loadingIcon = (
       <CircularProgress
         size={27}
-        sx={{ marginRight: "1rem", marginLeft: "0.1875rem" }}
+        sx={{ marginRight: "1.6rem", marginLeft: "0.3rem" }}
       />
     );
     const containerStyle = {
       display: "flex",
       flexDirection: "row",
       alignItems: "center",
-      margin: "0.5rem 0",
+      margin: "0.8rem 0",
     };
     const messageContainerStyle = {
       display: "flex",
@@ -459,7 +467,7 @@ export function SpecEditor({
           display: "flex",
           flexDirection: "column",
           height: "100%",
-          padding: "1.5rem 1.5rem 1.5rem 0",
+          padding: "2.4rem 2.4rem 2.4rem 0",
         }}
       >
         {spinner}

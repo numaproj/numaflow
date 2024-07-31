@@ -167,10 +167,10 @@ func (bw *BufferWrite) Write(_ context.Context, messages []isb.Message) ([]isb.O
 		case dfv1.DiscardLatest:
 			// user explicitly wants to discard the message when buffer if full.
 			// return no retryable error as a callback to let caller know that the message is discarded.
-			initializeErrorArray(errs, isb.NoRetryableBufferWriteErr{Name: bw.Name, Message: "Buffer full!"})
+			initializeErrorArray(errs, isb.NonRetryableBufferWriteErr{Name: bw.Name, Message: isb.BufferFullMessage})
 		default:
 			// Default behavior is to return a BufferWriteErr.
-			initializeErrorArray(errs, isb.BufferWriteErr{Name: bw.Name, Full: true, Message: "Buffer full!"})
+			initializeErrorArray(errs, isb.BufferWriteErr{Name: bw.Name, Full: true, Message: isb.BufferFullMessage})
 		}
 		isbWriteErrors.With(labels).Inc()
 		return nil, errs
@@ -180,7 +180,7 @@ func (bw *BufferWrite) Write(_ context.Context, messages []isb.Message) ([]isb.O
 		for idx, message := range messages {
 			// Reference the Payload in Body directly when writing to Redis ISB to avoid extra marshaling.
 			// TODO: revisit directly Payload reference when Body structure changes
-			errs[idx] = script.Run(ctx, bw.Client, []string{bw.GetHashKeyName(message.EventTime), bw.Stream}, message.Header.ID, message.Header, message.Body.Payload, bw.BufferWriteInfo.minId.String()).Err()
+			errs[idx] = script.Run(ctx, bw.Client, []string{bw.GetHashKeyName(message.EventTime), bw.Stream}, message.Header.ID.String(), message.Header, message.Body.Payload, bw.BufferWriteInfo.minId.String()).Err()
 		}
 	} else {
 		var scriptMissing bool
@@ -217,7 +217,12 @@ func (bw *BufferWrite) pipelinedWrite(ctx context.Context, script *redis.Script,
 	for idx, message := range messages {
 		// Reference the Payload in Body directly when writing to Redis ISB to avoid extra marshaling.
 		// TODO: revisit directly Payload reference when Body structure changes
-		cmds[idx] = script.Run(ctx, pipe, []string{bw.GetHashKeyName(message.EventTime), bw.Stream}, message.Header.ID, message.Header, message.Body.Payload, bw.BufferWriteInfo.minId.String())
+		headerBytes, err := message.Header.MarshalBinary()
+		if err != nil {
+			errs[idx] = err
+			continue
+		}
+		cmds[idx] = script.Run(ctx, pipe, []string{bw.GetHashKeyName(message.EventTime), bw.Stream}, message.Header.ID, headerBytes, message.Body.Payload, bw.BufferWriteInfo.minId.String())
 	}
 
 	scriptMissing := false

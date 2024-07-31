@@ -1,0 +1,35 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-fallback
+spec:
+  vertices:
+    - name: in
+      source:
+        # A self data generating source
+        generator:
+          rpu: 5
+          duration: 1s
+    - name: cat
+      scale:
+        min: 1
+      udf:
+        builtin:
+          name: cat
+    - name: output
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-go/fb-sink-log:stable
+            imagePullPolicy: Always
+        fallback:
+          udsink:
+            container:
+              image: quay.io/numaio/numaflow-go/fb-sink-log:stable
+  edges:
+    - from: in
+      to: cat
+    - from: cat
+      to: output

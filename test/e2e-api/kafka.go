@@ -22,201 +22,304 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/IBM/sarama"
 )
 
-func init() {
-	const bootstrapServers = "kafka-broker:9092"
+const bootstrapServers = "kafka-broker:9092"
+
+type KafkaController struct {
+	brokers     []string
+	adminClient sarama.ClusterAdmin
+	producer    sarama.SyncProducer
+	consumer    sarama.Consumer
+	mLock       sync.RWMutex
+}
+
+/*
+  getProducerAndConsumer is used for getting a Kafka consumer, producer and client for the given controller config. It is implemented with a lazy loading mechanism:
+  1) new fields are created only for the first request
+  2) Returning the current ones if it exists
+*/
+
+func (n *KafkaController) getProducerAndConsumer() (sarama.ClusterAdmin, sarama.SyncProducer, sarama.Consumer) {
+	if n.consumer != nil && n.producer != nil && n.adminClient != nil {
+		return n.adminClient, n.producer, n.consumer
+	}
+	n.mLock.Lock()
+	defer n.mLock.Unlock()
+	if n.consumer != nil && n.producer != nil && n.adminClient != nil {
+		return n.adminClient, n.producer, n.consumer
+	}
+
+	config := sarama.NewConfig()
+	config.Producer.Return.Successes = true
+	config.Producer.Partitioner = sarama.NewManualPartitioner
+
+	var err error
+	n.consumer, err = sarama.NewConsumer(n.brokers, config)
+	if err != nil {
+		log.Fatalf("Failed to start Kafka consumer: %v", err)
+	}
+	n.adminClient, err = sarama.NewClusterAdmin(n.brokers, config)
+	if err != nil {
+		log.Fatalf("Failed to start Kafka admin client: %v", err)
+	}
+	n.producer, err = sarama.NewSyncProducer(n.brokers, config)
+	if err != nil {
+		log.Fatalf("Failed to start Kafka producer: %v", err)
+	}
+
+	log.Println("new kafka client, producer and consumer created")
+	return n.adminClient, n.producer, n.consumer
+
+}
+
+// adminClient, producer and consumer fields set to nil when initialized for lazy loading. Only created when needed using getter methods.
+func NewKafkaController() *KafkaController {
+
 	var brokers = []string{bootstrapServers}
-	http.HandleFunc("/kafka/create-topic", func(w http.ResponseWriter, r *http.Request) {
-		topic := r.URL.Query().Get("topic")
-		admin, err := sarama.NewClusterAdmin(brokers, sarama.NewConfig())
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer admin.Close()
-		if err = admin.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: 1, ReplicationFactor: 1}, true); err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(201)
-	})
 
-	http.HandleFunc("/kafka/delete-topic", func(w http.ResponseWriter, r *http.Request) {
-		topic := r.URL.Query().Get("topic")
-		admin, err := sarama.NewClusterAdmin(brokers, sarama.NewConfig())
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer admin.Close()
-		if err = admin.DeleteTopic(topic); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(201)
-	})
-	http.HandleFunc("/kafka/list-topics", func(w http.ResponseWriter, r *http.Request) {
-		consumer, err := sarama.NewConsumer(brokers, sarama.NewConfig())
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer consumer.Close()
-		topics, err := consumer.Topics()
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(200)
-		_, _ = fmt.Fprintf(w, "Total topics : %s", topics)
-	})
+	return &KafkaController{
+		brokers:     brokers,
+		adminClient: nil,
+		producer:    nil,
+		consumer:    nil,
+	}
+}
 
-	http.HandleFunc("/kafka/count-topic", func(w http.ResponseWriter, r *http.Request) {
-		topic := r.URL.Query().Get("topic")
-		count, err := strconv.Atoi(r.URL.Query().Get("count"))
+func (kh *KafkaController) CreateTopicHandler(w http.ResponseWriter, r *http.Request) {
+
+	kafkaAdminClient, _, _ := kh.getProducerAndConsumer()
+
+	topic := r.URL.Query().Get("topic")
+	partitions, err := strconv.Atoi(r.URL.Query().Get("partitions"))
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Invalid number of partitions", http.StatusBadRequest)
+		return
+	}
+	if err = kafkaAdminClient.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: int32(partitions), ReplicationFactor: 1}, true); err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(201)
+}
+
+func (kh *KafkaController) DeleteTopicHandler(w http.ResponseWriter, r *http.Request) {
+	kafkaAdminClient, _, _ := kh.getProducerAndConsumer()
+
+	topic := r.URL.Query().Get("topic")
+	if err := kafkaAdminClient.DeleteTopic(topic); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(201)
+}
+
+func (kh *KafkaController) ListTopicsHandler(w http.ResponseWriter, r *http.Request) {
+	kafkaAdminClient, _, _ := kh.getProducerAndConsumer()
+
+	topics, err := kafkaAdminClient.ListTopics()
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(200)
+	for topic, details := range topics {
+		_, _ = fmt.Fprintf(w, "Topic: %s, Partitions: %d\n", topic, details.NumPartitions)
+	}
+}
+
+func (kh *KafkaController) CountTopicHandler(w http.ResponseWriter, r *http.Request) {
+	_, _, kafkaConsumer := kh.getProducerAndConsumer()
+
+	topic := r.URL.Query().Get("topic")
+	count, err := strconv.Atoi(r.URL.Query().Get("count"))
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	partitions, err := kafkaConsumer.Partitions(topic)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	msgCount := 0
+	msgs := make(chan *sarama.ConsumerMessage, 256)
+	doneCh := make(chan struct{})
+	errCh := make(chan error)
+	var wg sync.WaitGroup
+
+	var consumers []sarama.PartitionConsumer
+
+	for _, partition := range partitions {
+		pConsumer, err := kafkaConsumer.ConsumePartition(topic, partition, sarama.OffsetOldest)
 		if err != nil {
 			log.Println(err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		consumer, err := sarama.NewConsumer(brokers, sarama.NewConfig())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer consumer.Close()
-		pConsumer, err := consumer.ConsumePartition(topic, 0, sarama.OffsetOldest)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		msgCount := 0
-		for msgCount < count {
-			select {
-			case msg := <-pConsumer.Messages():
-				msgCount++
-				log.Println("Received messages: ", string(msg.Key), string(msg.Value), msg.Offset, msgCount)
-			case consumerError := <-pConsumer.Errors():
-				log.Println("Received consumerError.", string(consumerError.Topic), string(consumerError.Partition), consumerError.Err)
+
+		consumers = append(consumers, pConsumer)
+		wg.Add(1)
+		log.Println("Starting consumer for partition: ", partition)
+		go func(pc sarama.PartitionConsumer) {
+			defer wg.Done()
+			for {
+				select {
+				case <-doneCh:
+					return
+				case msg := <-pc.Messages():
+					select {
+					case msgs <- msg:
+					case <-doneCh:
+						return
+					}
+				case consumerError := <-pc.Errors():
+					errCh <- consumerError.Err
+					return
+				}
 			}
+		}(pConsumer)
+	}
+
+readLoop:
+	for msgCount < count {
+		select {
+		case msg := <-msgs:
+			msgCount++
+			log.Println("Received messages: ", string(msg.Key), string(msg.Value), msg.Offset, msgCount, " partition - ", msg.Partition)
+		case consumerError := <-errCh:
+			log.Println("Received consumerError - ", consumerError.Error())
+			break readLoop
 		}
-		w.WriteHeader(200)
-		_, _ = w.Write([]byte(fmt.Sprint(count)))
-	})
+	}
 
-	http.HandleFunc("/kafka/produce-topic", func(w http.ResponseWriter, r *http.Request) {
-		var (
-			partition int
-			err       error
-		)
-		topic := r.URL.Query().Get("topic")
-		key := r.URL.Query().Get("key")
-		queryPartition := r.URL.Query().Get("partition")
+	close(doneCh)
 
-		config := sarama.NewConfig()
-		config.Producer.Return.Successes = true
-		if queryPartition == "" {
-			partition = 0
-		} else {
-			partition, err = strconv.Atoi(queryPartition)
+	for _, c := range consumers {
+		_ = c.Close()
+	}
+
+	w.WriteHeader(200)
+	_, _ = w.Write([]byte(fmt.Sprint(count)))
+}
+
+func (kh *KafkaController) ProduceTopicHandler(w http.ResponseWriter, r *http.Request) {
+	_, kafkaProducer, _ := kh.getProducerAndConsumer()
+
+	var (
+		partition int
+		err       error
+	)
+	topic := r.URL.Query().Get("topic")
+	key := r.URL.Query().Get("key")
+	queryPartition := r.URL.Query().Get("partition")
+
+	if queryPartition == "" {
+		partition = 0
+	} else {
+		partition, err = strconv.Atoi(queryPartition)
+		if err != nil {
+			log.Println(err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	buf, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	message := &sarama.ProducerMessage{
+		Topic:     topic,
+		Value:     sarama.ByteEncoder(buf),
+		Key:       sarama.ByteEncoder(key),
+		Partition: int32(partition),
+	}
+	p, of, err := kafkaProducer.SendMessage(message)
+	if err != nil {
+		log.Printf("Failed to produce message to topic %s: %s\n", topic, err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	// send the partition and offset as response
+	w.WriteHeader(200)
+	_, _ = w.Write([]byte(fmt.Sprintf("Partition - %d: Offset - %d", p, of)))
+}
+
+func (kh *KafkaController) PumpTopicHandler(w http.ResponseWriter, r *http.Request) {
+	_, kafkaProducer, _ := kh.getProducerAndConsumer()
+
+	topic := r.URL.Query().Get("topic")
+	mf := newMessageFactory(r.URL.Query())
+	duration, err := time.ParseDuration(r.URL.Query().Get("sleep"))
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ns := r.URL.Query().Get("n")
+	if ns == "" {
+		ns = "-1"
+	}
+	n, err := strconv.Atoi(ns)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.WriteHeader(200)
+
+	start := time.Now()
+	_, _ = fmt.Fprintf(w, "sending %d messages of size %d to %q\n", n, mf.size, topic)
+
+	for i := 0; i < n || n < 0; i++ {
+		select {
+		case <-r.Context().Done():
+			return
+		default:
+			message := &sarama.ProducerMessage{
+				Topic:     topic,
+				Value:     sarama.ByteEncoder(mf.newMessage(i)),
+				Key:       sarama.ByteEncoder(strconv.Itoa(i)),
+				Partition: int32(0),
+			}
+			_, _, err := kafkaProducer.SendMessage(message)
 			if err != nil {
-				log.Println(err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
+				_, _ = fmt.Fprintf(w, "ERROR: %v\n", err)
 			}
-			// if partition is specified, use manual partitioner
-			config.Producer.Partitioner = sarama.NewManualPartitioner
+			time.Sleep(duration)
 		}
-		buf, err := io.ReadAll(r.Body)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	}
+	_, _ = fmt.Fprintf(w, "sent %d messages of size %d at %.0f TPS to %q\n", n, mf.size, float64(n)/time.Since(start).Seconds(), topic)
+}
 
-		syncProducer, err := sarama.NewSyncProducer(brokers, config)
+func (kh *KafkaController) Close() {
+	kh.mLock.Lock()
+	defer kh.mLock.Unlock()
 
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer syncProducer.Close()
-		message := &sarama.ProducerMessage{
-			Topic:     topic,
-			Value:     sarama.ByteEncoder(buf),
-			Key:       sarama.ByteEncoder([]byte(key)),
-			Partition: int32(partition),
-		}
-		if _, _, err := syncProducer.SendMessage(message); err != nil {
-			_, _ = fmt.Fprintf(w, "ERROR: %v\n", err)
-		}
-	})
+	if kh.producer != nil {
+		_ = kh.producer.Close()
+	}
 
-	http.HandleFunc("/kafka/pump-topic", func(w http.ResponseWriter, r *http.Request) {
-		topic := r.URL.Query().Get("topic")
-		mf := newMessageFactory(r.URL.Query())
-		duration, err := time.ParseDuration(r.URL.Query().Get("sleep"))
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+	if kh.consumer != nil {
+		_ = kh.consumer.Close()
+	}
 
-		ns := r.URL.Query().Get("n")
-		if ns == "" {
-			ns = "-1"
-		}
-		n, err := strconv.Atoi(ns)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.WriteHeader(200)
-
-		config := sarama.NewConfig()
-		config.Producer.Return.Successes = true
-
-		syncProducer, err := sarama.NewSyncProducer(brokers, config)
-
-		if err != nil {
-			log.Println(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer syncProducer.Close()
-
-		start := time.Now()
-		_, _ = fmt.Fprintf(w, "sending %d messages of size %d to %q\n", n, mf.size, topic)
-
-		for i := 0; i < n || n < 0; i++ {
-			select {
-			case <-r.Context().Done():
-				return
-			default:
-				message := &sarama.ProducerMessage{
-					Topic: topic,
-					Value: sarama.ByteEncoder(mf.newMessage(i)),
-					Key:   sarama.ByteEncoder([]byte(strconv.Itoa(i))),
-				}
-				_, _, err := syncProducer.SendMessage(message)
-				if err != nil {
-					_, _ = fmt.Fprintf(w, "ERROR: %v\n", err)
-				}
-				time.Sleep(duration)
-			}
-		}
-		_, _ = fmt.Fprintf(w, "sent %d messages of size %d at %.0f TPS to %q\n", n, mf.size, float64(n)/time.Since(start).Seconds(), topic)
-	})
+	if kh.adminClient != nil {
+		_ = kh.adminClient.Close()
+	}
 }

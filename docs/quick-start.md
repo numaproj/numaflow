@@ -182,7 +182,7 @@ View the UI for the advanced pipeline at https://localhost:8443/.
 
 ![Numaflow UI](assets/numaflow-ui-advanced-pipeline.png)
 
-The source code of the `even-odd` [User Defined Function](user-guide/user-defined-functions/user-defined-functions.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd). You also can replace the [Log](./user-guide/sinks/log.md) Sink with some other sinks like [Kafka](./user-guide/sinks/kafka.md) to forward the data to Kafka topics.
+The source code of the `even-odd` [user-defined function](user-guide/user-defined-functions/user-defined-functions.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd). You also can replace the [Log](./user-guide/sinks/log.md) Sink with some other sinks like [Kafka](./user-guide/sinks/kafka.md) to forward the data to Kafka topics.
 
 The pipeline can be deleted by
 
@@ -200,6 +200,6 @@ Try more examples in the [`examples`](https://github.com/numaproj/numaflow/tree/
 
 After exploring how Numaflow pipelines run, you can check what data [Sources](./user-guide/sources/generator.md)
 and [Sinks](./user-guide/sinks/kafka.md) Numaflow supports out of the box, or learn how to write
-[User Defined Functions](user-guide/user-defined-functions/user-defined-functions.md).
+[User-defined Functions](user-guide/user-defined-functions/user-defined-functions.md).
 
 Numaflow can also be paired with Numalogic, a collection of ML models and algorithms for real-time data analytics and AIOps including anomaly detection. Visit the [Numalogic homepage](https://numalogic.numaproj.io/) for more information.

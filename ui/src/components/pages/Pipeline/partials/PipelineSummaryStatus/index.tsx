@@ -1,6 +1,6 @@
 import React, { useCallback, useContext } from "react";
 import Box from "@mui/material/Box";
-import { useParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { SidebarType } from "../../../../common/SlidingSidebar";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
@@ -26,8 +26,11 @@ export function PipelineSummaryStatus({
   lag,
   refresh,
 }: PipelineSummaryProps) {
-  const { namespaceId } = useParams<{ namespaceId: string }>();
-  const { setSidebarProps } = useContext<AppContextProps>(AppContext);
+  const location = useLocation();
+  const query = new URLSearchParams(location.search);
+  const namespaceId = query.get("namespace") || "";
+  const { setSidebarProps, isReadOnly } =
+    useContext<AppContextProps>(AppContext);
 
   const handleUpdateComplete = useCallback(() => {
     refresh();
@@ -45,11 +48,13 @@ export function PipelineSummaryStatus({
     setSidebarProps({
       type: SidebarType.PIPELINE_UPDATE,
       specEditorProps: {
-        titleOverride: `View/Edit Pipeline: ${pipelineId}`,
+        titleOverride: isReadOnly
+          ? `View Pipeline: ${pipelineId}`
+          : `View/Edit Pipeline: ${pipelineId}`,
         initialYaml: pipeline,
         namespaceId,
         pipelineId,
-        viewType: ViewType.TOGGLE_EDIT,
+        viewType: isReadOnly ? ViewType.READ_ONLY : ViewType.TOGGLE_EDIT,
         onUpdateComplete: handleUpdateComplete,
       },
     });
@@ -66,21 +71,21 @@ export function PipelineSummaryStatus({
       sx={{
         display: "flex",
         flexDirection: "column",
-        marginTop: "0.375rem",
+        marginTop: "0.6rem",
         flexGrow: 1,
-        paddingLeft: "1rem",
+        paddingLeft: "1.6rem",
       }}
     >
       <Box sx={{ width: "fit-content" }}>
         <span className="pipeline-status-title">SUMMARY</span>
         <Box
-          sx={{ display: "flex", flexDirection: "row", marginTop: "0.3125rem" }}
+          sx={{ display: "flex", flexDirection: "row", marginTop: "0.5rem" }}
         >
           <Box
             sx={{
               display: "flex",
               flexDirection: "column",
-              marginRight: "1rem",
+              marginRight: "1.6rem",
             }}
           >
             <div className="pipeline-summary-text">
@@ -100,7 +105,7 @@ export function PipelineSummaryStatus({
             sx={{
               display: "flex",
               flexDirection: "column",
-              marginRight: "4rem",
+              marginRight: "6.4rem",
             }}
           >
             <div className="pipeline-summary-text">
@@ -117,7 +122,7 @@ export function PipelineSummaryStatus({
             sx={{
               display: "flex",
               flexDirection: "column",
-              width: "12rem",
+              width: "19.2rem",
             }}
           >
             <div className="pipeline-summary-text">
@@ -147,7 +152,7 @@ export function PipelineSummaryStatus({
                   onClick={handleSpecClick}
                   data-testid="pipeline-spec-click"
                 >
-                  View/Edit Specs
+                  {isReadOnly ? `View Specs` : `View / Edit Specs`}
                 </div>
               </span>
             </div>
