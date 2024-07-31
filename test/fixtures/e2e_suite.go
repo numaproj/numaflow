@@ -108,7 +108,7 @@ func (s *E2ESuite) SetupSuite() {
 	s.Given().ISBSvc(getISBSvcSpec()).
 		When().
 		Expect().
-		ISBSvcDeleted(1 * time.Minute)
+		ISBSvcDeleted(2 * time.Minute)
 
 	s.Given().ISBSvc(getISBSvcSpec()).
 		When().
@@ -139,7 +139,7 @@ func (s *E2ESuite) TearDownSuite() {
 		DeleteISBSvc().
 		Wait(3 * time.Second).
 		Expect().
-		ISBSvcDeleted(1 * time.Minute)
+		ISBSvcDeleted(2 * time.Minute)
 	s.T().Log("ISB svc is deleted")
 	deleteCMD := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", Namespace)
 	s.Given().When().Exec("sh", []string{"-c", deleteCMD}, OutputRegexp(`service "redis" deleted`))

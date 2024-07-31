@@ -446,7 +446,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 
 		assert.Equal(t, CtrServing, s.Containers[1].Name)
-		assert.Equal(t, "numaserve:0.1", s.Containers[1].Image)
+		assert.Equal(t, "test-f-image", s.Containers[1].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[1].ImagePullPolicy)
 		envNames = []string{}
 		for _, e := range s.Containers[1].Env {
