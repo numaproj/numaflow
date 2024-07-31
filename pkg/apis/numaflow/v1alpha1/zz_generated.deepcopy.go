@@ -2521,6 +2521,7 @@ func (in *VertexSpec) DeepCopy() *VertexSpec {
 func (in *VertexStatus) DeepCopyInto(out *VertexStatus) {
 	*out = *in
 	in.LastScaledAt.DeepCopyInto(&out.LastScaledAt)
+	in.Status.DeepCopyInto(&out.Status)
 	return
 }
 

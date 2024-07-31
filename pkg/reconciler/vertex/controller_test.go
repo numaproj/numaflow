@@ -701,3 +701,42 @@ func getEvents(reconciler *vertexReconciler) []string {
 	}
 	return events
 }
+
+func Test_checkChildrenResourceStatus(t *testing.T) {
+	t.Run("test check children resource status", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		testPl := testPipeline.DeepCopy()
+		err = cl.Create(ctx, testPl)
+		assert.Nil(t, err)
+		r := &vertexReconciler{
+			client:   cl,
+			scheme:   scheme.Scheme,
+			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+			image:    testFlowImage,
+			scaler:   scaling.NewScaler(cl),
+			logger:   zaptest.NewLogger(t).Sugar(),
+			recorder: record.NewFakeRecorder(64),
+		}
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.UDF = &dfv1.UDF{
+			Builtin: &dfv1.Function{
+				Name: "cat",
+			},
+		}
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		err = checkChildrenResourceStatus(ctx, r.client, testObj)
+		assert.NoError(t, err)
+		for _, c := range testObj.Status.Conditions {
+			if c.Type == string(dfv1.VertexConditionPodsHealthy) {
+				assert.Equal(t, string(corev1.ConditionTrue), string(c.Status))
+			}
+		}
+	})
+}

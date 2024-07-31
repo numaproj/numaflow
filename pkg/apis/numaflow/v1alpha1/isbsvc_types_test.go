@@ -39,7 +39,7 @@ func Test_ISBSvcSetType(t *testing.T) {
 func Test_ISBSvcInitConditions(t *testing.T) {
 	s := InterStepBufferServiceStatus{}
 	s.InitConditions()
-	assert.Equal(t, 2, len(s.Conditions))
+	assert.Equal(t, 3, len(s.Conditions))
 	for _, c := range s.Conditions {
 		assert.Equal(t, metav1.ConditionUnknown, c.Status)
 	}
@@ -75,6 +75,22 @@ func Test_ISBSvcMarkStatus(t *testing.T) {
 	for _, c := range s.Conditions {
 		if c.Type == string(ISBSvcConditionDeployed) {
 			assert.Equal(t, metav1.ConditionTrue, c.Status)
+		}
+	}
+	s.MarkChildrenResourceNotHealthy("reason", "message")
+	for _, c := range s.Conditions {
+		if c.Type == string(ISBSvcConditionChildrenResourcesHealthy) {
+			assert.Equal(t, metav1.ConditionFalse, c.Status)
+			assert.Equal(t, "reason", c.Reason)
+			assert.Equal(t, "message", c.Message)
+		}
+	}
+	s.MarkChildrenResourceHealthy("RolloutFinished", "All service healthy")
+	for _, c := range s.Conditions {
+		if c.Type == string(ISBSvcConditionChildrenResourcesHealthy) {
+			assert.Equal(t, metav1.ConditionTrue, c.Status)
+			assert.Equal(t, "RolloutFinished", c.Reason)
+			assert.Equal(t, "All service healthy", c.Message)
 		}
 	}
 	assert.True(t, s.IsReady())

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 
 	"go.uber.org/zap"
@@ -229,7 +230,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
 			if edge.GetToVertexPartitionCount() > 1 {
 				s := shuffle.NewShuffle(edge.To, edge.GetToVertexPartitionCount())
-				shuffleFuncMap[fmt.Sprintf("%s:%s", edge.From, edge.To)] = s
+				shuffleFuncMap[edge.From+":"+edge.To] = s
 			}
 		}
 
@@ -239,13 +240,18 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 			// Drop message if it contains the special tag
 			if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
+				metrics.UserDroppedMessages.With(map[string]string{
+					metrics.LabelVertex:             vertexName,
+					metrics.LabelPipeline:           pipelineName,
+					metrics.LabelVertexType:         string(dfv1.VertexTypeMapUDF),
+					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(u.VertexInstance.Replica)),
+				}).Inc()
+
 				return result, nil
 			}
 
 			// Iterate through the edges
 			for _, edge := range u.VertexInstance.Vertex.Spec.ToEdges {
-				edgeKey := fmt.Sprintf("%s:%s", edge.From, edge.To)
-
 				// Condition to proceed for forwarding message: No conditions on edge, or message tags match edge conditions
 				proceed := edge.Conditions == nil || edge.Conditions.Tags == nil || len(edge.Conditions.Tags.Values) == 0 || sharedutil.CompareSlice(edge.Conditions.Tags.GetOperator(), tags, edge.Conditions.Tags.Values)
 
@@ -254,6 +260,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 					// else forward the message to the default partition
 					partitionIdx := isb.DefaultPartitionIdx
 					if edge.GetToVertexPartitionCount() > 1 {
+						edgeKey := edge.From + ":" + edge.To
 						if edge.ToVertexType == dfv1.VertexTypeReduceUDF { // Shuffle on keys
 							partitionIdx = shuffleFuncMap[edgeKey].ShuffleOnKeys(keys)
 						} else { // Shuffle on msgId

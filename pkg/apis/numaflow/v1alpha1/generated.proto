@@ -1484,6 +1484,8 @@ message VertexStatus {
   optional string selector = 5;
 
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 4;
+
+  optional Status status = 7;
 }
 
 message VertexTemplate {

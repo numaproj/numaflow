@@ -37,6 +37,9 @@ const (
 	VertexPhaseRunning   VertexPhase = "Running"
 	VertexPhaseSucceeded VertexPhase = "Succeeded"
 	VertexPhaseFailed    VertexPhase = "Failed"
+
+	// VertexConditionPodsHealthy has the status True when all the vertex pods are healthy.
+	VertexConditionPodsHealthy ConditionType = "PodsHealthy"
 )
 
 type VertexType string
@@ -828,6 +831,7 @@ type VertexStatus struct {
 	Replicas     uint32      `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
 	Selector     string      `json:"selector,omitempty" protobuf:"bytes,5,opt,name=selector"`
 	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,4,opt,name=lastScaledAt"`
+	Status       `json:",inline" protobuf:"bytes,7,opt,name=status"`
 }
 
 func (vs *VertexStatus) MarkPhase(phase VertexPhase, reason, message string) {
@@ -842,6 +846,29 @@ func (vs *VertexStatus) MarkPhaseFailed(reason, message string) {
 
 func (vs *VertexStatus) MarkPhaseRunning() {
 	vs.MarkPhase(VertexPhaseRunning, "", "")
+}
+
+// MarkPodNotHealthy marks the pod not healthy with the given reason and message.
+func (vs *VertexStatus) MarkPodNotHealthy(reason, message string) {
+	vs.MarkFalse(VertexConditionPodsHealthy, reason, message)
+}
+
+// MarkPodHealthy marks the pod as healthy with the given reason and message.
+func (vs *VertexStatus) MarkPodHealthy(reason, message string) {
+	vs.MarkTrueWithReason(VertexConditionPodsHealthy, reason, message)
+}
+
+// InitConditions sets conditions to Unknown state.
+func (vs *VertexStatus) InitConditions() {
+	vs.InitializeConditions(VertexConditionPodsHealthy)
+}
+
+// IsHealthy indicates whether the vertex is healthy or not
+func (vs *VertexStatus) IsHealthy() bool {
+	if vs.Phase != VertexPhaseRunning {
+		return false
+	}
+	return vs.IsReady()
 }
 
 // +kubebuilder:object:root=true
