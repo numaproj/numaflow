@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=gcr.io/distroless/cc-debian12
+ARG BASE_IMAGE=scratch
 ARG ARCH=$TARGETARCH
 ####################################################################################################
 # base
@@ -16,11 +16,12 @@ RUN chmod +x /bin/numaflow
 ####################################################################################################
 # extension base
 ####################################################################################################
-FROM rust:1.79-bookworm as extension-base
-RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+FROM rust:alpine as extension-base
 
-RUN apt-get update \
-  && apt-get install -y protobuf-compiler
+# Install necessary dependencies
+RUN apk update && apk upgrade && \
+    apk add --no-cache curl ca-certificates tzdata protobuf && \
+    apk add --no-cache --virtual .build-deps cargo rust
 
 RUN cargo new /serve
 WORKDIR /serve
