@@ -1,5 +1,3 @@
-use axum_server::tls_rustls::RustlsConfig;
-use rcgen::generate_simple_self_signed;
 use tracing::{error, info};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -52,13 +50,4 @@ async fn flatten<T>(handle: tokio::task::JoinHandle<Result<T>>) -> Result<T> {
         Ok(Err(err)) => Err(err),
         Err(err) => Err(Error::Other(format!("Spawning the server: {err:?}"))),
     }
-}
-
-#[allow(dead_code)]
-async fn generate_tls_config() -> RustlsConfig {
-    let rcgen::CertifiedKey { cert, key_pair } =
-        generate_simple_self_signed(["localhost".to_owned()]).unwrap();
-    let cert_file = cert.pem();
-    let key_file = key_pair.serialize_pem();
-    RustlsConfig::from_pem(Vec::from(cert_file), Vec::from(key_file)).await.expect("failed to create tls config")
 }

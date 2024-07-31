@@ -5,7 +5,7 @@ CURRENT_DIR=$(shell pwd)
 DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=numaflow
 DOCKERFILE:=Dockerfile
-DEV_BASE_IMAGE:=gcr.io/distroless/cc-debian12
+DEV_BASE_IMAGE:=debian:bookworm
 RELEASE_BASE_IMAGE:=gcr.io/distroless/cc-debian12
 
 BUILD_DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')

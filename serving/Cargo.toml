@@ -12,7 +12,6 @@ all-tests = ["redis-tests", "nats-tests"]
 [dependencies]
 async-nats = "0.35.1"
 axum = "0.7.5"
-axum-server = { version = "0.6", features = ["tls-rustls"] }
 axum-macros = "0.4.1"
 hyper-util = { version = "0.1.6", features = ["client-legacy"] }
 metrics = { version = "0.23.0", default-features = false }
@@ -26,12 +25,11 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 uuid = { version = "1.10.0", features = ["v4"] }
 tempfile = "3.10.1"
-redis = { version = "0.25.3", features = ["tokio-comp", "aio", "connection-manager"] }
+redis = { version = "0.26.0", features = ["tokio-comp", "aio", "connection-manager"] }
 config = "0.14.0"
 trait-variant = "0.1.2"
 chrono = { version = "0.4", features = ["serde"] }
 # intern
 backoff = { path = "backoff" }
 base64 = "0.22.1"
-rcgen = "0.13.1"
 
