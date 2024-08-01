@@ -269,8 +269,9 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// store the offsets of the messages we read from ISB
 	var readOffsets = make([]isb.Offset, len(readMessages))
 	for idx, m := range readMessages {
-		readOffsets[idx] = m.ReadOffset
 		totalBytes += len(m.Payload)
+
+		readOffsets[idx] = m.ReadOffset
 	}
 
 	// source data transformer applies filtering and assigns event time to source data, which doesn't require watermarks.
