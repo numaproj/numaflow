@@ -11,8 +11,11 @@ import (
 // getVertexStatus will calculate the status of the vertices and return the status and reason
 func getVertexStatus(vertices *dfv1.VertexList) (bool, string) {
 	for _, vertex := range vertices.Items {
-		if !vertex.Status.IsHealthy() {
+		if vertex.Status.ObservedGeneration == 0 || vertex.Generation > vertex.Status.ObservedGeneration {
 			return false, "Progressing"
+		}
+		if !vertex.Status.IsHealthy() {
+			return false, "Unavailable"
 		}
 	}
 	return true, "Successful"

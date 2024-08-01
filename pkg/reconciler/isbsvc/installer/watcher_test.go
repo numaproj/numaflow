@@ -40,7 +40,7 @@ func TestGetStatefulSetStatus(t *testing.T) {
 		testSts := statefulSet.DeepCopy()
 		testSts.Status.UpdateRevision = "isbsvc-default-js-597b7f73a1"
 		msg, reason, status := getStatefulSetStatus(testSts)
-		assert.Equal(t, "Updating", reason)
+		assert.Equal(t, "Progressing", reason)
 		assert.False(t, status)
 		assert.Equal(t, "waiting for statefulset rolling update to complete 3 pods at revision isbsvc-default-js-597b7f73a1...\n", msg)
 	})
