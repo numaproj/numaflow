@@ -48,6 +48,23 @@ spec:
             # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/log
             image: quay.io/numaio/numaflow-python/sink-log:stable
             imagePullPolicy: Always
+    - name: rust-split
+      scale:
+        min: 1
+      udf:
+        container:
+          # Split input message into an array with comma, see https://github.com/numaproj/numaflow-rs/tree/main/examples/batchmap-flatmap
+          image: quay.io/numaio/numaflow-rs/batchmap-flatmap:stable
+          imagePullPolicy: Always
+    - name: rust-udsink
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            # https://github.com/numaproj/numaflow-rs/tree/main/examples/sink-log
+            image: quay.io/numaio/numaflow-rs/sink-log:stable
+            imagePullPolicy: Always
 ## FIXME(map-batch): enable Java
 #    - name: java-split
 #      scale:
@@ -75,6 +92,10 @@ spec:
       to: python-split
     - from: python-split
       to: python-udsink
+    - from: in
+      to: rust-split
+    - from: rust-split
+      to: rust-udsink
 #    - from: in
 #      to: java-split
 #    - from: java-split
