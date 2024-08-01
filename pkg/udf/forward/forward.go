@@ -178,6 +178,7 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	start := time.Now()
 	totalBytes := 0
+	dataBytes := 0
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
 	// at-least-once semantics for reading, during restart we will have to reprocess all unacknowledged messages. It is the
 	// responsibility of the Read function to do that.
@@ -225,6 +226,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	var readOffsets = make([]isb.Offset, len(readMessages))
 	for idx, m := range readMessages {
 		readOffsets[idx] = m.ReadOffset
+		totalBytes += len(m.Payload)
 		if m.Kind == isb.Data {
 			dataMessages = append(dataMessages, m)
 		}
@@ -244,11 +246,11 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		msg.Watermark = time.Time(processorWM)
 		// emit message size metric
 
-		totalBytes += len(msg.Payload)
+		dataBytes += len(msg.Payload)
 	}
 
 	metrics.ReadBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(totalBytes))
-
+	metrics.ReadDataBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(dataBytes))
 	var udfResults []isb.ReadWriteMessagePair
 	var writeOffsets map[string][][]isb.Offset
 	// Check if map streaming mode is enabled, if the applier is not nil that means we have enabled the required mode
