@@ -149,6 +149,9 @@ spec:
     - jsonPath: .status.replicas
       name: Current
       type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     - jsonPath: .status.reason
       name: Reason
       priority: 10

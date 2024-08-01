@@ -78,7 +78,6 @@ func (r *vertexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	if !equality.Semantic.DeepEqual(vertex.Status, vertexCopy.Status) {
-		fmt.Println("cccc")
 		if err := r.client.Status().Update(ctx, vertexCopy); err != nil {
 			return reconcile.Result{}, err
 		}
@@ -329,7 +328,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		vertex.Status.MarkPodNotHealthy("ListVerticesPodsFailed", err.Error())
 		return ctrl.Result{}, fmt.Errorf("failed to check the status of the pods: %w", err)
 	}
-	if msg, reason, status := getVertexStatus(&podList); status {
+	if healthy, reason, msg := reconciler.CheckVertexPodsStatus(&podList); healthy {
 		vertex.Status.MarkPodHealthy(reason, msg)
 	} else {
 		// Do not need to explicitly requeue, since the it keeps watching the status change of the pods

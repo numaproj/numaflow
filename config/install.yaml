@@ -2730,7 +2730,6 @@ spec:
                     enum:
                     - ""
                     - Running
-                    - Succeeded
                     - Failed
                     - Pausing
                     - Paused
@@ -12353,7 +12352,6 @@ spec:
                 enum:
                 - ""
                 - Running
-                - Succeeded
                 - Failed
                 - Pausing
                 - Paused
@@ -12417,6 +12415,9 @@ spec:
     - jsonPath: .status.replicas
       name: Current
       type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     - jsonPath: .status.reason
       name: Reason
       priority: 10
@@ -17844,10 +17845,9 @@ spec:
               phase:
                 enum:
                 - ""
-                - Pending
                 - Running
-                - Succeeded
                 - Failed
+                - Degraded
                 type: string
               reason:
                 type: string

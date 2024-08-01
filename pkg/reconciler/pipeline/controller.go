@@ -959,7 +959,7 @@ func checkChildrenResourceStatus(ctx context.Context, c client.Client, pipeline 
 		pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionDaemonServiceHealthy, "GetDaemonServiceFailed", err.Error())
 		return err
 	}
-	if msg, reason, status := getDeploymentStatus(&daemonDeployment); status {
+	if status, reason, msg := reconciler.CheckDeploymentStatus(&daemonDeployment); status {
 		pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionDaemonServiceHealthy, reason, msg)
 	} else {
 		pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionDaemonServiceHealthy, reason, msg)
@@ -977,7 +977,7 @@ func checkChildrenResourceStatus(ctx context.Context, c client.Client, pipeline 
 			return err
 		}
 		for _, sideInput := range sideInputs.Items {
-			if msg, reason, status := getDeploymentStatus(&sideInput); status {
+			if status, reason, msg := reconciler.CheckDeploymentStatus(&sideInput); status {
 				pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionSideInputsManagersHealthy, reason, msg)
 			} else {
 				pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionSideInputsManagersHealthy, reason, msg)
@@ -993,7 +993,7 @@ func checkChildrenResourceStatus(ctx context.Context, c client.Client, pipeline 
 		pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionVerticesHealthy, "ListVerticesFailed", err.Error())
 		return err
 	}
-	status, reason := getVertexStatus(&vertices)
+	status, reason := reconciler.CheckVertexStatus(&vertices)
 	if status {
 		pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionVerticesHealthy, reason, "All Vertices are healthy")
 	} else {

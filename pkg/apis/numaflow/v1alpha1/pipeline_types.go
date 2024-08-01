@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// +kubebuilder:validation:Enum="";Running;Succeeded;Failed;Pausing;Paused;Deleting
+// +kubebuilder:validation:Enum="";Running;Failed;Pausing;Paused;Deleting
 type PipelinePhase string
 
 const (
@@ -40,6 +40,7 @@ const (
 	PipelinePhasePausing  PipelinePhase = "Pausing"
 	PipelinePhasePaused   PipelinePhase = "Paused"
 	PipelinePhaseDeleting PipelinePhase = "Deleting"
+	PipelinePhaseDegraded PipelinePhase = "Degraded"
 
 	// PipelineConditionConfigured has the status True when the Pipeline
 	// has valid configuration.
