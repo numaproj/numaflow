@@ -33,7 +33,7 @@ func TestGetDeploymentStatus(t *testing.T) {
 	t.Run("Test Deployment status as true", func(t *testing.T) {
 		testDeployment := deployment.DeepCopy()
 		message, reason, done := getDeploymentStatus(testDeployment)
-		assert.Equal(t, "RolloutFinished", reason)
+		assert.Equal(t, "Healthy", reason)
 		assert.True(t, done)
 		assert.Equal(t, "deployment \"test-deployment\" successfully rolled out\n", message)
 	})
@@ -82,7 +82,7 @@ func TestGetVertexStatus(t *testing.T) {
 		}
 		status, reason := getVertexStatus(&vertices)
 		assert.True(t, status)
-		assert.Equal(t, "Successful", reason)
+		assert.Equal(t, "Healthy", reason)
 	})
 
 	t.Run("Test Vertex status as false when ObservedGeneration is not matching", func(t *testing.T) {

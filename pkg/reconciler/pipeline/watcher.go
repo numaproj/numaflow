@@ -18,7 +18,7 @@ func getVertexStatus(vertices *dfv1.VertexList) (bool, string) {
 			return false, "Unavailable"
 		}
 	}
-	return true, "Successful"
+	return true, "Healthy"
 }
 
 // getDeploymentStatus returns a message describing deployment status, and message with reason where bool value
@@ -43,9 +43,9 @@ func getDeploymentStatus(deployment *appv1.Deployment) (string, string, bool) {
 		if deployment.Status.AvailableReplicas < deployment.Status.UpdatedReplicas {
 			return fmt.Sprintf(
 				"Waiting for deployment %q rollout to finish: %d of %d updated replicas are available...\n",
-				deployment.Name, deployment.Status.AvailableReplicas, deployment.Status.UpdatedReplicas), "Unavailable", false
+				deployment.Name, deployment.Status.AvailableReplicas, deployment.Status.UpdatedReplicas), "Progressing", false
 		}
-		return fmt.Sprintf("deployment %q successfully rolled out\n", deployment.Name), "RolloutFinished", true
+		return fmt.Sprintf("deployment %q successfully rolled out\n", deployment.Name), "Healthy", true
 	}
 	return "Waiting for deployment spec update to be observed...", "Progressing", false
 }

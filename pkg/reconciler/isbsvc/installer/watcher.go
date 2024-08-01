@@ -24,13 +24,13 @@ func getStatefulSetStatus(sts *appv1.StatefulSet) (string, string, bool) {
 			if sts.Status.UpdatedReplicas < (*sts.Spec.Replicas - *sts.Spec.UpdateStrategy.RollingUpdate.Partition) {
 				return fmt.Sprintf(
 					"Waiting for partitioned roll out to finish: %d out of %d new pods have been updated...\n",
-					sts.Status.UpdatedReplicas, *sts.Spec.Replicas-*sts.Spec.UpdateStrategy.RollingUpdate.Partition), "Unavailable", false
+					sts.Status.UpdatedReplicas, *sts.Spec.Replicas-*sts.Spec.UpdateStrategy.RollingUpdate.Partition), "Progressing", false
 			}
 		}
 		return fmt.Sprintf("partitioned roll out complete: %d new pods have been updated...\n",
-			sts.Status.UpdatedReplicas), "RolloutFinished", true
+			sts.Status.UpdatedReplicas), "Healthy", true
 	}
 	return fmt.Sprintf(
 		"statefulset rolling update complete %d pods at revision %s...\n",
-		sts.Status.CurrentReplicas, sts.Status.CurrentRevision), "RolloutFinished", true
+		sts.Status.CurrentReplicas, sts.Status.CurrentRevision), "Healthy", true
 }
