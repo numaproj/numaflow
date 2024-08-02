@@ -98,7 +98,6 @@ spec:
       type: date
     - jsonPath: .status.message
       name: Message
-      priority: 10
       type: string
     name: v1alpha1
     schema:
@@ -154,11 +153,9 @@ spec:
       type: date
     - jsonPath: .status.reason
       name: Reason
-      priority: 10
       type: string
     - jsonPath: .status.message
       name: Message
-      priority: 10
       type: string
     name: v1alpha1
     schema:

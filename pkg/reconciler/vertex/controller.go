@@ -328,7 +328,6 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	var podList corev1.PodList
 	if err := r.client.List(ctx, &podList, &client.ListOptions{Namespace: vertex.GetNamespace(), LabelSelector: selector}); err != nil {
 		vertex.Status.MarkPodNotHealthy("ListVerticesPodsFailed", err.Error())
-		vertex.Status.MarkPhaseDegraded("ListVerticesPodsFailed", err.Error())
 		return ctrl.Result{}, fmt.Errorf("failed to get pods of a vertex: %w", err)
 	}
 	if healthy, reason, msg := reconciler.CheckVertexPodsStatus(&podList); healthy {
@@ -336,7 +335,6 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	} else {
 		// Do not need to explicitly requeue, since the it keeps watching the status change of the pods
 		vertex.Status.MarkPodNotHealthy(reason, msg)
-		vertex.Status.MarkPhaseDegraded(reason, msg)
 	}
 
 	return ctrl.Result{}, nil

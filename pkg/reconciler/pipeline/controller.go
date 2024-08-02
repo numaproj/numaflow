@@ -942,6 +942,14 @@ func (r *pipelineReconciler) safeToDelete(ctx context.Context, pl *dfv1.Pipeline
 
 // checkChildrenResourceStatus checks the status of the children resources of the pipeline
 func (r *pipelineReconciler) checkChildrenResourceStatus(ctx context.Context, pipeline *dfv1.Pipeline) error {
+	defer func() {
+		for _, c := range pipeline.Status.Conditions {
+			if c.Status != metav1.ConditionTrue {
+				pipeline.Status.SetPhase(pipeline.Spec.Lifecycle.GetDesiredPhase(), "Degraded: "+c.Message)
+			}
+		}
+	}()
+
 	// get the daemon deployment and update the status of it to the pipeline
 	var daemonDeployment appv1.Deployment
 	if err := r.client.Get(ctx, client.ObjectKey{Namespace: pipeline.GetNamespace(), Name: pipeline.GetDaemonDeploymentName()},
@@ -949,18 +957,15 @@ func (r *pipelineReconciler) checkChildrenResourceStatus(ctx context.Context, pi
 		if apierrors.IsNotFound(err) {
 			pipeline.Status.MarkDaemonServiceUnHealthy(
 				"GetDaemonServiceFailed", "Deployment not found, might be still under creation")
-			pipeline.Status.SetPhase(dfv1.PipelinePhaseDegraded, "Daemon deployment not found")
 			return nil
 		}
 		pipeline.Status.MarkDaemonServiceUnHealthy("GetDaemonServiceFailed", err.Error())
-		pipeline.Status.SetPhase(dfv1.PipelinePhaseDegraded, "Error getting the daemon deployment: "+err.Error())
 		return err
 	}
 	if status, reason, msg := reconciler.CheckDeploymentStatus(&daemonDeployment); status {
 		pipeline.Status.MarkDaemonServiceHealthy()
 	} else {
 		pipeline.Status.MarkDaemonServiceUnHealthy(reason, msg)
-		pipeline.Status.SetPhase(dfv1.PipelinePhaseDegraded, "Daemon deployment not ready: "+msg)
 	}
 
 	// get the side input deployments and update the status of them to the pipeline
@@ -972,7 +977,6 @@ func (r *pipelineReconciler) checkChildrenResourceStatus(ctx context.Context, pi
 		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + pipeline.Name + "," + dfv1.KeyComponent + "=" + dfv1.ComponentSideInputManager)
 		if err := r.client.List(ctx, &sideInputs, &client.ListOptions{Namespace: pipeline.Namespace, LabelSelector: selector}); err != nil {
 			pipeline.Status.MarkSideInputsManagersUnHealthy("ListSideInputsManagersFailed", err.Error())
-			pipeline.Status.SetPhase(dfv1.PipelinePhaseDegraded, "Error listing side inputs managers: "+err.Error())
 			return err
 		}
 		for _, sideInput := range sideInputs.Items {
@@ -980,7 +984,6 @@ func (r *pipelineReconciler) checkChildrenResourceStatus(ctx context.Context, pi
 				pipeline.Status.MarkSideInputsManagersHealthy()
 			} else {
 				pipeline.Status.MarkSideInputsManagersUnHealthy(reason, msg)
-				pipeline.Status.SetPhase(dfv1.PipelinePhaseDegraded, "Side inputs manager not ready: "+msg)
 				break
 			}
 		}
@@ -991,7 +994,6 @@ func (r *pipelineReconciler) checkChildrenResourceStatus(ctx context.Context, pi
 	selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + pipeline.GetName() + "," + dfv1.KeyComponent + "=" + dfv1.ComponentVertex)
 	if err := r.client.List(ctx, &vertices, &client.ListOptions{Namespace: pipeline.Namespace, LabelSelector: selector}); err != nil {
 		pipeline.Status.MarkVerticesUnHealthy("ListVerticesFailed", err.Error())
-		pipeline.Status.SetPhase(dfv1.PipelinePhaseDegraded, "Error listing vertices: "+err.Error())
 		return err
 	}
 	status, reason, message := reconciler.CheckVertexStatus(&vertices)
@@ -999,7 +1001,6 @@ func (r *pipelineReconciler) checkChildrenResourceStatus(ctx context.Context, pi
 		pipeline.Status.MarkVerticesHealthy()
 	} else {
 		pipeline.Status.MarkVerticesUnHealthy(reason, "Some Vertices are unhealthy: "+message)
-		pipeline.Status.SetPhase(dfv1.PipelinePhaseDegraded, "Some Vertices are unhealthy: "+message)
 	}
 
 	return nil

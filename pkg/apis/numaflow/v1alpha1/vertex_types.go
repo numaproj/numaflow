@@ -28,14 +28,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// +kubebuilder:validation:Enum="";Running;Failed;Degraded
+// +kubebuilder:validation:Enum="";Running;Failed
 type VertexPhase string
 
 const (
-	VertexPhaseUnknown  VertexPhase = ""
-	VertexPhaseRunning  VertexPhase = "Running"
-	VertexPhaseFailed   VertexPhase = "Failed"
-	VertexPhaseDegraded VertexPhase = "Degraded"
+	VertexPhaseUnknown VertexPhase = ""
+	VertexPhaseRunning VertexPhase = "Running"
+	VertexPhaseFailed  VertexPhase = "Failed"
 
 	// VertexConditionPodsHealthy has the status True when all the vertex pods are healthy.
 	VertexConditionPodsHealthy ConditionType = "PodsHealthy"
@@ -59,8 +58,8 @@ const (
 // +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
-// +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`,priority=10
-// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`,priority=10
+// +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 type Vertex struct {
@@ -844,11 +843,6 @@ func (vs *VertexStatus) MarkPhaseFailed(reason, message string) {
 	vs.MarkPhase(VertexPhaseFailed, reason, message)
 }
 
-// MarkPhaseDegraded marks the phase as degraded with the given reason and message.
-func (vs *VertexStatus) MarkPhaseDegraded(reason, message string) {
-	vs.MarkPhase(VertexPhaseDegraded, reason, message)
-}
-
 // MarkPhaseRunning marks the phase as running.
 func (vs *VertexStatus) MarkPhaseRunning() {
 	vs.MarkPhase(VertexPhaseRunning, "", "")
@@ -857,6 +851,8 @@ func (vs *VertexStatus) MarkPhaseRunning() {
 // MarkPodNotHealthy marks the pod not healthy with the given reason and message.
 func (vs *VertexStatus) MarkPodNotHealthy(reason, message string) {
 	vs.MarkFalse(VertexConditionPodsHealthy, reason, message)
+	vs.Reason = reason
+	vs.Message = "Degraded: " + message
 }
 
 // MarkPodHealthy marks the pod as healthy with the given reason and message.

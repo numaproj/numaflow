@@ -49,7 +49,6 @@ spec:
       type: date
     - jsonPath: .status.message
       name: Message
-      priority: 10
       type: string
     name: v1alpha1
     schema:
@@ -121,7 +120,6 @@ spec:
                     - Pausing
                     - Paused
                     - Deleting
-                    - Degraded
                     type: string
                   pauseGracePeriodSeconds:
                     default: 30
@@ -9744,7 +9742,6 @@ spec:
                 - Pausing
                 - Paused
                 - Deleting
-                - Degraded
                 type: string
               reduceUDFCount:
                 format: int32

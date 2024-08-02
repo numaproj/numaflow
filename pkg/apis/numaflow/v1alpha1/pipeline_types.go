@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// +kubebuilder:validation:Enum="";Running;Failed;Pausing;Paused;Deleting;Degraded
+// +kubebuilder:validation:Enum="";Running;Failed;Pausing;Paused;Deleting
 type PipelinePhase string
 
 const (
@@ -40,7 +40,6 @@ const (
 	PipelinePhasePausing  PipelinePhase = "Pausing"
 	PipelinePhasePaused   PipelinePhase = "Paused"
 	PipelinePhaseDeleting PipelinePhase = "Deleting"
-	PipelinePhaseDegraded PipelinePhase = "Degraded"
 
 	// PipelineConditionConfigured has the status True when the Pipeline
 	// has valid configuration.
@@ -67,7 +66,7 @@ const (
 // +kubebuilder:printcolumn:name="Map UDFs",type=integer,JSONPath=`.status.mapUDFCount`,priority=10
 // +kubebuilder:printcolumn:name="Reduce UDFs",type=integer,JSONPath=`.status.reduceUDFCount`,priority=10
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
-// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`,priority=10
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 type Pipeline struct {
@@ -698,6 +697,7 @@ func (pls *PipelineStatus) MarkDaemonServiceHealthy() {
 // MarkDaemonServiceUnHealthy set the daemon service of the pipeline is unhealthy.
 func (pls *PipelineStatus) MarkDaemonServiceUnHealthy(reason, message string) {
 	pls.MarkFalse(PipelineConditionDaemonServiceHealthy, reason, message)
+	pls.Message = "Degraded: " + message
 }
 
 // MarkSideInputsManagersHealthy set the Side Inputs managers of the pipeline are healthy.
@@ -713,6 +713,7 @@ func (pls *PipelineStatus) MarkSideInputsManagersHealthyWithReason(reason, messa
 // MarkSideInputsManagersUnHealthy set the Side Inputs managers of the pipeline are unhealthy.
 func (pls *PipelineStatus) MarkSideInputsManagersUnHealthy(reason, message string) {
 	pls.MarkFalse(PipelineConditionSideInputsManagersHealthy, reason, message)
+	pls.Message = "Degraded: " + message
 }
 
 // MarkVerticesHealthy set the vertices of the pipeline are healthy.
@@ -723,6 +724,7 @@ func (pls *PipelineStatus) MarkVerticesHealthy() {
 // MarkVerticesUnHealthy set the vertices of the pipeline are unhealthy with the given reason.
 func (pls *PipelineStatus) MarkVerticesUnHealthy(reason, message string) {
 	pls.MarkFalse(PipelineConditionVerticesHealthy, reason, message)
+	pls.Message = "Degraded: " + message
 }
 
 // MarkPhaseRunning set the Pipeline has been running.
