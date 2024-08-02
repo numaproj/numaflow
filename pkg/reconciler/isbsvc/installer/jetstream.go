@@ -561,18 +561,18 @@ func (r *jetStreamInstaller) CheckChildrenResourceStatus(ctx context.Context) er
 		Name:      generateJetStreamStatefulSetName(r.isbSvc),
 	}, &isbStatefulSet); err != nil {
 		if apierrors.IsNotFound(err) {
-			r.isbSvc.Status.MarkChildrenResourceNotHealthy("GetStatefulSetFailed",
+			r.isbSvc.Status.MarkChildrenResourceUnHealthy("GetStatefulSetFailed",
 				"StatefulSet not found, might be still under creation")
 			return nil
 		}
-		r.isbSvc.Status.MarkChildrenResourceNotHealthy("GetStatefulSetFailed", err.Error())
+		r.isbSvc.Status.MarkChildrenResourceUnHealthy("GetStatefulSetFailed", err.Error())
 		return err
 	}
 	// calculate the status of the InterStepBufferService by statefulset status and update the status of isbSvc
-	if msg, reason, status := getStatefulSetStatus(&isbStatefulSet); status {
+	if status, reason, msg := reconciler.CheckStatefulSetStatus(&isbStatefulSet); status {
 		r.isbSvc.Status.MarkChildrenResourceHealthy(reason, msg)
 	} else {
-		r.isbSvc.Status.MarkChildrenResourceNotHealthy(reason, msg)
+		r.isbSvc.Status.MarkChildrenResourceUnHealthy(reason, msg)
 	}
 	return nil
 }

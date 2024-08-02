@@ -599,7 +599,7 @@ message IdleSource {
 // +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.status.type`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
-// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`,priority=10
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 message InterStepBufferService {
@@ -636,7 +636,6 @@ message InterStepBufferServiceStatus {
 
   optional string type = 5;
 
-  // ObservedGeneration stores the generation value observed by the controller.
   optional int64 observedGeneration = 6;
 }
 
@@ -1034,7 +1033,6 @@ message PipelineStatus {
 
   optional uint32 reduceUDFCount = 10;
 
-  // ObservedGeneration stores the generation value observed by the controller.
   optional int64 observedGeneration = 11;
 }
 
@@ -1474,21 +1472,20 @@ message VertexSpec {
 }
 
 message VertexStatus {
-  optional string phase = 1;
+  optional Status status = 1;
 
-  optional string reason = 6;
-
-  optional string message = 2;
+  optional string phase = 2;
 
   optional uint32 replicas = 3;
 
-  optional string selector = 5;
+  optional string selector = 4;
 
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 4;
+  optional string reason = 5;
 
-  optional Status status = 7;
+  optional string message = 6;
 
-  // ObservedGeneration stores the generation value observed by the controller.
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 7;
+
   optional int64 observedGeneration = 8;
 }
 

@@ -25,7 +25,6 @@ spec:
       type: date
     - jsonPath: .status.message
       name: Message
-      priority: 10
       type: string
     name: v1alpha1
     schema:

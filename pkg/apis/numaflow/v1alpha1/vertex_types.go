@@ -821,15 +821,14 @@ func (v VertexSpec) getType() containerSupplier {
 }
 
 type VertexStatus struct {
-	Phase        VertexPhase `json:"phase" protobuf:"bytes,1,opt,name=phase,casttype=VertexPhase"`
-	Reason       string      `json:"reason,omitempty" protobuf:"bytes,6,opt,name=reason"`
-	Message      string      `json:"message,omitempty" protobuf:"bytes,2,opt,name=message"`
-	Replicas     uint32      `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
-	Selector     string      `json:"selector,omitempty" protobuf:"bytes,5,opt,name=selector"`
-	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,4,opt,name=lastScaledAt"`
-	Status       `json:",inline" protobuf:"bytes,7,opt,name=status"`
-	// ObservedGeneration stores the generation value observed by the controller.
-	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,8,opt,name=observedGeneration"`
+	Status             `json:",inline" protobuf:"bytes,1,opt,name=status"`
+	Phase              VertexPhase `json:"phase" protobuf:"bytes,2,opt,name=phase,casttype=VertexPhase"`
+	Replicas           uint32      `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
+	Selector           string      `json:"selector,omitempty" protobuf:"bytes,4,opt,name=selector"`
+	Reason             string      `json:"reason,omitempty" protobuf:"bytes,5,opt,name=reason"`
+	Message            string      `json:"message,omitempty" protobuf:"bytes,6,opt,name=message"`
+	LastScaledAt       metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,7,opt,name=lastScaledAt"`
+	ObservedGeneration int64       `json:"observedGeneration,omitempty" protobuf:"varint,8,opt,name=observedGeneration"`
 }
 
 func (vs *VertexStatus) MarkPhase(phase VertexPhase, reason, message string) {

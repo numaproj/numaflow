@@ -94,7 +94,7 @@ func TestGetDeploymentStatus(t *testing.T) {
 		done, reason, message := CheckDeploymentStatus(testDeployment)
 		assert.Equal(t, "Healthy", reason)
 		assert.True(t, done)
-		assert.Equal(t, "deployment \"test-deployment\" successfully rolled out\n", message)
+		assert.Equal(t, "deployment \"test-deployment\" successfully rolled out", message)
 	})
 
 	t.Run("Test Deployment status as false", func(t *testing.T) {
@@ -104,7 +104,7 @@ func TestGetDeploymentStatus(t *testing.T) {
 		done, reason, message := CheckDeploymentStatus(testDeployment)
 		assert.Equal(t, "Progressing", reason)
 		assert.False(t, done)
-		assert.Equal(t, "Waiting for deployment \"test-deployment\" rollout to finish: 0 out of 1 new replicas have been updated...\n", message)
+		assert.Equal(t, "Waiting for deployment \"test-deployment\" rollout to finish: 0 out of 1 new replicas have been updated...", message)
 	})
 
 	t.Run("Test deployment status as false while updating replica", func(t *testing.T) {
@@ -114,7 +114,7 @@ func TestGetDeploymentStatus(t *testing.T) {
 		done, reason, message := CheckDeploymentStatus(testDeployment)
 		assert.Equal(t, "Progressing", reason)
 		assert.False(t, done)
-		assert.Equal(t, "Waiting for deployment \"test-deployment\" rollout to finish: 1 old replicas are pending termination...\n", message)
+		assert.Equal(t, "Waiting for deployment \"test-deployment\" rollout to finish: 1 old replicas are pending termination...", message)
 	})
 }
 
@@ -205,5 +205,52 @@ func TestGetVertexStatus(t *testing.T) {
 		assert.False(t, status)
 		assert.Equal(t, "Unavailable", reason)
 		assert.Equal(t, `Vertex "test-vertex" is not healthy`, message)
+	})
+}
+
+var (
+	statefulSet = &appv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-statefulset",
+			Namespace: "default",
+		},
+		Status: appv1.StatefulSetStatus{
+			AvailableReplicas:  3,
+			CurrentReplicas:    3,
+			CurrentRevision:    "isbsvc-default-js-597b7f74d7",
+			ObservedGeneration: 1,
+			ReadyReplicas:      3,
+			Replicas:           3,
+			UpdateRevision:     "isbsvc-default-js-597b7f74d7",
+			UpdatedReplicas:    3,
+		},
+	}
+)
+
+func TestGetStatefulSetStatus(t *testing.T) {
+	t.Run("Test statefulset status as true", func(t *testing.T) {
+		testSts := statefulSet.DeepCopy()
+		status, reason, msg := CheckStatefulSetStatus(testSts)
+		assert.Equal(t, "Healthy", reason)
+		assert.True(t, status)
+		assert.Equal(t, "statefulset rolling update complete 3 pods at revision isbsvc-default-js-597b7f74d7...\n", msg)
+	})
+
+	t.Run("Test statefulset status as false", func(t *testing.T) {
+		testSts := statefulSet.DeepCopy()
+		testSts.Status.UpdateRevision = "isbsvc-default-js-597b7f73a1"
+		status, reason, msg := CheckStatefulSetStatus(testSts)
+		assert.Equal(t, "Progressing", reason)
+		assert.False(t, status)
+		assert.Equal(t, "waiting for statefulset rolling update to complete 3 pods at revision isbsvc-default-js-597b7f73a1...", msg)
+	})
+
+	t.Run("Test statefulset with ObservedGeneration as zero", func(t *testing.T) {
+		testSts := statefulSet.DeepCopy()
+		testSts.Status.ObservedGeneration = 0
+		status, reason, msg := CheckStatefulSetStatus(testSts)
+		assert.Equal(t, "Progressing", reason)
+		assert.False(t, status)
+		assert.Equal(t, "Waiting for statefulset spec update to be observed...", msg)
 	})
 }
