@@ -59,11 +59,11 @@ const (
 )
 
 // HealthThresholds are the thresholds used to compute the health of a vertex
-const (
+var (
 	// criticalBufferThreshold is the threshold above which the health of a vertex is critical
-	criticalBufferThreshold = 95
+	criticalBufferThreshold = v1alpha1.DefaultBufferUsageLimit * 90 // 95
 	// warningBufferThreshold is the threshold above which the health of a vertex is warning
-	warningBufferThreshold = 80
+	warningBufferThreshold = (0.85) * criticalBufferThreshold // 80
 )
 
 // Dataflow states
@@ -231,6 +231,7 @@ func (hc *HealthChecker) getPipelineVertexDataCriticality(ctx context.Context) (
 	}
 	// update the usage timeline for all the ISBs used in the pipeline
 	hc.updateUsageTimeline(buffers.Buffers)
+	hc.udpateThresholds()
 
 	var vertexState []*vertexState
 
@@ -253,6 +254,11 @@ func (hc *HealthChecker) getPipelineVertexDataCriticality(ctx context.Context) (
 		vertexState = append(vertexState, currentVertexState)
 	}
 	return vertexState, nil
+}
+
+func (hc *HealthChecker) udpateThresholds() {
+	criticalBufferThreshold = float64(*hc.pipeline.Spec.Limits.BufferUsageLimit) * 0.9
+	warningBufferThreshold = criticalBufferThreshold * 0.85
 }
 
 // updateUsageTimeline is used to update the usage timeline for a given buffer list
@@ -348,9 +354,9 @@ func calculateEWMAUsage(bufferUsage []float64) []float64 {
 func assignStateToBufferUsage(ewmaValue float64) string {
 	// Assign the state to the buffer usage
 	var state string
-	if ewmaValue > criticalBufferThreshold {
+	if ewmaValue > float64(criticalBufferThreshold) {
 		state = criticalState
-	} else if ewmaValue > warningBufferThreshold {
+	} else if ewmaValue > float64(warningBufferThreshold) {
 		state = warningState
 	} else {
 		state = healthyState
