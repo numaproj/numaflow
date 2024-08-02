@@ -510,6 +510,14 @@ func TestVertexMarkPhaseFailed(t *testing.T) {
 	assert.Equal(t, "message", s.Message)
 }
 
+func TestVertexMarkPhaseDegraded(t *testing.T) {
+	s := VertexStatus{}
+	s.MarkPhaseDegraded("reason", "message")
+	assert.Equal(t, VertexPhaseDegraded, s.Phase)
+	assert.Equal(t, "reason", s.Reason)
+	assert.Equal(t, "message", s.Message)
+}
+
 func Test_VertexMarkPodNotHealthy(t *testing.T) {
 	s := VertexStatus{}
 	s.MarkPodNotHealthy("reason", "message")

@@ -53,16 +53,16 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
 }
 
 // CheckVertexStatus will calculate the status of the vertices and return the status and reason
-func CheckVertexStatus(vertices *dfv1.VertexList) (bool, string) {
+func CheckVertexStatus(vertices *dfv1.VertexList) (healthy bool, reason string, message string) {
 	for _, vertex := range vertices.Items {
 		if vertex.Status.ObservedGeneration == 0 || vertex.Generation > vertex.Status.ObservedGeneration {
-			return false, "Progressing"
+			return false, "Progressing", `Vertex "` + vertex.Spec.Name + `" Waiting for reconciliation`
 		}
 		if !vertex.Status.IsHealthy() {
-			return false, "Unavailable"
+			return false, "Unavailable", `Vertex "` + vertex.Spec.Name + `" is not healthy`
 		}
 	}
-	return true, "Healthy"
+	return true, "Healthy", "All vertices are healthy"
 }
 
 // CheckDeploymentStatus returns a message describing deployment status, and message with reason where bool value

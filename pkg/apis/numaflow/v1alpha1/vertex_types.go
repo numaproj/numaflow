@@ -839,10 +839,17 @@ func (vs *VertexStatus) MarkPhase(phase VertexPhase, reason, message string) {
 	vs.Message = message
 }
 
+// MarkPhaseFailed marks the phase as failed with the given reason and message.
 func (vs *VertexStatus) MarkPhaseFailed(reason, message string) {
 	vs.MarkPhase(VertexPhaseFailed, reason, message)
 }
 
+// MarkPhaseDegraded marks the phase as degraded with the given reason and message.
+func (vs *VertexStatus) MarkPhaseDegraded(reason, message string) {
+	vs.MarkPhase(VertexPhaseDegraded, reason, message)
+}
+
+// MarkPhaseRunning marks the phase as running.
 func (vs *VertexStatus) MarkPhaseRunning() {
 	vs.MarkPhase(VertexPhaseRunning, "", "")
 }
@@ -850,7 +857,6 @@ func (vs *VertexStatus) MarkPhaseRunning() {
 // MarkPodNotHealthy marks the pod not healthy with the given reason and message.
 func (vs *VertexStatus) MarkPodNotHealthy(reason, message string) {
 	vs.MarkFalse(VertexConditionPodsHealthy, reason, message)
-	vs.MarkPhase(VertexPhaseDegraded, reason, message)
 }
 
 // MarkPodHealthy marks the pod as healthy with the given reason and message.

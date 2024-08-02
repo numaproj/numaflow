@@ -139,9 +139,10 @@ func TestGetVertexStatus(t *testing.T) {
 				Status: metav1.ConditionTrue,
 			},
 		}
-		status, reason := CheckVertexStatus(&vertices)
+		status, reason, message := CheckVertexStatus(&vertices)
 		assert.True(t, status)
 		assert.Equal(t, "Healthy", reason)
+		assert.Equal(t, "All vertices are healthy", message)
 	})
 
 	t.Run("Test Vertex status as false when ObservedGeneration is not matching", func(t *testing.T) {
@@ -150,6 +151,11 @@ func TestGetVertexStatus(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Generation: 2,
+					},
+					Spec: dfv1.VertexSpec{
+						AbstractVertex: dfv1.AbstractVertex{
+							Name: "test-vertex",
+						},
 					},
 					Status: dfv1.VertexStatus{
 						Phase:              "Running",
@@ -164,17 +170,27 @@ func TestGetVertexStatus(t *testing.T) {
 				Status: metav1.ConditionTrue,
 			},
 		}
-		status, reason := CheckVertexStatus(&vertices)
+		status, reason, message := CheckVertexStatus(&vertices)
 		assert.False(t, status)
 		assert.Equal(t, "Progressing", reason)
+		assert.Equal(t, `Vertex "test-vertex" Waiting for reconciliation`, message)
 	})
 
 	t.Run("Test Vertex status as false", func(t *testing.T) {
 		vertices := dfv1.VertexList{
 			Items: []dfv1.Vertex{
 				{
+					ObjectMeta: metav1.ObjectMeta{
+						Generation: 2,
+					},
+					Spec: dfv1.VertexSpec{
+						AbstractVertex: dfv1.AbstractVertex{
+							Name: "test-vertex",
+						},
+					},
 					Status: dfv1.VertexStatus{
-						Phase: "Pending",
+						Phase:              "Pending",
+						ObservedGeneration: 2,
 					},
 				},
 			},
@@ -185,8 +201,9 @@ func TestGetVertexStatus(t *testing.T) {
 				Status: metav1.ConditionTrue,
 			},
 		}
-		status, reason := CheckVertexStatus(&vertices)
+		status, reason, message := CheckVertexStatus(&vertices)
 		assert.False(t, status)
-		assert.Equal(t, "Progressing", reason)
+		assert.Equal(t, "Unavailable", reason)
+		assert.Equal(t, `Vertex "test-vertex" is not healthy`, message)
 	})
 }

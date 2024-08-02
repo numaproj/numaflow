@@ -2734,6 +2734,7 @@ spec:
                     - Pausing
                     - Paused
                     - Deleting
+                    - Degraded
                     type: string
                   pauseGracePeriodSeconds:
                     default: 30
@@ -12356,6 +12357,7 @@ spec:
                 - Pausing
                 - Paused
                 - Deleting
+                - Degraded
                 type: string
               reduceUDFCount:
                 format: int32

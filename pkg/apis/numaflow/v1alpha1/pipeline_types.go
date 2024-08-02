@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// +kubebuilder:validation:Enum="";Running;Failed;Pausing;Paused;Deleting
+// +kubebuilder:validation:Enum="";Running;Failed;Pausing;Paused;Deleting;Degraded
 type PipelinePhase string
 
 const (
@@ -684,15 +684,50 @@ func (pls *PipelineStatus) MarkDeployed() {
 	pls.MarkTrue(PipelineConditionDeployed)
 }
 
-// MarkPhaseRunning set the Pipeline has been running.
-func (pls *PipelineStatus) MarkPhaseRunning() {
-	pls.SetPhase(PipelinePhaseRunning, "")
-}
-
 // MarkDeployFailed set the Pipeline deployment failed
 func (pls *PipelineStatus) MarkDeployFailed(reason, message string) {
 	pls.MarkFalse(PipelineConditionDeployed, reason, message)
 	pls.SetPhase(PipelinePhaseFailed, message)
+}
+
+// MarkVerticesHealthy set the daemon service of the pipeline is healthy.
+func (pls *PipelineStatus) MarkDaemonServiceHealthy() {
+	pls.MarkTrue(PipelineConditionDaemonServiceHealthy)
+}
+
+// MarkDaemonServiceUnHealthy set the daemon service of the pipeline is unhealthy.
+func (pls *PipelineStatus) MarkDaemonServiceUnHealthy(reason, message string) {
+	pls.MarkFalse(PipelineConditionDaemonServiceHealthy, reason, message)
+}
+
+// MarkSideInputsManagersHealthy set the Side Inputs managers of the pipeline are healthy.
+func (pls *PipelineStatus) MarkSideInputsManagersHealthy() {
+	pls.MarkTrue(PipelineConditionSideInputsManagersHealthy)
+}
+
+// MarkSideInputsManagersHealthyWithReason set the Side Inputs managers of the pipeline are healthy with the given reason.
+func (pls *PipelineStatus) MarkSideInputsManagersHealthyWithReason(reason, message string) {
+	pls.MarkTrueWithReason(PipelineConditionSideInputsManagersHealthy, reason, message)
+}
+
+// MarkSideInputsManagersUnHealthy set the Side Inputs managers of the pipeline are unhealthy.
+func (pls *PipelineStatus) MarkSideInputsManagersUnHealthy(reason, message string) {
+	pls.MarkFalse(PipelineConditionSideInputsManagersHealthy, reason, message)
+}
+
+// MarkVerticesHealthy set the vertices of the pipeline are healthy.
+func (pls *PipelineStatus) MarkVerticesHealthy() {
+	pls.MarkTrueWithReason(PipelineConditionVerticesHealthy, "Successful", "All vertices are healthy")
+}
+
+// MarkVerticesUnHealthy set the vertices of the pipeline are unhealthy with the given reason.
+func (pls *PipelineStatus) MarkVerticesUnHealthy(reason, message string) {
+	pls.MarkFalse(PipelineConditionVerticesHealthy, reason, message)
+}
+
+// MarkPhaseRunning set the Pipeline has been running.
+func (pls *PipelineStatus) MarkPhaseRunning() {
+	pls.SetPhase(PipelinePhaseRunning, "")
 }
 
 // MarkPhasePaused set the Pipeline has been paused.
@@ -730,16 +765,6 @@ func (pls *PipelineStatus) IsHealthy() bool {
 	default:
 		return false
 	}
-}
-
-// MarkServiceNotHealthy marks a service as not healthy with the given reason and message.
-func (pls *PipelineStatus) MarkServiceNotHealthy(conditionType ConditionType, reason, message string) {
-	pls.MarkFalse(conditionType, reason, message)
-}
-
-// MarkServiceHealthy marks a service as healthy with the given reason and message.
-func (pls *PipelineStatus) MarkServiceHealthy(conditionType ConditionType, reason, message string) {
-	pls.MarkTrueWithReason(conditionType, reason, message)
 }
 
 // +kubebuilder:object:root=true
