@@ -95,6 +95,8 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		return ctrl.Result{}, nil
 	}
 
+	vertex.Status.SetObservedGeneration(vertex.Generation)
+
 	isbSvc := &dfv1.InterStepBufferService{}
 	isbSvcName := dfv1.DefaultISBSvcName
 	if len(vertex.Spec.InterStepBufferServiceName) > 0 {
@@ -326,7 +328,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	var podList corev1.PodList
 	if err := r.client.List(ctx, &podList, &client.ListOptions{Namespace: vertex.GetNamespace(), LabelSelector: selector}); err != nil {
 		vertex.Status.MarkPodNotHealthy("ListVerticesPodsFailed", err.Error())
-		return ctrl.Result{}, fmt.Errorf("failed to check the status of the pods: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to get pods of a vertex: %w", err)
 	}
 	if healthy, reason, msg := reconciler.CheckVertexPodsStatus(&podList); healthy {
 		vertex.Status.MarkPodHealthy(reason, msg)

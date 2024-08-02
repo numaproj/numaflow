@@ -1487,6 +1487,9 @@ message VertexStatus {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 4;
 
   optional Status status = 7;
+
+  // ObservedGeneration stores the generation value observed by the controller.
+  optional int64 observedGeneration = 8;
 }
 
 message VertexTemplate {

@@ -92,7 +92,7 @@ func TestGetDeploymentStatus(t *testing.T) {
 	t.Run("Test Deployment status as true", func(t *testing.T) {
 		testDeployment := deployment.DeepCopy()
 		done, reason, message := CheckDeploymentStatus(testDeployment)
-		assert.Equal(t, "DeploymentComplete", reason)
+		assert.Equal(t, "Healthy", reason)
 		assert.True(t, done)
 		assert.Equal(t, "deployment \"test-deployment\" successfully rolled out\n", message)
 	})
@@ -102,7 +102,7 @@ func TestGetDeploymentStatus(t *testing.T) {
 		testDeployment.Status.ObservedGeneration = 0
 		testDeployment.Status.UpdatedReplicas = 0
 		done, reason, message := CheckDeploymentStatus(testDeployment)
-		assert.Equal(t, "DeploymentNotComplete", reason)
+		assert.Equal(t, "Progressing", reason)
 		assert.False(t, done)
 		assert.Equal(t, "Waiting for deployment \"test-deployment\" rollout to finish: 0 out of 1 new replicas have been updated...\n", message)
 	})
@@ -112,7 +112,7 @@ func TestGetDeploymentStatus(t *testing.T) {
 		testDeployment.Status.UpdatedReplicas = 1
 		testDeployment.Status.Replicas = 2
 		done, reason, message := CheckDeploymentStatus(testDeployment)
-		assert.Equal(t, "DeploymentNotComplete", reason)
+		assert.Equal(t, "Progressing", reason)
 		assert.False(t, done)
 		assert.Equal(t, "Waiting for deployment \"test-deployment\" rollout to finish: 1 old replicas are pending termination...\n", message)
 	})
@@ -123,8 +123,12 @@ func TestGetVertexStatus(t *testing.T) {
 		vertices := dfv1.VertexList{
 			Items: []dfv1.Vertex{
 				{
+					ObjectMeta: metav1.ObjectMeta{
+						Generation: 1,
+					},
 					Status: dfv1.VertexStatus{
-						Phase: "Running",
+						Phase:              "Running",
+						ObservedGeneration: 1,
 					},
 				},
 			},
@@ -137,7 +141,32 @@ func TestGetVertexStatus(t *testing.T) {
 		}
 		status, reason := CheckVertexStatus(&vertices)
 		assert.True(t, status)
-		assert.Equal(t, "Successful", reason)
+		assert.Equal(t, "Healthy", reason)
+	})
+
+	t.Run("Test Vertex status as false when ObservedGeneration is not matching", func(t *testing.T) {
+		vertices := dfv1.VertexList{
+			Items: []dfv1.Vertex{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Generation: 2,
+					},
+					Status: dfv1.VertexStatus{
+						Phase:              "Running",
+						ObservedGeneration: 1,
+					},
+				},
+			},
+		}
+		vertices.Items[0].Status.Conditions = []metav1.Condition{
+			{
+				Type:   string(dfv1.VertexConditionPodsHealthy),
+				Status: metav1.ConditionTrue,
+			},
+		}
+		status, reason := CheckVertexStatus(&vertices)
+		assert.False(t, status)
+		assert.Equal(t, "Progressing", reason)
 	})
 
 	t.Run("Test Vertex status as false", func(t *testing.T) {

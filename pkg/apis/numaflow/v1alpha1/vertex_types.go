@@ -829,6 +829,8 @@ type VertexStatus struct {
 	Selector     string      `json:"selector,omitempty" protobuf:"bytes,5,opt,name=selector"`
 	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,4,opt,name=lastScaledAt"`
 	Status       `json:",inline" protobuf:"bytes,7,opt,name=status"`
+	// ObservedGeneration stores the generation value observed by the controller.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,8,opt,name=observedGeneration"`
 }
 
 func (vs *VertexStatus) MarkPhase(phase VertexPhase, reason, message string) {
@@ -867,6 +869,11 @@ func (vs *VertexStatus) IsHealthy() bool {
 		return false
 	}
 	return vs.IsReady()
+}
+
+// SetObservedGeneration sets the Status ObservedGeneration
+func (vs *VertexStatus) SetObservedGeneration(value int64) {
+	vs.ObservedGeneration = value
 }
 
 // +kubebuilder:object:root=true

@@ -55,11 +55,14 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
 // CheckVertexStatus will calculate the status of the vertices and return the status and reason
 func CheckVertexStatus(vertices *dfv1.VertexList) (bool, string) {
 	for _, vertex := range vertices.Items {
-		if !vertex.Status.IsHealthy() {
+		if vertex.Status.ObservedGeneration == 0 || vertex.Generation > vertex.Status.ObservedGeneration {
 			return false, "Progressing"
 		}
+		if !vertex.Status.IsHealthy() {
+			return false, "Unavailable"
+		}
 	}
-	return true, "Successful"
+	return true, "Healthy"
 }
 
 // CheckDeploymentStatus returns a message describing deployment status, and message with reason where bool value
@@ -72,23 +75,23 @@ func CheckDeploymentStatus(deployment *appv1.Deployment) (done bool, reason stri
 			return false, "ProgressDeadlineExceeded", fmt.Sprintf("deployment %q exceeded its progress deadline", deployment.Name)
 		}
 		if deployment.Spec.Replicas != nil && deployment.Status.UpdatedReplicas < *deployment.Spec.Replicas {
-			return false, "DeploymentNotComplete", fmt.Sprintf(
+			return false, "Progressing", fmt.Sprintf(
 				"Waiting for deployment %q rollout to finish: %d out of %d new replicas have been updated...\n",
 				deployment.Name, deployment.Status.UpdatedReplicas, *deployment.Spec.Replicas)
 		}
 		if deployment.Status.Replicas > deployment.Status.UpdatedReplicas {
-			return false, "DeploymentNotComplete", fmt.Sprintf(
+			return false, "Progressing", fmt.Sprintf(
 				"Waiting for deployment %q rollout to finish: %d old replicas are pending termination...\n",
 				deployment.Name, deployment.Status.Replicas-deployment.Status.UpdatedReplicas)
 		}
 		if deployment.Status.AvailableReplicas < deployment.Status.UpdatedReplicas {
-			return false, "DeploymentNotComplete", fmt.Sprintf(
+			return false, "Progressing", fmt.Sprintf(
 				"Waiting for deployment %q rollout to finish: %d of %d updated replicas are available...\n",
 				deployment.Name, deployment.Status.AvailableReplicas, deployment.Status.UpdatedReplicas)
 		}
-		return true, "DeploymentComplete", fmt.Sprintf("deployment %q successfully rolled out\n", deployment.Name)
+		return true, "Healthy", fmt.Sprintf("deployment %q successfully rolled out\n", deployment.Name)
 	}
-	return false, "DeploymentNotComplete", "Waiting for deployment spec update to be observed..."
+	return false, "Progressing", "Waiting for deployment spec update to be observed..."
 }
 
 // GetDeploymentCondition returns the condition with the provided type.
