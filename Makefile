@@ -161,15 +161,19 @@ ui-build:
 ui-test: ui-build
 	./hack/test-ui.sh
 
+.PHONY: ext-build
+ext-build:
+	cd serving && $(MAKE) build
+
 .PHONY: image
-image: clean ui-build dist/$(BINARY_NAME)-linux-amd64
+image: clean ui-build dist/$(BINARY_NAME)-linux-amd64 ext-build
 	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "ARCH=amd64" --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
 	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
 ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
 
-image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
+image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz ext-build
 	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file $(DOCKERFILE) ${PUSH_OPTION} .
 
 set-qemu:

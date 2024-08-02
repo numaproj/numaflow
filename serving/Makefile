@@ -19,6 +19,10 @@ $(error IMAGE_NAMESPACE must be set to push images (e.g. IMAGE_NAMESPACE=quay.io
 endif
 endif
 
+.PHONY: build
+build:
+	cargo build --release
+
 .PHONY: test
 test:
 	cargo test
@@ -36,7 +40,7 @@ clean:
 	cargo clean
 
 .PHONY: image
-image: clean
+image: build
 	 DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "VERSION=$(VERSION)" --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(NUMAFLOW_EXT_BINARY_NAME):$(VERSION) --target $(NUMAFLOW_EXT_BINARY_NAME) -f $(DOCKERFILE) .
 	 @if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(NUMAFLOW_EXT_BINARY_NAME):$(VERSION); fi
 ifdef IMAGE_IMPORT_CMD
@@ -44,5 +48,5 @@ ifdef IMAGE_IMPORT_CMD
 endif
 
 .PHONY: image-multi
-image-multi: set-qemu
+image-multi: set-qemu build
 	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" --build-arg "VERSION=$(VERSION)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(NUMAFLOW_EXT_BINARY_NAME):$(VERSION) --platform linux/amd64,linux/arm64 --file $(DOCKERFILE) ${PUSH_OPTION} .

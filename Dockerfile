@@ -15,36 +15,37 @@ RUN chmod +x /bin/numaflow
 ####################################################################################################
 FROM rust:1.79-bookworm as extension-base
 
-# For faster/easier installation of Rust binaries
 RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 
-RUN apt-get update \
-  && apt-get install -y protobuf-compiler
-
-RUN cargo new /serve
+RUN cargo new serve
+# Create a new empty shell project
 WORKDIR /serve
-COPY ./serving/Cargo.toml .
+RUN cargo new servesink
+COPY ./serving/servesink/Cargo.toml ./servesink/
 
 RUN cargo new extras/upstreams
-COPY ./serving/extras/upstreams/Cargo.toml extras/upstreams/Cargo.toml
-
-RUN cargo new servesink
-COPY ./serving/servesink/Cargo.toml servesink/Cargo.toml
+COPY ./serving/extras/upstreams/Cargo.toml ./extras/upstreams/
 
 RUN cargo new backoff
-COPY serving/backoff/Cargo.toml backoff/Cargo.toml
+COPY ./serving/backoff/Cargo.toml ./backoff/Cargo.toml
 
+# Copy all Cargo.toml and Cargo.lock files for caching dependencies
+COPY ./serving/Cargo.toml ./serving/Cargo.lock ./
+
+# Build only the dependencies to cache them
 RUN cargo build --release
 
-COPY ./serving/ /serve
-# update timestamps to force a new build
-RUN touch src/main.rs servesink/src/main.rs extras/upstreams/src/main.rs
+# Copy the actual source code files of the main project and the subprojects
+COPY ./serving/src ./src
+COPY ./serving/servesink/src ./servesink/src
+COPY ./serving/extras/upstreams/src ./extras/upstreams/src
+COPY ./serving/backoff/src ./backoff/src
 
-RUN --mount=type=cache,target=/usr/local/cargo/registry cargo build --release
+# Build the real binaries
+RUN touch src/main.rs servesink/main.rs extras/upstreams/main.rs && \
+    cargo build --release
 
 COPY --from=base /bin/numaflow /bin/numaflow
-
-RUN chmod +x /serve/target/release/serve
 
 ####################################################################################################
 # numaflow
