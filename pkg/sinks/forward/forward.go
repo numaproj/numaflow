@@ -226,19 +226,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	metrics.ReadDataMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(dataMessages)))
 	metrics.ReadMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(readMessages)))
 
-	// fetch watermark if available
-	// TODO: make it async (concurrent and wait later)
-	// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
-	// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
-	// we fetch the watermark for the partition from which we read the message.
-	processorWM := df.wmFetcher.ComputeWatermark(readMessages[0].ReadOffset, df.fromBufferPartition.GetPartitionIdx())
-
-	writeMessages := make([]isb.Message, 0, len(dataMessages))
-	for _, m := range dataMessages {
-		m.Watermark = time.Time(processorWM)
-		writeMessages = append(writeMessages, m.Message)
-	}
-
 	metrics.ReadBytesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
@@ -254,6 +241,19 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
 	}).Add(float64(dataBytes))
+
+	// fetch watermark if available
+	// TODO: make it async (concurrent and wait later)
+	// let's track only the first element's watermark. This is important because we reassign the watermark we fetch
+	// to all the elements in the batch. If we were to assign last element's watermark, we will wrongly mark on-time data as late.
+	// we fetch the watermark for the partition from which we read the message.
+	processorWM := df.wmFetcher.ComputeWatermark(readMessages[0].ReadOffset, df.fromBufferPartition.GetPartitionIdx())
+
+	writeMessages := make([]isb.Message, 0, len(dataMessages))
+	for _, m := range dataMessages {
+		m.Watermark = time.Time(processorWM)
+		writeMessages = append(writeMessages, m.Message)
+	}
 
 	// write the messages to the sink
 	writeOffsets, fallbackMessages, err := df.writeToSink(ctx, df.sinkWriter, writeMessages, false)

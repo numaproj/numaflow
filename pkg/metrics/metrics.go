@@ -61,7 +61,7 @@ var (
 	ReadDataBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "data_read_bytes_total",
-		Help:      "Total number of bytes read",
+		Help:      "Total number of Data message bytes read",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// ReadMessagesError is used to indicate the number of errors messages read

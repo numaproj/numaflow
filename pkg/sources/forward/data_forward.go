@@ -274,6 +274,21 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		readOffsets[idx] = m.ReadOffset
 	}
 
+	metrics.ReadBytesCount.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.reader.GetName(),
+	}).Add(float64(totalBytes))
+	metrics.ReadDataBytesCount.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.reader.GetName(),
+	}).Add(float64(totalBytes))
+
 	// source data transformer applies filtering and assigns event time to source data, which doesn't require watermarks.
 	// hence we assign time.UnixMilli(-1) to processorWM.
 	processorWM := wmb.Watermark(time.UnixMilli(-1))
@@ -341,22 +356,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 
 	}
-
-	metrics.ReadBytesCount.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.reader.GetName(),
-	}).Add(float64(totalBytes))
-	metrics.ReadDataBytesCount.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.reader.GetName(),
-	}).Add(float64(totalBytes))
-
 	// publish source watermark and assign IsLate attribute based on new event time.
 	var writeMessages []*isb.WriteMessage
 	var transformedReadMessages []*isb.ReadMessage
