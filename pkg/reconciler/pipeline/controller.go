@@ -144,16 +144,9 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	}()
 
 	pl.Status.SetObservedGeneration(pl.Generation)
-	// New, or reconciliation failed pipeline
-	if pl.Status.Phase == dfv1.PipelinePhaseUnknown || pl.Status.Phase == dfv1.PipelinePhaseFailed {
-		result, err := r.reconcileNonLifecycleChanges(ctx, pl)
-		if err != nil {
-			r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
-		}
-		return result, err
-	}
 
-	if oldPhase := pl.Status.Phase; oldPhase != pl.Spec.Lifecycle.GetDesiredPhase() {
+	if oldPhase := pl.Status.Phase; pl.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
+		oldPhase == dfv1.PipelinePhasePaused || oldPhase == dfv1.PipelinePhasePausing {
 		requeue, err := r.updateDesiredState(ctx, pl)
 		if err != nil {
 			logMsg := fmt.Sprintf("Updated desired pipeline phase failed: %v", zap.Error(err))
@@ -169,9 +162,10 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			return ctrl.Result{RequeueAfter: dfv1.DefaultRequeueAfter}, nil
 		}
 		return ctrl.Result{}, nil
+
 	}
 
-	// Regular pipeline update
+	// Regular pipeline change
 	result, err := r.reconcileNonLifecycleChanges(ctx, pl)
 	if err != nil {
 		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
@@ -352,8 +346,8 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 
 	pl.Status.MarkDeployed()
 	pl.Status.SetPhase(pl.Spec.Lifecycle.GetDesiredPhase(), "")
-	if err := checkChildrenResourceStatus(ctx, r.client, pl); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to check children resource status, %w", err)
+	if err := r.checkChildrenResourceStatus(ctx, pl); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to check pipeline children resource status, %w", err)
 	}
 	return ctrl.Result{}, nil
 }
@@ -946,41 +940,50 @@ func (r *pipelineReconciler) safeToDelete(ctx context.Context, pl *dfv1.Pipeline
 	return daemonClient.IsDrained(ctx, pl.Name)
 }
 
-func checkChildrenResourceStatus(ctx context.Context, c client.Client, pipeline *dfv1.Pipeline) error {
+// checkChildrenResourceStatus checks the status of the children resources of the pipeline
+func (r *pipelineReconciler) checkChildrenResourceStatus(ctx context.Context, pipeline *dfv1.Pipeline) error {
+	defer func() {
+		for _, c := range pipeline.Status.Conditions {
+			if c.Status != metav1.ConditionTrue {
+				pipeline.Status.SetPhase(pipeline.Spec.Lifecycle.GetDesiredPhase(), "Degraded: "+c.Message)
+			}
+		}
+	}()
+
 	// get the daemon deployment and update the status of it to the pipeline
 	var daemonDeployment appv1.Deployment
-	if err := c.Get(ctx, client.ObjectKey{Namespace: pipeline.GetNamespace(), Name: pipeline.GetDaemonDeploymentName()},
+	if err := r.client.Get(ctx, client.ObjectKey{Namespace: pipeline.GetNamespace(), Name: pipeline.GetDaemonDeploymentName()},
 		&daemonDeployment); err != nil {
 		if apierrors.IsNotFound(err) {
-			pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionDaemonServiceHealthy,
+			pipeline.Status.MarkDaemonServiceUnHealthy(
 				"GetDaemonServiceFailed", "Deployment not found, might be still under creation")
 			return nil
 		}
-		pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionDaemonServiceHealthy, "GetDaemonServiceFailed", err.Error())
+		pipeline.Status.MarkDaemonServiceUnHealthy("GetDaemonServiceFailed", err.Error())
 		return err
 	}
-	if msg, reason, status := getDeploymentStatus(&daemonDeployment); status {
-		pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionDaemonServiceHealthy, reason, msg)
+	if status, reason, msg := reconciler.CheckDeploymentStatus(&daemonDeployment); status {
+		pipeline.Status.MarkDaemonServiceHealthy()
 	} else {
-		pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionDaemonServiceHealthy, reason, msg)
+		pipeline.Status.MarkDaemonServiceUnHealthy(reason, msg)
 	}
 
 	// get the side input deployments and update the status of them to the pipeline
 	if len(pipeline.Spec.SideInputs) == 0 {
-		pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionSideInputsManagersHealthy,
+		pipeline.Status.MarkSideInputsManagersHealthyWithReason(
 			"NoSideInputs", "No Side Inputs attached to the pipeline")
 	} else {
 		var sideInputs appv1.DeploymentList
 		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + pipeline.Name + "," + dfv1.KeyComponent + "=" + dfv1.ComponentSideInputManager)
-		if err := c.List(ctx, &sideInputs, &client.ListOptions{Namespace: pipeline.Namespace, LabelSelector: selector}); err != nil {
-			pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionSideInputsManagersHealthy, "ListSideInputsManagersFailed", err.Error())
+		if err := r.client.List(ctx, &sideInputs, &client.ListOptions{Namespace: pipeline.Namespace, LabelSelector: selector}); err != nil {
+			pipeline.Status.MarkSideInputsManagersUnHealthy("ListSideInputsManagersFailed", err.Error())
 			return err
 		}
 		for _, sideInput := range sideInputs.Items {
-			if msg, reason, status := getDeploymentStatus(&sideInput); status {
-				pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionSideInputsManagersHealthy, reason, msg)
+			if status, reason, msg := reconciler.CheckDeploymentStatus(&sideInput); status {
+				pipeline.Status.MarkSideInputsManagersHealthy()
 			} else {
-				pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionSideInputsManagersHealthy, reason, msg)
+				pipeline.Status.MarkSideInputsManagersUnHealthy(reason, msg)
 				break
 			}
 		}
@@ -989,15 +992,15 @@ func checkChildrenResourceStatus(ctx context.Context, c client.Client, pipeline 
 	// calculate the status of the vertices and update the status of them to the pipeline
 	var vertices dfv1.VertexList
 	selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + pipeline.GetName() + "," + dfv1.KeyComponent + "=" + dfv1.ComponentVertex)
-	if err := c.List(ctx, &vertices, &client.ListOptions{Namespace: pipeline.Namespace, LabelSelector: selector}); err != nil {
-		pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionVerticesHealthy, "ListVerticesFailed", err.Error())
+	if err := r.client.List(ctx, &vertices, &client.ListOptions{Namespace: pipeline.Namespace, LabelSelector: selector}); err != nil {
+		pipeline.Status.MarkVerticesUnHealthy("ListVerticesFailed", err.Error())
 		return err
 	}
-	status, reason := getVertexStatus(&vertices)
+	status, reason, message := reconciler.CheckVertexStatus(&vertices)
 	if status {
-		pipeline.Status.MarkServiceHealthy(dfv1.PipelineConditionVerticesHealthy, reason, "All Vertices are healthy")
+		pipeline.Status.MarkVerticesHealthy()
 	} else {
-		pipeline.Status.MarkServiceNotHealthy(dfv1.PipelineConditionVerticesHealthy, reason, "Some Vertices are not healthy")
+		pipeline.Status.MarkVerticesUnHealthy(reason, "Some Vertices are unhealthy: "+message)
 	}
 
 	return nil

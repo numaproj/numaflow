@@ -273,9 +273,56 @@ func Test_PipelineMarkStatus(t *testing.T) {
 			assert.Equal(t, metav1.ConditionTrue, c.Status)
 		}
 	}
-	s.MarkServiceHealthy(PipelineConditionDaemonServiceHealthy, "test-reason", "All service healthy")
-	s.MarkServiceHealthy(PipelineConditionSideInputsManagersHealthy, "test-reason", "All service healthy")
-	s.MarkServiceHealthy(PipelineConditionVerticesHealthy, "test-reason", "All service healthy")
+	s.MarkDaemonServiceUnHealthy("reason", "message")
+	for _, c := range s.Conditions {
+		if c.Type == string(PipelineConditionDaemonServiceHealthy) {
+			assert.Equal(t, metav1.ConditionFalse, c.Status)
+			assert.Equal(t, "reason", c.Reason)
+			assert.Equal(t, "message", c.Message)
+		}
+	}
+	s.MarkDaemonServiceHealthy()
+	for _, c := range s.Conditions {
+		if c.Type == string(PipelineConditionDaemonServiceHealthy) {
+			assert.Equal(t, metav1.ConditionTrue, c.Status)
+		}
+	}
+	s.MarkSideInputsManagersHealthyWithReason("reason", "message")
+	for _, c := range s.Conditions {
+		if c.Type == string(PipelineConditionSideInputsManagersHealthy) {
+			assert.Equal(t, metav1.ConditionTrue, c.Status)
+			assert.Equal(t, "reason", c.Reason)
+			assert.Equal(t, "message", c.Message)
+		}
+	}
+	s.MarkSideInputsManagersUnHealthy("reason", "message")
+	for _, c := range s.Conditions {
+		if c.Type == string(PipelineConditionSideInputsManagersHealthy) {
+			assert.Equal(t, metav1.ConditionFalse, c.Status)
+			assert.Equal(t, "reason", c.Reason)
+			assert.Equal(t, "message", c.Message)
+		}
+	}
+	s.MarkSideInputsManagersHealthy()
+	for _, c := range s.Conditions {
+		if c.Type == string(PipelineConditionSideInputsManagersHealthy) {
+			assert.Equal(t, metav1.ConditionTrue, c.Status)
+		}
+	}
+	s.MarkVerticesUnHealthy("reason", "message")
+	for _, c := range s.Conditions {
+		if c.Type == string(PipelineConditionVerticesHealthy) {
+			assert.Equal(t, metav1.ConditionFalse, c.Status)
+			assert.Equal(t, "reason", c.Reason)
+			assert.Equal(t, "message", c.Message)
+		}
+	}
+	s.MarkVerticesHealthy()
+	for _, c := range s.Conditions {
+		if c.Type == string(PipelineConditionVerticesHealthy) {
+			assert.Equal(t, metav1.ConditionTrue, c.Status)
+		}
+	}
 
 	assert.True(t, s.IsReady())
 }

@@ -211,7 +211,7 @@ func TestInstall(t *testing.T) {
 		testObj.Name = "fake-isb"
 		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.NoError(t, err)
-		testObj.Status.MarkChildrenResourceNotHealthy("reason", "message")
+		testObj.Status.MarkChildrenResourceUnHealthy("reason", "message")
 		assert.False(t, testObj.Status.IsReady())
 		assert.False(t, testObj.Status.IsHealthy())
 
