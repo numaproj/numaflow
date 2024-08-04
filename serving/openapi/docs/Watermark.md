@@ -1,0 +1,13 @@
+# Watermark
+
+## Properties
+
+Name | Type | Description | Notes
+------------ | ------------- | ------------- | -------------
+**disabled** | Option<**bool**> | Disabled toggles the watermark propagation, defaults to false. | [optional]
+**idle_source** | Option<[**models::IdleSource**](IdleSource.md)> |  | [optional]
+**max_delay** | Option<[**models::V1PeriodDuration**](v1.Duration.md)> |  | [optional]
+
+[[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
+
+
