@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**conditions** | Option<[**Vec<models::V1PeriodCondition>**](v1.Condition.md)> | Conditions are the latest available observations of a resource's current state. | [optional]
-**config** | Option<[**models::BufferServiceConfig**](BufferServiceConfig.md)> |  | [optional]
+**conditions** | Option<[**Vec<crate::models::V1PeriodCondition>**](v1.Condition.md)> | Conditions are the latest available observations of a resource's current state. | [optional]
+**config** | Option<[**crate::models::BufferServiceConfig**](BufferServiceConfig.md)> |  | [optional]
 **message** | Option<**String**> |  | [optional]
 **observed_generation** | Option<**i64**> | ObservedGeneration stores the generation value observed by the controller. | [optional]
 **phase** | Option<**String**> |  | [optional]

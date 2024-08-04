@@ -5,8 +5,8 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **master_name** | Option<**String**> | Only required when Sentinel is used | [optional]
-**password** | Option<[**models::V1PeriodSecretKeySelector**](v1.SecretKeySelector.md)> |  | [optional]
-**sentinel_password** | Option<[**models::V1PeriodSecretKeySelector**](v1.SecretKeySelector.md)> |  | [optional]
+**password** | Option<[**crate::models::V1PeriodSecretKeySelector**](v1.SecretKeySelector.md)> |  | [optional]
+**sentinel_password** | Option<[**crate::models::V1PeriodSecretKeySelector**](v1.SecretKeySelector.md)> |  | [optional]
 **sentinel_url** | Option<**String**> | Sentinel URL, will be ignored if Redis URL is provided | [optional]
 **url** | Option<**String**> | Redis URL | [optional]
 **user** | Option<**String**> | Redis user | [optional]

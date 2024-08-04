@@ -8,8 +8,8 @@ Name | Type | Description | Notes
 **cluster_port** | **i32** |  | 
 **config_map_name** | **String** |  | 
 **config_reloader_image** | **String** |  | 
-**default_resources** | [**models::V1PeriodResourceRequirements**](v1.ResourceRequirements.md) |  | 
-**labels** | **std::collections::HashMap<String, String>** |  | 
+**default_resources** | [**crate::models::V1PeriodResourceRequirements**](v1.ResourceRequirements.md) |  | 
+**labels** | **::std::collections::HashMap<String, String>** |  | 
 **metrics_exporter_image** | **String** |  | 
 **metrics_port** | **i32** |  | 
 **monitor_port** | **i32** |  | 

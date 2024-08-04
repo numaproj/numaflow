@@ -6,7 +6,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **client_port** | **i32** |  | 
 **cluster_port** | **i32** |  | 
-**labels** | **std::collections::HashMap<String, String>** |  | 
+**labels** | **::std::collections::HashMap<String, String>** |  | 
 **metrics_port** | **i32** |  | 
 **monitor_port** | **i32** |  | 
 

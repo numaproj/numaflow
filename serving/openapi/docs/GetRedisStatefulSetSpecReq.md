@@ -6,10 +6,10 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **conf_config_map_name** | **String** |  | 
 **credential_secret_name** | **String** |  | 
-**default_resources** | [**models::V1PeriodResourceRequirements**](v1.ResourceRequirements.md) |  | 
+**default_resources** | [**crate::models::V1PeriodResourceRequirements**](v1.ResourceRequirements.md) |  | 
 **health_config_map_name** | **String** |  | 
 **init_container_image** | **String** |  | 
-**labels** | **std::collections::HashMap<String, String>** |  | 
+**labels** | **::std::collections::HashMap<String, String>** |  | 
 **metrics_exporter_image** | **String** |  | 
 **pvc_name_if_needed** | **String** |  | 
 **redis_container_port** | **i32** |  | 

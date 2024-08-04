@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**conditions** | Option<[**Vec<models::V1PeriodCondition>**](v1.Condition.md)> | Conditions are the latest available observations of a resource's current state. | [optional]
+**conditions** | Option<[**Vec<crate::models::V1PeriodCondition>**](v1.Condition.md)> | Conditions are the latest available observations of a resource's current state. | [optional]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

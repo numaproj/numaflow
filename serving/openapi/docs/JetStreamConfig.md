@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**auth** | Option<[**models::NatsAuth**](NatsAuth.md)> |  | [optional]
+**auth** | Option<[**crate::models::NatsAuth**](NatsAuth.md)> |  | [optional]
 **stream_config** | Option<**String**> |  | [optional]
 **tls_enabled** | Option<**bool**> | TLS enabled or not | [optional]
 **url** | Option<**String**> | JetStream (NATS) URL | [optional]
