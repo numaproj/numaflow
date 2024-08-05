@@ -44,6 +44,7 @@ generate:
 		--type-mappings CoreV1PodSecurityContext="k8s_openapi::api::core::v1::PodSecurityContext" \
 		--type-mappings CoreV1LocalObjectReference="k8s_openapi::api::core::v1::LocalObjectReference" \
 		--type-mappings CoreV1PodDNSConfig="k8s_openapi::api::core::v1::PodDNSConfig" \
+		--type-mappings CoreV1ContainerResizePolicy="k8s_openapi::api::core::v1::ContainerResizePolicy" \
 		--type-mappings CoreV1Container="k8s_openapi::api::core::v1::Container" \
 		--type-mappings CoreV1Volume="k8s_openapi::api::core::v1::Volume" \
 		--type-mappings CoreV1EmptyDirVolumeSource="k8s_openapi::api::core::v1::EmptyDirVolumeSource" \

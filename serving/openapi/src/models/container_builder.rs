@@ -45,7 +45,7 @@ pub struct ContainerBuilder {
     pub readiness_probe: Option<k8s_openapi::api::core::v1::Probe>,
     /// Resources resize policy for the container.
     #[serde(rename = "resizePolicy", skip_serializing_if = "Option::is_none")]
-    pub resize_policy: Option<Vec<crate::models::CoreV1ContainerResizePolicy>>,
+    pub resize_policy: Option<Vec<k8s_openapi::api::core::v1::ContainerResizePolicy>>,
     #[serde(rename = "resources", skip_serializing_if = "Option::is_none")]
     pub resources: Option<k8s_openapi::api::core::v1::ResourceRequirements>,
     /// RestartPolicy defines the restart behavior of individual containers in a pod. This field may only be set for init containers, and the only allowed value is \"Always\". For non-init containers or when this field is not specified, the restart behavior is defined by the Pod's restart policy and the container type. Setting the RestartPolicy as \"Always\" for the init container will have the following effect: this init container will be continually restarted on exit until all regular containers have terminated. Once all regular containers have completed, all init containers with restartPolicy \"Always\" will be shut down. This lifecycle differs from normal init containers and is often referred to as a \"sidecar\" container. Although this init container still starts in the init container sequence, it does not wait for the container to complete before proceeding to the next init container. Instead, the next init container starts immediately after this init container is started, or after any startupProbe has successfully completed.
