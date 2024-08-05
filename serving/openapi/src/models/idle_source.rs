@@ -14,11 +14,11 @@
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct IdleSource {
     #[serde(rename = "incrementBy", skip_serializing_if = "Option::is_none")]
-    pub increment_by: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration>,
+    pub increment_by: Option<kube::core::Duration>,
     #[serde(rename = "stepInterval", skip_serializing_if = "Option::is_none")]
-    pub step_interval: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration>,
+    pub step_interval: Option<kube::core::Duration>,
     #[serde(rename = "threshold", skip_serializing_if = "Option::is_none")]
-    pub threshold: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration>,
+    pub threshold: Option<kube::core::Duration>,
 }
 
 impl IdleSource {

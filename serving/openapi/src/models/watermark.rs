@@ -19,7 +19,7 @@ pub struct Watermark {
     #[serde(rename = "idleSource", skip_serializing_if = "Option::is_none")]
     pub idle_source: Option<Box<crate::models::IdleSource>>,
     #[serde(rename = "maxDelay", skip_serializing_if = "Option::is_none")]
-    pub max_delay: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration>,
+    pub max_delay: Option<kube::core::Duration>,
 }
 
 impl Watermark {

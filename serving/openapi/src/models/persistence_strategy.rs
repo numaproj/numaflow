@@ -21,7 +21,7 @@ pub struct PersistenceStrategy {
     #[serde(rename = "storageClassName", skip_serializing_if = "Option::is_none")]
     pub storage_class_name: Option<String>,
     #[serde(rename = "volumeSize", skip_serializing_if = "Option::is_none")]
-    pub volume_size: Option<crate::models::IoPeriodK8sPeriodApimachineryPeriodPkgPeriodApiPeriodResourcePeriodQuantity>,
+    pub volume_size: Option<k8s_openapi::apimachinery::pkg::api::resource::Quantity>,
 }
 
 impl PersistenceStrategy {

@@ -16,7 +16,7 @@ generate:
 	cat ../../api/openapi-spec/swagger.json | ../../hack/swaggerfilter.py io.numaproj.numaflow | \
 		sed 's/io.k8s.api.core.v1./CoreV1/' | \
 		sed 's/io.k8s.apimachinery.pkg.apis.meta.v1./MetaV1/' | \
-		sed 's/iio.k8s.apimachinery.pkg.api.resource.Quantity/ResourceQuantity/' | \
+		sed 's/io.k8s.apimachinery.pkg.api.resource.Quantity/ResourceQuantity/' | \
 		sed 's/io.numaproj.numaflow.v1alpha1.//' \
 		> ./dist/swagger.json
 	$(DOCKER) openapitools/openapi-generator-cli:$(GENERATOR_VERSION) \
@@ -47,12 +47,13 @@ generate:
 		--type-mappings CoreV1Container="k8s_openapi::api::core::v1::Container" \
 		--type-mappings CoreV1Volume="k8s_openapi::api::core::v1::Volume" \
 		--type-mappings CoreV1EmptyDirVolumeSource="k8s_openapi::api::core::v1::EmptyDirVolumeSource" \
-		--type-mappings MetaV1Duration="k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration" \
+		--type-mappings MetaV1Duration="kube::core::Duration" \
 		--type-mappings MetaV1ListMeta="k8s_openapi::apimachinery::pkg::apis::meta::v1::ListMeta" \
 		--type-mappings MetaV1Condition="k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition" \
 		--type-mappings MetaV1Time="k8s_openapi::apimachinery::pkg::apis::meta::v1::Time" \
 		--type-mappings MetaV1ObjectMeta="k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta" \
+		--type-mappings ResourceQuantity="k8s_openapi::apimachinery::pkg::api::resource::Quantity" \
 		--generate-alias-as-model
 
-	sed 's/\[dependencies\]/[dependencies]\nk8s-openapi = { version = "0.22.0", features = ["v1_29"] }/g' Cargo.toml  > tmp && mv tmp Cargo.toml
+	sed 's/\[dependencies\]/[dependencies]\nkube = "0.93.1"\nk8s-openapi = { version = "0.22.0", features = ["v1_29"] }/g' Cargo.toml  > tmp && mv tmp Cargo.toml
 
