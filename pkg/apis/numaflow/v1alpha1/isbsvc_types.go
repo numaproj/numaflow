@@ -54,8 +54,8 @@ const (
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.status.type`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 type InterStepBufferService struct {
@@ -87,73 +87,73 @@ type BufferServiceConfig struct {
 }
 
 type InterStepBufferServiceStatus struct {
-	Status  `json:",inline" protobuf:"bytes,1,opt,name=status"`
-	Phase   ISBSvcPhase         `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=ISBSvcPhase"`
-	Message string              `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
-	Config  BufferServiceConfig `json:"config,omitempty" protobuf:"bytes,4,opt,name=config"`
-	Type    ISBSvcType          `json:"type,omitempty" protobuf:"bytes,5,opt,name=type"`
-	// ObservedGeneration stores the generation value observed by the controller.
-	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,6,opt,name=observedGeneration"`
+	Status             `json:",inline" protobuf:"bytes,1,opt,name=status"`
+	Phase              ISBSvcPhase         `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=ISBSvcPhase"`
+	Message            string              `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
+	Config             BufferServiceConfig `json:"config,omitempty" protobuf:"bytes,4,opt,name=config"`
+	Type               ISBSvcType          `json:"type,omitempty" protobuf:"bytes,5,opt,name=type"`
+	ObservedGeneration int64               `json:"observedGeneration,omitempty" protobuf:"varint,6,opt,name=observedGeneration"`
 }
 
-func (isbsvc *InterStepBufferServiceStatus) SetPhase(phase ISBSvcPhase, msg string) {
-	isbsvc.Phase = phase
-	isbsvc.Message = msg
+func (iss *InterStepBufferServiceStatus) SetPhase(phase ISBSvcPhase, msg string) {
+	iss.Phase = phase
+	iss.Message = msg
 }
 
-func (isbsvc *InterStepBufferServiceStatus) SetType(typ ISBSvcType) {
-	isbsvc.Type = typ
+func (iss *InterStepBufferServiceStatus) SetType(typ ISBSvcType) {
+	iss.Type = typ
 }
 
 // InitConditions sets conditions to Unknown state.
-func (isbsvc *InterStepBufferServiceStatus) InitConditions() {
-	isbsvc.InitializeConditions(ISBSvcConditionConfigured, ISBSvcConditionDeployed, ISBSvcConditionChildrenResourcesHealthy)
-	isbsvc.SetPhase(ISBSvcPhasePending, "")
+func (iss *InterStepBufferServiceStatus) InitConditions() {
+	iss.InitializeConditions(ISBSvcConditionConfigured, ISBSvcConditionDeployed, ISBSvcConditionChildrenResourcesHealthy)
+	iss.SetPhase(ISBSvcPhasePending, "")
 }
 
 // MarkConfigured set the InterStepBufferService has valid configuration.
-func (isbsvc *InterStepBufferServiceStatus) MarkConfigured() {
-	isbsvc.MarkTrue(ISBSvcConditionConfigured)
-	isbsvc.SetPhase(ISBSvcPhasePending, "")
+func (iss *InterStepBufferServiceStatus) MarkConfigured() {
+	iss.MarkTrue(ISBSvcConditionConfigured)
+	iss.SetPhase(ISBSvcPhasePending, "")
 }
 
 // MarkNotConfigured the InterStepBufferService has configuration.
-func (isbsvc *InterStepBufferServiceStatus) MarkNotConfigured(reason, message string) {
-	isbsvc.MarkFalse(ISBSvcConditionConfigured, reason, message)
-	isbsvc.SetPhase(ISBSvcPhaseFailed, message)
+func (iss *InterStepBufferServiceStatus) MarkNotConfigured(reason, message string) {
+	iss.MarkFalse(ISBSvcConditionConfigured, reason, message)
+	iss.SetPhase(ISBSvcPhaseFailed, message)
 }
 
 // MarkDeployed set the InterStepBufferService has been deployed.
-func (isbsvc *InterStepBufferServiceStatus) MarkDeployed() {
-	isbsvc.MarkTrue(ISBSvcConditionDeployed)
-	isbsvc.SetPhase(ISBSvcPhaseRunning, "")
+func (iss *InterStepBufferServiceStatus) MarkDeployed() {
+	iss.MarkTrue(ISBSvcConditionDeployed)
+	iss.SetPhase(ISBSvcPhaseRunning, "")
 }
 
 // MarkDeployFailed set the InterStepBufferService deployment failed
-func (isbsvc *InterStepBufferServiceStatus) MarkDeployFailed(reason, message string) {
-	isbsvc.MarkFalse(ISBSvcConditionDeployed, reason, message)
-	isbsvc.SetPhase(ISBSvcPhaseFailed, message)
+func (iss *InterStepBufferServiceStatus) MarkDeployFailed(reason, message string) {
+	iss.MarkFalse(ISBSvcConditionDeployed, reason, message)
+	iss.SetPhase(ISBSvcPhaseFailed, message)
 }
 
 // SetObservedGeneration sets the Status ObservedGeneration
-func (isbsvc *InterStepBufferServiceStatus) SetObservedGeneration(value int64) {
-	isbsvc.ObservedGeneration = value
+func (iss *InterStepBufferServiceStatus) SetObservedGeneration(value int64) {
+	iss.ObservedGeneration = value
 }
 
 // IsHealthy indicates whether the InterStepBufferService is healthy or not
-func (isbsvc *InterStepBufferServiceStatus) IsHealthy() bool {
-	if isbsvc.Phase != ISBSvcPhaseRunning {
+func (iss *InterStepBufferServiceStatus) IsHealthy() bool {
+	if iss.Phase != ISBSvcPhaseRunning {
 		return false
 	}
-	return isbsvc.IsReady()
+	return iss.IsReady()
 }
 
-// MarkChildrenResourceNotHealthy marks the children resources as not healthy
-func (isbsvc *InterStepBufferServiceStatus) MarkChildrenResourceNotHealthy(reason, message string) {
-	isbsvc.MarkFalse(ISBSvcConditionChildrenResourcesHealthy, reason, message)
+// MarkChildrenResourceUnHealthy marks the children resources as not healthy
+func (iss *InterStepBufferServiceStatus) MarkChildrenResourceUnHealthy(reason, message string) {
+	iss.MarkFalse(ISBSvcConditionChildrenResourcesHealthy, reason, message)
+	iss.Message = reason + ": " + message
 }
 
 // MarkChildrenResourceHealthy marks the children resources as healthy
-func (isbsvc *InterStepBufferServiceStatus) MarkChildrenResourceHealthy(reason, message string) {
-	isbsvc.MarkTrueWithReason(ISBSvcConditionChildrenResourcesHealthy, reason, message)
+func (iss *InterStepBufferServiceStatus) MarkChildrenResourceHealthy(reason, message string) {
+	iss.MarkTrueWithReason(ISBSvcConditionChildrenResourcesHealthy, reason, message)
 }
