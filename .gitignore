@@ -21,6 +21,7 @@ docs/APIs.html
 */numaflow-models/docs
 */numaflow-models/.gitignore
 */numaflow-models/.openapi-generator
+*/numaflow-models/.openapi-generator-ignore
 */numaflow-models/.travis.yml
 */numaflow-models/README.md
 */numaflow-models/git_push.sh
