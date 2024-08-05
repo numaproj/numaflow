@@ -195,6 +195,7 @@ codegen:
 	$(MAKE) manifests
 	rm -rf ./vendor
 	go mod tidy
+	$(MAKE) --directory serving/numaflow-models generate
 
 clean:
 	-rm -rf ${CURRENT_DIR}/dist
