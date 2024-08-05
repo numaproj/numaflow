@@ -28,7 +28,7 @@ generate:
 		--remove-operation-id-prefix \
 		--model-name-prefix '' \
 		--model-name-suffix '' \
-		--global-property packageName=numaflow \
+		--additional-properties packageName=numaflow-client \
 		--additional-properties packageVersion=${SDK_VERSION} \
 		--type-mappings CoreV1Affinity="k8s_openapi::api::core::v1::Affinity" \
 		--type-mappings CoreV1SecretKeySelector="k8s_openapi::api::core::v1::SecretKeySelector" \
@@ -57,4 +57,6 @@ generate:
 		--type-mappings ResourceQuantity="k8s_openapi::apimachinery::pkg::api::resource::Quantity" \
 		--generate-alias-as-model
 
-	sed 's/\[dependencies\]/[dependencies]\nkube = "0.93.1"\nk8s-openapi = { version = "0.22.0", features = ["v1_29"] }/g' Cargo.toml  > tmp && mv tmp Cargo.toml
+	#sed 's/\[dependencies\]/[dependencies]\nkube = "0.93.1"\nk8s-openapi = { version = "0.22.0", features = ["v1_29"] }/g' Cargo.toml  > tmp && mv tmp Cargo.toml
+	cargo add kube
+	cargo add k8s-openapi --features v1_29
