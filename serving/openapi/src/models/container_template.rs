@@ -15,15 +15,15 @@
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ContainerTemplate {
     #[serde(rename = "env", skip_serializing_if = "Option::is_none")]
-    pub env: Option<Vec<crate::models::V1PeriodEnvVar>>,
+    pub env: Option<Vec<k8s_openapi::api::core::v1::EnvVar>>,
     #[serde(rename = "envFrom", skip_serializing_if = "Option::is_none")]
-    pub env_from: Option<Vec<crate::models::V1PeriodEnvFromSource>>,
+    pub env_from: Option<Vec<k8s_openapi::api::core::v1::EnvFromSource>>,
     #[serde(rename = "imagePullPolicy", skip_serializing_if = "Option::is_none")]
     pub image_pull_policy: Option<String>,
     #[serde(rename = "resources", skip_serializing_if = "Option::is_none")]
-    pub resources: Option<crate::models::V1PeriodResourceRequirements>,
+    pub resources: Option<k8s_openapi::api::core::v1::ResourceRequirements>,
     #[serde(rename = "securityContext", skip_serializing_if = "Option::is_none")]
-    pub security_context: Option<crate::models::V1PeriodSecurityContext>,
+    pub security_context: Option<k8s_openapi::api::core::v1::SecurityContext>,
 }
 
 impl ContainerTemplate {

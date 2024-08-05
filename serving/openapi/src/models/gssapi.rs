@@ -18,22 +18,22 @@ pub struct Gssapi {
     #[serde(rename = "authType")]
     pub auth_type: AuthType,
     #[serde(rename = "kerberosConfigSecret", skip_serializing_if = "Option::is_none")]
-    pub kerberos_config_secret: Option<crate::models::V1PeriodSecretKeySelector>,
+    pub kerberos_config_secret: Option<k8s_openapi::api::core::v1::SecretKeySelector>,
     #[serde(rename = "keytabSecret", skip_serializing_if = "Option::is_none")]
-    pub keytab_secret: Option<crate::models::V1PeriodSecretKeySelector>,
+    pub keytab_secret: Option<k8s_openapi::api::core::v1::SecretKeySelector>,
     #[serde(rename = "passwordSecret", skip_serializing_if = "Option::is_none")]
-    pub password_secret: Option<crate::models::V1PeriodSecretKeySelector>,
+    pub password_secret: Option<k8s_openapi::api::core::v1::SecretKeySelector>,
     #[serde(rename = "realm")]
     pub realm: String,
     #[serde(rename = "serviceName")]
     pub service_name: String,
     #[serde(rename = "usernameSecret")]
-    pub username_secret: crate::models::V1PeriodSecretKeySelector,
+    pub username_secret: k8s_openapi::api::core::v1::SecretKeySelector,
 }
 
 impl Gssapi {
     /// GSSAPI represents a SASL GSSAPI config
-    pub fn new(auth_type: AuthType, realm: String, service_name: String, username_secret: crate::models::V1PeriodSecretKeySelector) -> Gssapi {
+    pub fn new(auth_type: AuthType, realm: String, service_name: String, username_secret: k8s_openapi::api::core::v1::SecretKeySelector) -> Gssapi {
         Gssapi {
             auth_type,
             kerberos_config_secret: None,

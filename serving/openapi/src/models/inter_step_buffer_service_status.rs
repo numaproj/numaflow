@@ -15,7 +15,7 @@
 pub struct InterStepBufferServiceStatus {
     /// Conditions are the latest available observations of a resource's current state.
     #[serde(rename = "conditions", skip_serializing_if = "Option::is_none")]
-    pub conditions: Option<Vec<crate::models::V1PeriodCondition>>,
+    pub conditions: Option<Vec<k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition>>,
     #[serde(rename = "config", skip_serializing_if = "Option::is_none")]
     pub config: Option<Box<crate::models::BufferServiceConfig>>,
     #[serde(rename = "message", skip_serializing_if = "Option::is_none")]

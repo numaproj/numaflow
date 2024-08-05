@@ -14,9 +14,9 @@
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GetSideInputDeploymentReq {
     #[serde(rename = "DefaultResources")]
-    pub default_resources: crate::models::V1PeriodResourceRequirements,
+    pub default_resources: k8s_openapi::api::core::v1::ResourceRequirements,
     #[serde(rename = "Env")]
-    pub env: Vec<crate::models::V1PeriodEnvVar>,
+    pub env: Vec<k8s_openapi::api::core::v1::EnvVar>,
     #[serde(rename = "ISBSvcType")]
     pub isb_svc_type: String,
     #[serde(rename = "Image")]
@@ -26,7 +26,7 @@ pub struct GetSideInputDeploymentReq {
 }
 
 impl GetSideInputDeploymentReq {
-    pub fn new(default_resources: crate::models::V1PeriodResourceRequirements, env: Vec<crate::models::V1PeriodEnvVar>, isb_svc_type: String, image: String, pull_policy: String) -> GetSideInputDeploymentReq {
+    pub fn new(default_resources: k8s_openapi::api::core::v1::ResourceRequirements, env: Vec<k8s_openapi::api::core::v1::EnvVar>, isb_svc_type: String, image: String, pull_policy: String) -> GetSideInputDeploymentReq {
         GetSideInputDeploymentReq {
             default_resources,
             env,

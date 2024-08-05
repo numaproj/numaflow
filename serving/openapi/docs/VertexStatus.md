@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**conditions** | Option<[**Vec<crate::models::V1PeriodCondition>**](v1.Condition.md)> | Conditions are the latest available observations of a resource's current state. | [optional]
-**last_scaled_at** | Option<[**crate::models::V1PeriodTime**](v1.Time.md)> |  | [optional]
+**conditions** | Option<[**Vec<k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition>**](k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition.md)> | Conditions are the latest available observations of a resource's current state. | [optional]
+**last_scaled_at** | Option<[**k8s_openapi::apimachinery::pkg::apis::meta::v1::Time**](k8s_openapi::apimachinery::pkg::apis::meta::v1::Time.md)> |  | [optional]
 **message** | Option<**String**> |  | [optional]
 **observed_generation** | Option<**i64**> | ObservedGeneration stores the generation value observed by the controller. | [optional]
 **phase** | **String** |  | 

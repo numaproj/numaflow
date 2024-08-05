@@ -8,7 +8,7 @@ Name | Type | Description | Notes
 **cluster_port** | **i32** |  | 
 **config_map_name** | **String** |  | 
 **config_reloader_image** | **String** |  | 
-**default_resources** | [**crate::models::V1PeriodResourceRequirements**](v1.ResourceRequirements.md) |  | 
+**default_resources** | [**k8s_openapi::api::core::v1::ResourceRequirements**](k8s_openapi::api::core::v1::ResourceRequirements.md) |  | 
 **labels** | **::std::collections::HashMap<String, String>** |  | 
 **metrics_exporter_image** | **String** |  | 
 **metrics_port** | **i32** |  | 

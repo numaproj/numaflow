@@ -22,7 +22,7 @@ pub struct GetJetStreamStatefulSetSpecReq {
     #[serde(rename = "ConfigReloaderImage")]
     pub config_reloader_image: String,
     #[serde(rename = "DefaultResources")]
-    pub default_resources: crate::models::V1PeriodResourceRequirements,
+    pub default_resources: k8s_openapi::api::core::v1::ResourceRequirements,
     #[serde(rename = "Labels")]
     pub labels: ::std::collections::HashMap<String, String>,
     #[serde(rename = "MetricsExporterImage")]
@@ -46,7 +46,7 @@ pub struct GetJetStreamStatefulSetSpecReq {
 }
 
 impl GetJetStreamStatefulSetSpecReq {
-    pub fn new(client_port: i32, cluster_port: i32, config_map_name: String, config_reloader_image: String, default_resources: crate::models::V1PeriodResourceRequirements, labels: ::std::collections::HashMap<String, String>, metrics_exporter_image: String, metrics_port: i32, monitor_port: i32, nats_image: String, pvc_name_if_needed: String, server_auth_secret_name: String, server_encryption_secret_name: String, service_name: String, start_command: String) -> GetJetStreamStatefulSetSpecReq {
+    pub fn new(client_port: i32, cluster_port: i32, config_map_name: String, config_reloader_image: String, default_resources: k8s_openapi::api::core::v1::ResourceRequirements, labels: ::std::collections::HashMap<String, String>, metrics_exporter_image: String, metrics_port: i32, monitor_port: i32, nats_image: String, pvc_name_if_needed: String, server_auth_secret_name: String, server_encryption_secret_name: String, service_name: String, start_command: String) -> GetJetStreamStatefulSetSpecReq {
         GetJetStreamStatefulSetSpecReq {
             client_port,
             cluster_port,

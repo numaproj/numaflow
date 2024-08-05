@@ -24,13 +24,13 @@ pub struct JobTemplate {
     #[serde(rename = "containerTemplate", skip_serializing_if = "Option::is_none")]
     pub container_template: Option<Box<crate::models::ContainerTemplate>>,
     #[serde(rename = "dnsConfig", skip_serializing_if = "Option::is_none")]
-    pub dns_config: Option<crate::models::V1PeriodPodDnsConfig>,
+    pub dns_config: Option<k8s_openapi::api::core::v1::PodDNSConfig>,
     /// Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'.
     #[serde(rename = "dnsPolicy", skip_serializing_if = "Option::is_none")]
     pub dns_policy: Option<String>,
     /// ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
     #[serde(rename = "imagePullSecrets", skip_serializing_if = "Option::is_none")]
-    pub image_pull_secrets: Option<Vec<crate::models::V1PeriodLocalObjectReference>>,
+    pub image_pull_secrets: Option<Vec<k8s_openapi::api::core::v1::LocalObjectReference>>,
     #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Box<crate::models::Metadata>>,
     /// NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
@@ -46,13 +46,13 @@ pub struct JobTemplate {
     #[serde(rename = "runtimeClassName", skip_serializing_if = "Option::is_none")]
     pub runtime_class_name: Option<String>,
     #[serde(rename = "securityContext", skip_serializing_if = "Option::is_none")]
-    pub security_context: Option<crate::models::V1PeriodPodSecurityContext>,
+    pub security_context: Option<k8s_openapi::api::core::v1::PodSecurityContext>,
     /// ServiceAccountName applied to the pod
     #[serde(rename = "serviceAccountName", skip_serializing_if = "Option::is_none")]
     pub service_account_name: Option<String>,
     /// If specified, the pod's tolerations.
     #[serde(rename = "tolerations", skip_serializing_if = "Option::is_none")]
-    pub tolerations: Option<Vec<crate::models::V1PeriodToleration>>,
+    pub tolerations: Option<Vec<k8s_openapi::api::core::v1::Toleration>>,
     /// ttlSecondsAfterFinished limits the lifetime of a Job that has finished execution (either Complete or Failed). If this field is set, ttlSecondsAfterFinished after the Job finishes, it is eligible to be automatically deleted. When the Job is being deleted, its lifecycle guarantees (e.g. finalizers) will be honored. If this field is unset, the Job won't be automatically deleted. If this field is set to zero, the Job becomes eligible to be deleted immediately after it finishes. Numaflow defaults to 30
     #[serde(rename = "ttlSecondsAfterFinished", skip_serializing_if = "Option::is_none")]
     pub ttl_seconds_after_finished: Option<i32>,

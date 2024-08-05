@@ -14,9 +14,9 @@
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GetVertexPodSpecReq {
     #[serde(rename = "DefaultResources")]
-    pub default_resources: crate::models::V1PeriodResourceRequirements,
+    pub default_resources: k8s_openapi::api::core::v1::ResourceRequirements,
     #[serde(rename = "Env")]
-    pub env: Vec<crate::models::V1PeriodEnvVar>,
+    pub env: Vec<k8s_openapi::api::core::v1::EnvVar>,
     #[serde(rename = "ISBSvcType")]
     pub isb_svc_type: String,
     #[serde(rename = "Image")]
@@ -32,7 +32,7 @@ pub struct GetVertexPodSpecReq {
 }
 
 impl GetVertexPodSpecReq {
-    pub fn new(default_resources: crate::models::V1PeriodResourceRequirements, env: Vec<crate::models::V1PeriodEnvVar>, isb_svc_type: String, image: String, pipeline_spec: crate::models::PipelineSpec, pull_policy: String, serving_source_stream_name: String, side_inputs_store_name: String) -> GetVertexPodSpecReq {
+    pub fn new(default_resources: k8s_openapi::api::core::v1::ResourceRequirements, env: Vec<k8s_openapi::api::core::v1::EnvVar>, isb_svc_type: String, image: String, pipeline_spec: crate::models::PipelineSpec, pull_policy: String, serving_source_stream_name: String, side_inputs_store_name: String) -> GetVertexPodSpecReq {
         GetVertexPodSpecReq {
             default_resources,
             env,

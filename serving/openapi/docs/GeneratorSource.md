@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**duration** | Option<[**crate::models::V1PeriodDuration**](v1.Duration.md)> |  | [optional]
-**jitter** | Option<[**crate::models::V1PeriodDuration**](v1.Duration.md)> |  | [optional]
+**duration** | Option<[**k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration**](k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration.md)> |  | [optional]
+**jitter** | Option<[**k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration**](k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration.md)> |  | [optional]
 **key_count** | Option<**i32**> | KeyCount is the number of unique keys in the payload | [optional]
 **msg_size** | Option<**i32**> | Size of each generated message | [optional]
 **rpu** | Option<**i64**> |  | [optional]

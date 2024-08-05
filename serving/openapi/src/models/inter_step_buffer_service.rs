@@ -20,7 +20,7 @@ pub struct InterStepBufferService {
     #[serde(rename = "kind", skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
     #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<crate::models::V1PeriodObjectMeta>,
+    pub metadata: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta>,
     #[serde(rename = "spec")]
     pub spec: Box<crate::models::InterStepBufferServiceSpec>,
     #[serde(rename = "status", skip_serializing_if = "Option::is_none")]

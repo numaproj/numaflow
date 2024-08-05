@@ -14,7 +14,7 @@
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Authorization {
     #[serde(rename = "token", skip_serializing_if = "Option::is_none")]
-    pub token: Option<crate::models::V1PeriodSecretKeySelector>,
+    pub token: Option<k8s_openapi::api::core::v1::SecretKeySelector>,
 }
 
 impl Authorization {

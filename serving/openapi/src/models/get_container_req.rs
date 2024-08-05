@@ -14,7 +14,7 @@
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GetContainerReq {
     #[serde(rename = "env")]
-    pub env: Vec<crate::models::V1PeriodEnvVar>,
+    pub env: Vec<k8s_openapi::api::core::v1::EnvVar>,
     #[serde(rename = "image")]
     pub image: String,
     #[serde(rename = "imagePullPolicy")]
@@ -22,13 +22,13 @@ pub struct GetContainerReq {
     #[serde(rename = "isbSvcType")]
     pub isb_svc_type: String,
     #[serde(rename = "resources")]
-    pub resources: crate::models::V1PeriodResourceRequirements,
+    pub resources: k8s_openapi::api::core::v1::ResourceRequirements,
     #[serde(rename = "volumeMounts")]
-    pub volume_mounts: Vec<crate::models::V1PeriodVolumeMount>,
+    pub volume_mounts: Vec<k8s_openapi::api::core::v1::VolumeMount>,
 }
 
 impl GetContainerReq {
-    pub fn new(env: Vec<crate::models::V1PeriodEnvVar>, image: String, image_pull_policy: String, isb_svc_type: String, resources: crate::models::V1PeriodResourceRequirements, volume_mounts: Vec<crate::models::V1PeriodVolumeMount>) -> GetContainerReq {
+    pub fn new(env: Vec<k8s_openapi::api::core::v1::EnvVar>, image: String, image_pull_policy: String, isb_svc_type: String, resources: k8s_openapi::api::core::v1::ResourceRequirements, volume_mounts: Vec<k8s_openapi::api::core::v1::VolumeMount>) -> GetContainerReq {
         GetContainerReq {
             env,
             image,

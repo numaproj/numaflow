@@ -17,9 +17,9 @@ pub struct NatsAuth {
     #[serde(rename = "basic", skip_serializing_if = "Option::is_none")]
     pub basic: Option<Box<crate::models::BasicAuth>>,
     #[serde(rename = "nkey", skip_serializing_if = "Option::is_none")]
-    pub nkey: Option<crate::models::V1PeriodSecretKeySelector>,
+    pub nkey: Option<k8s_openapi::api::core::v1::SecretKeySelector>,
     #[serde(rename = "token", skip_serializing_if = "Option::is_none")]
-    pub token: Option<crate::models::V1PeriodSecretKeySelector>,
+    pub token: Option<k8s_openapi::api::core::v1::SecretKeySelector>,
 }
 
 impl NatsAuth {

@@ -19,13 +19,13 @@ pub struct NativeRedis {
     #[serde(rename = "automountServiceAccountToken", skip_serializing_if = "Option::is_none")]
     pub automount_service_account_token: Option<bool>,
     #[serde(rename = "dnsConfig", skip_serializing_if = "Option::is_none")]
-    pub dns_config: Option<crate::models::V1PeriodPodDnsConfig>,
+    pub dns_config: Option<k8s_openapi::api::core::v1::PodDNSConfig>,
     /// Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'.
     #[serde(rename = "dnsPolicy", skip_serializing_if = "Option::is_none")]
     pub dns_policy: Option<String>,
     /// ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
     #[serde(rename = "imagePullSecrets", skip_serializing_if = "Option::is_none")]
-    pub image_pull_secrets: Option<Vec<crate::models::V1PeriodLocalObjectReference>>,
+    pub image_pull_secrets: Option<Vec<k8s_openapi::api::core::v1::LocalObjectReference>>,
     #[serde(rename = "initContainerTemplate", skip_serializing_if = "Option::is_none")]
     pub init_container_template: Option<Box<crate::models::ContainerTemplate>>,
     #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
@@ -52,7 +52,7 @@ pub struct NativeRedis {
     #[serde(rename = "runtimeClassName", skip_serializing_if = "Option::is_none")]
     pub runtime_class_name: Option<String>,
     #[serde(rename = "securityContext", skip_serializing_if = "Option::is_none")]
-    pub security_context: Option<crate::models::V1PeriodPodSecurityContext>,
+    pub security_context: Option<k8s_openapi::api::core::v1::PodSecurityContext>,
     #[serde(rename = "sentinelContainerTemplate", skip_serializing_if = "Option::is_none")]
     pub sentinel_container_template: Option<Box<crate::models::ContainerTemplate>>,
     /// ServiceAccountName applied to the pod
@@ -62,7 +62,7 @@ pub struct NativeRedis {
     pub settings: Option<Box<crate::models::RedisSettings>>,
     /// If specified, the pod's tolerations.
     #[serde(rename = "tolerations", skip_serializing_if = "Option::is_none")]
-    pub tolerations: Option<Vec<crate::models::V1PeriodToleration>>,
+    pub tolerations: Option<Vec<k8s_openapi::api::core::v1::Toleration>>,
     /// Redis version, such as \"6.0.16\"
     #[serde(rename = "version", skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,

@@ -6,13 +6,13 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **args** | Option<**Vec<String>**> |  | [optional]
 **command** | Option<**Vec<String>**> |  | [optional]
-**env** | Option<[**Vec<crate::models::V1PeriodEnvVar>**](v1.EnvVar.md)> |  | [optional]
-**env_from** | Option<[**Vec<crate::models::V1PeriodEnvFromSource>**](v1.EnvFromSource.md)> |  | [optional]
+**env** | Option<[**Vec<k8s_openapi::api::core::v1::EnvVar>**](k8s_openapi::api::core::v1::EnvVar.md)> |  | [optional]
+**env_from** | Option<[**Vec<k8s_openapi::api::core::v1::EnvFromSource>**](k8s_openapi::api::core::v1::EnvFromSource.md)> |  | [optional]
 **image** | Option<**String**> |  | [optional]
 **image_pull_policy** | Option<**String**> |  | [optional]
-**resources** | Option<[**crate::models::V1PeriodResourceRequirements**](v1.ResourceRequirements.md)> |  | [optional]
-**security_context** | Option<[**crate::models::V1PeriodSecurityContext**](v1.SecurityContext.md)> |  | [optional]
-**volume_mounts** | Option<[**Vec<crate::models::V1PeriodVolumeMount>**](v1.VolumeMount.md)> |  | [optional]
+**resources** | Option<[**k8s_openapi::api::core::v1::ResourceRequirements**](k8s_openapi::api::core::v1::ResourceRequirements.md)> |  | [optional]
+**security_context** | Option<[**k8s_openapi::api::core::v1::SecurityContext**](k8s_openapi::api::core::v1::SecurityContext.md)> |  | [optional]
+**volume_mounts** | Option<[**Vec<k8s_openapi::api::core::v1::VolumeMount>**](k8s_openapi::api::core::v1::VolumeMount.md)> |  | [optional]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

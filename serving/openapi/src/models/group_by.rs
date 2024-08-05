@@ -15,7 +15,7 @@
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GroupBy {
     #[serde(rename = "allowedLateness", skip_serializing_if = "Option::is_none")]
-    pub allowed_lateness: Option<crate::models::V1PeriodDuration>,
+    pub allowed_lateness: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration>,
     #[serde(rename = "keyed", skip_serializing_if = "Option::is_none")]
     pub keyed: Option<bool>,
     #[serde(rename = "storage", skip_serializing_if = "Option::is_none")]

@@ -14,9 +14,9 @@
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GeneratorSource {
     #[serde(rename = "duration", skip_serializing_if = "Option::is_none")]
-    pub duration: Option<crate::models::V1PeriodDuration>,
+    pub duration: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration>,
     #[serde(rename = "jitter", skip_serializing_if = "Option::is_none")]
-    pub jitter: Option<crate::models::V1PeriodDuration>,
+    pub jitter: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration>,
     /// KeyCount is the number of unique keys in the payload
     #[serde(rename = "keyCount", skip_serializing_if = "Option::is_none")]
     pub key_count: Option<i32>,

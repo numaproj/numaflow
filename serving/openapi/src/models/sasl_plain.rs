@@ -16,13 +16,13 @@ pub struct SaslPlain {
     #[serde(rename = "handshake")]
     pub handshake: bool,
     #[serde(rename = "passwordSecret", skip_serializing_if = "Option::is_none")]
-    pub password_secret: Option<crate::models::V1PeriodSecretKeySelector>,
+    pub password_secret: Option<k8s_openapi::api::core::v1::SecretKeySelector>,
     #[serde(rename = "userSecret")]
-    pub user_secret: crate::models::V1PeriodSecretKeySelector,
+    pub user_secret: k8s_openapi::api::core::v1::SecretKeySelector,
 }
 
 impl SaslPlain {
-    pub fn new(handshake: bool, user_secret: crate::models::V1PeriodSecretKeySelector) -> SaslPlain {
+    pub fn new(handshake: bool, user_secret: k8s_openapi::api::core::v1::SecretKeySelector) -> SaslPlain {
         SaslPlain {
             handshake,
             password_secret: None,

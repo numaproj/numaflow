@@ -15,7 +15,7 @@
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PbqStorage {
     #[serde(rename = "emptyDir", skip_serializing_if = "Option::is_none")]
-    pub empty_dir: Option<crate::models::V1PeriodEmptyDirVolumeSource>,
+    pub empty_dir: Option<k8s_openapi::api::core::v1::EmptyDirVolumeSource>,
     /// NoStore means there will be no persistence storage and there will be data loss during pod restarts. Use this option only if you do not care about correctness (e.g., approx statistics pipeline like sampling rate, etc.).
     #[serde(rename = "no_store", skip_serializing_if = "Option::is_none")]
     pub no_store: Option<serde_json::Value>,

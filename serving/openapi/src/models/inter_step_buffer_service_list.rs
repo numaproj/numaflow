@@ -23,12 +23,12 @@ pub struct InterStepBufferServiceList {
     #[serde(rename = "kind", skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
     #[serde(rename = "metadata")]
-    pub metadata: crate::models::V1PeriodListMeta,
+    pub metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ListMeta,
 }
 
 impl InterStepBufferServiceList {
     /// InterStepBufferServiceList is the list of InterStepBufferService resources
-    pub fn new(items: Vec<crate::models::InterStepBufferService>, metadata: crate::models::V1PeriodListMeta) -> InterStepBufferServiceList {
+    pub fn new(items: Vec<crate::models::InterStepBufferService>, metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ListMeta) -> InterStepBufferServiceList {
         InterStepBufferServiceList {
             api_version: None,
             items,

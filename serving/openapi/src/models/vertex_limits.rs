@@ -23,7 +23,7 @@ pub struct VertexLimits {
     #[serde(rename = "readBatchSize", skip_serializing_if = "Option::is_none")]
     pub read_batch_size: Option<i64>,
     #[serde(rename = "readTimeout", skip_serializing_if = "Option::is_none")]
-    pub read_timeout: Option<crate::models::V1PeriodDuration>,
+    pub read_timeout: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration>,
 }
 
 impl VertexLimits {

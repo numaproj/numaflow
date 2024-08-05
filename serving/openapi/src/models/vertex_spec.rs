@@ -21,7 +21,7 @@ pub struct VertexSpec {
     #[serde(rename = "containerTemplate", skip_serializing_if = "Option::is_none")]
     pub container_template: Option<Box<crate::models::ContainerTemplate>>,
     #[serde(rename = "dnsConfig", skip_serializing_if = "Option::is_none")]
-    pub dns_config: Option<crate::models::V1PeriodPodDnsConfig>,
+    pub dns_config: Option<k8s_openapi::api::core::v1::PodDNSConfig>,
     /// Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'.
     #[serde(rename = "dnsPolicy", skip_serializing_if = "Option::is_none")]
     pub dns_policy: Option<String>,
@@ -29,12 +29,12 @@ pub struct VertexSpec {
     pub from_edges: Option<Vec<crate::models::CombinedEdge>>,
     /// ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod
     #[serde(rename = "imagePullSecrets", skip_serializing_if = "Option::is_none")]
-    pub image_pull_secrets: Option<Vec<crate::models::V1PeriodLocalObjectReference>>,
+    pub image_pull_secrets: Option<Vec<k8s_openapi::api::core::v1::LocalObjectReference>>,
     #[serde(rename = "initContainerTemplate", skip_serializing_if = "Option::is_none")]
     pub init_container_template: Option<Box<crate::models::ContainerTemplate>>,
     /// List of customized init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
     #[serde(rename = "initContainers", skip_serializing_if = "Option::is_none")]
-    pub init_containers: Option<Vec<crate::models::V1PeriodContainer>>,
+    pub init_containers: Option<Vec<k8s_openapi::api::core::v1::Container>>,
     #[serde(rename = "interStepBufferServiceName", skip_serializing_if = "Option::is_none")]
     pub inter_step_buffer_service_name: Option<String>,
     #[serde(rename = "limits", skip_serializing_if = "Option::is_none")]
@@ -65,7 +65,7 @@ pub struct VertexSpec {
     #[serde(rename = "scale", skip_serializing_if = "Option::is_none")]
     pub scale: Option<Box<crate::models::Scale>>,
     #[serde(rename = "securityContext", skip_serializing_if = "Option::is_none")]
-    pub security_context: Option<crate::models::V1PeriodPodSecurityContext>,
+    pub security_context: Option<k8s_openapi::api::core::v1::PodSecurityContext>,
     /// ServiceAccountName applied to the pod
     #[serde(rename = "serviceAccountName", skip_serializing_if = "Option::is_none")]
     pub service_account_name: Option<String>,
@@ -76,7 +76,7 @@ pub struct VertexSpec {
     pub side_inputs_container_template: Option<Box<crate::models::ContainerTemplate>>,
     /// List of customized sidecar containers belonging to the pod.
     #[serde(rename = "sidecars", skip_serializing_if = "Option::is_none")]
-    pub sidecars: Option<Vec<crate::models::V1PeriodContainer>>,
+    pub sidecars: Option<Vec<k8s_openapi::api::core::v1::Container>>,
     #[serde(rename = "sink", skip_serializing_if = "Option::is_none")]
     pub sink: Option<Box<crate::models::Sink>>,
     #[serde(rename = "source", skip_serializing_if = "Option::is_none")]
@@ -85,11 +85,11 @@ pub struct VertexSpec {
     pub to_edges: Option<Vec<crate::models::CombinedEdge>>,
     /// If specified, the pod's tolerations.
     #[serde(rename = "tolerations", skip_serializing_if = "Option::is_none")]
-    pub tolerations: Option<Vec<crate::models::V1PeriodToleration>>,
+    pub tolerations: Option<Vec<k8s_openapi::api::core::v1::Toleration>>,
     #[serde(rename = "udf", skip_serializing_if = "Option::is_none")]
     pub udf: Option<Box<crate::models::Udf>>,
     #[serde(rename = "volumes", skip_serializing_if = "Option::is_none")]
-    pub volumes: Option<Vec<crate::models::V1PeriodVolume>>,
+    pub volumes: Option<Vec<k8s_openapi::api::core::v1::Volume>>,
     #[serde(rename = "watermark", skip_serializing_if = "Option::is_none")]
     pub watermark: Option<Box<crate::models::Watermark>>,
 }

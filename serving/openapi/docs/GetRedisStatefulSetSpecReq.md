@@ -6,7 +6,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **conf_config_map_name** | **String** |  | 
 **credential_secret_name** | **String** |  | 
-**default_resources** | [**crate::models::V1PeriodResourceRequirements**](v1.ResourceRequirements.md) |  | 
+**default_resources** | [**k8s_openapi::api::core::v1::ResourceRequirements**](k8s_openapi::api::core::v1::ResourceRequirements.md) |  | 
 **health_config_map_name** | **String** |  | 
 **init_container_image** | **String** |  | 
 **labels** | **::std::collections::HashMap<String, String>** |  | 

@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**allowed_lateness** | Option<[**crate::models::V1PeriodDuration**](v1.Duration.md)> |  | [optional]
+**allowed_lateness** | Option<[**k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration**](k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration.md)> |  | [optional]
 **keyed** | Option<**bool**> |  | [optional]
 **storage** | Option<[**crate::models::PbqStorage**](PBQStorage.md)> |  | [optional]
 **window** | [**crate::models::Window**](Window.md) |  | 

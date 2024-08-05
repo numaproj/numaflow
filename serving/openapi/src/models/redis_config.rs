@@ -17,9 +17,9 @@ pub struct RedisConfig {
     #[serde(rename = "masterName", skip_serializing_if = "Option::is_none")]
     pub master_name: Option<String>,
     #[serde(rename = "password", skip_serializing_if = "Option::is_none")]
-    pub password: Option<crate::models::V1PeriodSecretKeySelector>,
+    pub password: Option<k8s_openapi::api::core::v1::SecretKeySelector>,
     #[serde(rename = "sentinelPassword", skip_serializing_if = "Option::is_none")]
-    pub sentinel_password: Option<crate::models::V1PeriodSecretKeySelector>,
+    pub sentinel_password: Option<k8s_openapi::api::core::v1::SecretKeySelector>,
     /// Sentinel URL, will be ignored if Redis URL is provided
     #[serde(rename = "sentinelUrl", skip_serializing_if = "Option::is_none")]
     pub sentinel_url: Option<String>,

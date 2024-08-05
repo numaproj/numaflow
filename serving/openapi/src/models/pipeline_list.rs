@@ -22,7 +22,7 @@ pub struct PipelineList {
     #[serde(rename = "kind", skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
     #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<crate::models::V1PeriodListMeta>,
+    pub metadata: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::ListMeta>,
 }
 
 impl PipelineList {

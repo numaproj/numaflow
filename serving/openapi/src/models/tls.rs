@@ -14,13 +14,13 @@
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Tls {
     #[serde(rename = "caCertSecret", skip_serializing_if = "Option::is_none")]
-    pub ca_cert_secret: Option<crate::models::V1PeriodSecretKeySelector>,
+    pub ca_cert_secret: Option<k8s_openapi::api::core::v1::SecretKeySelector>,
     #[serde(rename = "certSecret", skip_serializing_if = "Option::is_none")]
-    pub cert_secret: Option<crate::models::V1PeriodSecretKeySelector>,
+    pub cert_secret: Option<k8s_openapi::api::core::v1::SecretKeySelector>,
     #[serde(rename = "insecureSkipVerify", skip_serializing_if = "Option::is_none")]
     pub insecure_skip_verify: Option<bool>,
     #[serde(rename = "keySecret", skip_serializing_if = "Option::is_none")]
-    pub key_secret: Option<crate::models::V1PeriodSecretKeySelector>,
+    pub key_secret: Option<k8s_openapi::api::core::v1::SecretKeySelector>,
 }
 
 impl Tls {

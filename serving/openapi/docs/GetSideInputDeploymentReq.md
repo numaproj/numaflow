@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**default_resources** | [**crate::models::V1PeriodResourceRequirements**](v1.ResourceRequirements.md) |  | 
-**env** | [**Vec<crate::models::V1PeriodEnvVar>**](v1.EnvVar.md) |  | 
+**default_resources** | [**k8s_openapi::api::core::v1::ResourceRequirements**](k8s_openapi::api::core::v1::ResourceRequirements.md) |  | 
+**env** | [**Vec<k8s_openapi::api::core::v1::EnvVar>**](k8s_openapi::api::core::v1::EnvVar.md) |  | 
 **isb_svc_type** | **String** |  | 
 **image** | **String** |  | 
 **pull_policy** | **String** |  | 

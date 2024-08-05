@@ -21,7 +21,7 @@ pub struct SideInput {
     #[serde(rename = "trigger")]
     pub trigger: Box<crate::models::SideInputTrigger>,
     #[serde(rename = "volumes", skip_serializing_if = "Option::is_none")]
-    pub volumes: Option<Vec<crate::models::V1PeriodVolume>>,
+    pub volumes: Option<Vec<k8s_openapi::api::core::v1::Volume>>,
 }
 
 impl SideInput {

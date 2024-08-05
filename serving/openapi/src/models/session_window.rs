@@ -15,7 +15,7 @@
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SessionWindow {
     #[serde(rename = "timeout", skip_serializing_if = "Option::is_none")]
-    pub timeout: Option<crate::models::V1PeriodDuration>,
+    pub timeout: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration>,
 }
 
 impl SessionWindow {

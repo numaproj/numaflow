@@ -15,9 +15,9 @@
 pub struct VertexStatus {
     /// Conditions are the latest available observations of a resource's current state.
     #[serde(rename = "conditions", skip_serializing_if = "Option::is_none")]
-    pub conditions: Option<Vec<crate::models::V1PeriodCondition>>,
+    pub conditions: Option<Vec<k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition>>,
     #[serde(rename = "lastScaledAt", skip_serializing_if = "Option::is_none")]
-    pub last_scaled_at: Option<crate::models::V1PeriodTime>,
+    pub last_scaled_at: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Time>,
     #[serde(rename = "message", skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
     /// ObservedGeneration stores the generation value observed by the controller.

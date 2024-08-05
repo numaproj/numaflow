@@ -15,9 +15,9 @@
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SlidingWindow {
     #[serde(rename = "length", skip_serializing_if = "Option::is_none")]
-    pub length: Option<crate::models::V1PeriodDuration>,
+    pub length: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration>,
     #[serde(rename = "slide", skip_serializing_if = "Option::is_none")]
-    pub slide: Option<crate::models::V1PeriodDuration>,
+    pub slide: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Duration>,
     /// Streaming should be set to true if the reduce udf is streaming.
     #[serde(rename = "streaming", skip_serializing_if = "Option::is_none")]
     pub streaming: Option<bool>,
