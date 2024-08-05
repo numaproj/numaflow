@@ -56,9 +56,7 @@ func TestKafkaSource_Read(t *testing.T) {
 	}}
 
 	vi := &dfv1.VertexInstance{
-		Vertex:   vertex,
-		Hostname: "test-host",
-		Replica:  0,
+		Vertex: vertex,
 	}
 
 	// Create a new Sarama mock client

@@ -18627,7 +18627,6 @@
           "type": "string"
         },
         "observedGeneration": {
-          "description": "ObservedGeneration stores the generation value observed by the controller.",
           "format": "int64",
           "type": "integer"
         },
@@ -19316,7 +19315,6 @@
           "type": "string"
         },
         "observedGeneration": {
-          "description": "ObservedGeneration stores the generation value observed by the controller.",
           "format": "int64",
           "type": "integer"
         },
@@ -20188,7 +20186,6 @@
           "type": "string"
         },
         "observedGeneration": {
-          "description": "ObservedGeneration stores the generation value observed by the controller.",
           "format": "int64",
           "type": "integer"
         },
