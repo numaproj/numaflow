@@ -7,6 +7,7 @@ docs/AbstractSink.md
 docs/AbstractVertex.md
 docs/Authorization.md
 docs/BasicAuth.md
+docs/Blackhole.md
 docs/BufferServiceConfig.md
 docs/CombinedEdge.md
 docs/Container.md
@@ -41,10 +42,12 @@ docs/JobTemplate.md
 docs/KafkaSink.md
 docs/KafkaSource.md
 docs/Lifecycle.md
+docs/Log.md
 docs/Metadata.md
 docs/NativeRedis.md
 docs/NatsAuth.md
 docs/NatsSource.md
+docs/NoStore.md
 docs/PbqStorage.md
 docs/PersistenceStrategy.md
 docs/Pipeline.md
@@ -94,6 +97,7 @@ src/models/abstract_sink.rs
 src/models/abstract_vertex.rs
 src/models/authorization.rs
 src/models/basic_auth.rs
+src/models/blackhole.rs
 src/models/buffer_service_config.rs
 src/models/combined_edge.rs
 src/models/container.rs
@@ -128,11 +132,13 @@ src/models/job_template.rs
 src/models/kafka_sink.rs
 src/models/kafka_source.rs
 src/models/lifecycle.rs
+src/models/log.rs
 src/models/metadata.rs
 src/models/mod.rs
 src/models/native_redis.rs
 src/models/nats_auth.rs
 src/models/nats_source.rs
+src/models/no_store.rs
 src/models/pbq_storage.rs
 src/models/persistence_strategy.rs
 src/models/pipeline.rs

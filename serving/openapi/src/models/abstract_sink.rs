@@ -13,13 +13,12 @@
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AbstractSink {
-    /// Blackhole is a sink to emulate /dev/null
     #[serde(rename = "blackhole", skip_serializing_if = "Option::is_none")]
-    pub blackhole: Option<serde_json::Value>,
+    pub blackhole: Option<Box<crate::models::Blackhole>>,
     #[serde(rename = "kafka", skip_serializing_if = "Option::is_none")]
     pub kafka: Option<Box<crate::models::KafkaSink>>,
     #[serde(rename = "log", skip_serializing_if = "Option::is_none")]
-    pub log: Option<serde_json::Value>,
+    pub log: Option<Box<crate::models::Log>>,
     #[serde(rename = "udsink", skip_serializing_if = "Option::is_none")]
     pub udsink: Option<Box<crate::models::UdSink>>,
 }
@@ -27,9 +26,9 @@ pub struct AbstractSink {
 impl AbstractSink {
     pub fn new() -> AbstractSink {
         AbstractSink {
-            blackhole: None: None,
+            blackhole: None,
             kafka: None,
-            log: None: None,
+            log: None,
             udsink: None,
         }
     }
