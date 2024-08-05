@@ -57,6 +57,6 @@ generate:
 		--type-mappings ResourceQuantity="k8s_openapi::apimachinery::pkg::api::resource::Quantity" \
 		--generate-alias-as-model
 
-	sed -e 's/edition = "2018"/edition = "2021"/g' -e 's/authors =.*//' -e 's/license =.*//' Cargo.toml  > tmp && mv tmp Cargo.toml
+	sed -e 's/edition = "2018"/edition = "2021"/g' -e 's/authors =.*/authors = \["Numaflow Developers"\]/' -e 's/license =.*/license = "Apache License 2.0"/' Cargo.toml  > tmp && mv tmp Cargo.toml
 	cargo add kube
 	cargo add k8s-openapi --features v1_29
