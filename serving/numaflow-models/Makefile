@@ -1,6 +1,6 @@
 VERSION ?= main
 
-SDK_VERSION := $(shell if [[ "$(VERSION)" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*  ]]; then echo ${VERSION} | cut -c2-; elif [[ "$(VERSION)" =~ ^main$$  ]]; then echo 0.0.0-pre; else echo $(VERSION); fi)
+SDK_VERSION := $(shell if [[ "$(VERSION)" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*  ]]; then echo ${VERSION} | cut -c2-; elif [[ "$(VERSION)" =~ ^main$  ]]; then echo 0.0.0-pre; else echo $(VERSION); fi)
 
 # Somehow type-mappings stopped working starting from v7.4.0
 GENERATOR_VERSION := v7.3.0
