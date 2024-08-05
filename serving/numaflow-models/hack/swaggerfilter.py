@@ -29,6 +29,10 @@ def main():
     for k in list(defs.keys()):
         if not k.startswith(prefix):
             del defs[k]
+            continue
+
+        if k in ['io.numaproj.numaflow.v1alpha1.Blackhole', 'io.numaproj.numaflow.v1alpha1.Log', 'io.numaproj.numaflow.v1alpha1.NoStore']:
+            defs[k]['allOf'] = []
 
     json_object = json.dumps(swagger, indent=4)
     print(json_object)

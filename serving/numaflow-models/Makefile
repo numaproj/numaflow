@@ -13,13 +13,12 @@ publish: generate
 generate:
 	rm -Rf ./docs ./test ./numaflow/models/ ./numaflow/model/
 	mkdir -p ./dist
-	cat ../../api/openapi-spec/swagger.json | ../../hack/swaggerfilter.py io.numaproj.numaflow | \
+	cat ../../api/openapi-spec/swagger.json | ./hack/swaggerfilter.py io.numaproj.numaflow | \
 		sed 's/io.k8s.api.core.v1./CoreV1/' | \
 		sed 's/io.k8s.apimachinery.pkg.apis.meta.v1./MetaV1/' | \
 		sed 's/io.k8s.apimachinery.pkg.api.resource.Quantity/ResourceQuantity/' | \
 		sed 's/io.numaproj.numaflow.v1alpha1.//' \
 		> ./dist/swagger.json
-	python3 ./hack/update_swagger.py ./dist/swagger.json
 	$(DOCKER) openapitools/openapi-generator-cli:$(GENERATOR_VERSION) \
 		generate \
 		-i /base/dist/swagger.json \
