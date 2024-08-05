@@ -1,0 +1,34 @@
+# JetStreamBufferService
+
+## Properties
+
+Name | Type | Description | Notes
+------------ | ------------- | ------------- | -------------
+**affinity** | Option<[**k8s_openapi::api::core::v1::Affinity**](k8s_openapi::api::core::v1::Affinity.md)> |  | [optional]
+**automount_service_account_token** | Option<**bool**> | AutomountServiceAccountToken indicates whether a service account token should be automatically mounted. | [optional]
+**buffer_config** | Option<**String**> | Optional configuration for the streams, consumers and buckets to be created in this JetStream service, if specified, it will be merged with the default configuration in numaflow-controller-config. It accepts a YAML format configuration, it may include 4 sections, \"stream\", \"consumer\", \"otBucket\" and \"procBucket\". Available fields under \"stream\" include \"retention\" (e.g. interest, limits, workerQueue), \"maxMsgs\", \"maxAge\" (e.g. 72h), \"replicas\" (1, 3, 5), \"duplicates\" (e.g. 5m). Available fields under \"consumer\" include \"ackWait\" (e.g. 60s) Available fields under \"otBucket\" include \"maxValueSize\", \"history\", \"ttl\" (e.g. 72h), \"maxBytes\", \"replicas\" (1, 3, 5). Available fields under \"procBucket\" include \"maxValueSize\", \"history\", \"ttl\" (e.g. 72h), \"maxBytes\", \"replicas\" (1, 3, 5). | [optional]
+**container_template** | Option<[**crate::models::ContainerTemplate**](ContainerTemplate.md)> |  | [optional]
+**dns_config** | Option<[**k8s_openapi::api::core::v1::PodDNSConfig**](k8s_openapi::api::core::v1::PodDNSConfig.md)> |  | [optional]
+**dns_policy** | Option<**String**> | Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'. | [optional]
+**encryption** | Option<**bool**> | Whether encrypt the data at rest, defaults to false Enabling encryption might impact the performance, see https://docs.nats.io/running-a-nats-service/nats_admin/jetstream_admin/encryption_at_rest for the detail Toggling the value will impact encrypting/decrypting existing messages. | [optional]
+**image_pull_secrets** | Option<[**Vec<k8s_openapi::api::core::v1::LocalObjectReference>**](k8s_openapi::api::core::v1::LocalObjectReference.md)> | ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod | [optional]
+**metadata** | Option<[**crate::models::Metadata**](Metadata.md)> |  | [optional]
+**metrics_container_template** | Option<[**crate::models::ContainerTemplate**](ContainerTemplate.md)> |  | [optional]
+**node_selector** | Option<**::std::collections::HashMap<String, String>**> | NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/ | [optional]
+**persistence** | Option<[**crate::models::PersistenceStrategy**](PersistenceStrategy.md)> |  | [optional]
+**priority** | Option<**i32**> | The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/ | [optional]
+**priority_class_name** | Option<**String**> | If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/ | [optional]
+**reloader_container_template** | Option<[**crate::models::ContainerTemplate**](ContainerTemplate.md)> |  | [optional]
+**replicas** | Option<**i32**> | JetStream StatefulSet size | [optional]
+**runtime_class_name** | Option<**String**> | RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class | [optional]
+**security_context** | Option<[**k8s_openapi::api::core::v1::PodSecurityContext**](k8s_openapi::api::core::v1::PodSecurityContext.md)> |  | [optional]
+**service_account_name** | Option<**String**> | ServiceAccountName applied to the pod | [optional]
+**settings** | Option<**String**> | Nats/JetStream configuration, if not specified, global settings in numaflow-controller-config will be used. See https://docs.nats.io/running-a-nats-service/configuration#limits and https://docs.nats.io/running-a-nats-service/configuration#jetstream. For limits, only \"max_payload\" is supported for configuration, defaults to 1048576 (1MB), not recommended to use values over 8388608 (8MB) but max_payload can be set up to 67108864 (64MB). For jetstream, only \"max_memory_store\" and \"max_file_store\" are supported for configuration, do not set \"store_dir\" as it has been hardcoded. | [optional]
+**start_args** | Option<**Vec<String>**> | Optional arguments to start nats-server. For example, \"-D\" to enable debugging output, \"-DV\" to enable debugging and tracing. Check https://docs.nats.io/ for all the available arguments. | [optional]
+**tls** | Option<**bool**> | Whether enable TLS, defaults to false Enabling TLS might impact the performance | [optional]
+**tolerations** | Option<[**Vec<k8s_openapi::api::core::v1::Toleration>**](k8s_openapi::api::core::v1::Toleration.md)> | If specified, the pod's tolerations. | [optional]
+**version** | Option<**String**> | JetStream version, such as \"2.7.1\" | [optional]
+
+[[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
+
+
