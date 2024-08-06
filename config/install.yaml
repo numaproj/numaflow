@@ -17837,6 +17837,9 @@ spec:
                 type: string
               message:
                 type: string
+              observedGeneration:
+                format: int64
+                type: integer
               phase:
                 enum:
                 - ""

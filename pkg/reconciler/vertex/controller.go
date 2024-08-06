@@ -320,6 +320,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	vertex.Status.Selector = selector.String()
 
 	vertex.Status.MarkPhaseRunning()
+	vertex.Status.SetObservedGeneration(vertex.Generation)
 	if err = checkChildrenResourceStatus(ctx, r.client, vertex); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to check children resource status: %w", err)
 	}
