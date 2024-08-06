@@ -45,15 +45,13 @@ COPY ./serving/backoff/src ./backoff/src
 RUN touch src/main.rs servesink/main.rs extras/upstreams/main.rs && \
     cargo build --release
 
-COPY --from=base /bin/numaflow /bin/numaflow
-
 ####################################################################################################
 # numaflow
 ####################################################################################################
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE} as numaflow
 
-COPY --from=extension-base /bin/numaflow /bin/numaflow
+COPY --from=base /bin/numaflow /bin/numaflow
 COPY ui/build /ui/build
 
 COPY --from=extension-base /serve/target/release/serve /bin/serve
