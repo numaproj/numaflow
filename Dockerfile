@@ -32,6 +32,9 @@ COPY ./serving/backoff/Cargo.toml ./backoff/
 RUN cargo new numaflow-models
 COPY ./serving/numaflow-models/Cargo.toml ./numaflow-models/
 
+RUN cargo new source-sink
+COPY ./serving/source-sink/Cargo.toml ./source-sink/
+
 # Copy all Cargo.toml and Cargo.lock files for caching dependencies
 COPY ./serving/Cargo.toml ./serving/Cargo.lock ./
 
