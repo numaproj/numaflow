@@ -6,29 +6,20 @@ use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tracing::info;
 
-use crate::error::Error;
 use crate::forwarder::Forwarder;
 use crate::sink::{SinkClient, SinkConfig};
 use crate::source::{SourceClient, SourceConfig};
 use crate::transformer::{TransformerClient, TransformerConfig};
 
+pub(crate) use self::error::Result;
+pub(crate) use crate::error::Error;
+
 /// SourcerSinker orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
-/// The infamous forward-a-chunk executes the following in an infinite loop:
+/// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
 /// - Read X messages from the source
 /// - Invokes the SourceTransformer concurrently
 /// - Calls the Sinker to write the batch to the Sink
 /// - Send Acknowledgement back to the Source
-
-/// TODO
-/// - [ ] integrate with main
-/// - [ ] add metrics and metrics-server
-/// - [ ] integrate with trace!
-/// - [ ] add code comment
-/// - [ ] error handling using anyhow
-/// - [ ] unit testing >= 85%
-/// - [ ] local integration testing
-pub use self::error::Result;
-
 pub mod error;
 
 pub mod metrics;
@@ -48,11 +39,13 @@ pub(crate) mod shared;
 const TIMEOUT_IN_MS: u32 = 1000;
 const BATCH_SIZE: u64 = 500;
 
+/// forwards a chunk of data from the source to the sink via an optional transformer.
+/// It takes an optional custom_shutdown_rx for shutting down the forwarder, useful for testing.
 pub async fn run_forwarder(
-    custom_shutdown_rx: Option<oneshot::Receiver<()>>,
     source_config: SourceConfig,
     sink_config: SinkConfig,
     transformer_config: Option<TransformerConfig>,
+    custom_shutdown_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<()> {
     wait_for_server_info(&source_config.server_info_file).await?;
     let mut source_client = SourceClient::connect(source_config).await?;
@@ -77,6 +70,7 @@ pub async fn run_forwarder(
     )
     .await?;
 
+    // TODO: use builder pattern of options like TIMEOUT, BATCH_SIZE, etc?
     let mut forwarder = Forwarder::new(
         source_client,
         sink_client,
@@ -263,20 +257,26 @@ mod tests {
         };
 
         // wait for the servers to start
+        // FIXME: we need to have a better way, this is flaky
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        env::set_var("SOURCE_SOCKET", src_sock_file.to_str().unwrap());
-        env::set_var("SINK_SOCKET", sink_sock_file.to_str().unwrap());
+        unsafe {
+            env::set_var("SOURCE_SOCKET", src_sock_file.to_str().unwrap());
+        }
+        unsafe {
+            env::set_var("SINK_SOCKET", sink_sock_file.to_str().unwrap());
+        }
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
         let forwarder_handle = tokio::spawn(async move {
             let result =
-                super::run_forwarder(Some(shutdown_rx), source_config, sink_config, None).await;
+                super::run_forwarder(source_config, sink_config, None, Some(shutdown_rx)).await;
             assert!(result.is_ok());
         });
 
         // wait for the forwarder to start
+        // FIXME: we need to have a better way, this is flaky
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // stop the forwarder

@@ -6,8 +6,7 @@ use tonic::Request;
 
 use crate::error::{Error, Result};
 use crate::message::{Message, Offset};
-use crate::shared::{connect_with_uds, utc_from_timestamp};
-
+use crate::shared::connect_with_uds;
 pub mod proto {
     tonic::include_proto!("source.v1");
 }
@@ -61,29 +60,14 @@ impl SourceClient {
         });
 
         let mut stream = self.client.read_fn(request).await?.into_inner();
-        let mut messages = Vec::new();
+        let mut messages = Vec::with_capacity(num_records as usize);
 
         while let Some(response) = stream.next().await {
             let result = response?
                 .result
-                .ok_or_else(|| Error::SourceError("Offset not found".to_string()))?;
+                .ok_or_else(|| Error::SourceError("Empty message".to_string()))?;
 
-            let source_offset = match result.offset {
-                Some(o) => Offset {
-                    offset: BASE64_STANDARD.encode(o.offset),
-                    partition_id: o.partition_id,
-                },
-                None => return Err(Error::SourceError("Offset not found".to_string())),
-            };
-
-            let message = Message {
-                keys: result.keys,
-                value: result.payload,
-                offset: source_offset,
-                event_time: utc_from_timestamp(result.event_time),
-                headers: result.headers,
-            };
-            messages.push(message);
+            messages.push(result.try_into()?);
         }
 
         Ok(messages)
@@ -93,7 +77,9 @@ impl SourceClient {
         let offsets = offsets
             .into_iter()
             .map(|offset| proto::Offset {
-                offset: BASE64_STANDARD.decode(offset.offset).unwrap(), // we only control the encoding, so this should never fail
+                offset: BASE64_STANDARD
+                    .decode(offset.offset)
+                    .expect("we control the encoding, so this should never fail"),
                 partition_id: offset.partition_id,
             })
             .collect();
@@ -102,11 +88,11 @@ impl SourceClient {
             request: Some(proto::ack_request::Request { offsets }),
         });
 
-        let response = self.client.ack_fn(request).await?.into_inner();
-        Ok(response)
+        Ok(self.client.ack_fn(request).await?.into_inner())
     }
 
     #[allow(dead_code)]
+    // TODO: remove dead_code
     pub(crate) async fn pending_fn(&mut self) -> Result<proto::PendingResponse> {
         let request = Request::new(());
         let response = self.client.pending_fn(request).await?.into_inner();
@@ -114,6 +100,7 @@ impl SourceClient {
     }
 
     #[allow(dead_code)]
+    // TODO: remove dead_code
     pub(crate) async fn partitions_fn(&mut self) -> Result<Vec<i32>> {
         let request = Request::new(());
         let response = self.client.partitions_fn(request).await?.into_inner();
@@ -216,6 +203,7 @@ mod tests {
         });
 
         // wait for the server to start
+        // TODO: flaky
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let mut source_client = SourceClient::connect(SourceConfig {

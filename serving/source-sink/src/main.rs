@@ -13,6 +13,7 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     // Start the metrics server
+    // TODO: make the port configurable.
     let metrics_addr: SocketAddr = "0.0.0.0:9090".parse().expect("Invalid address");
     tokio::spawn(async move {
         if let Err(e) = start_metrics_server(metrics_addr).await {
@@ -29,7 +30,7 @@ async fn main() {
     };
 
     // Run the forwarder
-    if let Err(e) = run_forwarder(None, source_config, sink_config, transformer_config).await {
+    if let Err(e) = run_forwarder(source_config, sink_config, transformer_config, None).await {
         error!("Application error: {:?}", e);
     }
 }

@@ -21,10 +21,13 @@ pub enum Error {
 
     #[error("Connection Error - {0}")]
     ConnectionError(String),
+
+    #[error("gRPC Error - {0}")]
+    GRPCError(String),
 }
 
 impl From<tonic::Status> for Error {
     fn from(status: tonic::Status) -> Self {
-        Error::SourceError(status.to_string())
+        Error::GRPCError(status.to_string())
     }
 }

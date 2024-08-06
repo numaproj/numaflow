@@ -3,7 +3,7 @@ use tonic::Request;
 
 use crate::error::Result;
 use crate::message::Message;
-use crate::shared::{connect_with_uds, prost_timestamp_from_utc};
+use crate::shared::connect_with_uds;
 
 pub mod proto {
     tonic::include_proto!("sink.v1");
@@ -45,17 +45,8 @@ impl SinkClient {
     }
 
     pub(crate) async fn sink_fn(&mut self, messages: Vec<Message>) -> Result<proto::SinkResponse> {
-        let requests: Vec<proto::SinkRequest> = messages
-            .into_iter()
-            .map(|message| proto::SinkRequest {
-                keys: message.keys,
-                value: message.value,
-                event_time: prost_timestamp_from_utc(message.event_time),
-                watermark: None,
-                id: format!("{}-{}", message.offset.partition_id, message.offset.offset),
-                headers: message.headers,
-            })
-            .collect();
+        let requests: Vec<proto::SinkRequest> =
+            messages.into_iter().map(|message| message.into()).collect();
 
         let (tx, rx) = tokio::sync::mpsc::channel(1);
 

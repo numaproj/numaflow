@@ -3,7 +3,7 @@ use tonic::Request;
 
 use crate::error::Result;
 use crate::message::Message;
-use crate::shared::{connect_with_uds, prost_timestamp_from_utc, utc_from_timestamp};
+use crate::shared::{connect_with_uds, utc_from_timestamp};
 use crate::transformer::proto::SourceTransformRequest;
 
 pub mod proto {
@@ -51,15 +51,13 @@ impl TransformerClient {
         let offset = message.offset.clone();
         let headers = message.headers.clone();
 
-        let request = SourceTransformRequest {
-            keys: message.keys,
-            value: message.value,
-            event_time: prost_timestamp_from_utc(message.event_time),
-            watermark: None,
-            headers: message.headers,
-        };
-
-        let response = self.client.source_transform_fn(request).await?.into_inner();
+        // TODO: is this complex? the reason to do this is, tomorrow when we have the normal
+        //   Pipeline CRD, we can require the Into trait.
+        let response = self
+            .client
+            .source_transform_fn(<Message as Into<SourceTransformRequest>>::into(message))
+            .await?
+            .into_inner();
 
         let mut messages = Vec::new();
         for result in response.results {

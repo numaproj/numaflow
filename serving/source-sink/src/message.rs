@@ -1,5 +1,12 @@
 use std::collections::HashMap;
 
+use crate::error::Error;
+use crate::shared::{prost_timestamp_from_utc, utc_from_timestamp};
+use crate::sink::proto;
+use crate::source::proto::read_response;
+use crate::transformer::proto::SourceTransformRequest;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine;
 use chrono::{DateTime, Utc};
 
 /// A message that is sent from the source to the sink.
@@ -24,4 +31,54 @@ pub(crate) struct Offset {
     pub(crate) offset: String,
     /// partition id of the message
     pub(crate) partition_id: i32,
+}
+
+/// Convert the [`Message`] to [`SourceTransformRequest`]
+impl From<Message> for SourceTransformRequest {
+    fn from(message: Message) -> Self {
+        Self {
+            keys: message.keys,
+            value: message.value,
+            event_time: prost_timestamp_from_utc(message.event_time),
+            watermark: None,
+            headers: message.headers,
+        }
+    }
+}
+
+/// Convert [`read_response::Result`] to [`Message`]
+impl TryFrom<read_response::Result> for Message {
+    type Error = crate::Error;
+
+    fn try_from(result: read_response::Result) -> std::result::Result<Self, Self::Error> {
+        let source_offset = match result.offset {
+            Some(o) => Offset {
+                offset: BASE64_STANDARD.encode(o.offset),
+                partition_id: o.partition_id,
+            },
+            None => return Err(Error::SourceError("Offset not found".to_string())),
+        };
+
+        Ok(Message {
+            keys: result.keys,
+            value: result.payload,
+            offset: source_offset,
+            event_time: utc_from_timestamp(result.event_time),
+            headers: result.headers,
+        })
+    }
+}
+
+/// Convert [`Message`] to [`proto::SinkRequest`]
+impl From<Message> for proto::SinkRequest {
+    fn from(message: Message) -> Self {
+        Self {
+            keys: message.keys,
+            value: message.value,
+            event_time: prost_timestamp_from_utc(message.event_time),
+            watermark: None,
+            id: format!("{}-{}", message.offset.partition_id, message.offset.offset),
+            headers: message.headers,
+        }
+    }
 }

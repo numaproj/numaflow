@@ -8,7 +8,8 @@ use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
-/// transformer is present, and writing the messages to the sinK and acknowledging the messages.
+/// transformer is present,  writing the messages to the sink, and the acknowledging the messages
+/// back to the source.
 pub(crate) struct Forwarder {
     source_client: SourceClient,
     sink_client: SinkClient,
@@ -37,8 +38,12 @@ impl Forwarder {
         })
     }
 
+    /// run starts the forward-a-chunk loop and exits only after a chunk has been forwarded and ack'ed.
+    /// this means that, in the happy path scenario a block is always completely processed.
+    /// this function will return on any error and will cause end up in a non-0 exit code.   
     pub(crate) async fn run(&mut self) -> Result<()> {
         loop {
+            // two arms, either shutdown or forward-a-chunk
             tokio::select! {
                 _ = &mut self.shutdown_rx => {
                     info!("Shutdown signal received, stopping forwarder...");
@@ -71,9 +76,15 @@ impl Forwarder {
                     };
 
                     // Write messages to the sink
+                    // TODO: should we retry writing? what if the error is transient?
+                    //    we could rely on gRPC retries and say that any error that is bubbled up is worthy of non-0 exit.
+                    //    we need to confirm this via FMEA tests.
                     self.sink_client.sink_fn(transformed_messages).await?;
 
                     // Acknowledge the messages
+                    // TODO: should we retry acking? what if the error is transient?
+                    //    we could rely on gRPC retries and say that any error that is bubbled up is worthy of non-0 exit.
+                    //    we need to confirm this via FMEA tests.
                     self.source_client.ack_fn(offsets).await?;
                 }
             }
