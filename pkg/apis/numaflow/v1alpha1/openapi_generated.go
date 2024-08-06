@@ -70,6 +70,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle":                      schema_pkg_apis_numaflow_v1alpha1_Lifecycle(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log":                            schema_pkg_apis_numaflow_v1alpha1_Log(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata":                       schema_pkg_apis_numaflow_v1alpha1_Metadata(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertex":                     schema_pkg_apis_numaflow_v1alpha1_MonoVertex(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexList":                 schema_pkg_apis_numaflow_v1alpha1_MonoVertexList(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexSpec":                 schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexStatus":               schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NativeRedis":                    schema_pkg_apis_numaflow_v1alpha1_NativeRedis(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsAuth":                       schema_pkg_apis_numaflow_v1alpha1_NatsAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource":                     schema_pkg_apis_numaflow_v1alpha1_NatsSource(ref),
@@ -2744,6 +2748,364 @@ func schema_pkg_apis_numaflow_v1alpha1_Metadata(ref common.ReferenceCallback) co
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_MonoVertex(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexStatus"),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexSpec", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_MonoVertexList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertex"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertex", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"source": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source"),
+						},
+					},
+					"sink": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink"),
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Metadata sets the pods's metadata, i.e. annotations and labels",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata"),
+						},
+					},
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"tolerations": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod's tolerations.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.Toleration"),
+									},
+								},
+							},
+						},
+					},
+					"securityContext": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field.",
+							Ref:         ref("k8s.io/api/core/v1.PodSecurityContext"),
+						},
+					},
+					"imagePullSecrets": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-patch-merge-key": "name",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.LocalObjectReference"),
+									},
+								},
+							},
+						},
+					},
+					"priorityClassName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"affinity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
+							Ref:         ref("k8s.io/api/core/v1.Affinity"),
+						},
+					},
+					"serviceAccountName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ServiceAccountName applied to the pod",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"runtimeClassName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"automountServiceAccountToken": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"dnsPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"dnsConfig": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Specifies the DNS parameters of a pod. Parameters specified here will be merged to the generated DNS configuration based on DNSPolicy.",
+							Ref:         ref("k8s.io/api/core/v1.PodDNSConfig"),
+						},
+					},
+					"containerTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Container template for the main numa container.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+						},
+					},
+					"volumes": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-patch-merge-key": "name",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.Volume"),
+									},
+								},
+							},
+						},
+					},
+					"scale": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Settings for autoscaling",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale"),
+						},
+					},
+					"initContainers": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of customized init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.Container"),
+									},
+								},
+							},
+						},
+					},
+					"sidecars": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of customized sidecar containers belonging to the pod.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.Container"),
+									},
+								},
+							},
+						},
+					},
+					"daemonTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Template for the daemon service deployment.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-patch-merge-key": "type",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions are the latest available observations of a resource's current state.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+									},
+								},
+							},
+						},
+					},
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"lastUpdated": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
 	}
 }
 

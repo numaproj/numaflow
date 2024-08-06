@@ -818,6 +818,79 @@ message Metadata {
   map<string, string> labels = 2;
 }
 
+// +genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:shortName=mv
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:openapi-gen=true
+message MonoVertex {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  optional MonoVertexSpec spec = 2;
+
+  // +optional
+  optional MonoVertexStatus status = 3;
+}
+
+// +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+message MonoVertexList {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+
+  repeated MonoVertex items = 2;
+}
+
+message MonoVertexSpec {
+  optional Source source = 1;
+
+  optional Sink sink = 2;
+
+  // +optional
+  optional AbstractPodTemplate abstractPodTemplate = 3;
+
+  // Container template for the main numa container.
+  // +optional
+  optional ContainerTemplate containerTemplate = 4;
+
+  // +optional
+  // +patchStrategy=merge
+  // +patchMergeKey=name
+  repeated k8s.io.api.core.v1.Volume volumes = 5;
+
+  // Settings for autoscaling
+  // +optional
+  optional Scale scale = 6;
+
+  // List of customized init containers belonging to the pod.
+  // More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
+  // +optional
+  repeated k8s.io.api.core.v1.Container initContainers = 7;
+
+  // List of customized sidecar containers belonging to the pod.
+  // +optional
+  repeated k8s.io.api.core.v1.Container sidecars = 8;
+
+  // Template for the daemon service deployment.
+  // +optional
+  optional DaemonTemplate daemonTemplate = 9;
+}
+
+message MonoVertexStatus {
+  optional Status status = 1;
+
+  optional string phase = 2;
+
+  optional string message = 3;
+
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastUpdated = 4;
+
+  optional int64 observedGeneration = 11;
+}
+
 message NativeRedis {
   // Redis version, such as "6.0.16"
   optional string version = 1;

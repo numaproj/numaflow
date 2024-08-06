@@ -32,6 +32,10 @@ func (c *FakeNumaflowV1alpha1) InterStepBufferServices(namespace string) v1alpha
 	return &FakeInterStepBufferServices{c, namespace}
 }
 
+func (c *FakeNumaflowV1alpha1) MonoVertices(namespace string) v1alpha1.MonoVertexInterface {
+	return &FakeMonoVertices{c, namespace}
+}
+
 func (c *FakeNumaflowV1alpha1) Pipelines(namespace string) v1alpha1.PipelineInterface {
 	return &FakePipelines{c, namespace}
 }
