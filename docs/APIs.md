@@ -4081,12 +4081,6 @@ BufferServiceConfig </a> </em>
 
 <td>
 
-<p>
-
-ObservedGeneration stores the generation value observed by the
-controller.
-</p>
-
 </td>
 
 </tr>
@@ -6680,12 +6674,6 @@ Kubernetes meta/v1.Time </a> </em>
 </td>
 
 <td>
-
-<p>
-
-ObservedGeneration stores the generation value observed by the
-controller.
-</p>
 
 </td>
 
@@ -9876,35 +9864,28 @@ Description
 
 <td>
 
+<code>Status</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Status"> Status </a> </em>
+</td>
+
+<td>
+
+<p>
+
+(Members of <code>Status</code> are embedded into this type.)
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>phase</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.VertexPhase"> VertexPhase </a>
 </em>
-</td>
-
-<td>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>reason</code></br> <em> string </em>
-</td>
-
-<td>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>message</code></br> <em> string </em>
 </td>
 
 <td>
@@ -9943,6 +9924,32 @@ Description
 
 <td>
 
+<code>reason</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>message</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>lastScaledAt</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#time-v1-meta">
 Kubernetes meta/v1.Time </a> </em>
@@ -9958,35 +9965,10 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
-<code>Status</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Status"> Status </a> </em>
-</td>
-
-<td>
-
-<p>
-
-(Members of <code>Status</code> are embedded into this type.)
-</p>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
 <code>observedGeneration</code></br> <em> int64 </em>
 </td>
 
 <td>
-
-<p>
-
-ObservedGeneration stores the generation value observed by the
-controller.
-</p>
 
 </td>
 

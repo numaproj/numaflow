@@ -28,15 +28,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// +kubebuilder:validation:Enum="";Pending;Running;Succeeded;Failed
+// +kubebuilder:validation:Enum="";Running;Failed
 type VertexPhase string
 
 const (
-	VertexPhaseUnknown   VertexPhase = ""
-	VertexPhasePending   VertexPhase = "Pending"
-	VertexPhaseRunning   VertexPhase = "Running"
-	VertexPhaseSucceeded VertexPhase = "Succeeded"
-	VertexPhaseFailed    VertexPhase = "Failed"
+	VertexPhaseUnknown VertexPhase = ""
+	VertexPhaseRunning VertexPhase = "Running"
+	VertexPhaseFailed  VertexPhase = "Failed"
 
 	// VertexConditionPodsHealthy has the status True when all the vertex pods are healthy.
 	VertexConditionPodsHealthy ConditionType = "PodsHealthy"
@@ -59,10 +57,11 @@ const ServingBinary = "/bin/serve"
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`
-// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 type Vertex struct {
@@ -825,15 +824,14 @@ func (v VertexSpec) getType() containerSupplier {
 }
 
 type VertexStatus struct {
-	Phase        VertexPhase `json:"phase" protobuf:"bytes,1,opt,name=phase,casttype=VertexPhase"`
-	Reason       string      `json:"reason,omitempty" protobuf:"bytes,6,opt,name=reason"`
-	Message      string      `json:"message,omitempty" protobuf:"bytes,2,opt,name=message"`
-	Replicas     uint32      `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
-	Selector     string      `json:"selector,omitempty" protobuf:"bytes,5,opt,name=selector"`
-	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,4,opt,name=lastScaledAt"`
-	Status       `json:",inline" protobuf:"bytes,7,opt,name=status"`
-	// ObservedGeneration stores the generation value observed by the controller.
-	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,8,opt,name=observedGeneration"`
+	Status             `json:",inline" protobuf:"bytes,1,opt,name=status"`
+	Phase              VertexPhase `json:"phase" protobuf:"bytes,2,opt,name=phase,casttype=VertexPhase"`
+	Replicas           uint32      `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
+	Selector           string      `json:"selector,omitempty" protobuf:"bytes,4,opt,name=selector"`
+	Reason             string      `json:"reason,omitempty" protobuf:"bytes,5,opt,name=reason"`
+	Message            string      `json:"message,omitempty" protobuf:"bytes,6,opt,name=message"`
+	LastScaledAt       metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,7,opt,name=lastScaledAt"`
+	ObservedGeneration int64       `json:"observedGeneration,omitempty" protobuf:"varint,8,opt,name=observedGeneration"`
 }
 
 func (vs *VertexStatus) MarkPhase(phase VertexPhase, reason, message string) {
@@ -842,10 +840,12 @@ func (vs *VertexStatus) MarkPhase(phase VertexPhase, reason, message string) {
 	vs.Message = message
 }
 
+// MarkPhaseFailed marks the phase as failed with the given reason and message.
 func (vs *VertexStatus) MarkPhaseFailed(reason, message string) {
 	vs.MarkPhase(VertexPhaseFailed, reason, message)
 }
 
+// MarkPhaseRunning marks the phase as running.
 func (vs *VertexStatus) MarkPhaseRunning() {
 	vs.MarkPhase(VertexPhaseRunning, "", "")
 }
@@ -853,6 +853,8 @@ func (vs *VertexStatus) MarkPhaseRunning() {
 // MarkPodNotHealthy marks the pod not healthy with the given reason and message.
 func (vs *VertexStatus) MarkPodNotHealthy(reason, message string) {
 	vs.MarkFalse(VertexConditionPodsHealthy, reason, message)
+	vs.Reason = reason
+	vs.Message = "Degraded: " + message
 }
 
 // MarkPodHealthy marks the pod as healthy with the given reason and message.

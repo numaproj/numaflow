@@ -20,12 +20,12 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
-    - jsonPath: .status.message
-      name: Message
-      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - jsonPath: .status.message
+      name: Message
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -69,9 +69,6 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
-    - jsonPath: .status.message
-      name: Message
-      type: string
     - jsonPath: .status.vertexCount
       name: Vertices
       type: integer
@@ -98,6 +95,9 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - jsonPath: .status.message
+      name: Message
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
@@ -141,17 +141,20 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
-    - jsonPath: .status.reason
-      name: Reason
-      type: string
-    - jsonPath: .status.message
-      name: Message
-      type: string
     - jsonPath: .spec.replicas
       name: Desired
       type: string
     - jsonPath: .status.replicas
       name: Current
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - jsonPath: .status.reason
+      name: Reason
+      type: string
+    - jsonPath: .status.message
+      name: Message
       type: string
     name: v1alpha1
     schema:

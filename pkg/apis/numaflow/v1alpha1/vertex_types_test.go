@@ -492,8 +492,8 @@ func Test_getType(t *testing.T) {
 
 func TestVertexMarkPhase(t *testing.T) {
 	s := VertexStatus{}
-	s.MarkPhase(VertexPhasePending, "reason", "message")
-	assert.Equal(t, VertexPhasePending, s.Phase)
+	s.MarkPhase(VertexPhaseRunning, "reason", "message")
+	assert.Equal(t, VertexPhaseRunning, s.Phase)
 	assert.Equal(t, "reason", s.Reason)
 	assert.Equal(t, "message", s.Message)
 }

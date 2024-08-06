@@ -285,6 +285,7 @@ func (df *DataForward) replayForAlignedWindows(ctx context.Context, discoveredWA
 func (df *DataForward) forwardAChunk(ctx context.Context) {
 	readMessages, err := df.fromBufferPartition.Read(ctx, df.opts.readBatchSize)
 	totalBytes := 0
+	dataBytes := 0
 	if err != nil {
 		df.log.Errorw("Failed to read from isb", zap.Error(err))
 		metrics.ReadMessagesError.With(map[string]string{
@@ -367,7 +368,11 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 		m.Watermark = time.Time(processorWM)
 		totalBytes += len(m.Payload)
+		if m.Kind == isb.Data {
+			dataBytes += len(m.Payload)
+		}
 	}
+
 	metrics.ReadBytesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
@@ -375,6 +380,14 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
 	}).Add(float64(totalBytes))
+
+	metrics.ReadDataBytesCount.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
+	}).Add(float64(dataBytes))
 
 	// readMessages has to be written to PBQ, acked, etc.
 	df.process(ctx, readMessages)

@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// +kubebuilder:validation:Enum="";Running;Succeeded;Failed;Pausing;Paused;Deleting
+// +kubebuilder:validation:Enum="";Running;Failed;Pausing;Paused;Deleting
 type PipelinePhase string
 
 const (
@@ -59,7 +59,6 @@ const (
 // +kubebuilder:resource:shortName=pl
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +kubebuilder:printcolumn:name="Vertices",type=integer,JSONPath=`.status.vertexCount`
 // +kubebuilder:printcolumn:name="Sources",type=integer,JSONPath=`.status.sourceCount`,priority=10
 // +kubebuilder:printcolumn:name="Sinks",type=integer,JSONPath=`.status.sinkCount`,priority=10
@@ -67,6 +66,7 @@ const (
 // +kubebuilder:printcolumn:name="Map UDFs",type=integer,JSONPath=`.status.mapUDFCount`,priority=10
 // +kubebuilder:printcolumn:name="Reduce UDFs",type=integer,JSONPath=`.status.reduceUDFCount`,priority=10
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 type Pipeline struct {
@@ -609,18 +609,17 @@ type PipelineLimits struct {
 }
 
 type PipelineStatus struct {
-	Status         `json:",inline" protobuf:"bytes,1,opt,name=status"`
-	Phase          PipelinePhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=PipelinePhase"`
-	Message        string        `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
-	LastUpdated    metav1.Time   `json:"lastUpdated,omitempty" protobuf:"bytes,4,opt,name=lastUpdated"`
-	VertexCount    *uint32       `json:"vertexCount,omitempty" protobuf:"varint,5,opt,name=vertexCount"`
-	SourceCount    *uint32       `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
-	SinkCount      *uint32       `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
-	UDFCount       *uint32       `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
-	MapUDFCount    *uint32       `json:"mapUDFCount,omitempty" protobuf:"varint,9,opt,name=mapUDFCount"`
-	ReduceUDFCount *uint32       `json:"reduceUDFCount,omitempty" protobuf:"varint,10,opt,name=reduceUDFCount"`
-	// ObservedGeneration stores the generation value observed by the controller.
-	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,11,opt,name=observedGeneration"`
+	Status             `json:",inline" protobuf:"bytes,1,opt,name=status"`
+	Phase              PipelinePhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=PipelinePhase"`
+	Message            string        `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
+	LastUpdated        metav1.Time   `json:"lastUpdated,omitempty" protobuf:"bytes,4,opt,name=lastUpdated"`
+	VertexCount        *uint32       `json:"vertexCount,omitempty" protobuf:"varint,5,opt,name=vertexCount"`
+	SourceCount        *uint32       `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
+	SinkCount          *uint32       `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
+	UDFCount           *uint32       `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
+	MapUDFCount        *uint32       `json:"mapUDFCount,omitempty" protobuf:"varint,9,opt,name=mapUDFCount"`
+	ReduceUDFCount     *uint32       `json:"reduceUDFCount,omitempty" protobuf:"varint,10,opt,name=reduceUDFCount"`
+	ObservedGeneration int64         `json:"observedGeneration,omitempty" protobuf:"varint,11,opt,name=observedGeneration"`
 }
 
 // SetVertexCounts sets the counts of vertices.
@@ -683,15 +682,53 @@ func (pls *PipelineStatus) MarkDeployed() {
 	pls.MarkTrue(PipelineConditionDeployed)
 }
 
-// MarkPhaseRunning set the Pipeline has been running.
-func (pls *PipelineStatus) MarkPhaseRunning() {
-	pls.SetPhase(PipelinePhaseRunning, "")
-}
-
 // MarkDeployFailed set the Pipeline deployment failed
 func (pls *PipelineStatus) MarkDeployFailed(reason, message string) {
 	pls.MarkFalse(PipelineConditionDeployed, reason, message)
 	pls.SetPhase(PipelinePhaseFailed, message)
+}
+
+// MarkVerticesHealthy set the daemon service of the pipeline is healthy.
+func (pls *PipelineStatus) MarkDaemonServiceHealthy() {
+	pls.MarkTrue(PipelineConditionDaemonServiceHealthy)
+}
+
+// MarkDaemonServiceUnHealthy set the daemon service of the pipeline is unhealthy.
+func (pls *PipelineStatus) MarkDaemonServiceUnHealthy(reason, message string) {
+	pls.MarkFalse(PipelineConditionDaemonServiceHealthy, reason, message)
+	pls.Message = "Degraded: " + message
+}
+
+// MarkSideInputsManagersHealthy set the Side Inputs managers of the pipeline are healthy.
+func (pls *PipelineStatus) MarkSideInputsManagersHealthy() {
+	pls.MarkTrue(PipelineConditionSideInputsManagersHealthy)
+}
+
+// MarkSideInputsManagersHealthyWithReason set the Side Inputs managers of the pipeline are healthy with the given reason.
+func (pls *PipelineStatus) MarkSideInputsManagersHealthyWithReason(reason, message string) {
+	pls.MarkTrueWithReason(PipelineConditionSideInputsManagersHealthy, reason, message)
+}
+
+// MarkSideInputsManagersUnHealthy set the Side Inputs managers of the pipeline are unhealthy.
+func (pls *PipelineStatus) MarkSideInputsManagersUnHealthy(reason, message string) {
+	pls.MarkFalse(PipelineConditionSideInputsManagersHealthy, reason, message)
+	pls.Message = "Degraded: " + message
+}
+
+// MarkVerticesHealthy set the vertices of the pipeline are healthy.
+func (pls *PipelineStatus) MarkVerticesHealthy() {
+	pls.MarkTrueWithReason(PipelineConditionVerticesHealthy, "Successful", "All vertices are healthy")
+}
+
+// MarkVerticesUnHealthy set the vertices of the pipeline are unhealthy with the given reason.
+func (pls *PipelineStatus) MarkVerticesUnHealthy(reason, message string) {
+	pls.MarkFalse(PipelineConditionVerticesHealthy, reason, message)
+	pls.Message = "Degraded: " + message
+}
+
+// MarkPhaseRunning set the Pipeline has been running.
+func (pls *PipelineStatus) MarkPhaseRunning() {
+	pls.SetPhase(PipelinePhaseRunning, "")
 }
 
 // MarkPhasePaused set the Pipeline has been paused.
@@ -729,16 +766,6 @@ func (pls *PipelineStatus) IsHealthy() bool {
 	default:
 		return false
 	}
-}
-
-// MarkServiceNotHealthy marks a service as not healthy with the given reason and message.
-func (pls *PipelineStatus) MarkServiceNotHealthy(conditionType ConditionType, reason, message string) {
-	pls.MarkFalse(conditionType, reason, message)
-}
-
-// MarkServiceHealthy marks a service as healthy with the given reason and message.
-func (pls *PipelineStatus) MarkServiceHealthy(conditionType ConditionType, reason, message string) {
-	pls.MarkTrueWithReason(conditionType, reason, message)
 }
 
 // +kubebuilder:object:root=true
