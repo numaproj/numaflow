@@ -25,10 +25,11 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 uuid = { version = "1.10.0", features = ["v4"] }
 tempfile = "3.10.1"
-redis = { version = "0.25.3", features = ["tokio-comp", "aio", "connection-manager"] }
+redis = { version = "0.26.0", features = ["tokio-comp", "aio", "connection-manager"] }
 config = "0.14.0"
 trait-variant = "0.1.2"
 chrono = { version = "0.4", features = ["serde"] }
 # intern
 backoff = { path = "backoff" }
 base64 = "0.22.1"
+
