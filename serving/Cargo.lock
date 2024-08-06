@@ -2536,6 +2536,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "sourcer-sinker"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "hyper-util",
+ "log",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "numaflow",
+ "prost",
+ "prost-types",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tonic",
+ "tonic-build",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
