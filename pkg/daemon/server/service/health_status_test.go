@@ -107,6 +107,21 @@ func TestNewHealthChecker(t *testing.T) {
 	}
 }
 
+func TestHealthThresholds(t *testing.T) {
+
+	hc := NewHealthChecker(&v1alpha1.Pipeline{}, &mockISBService{})
+	a, _ := hc.GetThresholds()
+	assert.Equal(t, a, float64(72))
+	//assert.Equal(t, b, float64(61.2))
+	forty := uint32(40)
+	hc.pipeline.Spec.Limits = &v1alpha1.PipelineLimits{BufferUsageLimit: &forty}
+	hc.udpateThresholds()
+	c, _ := hc.GetThresholds()
+	assert.Equal(t, c, float64(36))
+	//assert.Equal(t, d, float64(30.6))
+
+}
+
 type mockISBService struct {
 	isbsvc.ISBService
 }
@@ -675,6 +690,42 @@ func TestAssignStateToTimeline(t *testing.T) {
 		})
 	}
 }
+
+// func Scalalbility_error_test(t *testing.T) {
+// 	pipelineName := "simple-pipeline"
+// 	namespace := "numaflow-system"
+// 	edges := []v1alpha1.Edge{
+// 		{
+// 			From: "in",
+// 			To:   "cat",
+// 		},
+// 		{
+// 			From: "cat",
+// 			To:   "out",
+// 		},
+// 	}
+// 	pipeline := &v1alpha1.Pipeline{
+// 		ObjectMeta: metav1.ObjectMeta{
+// 			Name:      pipelineName,
+// 			Namespace: namespace,
+// 		},
+// 		Spec: v1alpha1.PipelineSpec{
+// 			Vertices: []v1alpha1.AbstractVertex{
+// 				{Name: "in", Source: &v1alpha1.Source{}},
+// 				{Name: "cat", UDF: &v1alpha1.UDF{}},
+// 				{Name: "out", Sink: &v1alpha1.Sink{}},
+// 			},
+// 			Edges: edges,
+// 		},
+// 	}
+
+// 	for v := range pipeline.Spec.Vertices {
+// 		pipeline.Spec.Vertices[v].Scale = v1alpha1.Scale{Disabled: true}
+// 	}
+
+// 	pipeline.
+
+// }
 
 func TestConvertVertexStateToPipelineState(t *testing.T) {
 	tests := []struct {

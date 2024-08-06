@@ -61,9 +61,9 @@ const (
 // HealthThresholds are the thresholds used to compute the health of a vertex
 var (
 	// criticalBufferThreshold is the threshold above which the health of a vertex is critical
-	criticalBufferThreshold = v1alpha1.DefaultBufferUsageLimit * 90 // 95
+	criticalBufferThreshold = v1alpha1.DefaultBufferUsageLimit * float64(90) // 95
 	// warningBufferThreshold is the threshold above which the health of a vertex is warning
-	warningBufferThreshold = (0.85) * criticalBufferThreshold // 80
+	warningBufferThreshold = float64(0.85) * criticalBufferThreshold // 80
 )
 
 // Dataflow states
@@ -259,6 +259,10 @@ func (hc *HealthChecker) getPipelineVertexDataCriticality(ctx context.Context) (
 func (hc *HealthChecker) udpateThresholds() {
 	criticalBufferThreshold = float64(*hc.pipeline.Spec.Limits.BufferUsageLimit) * 0.9
 	warningBufferThreshold = criticalBufferThreshold * 0.85
+}
+
+func (hc *HealthChecker) GetThresholds() (float64, float64) {
+	return criticalBufferThreshold, warningBufferThreshold
 }
 
 // updateUsageTimeline is used to update the usage timeline for a given buffer list
