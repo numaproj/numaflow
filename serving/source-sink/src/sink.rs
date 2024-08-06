@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use tonic::transport::Channel;
 use tonic::Request;
 
@@ -11,15 +9,38 @@ pub mod proto {
     tonic::include_proto!("sink.v1");
 }
 
+const SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";
+const SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/sink-server-info";
+
+/// SinkConfig is the configuration for the sink server.
+#[derive(Debug, Clone)]
+pub struct SinkConfig {
+    pub socket_path: String,
+    pub server_info_file: String,
+    pub max_message_size: usize,
+}
+
+impl Default for SinkConfig {
+    fn default() -> Self {
+        SinkConfig {
+            socket_path: SINK_SOCKET.to_string(),
+            server_info_file: SINK_SERVER_INFO_FILE.to_string(),
+            max_message_size: 64 * 1024 * 1024, // 64 MB
+        }
+    }
+}
+
 /// SinkClient is a client to interact with the sink server.
 pub struct SinkClient {
     client: proto::sink_client::SinkClient<Channel>,
 }
 
 impl SinkClient {
-    pub(crate) async fn connect(uds_path: PathBuf) -> Result<Self> {
-        let channel = connect_with_uds(uds_path).await?;
-        let client = proto::sink_client::SinkClient::new(channel);
+    pub(crate) async fn connect(config: SinkConfig) -> Result<Self> {
+        let channel = connect_with_uds(config.socket_path.into()).await?;
+        let client = proto::sink_client::SinkClient::new(channel)
+            .max_decoding_message_size(config.max_message_size)
+            .max_encoding_message_size(config.max_message_size);
         Ok(Self { client })
     }
 
@@ -101,13 +122,14 @@ mod tests {
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("sink.sock");
+        let server_info_file = tmp_dir.path().join("sink-server-info");
 
+        let server_info = server_info_file.clone();
         let server_socket = sock_file.clone();
         let server_handle = tokio::spawn(async move {
-            let server_info_file = tmp_dir.path().join("sink-server-info");
             sink::Server::new(Logger)
                 .with_socket_file(server_socket)
-                .with_server_info_file(server_info_file)
+                .with_server_info_file(server_info)
                 .start_with_shutdown(shutdown_rx)
                 .await
                 .unwrap();
@@ -116,9 +138,13 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let mut sink_client = SinkClient::connect(sock_file)
-            .await
-            .expect("failed to connect to sink server");
+        let mut sink_client = SinkClient::connect(SinkConfig {
+            socket_path: sock_file.to_str().unwrap().to_string(),
+            server_info_file: server_info_file.to_str().unwrap().to_string(),
+            max_message_size: 4 * 1024 * 1024,
+        })
+        .await
+        .expect("failed to connect to sink server");
 
         let messages = vec![
             Message {

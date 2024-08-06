@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use tonic::transport::Channel;
 use tonic::Request;
 
@@ -12,6 +10,27 @@ pub mod proto {
     tonic::include_proto!("sourcetransformer.v1");
 }
 
+const TRANSFORMER_SOCKET: &str = "/var/run/numaflow/sourcetransform.sock";
+const TRANSFORMER_SERVER_INFO_FILE: &str = "/var/run/numaflow/transformer-server-info";
+
+/// TransformerConfig is the configuration for the transformer server.
+#[derive(Debug, Clone)]
+pub struct TransformerConfig {
+    pub socket_path: String,
+    pub server_info_file: String,
+    pub max_message_size: usize,
+}
+
+impl Default for TransformerConfig {
+    fn default() -> Self {
+        TransformerConfig {
+            socket_path: TRANSFORMER_SOCKET.to_string(),
+            server_info_file: TRANSFORMER_SERVER_INFO_FILE.to_string(),
+            max_message_size: 64 * 1024 * 1024, // 64 MB
+        }
+    }
+}
+
 /// TransformerClient is a client to interact with the transformer server.
 #[derive(Clone)]
 pub struct TransformerClient {
@@ -19,9 +38,11 @@ pub struct TransformerClient {
 }
 
 impl TransformerClient {
-    pub(crate) async fn connect(uds_path: PathBuf) -> Result<Self> {
-        let channel = connect_with_uds(uds_path).await?;
-        let client = proto::source_transform_client::SourceTransformClient::new(channel);
+    pub(crate) async fn connect(config: TransformerConfig) -> Result<Self> {
+        let channel = connect_with_uds(config.socket_path.into()).await?;
+        let client = proto::source_transform_client::SourceTransformClient::new(channel)
+            .max_decoding_message_size(config.max_message_size)
+            .max_encoding_message_size(config.max_message_size);
         Ok(Self { client })
     }
 
@@ -69,7 +90,7 @@ mod tests {
     use numaflow::sourcetransform;
     use tempfile::TempDir;
 
-    use crate::transformer::TransformerClient;
+    use crate::transformer::{TransformerClient, TransformerConfig};
 
     struct NowCat;
 
@@ -91,13 +112,14 @@ mod tests {
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = TempDir::new()?;
         let sock_file = tmp_dir.path().join("sourcetransform.sock");
+        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
 
+        let server_info = server_info_file.clone();
         let server_socket = sock_file.clone();
         let handle = tokio::spawn(async move {
-            let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
             sourcetransform::Server::new(NowCat)
                 .with_socket_file(server_socket)
-                .with_server_info_file(server_info_file)
+                .with_server_info_file(server_info)
                 .start_with_shutdown(shutdown_rx)
                 .await
                 .expect("server failed");
@@ -106,7 +128,12 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let mut client = TransformerClient::connect(sock_file).await?;
+        let mut client = TransformerClient::connect(TransformerConfig {
+            socket_path: sock_file.to_str().unwrap().to_string(),
+            server_info_file: server_info_file.to_str().unwrap().to_string(),
+            max_message_size: 4 * 1024 * 1024,
+        })
+        .await?;
 
         let message = crate::message::Message {
             keys: vec!["first".into(), "second".into()],

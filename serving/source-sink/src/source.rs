@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use tokio_stream::StreamExt;
@@ -14,6 +12,27 @@ pub mod proto {
     tonic::include_proto!("source.v1");
 }
 
+const SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
+const SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/source-server-info";
+
+/// SourceConfig is the configuration for the source server.
+#[derive(Debug, Clone)]
+pub struct SourceConfig {
+    pub socket_path: String,
+    pub server_info_file: String,
+    pub max_message_size: usize,
+}
+
+impl Default for SourceConfig {
+    fn default() -> Self {
+        SourceConfig {
+            socket_path: SOURCE_SOCKET.to_string(),
+            server_info_file: SOURCE_SERVER_INFO_FILE.to_string(),
+            max_message_size: 64 * 1024 * 1024, // 64 MB
+        }
+    }
+}
+
 /// SourceClient is a client to interact with the source server.
 #[derive(Debug, Clone)]
 pub(crate) struct SourceClient {
@@ -21,9 +40,11 @@ pub(crate) struct SourceClient {
 }
 
 impl SourceClient {
-    pub(crate) async fn connect(uds_path: PathBuf) -> Result<Self> {
-        let channel = connect_with_uds(uds_path).await?;
-        let client = proto::source_client::SourceClient::new(channel);
+    pub(crate) async fn connect(config: SourceConfig) -> Result<Self> {
+        let channel = connect_with_uds(config.socket_path.into()).await?;
+        let client = proto::source_client::SourceClient::new(channel)
+            .max_encoding_message_size(config.max_message_size)
+            .max_decoding_message_size(config.max_message_size);
         Ok(Self { client })
     }
 
@@ -116,7 +137,7 @@ mod tests {
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use tokio::sync::mpsc::Sender;
 
-    use crate::source::SourceClient;
+    use crate::source::{SourceClient, SourceConfig};
 
     struct SimpleSource {
         num: usize,
@@ -181,13 +202,14 @@ mod tests {
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("source.sock");
+        let server_info_file = tmp_dir.path().join("source-server-info");
 
+        let server_info = server_info_file.clone();
         let server_socket = sock_file.clone();
         let server_handle = tokio::spawn(async move {
-            let server_info_file = tmp_dir.path().join("source-server-info");
             source::Server::new(SimpleSource::new(10))
                 .with_socket_file(server_socket)
-                .with_server_info_file(server_info_file)
+                .with_server_info_file(server_info)
                 .start_with_shutdown(shutdown_rx)
                 .await
                 .unwrap();
@@ -196,9 +218,13 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let mut source_client = SourceClient::connect(sock_file)
-            .await
-            .expect("failed to connect to source server");
+        let mut source_client = SourceClient::connect(SourceConfig {
+            socket_path: sock_file.to_str().unwrap().to_string(),
+            server_info_file: server_info_file.to_str().unwrap().to_string(),
+            max_message_size: 4 * 1024 * 1024,
+        })
+        .await
+        .expect("failed to connect to source server");
 
         let response = source_client.is_ready().await.unwrap();
         assert_eq!(response.ready, true);

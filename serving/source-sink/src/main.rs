@@ -1,7 +1,11 @@
+use std::env;
 use std::net::SocketAddr;
 
 use tracing::error;
 
+use sourcer_sinker::sink::SinkConfig;
+use sourcer_sinker::source::SourceConfig;
+use sourcer_sinker::transformer::TransformerConfig;
 use sourcer_sinker::{metrics::start_metrics_server, run_forwarder};
 
 #[tokio::main]
@@ -16,8 +20,16 @@ async fn main() {
         }
     });
 
+    let source_config = SourceConfig::default();
+    let sink_config = SinkConfig::default();
+    let transformer_config = if env::var("NUMAFLOW_TRANSFORMER").is_ok() {
+        Some(TransformerConfig::default())
+    } else {
+        None
+    };
+
     // Run the forwarder
-    if let Err(e) = run_forwarder(None).await {
+    if let Err(e) = run_forwarder(None, source_config, sink_config, transformer_config).await {
         error!("Application error: {:?}", e);
     }
 }

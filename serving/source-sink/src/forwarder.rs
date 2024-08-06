@@ -92,9 +92,9 @@ mod tests {
     use tokio::sync::mpsc::Sender;
 
     use crate::forwarder::Forwarder;
-    use crate::sink::SinkClient;
-    use crate::source::SourceClient;
-    use crate::transformer::TransformerClient;
+    use crate::sink::{SinkClient, SinkConfig};
+    use crate::source::{SourceClient, SourceConfig};
+    use crate::transformer::{TransformerClient, TransformerConfig};
 
     struct SimpleSource {
         yet_to_be_acked: std::sync::RwLock<HashSet<String>>,
@@ -227,64 +227,82 @@ mod tests {
         let (source_shutdown_tx, source_shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let source_sock_file = tmp_dir.path().join("source.sock");
+        let server_info_file = tmp_dir.path().join("source-server-info");
 
+        let server_info = server_info_file.clone();
         let source_socket = source_sock_file.clone();
         let source_server_handle = tokio::spawn(async move {
-            let server_info_file = tmp_dir.path().join("source-server-info");
             source::Server::new(SimpleSource::new())
                 .with_socket_file(source_socket)
-                .with_server_info_file(server_info_file)
+                .with_server_info_file(server_info)
                 .start_with_shutdown(source_shutdown_rx)
                 .await
                 .unwrap();
         });
+        let source_config = SourceConfig {
+            socket_path: source_sock_file.to_str().unwrap().to_string(),
+            server_info_file: server_info_file.to_str().unwrap().to_string(),
+            max_message_size: 4 * 1024 * 1024,
+        };
 
         // Start the sink server
         let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
         let sink_tmp_dir = tempfile::TempDir::new().unwrap();
         let sink_sock_file = sink_tmp_dir.path().join("sink.sock");
+        let server_info_file = sink_tmp_dir.path().join("sink-server-info");
 
+        let server_info = server_info_file.clone();
         let sink_socket = sink_sock_file.clone();
         let sink_server_handle = tokio::spawn(async move {
-            let server_info_file = sink_tmp_dir.path().join("sink-server-info");
             sink::Server::new(InMemorySink::new(sink_tx))
                 .with_socket_file(sink_socket)
-                .with_server_info_file(server_info_file)
+                .with_server_info_file(server_info)
                 .start_with_shutdown(sink_shutdown_rx)
                 .await
                 .unwrap();
         });
+        let sink_config = SinkConfig {
+            socket_path: sink_sock_file.to_str().unwrap().to_string(),
+            server_info_file: server_info_file.to_str().unwrap().to_string(),
+            max_message_size: 4 * 1024 * 1024,
+        };
 
         // Start the transformer server
         let (transformer_shutdown_tx, transformer_shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let transformer_sock_file = tmp_dir.path().join("transformer.sock");
+        let server_info_file = tmp_dir.path().join("transformer-server-info");
 
+        let server_info = server_info_file.clone();
         let transformer_socket = transformer_sock_file.clone();
         let transformer_server_handle = tokio::spawn(async move {
-            let server_info_file = tmp_dir.path().join("transformer-server-info");
             sourcetransform::Server::new(SimpleTransformer)
                 .with_socket_file(transformer_socket)
-                .with_server_info_file(server_info_file)
+                .with_server_info_file(server_info)
                 .start_with_shutdown(transformer_shutdown_rx)
                 .await
                 .unwrap();
         });
+        let transformer_config = TransformerConfig {
+            socket_path: transformer_sock_file.to_str().unwrap().to_string(),
+            server_info_file: server_info_file.to_str().unwrap().to_string(),
+            max_message_size: 4 * 1024 * 1024,
+        };
 
         // Wait for the servers to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let (forwarder_shutdown_tx, forwarder_shutdown_rx) = tokio::sync::oneshot::channel();
 
-        let source_client = SourceClient::connect(source_sock_file)
+        let source_client = SourceClient::connect(source_config)
             .await
             .expect("failed to connect to source server");
 
-        let sink_client = SinkClient::connect(sink_sock_file)
+        let sink_client = SinkClient::connect(sink_config)
             .await
             .expect("failed to connect to sink server");
 
-        let transformer_client = TransformerClient::connect(transformer_sock_file)
+        let transformer_client = TransformerClient::connect(transformer_config)
             .await
             .expect("failed to connect to transformer server");
 
