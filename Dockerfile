@@ -27,7 +27,10 @@ RUN cargo new extras/upstreams
 COPY ./serving/extras/upstreams/Cargo.toml ./extras/upstreams/
 
 RUN cargo new backoff
-COPY ./serving/backoff/Cargo.toml ./backoff/Cargo.toml
+COPY ./serving/backoff/Cargo.toml ./backoff/
+
+RUN cargo new numaflow-models
+COPY ./serving/numaflow-models/Cargo.toml ./numaflow-models/
 
 # Copy all Cargo.toml and Cargo.lock files for caching dependencies
 COPY ./serving/Cargo.toml ./serving/Cargo.lock ./
@@ -40,9 +43,10 @@ COPY ./serving/src ./src
 COPY ./serving/servesink/src ./servesink/src
 COPY ./serving/extras/upstreams/src ./extras/upstreams/src
 COPY ./serving/backoff/src ./backoff/src
+COPY ./serving/numaflow-models/src ./numaflow-models/src
 
 # Build the real binaries
-RUN touch src/main.rs servesink/main.rs extras/upstreams/main.rs && \
+RUN touch src/main.rs servesink/main.rs extras/upstreams/main.rs numaflow-models/main.rs && \
     cargo build --release
 
 ####################################################################################################
