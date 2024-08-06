@@ -17,7 +17,7 @@ async fn main() {
     });
 
     // Run the forwarder
-    if let Err(e) = run_forwarder().await {
+    if let Err(e) = run_forwarder(None).await {
         error!("Application error: {:?}", e);
     }
 }

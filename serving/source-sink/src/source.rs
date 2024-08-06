@@ -14,6 +14,7 @@ pub mod proto {
     tonic::include_proto!("source.v1");
 }
 
+/// SourceClient is a client to interact with the source server.
 #[derive(Debug, Clone)]
 pub(crate) struct SourceClient {
     client: proto::source_client::SourceClient<Channel>,
@@ -92,10 +93,10 @@ impl SourceClient {
     }
 
     #[allow(dead_code)]
-    pub(crate) async fn partitions_fn(&mut self) -> Result<proto::PartitionsResponse> {
+    pub(crate) async fn partitions_fn(&mut self) -> Result<Vec<i32>> {
         let request = Request::new(());
         let response = self.client.partitions_fn(request).await?.into_inner();
-        Ok(response)
+        Ok(response.result.map_or(vec![], |r| r.partitions))
     }
 
     pub(crate) async fn is_ready(&mut self) -> Result<proto::ReadyResponse> {
@@ -215,7 +216,7 @@ mod tests {
         assert_eq!(pending.result.unwrap().count, 0);
 
         let partitions = source_client.partitions_fn().await.unwrap();
-        assert_eq!(partitions.result.unwrap().partitions, vec![2]);
+        assert_eq!(partitions, vec![2]);
 
         shutdown_tx
             .send(())

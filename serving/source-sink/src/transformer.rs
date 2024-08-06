@@ -12,6 +12,7 @@ pub mod proto {
     tonic::include_proto!("sourcetransformer.v1");
 }
 
+/// TransformerClient is a client to interact with the transformer server.
 #[derive(Clone)]
 pub struct TransformerClient {
     client: proto::source_transform_client::SourceTransformClient<Channel>,

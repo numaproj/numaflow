@@ -50,7 +50,7 @@ const TRANSFORMER_SOCKET: &str = "/var/run/numaflow/sourcetransform.sock";
 const TIMEOUT_IN_MS: u32 = 1000;
 const BATCH_SIZE: u64 = 500;
 
-pub async fn run_forwarder() -> Result<()> {
+pub async fn run_forwarder(custom_shutdown_rx: Option<oneshot::Receiver<()>>) -> Result<()> {
     let mut source_client = SourceClient::connect(SOURCE_SOCKET.into()).await?;
     let mut sink_client = SinkClient::connect(SINK_SOCKET.into()).await?;
     let mut transformer_client = if env::var("NUMAFLOW_TRANSFORMER").is_ok() {
@@ -85,7 +85,7 @@ pub async fn run_forwarder() -> Result<()> {
     });
 
     let shutdown_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
-        shutdown_signal().await;
+        shutdown_signal(custom_shutdown_rx).await;
         shutdown_tx
             .send(())
             .map_err(|_| Error::ForwarderError("Failed to send shutdown signal".to_string()))?;
@@ -135,7 +135,7 @@ async fn wait_until_ready(
     Ok(())
 }
 
-async fn shutdown_signal() {
+async fn shutdown_signal(shutdown_rx: Option<oneshot::Receiver<()>>) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -149,8 +149,94 @@ async fn shutdown_signal() {
             .await;
     };
 
+    let custom_shutdown = async {
+        if let Some(rx) = shutdown_rx {
+            rx.await.ok();
+        }
+    };
+
     tokio::select! {
         _ = ctrl_c => {},
         _ = terminate => {},
+        _ = custom_shutdown => {},
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use numaflow::{sink, source};
+//     use numaflow::source::{Message, Offset, SourceReadRequest};
+//     use tokio::sync::mpsc::Sender;
+// 
+//     struct SimpleSource;
+//     #[tonic::async_trait]
+//     impl source::Sourcer for SimpleSource {
+//         async fn read(&self, _: SourceReadRequest, _: Sender<Message>) {
+//         }
+// 
+//         async fn ack(&self, _: Vec<Offset>) {
+//         }
+// 
+//         async fn pending(&self) -> usize {
+//             0
+//         }
+// 
+//         async fn partitions(&self) -> Option<Vec<i32>> {
+//             None
+//         }
+//     }
+// 
+//     struct SimpleSink;
+// 
+//     #[tonic::async_trait]
+//     impl sink::Sinker for SimpleSink {
+//         async fn sink(&self, input: tokio::sync::mpsc::Receiver<sink::SinkRequest>) -> Vec<sink::Response> {
+//             vec![]
+//         }
+//     }
+//     #[tokio::test]
+//     async fn run_forwarder() {
+//         let (src_shutdown_tx, src_shutdown_rx) = tokio::sync::oneshot::channel();
+//         let tmp_dir = tempfile::TempDir::new().unwrap();
+//         let sock_file = tmp_dir.path().join("source.sock");
+// 
+//         let server_socket = sock_file.clone();
+//         let src_server_handle = tokio::spawn(async move {
+//             let server_info_file = tmp_dir.path().join("source-server-info");
+//             source::Server::new(SimpleSource)
+//                 .with_socket_file(server_socket)
+//                 .with_server_info_file(server_info_file)
+//                 .start_with_shutdown(src_shutdown_rx)
+//                 .await
+//                 .unwrap();
+//         });
+// 
+//         let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
+//         let tmp_dir = tempfile::TempDir::new().unwrap();
+//         let sock_file = tmp_dir.path().join("sink.sock");
+// 
+//         let server_socket = sock_file.clone();
+//         let sink_server_handle = tokio::spawn(async move {
+//             let server_info_file = tmp_dir.path().join("sink-server-info");
+//             sink::Server::new(SimpleSink)
+//                 .with_socket_file(server_socket)
+//                 .with_server_info_file(server_info_file)
+//                 .start_with_shutdown(sink_shutdown_rx)
+//                 .await
+//                 .unwrap();
+//         });
+// 
+//         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+// 
+//         let result = super::run_forwarder(Some(shutdown_rx)).await;
+//         println!("{:?}", result);
+//         assert!(result.is_ok());
+// 
+//         // stop the source and sink servers
+//         src_shutdown_tx.send(()).unwrap();
+//         sink_shutdown_tx.send(()).unwrap();
+// 
+//         src_server_handle.await.unwrap();
+//         sink_server_handle.await.unwrap();
+//     }
+// }

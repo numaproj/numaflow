@@ -11,6 +11,7 @@ pub mod proto {
     tonic::include_proto!("sink.v1");
 }
 
+/// SinkClient is a client to interact with the sink server.
 pub struct SinkClient {
     client: proto::sink_client::SinkClient<Channel>,
 }
@@ -45,6 +46,7 @@ impl SinkClient {
             }
         });
 
+        // TODO: retry for response with failure status
         let response = self
             .client
             .sink_fn(tokio_stream::wrappers::ReceiverStream::new(rx))

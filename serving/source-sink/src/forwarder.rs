@@ -7,6 +7,8 @@ use crate::sink::SinkClient;
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
 
+/// Forwarder is responsible for reading messages from the source, applying transformation if
+/// transformer is present, and writing the messages to the sinK and acknowledging the messages.
 pub(crate) struct Forwarder {
     source_client: SourceClient,
     sink_client: SinkClient,
