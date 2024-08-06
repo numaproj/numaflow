@@ -49,6 +49,8 @@ const (
 	VertexTypeReduceUDF VertexType = "ReduceUDF"
 )
 
+const ServingBinary = "/bin/serve"
+
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=vtx
@@ -344,8 +346,9 @@ func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, 
 	servingContainer := corev1.Container{
 		Name:            ServingSourceContainer,
 		Env:             req.Env,
-		Image:           "numaserve:0.1", // TODO: use appropriate image
-		ImagePullPolicy: corev1.PullIfNotPresent,
+		Image:           req.Image,
+		ImagePullPolicy: req.PullPolicy,
+		Command:         []string{ServingBinary}, // we use the same image, but we execute the extension binary
 		Resources:       req.DefaultResources,
 	}
 

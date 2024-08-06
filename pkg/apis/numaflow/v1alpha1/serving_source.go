@@ -29,7 +29,7 @@ type ServingStore struct {
 
 // GetTTL returns the TTL for the data in the store. If the TTL is not set, it returns 24 hours.
 func (ss *ServingStore) GetTTL() *metav1.Duration {
-	if ss == nil {
+	if ss.TTL == nil {
 		return &metav1.Duration{Duration: DefaultServingTTL}
 	}
 	return ss.TTL

@@ -1,43 +1,45 @@
-FROM rust:1.79-bookworm as build
+# Use multi-stage builds to keep the final image small
+# Use an official Rust image for the build stage
+FROM rust:1.79-bookworm as builder
 
-# For faster/easier installation of Rust binaries
 RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 
-RUN apt-get update \
-  && apt-get install -y protobuf-compiler
-
-# Compile and cache our dependencies in a layer
-RUN cargo new /serve
+RUN cargo new serve
+# Create a new empty shell project
 WORKDIR /serve
-COPY Cargo.toml .
+RUN cargo new servesink
+COPY ./servesink/Cargo.toml ./servesink/
 
 RUN cargo new extras/upstreams
-COPY extras/upstreams/Cargo.toml extras/upstreams/Cargo.toml
-
-RUN cargo new servesink
-COPY servesink/Cargo.toml servesink/Cargo.toml
+COPY ./extras/upstreams/Cargo.toml ./extras/upstreams/
 
 RUN cargo new backoff
-COPY backoff/Cargo.toml backoff/Cargo.toml
+COPY ./backoff/Cargo.toml ./backoff/Cargo.toml
 
+RUN cargo new numaflow-models
+COPY ./numaflow-models/Cargo.toml ./numaflow-models/
+
+# Copy all Cargo.toml and Cargo.lock files for caching dependencies
+COPY ./Cargo.toml ./Cargo.lock ./
+
+# Build only the dependencies to cache them
 RUN cargo build --release
 
-COPY ./ /serve
-# update timestamps to force a new build
-RUN touch src/main.rs servesink/src/main.rs extras/upstreams/src/main.rs 
+# Copy the actual source code files of the main project and the subprojects
+COPY ./src ./src
+COPY ./servesink/src ./servesink/src
+COPY ./extras/upstreams/src ./extras/upstreams/src
+COPY ./backoff/src ./backoff/src
+COPY ./numaflow-models/src ./numaflow-models/src
 
-RUN --mount=type=cache,target=/usr/local/cargo/registry cargo build --release
+# Build the real binaries
+RUN touch src/main.rs servesink/main.rs extras/upstreams/main.rs numaflow-models/main.rs && \
+    cargo build --release
 
-### Final
+# Use a lightweight image for the runtime
+FROM gcr.io/distroless/cc-debian12 as numaflow-ext
 
-FROM debian:bookworm
-
-USER root
-
-RUN apt-get update \
-  && apt-get install -y openssl
-
-COPY --from=build /serve/target/release/serve .
+COPY --from=builder /serve/target/release/serve .
 COPY ./config config
 
 

@@ -388,7 +388,7 @@ func TestProcessorManagerWatchForMapWithMultiplePartition(t *testing.T) {
 				t.Fatalf("expected 2 processors, got %d: %s", len(allProcessors), ctx.Err())
 			}
 		default:
-			time.Sleep(1 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 			allProcessors = processorManager.getAllProcessors()
 		}
 	}
