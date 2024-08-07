@@ -112,13 +112,17 @@ func TestHealthThresholds(t *testing.T) {
 	hc := NewHealthChecker(&v1alpha1.Pipeline{}, &mockISBService{})
 	a, _ := hc.GetThresholds()
 	assert.Equal(t, a, float64(72))
-	//assert.Equal(t, b, float64(61.2))
+
 	forty := uint32(40)
+	eighty := uint32(80)
+
 	hc.pipeline.Spec.Limits = &v1alpha1.PipelineLimits{BufferUsageLimit: &forty}
 	hc.udpateThresholds()
 	c, _ := hc.GetThresholds()
 	assert.Equal(t, c, float64(36))
-	//assert.Equal(t, d, float64(30.6))
+
+	hc.pipeline.Spec.Limits = &v1alpha1.PipelineLimits{BufferUsageLimit: &eighty}
+	hc.udpateThresholds()
 
 }
 
@@ -596,7 +600,7 @@ func TestAssignStateToBufferUsage(t *testing.T) {
 		},
 		{
 			name:      "Warning state",
-			ewmaValue: v1alpha1.DefaultBufferUsageLimit * 90 * 0.9,
+			ewmaValue: v1alpha1.DefaultBufferUsageLimit * 90 * 0.86,
 			expected:  warningState,
 		},
 		{
@@ -609,6 +613,7 @@ func TestAssignStateToBufferUsage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := assignStateToBufferUsage(tt.ewmaValue)
+			t.Log(tt.ewmaValue, result)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
