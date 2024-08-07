@@ -591,17 +591,17 @@ func TestAssignStateToBufferUsage(t *testing.T) {
 	}{
 		{
 			name:      "Critical state",
-			ewmaValue: 96,
+			ewmaValue: v1alpha1.DefaultBufferUsageLimit * 95,
 			expected:  criticalState,
 		},
 		{
 			name:      "Warning state",
-			ewmaValue: 85,
+			ewmaValue: v1alpha1.DefaultBufferUsageLimit * 90 * 0.9,
 			expected:  warningState,
 		},
 		{
 			name:      "Healthy state",
-			ewmaValue: 30,
+			ewmaValue: v1alpha1.DefaultBufferUsageLimit * 30,
 			expected:  healthyState,
 		},
 	}
@@ -615,6 +615,7 @@ func TestAssignStateToBufferUsage(t *testing.T) {
 }
 
 func TestAssignStateToTimeline(t *testing.T) {
+	n := v1alpha1.DefaultBufferUsageLimit * 100
 	tests := []struct {
 		name       string
 		ewmaValues []float64
@@ -623,61 +624,61 @@ func TestAssignStateToTimeline(t *testing.T) {
 	}{
 		{
 			name:       "Single healthy value",
-			ewmaValues: []float64{30},
+			ewmaValues: []float64{n * 0.3},
 			lookBack:   false,
 			expected:   healthyState,
 		},
 		{
 			name:       "Single warning value",
-			ewmaValues: []float64{85},
+			ewmaValues: []float64{n * 0.85},
 			lookBack:   false,
 			expected:   warningState,
 		},
 		{
 			name:       "Single critical value without lookback",
-			ewmaValues: []float64{96},
+			ewmaValues: []float64{n * 0.95},
 			lookBack:   false,
 			expected:   criticalState,
 		},
 		{
 			name:       "Single critical value with lookback",
-			ewmaValues: []float64{96},
+			ewmaValues: []float64{n * 0.95},
 			lookBack:   true,
 			expected:   warningState,
 		},
 		{
 			name:       "Multiple values ending with critical, no lookback",
-			ewmaValues: []float64{30, 85, 96},
+			ewmaValues: []float64{n * 0.3, n * 0.7, n * 0.92},
 			lookBack:   false,
 			expected:   criticalState,
 		},
 		{
 			name:       "Multiple values ending with critical, with lookback, insufficient critical count",
-			ewmaValues: []float64{30, 85, 96, 96},
+			ewmaValues: []float64{n * 0.3, n * 0.7, n * 0.95, n * 0.95},
 			lookBack:   true,
 			expected:   warningState,
 		},
 		{
 			name:       "Multiple values ending with critical, with lookback, sufficient critical count",
-			ewmaValues: []float64{96, 96, 96, 96, 96},
+			ewmaValues: []float64{n * 0.95, n * 0.95, n * 0.95, n * 0.95, n * 0.95},
 			lookBack:   true,
 			expected:   criticalState,
 		},
 		{
 			name:       "Values fluctuating between warning and critical",
-			ewmaValues: []float64{85, 96, 85, 96, 85},
+			ewmaValues: []float64{n * 0.85, n * 0.95, n * 0.85, n * 0.95, n * 0.85},
 			lookBack:   true,
 			expected:   warningState,
 		},
 		{
 			name:       "Values increasing from healthy to critical",
-			ewmaValues: []float64{30, 50, 70, 90, 96},
+			ewmaValues: []float64{n * 0.3, n * 0.5, n * 0.7, n * 0.9, n * 0.96},
 			lookBack:   true,
 			expected:   warningState,
 		},
 		{
 			name:       "Values decreasing from critical to healthy",
-			ewmaValues: []float64{96, 90, 70, 50, 30},
+			ewmaValues: []float64{n * 0.96, n * 0.9, n * 0.7, n * 0.5, n * 0.3},
 			lookBack:   true,
 			expected:   healthyState,
 		},
