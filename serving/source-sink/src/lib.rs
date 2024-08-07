@@ -154,6 +154,7 @@ async fn shutdown_signal(shutdown_rx: Option<oneshot::Receiver<()>>) {
         signal::ctrl_c()
             .await
             .expect("failed to install Ctrl+C handler");
+        info!("Received Ctrl+C signal");
     };
 
     let terminate = async {
@@ -161,12 +162,18 @@ async fn shutdown_signal(shutdown_rx: Option<oneshot::Receiver<()>>) {
             .expect("failed to install signal handler")
             .recv()
             .await;
+        info!("Received terminate signal");
     };
 
     let custom_shutdown = async {
         if let Some(rx) = shutdown_rx {
             rx.await.ok();
+        } else {
+            // Create a watch channel that never sends
+            let (_tx, mut rx) = tokio::sync::watch::channel(());
+            rx.changed().await.ok();
         }
+        info!("Received custom shutdown signal");
     };
 
     tokio::select! {

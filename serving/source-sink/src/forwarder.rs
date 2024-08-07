@@ -1,3 +1,4 @@
+use chrono::Utc;
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tracing::info;
@@ -42,6 +43,8 @@ impl Forwarder {
     /// this means that, in the happy path scenario a block is always completely processed.
     /// this function will return on any error and will cause end up in a non-0 exit code.   
     pub(crate) async fn run(&mut self) -> Result<()> {
+        let mut messages_count: u64 = 0;
+        let mut last_forwarded_at = std::time::Instant::now();
         loop {
             // two arms, either shutdown or forward-a-chunk
             tokio::select! {
@@ -52,7 +55,7 @@ impl Forwarder {
                 result = self.source_client.read_fn(self.batch_size, self.timeout_in_ms) => {
                     // Read messages from the source
                     let messages = result?;
-
+                    messages_count += messages.len() as u64;
                     // Extract offsets from the messages
                     let offsets = messages.iter().map(|message| message.offset.clone()).collect();
 
@@ -87,6 +90,16 @@ impl Forwarder {
                     //    we need to confirm this via FMEA tests.
                     self.source_client.ack_fn(offsets).await?;
                 }
+            }
+            // if the last forward was more than 1 second ago, forward a chunk print the number of messages forwarded
+            if last_forwarded_at.elapsed().as_millis() >= 1000 {
+                info!(
+                    "Forwarded {} messages at time {}",
+                    messages_count,
+                    Utc::now()
+                );
+                messages_count = 0;
+                last_forwarded_at = std::time::Instant::now();
             }
         }
         Ok(())

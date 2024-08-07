@@ -11,7 +11,7 @@ pub mod proto {
 }
 
 const TRANSFORMER_SOCKET: &str = "/var/run/numaflow/sourcetransform.sock";
-const TRANSFORMER_SERVER_INFO_FILE: &str = "/var/run/numaflow/transformer-server-info";
+const TRANSFORMER_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcetransformer-server-info";
 
 /// TransformerConfig is the configuration for the transformer server.
 #[derive(Debug, Clone)]

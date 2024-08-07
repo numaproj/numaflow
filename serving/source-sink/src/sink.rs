@@ -10,7 +10,7 @@ pub mod proto {
 }
 
 const SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";
-const SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/sink-server-info";
+const SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/sinker-server-info";
 
 /// SinkConfig is the configuration for the sink server.
 #[derive(Debug, Clone)]

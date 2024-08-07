@@ -12,7 +12,7 @@ pub mod proto {
 }
 
 const SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
-const SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/source-server-info";
+const SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
 /// SourceConfig is the configuration for the source server.
 #[derive(Debug, Clone)]
