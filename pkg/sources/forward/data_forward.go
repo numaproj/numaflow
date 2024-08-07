@@ -190,6 +190,7 @@ func (df *DataForward) Start() <-chan struct{} {
 // buffer-not-reachable, etc., but do not include errors due to user code transformer, WhereTo, etc.
 func (df *DataForward) forwardAChunk(ctx context.Context) {
 	start := time.Now()
+	totalBytes := 0
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
 	// at-least-once semantics for reading, during the restart we will have to reprocess all unacknowledged messages. It is the
 	// responsibility of the Read function to do that.
@@ -264,10 +265,29 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	}).Add(float64(len(readMessages)))
 
 	// store the offsets of the messages we read from source
+
+	// store the offsets of the messages we read from ISB
 	var readOffsets = make([]isb.Offset, len(readMessages))
 	for idx, m := range readMessages {
+		totalBytes += len(m.Payload)
+
 		readOffsets[idx] = m.ReadOffset
 	}
+
+	metrics.ReadBytesCount.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.reader.GetName(),
+	}).Add(float64(totalBytes))
+	metrics.ReadDataBytesCount.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.reader.GetName(),
+	}).Add(float64(totalBytes))
 
 	// source data transformer applies filtering and assigns event time to source data, which doesn't require watermarks.
 	// hence we assign time.UnixMilli(-1) to processorWM.
@@ -297,15 +317,9 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				df.concurrentApplyTransformer(ctx, transformerCh)
 			}()
 		}
+
 		concurrentTransformerProcessingStart := time.Now()
 		for idx, m := range readMessages {
-			metrics.ReadBytesCount.With(map[string]string{
-				metrics.LabelVertex:             df.vertexName,
-				metrics.LabelPipeline:           df.pipelineName,
-				metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-				metrics.LabelPartitionName:      df.reader.GetName(),
-			}).Add(float64(len(m.Payload)))
 
 			// assign watermark to the message
 			m.Watermark = time.Time(processorWM)
@@ -331,15 +345,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			metrics.LabelPartitionName:      df.reader.GetName(),
 		}).Observe(float64(time.Since(concurrentTransformerProcessingStart).Microseconds()))
 	} else {
-		for idx, m := range readMessages {
-			metrics.ReadBytesCount.With(map[string]string{
-				metrics.LabelVertex:             df.vertexName,
-				metrics.LabelPipeline:           df.pipelineName,
-				metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-				metrics.LabelPartitionName:      df.reader.GetName(),
-			}).Add(float64(len(m.Payload)))
 
+		for idx, m := range readMessages {
 			// assign watermark to the message
 			m.Watermark = time.Time(processorWM)
 			readWriteMessagePairs[idx].ReadMessage = m
@@ -347,8 +354,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			// thus, the unmodified read message will be stored as the corresponding writeMessage in readWriteMessagePairs
 			readWriteMessagePairs[idx].WriteMessages = []*isb.WriteMessage{{Message: m.Message}}
 		}
-	}
 
+	}
 	// publish source watermark and assign IsLate attribute based on new event time.
 	var writeMessages []*isb.WriteMessage
 	var transformedReadMessages []*isb.ReadMessage

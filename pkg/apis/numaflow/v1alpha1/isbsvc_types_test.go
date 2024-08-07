@@ -77,7 +77,7 @@ func Test_ISBSvcMarkStatus(t *testing.T) {
 			assert.Equal(t, metav1.ConditionTrue, c.Status)
 		}
 	}
-	s.MarkChildrenResourceNotHealthy("reason", "message")
+	s.MarkChildrenResourceUnHealthy("reason", "message")
 	for _, c := range s.Conditions {
 		if c.Type == string(ISBSvcConditionChildrenResourcesHealthy) {
 			assert.Equal(t, metav1.ConditionFalse, c.Status)

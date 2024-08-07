@@ -5,8 +5,8 @@ CURRENT_DIR=$(shell pwd)
 DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=numaflow
 DOCKERFILE:=Dockerfile
-DEV_BASE_IMAGE:=alpine:3.17
-RELEASE_BASE_IMAGE:=scratch
+DEV_BASE_IMAGE:=debian:bookworm
+RELEASE_BASE_IMAGE:=gcr.io/distroless/cc-debian12
 
 BUILD_DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 GIT_COMMIT=$(shell git rev-parse HEAD)
@@ -195,13 +195,14 @@ codegen:
 	$(MAKE) manifests
 	rm -rf ./vendor
 	go mod tidy
+	$(MAKE) --directory serving/numaflow-models generate
 
 clean:
 	-rm -rf ${CURRENT_DIR}/dist
 
 .PHONY: crds
 crds:
-	./hack/crdgen.sh	
+	./hack/crdgen.sh
 
 .PHONY: manifests
 manifests: crds
