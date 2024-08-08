@@ -269,10 +269,10 @@ func (mv MonoVertex) simpleCopy() MonoVertex {
 		},
 		Spec: mv.Spec.DeepCopyWithoutReplicas(),
 	}
-	if m.Spec.Limits != nil {
+	if m.Spec.Limits == nil {
 		m.Spec.Limits = &MonoVertexLimits{}
 	}
-	if m.Spec.Limits.ReadBatchSize != nil {
+	if m.Spec.Limits.ReadBatchSize == nil {
 		m.Spec.Limits.ReadBatchSize = ptr.To[uint64](DefaultReadBatchSize)
 	}
 	if m.Spec.Limits.ReadTimeout == nil {
