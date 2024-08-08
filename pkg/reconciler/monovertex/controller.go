@@ -129,10 +129,10 @@ func (mr *monoVertexReconciler) reconcileNonLifecycleChanges(ctx context.Context
 	// Mark it running before checking the status of the pods
 	monoVtx.Status.MarkPhaseRunning()
 
-	// TODO: check children resource status
-	// if err := mr.checkChildrenResourceStatus(ctx, pl); err != nil {
-	// 	return ctrl.Result{}, fmt.Errorf("failed to check mono vertex children resource status, %w", err)
-	// }
+	// Check children resource status
+	if err := mr.checkChildrenResourceStatus(ctx, monoVtx); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to check mono vertex children resource status, %w", err)
+	}
 	return ctrl.Result{}, nil
 }
 
