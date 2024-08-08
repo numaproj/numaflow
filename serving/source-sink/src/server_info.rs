@@ -33,6 +33,7 @@ const END: &str = "U+005C__END__";
 pub(crate) struct ServerInfo {
     protocol: String,
     language: String,
+    #[serde(default)]
     minimum_numaflow_version: String,
     version: String,
     metadata: HashMap<String, String>,
@@ -82,6 +83,8 @@ pub async fn wait_for_server_info(file_path: &str) -> error::Result<()> {
         }
     };
 
+    println!("Server info: {:?}", server_info);
+
     let sdk_version = &server_info.version;
     let min_numaflow_version = &server_info.minimum_numaflow_version;
     let sdk_language = &server_info.language;
@@ -106,6 +109,7 @@ pub async fn wait_for_server_info(file_path: &str) -> error::Result<()> {
         warn!("Failed to get the SDK version/language, skipping SDK version compatibility check");
     } else {
         let min_supported_sdk_versions = version::get_minimum_supported_sdk_versions();
+        println!("min_supported_sdk_versions: {:?}", min_supported_sdk_versions);
         check_sdk_compatibility(sdk_version, sdk_language, min_supported_sdk_versions)?;
     }
 
@@ -178,6 +182,9 @@ fn check_sdk_compatibility(
             let sdk_version_semver = Version::parse(sdk_version)
                 .map_err(|e| Error::ServerInfoError(format!("Error parsing SDK version: {}", e)))?;
 
+            println!("sdk_version_semver: {:?}", sdk_version_semver);
+            println!("sdk_constraint: {:?}", sdk_constraint);
+
             if let Err(e) = check_constraint(&sdk_version_semver, &sdk_constraint) {
                 let err_string = format!(
                     "SDK version {} must be upgraded to at least {}, in order to work with the current numaflow version: {}",
@@ -186,6 +193,14 @@ fn check_sdk_compatibility(
                 return Err(Error::ServerInfoError(err_string));
             }
         }
+    } else {
+        // language not found in the supported SDK versions
+        warn!("SDK version constraint not found for language: {}", sdk_language);
+        // return error indicating the language
+        return Err(Error::ServerInfoError(format!(
+            "SDK version constraint not found for language: {}",
+            sdk_language
+        )));
     }
     Ok(())
 }
@@ -225,8 +240,6 @@ async fn read_server_info(file_path: &str) -> error::Result<(ServerInfo)> {
 
     // Parse the JSON
     let server_info = serde_json::from_str(&contents).unwrap();
-    // Extract the server info from the Result
-
     Ok(server_info)
 }
 
