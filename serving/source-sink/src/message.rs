@@ -50,7 +50,7 @@ impl From<Message> for SourceTransformRequest {
 impl TryFrom<read_response::Result> for Message {
     type Error = crate::Error;
 
-    fn try_from(result: read_response::Result) -> std::result::Result<Self, Self::Error> {
+    fn try_from(result: read_response::Result) -> Result<Self, Self::Error> {
         let source_offset = match result.offset {
             Some(o) => Offset {
                 offset: BASE64_STANDARD.encode(o.offset),
