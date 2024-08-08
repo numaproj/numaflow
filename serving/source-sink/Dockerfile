@@ -13,7 +13,7 @@ RUN cargo build --release
 FROM debian:bookworm AS simple-source
 
 # copy the build artifact from the build stage
-COPY --from=build /source-sink/target/release/source-sink .
+COPY --from=build /source-sink/target/release/sourcer-sinker .
 
 # set the startup command to run your binary
 CMD ["./source-sink"]
