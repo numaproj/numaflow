@@ -149,16 +149,7 @@ func (mv MonoVertex) GetDaemonServiceObj() *corev1.Service {
 }
 
 func (mv MonoVertex) GetDaemonDeploymentObj(req GetMonoVertexDaemonDeploymentReq) (*appv1.Deployment, error) {
-	mvVtxCopy := &MonoVertex{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: mv.Namespace,
-			Name:      mv.Name,
-		},
-		Spec: mv.Spec.WithoutReplicas(),
-	}
-	// TODO: lifecycle
-	// mvVtxCopy.Spec.Lifecycle = Lifecycle{}
-	mvVtxCopyBytes, err := json.Marshal(mvVtxCopy)
+	mvVtxCopyBytes, err := json.Marshal(mv.simpleCopy())
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal mono vertex spec")
 	}
@@ -270,15 +261,30 @@ func (mv MonoVertex) sidecarEnvs() []corev1.EnvVar {
 	}
 }
 
-func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, error) {
-	monoVtxCopy := &MonoVertex{
+func (mv MonoVertex) simpleCopy() MonoVertex {
+	m := MonoVertex{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: mv.Namespace,
 			Name:      mv.Name,
 		},
-		Spec: mv.Spec.WithoutReplicas(),
+		Spec: mv.Spec.DeepCopyWithoutReplicas(),
 	}
-	monoVtxBytes, err := json.Marshal(monoVtxCopy)
+	if m.Spec.Limits != nil {
+		m.Spec.Limits = &MonoVertexLimits{}
+	}
+	if m.Spec.Limits.ReadBatchSize != nil {
+		m.Spec.Limits.ReadBatchSize = ptr.To[uint64](DefaultReadBatchSize)
+	}
+	if m.Spec.Limits.ReadTimeout == nil {
+		m.Spec.Limits.ReadTimeout = &metav1.Duration{Duration: DefaultReadTimeout}
+	}
+	// TODO: lifecycle
+	// mvVtxCopy.Spec.Lifecycle = Lifecycle{}
+	return m
+}
+
+func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, error) {
+	monoVtxBytes, err := json.Marshal(mv.simpleCopy())
 	if err != nil {
 		return nil, errors.New("failed to marshal mono vertex spec")
 	}
@@ -389,7 +395,7 @@ type MonoVertexSpec struct {
 	DaemonTemplate *DaemonTemplate `json:"daemonTemplate,omitempty" protobuf:"bytes,11,opt,name=daemonTemplate"`
 }
 
-func (mvspec MonoVertexSpec) WithoutReplicas() MonoVertexSpec {
+func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
 	x := *mvspec.DeepCopy()
 	x.Replicas = ptr.To[int32](0)
 	return x
@@ -426,14 +432,14 @@ type MonoVertexLimits struct {
 
 func (mvl MonoVertexLimits) GetReadBatchSize() uint64 {
 	if mvl.ReadBatchSize == nil {
-		return 500
+		return DefaultReadBatchSize
 	}
 	return *mvl.ReadBatchSize
 }
 
 func (mvl MonoVertexLimits) GetReadTimeout() time.Duration {
 	if mvl.ReadTimeout == nil {
-		return 1 * time.Second
+		return DefaultReadTimeout
 	}
 	return mvl.ReadTimeout.Duration
 }

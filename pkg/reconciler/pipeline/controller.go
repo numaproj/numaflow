@@ -623,7 +623,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			Watermark:                  pl.Spec.Watermark,
 			Replicas:                   &replicas,
 		}
-		hash := sharedutil.MustHash(spec.WithoutReplicas())
+		hash := sharedutil.MustHash(spec.DeepCopyWithoutReplicas())
 		obj := dfv1.Vertex{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: pl.Namespace,

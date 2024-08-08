@@ -121,7 +121,7 @@ func TestWithoutReplicas(t *testing.T) {
 	s := &VertexSpec{
 		Replicas: ptr.To[int32](3),
 	}
-	assert.Equal(t, int32(0), *s.WithoutReplicas().Replicas)
+	assert.Equal(t, int32(0), *s.DeepCopyWithoutReplicas().Replicas)
 }
 
 func TestGetVertexReplicas(t *testing.T) {

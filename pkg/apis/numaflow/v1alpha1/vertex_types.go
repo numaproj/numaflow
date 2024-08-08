@@ -214,7 +214,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 			Namespace: v.Namespace,
 			Name:      v.Name,
 		},
-		Spec: v.Spec.WithoutReplicas(),
+		Spec: v.Spec.DeepCopyWithoutReplicas(),
 	}
 	vertexBytes, err := json.Marshal(vertexCopy)
 	if err != nil {
@@ -480,7 +480,7 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 	return append(initContainers, v.Spec.InitContainers...)
 }
 
-func (vs VertexSpec) WithoutReplicas() VertexSpec {
+func (vs VertexSpec) DeepCopyWithoutReplicas() VertexSpec {
 	x := *vs.DeepCopy()
 	x.Replicas = ptr.To[int32](0)
 	return x
