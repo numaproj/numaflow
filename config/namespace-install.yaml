@@ -2625,7 +2625,7 @@ spec:
     listKind: MonoVertexList
     plural: monovertices
     shortNames:
-    - mv
+    - mvtx
     singular: monovertex
   scope: Namespaced
   versions:
@@ -4795,6 +4795,10 @@ spec:
                 type: integer
               priorityClassName:
                 type: string
+              replicas:
+                default: 1
+                format: int32
+                type: integer
               runtimeClassName:
                 type: string
               scale:
@@ -8085,6 +8089,9 @@ spec:
                   - type
                   type: object
                 type: array
+              lastScaledAt:
+                format: date-time
+                type: string
               lastUpdated:
                 format: date-time
                 type: string
@@ -8102,6 +8109,15 @@ spec:
                 - Paused
                 - Deleting
                 type: string
+              reason:
+                type: string
+              replicas:
+                format: int32
+                type: integer
+              selector:
+                type: string
+            required:
+            - replicas
             type: object
         required:
         - spec
@@ -8109,6 +8125,10 @@ spec:
     served: true
     storage: true
     subresources:
+      scale:
+        labelSelectorPath: .status.selector
+        specReplicasPath: .spec.replicas
+        statusReplicasPath: .status.replicas
       status: {}
 status:
   acceptedNames:
@@ -23438,6 +23458,10 @@ rules:
   - vertices/finalizers
   - vertices/status
   - vertices/scale
+  - monovertices
+  - monovertices/finalizers
+  - monovertices/status
+  - monovertices/scale
   verbs:
   - create
   - delete
@@ -23541,6 +23565,10 @@ rules:
   - vertices/finalizers
   - vertices/status
   - vertices/scale
+  - monovertices
+  - monovertices/finalizers
+  - monovertices/status
+  - monovertices/scale
   verbs:
   - create
   - delete

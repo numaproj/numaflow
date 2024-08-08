@@ -18315,6 +18315,58 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.GetMonoVertexDaemonDeploymentReq": {
+      "type": "object",
+      "required": [
+        "Image",
+        "PullPolicy",
+        "Env",
+        "DefaultResources"
+      ],
+      "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
+        "Env": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
+          }
+        },
+        "Image": {
+          "type": "string"
+        },
+        "PullPolicy": {
+          "type": "string"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.GetMonoVertexPodSpecReq": {
+      "type": "object",
+      "required": [
+        "Image",
+        "PullPolicy",
+        "Env",
+        "DefaultResources"
+      ],
+      "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
+        "Env": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
+          }
+        },
+        "Image": {
+          "type": "string"
+        },
+        "PullPolicy": {
+          "type": "string"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.GetRedisServiceSpecReq": {
       "type": "object",
       "required": [
@@ -19087,6 +19139,10 @@
           "description": "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
           "type": "string"
         },
+        "replicas": {
+          "type": "integer",
+          "format": "int32"
+        },
         "runtimeClassName": {
           "description": "RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class",
           "type": "string"
@@ -19135,6 +19191,9 @@
     },
     "io.numaproj.numaflow.v1alpha1.MonoVertexStatus": {
       "type": "object",
+      "required": [
+        "replicas"
+      ],
       "properties": {
         "conditions": {
           "description": "Conditions are the latest available observations of a resource's current state.",
@@ -19144,6 +19203,9 @@
           },
           "x-kubernetes-patch-merge-key": "type",
           "x-kubernetes-patch-strategy": "merge"
+        },
+        "lastScaledAt": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
         },
         "lastUpdated": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
@@ -19156,6 +19218,16 @@
           "format": "int64"
         },
         "phase": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "replicas": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "selector": {
           "type": "string"
         }
       }

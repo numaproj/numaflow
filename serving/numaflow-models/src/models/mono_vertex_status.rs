@@ -13,6 +13,8 @@ pub struct MonoVertexStatus {
     /// Conditions are the latest available observations of a resource's current state.
     #[serde(rename = "conditions", skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Vec<k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition>>,
+    #[serde(rename = "lastScaledAt", skip_serializing_if = "Option::is_none")]
+    pub last_scaled_at: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Time>,
     #[serde(rename = "lastUpdated", skip_serializing_if = "Option::is_none")]
     pub last_updated: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Time>,
     #[serde(rename = "message", skip_serializing_if = "Option::is_none")]
@@ -21,16 +23,26 @@ pub struct MonoVertexStatus {
     pub observed_generation: Option<i64>,
     #[serde(rename = "phase", skip_serializing_if = "Option::is_none")]
     pub phase: Option<String>,
+    #[serde(rename = "reason", skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(rename = "replicas")]
+    pub replicas: i64,
+    #[serde(rename = "selector", skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
 }
 
 impl MonoVertexStatus {
-    pub fn new() -> MonoVertexStatus {
+    pub fn new(replicas: i64) -> MonoVertexStatus {
         MonoVertexStatus {
             conditions: None,
+            last_scaled_at: None,
             last_updated: None,
             message: None,
             observed_generation: None,
             phase: None,
+            reason: None,
+            replicas,
+            selector: None,
         }
     }
 }

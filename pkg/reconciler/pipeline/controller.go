@@ -623,7 +623,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			Watermark:                  pl.Spec.Watermark,
 			Replicas:                   &replicas,
 		}
-		hash := sharedutil.MustHash(spec.WithOutReplicas())
+		hash := sharedutil.MustHash(spec.WithoutReplicas())
 		obj := dfv1.Vertex{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: pl.Namespace,
@@ -946,6 +946,7 @@ func (r *pipelineReconciler) checkChildrenResourceStatus(ctx context.Context, pi
 		for _, c := range pipeline.Status.Conditions {
 			if c.Status != metav1.ConditionTrue {
 				pipeline.Status.SetPhase(pipeline.Spec.Lifecycle.GetDesiredPhase(), "Degraded: "+c.Message)
+				return
 			}
 		}
 	}()
