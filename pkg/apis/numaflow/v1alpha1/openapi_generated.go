@@ -30,92 +30,99 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractPodTemplate":            schema_pkg_apis_numaflow_v1alpha1_AbstractPodTemplate(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink":                   schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex":                 schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization":                  schema_pkg_apis_numaflow_v1alpha1_Authorization(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BasicAuth":                      schema_pkg_apis_numaflow_v1alpha1_BasicAuth(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole":                      schema_pkg_apis_numaflow_v1alpha1_Blackhole(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BufferServiceConfig":            schema_pkg_apis_numaflow_v1alpha1_BufferServiceConfig(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge":                   schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container":                      schema_pkg_apis_numaflow_v1alpha1_Container(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate":              schema_pkg_apis_numaflow_v1alpha1_ContainerTemplate(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate":                 schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge":                           schema_pkg_apis_numaflow_v1alpha1_Edge(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.FixedWindow":                    schema_pkg_apis_numaflow_v1alpha1_FixedWindow(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions":              schema_pkg_apis_numaflow_v1alpha1_ForwardConditions(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Function":                       schema_pkg_apis_numaflow_v1alpha1_Function(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GSSAPI":                         schema_pkg_apis_numaflow_v1alpha1_GSSAPI(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource":                schema_pkg_apis_numaflow_v1alpha1_GeneratorSource(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetDaemonDeploymentReq":         schema_pkg_apis_numaflow_v1alpha1_GetDaemonDeploymentReq(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetJetStreamServiceSpecReq":     schema_pkg_apis_numaflow_v1alpha1_GetJetStreamServiceSpecReq(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetJetStreamStatefulSetSpecReq": schema_pkg_apis_numaflow_v1alpha1_GetJetStreamStatefulSetSpecReq(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetRedisServiceSpecReq":         schema_pkg_apis_numaflow_v1alpha1_GetRedisServiceSpecReq(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetRedisStatefulSetSpecReq":     schema_pkg_apis_numaflow_v1alpha1_GetRedisStatefulSetSpecReq(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetSideInputDeploymentReq":      schema_pkg_apis_numaflow_v1alpha1_GetSideInputDeploymentReq(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetVertexPodSpecReq":            schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy":                        schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource":                     schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.IdleSource":                     schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferService":         schema_pkg_apis_numaflow_v1alpha1_InterStepBufferService(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceList":     schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceList(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceSpec":     schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceSpec(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceStatus":   schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceStatus(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamBufferService":         schema_pkg_apis_numaflow_v1alpha1_JetStreamBufferService(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamConfig":                schema_pkg_apis_numaflow_v1alpha1_JetStreamConfig(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamSource":                schema_pkg_apis_numaflow_v1alpha1_JetStreamSource(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JobTemplate":                    schema_pkg_apis_numaflow_v1alpha1_JobTemplate(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink":                      schema_pkg_apis_numaflow_v1alpha1_KafkaSink(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource":                    schema_pkg_apis_numaflow_v1alpha1_KafkaSource(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle":                      schema_pkg_apis_numaflow_v1alpha1_Lifecycle(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log":                            schema_pkg_apis_numaflow_v1alpha1_Log(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata":                       schema_pkg_apis_numaflow_v1alpha1_Metadata(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NativeRedis":                    schema_pkg_apis_numaflow_v1alpha1_NativeRedis(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsAuth":                       schema_pkg_apis_numaflow_v1alpha1_NatsAuth(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource":                     schema_pkg_apis_numaflow_v1alpha1_NatsSource(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NoStore":                        schema_pkg_apis_numaflow_v1alpha1_NoStore(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PBQStorage":                     schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy":            schema_pkg_apis_numaflow_v1alpha1_PersistenceStrategy(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Pipeline":                       schema_pkg_apis_numaflow_v1alpha1_Pipeline(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits":                 schema_pkg_apis_numaflow_v1alpha1_PipelineLimits(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineList":                   schema_pkg_apis_numaflow_v1alpha1_PipelineList(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineSpec":                   schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineStatus":                 schema_pkg_apis_numaflow_v1alpha1_PipelineStatus(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisBufferService":             schema_pkg_apis_numaflow_v1alpha1_RedisBufferService(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisConfig":                    schema_pkg_apis_numaflow_v1alpha1_RedisConfig(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSettings":                  schema_pkg_apis_numaflow_v1alpha1_RedisSettings(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL":                           schema_pkg_apis_numaflow_v1alpha1_SASL(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain":                      schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale":                          schema_pkg_apis_numaflow_v1alpha1_Scale(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingSource":                  schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore":                   schema_pkg_apis_numaflow_v1alpha1_ServingStore(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SessionWindow":                  schema_pkg_apis_numaflow_v1alpha1_SessionWindow(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput":                      schema_pkg_apis_numaflow_v1alpha1_SideInput(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputTrigger":               schema_pkg_apis_numaflow_v1alpha1_SideInputTrigger(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputsManagerTemplate":      schema_pkg_apis_numaflow_v1alpha1_SideInputsManagerTemplate(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink":                           schema_pkg_apis_numaflow_v1alpha1_Sink(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SlidingWindow":                  schema_pkg_apis_numaflow_v1alpha1_SlidingWindow(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source":                         schema_pkg_apis_numaflow_v1alpha1_Source(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Status":                         schema_pkg_apis_numaflow_v1alpha1_Status(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS":                            schema_pkg_apis_numaflow_v1alpha1_TLS(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TagConditions":                  schema_pkg_apis_numaflow_v1alpha1_TagConditions(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates":                      schema_pkg_apis_numaflow_v1alpha1_Templates(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Transformer":                    schema_pkg_apis_numaflow_v1alpha1_Transformer(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF":                            schema_pkg_apis_numaflow_v1alpha1_UDF(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink":                         schema_pkg_apis_numaflow_v1alpha1_UDSink(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource":                       schema_pkg_apis_numaflow_v1alpha1_UDSource(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer":                  schema_pkg_apis_numaflow_v1alpha1_UDTransformer(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Vertex":                         schema_pkg_apis_numaflow_v1alpha1_Vertex(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexInstance":                 schema_pkg_apis_numaflow_v1alpha1_VertexInstance(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits":                   schema_pkg_apis_numaflow_v1alpha1_VertexLimits(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexList":                     schema_pkg_apis_numaflow_v1alpha1_VertexList(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexSpec":                     schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexStatus":                   schema_pkg_apis_numaflow_v1alpha1_VertexStatus(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexTemplate":                 schema_pkg_apis_numaflow_v1alpha1_VertexTemplate(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark":                      schema_pkg_apis_numaflow_v1alpha1_Watermark(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window":                         schema_pkg_apis_numaflow_v1alpha1_Window(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.containerBuilder":               schema_pkg_apis_numaflow_v1alpha1_containerBuilder(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.getContainerReq":                schema_pkg_apis_numaflow_v1alpha1_getContainerReq(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractPodTemplate":              schema_pkg_apis_numaflow_v1alpha1_AbstractPodTemplate(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink":                     schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex":                   schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization":                    schema_pkg_apis_numaflow_v1alpha1_Authorization(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BasicAuth":                        schema_pkg_apis_numaflow_v1alpha1_BasicAuth(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole":                        schema_pkg_apis_numaflow_v1alpha1_Blackhole(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BufferServiceConfig":              schema_pkg_apis_numaflow_v1alpha1_BufferServiceConfig(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge":                     schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container":                        schema_pkg_apis_numaflow_v1alpha1_Container(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate":                schema_pkg_apis_numaflow_v1alpha1_ContainerTemplate(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate":                   schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge":                             schema_pkg_apis_numaflow_v1alpha1_Edge(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.FixedWindow":                      schema_pkg_apis_numaflow_v1alpha1_FixedWindow(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions":                schema_pkg_apis_numaflow_v1alpha1_ForwardConditions(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Function":                         schema_pkg_apis_numaflow_v1alpha1_Function(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GSSAPI":                           schema_pkg_apis_numaflow_v1alpha1_GSSAPI(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource":                  schema_pkg_apis_numaflow_v1alpha1_GeneratorSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetDaemonDeploymentReq":           schema_pkg_apis_numaflow_v1alpha1_GetDaemonDeploymentReq(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetJetStreamServiceSpecReq":       schema_pkg_apis_numaflow_v1alpha1_GetJetStreamServiceSpecReq(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetJetStreamStatefulSetSpecReq":   schema_pkg_apis_numaflow_v1alpha1_GetJetStreamStatefulSetSpecReq(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetMonoVertexDaemonDeploymentReq": schema_pkg_apis_numaflow_v1alpha1_GetMonoVertexDaemonDeploymentReq(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetMonoVertexPodSpecReq":          schema_pkg_apis_numaflow_v1alpha1_GetMonoVertexPodSpecReq(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetRedisServiceSpecReq":           schema_pkg_apis_numaflow_v1alpha1_GetRedisServiceSpecReq(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetRedisStatefulSetSpecReq":       schema_pkg_apis_numaflow_v1alpha1_GetRedisStatefulSetSpecReq(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetSideInputDeploymentReq":        schema_pkg_apis_numaflow_v1alpha1_GetSideInputDeploymentReq(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetVertexPodSpecReq":              schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy":                          schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource":                       schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.IdleSource":                       schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferService":           schema_pkg_apis_numaflow_v1alpha1_InterStepBufferService(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceList":       schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceList(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceSpec":       schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceSpec(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceStatus":     schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceStatus(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamBufferService":           schema_pkg_apis_numaflow_v1alpha1_JetStreamBufferService(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamConfig":                  schema_pkg_apis_numaflow_v1alpha1_JetStreamConfig(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamSource":                  schema_pkg_apis_numaflow_v1alpha1_JetStreamSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JobTemplate":                      schema_pkg_apis_numaflow_v1alpha1_JobTemplate(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink":                        schema_pkg_apis_numaflow_v1alpha1_KafkaSink(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource":                      schema_pkg_apis_numaflow_v1alpha1_KafkaSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle":                        schema_pkg_apis_numaflow_v1alpha1_Lifecycle(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log":                              schema_pkg_apis_numaflow_v1alpha1_Log(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata":                         schema_pkg_apis_numaflow_v1alpha1_Metadata(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertex":                       schema_pkg_apis_numaflow_v1alpha1_MonoVertex(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexLimits":                 schema_pkg_apis_numaflow_v1alpha1_MonoVertexLimits(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexList":                   schema_pkg_apis_numaflow_v1alpha1_MonoVertexList(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexSpec":                   schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexStatus":                 schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NativeRedis":                      schema_pkg_apis_numaflow_v1alpha1_NativeRedis(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsAuth":                         schema_pkg_apis_numaflow_v1alpha1_NatsAuth(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource":                       schema_pkg_apis_numaflow_v1alpha1_NatsSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NoStore":                          schema_pkg_apis_numaflow_v1alpha1_NoStore(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PBQStorage":                       schema_pkg_apis_numaflow_v1alpha1_PBQStorage(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy":              schema_pkg_apis_numaflow_v1alpha1_PersistenceStrategy(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Pipeline":                         schema_pkg_apis_numaflow_v1alpha1_Pipeline(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits":                   schema_pkg_apis_numaflow_v1alpha1_PipelineLimits(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineList":                     schema_pkg_apis_numaflow_v1alpha1_PipelineList(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineSpec":                     schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineStatus":                   schema_pkg_apis_numaflow_v1alpha1_PipelineStatus(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisBufferService":               schema_pkg_apis_numaflow_v1alpha1_RedisBufferService(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisConfig":                      schema_pkg_apis_numaflow_v1alpha1_RedisConfig(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSettings":                    schema_pkg_apis_numaflow_v1alpha1_RedisSettings(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL":                             schema_pkg_apis_numaflow_v1alpha1_SASL(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain":                        schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale":                            schema_pkg_apis_numaflow_v1alpha1_Scale(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingSource":                    schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore":                     schema_pkg_apis_numaflow_v1alpha1_ServingStore(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SessionWindow":                    schema_pkg_apis_numaflow_v1alpha1_SessionWindow(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput":                        schema_pkg_apis_numaflow_v1alpha1_SideInput(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputTrigger":                 schema_pkg_apis_numaflow_v1alpha1_SideInputTrigger(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInputsManagerTemplate":        schema_pkg_apis_numaflow_v1alpha1_SideInputsManagerTemplate(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink":                             schema_pkg_apis_numaflow_v1alpha1_Sink(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SlidingWindow":                    schema_pkg_apis_numaflow_v1alpha1_SlidingWindow(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source":                           schema_pkg_apis_numaflow_v1alpha1_Source(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Status":                           schema_pkg_apis_numaflow_v1alpha1_Status(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS":                              schema_pkg_apis_numaflow_v1alpha1_TLS(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TagConditions":                    schema_pkg_apis_numaflow_v1alpha1_TagConditions(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates":                        schema_pkg_apis_numaflow_v1alpha1_Templates(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Transformer":                      schema_pkg_apis_numaflow_v1alpha1_Transformer(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF":                              schema_pkg_apis_numaflow_v1alpha1_UDF(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink":                           schema_pkg_apis_numaflow_v1alpha1_UDSink(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource":                         schema_pkg_apis_numaflow_v1alpha1_UDSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer":                    schema_pkg_apis_numaflow_v1alpha1_UDTransformer(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Vertex":                           schema_pkg_apis_numaflow_v1alpha1_Vertex(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexInstance":                   schema_pkg_apis_numaflow_v1alpha1_VertexInstance(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits":                     schema_pkg_apis_numaflow_v1alpha1_VertexLimits(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexList":                       schema_pkg_apis_numaflow_v1alpha1_VertexList(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexSpec":                       schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexStatus":                     schema_pkg_apis_numaflow_v1alpha1_VertexStatus(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexTemplate":                   schema_pkg_apis_numaflow_v1alpha1_VertexTemplate(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark":                        schema_pkg_apis_numaflow_v1alpha1_Watermark(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window":                           schema_pkg_apis_numaflow_v1alpha1_Window(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.containerBuilder":                 schema_pkg_apis_numaflow_v1alpha1_containerBuilder(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.getContainerReq":                  schema_pkg_apis_numaflow_v1alpha1_getContainerReq(ref),
 	}
 }
 
@@ -1516,6 +1523,102 @@ func schema_pkg_apis_numaflow_v1alpha1_GetJetStreamStatefulSetSpecReq(ref common
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_GetMonoVertexDaemonDeploymentReq(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"Image": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"PullPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"Env": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.EnvVar"),
+									},
+								},
+							},
+						},
+					},
+					"DefaultResources": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
+						},
+					},
+				},
+				Required: []string{"Image", "PullPolicy", "Env", "DefaultResources"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_GetMonoVertexPodSpecReq(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"Image": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"PullPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"Env": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.EnvVar"),
+									},
+								},
+							},
+						},
+					},
+					"DefaultResources": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
+						},
+					},
+				},
+				Required: []string{"Image", "PullPolicy", "Env", "DefaultResources"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements"},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_GetRedisServiceSpecReq(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -2744,6 +2847,428 @@ func schema_pkg_apis_numaflow_v1alpha1_Metadata(ref common.ReferenceCallback) co
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_MonoVertex(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexStatus"),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexSpec", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_MonoVertexLimits(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"readBatchSize": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Read batch size from the source.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"readTimeout": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Read timeout duration from the source.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_MonoVertexList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertex"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertex", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"replicas": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+					"source": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source"),
+						},
+					},
+					"sink": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink"),
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Metadata sets the pods's metadata, i.e. annotations and labels",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata"),
+						},
+					},
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"tolerations": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, the pod's tolerations.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.Toleration"),
+									},
+								},
+							},
+						},
+					},
+					"securityContext": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field.",
+							Ref:         ref("k8s.io/api/core/v1.PodSecurityContext"),
+						},
+					},
+					"imagePullSecrets": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-patch-merge-key": "name",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.LocalObjectReference"),
+									},
+								},
+							},
+						},
+					},
+					"priorityClassName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"affinity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
+							Ref:         ref("k8s.io/api/core/v1.Affinity"),
+						},
+					},
+					"serviceAccountName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ServiceAccountName applied to the pod",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"runtimeClassName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"automountServiceAccountToken": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"dnsPolicy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"dnsConfig": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Specifies the DNS parameters of a pod. Parameters specified here will be merged to the generated DNS configuration based on DNSPolicy.",
+							Ref:         ref("k8s.io/api/core/v1.PodDNSConfig"),
+						},
+					},
+					"containerTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Container template for the main numa container.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+						},
+					},
+					"volumes": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-patch-merge-key": "name",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.Volume"),
+									},
+								},
+							},
+						},
+					},
+					"limits": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexLimits"),
+						},
+					},
+					"scale": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Settings for autoscaling",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale"),
+						},
+					},
+					"initContainers": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of customized init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.Container"),
+									},
+								},
+							},
+						},
+					},
+					"sidecars": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of customized sidecar containers belonging to the pod.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/api/core/v1.Container"),
+									},
+								},
+							},
+						},
+					},
+					"daemonTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Template for the daemon service deployment.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-patch-merge-key": "type",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions are the latest available observations of a resource's current state.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+									},
+								},
+							},
+						},
+					},
+					"phase": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"replicas": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int64",
+						},
+					},
+					"selector": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"reason": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"lastUpdated": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"lastScaledAt": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+				},
+				Required: []string{"replicas"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
 	}
 }
 

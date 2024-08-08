@@ -392,7 +392,7 @@ func (p Pipeline) GetPipelineLimits() PipelineLimits {
 	defaultReadBatchSize := uint64(DefaultReadBatchSize)
 	defaultBufferMaxLength := uint64(DefaultBufferLength)
 	defaultBufferUsageLimit := uint32(100 * DefaultBufferUsageLimit)
-	defaultReadTimeout := time.Second
+	defaultReadTimeout := DefaultReadTimeout
 	limits := PipelineLimits{
 		ReadBatchSize:    &defaultReadBatchSize,
 		BufferMaxLength:  &defaultBufferMaxLength,

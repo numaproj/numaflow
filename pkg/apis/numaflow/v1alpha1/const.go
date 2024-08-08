@@ -34,6 +34,7 @@ const (
 	KeyISBSvcType       = "numaflow.numaproj.io/isbsvc-type"
 	KeyPipelineName     = "numaflow.numaproj.io/pipeline-name"
 	KeyVertexName       = "numaflow.numaproj.io/vertex-name"
+	KeyMonoVertexName   = "numaflow.numaproj.io/mono-vertex-name"
 	KeyReplica          = "numaflow.numaproj.io/replica"
 	KeySideInputName    = "numaflow.numaproj.io/side-input-name"
 	KeyPauseTimestamp   = "numaflow.numaproj.io/pause-timestamp"
@@ -89,25 +90,30 @@ const (
 	ComponentISBSvc           = "isbsvc"
 	ComponentDaemon           = "daemon"
 	ComponentVertex           = "vertex"
+	ComponentMonoVertex       = "mono-vertex"
+	ComponentMonoVertexDaemon = "mono-vertex-daemon"
 	ComponentJob              = "job"
 	ComponentSideInputManager = "side-inputs-manager"
 	ComponentUXServer         = "numaflow-ux"
 
 	// controllers
-	ControllerISBSvc   = "isbsvc-controller"
-	ControllerPipeline = "pipeline-controller"
-	ControllerVertex   = "vertex-controller"
+	ControllerISBSvc     = "isbsvc-controller"
+	ControllerPipeline   = "pipeline-controller"
+	ControllerVertex     = "vertex-controller"
+	ControllerMonoVertex = "mono-vertex-controller"
 
 	// ENV vars
 	EnvNamespace                        = "NUMAFLOW_NAMESPACE"
 	EnvPipelineName                     = "NUMAFLOW_PIPELINE_NAME"
 	EnvVertexName                       = "NUMAFLOW_VERTEX_NAME"
+	EnvMonoVertexName                   = "NUMAFLOW_MONO_VERTEX_NAME"
 	EnvCallbackEnabled                  = "NUMAFLOW_CALLBACK_ENABLED"
 	EnvCallbackURL                      = "NUMAFLOW_CALLBACK_URL"
 	EnvPod                              = "NUMAFLOW_POD"
 	EnvReplica                          = "NUMAFLOW_REPLICA"
 	EnvVertexObject                     = "NUMAFLOW_VERTEX_OBJECT"
 	EnvPipelineObject                   = "NUMAFLOW_PIPELINE_OBJECT"
+	EnvMonoVertexObject                 = "NUMAFLOW_MONO_VERTEX_OBJECT"
 	EnvSideInputObject                  = "NUMAFLOW_SIDE_INPUT_OBJECT"
 	EnvImage                            = "NUMAFLOW_IMAGE"
 	EnvImagePullPolicy                  = "NUMAFLOW_IMAGE_PULL_POLICY"
@@ -150,6 +156,9 @@ const (
 	VertexHTTPSPort                     = 8443
 	VertexHTTPSPortName                 = "https"
 	DaemonServicePort                   = 4327
+	MonoVertexMetricsPort               = 2469
+	MonoVertexMetricsPortName           = "metrics"
+	MonoVertexDaemonServicePort         = 4327
 
 	DefaultRequeueAfter = 10 * time.Second
 
@@ -159,6 +168,7 @@ const (
 	DefaultBufferLength     = 30000
 	DefaultBufferUsageLimit = 0.8
 	DefaultReadBatchSize    = 500
+	DefaultReadTimeout      = 1 * time.Second
 
 	// Auto scaling
 	DefaultLookbackSeconds          = 120 // Default lookback seconds for calculating avg rate and pending

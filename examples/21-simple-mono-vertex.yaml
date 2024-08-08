@@ -1,0 +1,13 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: simple-mono-vertex
+spec:
+  source:
+    udsource:
+      container:
+        image: quay.io/numaio/numaflow-java/source-simple-source:stable
+  sink:
+    udsink:
+      container:
+        image: quay.io/numaio/numaflow-java/simple-sink:stable

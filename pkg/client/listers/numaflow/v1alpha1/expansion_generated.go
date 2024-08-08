@@ -26,6 +26,14 @@ type InterStepBufferServiceListerExpansion interface{}
 // InterStepBufferServiceNamespaceLister.
 type InterStepBufferServiceNamespaceListerExpansion interface{}
 
+// MonoVertexListerExpansion allows custom methods to be added to
+// MonoVertexLister.
+type MonoVertexListerExpansion interface{}
+
+// MonoVertexNamespaceListerExpansion allows custom methods to be added to
+// MonoVertexNamespaceLister.
+type MonoVertexNamespaceListerExpansion interface{}
+
 // PipelineListerExpansion allows custom methods to be added to
 // PipelineLister.
 type PipelineListerExpansion interface{}
