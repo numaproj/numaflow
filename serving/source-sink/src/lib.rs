@@ -33,7 +33,6 @@ pub mod transformer;
 pub mod forwarder;
 
 pub mod message;
-
 pub(crate) mod shared;
 
 const TIMEOUT_IN_MS: u32 = 1000;

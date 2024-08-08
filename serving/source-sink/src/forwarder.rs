@@ -1,7 +1,8 @@
 use chrono::Utc;
+use metrics::counter;
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
-use tracing::info;
+use tracing::{info, trace};
 
 use crate::error::{Error, Result};
 use crate::sink::SinkClient;
@@ -56,6 +57,8 @@ impl Forwarder {
                     // Read messages from the source
                     let messages = result?;
                     messages_count += messages.len() as u64;
+                    // INCOMING_REQUESTS.inc_by(messages.len() as i64);
+                    counter!("data_read_total", "vertex" => "vertex1", "pipeline" => "pipeline1", "vertex_type" => "type1", "vertex_replica_index" => "index1", "partition_name" => "partition1").increment(messages_count);
                     // Extract offsets from the messages
                     let offsets = messages.iter().map(|message| message.offset.clone()).collect();
 
@@ -89,8 +92,10 @@ impl Forwarder {
                     //    we could rely on gRPC retries and say that any error that is bubbled up is worthy of non-0 exit.
                     //    we need to confirm this via FMEA tests.
                     self.source_client.ack_fn(offsets).await?;
+                    trace!("Forwarded {} messages", messages_count);
                 }
             }
+            // TODO: print slow forwarder (make the time configurable)
             // if the last forward was more than 1 second ago, forward a chunk print the number of messages forwarded
             if last_forwarded_at.elapsed().as_millis() >= 1000 {
                 info!(
