@@ -1,18 +1,21 @@
 use std::fs;
 use std::time::Duration;
+
+use anyhow::Context;
+use serde::Deserialize;
 use tokio::signal;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
-use tracing::info;
+use tracing::{info, warn};
 
+pub(crate) use crate::error::Error;
 use crate::forwarder::Forwarder;
 use crate::sink::{SinkClient, SinkConfig};
 use crate::source::{SourceClient, SourceConfig};
 use crate::transformer::{TransformerClient, TransformerConfig};
 
 pub(crate) use self::error::Result;
-pub(crate) use crate::error::Error;
 
 /// SourcerSinker orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
@@ -33,6 +36,11 @@ pub mod transformer;
 pub mod forwarder;
 
 pub mod message;
+
+pub mod server_info;
+
+pub mod version;
+
 pub(crate) mod shared;
 
 const TIMEOUT_IN_MS: u32 = 1000;
@@ -46,14 +54,14 @@ pub async fn run_forwarder(
     transformer_config: Option<TransformerConfig>,
     custom_shutdown_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<()> {
-    wait_for_server_info(&source_config.server_info_file).await?;
+    server_info::wait_for_server_info(&source_config.server_info_file).await?;
     let mut source_client = SourceClient::connect(source_config).await?;
 
-    wait_for_server_info(&sink_config.server_info_file).await?;
+    server_info::wait_for_server_info(&sink_config.server_info_file).await?;
     let mut sink_client = SinkClient::connect(sink_config).await?;
 
     let mut transformer_client = if let Some(config) = transformer_config {
-        wait_for_server_info(&config.server_info_file).await?;
+        server_info::wait_for_server_info(&config.server_info_file).await?;
         Some(TransformerClient::connect(config).await?)
     } else {
         None
@@ -100,17 +108,17 @@ pub async fn run_forwarder(
     Ok(())
 }
 
-async fn wait_for_server_info(file_path: &str) -> Result<()> {
-    loop {
-        if let Ok(metadata) = fs::metadata(file_path) {
-            if metadata.len() > 0 {
-                return Ok(());
-            }
-        }
-        info!("Server info file {} is not ready, waiting...", file_path);
-        sleep(Duration::from_secs(1)).await;
-    }
-}
+// async fn wait_for_server_info(file_path: &str) -> Result<()> {
+//     loop {
+//         if let Ok(metadata) = fs::metadata(file_path) {
+//             if metadata.len() > 0 {
+//                 return Ok(());
+//             }
+//         }
+//         info!("Server info file {} is not ready, waiting...", file_path);
+//         sleep(Duration::from_secs(1)).await;
+//     }
+// }
 
 async fn wait_until_ready(
     source_client: &mut SourceClient,
@@ -184,12 +192,14 @@ async fn shutdown_signal(shutdown_rx: Option<oneshot::Receiver<()>>) {
 
 #[cfg(test)]
 mod tests {
-    use crate::sink::SinkConfig;
-    use crate::source::SourceConfig;
+    use std::env;
+
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source};
-    use std::env;
     use tokio::sync::mpsc::Sender;
+
+    use crate::sink::SinkConfig;
+    use crate::source::SourceConfig;
 
     struct SimpleSource;
     #[tonic::async_trait]
@@ -240,6 +250,19 @@ mod tests {
             server_info_file: src_info_file.to_str().unwrap().to_string(),
             max_message_size: 100,
         };
+
+        // Write to the server info file with sample data, use the write_server_info
+        // function from the server_info module
+        // println!("file_path_1: {:?}", src_info_file.clone());
+        // let dummy_info = server_info::ServerInfo::dummy();
+        // server_info::write_server_info(&dummy_info, &src_info_file.to_str().unwrap())
+        //     .await.expect("Could not write to server info file");
+
+        // // read the server info file and check if the data is correct
+        // let s = fs::read_to_string(src_info_file.clone());
+        // println!("Server info file: {:?}", s);
+        //
+        // println!("file_path_1: {:?}", src_info_file);
 
         let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();

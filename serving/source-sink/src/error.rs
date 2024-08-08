@@ -24,6 +24,9 @@ pub enum Error {
 
     #[error("gRPC Error - {0}")]
     GRPCError(String),
+
+    #[error("ServerInfoError Error - {0}")]
+    ServerInfoError(String),
 }
 
 impl From<tonic::Status> for Error {
