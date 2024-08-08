@@ -17,6 +17,7 @@ limitations under the License.
 syntax = "proto3";
 
 option go_package = "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1";
+option java_package = "io.numaproj.numaflow.map.v1";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
