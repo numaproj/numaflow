@@ -313,7 +313,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 
 	currentReplicas := int(vertex.Status.Replicas)
 	if currentReplicas != desiredReplicas || vertex.Status.Selector == "" {
-		log.Infow("Replicas changed", "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
+		log.Infow("Pipeline Vertex replicas changed", "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
 		r.recorder.Eventf(vertex, corev1.EventTypeNormal, "ReplicasScaled", "Replicas changed from %d to %d", currentReplicas, desiredReplicas)
 		vertex.Status.Replicas = uint32(desiredReplicas)
 		vertex.Status.LastScaledAt = metav1.Time{Time: time.Now()}
