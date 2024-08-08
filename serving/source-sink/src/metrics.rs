@@ -1,14 +1,13 @@
 use std::future::ready;
 
 use axum::{routing::get, Router};
+use metrics::describe_counter;
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tracing::debug;
 
 use crate::error::Error;
-
 /// Collect and emit prometheus metrics.
-
 /// Metrics router and server
 pub async fn start_metrics_server<A>(addr: A) -> crate::Result<()>
 where
@@ -47,6 +46,10 @@ fn setup_metrics_recorder() -> crate::Result<PrometheusHandle> {
         .map_err(|e| Error::MetricsError(format!("Prometheus install_recorder: {}", e)))?
         .install_recorder()
         .map_err(|e| Error::MetricsError(format!("Prometheus install_recorder: {}", e)))?;
+
+    // Define the metrics
+    describe_counter!("data_read_total", "Total number of Data Messages Read");
+    describe_counter!("read_bytes_total", "Total number of bytes read");
 
     Ok(prometheus_handle)
 }
