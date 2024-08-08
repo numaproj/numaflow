@@ -29,6 +29,10 @@ rules:
       - vertices/finalizers
       - vertices/status
       - vertices/scale
+      - monovertices
+      - monovertices/finalizers
+      - monovertices/status
+      - monovertices/scale
   - apiGroups:
       - ""
     resources:
