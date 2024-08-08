@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -421,6 +422,20 @@ type MonoVertexLimits struct {
 	// +kubebuilder:default= "1s"
 	// +optional
 	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,2,opt,name=readTimeout"`
+}
+
+func (mvl MonoVertexLimits) GetReadBatchSize() uint64 {
+	if mvl.ReadBatchSize == nil {
+		return 500
+	}
+	return *mvl.ReadBatchSize
+}
+
+func (mvl MonoVertexLimits) GetReadTimeout() time.Duration {
+	if mvl.ReadTimeout == nil {
+		return 1 * time.Second
+	}
+	return mvl.ReadTimeout.Duration
 }
 
 type MonoVertexStatus struct {
