@@ -48,6 +48,9 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
 		if c.State.Waiting != nil && c.State.Waiting.Reason == "CrashLoopBackOff" {
 			return false, c.State.Waiting.Reason
 		}
+		if c.State.Terminated != nil && c.State.Terminated.Reason == "Error" {
+			return false, c.State.Terminated.Reason
+		}
 	}
 	return true, ""
 }

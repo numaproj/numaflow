@@ -72,6 +72,9 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
+    - jsonPath: .status.reason
+      name: Reason
+      type: string
     - jsonPath: .status.message
       name: Message
       type: string
