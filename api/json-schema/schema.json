@@ -19056,6 +19056,20 @@
       ],
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.MonoVertexLimits": {
+      "properties": {
+        "readBatchSize": {
+          "description": "Read batch size from the source.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "readTimeout": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "Read timeout duration from the source."
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.MonoVertexList": {
       "properties": {
         "apiVersion": {
@@ -19122,6 +19136,10 @@
             "$ref": "#/definitions/io.k8s.api.core.v1.Container"
           },
           "type": "array"
+        },
+        "limits": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexLimits",
+          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings"
         },
         "metadata": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Metadata",

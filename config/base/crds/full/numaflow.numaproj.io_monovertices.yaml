@@ -2166,6 +2166,16 @@ spec:
                   - name
                   type: object
                 type: array
+              limits:
+                properties:
+                  readBatchSize:
+                    default: 500
+                    format: int64
+                    type: integer
+                  readTimeout:
+                    default: 1s
+                    type: string
+                type: object
               metadata:
                 properties:
                   annotations:

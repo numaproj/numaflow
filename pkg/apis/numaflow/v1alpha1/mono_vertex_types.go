@@ -370,19 +370,22 @@ type MonoVertexSpec struct {
 	// +patchStrategy=merge
 	// +patchMergeKey=name
 	Volumes []corev1.Volume `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,6,rep,name=volumes"`
+	// Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings
+	// +optional
+	Limits *MonoVertexLimits `json:"limits,omitempty" protobuf:"bytes,7,opt,name=limits"`
 	// Settings for autoscaling
 	// +optional
-	Scale Scale `json:"scale,omitempty" protobuf:"bytes,7,opt,name=scale"`
+	Scale Scale `json:"scale,omitempty" protobuf:"bytes,8,opt,name=scale"`
 	// List of customized init containers belonging to the pod.
 	// More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
 	// +optional
-	InitContainers []corev1.Container `json:"initContainers,omitempty" protobuf:"bytes,8,rep,name=initContainers"`
+	InitContainers []corev1.Container `json:"initContainers,omitempty" protobuf:"bytes,9,rep,name=initContainers"`
 	// List of customized sidecar containers belonging to the pod.
 	// +optional
-	Sidecars []corev1.Container `json:"sidecars,omitempty" protobuf:"bytes,9,rep,name=sidecars"`
+	Sidecars []corev1.Container `json:"sidecars,omitempty" protobuf:"bytes,10,rep,name=sidecars"`
 	// Template for the daemon service deployment.
 	// +optional
-	DaemonTemplate *DaemonTemplate `json:"daemonTemplate,omitempty" protobuf:"bytes,10,opt,name=daemonTemplate"`
+	DaemonTemplate *DaemonTemplate `json:"daemonTemplate,omitempty" protobuf:"bytes,11,opt,name=daemonTemplate"`
 }
 
 func (mvspec MonoVertexSpec) WithoutReplicas() MonoVertexSpec {
@@ -407,6 +410,17 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) []corev1.Conta
 	// Fallback sink is not supported.
 	containers = append(containers, mvspec.Sidecars...)
 	return containers
+}
+
+type MonoVertexLimits struct {
+	// Read batch size from the source.
+	// +kubebuilder:default=500
+	// +optional
+	ReadBatchSize *uint64 `json:"readBatchSize,omitempty" protobuf:"varint,1,opt,name=readBatchSize"`
+	// Read timeout duration from the source.
+	// +kubebuilder:default= "1s"
+	// +optional
+	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,2,opt,name=readTimeout"`
 }
 
 type MonoVertexStatus struct {

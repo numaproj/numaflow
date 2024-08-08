@@ -33,6 +33,8 @@ pub struct MonoVertexSpec {
     /// List of customized init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
     #[serde(rename = "initContainers", skip_serializing_if = "Option::is_none")]
     pub init_containers: Option<Vec<k8s_openapi::api::core::v1::Container>>,
+    #[serde(rename = "limits", skip_serializing_if = "Option::is_none")]
+    pub limits: Option<Box<crate::models::MonoVertexLimits>>,
     #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Box<crate::models::Metadata>>,
     /// NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
@@ -81,6 +83,7 @@ impl MonoVertexSpec {
             dns_policy: None,
             image_pull_secrets: None,
             init_containers: None,
+            limits: None,
             metadata: None,
             node_selector: None,
             priority: None,

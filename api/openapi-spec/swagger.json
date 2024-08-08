@@ -19051,6 +19051,20 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.MonoVertexLimits": {
+      "type": "object",
+      "properties": {
+        "readBatchSize": {
+          "description": "Read batch size from the source.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "readTimeout": {
+          "description": "Read timeout duration from the source.",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.MonoVertexList": {
       "type": "object",
       "required": [
@@ -19118,6 +19132,10 @@
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.Container"
           }
+        },
+        "limits": {
+          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexLimits"
         },
         "metadata": {
           "description": "Metadata sets the pods's metadata, i.e. annotations and labels",

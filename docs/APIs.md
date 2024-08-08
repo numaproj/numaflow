@@ -5578,6 +5578,28 @@ Container template for the main numa container.
 
 <td>
 
+<code>limits</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexLimits">
+MonoVertexLimits </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Limits define the limitations such as buffer read batch size for all the
+vertices of a pipeline, will override pipeline level settings
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>scale</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Scale"> Scale </a> </em>
 </td>
@@ -5676,6 +5698,87 @@ MonoVertexStatus </a> </em>
 <td>
 
 <em>(Optional)</em>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.MonoVertexLimits">
+
+MonoVertexLimits
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>readBatchSize</code></br> <em> uint64 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Read batch size from the source.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>readTimeout</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Read timeout duration from the source.
+</p>
+
 </td>
 
 </tr>
@@ -5835,6 +5938,28 @@ Container template for the main numa container.
 <td>
 
 <em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>limits</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexLimits">
+MonoVertexLimits </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Limits define the limitations such as buffer read batch size for all the
+vertices of a pipeline, will override pipeline level settings
+</p>
+
 </td>
 
 </tr>
