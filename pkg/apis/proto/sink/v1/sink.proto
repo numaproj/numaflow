@@ -22,6 +22,7 @@ option java_package = "io.numaproj.numaflow.sink.v1";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
+
 package sink.v1;
 
 service Sink {
@@ -41,6 +42,7 @@ message SinkRequest {
   google.protobuf.Timestamp event_time = 3;
   google.protobuf.Timestamp watermark = 4;
   string id = 5;
+  map<string, string> headers = 6;
 }
 
 /**
@@ -50,6 +52,15 @@ message ReadyResponse {
   bool ready = 1;
 }
 
+/*
+  * Status is the status of the response.
+ */
+enum Status {
+  SUCCESS = 0;
+  FAILURE = 1;
+  FALLBACK = 2;
+}
+
 /**
  * SinkResponse is the individual response of each message written to the sink.
  */
@@ -57,8 +68,8 @@ message SinkResponse {
   message Result {
     // id is the ID of the message, can be used to uniquely identify the message.
     string id = 1;
-    // success denotes the status of persisting to disk. if set to false, it means writing to sink for the message failed.
-    bool success = 2;
+    // status denotes the status of persisting to sink. It can be SUCCESS, FAILURE, or FALLBACK.
+    Status status = 2;
     // err_msg is the error message, set it if success is set to false.
     string err_msg = 3;
   }
