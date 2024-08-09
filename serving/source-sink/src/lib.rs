@@ -1,8 +1,6 @@
+use serde::Deserialize;
 use std::fs;
 use std::time::Duration;
-
-use anyhow::Context;
-use serde::Deserialize;
 use tokio::signal;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -54,11 +52,12 @@ pub async fn run_forwarder(
     transformer_config: Option<TransformerConfig>,
     custom_shutdown_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<()> {
-    server_info::wait_for_server_info(&source_config.server_info_file).await.map_err(|e| {
-        warn!("Error waiting for server info file: {:?}", e);
-        println!("Error waiting for server info file: {:?}", e);
-        Error::ForwarderError("Error waiting for server info file".to_string())
-    })?;
+    server_info::wait_for_server_info(&source_config.server_info_file)
+        .await
+        .map_err(|e| {
+            warn!("Error waiting for server info file: {:?}", e);
+            Error::ForwarderError("Error waiting for server info file".to_string())
+        })?;
     let mut source_client = SourceClient::connect(source_config).await?;
 
     server_info::wait_for_server_info(&sink_config.server_info_file).await?;
@@ -254,19 +253,6 @@ mod tests {
             server_info_file: src_info_file.to_str().unwrap().to_string(),
             max_message_size: 100,
         };
-
-        // Write to the server info file with sample data, use the write_server_info
-        // function from the server_info module
-        // println!("file_path_1: {:?}", src_info_file.clone());
-        // let dummy_info = server_info::ServerInfo::dummy();
-        // server_info::write_server_info(&dummy_info, &src_info_file.to_str().unwrap())
-        //     .await.expect("Could not write to server info file");
-
-        // // read the server info file and check if the data is correct
-        // let s = fs::read_to_string(src_info_file.clone());
-        // println!("Server info file: {:?}", s);
-        //
-        // println!("file_path_1: {:?}", src_info_file);
 
         let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();

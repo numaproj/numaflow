@@ -17,6 +17,7 @@ lazy_static::lazy_static! {
         m.insert("go".to_string(), "0.7.0-rc2".to_string());
         m.insert("python".to_string(), "0.7.0a1".to_string());
         m.insert("java".to_string(), "0.7.2-0".to_string());
+        m.insert("rust".to_string(), "0.0.1".to_string());
         m
     };
 }
@@ -78,12 +79,6 @@ impl VersionInfo {
     pub(crate) fn get_version_info() -> &'static VersionInfo {
         &VERSION_INFO
     }
-
-    // Getter for version as string
-    pub(crate) fn version_as_string(&self) -> String {
-        format!("version: {}, BuildDate: {}, GitCommit: {}, GitTag: {}, GitTreeState: {}, RustVersion: {}, Compiler: {}, Platform: {}",
-               self.version, self.build_date, self.git_commit, self.git_tag, self.git_tree_state, self.rust_version, self.compiler, self.platform)
-    }
 }
 
 lazy_static! {
@@ -140,7 +135,14 @@ mod tests {
         };
 
         let expected = "version: 1.0.0, BuildDate: 2023-05-01T12:00:00Z, GitCommit: abcdef1234567890, GitTag: v1.0.0, GitTreeState: clean, RustVersion: 1.55.0, Compiler: rustc, Platform: linux/amd64";
-        assert_eq!(v.version_as_string(), expected);
+
+        // convert VersionInfo to string
+        let version_str = format!(
+            "version: {}, BuildDate: {}, GitCommit: {}, GitTag: {}, GitTreeState: {}, RustVersion: {}, Compiler: {}, Platform: {}",
+            v.version, v.build_date, v.git_commit, v.git_tag, v.git_tree_state, v.rust_version, v.compiler, v.platform
+        );
+        // check if the string is as expected
+        assert_eq!(version_str, expected);
     }
 
     #[test]
