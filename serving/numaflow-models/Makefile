@@ -13,7 +13,7 @@ publish: generate
 	echo TODO
 
 generate:
-	rm -Rf ./docs ./test ./numaflow/models/ ./numaflow/model/
+	rm -Rf ./docs ./src
 	mkdir -p ./dist
 	cat ../../api/openapi-spec/swagger.json | ./hack/swaggerfilter.py io.numaproj.numaflow | \
 		sed 's/io.k8s.api.core.v1./CoreV1/' | \
@@ -25,6 +25,7 @@ generate:
 		generate \
 		-i /base/dist/swagger.json \
 		-g rust \
+		-t /base/templates \
 		-o /base \
 		--remove-operation-id-prefix \
 		--model-name-prefix '' \
@@ -58,7 +59,6 @@ generate:
 		--type-mappings ResourceQuantity="k8s_openapi::apimachinery::pkg::api::resource::Quantity" \
 		--generate-alias-as-model
 
-	sed -e 's/edition = "2018"/edition = "2021"/g' -e 's/authors =.*/authors = \["Numaflow Developers"\]/' -e 's/license =.*/license = "Apache License 2.0"/' Cargo.toml  > tmp && mv tmp Cargo.toml
 	cargo add kube
 	cargo add k8s-openapi --features v1_29
 	cargo fmt
