@@ -28,7 +28,7 @@ async fn main() {
     info!("Starting the forwarder");
     // Start the metrics server, which server the prometheus metrics.
     // TODO: make the port configurable.
-    let metrics_addr: SocketAddr = "0.0.0.0:9090".parse().expect("Invalid address");
+    let metrics_addr: SocketAddr = "0.0.0.0:2469".parse().expect("Invalid address");
 
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
