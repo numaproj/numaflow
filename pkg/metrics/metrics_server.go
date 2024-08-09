@@ -148,7 +148,6 @@ func NewMetricsServer(vertex *dfv1.Vertex, opts ...Option) *metricsServer {
 	if m.lagReaders != nil {
 		for partitionName := range m.lagReaders {
 			m.partitionPendingInfo[partitionName] = sharedqueue.New[timestampedPending](1800)
-
 		}
 	}
 	return m
