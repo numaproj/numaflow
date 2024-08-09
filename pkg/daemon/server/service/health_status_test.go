@@ -117,12 +117,12 @@ func TestHealthThresholds(t *testing.T) {
 	eighty := uint32(80)
 
 	hc.pipeline.Spec.Limits = &v1alpha1.PipelineLimits{BufferUsageLimit: &forty}
-	hc.udpateThresholds()
+	hc.udpateThresholds(uint32(*hc.pipeline.Spec.Limits.BufferUsageLimit))
 	c, _ := hc.GetThresholds()
 	assert.Equal(t, c, float64(36))
 
 	hc.pipeline.Spec.Limits = &v1alpha1.PipelineLimits{BufferUsageLimit: &eighty}
-	hc.udpateThresholds()
+	hc.udpateThresholds(uint32(*hc.pipeline.Spec.Limits.BufferUsageLimit))
 
 }
 
@@ -612,7 +612,7 @@ func TestAssignStateToBufferUsage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := assignStateToBufferUsage(tt.ewmaValue)
+			result := assignStateToBufferUsage(tt.ewmaValue, 80)
 			t.Log(tt.ewmaValue, result)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -691,7 +691,7 @@ func TestAssignStateToTimeline(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := assignStateToTimeline(tt.ewmaValues, tt.lookBack)
+			result := assignStateToTimeline(tt.ewmaValues, tt.lookBack, 80)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
