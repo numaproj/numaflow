@@ -10,7 +10,7 @@ resources:
 
 images:
   - name: quay.io/numaproj/numaflow
-    newTag: latest
+    newTag: v1.3.0-rc1
 
 patches:
   - patch: |-
@@ -25,4 +25,4 @@ patches:
               - name: controller-manager
                 env:
                   - name: NUMAFLOW_IMAGE
-                    value: quay.io/numaproj/numaflow:latest
+                    value: quay.io/numaproj/numaflow:v1.3.0-rc1
