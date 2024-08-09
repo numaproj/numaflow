@@ -1,13 +1,16 @@
 use std::future::ready;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
+use axum_server::tls_rustls::RustlsConfig;
 use log::info;
 use metrics::describe_counter;
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
+use rcgen::{CertifiedKey, generate_simple_self_signed};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -44,7 +47,7 @@ where
         .route("/metrics", get(move || ready(recorder_handle.render())))
         .route("/livez", get(livez))
         .route("/readyz", get(readyz))
-        .route("/sidecar/livez", get(sidecar_livez));
+        .route("/sidecar-livez", get(sidecar_livez));
 
     let listener = TcpListener::bind(&addr)
         .await
@@ -58,33 +61,36 @@ where
     Ok(())
 }
 
-// FIXME: facing some issues with the tls_rustls feature
-// pub async fn start_metrics_https_server(addr: SocketAddr) -> crate::Result<()>
-// where
-// {
-//     // Generate a self-signed certificate
-//     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
-//         .map_err(|e| Error::MetricsError(format!("Generating self-signed certificate: {}", e)))?;
-//
-//     let tls_config = RustlsConfig::from_pem(cert.pem().into(), key_pair.serialize_pem().into())
-//         .await
-//         .map_err(|e| Error::MetricsError(format!("Creating tlsConfig from pem: {}", e)))?;
-//
-//     // setup_metrics_recorder should only be invoked once
-//     let recorder_handle = setup_metrics_recorder()?;
-//
-//     let metrics_app = Router::new()
-//         .route("/metrics", get(move || ready(recorder_handle.render())))
-//         .route("/livez", get(livez))
-//         .route("/readyz", get(readyz));
-//
-//     axum_server::bind_rustls(addr, tls_config)
-//         .serve(metrics_app.into_make_service())
-//         .await
-//         .map_err(|e| Error::MetricsError(format!("Starting web server for metrics: {}", e)))?;
-//
-//     Ok(())
-// }
+pub async fn start_metrics_https_server(addr: SocketAddr) -> crate::Result<()>
+where
+{
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+    // Generate a self-signed certificate
+    let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
+        .map_err(|e| Error::MetricsError(format!("Generating self-signed certificate: {}", e)))?;
+
+
+    let tls_config = RustlsConfig::from_pem(cert.pem().into(), key_pair.serialize_pem().into())
+        .await
+        .map_err(|e| Error::MetricsError(format!("Creating tlsConfig from pem: {}", e)))?;
+
+    // setup_metrics_recorder should only be invoked once
+    let recorder_handle = setup_metrics_recorder()?;
+
+    let metrics_app = Router::new()
+        .route("/metrics", get(move || ready(recorder_handle.render())))
+        .route("/livez", get(livez))
+        .route("/readyz", get(readyz))
+        .route("/sidecar-livez", get(sidecar_livez));
+
+    axum_server::bind_rustls(addr, tls_config)
+        .serve(metrics_app.into_make_service())
+        .await
+        .map_err(|e| Error::MetricsError(format!("Starting web server for metrics: {}", e)))?;
+
+    Ok(())
+}
 
 async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT

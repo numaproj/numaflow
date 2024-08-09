@@ -3,16 +3,11 @@ kind: MonoVertex
 metadata:
   name: simple-mono-vertex
 spec:
-  limits:
-    readBatchSize: 1000
   source:
     udsource:
       container:
-        image: docker.intuit.com/personal/yhl01/simple-source:stable
-    transformer:
-      container:
-        image: quay.io/yhl25/mapt-event-time-filter:stable
+        image: quay.io/numaio/numaflow-java/source-simple-source:stable
   sink:
     udsink:
       container:
-        image: docker.intuit.com/personal/yhl01/blackhole-sink:stable
+        image: quay.io/numaio/numaflow-java/simple-sink:stable

@@ -319,7 +319,7 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/readyz",
 				Port:   intstr.FromInt32(MonoVertexMetricsPort),
-				Scheme: corev1.URISchemeHTTP,
+				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
 		InitialDelaySeconds: 3,
@@ -331,7 +331,7 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/livez",
 				Port:   intstr.FromInt32(MonoVertexMetricsPort),
-				Scheme: corev1.URISchemeHTTP,
+				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
 		InitialDelaySeconds: 20,
