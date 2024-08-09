@@ -1,5 +1,92 @@
 # Changelog
 
+## v1.3.0-rc1 (2024-08-08)
+
+ * [179f5967](https://github.com/numaproj/numaflow/commit/179f59674a0a61eb7ae7cd7a83612f0eb7b3be7f) Update manifests to v1.3.0-rc1
+ * [51cc125e](https://github.com/numaproj/numaflow/commit/51cc125eaa1f10cd896b0b5e6a7f9142659b179f) feat: introducing MonoVertex (#1911)
+ * [5e56a594](https://github.com/numaproj/numaflow/commit/5e56a594c8f6f23a4228ff0d740b6666e9f049a4) feat: Rust k8s model for Numaflow (#1898)
+ * [bc1451a3](https://github.com/numaproj/numaflow/commit/bc1451a35f3871c3459955956eaa35f48abea761) feat: Add ObservedGeneration field in vertex status and use it for calculating status (#1892)
+ * [280b9bd3](https://github.com/numaproj/numaflow/commit/280b9bd3edc95100791b2f23a1e3eb9930db675c) fix: configure discard policy for WorkQueue/Interest  (#1884)
+ * [d2a67588](https://github.com/numaproj/numaflow/commit/d2a67588e3c9f165fab708a962c873beed235e95) feat: Sync the health status of  ISBService, pipeline and vertex (#1860)
+ * [51a21fa8](https://github.com/numaproj/numaflow/commit/51a21fa8a4ba9c12ad3a14ddf6dab0ef53525d73) feat: expose replica metrics for ISB Service and Vertex (#1859)
+ * [e4e5f1c8](https://github.com/numaproj/numaflow/commit/e4e5f1c89bfa8913cff948dc7ae08ad828250cae) feat: new edge path (#1864)
+ * [c07425b5](https://github.com/numaproj/numaflow/commit/c07425b50b38f09a381c0673e9f344c5874aed7b) feat: pipeline and isbsvc resource health status metrics and detailed vertex type stats (#1856)
+ * [d708ffb0](https://github.com/numaproj/numaflow/commit/d708ffb0cb9c3f02e1be1fd3804ab9785b4fa2f1) feat: add controller and pipeline info metrics (#1855)
+ * [0b7f5a38](https://github.com/numaproj/numaflow/commit/0b7f5a3894fcceda5ff49a509c3a50a897b0a47d) fix: api docs for jetstream service (#1851)
+ * [1db0d093](https://github.com/numaproj/numaflow/commit/1db0d093b77d843911dc3a8890026b8e13bbf98a) feat: use same server-info file for all map modes (#1828)
+ * [ccfb8c2c](https://github.com/numaproj/numaflow/commit/ccfb8c2c0f804df3bc09933b4f9dfeba184b55f7) feat: Serving Source (#1806)
+ * [d620f1b1](https://github.com/numaproj/numaflow/commit/d620f1b16ec1bc9fd572c5106ed7093f82f417d2) feat: add ObservedGeneration to Pipeline and ISBService Status (#1799)
+ * [6e4a681f](https://github.com/numaproj/numaflow/commit/6e4a681ff260d95a08395ce5f70005c0c2c166d4) fix(#1832): scale down to >=min, but not 0 when there's direct back pressure (#1834)
+ * [fa18f97d](https://github.com/numaproj/numaflow/commit/fa18f97dc7fb9d611c3498b3cea2b2ecd8598b96) fix: should never scale down to < min (#1832)
+ * [cea0783f](https://github.com/numaproj/numaflow/commit/cea0783f660827daa2d36d413baab05114854a56) fix: value can be null (#1831)
+ * [251e84f2](https://github.com/numaproj/numaflow/commit/251e84f23eae3c54573bd87799055db750e50314) feat: enable restful daemon client option for UX server (#1826)
+ * [00619b67](https://github.com/numaproj/numaflow/commit/00619b671d636aac78fa2330cf334b014874fc18) feat: implement map batch (#1778)
+ * [8cff6d1f](https://github.com/numaproj/numaflow/commit/8cff6d1ff13bf4b3343084b737065fc03596a2f0) fix: save trait should accept Self as mutable (#1795)
+ * [2b0ac547](https://github.com/numaproj/numaflow/commit/2b0ac547e70209b87a3868684035265ca6dd619f) feat: crate for retry with backoff strategy (#1785)
+ * [5f3766ab](https://github.com/numaproj/numaflow/commit/5f3766ab9173d4b7a510c881f4d655089eebb504) feat: use protobuf to store wmb in KV (#1782)
+ * [21533393](https://github.com/numaproj/numaflow/commit/21533393125c8a2754f74f689ef6bf2f66c59830) feat: use protobuf to store header and messages in ISB (#1771)
+ * [07483c85](https://github.com/numaproj/numaflow/commit/07483c85540fb30f605a8d018ff4aa42ff7ac01d) fix: add retries when writing to redis and resp headers const (#1766)
+ * [1fc41e93](https://github.com/numaproj/numaflow/commit/1fc41e93991807cd4170474f9b3ec0b4dccb1a6a) feat: serving and tracking endpoint for Numaflow (#1765)
+ * [8da7c229](https://github.com/numaproj/numaflow/commit/8da7c2296b11d717cb5911256bd9d11af10b4ac1) feat: publish to callback endpoint for tracking (#1753)
+ * [f69d8303](https://github.com/numaproj/numaflow/commit/f69d8303268f79bdeaaa5603f44bbd38e0913e53) chore(deps): bump ws from 7.5.9 to 7.5.10 in /ui (#1762)
+ * [0f91c7ef](https://github.com/numaproj/numaflow/commit/0f91c7ef8e52819f096a23b1f2759b014952988e) chore(deps): bump braces from 3.0.2 to 3.0.3 in /ui (#1758)
+ * [b26008e8](https://github.com/numaproj/numaflow/commit/b26008e8414d99bda71ec23f5c1dd3770bf63972) feat(config): standardize boolean value with YAML tags. Fixes #1742 (#1749)
+ * [71bc030d](https://github.com/numaproj/numaflow/commit/71bc030dcea12ec97758b9023ba567744666c09a) feat: adding numaflow version to the UI (#1744)
+ * [1e03eee4](https://github.com/numaproj/numaflow/commit/1e03eee4f2ea123310db02d89775e20f85906d0f) fix: update SDKs to stable image (#1746)
+ * [30c42f63](https://github.com/numaproj/numaflow/commit/30c42f635c3d9840e1a3f5acdfed1d1a3d33e0be) doc: update roadmap (#1748)
+ * [61a17aaf](https://github.com/numaproj/numaflow/commit/61a17aafa82219ddb17b1b40a3c39e297c7f6584) Tick generator blob - Closes #1732 (#1733)
+ * [3759cde0](https://github.com/numaproj/numaflow/commit/3759cde082f273d2bc126fa2f463d47a4eda09bd) fix: Read from Oldest Offset for Idle Source Kafka e2e  (#1731)
+ * [0cd57bc4](https://github.com/numaproj/numaflow/commit/0cd57bc4e6f54e3e1d756f59f67ec4720823f3a9) feat: Built-in Jetstream source implementation (Closes #1695) (#1723)
+ * [d2580c6d](https://github.com/numaproj/numaflow/commit/d2580c6d8bd5a83b56ca69cb0858af001f9b187b) fix: height fixes to render pipeline view (#1720)
+ * [3d9358f9](https://github.com/numaproj/numaflow/commit/3d9358f9c0670647bad76aa16ff5c8e188ff5a63) doc: add numaflow-controller-config link (#1719)
+ * [1c772576](https://github.com/numaproj/numaflow/commit/1c7725766ac1f4447536faf902d33c31983bda84) fix: summary bar overlay fix for plugin (#1710)
+ * [7ab5788d](https://github.com/numaproj/numaflow/commit/7ab5788d2478e6444b6212a761fda2793f417e4a) chore(deps): bump ejs from 3.1.9 to 3.1.10 in /ui (#1711)
+ * [88b89bc0](https://github.com/numaproj/numaflow/commit/88b89bc0f53268a687ae7c438d6c9f26dc10881c) doc: add "nav" for fallback-sink (#1694)
+ * [6da27960](https://github.com/numaproj/numaflow/commit/6da279605e29d55523449b3d4d5df0391961d66c) doc: reduce streaming (#1689)
+ * [aea4a329](https://github.com/numaproj/numaflow/commit/aea4a329be26ef50566b08d00b4bdd11a5a07e17) doc: Fallback Sink (#1691)
+ * [2f854b0d](https://github.com/numaproj/numaflow/commit/2f854b0d6d2b249393fe94eccdc0c2780b2f451d) chore(deps): bump golang.org/x/net from 0.22.0 to 0.23.0 (#1692)
+ * [9bfcf880](https://github.com/numaproj/numaflow/commit/9bfcf880f2890885cd3e527b632d27f584c7edef) doc: session doc (#1650)
+ * [68541358](https://github.com/numaproj/numaflow/commit/685413587e885213c3b036a8bcede198e04d0fa8) fix: version downgrade for monaco-editor  (#1673)
+ * [db0d2ed1](https://github.com/numaproj/numaflow/commit/db0d2ed1d9208cbe52123b3927f49fdfb30442ba) feat: Fallback Sink  (#1669)
+ * [06ca9bc4](https://github.com/numaproj/numaflow/commit/06ca9bc42ad1a88f6cbd4cbb4b76c01cc325e48c) fix: routing fixes (#1671)
+ * [3bb93820](https://github.com/numaproj/numaflow/commit/3bb938204de9c18925f1058a4ac3666498be64e9) feat: controller change for fallback sink (#1664)
+ * [268b00d1](https://github.com/numaproj/numaflow/commit/268b00d1ded263faf44d7c509c1d1b0e9d85998f) Enable cors for numaflow api (#1631)
+ * [e9c3731b](https://github.com/numaproj/numaflow/commit/e9c3731bcb53f5b5c18695efee2d2a4c5b616adc) feat: expose controller leader election duration and renew opts (#1657)
+ * [e7cf8c77](https://github.com/numaproj/numaflow/commit/e7cf8c773372d3609c358c8aac0fa65eca4cbedf) fix: add headers to custom sinkrequest (#1653)
+ * [2ef4286c](https://github.com/numaproj/numaflow/commit/2ef4286c90a4e02631480d70d04ba250a4f426ee) fix: pass headers to transfomer (#1651)
+ * [75195d56](https://github.com/numaproj/numaflow/commit/75195d56dcc25bcbe277abe257c3d7eb7378ca86) fix: avoid publishing watermarks for duplicate messages. (#1649)
+ * [872d8a83](https://github.com/numaproj/numaflow/commit/872d8a8399d9d782b9fe95929e029d158da999c1) fix: flaky TestDropOnFull  (#1647)
+ * [645a6941](https://github.com/numaproj/numaflow/commit/645a694173a7d7a34cb7ad4e26d445e6de053886) fix: Dedup not working for multi-partitioned edge (#1639)
+ * [a6297030](https://github.com/numaproj/numaflow/commit/a6297030792ca25435fb1c35f14c71e2b8daaf8b) fix: readonly view (#1640)
+ * [0c68cd40](https://github.com/numaproj/numaflow/commit/0c68cd40a3d4065b49e335a0a53d3c5f85925811) feat: read only view for UI (#1628)
+ * [3dbba4f6](https://github.com/numaproj/numaflow/commit/3dbba4f64931313267cb9023c2e787bd86a111f6) fix: race condition while publishing wm inside reduce (#1599)
+ * [74ab70aa](https://github.com/numaproj/numaflow/commit/74ab70aaf992af370a5ffe779e1b3147263d84ad) fix: bug in late message handling for sliding window (#1471)
+ * [35c2fe00](https://github.com/numaproj/numaflow/commit/35c2fe00a0bef24a658ebecfc3a39de50c195ed0) fix: numaflow package style fixes (#1622)
+ * [f1e5ba0e](https://github.com/numaproj/numaflow/commit/f1e5ba0eb222edf3e5a5593769efc3626b092c1b) doc: add new user to the list (#1623)
+ * [caf49c91](https://github.com/numaproj/numaflow/commit/caf49c9197398cdaac9c97c7d4e126b9eeeaeb19) fix: watermark progression during pods creation/deletion (#1619)
+ * [756e66e6](https://github.com/numaproj/numaflow/commit/756e66e6be14e2bd0d56d7a9a3fe48bb2aa1c385) fix: allow pipeline to start with redis isbsvc (Fixes: #1513) (#1567)
+ * [ef94def9](https://github.com/numaproj/numaflow/commit/ef94def97157d1f532588f33504a17dd8e266623) fix: dedup in user defined source (#1613)
+ * [c0b9fad2](https://github.com/numaproj/numaflow/commit/c0b9fad219de930de61a3bcb04cfff2bd60320c9) chore(deps): bump express from 4.18.2 to 4.19.2 in /ui (#1609)
+
+### Contributors
+
+ * Ali Ibrahim
+ * Chandan Kumar
+ * Charan
+ * Derek Wang
+ * Keran Yang
+ * Matt Warner
+ * Naga
+ * Quentin FAIDIDE
+ * Sidhant Kohli
+ * Sreekanth
+ * Vedant Gupta
+ * Vigith Maurice
+ * Yashash H L
+ * dependabot[bot]
+ * samhith-kakarla
+ * xdevxy
+
 ## v1.2.1 (2024-05-07)
 
  * [89ea33f1](https://github.com/numaproj/numaflow/commit/89ea33f1d69785f6f5f17f1d5854ac189003918a) Update manifests to v1.2.1
