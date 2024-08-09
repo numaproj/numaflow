@@ -7,6 +7,7 @@ use tonic::Request;
 use crate::error::{Error, Result};
 use crate::message::{Message, Offset};
 use crate::shared::connect_with_uds;
+
 pub mod proto {
     tonic::include_proto!("source.v1");
 }
@@ -44,6 +45,7 @@ impl SourceClient {
         let client = proto::source_client::SourceClient::new(channel)
             .max_encoding_message_size(config.max_message_size)
             .max_decoding_message_size(config.max_message_size);
+
         Ok(Self { client })
     }
 
@@ -93,9 +95,15 @@ impl SourceClient {
 
     #[allow(dead_code)]
     // TODO: remove dead_code
-    pub(crate) async fn pending_fn(&mut self) -> Result<proto::PendingResponse> {
+    pub(crate) async fn pending_fn(&mut self) -> Result<i64> {
         let request = Request::new(());
-        let response = self.client.pending_fn(request).await?.into_inner();
+        let response = self
+            .client
+            .pending_fn(request)
+            .await?
+            .into_inner()
+            .result
+            .map_or(0, |r| r.count);
         Ok(response)
     }
 
@@ -215,7 +223,7 @@ mod tests {
         .expect("failed to connect to source server");
 
         let response = source_client.is_ready().await.unwrap();
-        assert_eq!(response.ready, true);
+        assert!(response.ready);
 
         let messages = source_client.read_fn(5, 1000).await.unwrap();
         assert_eq!(messages.len(), 5);
@@ -227,7 +235,7 @@ mod tests {
         assert!(response.result.unwrap().success.is_some());
 
         let pending = source_client.pending_fn().await.unwrap();
-        assert_eq!(pending.result.unwrap().count, 0);
+        assert_eq!(pending, 0);
 
         let partitions = source_client.partitions_fn().await.unwrap();
         assert_eq!(partitions, vec![2]);

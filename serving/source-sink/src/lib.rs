@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use std::fs;
 use std::time::Duration;
+use std::{env, fs};
 use tokio::signal;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -41,8 +42,8 @@ pub mod version;
 
 pub(crate) mod shared;
 
-const TIMEOUT_IN_MS: u32 = 1000;
-const BATCH_SIZE: u64 = 500;
+const TIMEOUT_IN_MS: &str = "1000";
+const BATCH_SIZE: &str = "500";
 
 /// forwards a chunk of data from the source to the sink via an optional transformer.
 /// It takes an optional custom_shutdown_rx for shutting down the forwarder, useful for testing.
@@ -55,16 +56,31 @@ pub async fn run_forwarder(
     server_info::wait_for_server_info(&source_config.server_info_file)
         .await
         .map_err(|e| {
-            warn!("Error waiting for server info file: {:?}", e);
+            warn!("Error waiting for source server info file: {:?}", e);
             Error::ForwarderError("Error waiting for server info file".to_string())
         })?;
+    // TODO: get this from vertex object, controller will have to pass this
+    let vertex_name = env::var("VERTEX_NAME").unwrap_or_else(|_| "vertex".to_string());
+    let pipeline_name = env::var("PIPELINE_NAME").unwrap_or_else(|_| "pipeline".to_string());
+    let replica = 0;
+
     let mut source_client = SourceClient::connect(source_config).await?;
 
-    server_info::wait_for_server_info(&sink_config.server_info_file).await?;
+    server_info::wait_for_server_info(&sink_config.server_info_file)
+      .await
+      .map_err(|e| {
+          warn!("Error waiting for sink server info file: {:?}", e);
+          Error::ForwarderError("Error waiting for server info file".to_string())
+      })?;
     let mut sink_client = SinkClient::connect(sink_config).await?;
 
     let mut transformer_client = if let Some(config) = transformer_config {
-        server_info::wait_for_server_info(&config.server_info_file).await?;
+        server_info::wait_for_server_info(&config.server_info_file)
+          .await
+          .map_err(|e| {
+              warn!("Error waiting for transformer server info file: {:?}", e);
+              Error::ForwarderError("Error waiting for server info file".to_string())
+          })?;
         Some(TransformerClient::connect(config).await?)
     } else {
         None
@@ -80,13 +96,26 @@ pub async fn run_forwarder(
     )
     .await?;
 
+    // TODO get these from the vertex object
+    let timeout_in_ms: u32 = env::var("TIMEOUT_IN_MS")
+        .unwrap_or_else(|_| TIMEOUT_IN_MS.to_string())
+        .parse()
+        .expect("Invalid TIMEOUT_IN_MS");
+    let batch_size: u64 = env::var("BATCH_SIZE")
+        .unwrap_or_else(|_| BATCH_SIZE.to_string())
+        .parse()
+        .expect("Invalid BATCH_SIZE");
+
     // TODO: use builder pattern of options like TIMEOUT, BATCH_SIZE, etc?
     let mut forwarder = Forwarder::new(
+        vertex_name,
+        pipeline_name,
+        replica,
         source_client,
         sink_client,
         transformer_client,
-        TIMEOUT_IN_MS,
-        BATCH_SIZE,
+        timeout_in_ms,
+        batch_size,
         shutdown_rx,
     )
     .await?;
@@ -279,12 +308,8 @@ mod tests {
         // FIXME: we need to have a better way, this is flaky
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        unsafe {
-            env::set_var("SOURCE_SOCKET", src_sock_file.to_str().unwrap());
-        }
-        unsafe {
-            env::set_var("SINK_SOCKET", sink_sock_file.to_str().unwrap());
-        }
+        env::set_var("SOURCE_SOCKET", src_sock_file.to_str().unwrap());
+        env::set_var("SINK_SOCKET", sink_sock_file.to_str().unwrap());
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 

@@ -39,6 +39,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	isbsvcctrl "github.com/numaproj/numaflow/pkg/reconciler/isbsvc"
+	monovtxctrl "github.com/numaproj/numaflow/pkg/reconciler/monovertex"
 	plctrl "github.com/numaproj/numaflow/pkg/reconciler/pipeline"
 	vertexctrl "github.com/numaproj/numaflow/pkg/reconciler/vertex"
 	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
@@ -194,7 +195,7 @@ func Start(namespaced bool, managedNamespace string) {
 		logger.Fatalw("Unable to watch Services", zap.Error(err))
 	}
 
-	// Watch Deployments with Generation changes
+	// Watch Deployments changes
 	if err := pipelineController.Watch(source.Kind(mgr.GetCache(), &appv1.Deployment{}),
 		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Pipeline{}, handler.OnlyControllerOwner()),
 		predicate.ResourceVersionChangedPredicate{}); err != nil {
@@ -233,6 +234,46 @@ func Start(namespaced bool, managedNamespace string) {
 		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Vertex{}, handler.OnlyControllerOwner()),
 		predicate.ResourceVersionChangedPredicate{}); err != nil {
 		logger.Fatalw("Unable to watch Services", zap.Error(err))
+	}
+
+	// MonoVertex controller
+	monoVertexController, err := controller.New(dfv1.ControllerMonoVertex, mgr, controller.Options{
+		Reconciler: monovtxctrl.NewReconciler(mgr.GetClient(), mgr.GetScheme(), config, image, logger, mgr.GetEventRecorderFor(dfv1.ControllerMonoVertex)),
+	})
+	if err != nil {
+		logger.Fatalw("Unable to set up MonoVertex controller", zap.Error(err))
+	}
+
+	// Watch MonoVertices
+	if err := monoVertexController.Watch(source.Kind(mgr.GetCache(), &dfv1.MonoVertex{}), &handler.EnqueueRequestForObject{},
+		predicate.Or(
+			predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{},
+		)); err != nil {
+		logger.Fatalw("Unable to watch MonoVertices", zap.Error(err))
+	}
+
+	// Watch Pods
+	if err := monoVertexController.Watch(source.Kind(mgr.GetCache(), &corev1.Pod{}),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.MonoVertex{}, handler.OnlyControllerOwner()),
+		predicate.ResourceVersionChangedPredicate{},
+		predicate.Funcs{
+			CreateFunc: func(event.CreateEvent) bool { return false }, // Do not watch pod create events
+		}); err != nil {
+		logger.Fatalw("Unable to watch Pods", zap.Error(err))
+	}
+
+	// Watch Services with ResourceVersion changes
+	if err := monoVertexController.Watch(source.Kind(mgr.GetCache(), &corev1.Service{}),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.MonoVertex{}, handler.OnlyControllerOwner()),
+		predicate.ResourceVersionChangedPredicate{}); err != nil {
+		logger.Fatalw("Unable to watch Services", zap.Error(err))
+	}
+
+	// Watch Deployments changes
+	if err := monoVertexController.Watch(source.Kind(mgr.GetCache(), &appv1.Deployment{}),
+		handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.MonoVertex{}, handler.OnlyControllerOwner()),
+		predicate.ResourceVersionChangedPredicate{}); err != nil {
+		logger.Fatalw("Unable to watch Deployments", zap.Error(err))
 	}
 
 	// Add autoscaling runner
