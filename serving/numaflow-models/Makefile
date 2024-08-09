@@ -62,5 +62,5 @@ generate:
 	cargo add kube
 	cargo add k8s-openapi --features v1_29
 	ls -l src
-	src/apis/
+	ls -l src/apis/
 	cargo fmt
