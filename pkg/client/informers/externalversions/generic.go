@@ -55,6 +55,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=numaflow.numaproj.io, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("interstepbufferservices"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Numaflow().V1alpha1().InterStepBufferServices().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("monovertices"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Numaflow().V1alpha1().MonoVertices().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("pipelines"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Numaflow().V1alpha1().Pipelines().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("vertices"):

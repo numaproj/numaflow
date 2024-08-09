@@ -22,6 +22,7 @@ option java_package = "io.numaproj.numaflow.mapstream.v1";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
+
 package mapstream.v1;
 
 service MapStream {
@@ -40,6 +41,7 @@ message MapStreamRequest {
   bytes value = 2;
   google.protobuf.Timestamp event_time = 3;
   google.protobuf.Timestamp watermark = 4;
+  map<string, string> headers = 5;
 }
 
 /**

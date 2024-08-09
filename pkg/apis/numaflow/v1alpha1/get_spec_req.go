@@ -97,3 +97,17 @@ type GetSideInputDeploymentReq struct {
 	Env              []corev1.EnvVar             `protobuf:"bytes,4,rep,name=env"`
 	DefaultResources corev1.ResourceRequirements `protobuf:"bytes,5,opt,name=defaultResources"`
 }
+
+type GetMonoVertexDaemonDeploymentReq struct {
+	Image            string                      `protobuf:"bytes,1,opt,name=image"`
+	PullPolicy       corev1.PullPolicy           `protobuf:"bytes,2,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
+	Env              []corev1.EnvVar             `protobuf:"bytes,3,rep,name=env"`
+	DefaultResources corev1.ResourceRequirements `protobuf:"bytes,4,opt,name=defaultResources"`
+}
+
+type GetMonoVertexPodSpecReq struct {
+	Image            string                      `protobuf:"bytes,1,opt,name=image"`
+	PullPolicy       corev1.PullPolicy           `protobuf:"bytes,2,opt,name=pullPolicy,casttype=k8s.io/api/core/v1.PullPolicy"`
+	Env              []corev1.EnvVar             `protobuf:"bytes,3,rep,name=env"`
+	DefaultResources corev1.ResourceRequirements `protobuf:"bytes,4,opt,name=defaultResources"`
+}
