@@ -1,13 +1,11 @@
+use std::collections::HashMap;
+use std::fs;
+use std::str::FromStr;
+use std::time::Duration;
+
 use pep440_rs::{Version as PepVersion, VersionSpecifier};
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fs;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
@@ -22,21 +20,23 @@ const END: &str = "U+005C__END__";
 // ServerInfo structure to store server-related information
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct ServerInfo {
-    #[serde(default)] // Use default value if not provided in JSON
+    #[serde(default)]
     protocol: String,
-    #[serde(default)] // Use default value if not provided in JSON
+    #[serde(default)]
     language: String,
-    #[serde(default)] // Use default value if not provided in JSON
+    #[serde(default)]
     minimum_numaflow_version: String,
-    #[serde(default)] // Use default value if not provided in JSON
+    #[serde(default)]
     version: String,
-    #[serde(default)] // Use default value if not provided in JSON
+    #[serde(default)]
     metadata: Option<HashMap<String, String>>, // Metadata is optional
 }
 
-// wait_for_server_info waits until the server info file is ready
-pub async fn wait_for_server_info(file_path: &str) -> error::Result<()> {
+/// check_for_server_compatibility waits until the server info file is ready and check whether the
+/// server is compatible with Numaflow.
+pub async fn check_for_server_compatibility(file_path: &str) -> error::Result<()> {
     // Infinite loop to keep checking until the file is ready
+    // TODO: see whether we can move this to the code into `read_server_info`
     loop {
         // Check if the file exists and has content
         if let Ok(metadata) = fs::metadata(file_path) {
@@ -124,14 +124,14 @@ fn check_numaflow_compatibility(
 
     // Create a version constraint based on the minimum numaflow version
     let numaflow_constraint = format!(">={}", min_numaflow_version);
-    check_constraint(&numaflow_version_semver, &numaflow_constraint).map_err(|e| {
-        let err_string = format!(
-            "numaflow version {} must be upgraded to at least {}, in order to work with current SDK version {}",
-            numaflow_version_semver, min_numaflow_version, e
-        );
-        Error::ServerInfoError(err_string)
-    })?;
-    Ok(())
+    Ok(
+        check_constraint(&numaflow_version_semver, &numaflow_constraint).map_err(|e| {
+            Error::ServerInfoError(format!(
+                "numaflow version {} must be upgraded to at least {}, in order to work with current SDK version {}",
+                numaflow_version_semver, min_numaflow_version, e
+            ))
+        })?
+    )
 }
 
 /// Checks if the current SDK version is compatible with the given language's minimum supported SDK version.
@@ -181,6 +181,7 @@ fn check_sdk_compatibility(
             "SDK version constraint not found for language: {}",
             sdk_language
         );
+
         // Return error indicating the language
         return Err(Error::ServerInfoError(format!(
             "SDK version constraint not found for language: {}",
@@ -204,7 +205,7 @@ async fn read_server_info(file_path: &str) -> error::Result<ServerInfo> {
                     contents = data.trim_end_matches(END).to_string();
                     break;
                 } else {
-                    warn!("Server info file is not ready yet...");
+                    warn!("Server info file is incomplete, EOF is missing...");
                 }
             }
             Err(e) => {
@@ -220,6 +221,7 @@ async fn read_server_info(file_path: &str) -> error::Result<ServerInfo> {
                 "server-info reading retry exceeded".to_string(),
             ));
         }
+
         sleep(Duration::from_millis(100)).await; // Sleep before retrying
     }
 
@@ -230,13 +232,15 @@ async fn read_server_info(file_path: &str) -> error::Result<ServerInfo> {
             e, contents
         ))
     })?;
+
     Ok(server_info) // Return the parsed server info
 }
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
     use std::{collections::HashMap, fs::File};
+    use std::io::{Read, Write};
+    use serde_json::json;
     use tempfile::tempdir;
 
     use super::*;
@@ -437,7 +441,7 @@ mod tests {
     #[tokio::test]
     async fn test_write_server_info_failure() {
         // Invalid file path that cannot be created
-        let file_path = PathBuf::from("/invalid/path/server_info.txt");
+        let file_path = std::path::PathBuf::from("/invalid/path/server_info.txt");
 
         // Server info to write
         let server_info = ServerInfo {
@@ -534,7 +538,7 @@ mod tests {
             "version": "v0.7.0-rc2",
             "metadata": null
         })
-        .to_string();
+            .to_string();
 
         let expected_server_info = ServerInfo {
             protocol: "uds".to_string(),
@@ -607,9 +611,10 @@ mod tests {
 
 // creat a mod for version.rs
 mod version {
-    use once_cell::sync::Lazy;
     use std::collections::HashMap;
     use std::env;
+
+    use once_cell::sync::Lazy;
 
     pub(crate) type SdkConstraints = HashMap<String, String>;
 

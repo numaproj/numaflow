@@ -1,4 +1,3 @@
-use std::fs;
 use std::time::Duration;
 
 use tokio::signal;
@@ -47,7 +46,7 @@ pub async fn run_forwarder(
     transformer_config: Option<TransformerConfig>,
     custom_shutdown_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<()> {
-    server_info::wait_for_server_info(&source_config.server_info_file)
+    server_info::check_for_server_compatibility(&source_config.server_info_file)
         .await
         .map_err(|e| {
             warn!("Error waiting for source server info file: {:?}", e);
@@ -59,7 +58,7 @@ pub async fn run_forwarder(
     let mut lag_reader = metrics::LagReader::new(source_client.clone(), None, None);
     lag_reader.start().await;
 
-    server_info::wait_for_server_info(&sink_config.server_info_file)
+    server_info::check_for_server_compatibility(&sink_config.server_info_file)
         .await
         .map_err(|e| {
             warn!("Error waiting for sink server info file: {:?}", e);
@@ -69,7 +68,7 @@ pub async fn run_forwarder(
     let mut sink_client = SinkClient::connect(sink_config).await?;
 
     let mut transformer_client = if let Some(config) = transformer_config {
-        server_info::wait_for_server_info(&config.server_info_file)
+        server_info::check_for_server_compatibility(&config.server_info_file)
             .await
             .map_err(|e| {
                 warn!("Error waiting for transformer server info file: {:?}", e);
@@ -88,7 +87,7 @@ pub async fn run_forwarder(
         &mut sink_client,
         &mut transformer_client,
     )
-    .await?;
+        .await?;
 
     // TODO: use builder pattern of options like TIMEOUT, BATCH_SIZE, etc?
     let mut forwarder =
@@ -124,18 +123,6 @@ pub async fn run_forwarder(
     lag_reader.shutdown().await;
     info!("Forwarder stopped gracefully");
     Ok(())
-}
-
-async fn wait_for_server_info(file_path: &str) -> Result<()> {
-    loop {
-        if let Ok(metadata) = fs::metadata(file_path) {
-            if metadata.len() > 0 {
-                return Ok(());
-            }
-        }
-        info!("Server info file {} is not ready, waiting...", file_path);
-        sleep(Duration::from_secs(1)).await;
-    }
 }
 
 async fn wait_until_ready(
