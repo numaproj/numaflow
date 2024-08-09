@@ -13,7 +13,7 @@ publish: generate
 	echo TODO
 
 generate:
-	rm -Rf ./docs ./test ./numaflow/models/ ./numaflow/model/
+	rm -Rf ./docs ./src
 	mkdir -p ./dist
 	cat ../../api/openapi-spec/swagger.json | ./hack/swaggerfilter.py io.numaproj.numaflow | \
 		sed 's/io.k8s.api.core.v1./CoreV1/' | \
