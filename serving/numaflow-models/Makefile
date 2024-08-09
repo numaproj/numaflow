@@ -63,4 +63,5 @@ generate:
 	cargo add k8s-openapi --features v1_29
 	ls -l src
 	ls -l src/apis/
+	whoami
 	cargo fmt
