@@ -613,7 +613,7 @@ mod version {
 
     pub(crate) type SdkConstraints = HashMap<String, String>;
 
-    // Define the static variable using once_cell::sync::Lazy
+    // MINIMUM_SUPPORTED_SDK_VERSIONS is a HashMap with SDK language as key and minimum supported version as value
     static MINIMUM_SUPPORTED_SDK_VERSIONS: Lazy<SdkConstraints> = Lazy::new(|| {
         let mut m = HashMap::new();
         m.insert("go".to_string(), "0.7.0-rc2".to_string());
