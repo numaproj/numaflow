@@ -1,13 +1,15 @@
+use std::env;
+use std::net::SocketAddr;
+
 use log::info;
+use tracing::error;
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::EnvFilter;
+
 use sourcer_sinker::sink::SinkConfig;
 use sourcer_sinker::source::SourceConfig;
 use sourcer_sinker::transformer::TransformerConfig;
 use sourcer_sinker::{metrics::start_metrics_server, run_forwarder};
-use std::env;
-use std::net::SocketAddr;
-use tracing::error;
-use tracing::level_filters::LevelFilter;
-use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {

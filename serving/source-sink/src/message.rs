@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine;
+use chrono::{DateTime, Utc};
+
 use crate::error::Error;
 use crate::shared::{prost_timestamp_from_utc, utc_from_timestamp};
 use crate::sink::proto;
 use crate::source::proto::read_response;
 use crate::transformer::proto::SourceTransformRequest;
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use base64::Engine;
-use chrono::{DateTime, Utc};
 
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone)]

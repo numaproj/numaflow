@@ -1,18 +1,19 @@
 use std::time::Duration;
 use std::{env, fs};
+
 use tokio::signal;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tracing::info;
 
+pub(crate) use crate::error::Error;
 use crate::forwarder::Forwarder;
 use crate::sink::{SinkClient, SinkConfig};
 use crate::source::{SourceClient, SourceConfig};
 use crate::transformer::{TransformerClient, TransformerConfig};
 
 pub(crate) use self::error::Result;
-pub(crate) use crate::error::Error;
 
 /// SourcerSinker orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
@@ -53,6 +54,10 @@ pub async fn run_forwarder(
 
     wait_for_server_info(&source_config.server_info_file).await?;
     let mut source_client = SourceClient::connect(source_config).await?;
+
+    // start the lag reader to publish lag metrics
+    let mut lag_reader = metrics::LagReader::new(source_client.clone(), None, None);
+    lag_reader.start().await;
 
     wait_for_server_info(&sink_config.server_info_file).await?;
     let mut sink_client = SinkClient::connect(sink_config).await?;
@@ -114,6 +119,7 @@ pub async fn run_forwarder(
     let _ = tokio::try_join!(forwarder_handle, shutdown_handle)
         .map_err(|e| Error::ForwarderError(format!("{:?}", e)))?;
 
+    lag_reader.shutdown().await;
     info!("Forwarder stopped gracefully");
     Ok(())
 }
@@ -202,12 +208,14 @@ async fn shutdown_signal(shutdown_rx: Option<oneshot::Receiver<()>>) {
 
 #[cfg(test)]
 mod tests {
-    use crate::sink::SinkConfig;
-    use crate::source::SourceConfig;
+    use std::env;
+
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source};
-    use std::env;
     use tokio::sync::mpsc::Sender;
+
+    use crate::sink::SinkConfig;
+    use crate::source::SourceConfig;
 
     struct SimpleSource;
     #[tonic::async_trait]

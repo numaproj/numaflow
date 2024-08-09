@@ -1,23 +1,22 @@
-use crate::error::{Error, Result};
-use crate::metrics::{
-    FORWARDER_ACK_LATENCY, FORWARDER_ACK_TOTAL, FORWARDER_LATENCY, FORWARDER_READ_BYTES_TOTAL,
-    FORWARDER_READ_LATENCY, FORWARDER_READ_TOTAL, FORWARDER_TRANSFORMER_LATENCY,
-    FORWARDER_WRITE_LATENCY, FORWARDER_WRITE_TOTAL, PARTITION_LABEL, PIPELINE_LABEL, REPLICA_LABEL,
-    VERTEX_LABEL, VERTEX_TYPE_LABEL,
-};
-use crate::sink::SinkClient;
-use crate::source::SourceClient;
-use crate::transformer::TransformerClient;
 use chrono::Utc;
-use metrics::{counter, histogram};
+use metrics::counter;
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tracing::{info, trace};
 
+use crate::error::{Error, Result};
+use crate::metrics::{
+    FORWARDER_ACK_TOTAL, FORWARDER_READ_BYTES_TOTAL, FORWARDER_READ_TOTAL, FORWARDER_WRITE_TOTAL,
+    PARTITION_LABEL, PIPELINE_LABEL, REPLICA_LABEL, VERTEX_LABEL, VERTEX_TYPE_LABEL,
+};
+use crate::sink::SinkClient;
+use crate::source::SourceClient;
+use crate::transformer::TransformerClient;
+
 const SOURCER_SINKER_VERTEX_TYPE: &str = "sourcer-sinker";
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
-/// transformer is present,  writing the messages to the sink, and the acknowledging the messages
+/// transformer is present, writing the messages to the sink, and then acknowledging the messages
 /// back to the source.
 pub(crate) struct Forwarder {
     source_client: SourceClient,
@@ -66,12 +65,13 @@ impl Forwarder {
 
     /// run starts the forward-a-chunk loop and exits only after a chunk has been forwarded and ack'ed.
     /// this means that, in the happy path scenario a block is always completely processed.
-    /// this function will return on any error and will cause end up in a non-0 exit code.   
+    /// this function will return on any error and will cause end up in a non-0 exit code.
     pub(crate) async fn run(&mut self) -> Result<()> {
         let mut messages_count: u64 = 0;
         let mut last_forwarded_at = std::time::Instant::now();
         loop {
-            let start_time = std::time::Instant::now();
+            // TODO: emit latency metrics, metrics-rs histograms has memory leak issues.
+            let start_time = tokio::time::Instant::now();
             // two arms, either shutdown or forward-a-chunk
             tokio::select! {
                 _ = &mut self.shutdown_rx => {
@@ -81,10 +81,7 @@ impl Forwarder {
                 result = self.source_client.read_fn(self.batch_size, self.timeout_in_ms) => {
                     // Read messages from the source
                     let messages = result?;
-                    info!("Read batch size: {}", messages.len());
-
-                    histogram!(FORWARDER_READ_LATENCY, &self.common_labels)
-                        .record(start_time.elapsed().as_millis() as f64);
+                    info!("Read batch size: {} and latency - {}ms", messages.len(), start_time.elapsed().as_millis());
 
                     messages_count += messages.len() as u64;
                     let bytes_count = messages.iter().map(|msg| msg.value.len() as u64).sum::<u64>();
@@ -95,7 +92,7 @@ impl Forwarder {
                     let offsets = messages.iter().map(|message| message.offset.clone()).collect();
                     // Apply transformation if transformer is present
                     let transformed_messages = if let Some(transformer_client) = &self.transformer_client {
-                        let start_time = std::time::Instant::now();
+                        let start_time = tokio::time::Instant::now();
                         let mut jh = JoinSet::new();
                         for message in messages {
                             let mut transformer_client = transformer_client.clone();
@@ -108,31 +105,29 @@ impl Forwarder {
                             let result = result?;
                             results.extend(result);
                         }
-                        histogram!(FORWARDER_TRANSFORMER_LATENCY, &self.common_labels)
-                            .record(start_time.elapsed().as_millis() as f64);
+                        info!("Transformed latency - {}ms", start_time.elapsed().as_millis());
                         results
                     } else {
                         messages
                     };
 
-                    let sink_write_start_time = std::time::Instant::now();
                     // Write messages to the sink
                     // TODO: should we retry writing? what if the error is transient?
                     //    we could rely on gRPC retries and say that any error that is bubbled up is worthy of non-0 exit.
                     //    we need to confirm this via FMEA tests.
+                    let start_time = tokio::time::Instant::now();
                     self.sink_client.sink_fn(transformed_messages).await?;
-                    histogram!(FORWARDER_WRITE_LATENCY, &self.common_labels)
-                        .record(sink_write_start_time.elapsed().as_millis() as f64);
+                    info!("Sink latency - {}ms", start_time.elapsed().as_millis());
                     counter!(FORWARDER_WRITE_TOTAL, &self.common_labels).increment(messages_count);
 
                     // Acknowledge the messages
                     // TODO: should we retry acking? what if the error is transient?
                     //    we could rely on gRPC retries and say that any error that is bubbled up is worthy of non-0 exit.
                     //    we need to confirm this via FMEA tests.
-                    let ack_start_time = std::time::Instant::now();
+                    let start_time = tokio::time::Instant::now();
                     self.source_client.ack_fn(offsets).await?;
-                    histogram!(FORWARDER_ACK_LATENCY, &self.common_labels)
-                        .record(ack_start_time.elapsed().as_millis() as f64);
+                    info!("Ack latency - {}ms", start_time.elapsed().as_millis());
+
                     counter!(FORWARDER_ACK_TOTAL, &self.common_labels).increment(messages_count);
                     trace!("Forwarded {} messages", messages_count);
                 }
@@ -147,8 +142,6 @@ impl Forwarder {
                 messages_count = 0;
                 last_forwarded_at = std::time::Instant::now();
             }
-            histogram!(FORWARDER_LATENCY, &self.common_labels)
-                .record(start_time.elapsed().as_millis() as f64);
         }
         Ok(())
     }
