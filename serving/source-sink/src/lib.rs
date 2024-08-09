@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use std::fs;
 use std::time::Duration;
 use std::{env, fs};
 use tokio::signal;
@@ -67,20 +66,20 @@ pub async fn run_forwarder(
     let mut source_client = SourceClient::connect(source_config).await?;
 
     server_info::wait_for_server_info(&sink_config.server_info_file)
-      .await
-      .map_err(|e| {
-          warn!("Error waiting for sink server info file: {:?}", e);
-          Error::ForwarderError("Error waiting for server info file".to_string())
-      })?;
+        .await
+        .map_err(|e| {
+            warn!("Error waiting for sink server info file: {:?}", e);
+            Error::ForwarderError("Error waiting for server info file".to_string())
+        })?;
     let mut sink_client = SinkClient::connect(sink_config).await?;
 
     let mut transformer_client = if let Some(config) = transformer_config {
         server_info::wait_for_server_info(&config.server_info_file)
-          .await
-          .map_err(|e| {
-              warn!("Error waiting for transformer server info file: {:?}", e);
-              Error::ForwarderError("Error waiting for server info file".to_string())
-          })?;
+            .await
+            .map_err(|e| {
+                warn!("Error waiting for transformer server info file: {:?}", e);
+                Error::ForwarderError("Error waiting for server info file".to_string())
+            })?;
         Some(TransformerClient::connect(config).await?)
     } else {
         None

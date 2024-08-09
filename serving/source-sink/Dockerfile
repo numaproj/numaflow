@@ -16,4 +16,4 @@ FROM debian:bookworm AS simple-source
 COPY --from=build /source-sink/target/release/sourcer-sinker .
 
 # set the startup command to run your binary
-CMD ["./source-sink"]
+CMD ["./sourcer-sinker"]

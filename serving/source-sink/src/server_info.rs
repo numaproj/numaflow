@@ -515,7 +515,11 @@ mod tests {
         assert_eq!(server_info.language, "python");
         assert_eq!(server_info.minimum_numaflow_version, "1.2.0-rc4");
         assert_eq!(server_info.version, "1.0.0");
-        // assert_eq!(server_info.metadata.get("key1").unwrap(), "value1");
+        // Check metadata
+        assert!(server_info.metadata.is_some());
+        let server_info = server_info.metadata.unwrap();
+        assert_eq!(server_info.len(), 1);
+        assert_eq!(server_info.get("key1").unwrap(), "value1");
     }
 
     #[tokio::test]
