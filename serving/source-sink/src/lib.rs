@@ -1,11 +1,11 @@
+use std::fs;
 use std::time::Duration;
-use std::{env, fs};
 
 use tokio::signal;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
-use tracing::info;
+use tracing::{error, info};
 
 pub(crate) use crate::error::Error;
 use crate::forwarder::Forwarder;
@@ -33,11 +33,10 @@ pub mod transformer;
 
 pub mod forwarder;
 
+pub mod config;
+
 pub mod message;
 pub(crate) mod shared;
-
-const TIMEOUT_IN_MS: &str = "1000";
-const BATCH_SIZE: &str = "500";
 
 /// forwards a chunk of data from the source to the sink via an optional transformer.
 /// It takes an optional custom_shutdown_rx for shutting down the forwarder, useful for testing.
@@ -47,11 +46,6 @@ pub async fn run_forwarder(
     transformer_config: Option<TransformerConfig>,
     custom_shutdown_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<()> {
-    // TODO: get this from vertex object, controller will have to pass this
-    let vertex_name = env::var("VERTEX_NAME").unwrap_or_else(|_| "vertex".to_string());
-    let pipeline_name = env::var("PIPELINE_NAME").unwrap_or_else(|_| "pipeline".to_string());
-    let replica = 0;
-
     wait_for_server_info(&source_config.server_info_file).await?;
     let mut source_client = SourceClient::connect(source_config).await?;
 
@@ -79,29 +73,9 @@ pub async fn run_forwarder(
     )
     .await?;
 
-    // TODO get these from the vertex object
-    let timeout_in_ms: u32 = env::var("TIMEOUT_IN_MS")
-        .unwrap_or_else(|_| TIMEOUT_IN_MS.to_string())
-        .parse()
-        .expect("Invalid TIMEOUT_IN_MS");
-    let batch_size: u64 = env::var("BATCH_SIZE")
-        .unwrap_or_else(|_| BATCH_SIZE.to_string())
-        .parse()
-        .expect("Invalid BATCH_SIZE");
-
     // TODO: use builder pattern of options like TIMEOUT, BATCH_SIZE, etc?
-    let mut forwarder = Forwarder::new(
-        vertex_name,
-        pipeline_name,
-        replica,
-        source_client,
-        sink_client,
-        transformer_client,
-        timeout_in_ms,
-        batch_size,
-        shutdown_rx,
-    )
-    .await?;
+    let mut forwarder =
+        Forwarder::new(source_client, sink_client, transformer_client, shutdown_rx).await?;
 
     let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
         forwarder.run().await?;
@@ -116,8 +90,19 @@ pub async fn run_forwarder(
         Ok(())
     });
 
-    let _ = tokio::try_join!(forwarder_handle, shutdown_handle)
-        .map_err(|e| Error::ForwarderError(format!("{:?}", e)))?;
+    forwarder_handle
+        .await
+        .unwrap_or_else(|e| {
+            error!("Forwarder task panicked: {:?}", e);
+            Err(Error::ForwarderError("Forwarder task panicked".to_string()))
+        })
+        .unwrap_or_else(|e| {
+            error!("Forwarder failed: {:?}", e);
+        });
+
+    if !shutdown_handle.is_finished() {
+        shutdown_handle.abort();
+    }
 
     lag_reader.shutdown().await;
     info!("Forwarder stopped gracefully");

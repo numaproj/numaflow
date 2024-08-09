@@ -219,11 +219,6 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		opts = append(opts, forward.WithUDFUnaryMap(mapHandler))
 	}
 
-	// We can have the vertex running only of the map modes
-	if enableMapUdfStream && enableBatchMapUdf {
-		return fmt.Errorf("vertex cannot have both map stream and batch map modes enabled")
-	}
-
 	for index, bufferPartition := range fromBuffer {
 		// Populate shuffle function map
 		shuffleFuncMap := make(map[string]*shuffle.Shuffle)

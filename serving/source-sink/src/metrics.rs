@@ -1,28 +1,25 @@
 use std::future::ready;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
-use axum_server::tls_rustls::RustlsConfig;
 use log::info;
 use metrics::describe_counter;
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
-use rcgen::{CertifiedKey, generate_simple_self_signed};
+use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
 use tokio_util::sync::CancellationToken;
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::error::Error;
 use crate::source::SourceClient;
 
 // Define the labels for the metrics
-pub const VERTEX_LABEL: &str = "vertex";
-pub const PIPELINE_LABEL: &str = "pipeline";
+pub const MONO_VERTEX_NAME: &str = "vertex";
 pub const REPLICA_LABEL: &str = "replica";
 pub const PARTITION_LABEL: &str = "partition_name";
 pub const VERTEX_TYPE_LABEL: &str = "vertex_type";
@@ -36,40 +33,68 @@ pub const FORWARDER_WRITE_TOTAL: &str = "forwarder_write_total";
 
 /// Collect and emit prometheus metrics.
 /// Metrics router and server
-pub async fn start_metrics_server(addr: SocketAddr) -> crate::Result<()>
+pub async fn start_metrics_http_server<A>(addr: A) -> crate::Result<()>
 where
+    A: ToSocketAddrs + std::fmt::Debug,
 {
-    // Generate a self-signed certificate
-    let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()]).map_err(|e| {
-        Error::MetricsError(format!("Generating self-signed certificate: {}", e))
-    })?;
-
-
-    let tls_config = RustlsConfig::from_pem(cert.pem().into(), key_pair.serialize_pem().into())
-        .await
-        .map_err(|e| Error::MetricsError(format!("Creating tlsConfig from pem: {}", e)))?;
-
     // setup_metrics_recorder should only be invoked once
     let recorder_handle = setup_metrics_recorder()?;
-    
+
     let metrics_app = Router::new()
         .route("/metrics", get(move || ready(recorder_handle.render())))
         .route("/livez", get(livez))
-        .route("/readyz", get(readyz));
+        .route("/readyz", get(readyz))
+        .route("/sidecar/livez", get(sidecar_livez));
 
-    axum_server::bind_rustls(addr, tls_config)
-        .serve(metrics_app.into_make_service())
+    let listener = TcpListener::bind(&addr)
+        .await
+        .map_err(|e| Error::MetricsError(format!("Creating listener on {:?}: {}", addr, e)))?;
+
+    debug!("metrics server started at addr: {:?}", addr);
+
+    axum::serve(listener, metrics_app)
         .await
         .map_err(|e| Error::MetricsError(format!("Starting web server for metrics: {}", e)))?;
-
     Ok(())
 }
+
+// FIXME: facing some issues with the tls_rustls feature
+// pub async fn start_metrics_https_server(addr: SocketAddr) -> crate::Result<()>
+// where
+// {
+//     // Generate a self-signed certificate
+//     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
+//         .map_err(|e| Error::MetricsError(format!("Generating self-signed certificate: {}", e)))?;
+//
+//     let tls_config = RustlsConfig::from_pem(cert.pem().into(), key_pair.serialize_pem().into())
+//         .await
+//         .map_err(|e| Error::MetricsError(format!("Creating tlsConfig from pem: {}", e)))?;
+//
+//     // setup_metrics_recorder should only be invoked once
+//     let recorder_handle = setup_metrics_recorder()?;
+//
+//     let metrics_app = Router::new()
+//         .route("/metrics", get(move || ready(recorder_handle.render())))
+//         .route("/livez", get(livez))
+//         .route("/readyz", get(readyz));
+//
+//     axum_server::bind_rustls(addr, tls_config)
+//         .serve(metrics_app.into_make_service())
+//         .await
+//         .map_err(|e| Error::MetricsError(format!("Starting web server for metrics: {}", e)))?;
+//
+//     Ok(())
+// }
 
 async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
 async fn readyz() -> impl IntoResponse {
+    StatusCode::NO_CONTENT
+}
+
+async fn sidecar_livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
@@ -288,7 +313,7 @@ mod tests {
     async fn test_start_metrics_server() {
         let addr = SocketAddr::from(([127, 0, 0, 1], 0));
         let server = tokio::spawn(async move {
-            let result = start_metrics_server(addr).await;
+            let result = start_metrics_http_server(addr).await;
             assert!(result.is_ok())
         });
 

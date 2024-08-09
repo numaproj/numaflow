@@ -319,7 +319,7 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/readyz",
 				Port:   intstr.FromInt32(MonoVertexMetricsPort),
-				Scheme: corev1.URISchemeHTTPS,
+				Scheme: corev1.URISchemeHTTP,
 			},
 		},
 		InitialDelaySeconds: 3,
@@ -331,7 +331,7 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/livez",
 				Port:   intstr.FromInt32(MonoVertexMetricsPort),
-				Scheme: corev1.URISchemeHTTPS,
+				Scheme: corev1.URISchemeHTTP,
 			},
 		},
 		InitialDelaySeconds: 20,
@@ -403,7 +403,8 @@ func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
 
 func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) []corev1.Container {
 	mainContainer := containerBuilder{}.
-		init(req).command("/bin/serve").build() // TODO: command
+		init(req).command(MonoVertexBinary).build()
+
 	containers := []corev1.Container{mainContainer}
 	if mvspec.Source.UDSource != nil { // Only support UDSource for now.
 		containers = append(containers, mvspec.Source.getUDSourceContainer(req))

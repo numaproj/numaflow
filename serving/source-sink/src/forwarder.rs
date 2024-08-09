@@ -1,19 +1,19 @@
+use crate::config::config;
+use crate::error::{Error, Result};
+use crate::metrics::{
+    FORWARDER_ACK_TOTAL, FORWARDER_READ_BYTES_TOTAL, FORWARDER_READ_TOTAL, FORWARDER_WRITE_TOTAL,
+    MONO_VERTEX_NAME, PARTITION_LABEL, REPLICA_LABEL, VERTEX_TYPE_LABEL,
+};
+use crate::sink::SinkClient;
+use crate::source::SourceClient;
+use crate::transformer::TransformerClient;
 use chrono::Utc;
 use metrics::counter;
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tracing::{info, trace};
 
-use crate::error::{Error, Result};
-use crate::metrics::{
-    FORWARDER_ACK_TOTAL, FORWARDER_READ_BYTES_TOTAL, FORWARDER_READ_TOTAL, FORWARDER_WRITE_TOTAL,
-    PARTITION_LABEL, PIPELINE_LABEL, REPLICA_LABEL, VERTEX_LABEL, VERTEX_TYPE_LABEL,
-};
-use crate::sink::SinkClient;
-use crate::source::SourceClient;
-use crate::transformer::TransformerClient;
-
-const SOURCER_SINKER_VERTEX_TYPE: &str = "sourcer-sinker";
+const MONO_VERTEX_TYPE: &str = "mono_vertex";
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
@@ -22,33 +22,25 @@ pub(crate) struct Forwarder {
     source_client: SourceClient,
     sink_client: SinkClient,
     transformer_client: Option<TransformerClient>,
-    timeout_in_ms: u32,
-    batch_size: u64,
     shutdown_rx: oneshot::Receiver<()>,
     common_labels: Vec<(String, String)>,
 }
 
 impl Forwarder {
-    #[allow(clippy::too_many_arguments)] // we will use one vertex object to pass all the arguments
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
-        vertex_name: String,
-        pipeline_name: String,
-        replica: u32,
         source_client: SourceClient,
         sink_client: SinkClient,
         transformer_client: Option<TransformerClient>,
-        timeout_in_ms: u32,
-        batch_size: u64,
         shutdown_rx: oneshot::Receiver<()>,
     ) -> Result<Self> {
         let common_labels = vec![
-            (VERTEX_LABEL.to_string(), vertex_name),
-            (PIPELINE_LABEL.to_string(), pipeline_name),
             (
-                VERTEX_TYPE_LABEL.to_string(),
-                SOURCER_SINKER_VERTEX_TYPE.to_string(),
+                MONO_VERTEX_NAME.to_string(),
+                config().mono_vertex_name.clone(),
             ),
-            (REPLICA_LABEL.to_string(), replica.to_string()),
+            (VERTEX_TYPE_LABEL.to_string(), MONO_VERTEX_TYPE.to_string()),
+            (REPLICA_LABEL.to_string(), config().replica.to_string()),
             (PARTITION_LABEL.to_string(), "0".to_string()),
         ];
 
@@ -56,8 +48,6 @@ impl Forwarder {
             source_client,
             sink_client,
             transformer_client,
-            timeout_in_ms,
-            batch_size,
             shutdown_rx,
             common_labels,
         })
@@ -78,7 +68,7 @@ impl Forwarder {
                     info!("Shutdown signal received, stopping forwarder...");
                     break;
                 }
-                result = self.source_client.read_fn(self.batch_size, self.timeout_in_ms) => {
+                result = self.source_client.read_fn(config().batch_size, config().timeout_in_ms) => {
                     // Read messages from the source
                     let messages = result?;
                     info!("Read batch size: {} and latency - {}ms", messages.len(), start_time.elapsed().as_millis());
@@ -105,7 +95,7 @@ impl Forwarder {
                             let result = result?;
                             results.extend(result);
                         }
-                        info!("Transformed latency - {}ms", start_time.elapsed().as_millis());
+                        info!("Transformer latency - {}ms", start_time.elapsed().as_millis());
                         results
                     } else {
                         messages
@@ -372,14 +362,9 @@ mod tests {
             .expect("failed to connect to transformer server");
 
         let mut forwarder = Forwarder::new(
-            "test-vertex".to_string(),
-            "test-pipeline".to_string(),
-            0,
             source_client,
             sink_client,
             Some(transformer_client),
-            1000,
-            10,
             forwarder_shutdown_rx,
         )
         .await
