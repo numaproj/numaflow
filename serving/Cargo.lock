@@ -2743,7 +2743,6 @@ dependencies = [
  "bytes",
  "chrono",
  "hyper-util",
- "log",
  "metrics",
  "metrics-exporter-prometheus",
  "numaflow",
