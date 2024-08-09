@@ -10,7 +10,7 @@ use axum_server::tls_rustls::RustlsConfig;
 use log::info;
 use metrics::describe_counter;
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
-use rcgen::{CertifiedKey, generate_simple_self_signed};
+use rcgen::{generate_simple_self_signed, CertifiedKey};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -69,7 +69,6 @@ where
     // Generate a self-signed certificate
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| Error::MetricsError(format!("Generating self-signed certificate: {}", e)))?;
-
 
     let tls_config = RustlsConfig::from_pem(cert.pem().into(), key_pair.serialize_pem().into())
         .await

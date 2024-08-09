@@ -5,7 +5,7 @@ use tokio::signal;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub(crate) use crate::error::Error;
 use crate::forwarder::Forwarder;
@@ -36,6 +36,7 @@ pub mod forwarder;
 pub mod config;
 
 pub mod message;
+mod server_info;
 pub(crate) mod shared;
 
 /// forwards a chunk of data from the source to the sink via an optional transformer.
@@ -46,18 +47,34 @@ pub async fn run_forwarder(
     transformer_config: Option<TransformerConfig>,
     custom_shutdown_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<()> {
-    wait_for_server_info(&source_config.server_info_file).await?;
+    server_info::wait_for_server_info(&source_config.server_info_file)
+        .await
+        .map_err(|e| {
+            warn!("Error waiting for source server info file: {:?}", e);
+            Error::ForwarderError("Error waiting for server info file".to_string())
+        })?;
     let mut source_client = SourceClient::connect(source_config).await?;
 
     // start the lag reader to publish lag metrics
     let mut lag_reader = metrics::LagReader::new(source_client.clone(), None, None);
     lag_reader.start().await;
 
-    wait_for_server_info(&sink_config.server_info_file).await?;
+    server_info::wait_for_server_info(&sink_config.server_info_file)
+        .await
+        .map_err(|e| {
+            warn!("Error waiting for sink server info file: {:?}", e);
+            Error::ForwarderError("Error waiting for server info file".to_string())
+        })?;
+
     let mut sink_client = SinkClient::connect(sink_config).await?;
 
     let mut transformer_client = if let Some(config) = transformer_config {
-        wait_for_server_info(&config.server_info_file).await?;
+        server_info::wait_for_server_info(&config.server_info_file)
+            .await
+            .map_err(|e| {
+                warn!("Error waiting for transformer server info file: {:?}", e);
+                Error::ForwarderError("Error waiting for server info file".to_string())
+            })?;
         Some(TransformerClient::connect(config).await?)
     } else {
         None
