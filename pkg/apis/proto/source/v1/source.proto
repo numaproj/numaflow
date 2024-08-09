@@ -79,6 +79,10 @@ message ReadResponse {
     // We add this optional field to support the use case where the user defined source can provide keys for the datum.
     // e.g. Kafka and Redis Stream message usually include information about the keys.
     repeated string keys = 4;
+    // Optional list of headers associated with the datum.
+    // Headers are the metadata associated with the datum.
+    // e.g. Kafka and Redis Stream message usually include information about the headers.
+    map<string, string> headers = 5;
   }
   // Required field holding the result.
   Result result = 1;

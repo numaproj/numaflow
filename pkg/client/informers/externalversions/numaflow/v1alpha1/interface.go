@@ -26,6 +26,8 @@ import (
 type Interface interface {
 	// InterStepBufferServices returns a InterStepBufferServiceInformer.
 	InterStepBufferServices() InterStepBufferServiceInformer
+	// MonoVertices returns a MonoVertexInformer.
+	MonoVertices() MonoVertexInformer
 	// Pipelines returns a PipelineInformer.
 	Pipelines() PipelineInformer
 	// Vertices returns a VertexInformer.
@@ -46,6 +48,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // InterStepBufferServices returns a InterStepBufferServiceInformer.
 func (v *version) InterStepBufferServices() InterStepBufferServiceInformer {
 	return &interStepBufferServiceInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// MonoVertices returns a MonoVertexInformer.
+func (v *version) MonoVertices() MonoVertexInformer {
+	return &monoVertexInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // Pipelines returns a PipelineInformer.
