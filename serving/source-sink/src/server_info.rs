@@ -14,42 +14,37 @@ use tracing::{info, warn};
 use crate::error::Error;
 use crate::{error, version};
 
-// Constant to represent the end of the server info. Equivalent to U+005C__END__.
+// Constant to represent the end of the server info.
+// Equivalent to U+005C__END__.
 const END: &str = "U+005C__END__";
 
-// fn unwrap_or_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-// where
-//     D: Deserializer<'de>,
-//     T: Deserialize<'de> + Default,
-// {
-//     Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
-// }
-
-// Struct for ServerInfo
+// ServerInfo structure to store server-related information
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct ServerInfo {
-    #[serde(default)]
+    #[serde(default)] // Use default value if not provided in JSON
     protocol: String,
-    #[serde(default)]
+    #[serde(default)] // Use default value if not provided in JSON
     language: String,
-    #[serde(default)]
+    #[serde(default)] // Use default value if not provided in JSON
     minimum_numaflow_version: String,
-    #[serde(default)]
+    #[serde(default)] // Use default value if not provided in JSON
     version: String,
-    #[serde(default)]
-    metadata: Option<HashMap<String, String>>,
+    #[serde(default)] // Use default value if not provided in JSON
+    metadata: Option<HashMap<String, String>>, // Metadata is optional
 }
 
-// wait_for_server_info waits until the server info is ready
+// wait_for_server_info waits until the server info file is ready
 pub async fn wait_for_server_info(file_path: &str) -> error::Result<()> {
+    // Infinite loop to keep checking until the file is ready
     loop {
-        // TODO: add a check for cancellation
+        // Check if the file exists and has content
         if let Ok(metadata) = fs::metadata(file_path) {
             if metadata.len() > 0 {
-                // break out of the loop if the file is ready
+                // Break out of the loop if the file is ready (has content)
                 break;
             }
         }
+        // Log message indicating the file is not ready and sleep for 1 second before checking again
         info!("Server info file {} is not ready, waiting...", file_path);
         sleep(Duration::from_secs(1)).await;
     }
@@ -67,16 +62,20 @@ pub async fn wait_for_server_info(file_path: &str) -> error::Result<()> {
         }
     };
 
+    // Log the server info
     info!("Server info file: {:?}", server_info);
 
+    // Extract relevant fields from server info
     let sdk_version = &server_info.version;
     let min_numaflow_version = &server_info.minimum_numaflow_version;
     let sdk_language = &server_info.language;
+    // Get version information
     let version_info = version::VersionInfo::get_version_info();
     let numaflow_version = &version_info.version;
 
-    println!("version_info: {:?}", version_info);
+    println!("Version_info: {:?}", version_info);
 
+    // Check minimum numaflow version compatibility if specified
     if min_numaflow_version.is_empty() {
         warn!("Failed to get the minimum numaflow version, skipping numaflow version compatibility check");
     } else if !numaflow_version.contains("latest")
@@ -90,17 +89,21 @@ pub async fn wait_for_server_info(file_path: &str) -> error::Result<()> {
         return Ok(());
     }
 
+    // Check SDK compatibility if version and language are specified
     if sdk_version.is_empty() || sdk_language.is_empty() {
         warn!("Failed to get the SDK version/language, skipping SDK version compatibility check");
     } else {
+        // Get minimum supported SDK versions and check compatibility
         let min_supported_sdk_versions = version::get_minimum_supported_sdk_versions();
         check_sdk_compatibility(sdk_version, sdk_language, min_supported_sdk_versions)?;
     }
 
     Ok(())
 }
+
 /// Checks if the given version meets the specified constraint.
 fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
+    // Parse the given constraint as a semantic version requirement
     let version_req = VersionReq::parse(constraint).map_err(|e| {
         Error::ServerInfoError(format!(
             "Error parsing constraint: {},\
@@ -109,6 +112,7 @@ fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
         ))
     })?;
 
+    // Check if the provided version satisfies the parsed constraint
     if !version_req.matches(version) {
         return Err(Error::ServerInfoError("invalid version".to_string()));
     }
@@ -116,19 +120,23 @@ fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
     Ok(())
 }
 
-/// Checks if the current numaflow version is compatible with the given language's SDK version.
+/// Checks if the current numaflow version is compatible with the given minimum numaflow version.
 fn check_numaflow_compatibility(
     numaflow_version: &str,
     min_numaflow_version: &str,
 ) -> error::Result<()> {
+    // Ensure that the minimum numaflow version is specified
     if min_numaflow_version.is_empty() {
         return Err(Error::ServerInfoError("invalid version".to_string()));
     }
 
+    // Parse the provided numaflow version as a semantic version
     let numaflow_version_semver = Version::parse(numaflow_version)
         .map_err(|e| Error::ServerInfoError(format!("Error parsing Numaflow version: {}", e)))?;
 
+    // Create a version constraint based on the minimum numaflow version
     let numaflow_constraint = format!(">={}", min_numaflow_version);
+    // Check if the numaflow version satisfies the constraint
     if let Err(e) = check_constraint(&numaflow_version_semver, &numaflow_constraint) {
         let err_string = format!(
             "numaflow version {} must be upgraded to at least {}, in order to work with current SDK version {}",
@@ -139,14 +147,17 @@ fn check_numaflow_compatibility(
     Ok(())
 }
 
+/// Checks if the current SDK version is compatible with the given language's minimum supported SDK version.
 fn check_sdk_compatibility(
     sdk_version: &str,
     sdk_language: &str,
     min_supported_sdk_versions: &version::SdkConstraints,
 ) -> error::Result<()> {
+    // Check if the SDK language is present in the minimum supported SDK versions
     if let Some(sdk_required_version) = min_supported_sdk_versions.get(sdk_language) {
         let sdk_constraint = format!(">={}", sdk_required_version);
 
+        // For Python, use Pep440 versioning
         if sdk_language.to_lowercase() == "python" {
             let sdk_version_pep440 = PepVersion::from_str(sdk_version)
                 .map_err(|e| Error::ServerInfoError(format!("Error parsing SDK version: {}", e)))?;
@@ -154,9 +165,6 @@ fn check_sdk_compatibility(
             let specifiers = VersionSpecifier::from_str(&sdk_constraint).map_err(|e| {
                 Error::ServerInfoError(format!("Error parsing SDK constraint: {}", e))
             })?;
-
-            println!("sdk_version_semver: {:?}", sdk_version_pep440);
-            println!("sdk_constraint: {:?}", sdk_constraint);
 
             if !specifiers.contains(&sdk_version_pep440) {
                 let err_string = format!(
@@ -166,18 +174,18 @@ fn check_sdk_compatibility(
                 return Err(Error::ServerInfoError(err_string));
             }
         } else {
+            // Strip the 'v' prefix if present for non-Python languages
             let sdk_version_stripped = if sdk_version.starts_with('v') {
                 &sdk_version[1..]
             } else {
                 sdk_version
             };
 
+            // Parse the SDK version using semver
             let sdk_version_semver = Version::parse(sdk_version_stripped)
                 .map_err(|e| Error::ServerInfoError(format!("Error parsing SDK version: {}", e)))?;
 
-            println!("sdk_version_semver: {:?}", sdk_version_semver);
-            println!("sdk_constraint: {:?}", sdk_constraint);
-
+            // Check if the SDK version satisfies the constraint
             if let Err(e) = check_constraint(&sdk_version_semver, &sdk_constraint) {
                 let err_string = format!(
                     "SDK version {} must be upgraded to at least {}, in order to work with the current numaflow version: {}",
@@ -187,12 +195,12 @@ fn check_sdk_compatibility(
             }
         }
     } else {
-        // language not found in the supported SDK versions
+        // Language not found in the supported SDK versions
         warn!(
             "SDK version constraint not found for language: {}",
             sdk_language
         );
-        // return error indicating the language
+        // Return error indicating the language
         return Err(Error::ServerInfoError(format!(
             "SDK version constraint not found for language: {}",
             sdk_language
@@ -201,17 +209,18 @@ fn check_sdk_compatibility(
     Ok(())
 }
 
+/// Reads the server info file and returns the parsed ServerInfo struct.
 async fn read_server_info(file_path: &str) -> error::Result<ServerInfo> {
-    // Retry logic
+    // Retry logic for reading the file
     let mut retry = 0;
     let contents;
     loop {
-        // Read the file
+        // Attempt to read the file
         match fs::read_to_string(file_path) {
             Ok(data) => {
                 if data.ends_with(END) {
+                    // If the file ends with the END marker, trim it and break out of the loop
                     contents = data.trim_end_matches(END).to_string();
-                    // break out of the loop if the file is ready
                     break;
                 } else {
                     warn!("Server info file is not ready yet...");
@@ -222,25 +231,25 @@ async fn read_server_info(file_path: &str) -> error::Result<ServerInfo> {
             }
         }
 
-        // Retry logic with limit
+        // Retry limit logic
         retry += 1;
         if retry >= 10 {
-            // return an error if the retry limit is reached
+            // Return an error if the retry limit is reached
             return Err(Error::ServerInfoError(
                 "server-info reading retry exceeded".to_string(),
             ));
         }
-        sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await; // Sleep before retrying
     }
 
-    // Parse the JSON, if there is an error, return the error
+    // Parse the JSON; if there is an error, return the error
     let server_info: ServerInfo = serde_json::from_str(&contents).map_err(|e| {
         Error::ServerInfoError(format!(
             "Failed to parse server-info file: {}, contents: {}",
             e, contents
         ))
     })?;
-    Ok(server_info)
+    Ok(server_info) // Return the parsed server info
 }
 
 #[cfg(test)]
@@ -552,8 +561,6 @@ mod tests {
 
         let parsed_server_info: ServerInfo =
             serde_json::from_str(&json_data).expect("Failed to parse JSON");
-
-        println!("Parsed server info: {:?}", parsed_server_info);
     }
 
     #[test]
