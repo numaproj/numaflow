@@ -6,7 +6,7 @@ DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=numaflow
 DOCKERFILE:=Dockerfile
 DEV_BASE_IMAGE:=debian:bookworm
-RELEASE_BASE_IMAGE:=gcr.io/distroless/cc-debian12
+RELEASE_BASE_IMAGE:=debian:bookworm
 
 BUILD_DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 GIT_COMMIT=$(shell git rev-parse HEAD)

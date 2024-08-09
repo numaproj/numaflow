@@ -4,6 +4,9 @@ FROM rust:1.79-bookworm as builder
 
 RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 
+RUN apt-get update
+RUN apt-get install protobuf-compiler -y
+
 RUN cargo new serve
 # Create a new empty shell project
 WORKDIR /serve
@@ -19,6 +22,9 @@ COPY ./backoff/Cargo.toml ./backoff/Cargo.toml
 RUN cargo new numaflow-models
 COPY ./numaflow-models/Cargo.toml ./numaflow-models/
 
+RUN cargo new source-sink
+COPY ./source-sink/Cargo.toml ./source-sink/Cargo.toml
+
 # Copy all Cargo.toml and Cargo.lock files for caching dependencies
 COPY ./Cargo.toml ./Cargo.lock ./
 
@@ -31,16 +37,20 @@ COPY ./servesink/src ./servesink/src
 COPY ./extras/upstreams/src ./extras/upstreams/src
 COPY ./backoff/src ./backoff/src
 COPY ./numaflow-models/src ./numaflow-models/src
+COPY ./source-sink/src ./source-sink/src
+COPY ./source-sink/build.rs ./source-sink/build.rs
+COPY ./source-sink/proto ./source-sink/proto
 
 # Build the real binaries
-RUN touch src/main.rs servesink/main.rs extras/upstreams/main.rs numaflow-models/main.rs && \
-    cargo build --release
+RUN touch src/main.rs servesink/src/main.rs numaflow-models/src/main.rs source-sink/src/main.rs && \
+    cargo build --workspace --all --release
 
 # Use a lightweight image for the runtime
-FROM gcr.io/distroless/cc-debian12 as numaflow-ext
+FROM debian:bookworm as numaflow-ext
 
-COPY --from=builder /serve/target/release/serve .
+RUN apt-get update && apt-get install -y libssl3
+
+COPY --from=builder /serve/target/release/ .
 COPY ./config config
-
 
 ENTRYPOINT ["./serve"]

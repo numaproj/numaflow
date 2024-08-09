@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+package sourcetransformer.v1;
+
+service SourceTransform {
+  // SourceTransformFn applies a function to each request element.
+  // In addition to map function, SourceTransformFn also supports assigning a new event time to response.
+  // SourceTransformFn can be used only at source vertex by source data transformer.
+  rpc SourceTransformFn(SourceTransformRequest) returns (SourceTransformResponse);
+
+  // IsReady is the heartbeat endpoint for gRPC.
+  rpc IsReady(google.protobuf.Empty) returns (ReadyResponse);
+}
+
+/**
+ * SourceTransformerRequest represents a request element.
+ */
+message SourceTransformRequest {
+  repeated string keys = 1;
+  bytes value = 2;
+  google.protobuf.Timestamp event_time = 3;
+  google.protobuf.Timestamp watermark = 4;
+  map<string, string> headers = 5;
+}
+
+/**
+ * SourceTransformerResponse represents a response element.
+ */
+message SourceTransformResponse {
+  message Result {
+    repeated string keys = 1;
+    bytes value = 2;
+    google.protobuf.Timestamp event_time = 3;
+    repeated string tags = 4;
+  }
+  repeated Result results = 1;
+}
+
+/**
+ * ReadyResponse is the health check result.
+ */
+message ReadyResponse {
+  bool ready = 1;
+}

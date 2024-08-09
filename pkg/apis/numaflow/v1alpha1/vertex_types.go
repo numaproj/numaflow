@@ -51,6 +51,7 @@ const (
 )
 
 const ServingBinary = "/bin/serve"
+const MonoVertexBinary = "/bin/sourcer-sinker"
 
 // +genclient
 // +kubebuilder:object:root=true

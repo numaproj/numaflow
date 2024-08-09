@@ -403,7 +403,8 @@ func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
 
 func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) []corev1.Container {
 	mainContainer := containerBuilder{}.
-		init(req).command("/bin/serve").build() // TODO: command
+		init(req).command(MonoVertexBinary).build()
+
 	containers := []corev1.Container{mainContainer}
 	if mvspec.Source.UDSource != nil { // Only support UDSource for now.
 		containers = append(containers, mvspec.Source.getUDSourceContainer(req))
