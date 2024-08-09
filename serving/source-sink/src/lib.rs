@@ -139,18 +139,6 @@ pub async fn run_forwarder(
     Ok(())
 }
 
-// async fn wait_for_server_info(file_path: &str) -> Result<()> {
-//     loop {
-//         if let Ok(metadata) = fs::metadata(file_path) {
-//             if metadata.len() > 0 {
-//                 return Ok(());
-//             }
-//         }
-//         info!("Server info file {} is not ready, waiting...", file_path);
-//         sleep(Duration::from_secs(1)).await;
-//     }
-// }
-
 async fn wait_until_ready(
     source_client: &mut SourceClient,
     sink_client: &mut SinkClient,
