@@ -28,6 +28,9 @@ serde_json = "1.0.122"
 numaflow-models = { path = "../numaflow-models"}
 rcgen = "0.13.1"
 rustls = { version = "0.23.12", features = ["aws_lc_rs"] }
+serde = { version = "1.0.204", features = ["derive"] }
+semver = "1.0"
+pep440_rs = "0.6.6"
 
 [dev-dependencies]
 tower = "0.4.13"

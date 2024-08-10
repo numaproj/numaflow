@@ -1,11 +1,10 @@
-use std::fs;
 use std::time::Duration;
 
 use tokio::signal;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub(crate) use crate::error::Error;
 use crate::forwarder::Forwarder;
@@ -36,6 +35,7 @@ pub mod forwarder;
 pub mod config;
 
 pub mod message;
+mod server_info;
 pub(crate) mod shared;
 
 /// forwards a chunk of data from the source to the sink via an optional transformer.
@@ -46,18 +46,34 @@ pub async fn run_forwarder(
     transformer_config: Option<TransformerConfig>,
     custom_shutdown_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<()> {
-    wait_for_server_info(&source_config.server_info_file).await?;
+    server_info::check_for_server_compatibility(&source_config.server_info_file)
+        .await
+        .map_err(|e| {
+            warn!("Error waiting for source server info file: {:?}", e);
+            Error::ForwarderError("Error waiting for server info file".to_string())
+        })?;
     let mut source_client = SourceClient::connect(source_config).await?;
 
     // start the lag reader to publish lag metrics
     let mut lag_reader = metrics::LagReader::new(source_client.clone(), None, None);
     lag_reader.start().await;
 
-    wait_for_server_info(&sink_config.server_info_file).await?;
+    server_info::check_for_server_compatibility(&sink_config.server_info_file)
+        .await
+        .map_err(|e| {
+            warn!("Error waiting for sink server info file: {:?}", e);
+            Error::ForwarderError("Error waiting for server info file".to_string())
+        })?;
+
     let mut sink_client = SinkClient::connect(sink_config).await?;
 
     let mut transformer_client = if let Some(config) = transformer_config {
-        wait_for_server_info(&config.server_info_file).await?;
+        server_info::check_for_server_compatibility(&config.server_info_file)
+            .await
+            .map_err(|e| {
+                warn!("Error waiting for transformer server info file: {:?}", e);
+                Error::ForwarderError("Error waiting for server info file".to_string())
+            })?;
         Some(TransformerClient::connect(config).await?)
     } else {
         None
@@ -107,18 +123,6 @@ pub async fn run_forwarder(
     lag_reader.shutdown().await;
     info!("Forwarder stopped gracefully");
     Ok(())
-}
-
-async fn wait_for_server_info(file_path: &str) -> Result<()> {
-    loop {
-        if let Ok(metadata) = fs::metadata(file_path) {
-            if metadata.len() > 0 {
-                return Ok(());
-            }
-        }
-        info!("Server info file {} is not ready, waiting...", file_path);
-        sleep(Duration::from_secs(1)).await;
-    }
 }
 
 async fn wait_until_ready(
