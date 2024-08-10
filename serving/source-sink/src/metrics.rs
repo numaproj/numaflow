@@ -7,16 +7,15 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
-use log::info;
 use metrics::describe_counter;
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
-use rcgen::{CertifiedKey, generate_simple_self_signed};
+use rcgen::{generate_simple_self_signed, CertifiedKey};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use crate::error::Error;
 use crate::source::SourceClient;
@@ -30,7 +29,6 @@ pub const VERTEX_TYPE_LABEL: &str = "vertex_type";
 // Define the metrics
 pub const FORWARDER_READ_TOTAL: &str = "forwarder_read_total";
 pub const FORWARDER_READ_BYTES_TOTAL: &str = "forwarder_read_bytes_total";
-
 pub const FORWARDER_ACK_TOTAL: &str = "forwarder_ack_total";
 pub const FORWARDER_WRITE_TOTAL: &str = "forwarder_write_total";
 
@@ -43,11 +41,7 @@ where
     // setup_metrics_recorder should only be invoked once
     let recorder_handle = setup_metrics_recorder()?;
 
-    let metrics_app = Router::new()
-        .route("/metrics", get(move || ready(recorder_handle.render())))
-        .route("/livez", get(livez))
-        .route("/readyz", get(readyz))
-        .route("/sidecar-livez", get(sidecar_livez));
+    let metrics_app = metrics_router(recorder_handle);
 
     let listener = TcpListener::bind(&addr)
         .await
@@ -70,7 +64,6 @@ where
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| Error::MetricsError(format!("Generating self-signed certificate: {}", e)))?;
 
-
     let tls_config = RustlsConfig::from_pem(cert.pem().into(), key_pair.serialize_pem().into())
         .await
         .map_err(|e| Error::MetricsError(format!("Creating tlsConfig from pem: {}", e)))?;
@@ -78,11 +71,7 @@ where
     // setup_metrics_recorder should only be invoked once
     let recorder_handle = setup_metrics_recorder()?;
 
-    let metrics_app = Router::new()
-        .route("/metrics", get(move || ready(recorder_handle.render())))
-        .route("/livez", get(livez))
-        .route("/readyz", get(readyz))
-        .route("/sidecar-livez", get(sidecar_livez));
+    let metrics_app = metrics_router(recorder_handle);
 
     axum_server::bind_rustls(addr, tls_config)
         .serve(metrics_app.into_make_service())
@@ -90,6 +79,16 @@ where
         .map_err(|e| Error::MetricsError(format!("Starting web server for metrics: {}", e)))?;
 
     Ok(())
+}
+
+/// router for metrics and k8s health endpoints
+fn metrics_router(recorder_handle: PrometheusHandle) -> Router {
+    let metrics_app = Router::new()
+        .route("/metrics", get(move || ready(recorder_handle.render())))
+        .route("/livez", get(livez))
+        .route("/readyz", get(readyz))
+        .route("/sidecar-livez", get(sidecar_livez));
+    metrics_app
 }
 
 async fn livez() -> impl IntoResponse {
@@ -139,6 +138,7 @@ fn setup_metrics_recorder() -> crate::Result<PrometheusHandle> {
         FORWARDER_WRITE_TOTAL,
         "Total number of Data Messages written by the forwarder"
     );
+
     Ok(prometheus_handle)
 }
 
@@ -177,7 +177,7 @@ impl LagReader {
             cancellation_token: CancellationToken::new(),
             buildup_handle: None,
             expose_handle: None,
-            pending_stats: Arc::new(Mutex::new(Vec::new())),
+            pending_stats: Arc::new(Mutex::new(Vec::with_capacity(MAX_PENDING_STATS))),
         }
     }
 
@@ -194,7 +194,7 @@ impl LagReader {
         let pending_stats = self.pending_stats.clone();
 
         self.buildup_handle = Some(tokio::spawn(async move {
-            buildup_pending_info(source_client, token, lag_checking_interval, pending_stats).await;
+            build_pending_info(source_client, token, lag_checking_interval, pending_stats).await;
         }));
 
         let token = self.cancellation_token.clone();
@@ -216,8 +216,8 @@ impl LagReader {
     }
 }
 
-// Periodically checks the pending messages from the source client and updates the pending stats.
-async fn buildup_pending_info(
+/// Periodically checks the pending messages from the source client and build the pending stats.
+async fn build_pending_info(
     mut source_client: SourceClient,
     cancellation_token: CancellationToken,
     lag_checking_interval: Duration,
@@ -240,7 +240,7 @@ async fn buildup_pending_info(
                             });
                             let n = stats.len();
                             // Ensure only the most recent MAX_PENDING_STATS entries are kept
-                            if n > MAX_PENDING_STATS {
+                            if n >= MAX_PENDING_STATS {
                                 stats.drain(0..(n - MAX_PENDING_STATS));
                             }
                         }
@@ -280,7 +280,7 @@ async fn expose_pending_metrics(
     }
 }
 
-// Calculate the average pending messages over the last `seconds` seconds.
+/// Calculate the average pending messages over the last `seconds` seconds.
 async fn calculate_pending(
     seconds: i64,
     pending_stats: &Arc<Mutex<Vec<TimestampedPending>>>,
@@ -306,6 +306,7 @@ async fn calculate_pending(
 
     result
 }
+
 #[cfg(test)]
 mod tests {
     use std::net::SocketAddr;
