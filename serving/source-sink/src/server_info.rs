@@ -17,7 +17,7 @@ use crate::server_info::version::SdkConstraints;
 // Equivalent to U+005C__END__.
 const END: &str = "U+005C__END__";
 
-// ServerInfo structure to store server-related information
+/// ServerInfo structure to store server-related information
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct ServerInfo {
     #[serde(default)]
@@ -233,6 +233,97 @@ async fn read_server_info(file_path: &str) -> error::Result<ServerInfo> {
     })?;
 
     Ok(server_info) // Return the parsed server info
+}
+
+
+/// create a mod for version.rs
+mod version {
+    use std::collections::HashMap;
+    use std::env;
+
+    use once_cell::sync::Lazy;
+
+    pub(crate) type SdkConstraints = HashMap<String, String>;
+
+    // MINIMUM_SUPPORTED_SDK_VERSIONS is a HashMap with SDK language as key and minimum supported version as value
+    static MINIMUM_SUPPORTED_SDK_VERSIONS: Lazy<SdkConstraints> = Lazy::new(|| {
+        // TODO: populate this from a static file and make it part of the release process
+        let mut m = HashMap::new();
+        m.insert("go".to_string(), "0.7.0-rc2".to_string());
+        m.insert("python".to_string(), "0.7.0a1".to_string());
+        m.insert("java".to_string(), "0.7.2-0".to_string());
+        m.insert("rust".to_string(), "0.0.1".to_string());
+        m
+    });
+
+    // Function to get the minimum supported SDK version hash map
+    pub(crate) fn get_minimum_supported_sdk_versions() -> &'static SdkConstraints {
+        &MINIMUM_SUPPORTED_SDK_VERSIONS
+    }
+
+    /// Struct to hold version information.
+    #[derive(Debug, PartialEq)]
+    pub struct VersionInfo {
+        pub version: String,
+        pub build_date: String,
+        pub git_commit: String,
+        pub git_tag: String,
+        pub git_tree_state: String,
+        pub go_version: String,
+        pub compiler: String,
+        pub platform: String,
+    }
+
+    impl VersionInfo {
+        /// Initialize with environment variables or default values.
+        fn init() -> Self {
+            let version = env::var("VERSION").unwrap_or_else(|_| "latest".to_string());
+            let build_date =
+                env::var("BUILD_DATE").unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string());
+            let git_commit = env::var("GIT_COMMIT").unwrap_or_default();
+            let git_tag = env::var("GIT_TAG").unwrap_or_default();
+            let git_tree_state = env::var("GIT_TREE_STATE").unwrap_or_default();
+            let go_version = env::var("GO_VERSION").unwrap_or_else(|_| "unknown".to_string());
+            let compiler = env::var("COMPILER").unwrap_or_default();
+            let platform = env::var("PLATFORM")
+                .unwrap_or_else(|_| format!("{}/{}", env::consts::OS, env::consts::ARCH));
+
+            let version_str =
+                if !git_commit.is_empty() && !git_tag.is_empty() && git_tree_state == "clean" {
+                    git_tag.clone()
+                } else {
+                    let mut version_str = version.clone();
+                    if !git_commit.is_empty() && git_commit.len() >= 7 {
+                        version_str.push_str(&format!("+{}", &git_commit[..7]));
+                        if git_tree_state != "clean" {
+                            version_str.push_str(".dirty");
+                        }
+                    } else {
+                        version_str.push_str("+unknown");
+                    }
+                    version_str
+                };
+
+            VersionInfo {
+                version: version_str,
+                build_date,
+                git_commit,
+                git_tag,
+                git_tree_state,
+                go_version,
+                compiler,
+                platform,
+            }
+        }
+    }
+
+    /// Use once_cell::sync::Lazy for thread-safe, one-time initialization
+    static VERSION_INFO: Lazy<VersionInfo> = Lazy::new(VersionInfo::init);
+
+    /// Getter function for VersionInfo
+    pub fn get_version_info() -> &'static VersionInfo {
+        &VERSION_INFO
+    }
 }
 
 #[cfg(test)]
@@ -532,7 +623,7 @@ mod tests {
             "version": "v0.7.0-rc2",
             "metadata": null
         })
-        .to_string();
+            .to_string();
 
         let _expected_server_info = ServerInfo {
             protocol: "uds".to_string(),
@@ -600,94 +691,5 @@ mod tests {
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
         assert!(result.is_err());
-    }
-}
-
-// creat a mod for version.rs
-mod version {
-    use std::collections::HashMap;
-    use std::env;
-
-    use once_cell::sync::Lazy;
-
-    pub(crate) type SdkConstraints = HashMap<String, String>;
-
-    // MINIMUM_SUPPORTED_SDK_VERSIONS is a HashMap with SDK language as key and minimum supported version as value
-    static MINIMUM_SUPPORTED_SDK_VERSIONS: Lazy<SdkConstraints> = Lazy::new(|| {
-        let mut m = HashMap::new();
-        m.insert("go".to_string(), "0.7.0-rc2".to_string());
-        m.insert("python".to_string(), "0.7.0a1".to_string());
-        m.insert("java".to_string(), "0.7.2-0".to_string());
-        m.insert("rust".to_string(), "0.0.1".to_string());
-        m
-    });
-
-    // Function to get the minimum supported SDK version hash map
-    pub(crate) fn get_minimum_supported_sdk_versions() -> &'static SdkConstraints {
-        &MINIMUM_SUPPORTED_SDK_VERSIONS
-    }
-
-    /// Struct to hold version information.
-    #[derive(Debug, PartialEq)]
-    pub struct VersionInfo {
-        pub version: String,
-        pub build_date: String,
-        pub git_commit: String,
-        pub git_tag: String,
-        pub git_tree_state: String,
-        pub go_version: String,
-        pub compiler: String,
-        pub platform: String,
-    }
-
-    impl VersionInfo {
-        /// Initialize with environment variables or default values.
-        fn init() -> Self {
-            let version = env::var("VERSION").unwrap_or_else(|_| "latest".to_string());
-            let build_date =
-                env::var("BUILD_DATE").unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string());
-            let git_commit = env::var("GIT_COMMIT").unwrap_or_default();
-            let git_tag = env::var("GIT_TAG").unwrap_or_default();
-            let git_tree_state = env::var("GIT_TREE_STATE").unwrap_or_default();
-            let go_version = env::var("GO_VERSION").unwrap_or_else(|_| "unknown".to_string());
-            let compiler = env::var("COMPILER").unwrap_or_default();
-            let platform = env::var("PLATFORM")
-                .unwrap_or_else(|_| format!("{}/{}", env::consts::OS, env::consts::ARCH));
-
-            let version_str =
-                if !git_commit.is_empty() && !git_tag.is_empty() && git_tree_state == "clean" {
-                    git_tag.clone()
-                } else {
-                    let mut version_str = version.clone();
-                    if !git_commit.is_empty() && git_commit.len() >= 7 {
-                        version_str.push_str(&format!("+{}", &git_commit[..7]));
-                        if git_tree_state != "clean" {
-                            version_str.push_str(".dirty");
-                        }
-                    } else {
-                        version_str.push_str("+unknown");
-                    }
-                    version_str
-                };
-
-            VersionInfo {
-                version: version_str,
-                build_date,
-                git_commit,
-                git_tag,
-                git_tree_state,
-                go_version,
-                compiler,
-                platform,
-            }
-        }
-    }
-
-    /// Use once_cell::sync::Lazy for thread-safe, one-time initialization
-    static VERSION_INFO: Lazy<VersionInfo> = Lazy::new(VersionInfo::init);
-
-    /// Getter function for VersionInfo
-    pub fn get_version_info() -> &'static VersionInfo {
-        &VERSION_INFO
     }
 }
