@@ -87,7 +87,7 @@ pub async fn run_forwarder(
         &mut sink_client,
         &mut transformer_client,
     )
-        .await?;
+    .await?;
 
     // TODO: use builder pattern of options like TIMEOUT, BATCH_SIZE, etc?
     let mut forwarder =
