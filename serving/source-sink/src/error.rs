@@ -27,6 +27,9 @@ pub enum Error {
 
     #[error("Config Error - {0}")]
     ConfigError(String),
+
+    #[error("ServerInfoError Error - {0}")]
+    ServerInfoError(String),
 }
 
 impl From<tonic::Status> for Error {
