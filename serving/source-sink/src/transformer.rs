@@ -74,10 +74,8 @@ impl TransformerClient {
         Ok(messages)
     }
 
-    pub(crate) async fn is_ready(&mut self) -> Result<proto::ReadyResponse> {
-        let request = Request::new(());
-        let response = self.client.is_ready(request).await?.into_inner();
-        Ok(response)
+    pub(crate) async fn is_ready(&mut self) -> bool {
+        self.client.is_ready(Request::new(())).await.is_ok()
     }
 }
 
@@ -144,8 +142,8 @@ mod tests {
             headers: Default::default(),
         };
 
-        let resp = client.is_ready().await?;
-        assert_eq!(resp.ready, true);
+        let resp = client.is_ready().await;
+        assert_eq!(resp, true);
 
         let resp = client.transform_fn(message).await?;
         assert_eq!(resp.len(), 1);

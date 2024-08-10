@@ -1,3 +1,9 @@
+use chrono::Utc;
+use metrics::counter;
+use tokio::task::JoinSet;
+use tokio_util::sync::CancellationToken;
+use tracing::{info, trace};
+
 use crate::config::config;
 use crate::error::{Error, Result};
 use crate::metrics::{
@@ -7,11 +13,6 @@ use crate::metrics::{
 use crate::sink::SinkClient;
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
-use chrono::Utc;
-use metrics::counter;
-use tokio::sync::oneshot;
-use tokio::task::JoinSet;
-use tracing::{info, trace};
 
 const MONO_VERTEX_TYPE: &str = "mono_vertex";
 
@@ -22,7 +23,7 @@ pub(crate) struct Forwarder {
     source_client: SourceClient,
     sink_client: SinkClient,
     transformer_client: Option<TransformerClient>,
-    shutdown_rx: oneshot::Receiver<()>,
+    cln_token: CancellationToken,
     common_labels: Vec<(String, String)>,
 }
 
@@ -32,7 +33,7 @@ impl Forwarder {
         source_client: SourceClient,
         sink_client: SinkClient,
         transformer_client: Option<TransformerClient>,
-        shutdown_rx: oneshot::Receiver<()>,
+        cln_token: CancellationToken,
     ) -> Result<Self> {
         let common_labels = vec![
             (
@@ -48,8 +49,8 @@ impl Forwarder {
             source_client,
             sink_client,
             transformer_client,
-            shutdown_rx,
             common_labels,
+            cln_token,
         })
     }
 
@@ -64,7 +65,7 @@ impl Forwarder {
             let start_time = tokio::time::Instant::now();
             // two arms, either shutdown or forward-a-chunk
             tokio::select! {
-                _ = &mut self.shutdown_rx => {
+                _ = self.cln_token.cancelled() => {
                     info!("Shutdown signal received, stopping forwarder...");
                     break;
                 }
@@ -145,6 +146,7 @@ mod tests {
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
     use tokio::sync::mpsc::Sender;
+    use tokio_util::sync::CancellationToken;
 
     use crate::forwarder::Forwarder;
     use crate::sink::{SinkClient, SinkConfig};
@@ -347,7 +349,7 @@ mod tests {
         // Wait for the servers to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let (forwarder_shutdown_tx, forwarder_shutdown_rx) = tokio::sync::oneshot::channel();
+        let cln_token = CancellationToken::new();
 
         let source_client = SourceClient::connect(source_config)
             .await
@@ -365,7 +367,7 @@ mod tests {
             source_client,
             sink_client,
             Some(transformer_client),
-            forwarder_shutdown_rx,
+            cln_token.clone(),
         )
         .await
         .expect("failed to create forwarder");
@@ -383,9 +385,7 @@ mod tests {
         );
 
         // stop the forwarder
-        forwarder_shutdown_tx
-            .send(())
-            .expect("failed to send shutdown signal");
+        cln_token.cancel();
         forwarder_handle
             .await
             .expect("failed to join forwarder task");
