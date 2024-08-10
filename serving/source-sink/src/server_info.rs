@@ -637,7 +637,7 @@ mod tests {
             "version": "v0.7.0-rc2",
             "metadata": null
         })
-            .to_string();
+        .to_string();
 
         let _expected_server_info = ServerInfo {
             protocol: "uds".to_string(),

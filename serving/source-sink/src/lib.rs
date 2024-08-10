@@ -4,7 +4,7 @@ use std::time::Duration;
 use crate::config::config;
 pub(crate) use crate::error::Error;
 use crate::forwarder::Forwarder;
-use crate::metrics::start_metrics_https_server;
+use crate::metrics::{start_metrics_https_server, MetricsState};
 use crate::sink::{SinkClient, SinkConfig};
 use crate::source::{SourceClient, SourceConfig};
 use crate::transformer::{TransformerClient, TransformerConfig};
@@ -91,18 +91,13 @@ pub async fn init(
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
     // joined.
-    let metrics_source_client = source_client.clone();
-    let metrics_sink_client = sink_client.clone();
-    let metrics_transformer_client = transformer_client.clone();
+    let metrics_state = MetricsState {
+        source_client: source_client.clone(),
+        sink_client: sink_client.clone(),
+        transformer_client: transformer_client.clone(),
+    };
     tokio::spawn(async move {
-        if let Err(e) = start_metrics_https_server(
-            metrics_addr,
-            metrics_source_client,
-            metrics_sink_client,
-            metrics_transformer_client,
-        )
-        .await
-        {
+        if let Err(e) = start_metrics_https_server(metrics_addr, metrics_state).await {
             error!("Metrics server error: {:?}", e);
         }
     });

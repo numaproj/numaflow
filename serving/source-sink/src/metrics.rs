@@ -35,7 +35,7 @@ pub const FORWARDER_ACK_TOTAL: &str = "forwarder_ack_total";
 pub const FORWARDER_WRITE_TOTAL: &str = "forwarder_write_total";
 
 #[derive(Clone)]
-struct MetricsState {
+pub(crate) struct MetricsState {
     pub source_client: SourceClient,
     pub sink_client: SinkClient,
     pub transformer_client: Option<TransformerClient>,
@@ -80,9 +80,7 @@ where
 
 pub(crate) async fn start_metrics_https_server(
     addr: SocketAddr,
-    source_client: SourceClient,
-    sink_client: SinkClient,
-    transformer_client: Option<TransformerClient>,
+    metrics_state: MetricsState,
 ) -> crate::Result<()> {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -97,14 +95,7 @@ pub(crate) async fn start_metrics_https_server(
     // setup_metrics_recorder should only be invoked once
     let recorder_handle = setup_metrics_recorder()?;
 
-    let metrics_app = metrics_router(
-        recorder_handle,
-        MetricsState {
-            source_client,
-            sink_client,
-            transformer_client,
-        },
-    );
+    let metrics_app = metrics_router(recorder_handle, metrics_state);
 
     axum_server::bind_rustls(addr, tls_config)
         .serve(metrics_app.into_make_service())
