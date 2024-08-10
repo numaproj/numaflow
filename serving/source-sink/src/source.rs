@@ -115,10 +115,8 @@ impl SourceClient {
         Ok(response.result.map_or(vec![], |r| r.partitions))
     }
 
-    pub(crate) async fn is_ready(&mut self) -> Result<proto::ReadyResponse> {
-        let request = Request::new(());
-        let response = self.client.is_ready(request).await?.into_inner();
-        Ok(response)
+    pub(crate) async fn is_ready(&mut self) -> bool {
+        self.client.is_ready(Request::new(())).await.is_ok()
     }
 }
 
@@ -222,8 +220,8 @@ mod tests {
         .await
         .expect("failed to connect to source server");
 
-        let response = source_client.is_ready().await.unwrap();
-        assert!(response.ready);
+        let response = source_client.is_ready().await;
+        assert!(response);
 
         let messages = source_client.read_fn(5, 1000).await.unwrap();
         assert_eq!(messages.len(), 5);

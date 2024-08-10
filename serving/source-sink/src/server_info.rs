@@ -7,10 +7,10 @@ use pep440_rs::{Version as PepVersion, VersionSpecifier};
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use crate::error;
-use crate::error::Error;
+use crate::error::{self, Error};
 use crate::server_info::version::SdkConstraints;
 
 // Constant to represent the end of the server info.
@@ -34,9 +34,12 @@ pub(crate) struct ServerInfo {
 
 /// check_for_server_compatibility waits until the server info file is ready and check whether the
 /// server is compatible with Numaflow.
-pub async fn check_for_server_compatibility(file_path: &str) -> error::Result<()> {
+pub async fn check_for_server_compatibility(
+    file_path: &str,
+    cln_token: CancellationToken,
+) -> error::Result<()> {
     // Read the server info file
-    let server_info = read_server_info(file_path).await?;
+    let server_info = read_server_info(file_path, cln_token).await?;
 
     // Log the server info
     info!("Server info file: {:?}", server_info);
@@ -79,8 +82,7 @@ fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
     // Parse the given constraint as a semantic version requirement
     let version_req = VersionReq::parse(constraint).map_err(|e| {
         Error::ServerInfoError(format!(
-            "Error parsing constraint: {},\
-         constraint string: {}",
+            "Error parsing constraint: {}, constraint string: {}",
             e, constraint
         ))
     })?;
@@ -109,14 +111,12 @@ fn check_numaflow_compatibility(
 
     // Create a version constraint based on the minimum numaflow version
     let numaflow_constraint = format!(">={}", min_numaflow_version);
-    Ok(
-        check_constraint(&numaflow_version_semver, &numaflow_constraint).map_err(|e| {
-            Error::ServerInfoError(format!(
-                "numaflow version {} must be upgraded to at least {}, in order to work with current SDK version {}",
-                numaflow_version_semver, min_numaflow_version, e
-            ))
-        })?
-    )
+    check_constraint(&numaflow_version_semver, &numaflow_constraint).map_err(|e| {
+        Error::ServerInfoError(format!(
+            "numaflow version {} must be upgraded to at least {}, in order to work with current SDK version {}",
+            numaflow_version_semver, min_numaflow_version, e
+        ))
+    })
 }
 
 /// Checks if the current SDK version is compatible with the given language's minimum supported SDK version.
@@ -177,9 +177,18 @@ fn check_sdk_compatibility(
 }
 
 /// Reads the server info file and returns the parsed ServerInfo struct.
-async fn read_server_info(file_path: &str) -> error::Result<ServerInfo> {
+/// The cancellation token is used to stop ready-check of server_info file in case it is missing.
+/// This cancellation token is closed via the global shutdown handler.
+async fn read_server_info(
+    file_path: &str,
+    cln_token: CancellationToken,
+) -> error::Result<ServerInfo> {
     // Infinite loop to keep checking until the file is ready
     loop {
+        if cln_token.is_cancelled() {
+            return Err(Error::ServerInfoError("Operation cancelled".to_string()));
+        }
+
         // Check if the file exists and has content
         if let Ok(metadata) = fs::metadata(file_path) {
             if metadata.len() > 0 {
@@ -234,7 +243,6 @@ async fn read_server_info(file_path: &str) -> error::Result<ServerInfo> {
 
     Ok(server_info) // Return the parsed server info
 }
-
 
 /// create a mod for version.rs
 mod version {
@@ -358,7 +366,7 @@ mod tests {
         }
 
         // Create a new file
-        let mut file = File::create(svr_info_file_path);
+        let file = File::create(svr_info_file_path);
 
         // Extract the file from the Result
         let mut file = match file {
@@ -560,6 +568,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file_path = dir.path().join("server_info.txt");
 
+        let cln_token = CancellationToken::new();
+        let _drop_guard = cln_token.clone().drop_guard();
+
         // Server info to write
         let server_info = ServerInfo {
             protocol: TCP.parse().unwrap(),
@@ -577,7 +588,7 @@ mod tests {
         let _ = write_server_info(&server_info, file_path.to_str().unwrap()).await;
 
         // Call the read_server_info function
-        let result = read_server_info(file_path.to_str().unwrap()).await;
+        let result = read_server_info(file_path.to_str().unwrap(), cln_token).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
 
         let server_info = result.unwrap();
@@ -602,8 +613,11 @@ mod tests {
         let mut file = File::create(&file_path).unwrap();
         writeln!(file, r#"{{"protocol":"tcp","language":"go","minimum_numaflow_version":"1.2.0-rc4","version":"1.0.0","metadata":{{"key1":"value1"}}}}"#).unwrap();
 
+        let cln_token = CancellationToken::new();
+        let _drop_guard = cln_token.clone().drop_guard();
+
         // Call the read_server_info function
-        let result = read_server_info(file_path.to_str().unwrap()).await;
+        let result = read_server_info(file_path.to_str().unwrap(), cln_token).await;
         assert!(result.is_err(), "Expected Err, got {:?}", result);
 
         let error = result.unwrap_err();
@@ -623,7 +637,7 @@ mod tests {
             "version": "v0.7.0-rc2",
             "metadata": null
         })
-            .to_string();
+        .to_string();
 
         let _expected_server_info = ServerInfo {
             protocol: "uds".to_string(),
