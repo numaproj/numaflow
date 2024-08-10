@@ -1,10 +1,13 @@
-use crate::error::Error;
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
-use numaflow_models::models::MonoVertex;
 use std::env;
 use std::sync::OnceLock;
+
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use tracing::level_filters::LevelFilter;
+
+use numaflow_models::models::MonoVertex;
+
+use crate::error::Error;
 
 const ENV_MONO_VERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 const ENV_GRPC_MAX_MESSAGE_SIZE: &str = "NUMAFLOW_GRPC_MAX_MESSAGE_SIZE";
@@ -125,8 +128,9 @@ impl Settings {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::env;
+
+    use super::*;
 
     #[test]
     fn test_settings_load() {

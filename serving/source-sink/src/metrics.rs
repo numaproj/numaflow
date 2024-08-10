@@ -14,7 +14,6 @@ use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
 use crate::error::Error;
@@ -157,7 +156,6 @@ pub(crate) struct LagReader {
     source_client: SourceClient,
     lag_checking_interval: Duration,
     refresh_interval: Duration,
-    cancellation_token: CancellationToken,
     buildup_handle: Option<JoinHandle<()>>,
     expose_handle: Option<JoinHandle<()>>,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
@@ -174,7 +172,6 @@ impl LagReader {
             source_client,
             lag_checking_interval: lag_checking_interval.unwrap_or_else(|| Duration::from_secs(3)),
             refresh_interval: refresh_interval.unwrap_or_else(|| Duration::from_secs(5)),
-            cancellation_token: CancellationToken::new(),
             buildup_handle: None,
             expose_handle: None,
             pending_stats: Arc::new(Mutex::new(Vec::with_capacity(MAX_PENDING_STATS))),
@@ -187,31 +184,29 @@ impl LagReader {
     /// - One to periodically check the lag and update the pending stats.
     /// - Another to periodically expose the pending metrics.
     pub async fn start(&mut self) {
-        let token = self.cancellation_token.clone();
         let source_client = self.source_client.clone();
         let lag_checking_interval = self.lag_checking_interval;
         let refresh_interval = self.refresh_interval;
         let pending_stats = self.pending_stats.clone();
 
         self.buildup_handle = Some(tokio::spawn(async move {
-            build_pending_info(source_client, token, lag_checking_interval, pending_stats).await;
+            build_pending_info(source_client, lag_checking_interval, pending_stats).await;
         }));
 
-        let token = self.cancellation_token.clone();
         let pending_stats = self.pending_stats.clone();
         self.expose_handle = Some(tokio::spawn(async move {
-            expose_pending_metrics(token, refresh_interval, pending_stats).await;
+            expose_pending_metrics(refresh_interval, pending_stats).await;
         }));
     }
+}
 
-    /// Shuts down the lag reader by cancelling the tasks and waiting for them to complete.
-    pub(crate) async fn shutdown(self) {
-        self.cancellation_token.cancel();
-        if let Some(handle) = self.buildup_handle {
-            let _ = handle.await;
+impl Drop for LagReader {
+    fn drop(&mut self) {
+        if let Some(handle) = self.expose_handle.take() {
+            handle.abort();
         }
-        if let Some(handle) = self.expose_handle {
-            let _ = handle.await;
+        if let Some(handle) = self.buildup_handle.take() {
+            handle.abort();
         }
     }
 }
@@ -219,36 +214,29 @@ impl LagReader {
 /// Periodically checks the pending messages from the source client and build the pending stats.
 async fn build_pending_info(
     mut source_client: SourceClient,
-    cancellation_token: CancellationToken,
     lag_checking_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
     let mut ticker = time::interval(lag_checking_interval);
     loop {
-        tokio::select! {
-            _ = cancellation_token.cancelled() => {
-                return;
-            }
-            _ = ticker.tick() => {
-                match source_client.pending_fn().await {
-                    Ok(pending) => {
-                        if pending != -1 {
-                            let mut stats = pending_stats.lock().await;
-                            stats.push(TimestampedPending {
-                                pending,
-                                timestamp: std::time::Instant::now(),
-                            });
-                            let n = stats.len();
-                            // Ensure only the most recent MAX_PENDING_STATS entries are kept
-                            if n >= MAX_PENDING_STATS {
-                                stats.drain(0..(n - MAX_PENDING_STATS));
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        error!("Failed to get pending messages: {:?}", err);
+        ticker.tick().await;
+        match source_client.pending_fn().await {
+            Ok(pending) => {
+                if pending != -1 {
+                    let mut stats = pending_stats.lock().await;
+                    stats.push(TimestampedPending {
+                        pending,
+                        timestamp: std::time::Instant::now(),
+                    });
+                    let n = stats.len();
+                    // Ensure only the most recent MAX_PENDING_STATS entries are kept
+                    if n >= MAX_PENDING_STATS {
+                        stats.drain(0..(n - MAX_PENDING_STATS));
                     }
                 }
+            }
+            Err(err) => {
+                error!("Failed to get pending messages: {:?}", err);
             }
         }
     }
@@ -256,25 +244,18 @@ async fn build_pending_info(
 
 // Periodically exposes the pending metrics by calculating the average pending messages over different intervals.
 async fn expose_pending_metrics(
-    cancellation_token: CancellationToken,
     refresh_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
     let mut ticker = time::interval(refresh_interval);
     let lookback_seconds_map = vec![("1m", 60), ("5m", 300), ("15m", 900)];
     loop {
-        tokio::select! {
-            _ = cancellation_token.cancelled() => {
-                return;
-            }
-            _ = ticker.tick() => {
-                for (label, seconds) in &lookback_seconds_map {
-                    let pending = calculate_pending(*seconds, &pending_stats).await;
-                    if pending != -1 {
-                        // TODO: emit it as a metric
-                        info!("Pending messages ({}): {}", label, pending);
-                    }
-                }
+        ticker.tick().await;
+        for (label, seconds) in &lookback_seconds_map {
+            let pending = calculate_pending(*seconds, &pending_stats).await;
+            if pending != -1 {
+                // TODO: emit it as a metric
+                info!("Pending messages ({}): {}", label, pending);
             }
         }
     }

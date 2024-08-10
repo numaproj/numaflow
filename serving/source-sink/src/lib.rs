@@ -1,9 +1,7 @@
 use std::time::Duration;
 
-use tokio::signal;
-use tokio::sync::oneshot;
-use tokio::task::JoinHandle;
 use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 pub(crate) use crate::error::Error;
@@ -44,9 +42,9 @@ pub async fn run_forwarder(
     source_config: SourceConfig,
     sink_config: SinkConfig,
     transformer_config: Option<TransformerConfig>,
-    custom_shutdown_rx: Option<oneshot::Receiver<()>>,
+    cln_token: CancellationToken,
 ) -> Result<()> {
-    server_info::check_for_server_compatibility(&source_config.server_info_file)
+    server_info::check_for_server_compatibility(&source_config.server_info_file, cln_token.clone())
         .await
         .map_err(|e| {
             warn!("Error waiting for source server info file: {:?}", e);
@@ -54,11 +52,7 @@ pub async fn run_forwarder(
         })?;
     let mut source_client = SourceClient::connect(source_config).await?;
 
-    // start the lag reader to publish lag metrics
-    let mut lag_reader = metrics::LagReader::new(source_client.clone(), None, None);
-    lag_reader.start().await;
-
-    server_info::check_for_server_compatibility(&sink_config.server_info_file)
+    server_info::check_for_server_compatibility(&sink_config.server_info_file, cln_token.clone())
         .await
         .map_err(|e| {
             warn!("Error waiting for sink server info file: {:?}", e);
@@ -68,7 +62,7 @@ pub async fn run_forwarder(
     let mut sink_client = SinkClient::connect(sink_config).await?;
 
     let mut transformer_client = if let Some(config) = transformer_config {
-        server_info::check_for_server_compatibility(&config.server_info_file)
+        server_info::check_for_server_compatibility(&config.server_info_file, cln_token.clone())
             .await
             .map_err(|e| {
                 warn!("Error waiting for transformer server info file: {:?}", e);
@@ -79,8 +73,6 @@ pub async fn run_forwarder(
         None
     };
 
-    let (shutdown_tx, shutdown_rx) = oneshot::channel();
-
     // readiness check for all the ud containers
     wait_until_ready(
         &mut source_client,
@@ -89,38 +81,16 @@ pub async fn run_forwarder(
     )
     .await?;
 
+    // start the lag reader to publish lag metrics
+    let mut lag_reader = metrics::LagReader::new(source_client.clone(), None, None);
+    lag_reader.start().await;
+
     // TODO: use builder pattern of options like TIMEOUT, BATCH_SIZE, etc?
     let mut forwarder =
-        Forwarder::new(source_client, sink_client, transformer_client, shutdown_rx).await?;
+        Forwarder::new(source_client, sink_client, transformer_client, cln_token).await?;
 
-    let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
-        forwarder.run().await?;
-        Ok(())
-    });
+    forwarder.run().await?;
 
-    let shutdown_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
-        shutdown_signal(custom_shutdown_rx).await;
-        shutdown_tx
-            .send(())
-            .map_err(|_| Error::ForwarderError("Failed to send shutdown signal".to_string()))?;
-        Ok(())
-    });
-
-    forwarder_handle
-        .await
-        .unwrap_or_else(|e| {
-            error!("Forwarder task panicked: {:?}", e);
-            Err(Error::ForwarderError("Forwarder task panicked".to_string()))
-        })
-        .unwrap_or_else(|e| {
-            error!("Forwarder failed: {:?}", e);
-        });
-
-    if !shutdown_handle.is_finished() {
-        shutdown_handle.abort();
-    }
-
-    lag_reader.shutdown().await;
     info!("Forwarder stopped gracefully");
     Ok(())
 }
@@ -161,40 +131,6 @@ async fn wait_until_ready(
     Ok(())
 }
 
-async fn shutdown_signal(shutdown_rx: Option<oneshot::Receiver<()>>) {
-    let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-        info!("Received Ctrl+C signal");
-    };
-
-    let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-        info!("Received terminate signal");
-    };
-
-    let custom_shutdown = async {
-        if let Some(rx) = shutdown_rx {
-            rx.await.ok();
-        } else {
-            // Create a watch channel that never sends
-            let (_tx, mut rx) = tokio::sync::watch::channel(());
-            rx.changed().await.ok();
-        }
-        info!("Received custom shutdown signal");
-    };
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-        _ = custom_shutdown => {},
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::env;
@@ -202,6 +138,7 @@ mod tests {
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source};
     use tokio::sync::mpsc::Sender;
+    use tokio_util::sync::CancellationToken;
 
     use crate::sink::SinkConfig;
     use crate::source::SourceConfig;
@@ -284,11 +221,12 @@ mod tests {
         env::set_var("SOURCE_SOCKET", src_sock_file.to_str().unwrap());
         env::set_var("SINK_SOCKET", sink_sock_file.to_str().unwrap());
 
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let cln_token = CancellationToken::new();
 
+        let forwarder_cln_token = cln_token.clone();
         let forwarder_handle = tokio::spawn(async move {
             let result =
-                super::run_forwarder(source_config, sink_config, None, Some(shutdown_rx)).await;
+                super::run_forwarder(source_config, sink_config, None, forwarder_cln_token).await;
             assert!(result.is_ok());
         });
 
@@ -297,7 +235,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // stop the forwarder
-        shutdown_tx.send(()).unwrap();
+        cln_token.cancel();
         forwarder_handle.await.unwrap();
 
         // stop the source and sink servers

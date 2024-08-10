@@ -76,10 +76,11 @@ impl SinkClient {
 
 #[cfg(test)]
 mod tests {
-    use crate::message::Offset;
     use chrono::offset::Utc;
     use numaflow::sink;
     use tracing::info;
+
+    use crate::message::Offset;
 
     use super::*;
 
