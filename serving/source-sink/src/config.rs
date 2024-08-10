@@ -1,10 +1,10 @@
 use crate::error::Error;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use log::LevelFilter;
 use numaflow_models::models::MonoVertex;
 use std::env;
 use std::sync::OnceLock;
+use tracing::level_filters::LevelFilter;
 
 const ENV_MONO_VERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 const ENV_GRPC_MAX_MESSAGE_SIZE: &str = "NUMAFLOW_GRPC_MAX_MESSAGE_SIZE";
@@ -48,7 +48,7 @@ impl Default for Settings {
             batch_size: DEFAULT_BATCH_SIZE,
             timeout_in_ms: DEFAULT_TIMEOUT_IN_MS,
             metrics_server_listen_port: DEFAULT_METRICS_PORT,
-            log_level: "info".to_string(),
+            log_level: LevelFilter::INFO.to_string(),
             grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
             is_transformer_enabled: false,
             lag_check_interval_in_secs: DEFAULT_LAG_CHECK_INTERVAL_IN_SECS,
@@ -105,7 +105,7 @@ impl Settings {
         }
 
         settings.log_level =
-            env::var(ENV_LOG_LEVEL).unwrap_or_else(|_| LevelFilter::Info.to_string());
+            env::var(ENV_LOG_LEVEL).unwrap_or_else(|_| LevelFilter::INFO.to_string());
 
         settings.grpc_max_message_size = env::var(ENV_GRPC_MAX_MESSAGE_SIZE)
             .unwrap_or_else(|_| DEFAULT_GRPC_MAX_MESSAGE_SIZE.to_string())
@@ -131,9 +131,11 @@ mod tests {
     #[test]
     fn test_settings_load() {
         // Set up environment variables
-        env::set_var(ENV_MONO_VERTEX_OBJ, "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLW1vbm8tdmVydGV4IiwibmFtZXNwYWNlIjoiZGVmYXVsdCIsImNyZWF0aW9uVGltZXN0YW1wIjpudWxsfSwic3BlYyI6eyJyZXBsaWNhcyI6MCwic291cmNlIjp7InRyYW5zZm9ybWVyIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6InF1YXkuaW8vbnVtYWlvL251bWFmbG93LXJzL21hcHQtZXZlbnQtdGltZS1maWx0ZXI6c3RhYmxlIiwicmVzb3VyY2VzIjp7fX0sImJ1aWx0aW4iOm51bGx9LCJ1ZHNvdXJjZSI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJkb2NrZXIuaW50dWl0LmNvbS9wZXJzb25hbC95aGwwMS9zaW1wbGUtc291cmNlOnN0YWJsZSIsInJlc291cmNlcyI6e319fX0sInNpbmsiOnsidWRzaW5rIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImRvY2tlci5pbnR1aXQuY29tL3BlcnNvbmFsL3lobDAxL2JsYWNraG9sZS1zaW5rOnN0YWJsZSIsInJlc291cmNlcyI6e319fX0sImxpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMifSwic2NhbGUiOnt9fSwic3RhdHVzIjp7InJlcGxpY2FzIjowLCJsYXN0VXBkYXRlZCI6bnVsbCwibGFzdFNjYWxlZEF0IjpudWxsfX0=");
-        env::set_var(ENV_LOG_LEVEL, "debug");
-        env::set_var(ENV_GRPC_MAX_MESSAGE_SIZE, "128000000");
+        unsafe {
+            env::set_var(ENV_MONO_VERTEX_OBJ, "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLW1vbm8tdmVydGV4IiwibmFtZXNwYWNlIjoiZGVmYXVsdCIsImNyZWF0aW9uVGltZXN0YW1wIjpudWxsfSwic3BlYyI6eyJyZXBsaWNhcyI6MCwic291cmNlIjp7InRyYW5zZm9ybWVyIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6InF1YXkuaW8vbnVtYWlvL251bWFmbG93LXJzL21hcHQtZXZlbnQtdGltZS1maWx0ZXI6c3RhYmxlIiwicmVzb3VyY2VzIjp7fX0sImJ1aWx0aW4iOm51bGx9LCJ1ZHNvdXJjZSI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJkb2NrZXIuaW50dWl0LmNvbS9wZXJzb25hbC95aGwwMS9zaW1wbGUtc291cmNlOnN0YWJsZSIsInJlc291cmNlcyI6e319fX0sInNpbmsiOnsidWRzaW5rIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImRvY2tlci5pbnR1aXQuY29tL3BlcnNvbmFsL3lobDAxL2JsYWNraG9sZS1zaW5rOnN0YWJsZSIsInJlc291cmNlcyI6e319fX0sImxpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMifSwic2NhbGUiOnt9fSwic3RhdHVzIjp7InJlcGxpY2FzIjowLCJsYXN0VXBkYXRlZCI6bnVsbCwibGFzdFNjYWxlZEF0IjpudWxsfX0=");
+            env::set_var(ENV_LOG_LEVEL, "debug");
+            env::set_var(ENV_GRPC_MAX_MESSAGE_SIZE, "128000000");
+        };
 
         // Load settings
         let settings = Settings::load().unwrap();
@@ -146,8 +148,10 @@ mod tests {
         assert_eq!(settings.grpc_max_message_size, 128000000);
 
         // Clean up environment variables
-        env::remove_var(ENV_MONO_VERTEX_OBJ);
-        env::remove_var(ENV_LOG_LEVEL);
-        env::remove_var(ENV_GRPC_MAX_MESSAGE_SIZE);
+        unsafe {
+            env::remove_var(ENV_MONO_VERTEX_OBJ);
+            env::remove_var(ENV_LOG_LEVEL);
+            env::remove_var(ENV_GRPC_MAX_MESSAGE_SIZE);
+        };
     }
 }

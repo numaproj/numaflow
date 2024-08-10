@@ -1,19 +1,18 @@
-use log::Level::Info;
 use sourcer_sinker::config::config;
+use sourcer_sinker::metrics::start_metrics_https_server;
+use sourcer_sinker::run_forwarder;
 use sourcer_sinker::sink::SinkConfig;
 use sourcer_sinker::source::SourceConfig;
 use sourcer_sinker::transformer::TransformerConfig;
-use sourcer_sinker::run_forwarder;
 use std::env;
 use std::net::SocketAddr;
-use tracing::error;
 use tracing::level_filters::LevelFilter;
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
-use sourcer_sinker::metrics::start_metrics_https_server;
 
 #[tokio::main]
 async fn main() {
-    let log_level = env::var("NUMAFLOW_DEBUG").unwrap_or_else(|_| Info.to_string());
+    let log_level = env::var("NUMAFLOW_DEBUG").unwrap_or_else(|_| LevelFilter::INFO.to_string());
     // Initialize the logger
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -61,4 +60,6 @@ async fn main() {
     if let Err(e) = run_forwarder(source_config, sink_config, transformer_config, None).await {
         error!("Application error: {:?}", e);
     }
+
+    info!("Gracefully Exiting...");
 }
