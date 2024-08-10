@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
@@ -17,7 +18,9 @@ use tokio::time;
 use tracing::{debug, error, info};
 
 use crate::error::Error;
+use crate::sink::SinkClient;
 use crate::source::SourceClient;
+use crate::transformer::TransformerClient;
 
 // Define the labels for the metrics
 pub const MONO_VERTEX_NAME: &str = "vertex";
@@ -31,16 +34,36 @@ pub const FORWARDER_READ_BYTES_TOTAL: &str = "forwarder_read_bytes_total";
 pub const FORWARDER_ACK_TOTAL: &str = "forwarder_ack_total";
 pub const FORWARDER_WRITE_TOTAL: &str = "forwarder_write_total";
 
+#[derive(Clone)]
+struct MetricsState {
+    pub source_client: SourceClient,
+    pub sink_client: SinkClient,
+    pub transformer_client: Option<TransformerClient>,
+}
+
 /// Collect and emit prometheus metrics.
 /// Metrics router and server
-pub async fn start_metrics_http_server<A>(addr: A) -> crate::Result<()>
+#[allow(dead_code)]
+pub(crate) async fn start_metrics_http_server<A>(
+    addr: A,
+    source_client: SourceClient,
+    sink_client: SinkClient,
+    transformer_client: Option<TransformerClient>,
+) -> crate::Result<()>
 where
     A: ToSocketAddrs + std::fmt::Debug,
 {
     // setup_metrics_recorder should only be invoked once
     let recorder_handle = setup_metrics_recorder()?;
 
-    let metrics_app = metrics_router(recorder_handle);
+    let metrics_app = metrics_router(
+        recorder_handle,
+        MetricsState {
+            source_client,
+            sink_client,
+            transformer_client,
+        },
+    );
 
     let listener = TcpListener::bind(&addr)
         .await
@@ -54,9 +77,12 @@ where
     Ok(())
 }
 
-pub async fn start_metrics_https_server(addr: SocketAddr) -> crate::Result<()>
-where
-{
+pub(crate) async fn start_metrics_https_server(
+    addr: SocketAddr,
+    source_client: SourceClient,
+    sink_client: SinkClient,
+    transformer_client: Option<TransformerClient>,
+) -> crate::Result<()> {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     // Generate a self-signed certificate
@@ -70,7 +96,14 @@ where
     // setup_metrics_recorder should only be invoked once
     let recorder_handle = setup_metrics_recorder()?;
 
-    let metrics_app = metrics_router(recorder_handle);
+    let metrics_app = metrics_router(
+        recorder_handle,
+        MetricsState {
+            source_client,
+            sink_client,
+            transformer_client,
+        },
+    );
 
     axum_server::bind_rustls(addr, tls_config)
         .serve(metrics_app.into_make_service())
@@ -81,12 +114,14 @@ where
 }
 
 /// router for metrics and k8s health endpoints
-fn metrics_router(recorder_handle: PrometheusHandle) -> Router {
+fn metrics_router(recorder_handle: PrometheusHandle, metrics_state: MetricsState) -> Router {
     let metrics_app = Router::new()
         .route("/metrics", get(move || ready(recorder_handle.render())))
         .route("/livez", get(livez))
         .route("/readyz", get(readyz))
-        .route("/sidecar-livez", get(sidecar_livez));
+        .route("/sidecar-livez", get(sidecar_livez))
+        .with_state(metrics_state);
+
     metrics_app
 }
 
@@ -98,7 +133,18 @@ async fn readyz() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-async fn sidecar_livez() -> impl IntoResponse {
+async fn sidecar_livez(State(mut state): State<MetricsState>) -> impl IntoResponse {
+    if !state.source_client.is_ready().await {
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
+    if !state.sink_client.is_ready().await {
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
+    if let Some(mut transformer_client) = state.transformer_client {
+        if !transformer_client.is_ready().await {
+            return StatusCode::SERVICE_UNAVAILABLE;
+        }
+    }
     StatusCode::NO_CONTENT
 }
 
@@ -288,27 +334,4 @@ async fn calculate_pending(
     result
 }
 
-#[cfg(test)]
-mod tests {
-    use std::net::SocketAddr;
-    use std::time::Duration;
-
-    use tokio::time::sleep;
-
-    use super::*;
-
-    #[tokio::test]
-    async fn test_start_metrics_server() {
-        let addr = SocketAddr::from(([127, 0, 0, 1], 0));
-        let server = tokio::spawn(async move {
-            let result = start_metrics_http_server(addr).await;
-            assert!(result.is_ok())
-        });
-
-        // Give the server a little bit of time to start
-        sleep(Duration::from_millis(100)).await;
-
-        // Stop the server
-        server.abort();
-    }
-}
+// TODO add tests

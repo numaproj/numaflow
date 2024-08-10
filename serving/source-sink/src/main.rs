@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -8,8 +6,7 @@ use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 use sourcer_sinker::config::config;
-use sourcer_sinker::metrics::start_metrics_https_server;
-use sourcer_sinker::run_forwarder;
+use sourcer_sinker::init;
 use sourcer_sinker::sink::SinkConfig;
 use sourcer_sinker::source::SourceConfig;
 use sourcer_sinker::transformer::TransformerConfig;
@@ -26,19 +23,6 @@ async fn main() {
         .with_target(false)
         .init();
 
-    // Start the metrics server, which server the prometheus metrics.
-    // TODO: make the port configurable.
-    let metrics_addr: SocketAddr = "0.0.0.0:2469".parse().expect("Invalid address");
-
-    // Start the metrics server in a separate background async spawn,
-    // This should be running throughout the lifetime of the application, hence the handle is not
-    // joined.
-    let metrics_server_handle = tokio::spawn(async move {
-        if let Err(e) = start_metrics_https_server(metrics_addr).await {
-            error!("Metrics server error: {:?}", e);
-        }
-    });
-
     // Initialize the source, sink and transformer configurations
     // We are using the default configurations for now.
     let source_config = SourceConfig {
@@ -50,6 +34,7 @@ async fn main() {
         max_message_size: config().grpc_max_message_size,
         ..Default::default()
     };
+
     let transformer_config = if config().is_transformer_enabled {
         Some(TransformerConfig {
             max_message_size: config().grpc_max_message_size,
@@ -68,7 +53,7 @@ async fn main() {
     });
 
     // Run the forwarder
-    if let Err(e) = run_forwarder(source_config, sink_config, transformer_config, cln_token).await {
+    if let Err(e) = init(source_config, sink_config, transformer_config, cln_token).await {
         error!("Application error: {:?}", e);
     }
 
@@ -76,9 +61,6 @@ async fn main() {
         shutdown_handle.abort();
     }
 
-    if !metrics_server_handle.is_finished() {
-        metrics_server_handle.abort();
-    }
     info!("Gracefully Exiting...");
 }
 

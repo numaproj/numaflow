@@ -1,14 +1,16 @@
+use std::net::SocketAddr;
 use std::time::Duration;
 
-use tokio::time::sleep;
-use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
-
+use crate::config::config;
 pub(crate) use crate::error::Error;
 use crate::forwarder::Forwarder;
+use crate::metrics::start_metrics_https_server;
 use crate::sink::{SinkClient, SinkConfig};
 use crate::source::{SourceClient, SourceConfig};
 use crate::transformer::{TransformerClient, TransformerConfig};
+use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info, warn};
 
 pub(crate) use self::error::Result;
 
@@ -38,7 +40,7 @@ pub(crate) mod shared;
 
 /// forwards a chunk of data from the source to the sink via an optional transformer.
 /// It takes an optional custom_shutdown_rx for shutting down the forwarder, useful for testing.
-pub async fn run_forwarder(
+pub async fn init(
     source_config: SourceConfig,
     sink_config: SinkConfig,
     transformer_config: Option<TransformerConfig>,
@@ -81,6 +83,30 @@ pub async fn run_forwarder(
     )
     .await?;
 
+    // Start the metrics server, which server the prometheus metrics.
+    let metrics_addr: SocketAddr = format!("0.0.0.0:{}", &config().metrics_server_listen_port)
+        .parse()
+        .expect("Invalid address");
+
+    // Start the metrics server in a separate background async spawn,
+    // This should be running throughout the lifetime of the application, hence the handle is not
+    // joined.
+    let metrics_source_client = source_client.clone();
+    let metrics_sink_client = sink_client.clone();
+    let metrics_transformer_client = transformer_client.clone();
+    tokio::spawn(async move {
+        if let Err(e) = start_metrics_https_server(
+            metrics_addr,
+            metrics_source_client,
+            metrics_sink_client,
+            metrics_transformer_client,
+        )
+        .await
+        {
+            error!("Metrics server error: {:?}", e);
+        }
+    });
+
     // start the lag reader to publish lag metrics
     let mut lag_reader = metrics::LagReader::new(source_client.clone(), None, None);
     lag_reader.start().await;
@@ -101,18 +127,18 @@ async fn wait_until_ready(
     transformer_client: &mut Option<TransformerClient>,
 ) -> Result<()> {
     loop {
-        let source_ready = source_client.is_ready().await.is_ok();
+        let source_ready = source_client.is_ready().await;
         if !source_ready {
             info!("UDSource is not ready, waiting...");
         }
 
-        let sink_ready = sink_client.is_ready().await.is_ok();
+        let sink_ready = sink_client.is_ready().await;
         if !sink_ready {
             info!("UDSink is not ready, waiting...");
         }
 
         let transformer_ready = if let Some(client) = transformer_client {
-            let ready = client.is_ready().await.is_ok();
+            let ready = client.is_ready().await;
             if !ready {
                 info!("UDTransformer is not ready, waiting...");
             }
@@ -225,8 +251,7 @@ mod tests {
 
         let forwarder_cln_token = cln_token.clone();
         let forwarder_handle = tokio::spawn(async move {
-            let result =
-                super::run_forwarder(source_config, sink_config, None, forwarder_cln_token).await;
+            let result = super::init(source_config, sink_config, None, forwarder_cln_token).await;
             assert!(result.is_ok());
         });
 

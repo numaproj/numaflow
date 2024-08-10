@@ -30,6 +30,7 @@ impl Default for SinkConfig {
     }
 }
 
+#[derive(Clone)]
 /// SinkClient is a client to interact with the sink server.
 pub struct SinkClient {
     client: proto::sink_client::SinkClient<Channel>,
@@ -67,10 +68,8 @@ impl SinkClient {
         Ok(response)
     }
 
-    pub(crate) async fn is_ready(&mut self) -> Result<proto::ReadyResponse> {
-        let request = Request::new(());
-        let response = self.client.is_ready(request).await?.into_inner();
-        Ok(response)
+    pub(crate) async fn is_ready(&mut self) -> bool {
+        self.client.is_ready(Request::new(())).await.is_ok()
     }
 }
 
@@ -160,8 +159,8 @@ mod tests {
             },
         ];
 
-        let ready_response = sink_client.is_ready().await.unwrap();
-        assert_eq!(ready_response.ready, true);
+        let ready_response = sink_client.is_ready().await;
+        assert!(ready_response);
 
         let response = sink_client.sink_fn(messages).await.unwrap();
         assert_eq!(response.results.len(), 2);

@@ -10,8 +10,7 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use crate::error;
-use crate::error::Error;
+use crate::error::{self, Error};
 use crate::server_info::version::SdkConstraints;
 
 // Constant to represent the end of the server info.
@@ -83,8 +82,7 @@ fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
     // Parse the given constraint as a semantic version requirement
     let version_req = VersionReq::parse(constraint).map_err(|e| {
         Error::ServerInfoError(format!(
-            "Error parsing constraint: {},\
-         constraint string: {}",
+            "Error parsing constraint: {}, constraint string: {}",
             e, constraint
         ))
     })?;
@@ -114,11 +112,11 @@ fn check_numaflow_compatibility(
     // Create a version constraint based on the minimum numaflow version
     let numaflow_constraint = format!(">={}", min_numaflow_version);
     check_constraint(&numaflow_version_semver, &numaflow_constraint).map_err(|e| {
-            Error::ServerInfoError(format!(
-                "numaflow version {} must be upgraded to at least {}, in order to work with current SDK version {}",
-                numaflow_version_semver, min_numaflow_version, e
-            ))
-        })
+        Error::ServerInfoError(format!(
+            "numaflow version {} must be upgraded to at least {}, in order to work with current SDK version {}",
+            numaflow_version_semver, min_numaflow_version, e
+        ))
+    })
 }
 
 /// Checks if the current SDK version is compatible with the given language's minimum supported SDK version.
@@ -336,10 +334,9 @@ mod version {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
     use std::io::{Read, Write};
     use std::{collections::HashMap, fs::File};
-
-    use serde_json::json;
     use tempfile::tempdir;
 
     use super::*;
@@ -367,7 +364,7 @@ mod tests {
         }
 
         // Create a new file
-        let file = File::create(svr_info_file_path);
+        let mut file = File::create(svr_info_file_path);
 
         // Extract the file from the Result
         let mut file = match file {
@@ -398,7 +395,7 @@ mod tests {
     }
 
     // Helper function to create a SdkConstraints struct
-    fn create_sdk_constraints() -> SdkConstraints {
+    fn create_sdk_constraints() -> version::SdkConstraints {
         let mut constraints = HashMap::new();
         constraints.insert("python".to_string(), "1.2.0".to_string());
         constraints.insert("java".to_string(), "2.0.0".to_string());
@@ -566,10 +563,8 @@ mod tests {
     #[tokio::test]
     async fn test_read_server_info_success() {
         // Create a temporary directory
-        let dir = tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
         let file_path = dir.path().join("server_info.txt");
-        let cln_token = CancellationToken::new();
-        let _drop_guard = cln_token.clone().drop_guard();
 
         // Server info to write
         let server_info = ServerInfo {
@@ -588,7 +583,7 @@ mod tests {
         let _ = write_server_info(&server_info, file_path.to_str().unwrap()).await;
 
         // Call the read_server_info function
-        let result = read_server_info(file_path.to_str().unwrap(), cln_token).await;
+        let result = read_server_info(file_path.to_str().unwrap()).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
 
         let server_info = result.unwrap();
@@ -606,17 +601,15 @@ mod tests {
     #[tokio::test]
     async fn test_read_server_info_retry_limit() {
         // Create a temporary directory
-        let dir = tempdir().unwrap();
+        let dir = tempfile::tempdir().unwrap();
         let file_path = dir.path().join("server_info.txt");
-        let cln_token = CancellationToken::new();
-        let _drop_guard = cln_token.clone().drop_guard();
 
         // Write a partial test file not ending with END marker
         let mut file = File::create(&file_path).unwrap();
         writeln!(file, r#"{{"protocol":"tcp","language":"go","minimum_numaflow_version":"1.2.0-rc4","version":"1.0.0","metadata":{{"key1":"value1"}}}}"#).unwrap();
 
         // Call the read_server_info function
-        let result = read_server_info(file_path.to_str().unwrap(), cln_token).await;
+        let result = read_server_info(file_path.to_str().unwrap()).await;
         assert!(result.is_err(), "Expected Err, got {:?}", result);
 
         let error = result.unwrap_err();
