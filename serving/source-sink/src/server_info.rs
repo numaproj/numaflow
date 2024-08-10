@@ -177,6 +177,8 @@ fn check_sdk_compatibility(
 }
 
 /// Reads the server info file and returns the parsed ServerInfo struct.
+/// The cancellation token is used to stop ready-check of server_info file in case it is missing.
+/// This cancellation token is closed via the global shutdown handler.
 async fn read_server_info(
     file_path: &str,
     cln_token: CancellationToken,
@@ -364,7 +366,7 @@ mod tests {
         }
 
         // Create a new file
-        let mut file = File::create(svr_info_file_path);
+        let file = File::create(svr_info_file_path);
 
         // Extract the file from the Result
         let mut file = match file {
@@ -566,6 +568,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file_path = dir.path().join("server_info.txt");
 
+        let cln_token = CancellationToken::new();
+        let _drop_guard = cln_token.clone().drop_guard();
+
         // Server info to write
         let server_info = ServerInfo {
             protocol: TCP.parse().unwrap(),
@@ -583,7 +588,7 @@ mod tests {
         let _ = write_server_info(&server_info, file_path.to_str().unwrap()).await;
 
         // Call the read_server_info function
-        let result = read_server_info(file_path.to_str().unwrap()).await;
+        let result = read_server_info(file_path.to_str().unwrap(), cln_token).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
 
         let server_info = result.unwrap();
@@ -608,8 +613,11 @@ mod tests {
         let mut file = File::create(&file_path).unwrap();
         writeln!(file, r#"{{"protocol":"tcp","language":"go","minimum_numaflow_version":"1.2.0-rc4","version":"1.0.0","metadata":{{"key1":"value1"}}}}"#).unwrap();
 
+        let cln_token = CancellationToken::new();
+        let _drop_guard = cln_token.clone().drop_guard();
+
         // Call the read_server_info function
-        let result = read_server_info(file_path.to_str().unwrap()).await;
+        let result = read_server_info(file_path.to_str().unwrap(), cln_token).await;
         assert!(result.is_err(), "Expected Err, got {:?}", result);
 
         let error = result.unwrap_err();
@@ -629,7 +637,7 @@ mod tests {
             "version": "v0.7.0-rc2",
             "metadata": null
         })
-        .to_string();
+            .to_string();
 
         let _expected_server_info = ServerInfo {
             protocol: "uds".to_string(),

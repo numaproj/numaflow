@@ -42,7 +42,8 @@ struct MetricsState {
 }
 
 /// Collect and emit prometheus metrics.
-/// Metrics router and server
+/// Metrics router and server over HTTP endpoint.
+// This is not used currently
 #[allow(dead_code)]
 pub(crate) async fn start_metrics_http_server<A>(
     addr: A,
@@ -246,6 +247,7 @@ impl LagReader {
     }
 }
 
+/// When lag-reader is dropped, we need to clean up the pending exposer and the pending builder tasks.
 impl Drop for LagReader {
     fn drop(&mut self) {
         if let Some(handle) = self.expose_handle.take() {
@@ -254,6 +256,8 @@ impl Drop for LagReader {
         if let Some(handle) = self.buildup_handle.take() {
             handle.abort();
         }
+
+        info!("Stopped the Lag-Reader Expose and Builder tasks");
     }
 }
 

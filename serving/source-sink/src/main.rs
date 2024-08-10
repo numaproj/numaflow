@@ -46,19 +46,21 @@ async fn main() {
 
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
+    // wait for SIG{INT,TERM} and invoke cancellation token.
     let shutdown_handle: JoinHandle<sourcer_sinker::error::Result<()>> = tokio::spawn(async move {
         shutdown_signal().await;
         shutdown_cln_token.cancel();
         Ok(())
     });
 
-    // Run the forwarder
+    // Run the forwarder with cancellation token.
     if let Err(e) = init(source_config, sink_config, transformer_config, cln_token).await {
         error!("Application error: {:?}", e);
-    }
 
-    if !shutdown_handle.is_finished() {
-        shutdown_handle.abort();
+        // abort the task since we have an error
+        if !shutdown_handle.is_finished() {
+            shutdown_handle.abort();
+        }
     }
 
     info!("Gracefully Exiting...");
