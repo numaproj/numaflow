@@ -14,19 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package server
+package client
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+	"context"
+	"io"
 
-	"github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
 )
 
-var (
-	monoVertexInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: "mvtx",
-		Name:      "build_info",
-		Help:      "A metric with a constant value '1', labeled by Numaflow binary version and platform, as well as the mono vertex name",
-	}, []string{metrics.LabelVersion, metrics.LabelPlatform, metrics.LabelMonoVertex})
-)
+type MonoVertexDaemonClient interface {
+	io.Closer
+	GetMonoVertexMetrics(ctx context.Context) (*mvtxdaemon.MonoVertexMetrics, error)
+}

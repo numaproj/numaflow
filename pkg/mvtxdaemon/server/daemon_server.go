@@ -38,6 +38,8 @@ import (
 	"github.com/numaproj/numaflow"
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
+	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
+	"github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 )
@@ -90,7 +92,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	go func() { _ = tcpm.Serve() }()
 
 	version := numaflow.GetVersion()
-	mono_vertex_info.WithLabelValues(version.Version, version.Platform, ds.monoVtx.Name).Set(1)
+	monoVertexInfo.WithLabelValues(version.Version, version.Platform, ds.monoVtx.Name).Set(1)
 
 	log.Infof("MonoVertex daemon server started successfully on %s", address)
 	<-ctx.Done()
@@ -111,6 +113,11 @@ func (ds *daemonServer) newGRPCServer() (*grpc.Server, error) {
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
+	mvtxService, err := service.NewMoveVertexService(ds.monoVtx)
+	if err != nil {
+		return nil, err
+	}
+	mvtxdaemon.RegisterMonoVertexDaemonServiceServer(grpcServer, mvtxService)
 	return grpcServer, nil
 }
 

@@ -28,7 +28,7 @@ const (
 	LabelISBService         = "isbsvc"
 	LabelPipeline           = "pipeline"
 	LabelVertex             = "vertex"
-	LabelMonoVertex         = "mono_vertex"
+	LabelMonoVertex         = "mvtx"
 	LabelVertexReplicaIndex = "replica"
 	LabelVertexType         = "vertex_type"
 	LabelPartitionName      = "partition_name"

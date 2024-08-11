@@ -113,11 +113,11 @@ func (s *Scaler) StopWatching(key string) {
 // It waits for keys in the channel, and starts a scaling job
 func (s *Scaler) scale(ctx context.Context, id int, keyCh <-chan string) {
 	log := logging.FromContext(ctx)
-	log.Infof("Started autoscaling worker %v", id)
+	log.Infof("Started Vertex autoscaling worker %v", id)
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("Stopped scaling worker %v", id)
+			log.Infof("Stopped Vertex autoscaling worker %v", id)
 			return
 		case key := <-keyCh:
 			if err := s.scaleOneVertex(ctx, key, id); err != nil {
@@ -400,8 +400,8 @@ func (s *Scaler) desiredReplicas(_ context.Context, vertex *dfv1.Vertex, partiti
 // Each worker keeps picking up scaling tasks (which contains vertex keys) to calculate the desired replicas,
 // and patch the vertex spec with the new replica number if needed.
 func (s *Scaler) Start(ctx context.Context) error {
-	log := logging.FromContext(ctx).Named("autoscaler")
-	log.Info("Starting autoscaler...")
+	log := logging.FromContext(ctx).Named("vertex-autoscaler")
+	log.Info("Starting vertex autoscaler...")
 	keyCh := make(chan string)
 	ctx, cancel := context.WithCancel(logging.WithLogger(ctx, log))
 	defer cancel()

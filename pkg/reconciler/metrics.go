@@ -45,6 +45,12 @@ var (
 		Help:      "A metric to indicate whether the Pipeline is healthy. '1' means healthy, '0' means unhealthy",
 	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
 
+	MonoVertexHealth = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "mvtx_health",
+		Help:      "A metric to indicate whether the MonoVertex is healthy. '1' means healthy, '0' means unhealthy",
+	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertex})
+
 	// JetStreamISBSvcReplicas indicates the replicas of a JetStream ISB Service.
 	JetStreamISBSvcReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
@@ -72,8 +78,25 @@ var (
 		Name:      "vertex_current_replicas",
 		Help:      "A metric indicates the current replicas of a Vertex",
 	}, []string{metrics.LabelNamespace, metrics.LabelPipeline, metrics.LabelVertex})
+
+	// MonoVertexDisiredReplicas indicates the desired replicas of a MonoVertex.
+	MonoVertexDisiredReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "mvtx_desired_replicas",
+		Help:      "A metric indicates the desired replicas of a MonoVertex",
+	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertex})
+
+	// MonoVertexCurrentReplicas indicates the current replicas of a MonoVertex.
+	MonoVertexCurrentReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "mvtx_current_replicas",
+		Help:      "A metric indicates the current replicas of a MonoVertex",
+	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertex})
 )
 
 func init() {
-	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcHealth, PipelineHealth, JetStreamISBSvcReplicas, RedisISBSvcReplicas, VertexDisiredReplicas, VertexCurrentReplicas)
+	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcHealth, PipelineHealth,
+		MonoVertexHealth, JetStreamISBSvcReplicas, RedisISBSvcReplicas,
+		VertexDisiredReplicas, VertexCurrentReplicas, MonoVertexDisiredReplicas,
+		MonoVertexCurrentReplicas)
 }
