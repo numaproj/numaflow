@@ -26,7 +26,7 @@ use crate::transformer::TransformerClient;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
-use prometheus_client::metrics::histogram::Histogram;
+use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
 use prometheus_client::registry::Registry;
 use serde::{Deserialize, Serialize};
 use tower::load::pending_requests::Count;
@@ -42,6 +42,7 @@ pub const FORWARDER_READ_TOTAL: &str = "forwarder_read_total";
 pub const FORWARDER_READ_BYTES_TOTAL: &str = "forwarder_read_bytes_total";
 pub const FORWARDER_ACK_TOTAL: &str = "forwarder_ack_total";
 pub const FORWARDER_WRITE_TOTAL: &str = "forwarder_write_total";
+pub const FORWARDER_PROCESSING_TIME: &str = "forwarder_chunk_processing_time";
 
 #[derive(Clone)]
 pub(crate) struct MetricsState {
@@ -97,18 +98,31 @@ pub struct ForwardMetrics {
     pub forward_read_total: Family<Vec<(String, String)>, Counter>,
     pub forward_ack_total: Family<Vec<(String, String)>, Counter>,
     pub forward_write_total: Family<Vec<(String, String)>, Counter>,
+    pub forward_a_chunk_total_time: Family<Vec<(String, String)>, Histogram>,
 }
 
 impl ForwardMetrics {
     fn new() -> Self {
+        let log_to_power_of_sqrt2_bins: [f64; 62] = (0..62)
+            .map(|i| 2_f64.sqrt().powf(i as f64))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
         let forward_read_total = Family::<Vec<(String, String)>, Counter>::default();
         let forward_ack_total = Family::<Vec<(String, String)>, Counter>::default();
         let forward_write_total = Family::<Vec<(String, String)>, Counter>::default();
+        // TODO: use the log_to_power_of_sqrt2_bins? or use the default exponential buckets?
+        let forward_a_chunk_total_time =
+            Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(1.0, 2.0, 10))
+            });
 
         let metrics = ForwardMetrics {
             forward_read_total,
             forward_ack_total,
             forward_write_total,
+            forward_a_chunk_total_time,
         };
 
         let mut registry = global_registry().registry.lock();
@@ -126,6 +140,11 @@ impl ForwardMetrics {
             FORWARDER_WRITE_TOTAL,
             "A Counter to keep track of the total number of messages written to the sink",
             metrics.forward_write_total.clone(),
+        );
+        registry.register(
+            FORWARDER_PROCESSING_TIME,
+            "A Histogram to keep track of the total time taken to forward a chunk, the time is in microseconds",
+            metrics.forward_a_chunk_total_time.clone(),
         );
         metrics
     }
@@ -165,13 +184,16 @@ where
     A: ToSocketAddrs + std::fmt::Debug,
 {
     // setup_metrics_recorder should only be invoked once
-    // let recorder_handle = setup_metrics_recorder()?;
+    let recorder_handle = setup_metrics_recorder()?;
 
-    let metrics_app = metrics_router(MetricsState {
-        source_client,
-        sink_client,
-        transformer_client,
-    });
+    let metrics_app = metrics_router(
+        MetricsState {
+            source_client,
+            sink_client,
+            transformer_client,
+        },
+        recorder_handle,
+    );
 
     let listener = TcpListener::bind(&addr)
         .await
@@ -202,7 +224,7 @@ pub(crate) async fn start_metrics_https_server(
     // setup_metrics_recorder should only be invoked once
     let recorder_handle = setup_metrics_recorder()?;
 
-    let metrics_app = metrics_router(metrics_state);
+    let metrics_app = metrics_router(metrics_state, recorder_handle);
 
     axum_server::bind_rustls(addr, tls_config)
         .serve(metrics_app.into_make_service())
@@ -213,7 +235,7 @@ pub(crate) async fn start_metrics_https_server(
 }
 
 /// router for metrics and k8s health endpoints
-fn metrics_router(metrics_state: MetricsState) -> Router {
+fn metrics_router(metrics_state: MetricsState, recorder_handle: PrometheusHandle) -> Router {
     let metrics_app = Router::new()
         .route("/metrics", get(metrics_handler))
         .route("/livez", get(livez))

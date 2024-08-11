@@ -139,6 +139,10 @@ impl Forwarder {
                 messages_count = 0;
                 last_forwarded_at = std::time::Instant::now();
             }
+            forward_metrics()
+                .forward_a_chunk_total_time
+                .get_or_create(&self.common_labels)
+                .observe(start_time.elapsed().as_micros() as f64);
         }
         Ok(())
     }
