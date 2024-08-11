@@ -1,26 +1,35 @@
+use std::borrow::Cow;
 use std::future::ready;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
+use axum::body::Body;
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
-use metrics::describe_counter;
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
+use prometheus_client::encoding::EncodeLabelSet;
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-use tokio::time;
+use tokio::{sync, time};
 use tracing::{debug, error, info};
 
 use crate::error::Error;
 use crate::sink::SinkClient;
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
+use prometheus_client::encoding::text::encode;
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::histogram::Histogram;
+use prometheus_client::registry::Registry;
+use serde::{Deserialize, Serialize};
+use tower::load::pending_requests::Count;
 
 // Define the labels for the metrics
 pub const MONO_VERTEX_NAME: &str = "vertex";
@@ -41,6 +50,107 @@ pub(crate) struct MetricsState {
     pub transformer_client: Option<TransformerClient>,
 }
 
+/// The global register of all metrics.
+#[derive(Default)]
+pub struct GlobalRegistry {
+    // It is okay to use std mutex because we register each metric only one time.
+    pub registry: parking_lot::Mutex<Registry>,
+}
+
+impl GlobalRegistry {
+    fn new() -> Self {
+        GlobalRegistry {
+            // Create a new registry with labels
+            // Create a labels for the registry with trait labels: impl Iterator<Item = (Cow<'static, str>, Cow<'static, str>)>)
+            registry: parking_lot::Mutex::new(Registry::with_prefix("numaflow")),
+        }
+    }
+}
+
+static GLOBAL_REGISTER: OnceLock<GlobalRegistry> = OnceLock::new();
+
+pub fn global_registry() -> &'static GlobalRegistry {
+    GLOBAL_REGISTER.get_or_init(GlobalRegistry::new)
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+pub(crate) struct Label {
+    vertex: String,
+    replica: String,
+    partition: String,
+    vertex_type: String,
+}
+
+impl Label {
+    // Create a new label from Strings
+    pub fn new(vertex: String, replica: String, partition: String, vertex_type: String) -> Self {
+        Label {
+            vertex,
+            replica,
+            partition,
+            vertex_type,
+        }
+    }
+}
+
+pub struct ForwardMetrics {
+    pub forward_read_total: Family<Vec<(String, String)>, Counter>,
+    pub forward_ack_total: Family<Vec<(String, String)>, Counter>,
+    pub forward_write_total: Family<Vec<(String, String)>, Counter>,
+}
+
+impl ForwardMetrics {
+    fn new() -> Self {
+        let forward_read_total = Family::<Vec<(String, String)>, Counter>::default();
+        let forward_ack_total = Family::<Vec<(String, String)>, Counter>::default();
+        let forward_write_total = Family::<Vec<(String, String)>, Counter>::default();
+
+        let metrics = ForwardMetrics {
+            forward_read_total,
+            forward_ack_total,
+            forward_write_total,
+        };
+
+        let mut registry = global_registry().registry.lock();
+        registry.register(
+            FORWARDER_READ_TOTAL,
+            "A Counter to keep track of the total number of messages read from the source",
+            metrics.forward_read_total.clone(),
+        );
+        registry.register(
+            FORWARDER_ACK_TOTAL,
+            "A Counter to keep track of the total number of messages acknowledged by the sink",
+            metrics.forward_ack_total.clone(),
+        );
+        registry.register(
+            FORWARDER_WRITE_TOTAL,
+            "A Counter to keep track of the total number of messages written to the sink",
+            metrics.forward_write_total.clone(),
+        );
+        metrics
+    }
+}
+
+static FORWARD_METRICS: OnceLock<ForwardMetrics> = OnceLock::new();
+
+pub fn forward_metrics() -> &'static ForwardMetrics {
+    FORWARD_METRICS.get_or_init(|| {
+        let metrics = ForwardMetrics::new();
+        metrics
+    })
+}
+
+pub async fn metrics_handler() -> impl IntoResponse {
+    let state = global_registry().registry.lock();
+    let mut buffer = String::new();
+    encode(&mut buffer, &*state).unwrap();
+    println!("Metrics: {:?}", buffer);
+    Response::builder()
+        .status(StatusCode::OK)
+        .body(Body::from(buffer))
+        .unwrap()
+}
+
 /// Collect and emit prometheus metrics.
 /// Metrics router and server over HTTP endpoint.
 // This is not used currently
@@ -55,16 +165,13 @@ where
     A: ToSocketAddrs + std::fmt::Debug,
 {
     // setup_metrics_recorder should only be invoked once
-    let recorder_handle = setup_metrics_recorder()?;
+    // let recorder_handle = setup_metrics_recorder()?;
 
-    let metrics_app = metrics_router(
-        recorder_handle,
-        MetricsState {
-            source_client,
-            sink_client,
-            transformer_client,
-        },
-    );
+    let metrics_app = metrics_router(MetricsState {
+        source_client,
+        sink_client,
+        transformer_client,
+    });
 
     let listener = TcpListener::bind(&addr)
         .await
@@ -95,7 +202,7 @@ pub(crate) async fn start_metrics_https_server(
     // setup_metrics_recorder should only be invoked once
     let recorder_handle = setup_metrics_recorder()?;
 
-    let metrics_app = metrics_router(recorder_handle, metrics_state);
+    let metrics_app = metrics_router(metrics_state);
 
     axum_server::bind_rustls(addr, tls_config)
         .serve(metrics_app.into_make_service())
@@ -106,9 +213,9 @@ pub(crate) async fn start_metrics_https_server(
 }
 
 /// router for metrics and k8s health endpoints
-fn metrics_router(recorder_handle: PrometheusHandle, metrics_state: MetricsState) -> Router {
+fn metrics_router(metrics_state: MetricsState) -> Router {
     let metrics_app = Router::new()
-        .route("/metrics", get(move || ready(recorder_handle.render())))
+        .route("/metrics", get(metrics_handler))
         .route("/livez", get(livez))
         .route("/readyz", get(readyz))
         .route("/sidecar-livez", get(sidecar_livez))
@@ -157,24 +264,6 @@ fn setup_metrics_recorder() -> crate::Result<PrometheusHandle> {
         .map_err(|e| Error::MetricsError(format!("Prometheus install_recorder: {}", e)))?
         .install_recorder()
         .map_err(|e| Error::MetricsError(format!("Prometheus install_recorder: {}", e)))?;
-
-    // Define forwarder metrics
-    describe_counter!(
-        FORWARDER_READ_TOTAL,
-        "Total number of Data Messages Read in the forwarder"
-    );
-    describe_counter!(
-        FORWARDER_READ_BYTES_TOTAL,
-        "Total number of bytes read in the forwarder"
-    );
-    describe_counter!(
-        FORWARDER_ACK_TOTAL,
-        "Total number of acknowledgments by the forwarder"
-    );
-    describe_counter!(
-        FORWARDER_WRITE_TOTAL,
-        "Total number of Data Messages written by the forwarder"
-    );
 
     Ok(prometheus_handle)
 }

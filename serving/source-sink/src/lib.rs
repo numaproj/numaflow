@@ -22,7 +22,7 @@ pub(crate) use self::error::Result;
 /// - Send Acknowledgement back to the Source
 pub mod error;
 
-pub mod metrics;
+mod metrics;
 
 pub mod source;
 
@@ -96,6 +96,7 @@ pub async fn init(
         sink_client: sink_client.clone(),
         transformer_client: transformer_client.clone(),
     };
+
     tokio::spawn(async move {
         if let Err(e) = start_metrics_https_server(metrics_addr, metrics_state).await {
             error!("Metrics server error: {:?}", e);

@@ -17,7 +17,6 @@ prost = "0.13.1"
 prost-types = "0.13.1"
 chrono = "0.4.31"
 base64 = "0.22.1"
-metrics = { version = "0.23.0", default-features = false }
 metrics-exporter-prometheus = { version = "0.15.3", default-features = false }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 hyper-util = "0.1.6"
@@ -32,6 +31,8 @@ rustls = { version = "0.23.12", features = ["aws_lc_rs"] }
 serde = { version = "1.0.204", features = ["derive"] }
 semver = "1.0"
 pep440_rs = "0.6.6"
+prometheus-client = "0.22.3"
+parking_lot = "0.12.3"
 
 [dev-dependencies]
 tower = "0.4.13"
