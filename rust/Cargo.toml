@@ -1,0 +1,12 @@
+workspace = { members = ["backoff", "numaflow-models", "servesink", "serving", "source-sink"] }
+
+[[bin]]
+name = "numaflow"
+path = "src/bin/main.rs"
+
+[package]
+name = "numaflow"
+version = "0.1.0"
+edition = "2021"
+
+

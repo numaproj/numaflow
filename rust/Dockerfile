@@ -13,8 +13,6 @@ WORKDIR /serve
 RUN cargo new servesink
 COPY ./servesink/Cargo.toml ./servesink/
 
-RUN cargo new extras/upstreams
-COPY ./extras/upstreams/Cargo.toml ./extras/upstreams/
 
 RUN cargo new backoff
 COPY ./backoff/Cargo.toml ./backoff/Cargo.toml
@@ -34,7 +32,6 @@ RUN cargo build --release
 # Copy the actual source code files of the main project and the subprojects
 COPY ./src ./src
 COPY ./servesink/src ./servesink/src
-COPY ./extras/upstreams/src ./extras/upstreams/src
 COPY ./backoff/src ./backoff/src
 COPY ./numaflow-models/src ./numaflow-models/src
 COPY ./source-sink/src ./source-sink/src
@@ -51,6 +48,6 @@ FROM debian:bookworm as numaflow-ext
 RUN apt-get update && apt-get install -y libssl3
 
 COPY --from=builder /serve/target/release/ .
-COPY ./config config
+COPY serving/config config
 
 ENTRYPOINT ["./serve"]
