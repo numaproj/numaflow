@@ -107,6 +107,9 @@ jobs:
       - name: Install grcov
         run: cargo install grcov
 
+      - name: Install Protobuf Compiler
+        run: sudo apt-get install -y protobuf-compiler
+
       - name: Test Rust
         working-directory: ./rust
         run: |
