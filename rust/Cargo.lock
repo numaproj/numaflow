@@ -1556,6 +1556,43 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9be0862c1b3f26a88803c4a49de6889c10e608b3ee9344e6ef5b45fb37ad3d1"
 
 [[package]]
+name = "mono-vertex"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-server",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "hyper-util",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "numaflow 0.1.0 (git+https://github.com/numaproj/numaflow-rs.git?branch=main)",
+ "numaflow-models",
+ "once_cell",
+ "pep440_rs",
+ "prost",
+ "prost-types",
+ "rcgen",
+ "rustls",
+ "semver",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tonic",
+ "tonic-build",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "trait-variant",
+ "uuid",
+]
+
+[[package]]
 name = "multimap"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1669,6 +1706,14 @@ dependencies = [
 [[package]]
 name = "numaflow"
 version = "0.1.0"
+dependencies = [
+ "backoff",
+ "mono-vertex",
+ "servesink",
+ "serving",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "numaflow"
@@ -2746,43 +2791,6 @@ checksum = "ce305eb0b4296696835b71df73eb912e0f1ffd2556a501fcede6e0c50349191c"
 dependencies = [
  "libc",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "sourcer-sinker"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-server",
- "base64 0.22.1",
- "bytes",
- "chrono",
- "hyper-util",
- "metrics",
- "metrics-exporter-prometheus",
- "numaflow 0.1.0 (git+https://github.com/numaproj/numaflow-rs.git?branch=main)",
- "numaflow-models",
- "once_cell",
- "pep440_rs",
- "prost",
- "prost-types",
- "rcgen",
- "rustls",
- "semver",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tonic",
- "tonic-build",
- "tower",
- "tracing",
- "tracing-subscriber",
- "trait-variant",
- "uuid",
 ]
 
 [[package]]

@@ -1,4 +1,4 @@
-workspace = { members = ["backoff", "numaflow-models", "servesink", "serving", "source-sink"] }
+workspace = { members = ["backoff", "numaflow-models", "servesink", "serving", "mono-vertex"] }
 
 [[bin]]
 name = "numaflow"
@@ -10,3 +10,10 @@ version = "0.1.0"
 edition = "2021"
 
 
+[dependencies]
+tokio = "1.39.2"
+backoff = { path = "backoff" }
+servesink = { path = "servesink" }
+serving = { path = "serving" }
+mono-vertex = { path = "mono-vertex" }
+tracing = "0.1.40"

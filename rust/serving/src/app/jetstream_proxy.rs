@@ -117,8 +117,8 @@ async fn sync_publish_serve<T: Send + Sync + Clone + Store>(
         }
     };
 
-    // The reponse can be a binary array of elements as single chunk. For the user to process the blob, we return the array len and
-    // length of each element in the array. This will help the user to decomponse the binary response chunk into individual
+    // The response can be a binary array of elements as single chunk. For the user to process the blob, we return the array len and
+    // length of each element in the array. This will help the user to decompose the binary response chunk into individual
     // elements.
     let mut header_map = HeaderMap::new();
     let response_arr_len: String = result
