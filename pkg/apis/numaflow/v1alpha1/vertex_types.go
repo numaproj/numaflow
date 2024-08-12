@@ -50,8 +50,7 @@ const (
 	VertexTypeReduceUDF VertexType = "ReduceUDF"
 )
 
-const ServingBinary = "/bin/serve"
-const MonoVertexBinary = "/bin/sourcer-sinker"
+const NumaflowRustBinary = "/bin/numaflow-rs"
 
 // +genclient
 // +kubebuilder:object:root=true
@@ -350,8 +349,9 @@ func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, 
 		Env:             req.Env,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
-		Command:         []string{ServingBinary}, // we use the same image, but we execute the extension binary
+		Command:         []string{NumaflowRustBinary}, // we use the same image, but we execute the extension binary
 		Resources:       req.DefaultResources,
+		Args:            []string{"--serving"},
 	}
 
 	// set the common envs

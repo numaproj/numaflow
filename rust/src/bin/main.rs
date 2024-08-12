@@ -6,7 +6,7 @@ async fn main() {
     let args: Vec<String> = env::args().collect();
 
     // Based on the argument, run the appropriate component.
-    if args.contains(&"--serve".to_string()) {
+    if args.contains(&"--serving".to_string()) {
         serving::serve().await;
     } else if args.contains(&"--servesink".to_string()) {
         if let Err(e) = servesink::servesink().await {
