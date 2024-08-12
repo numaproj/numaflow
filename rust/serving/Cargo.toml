@@ -1,6 +1,5 @@
-workspace = { members = ["backoff", "extras/upstreams", "numaflow-models", "servesink", "source-sink"] }
 [package]
-name = "serve"
+name = "serving"
 version = "0.1.0"
 edition = "2021"
 
@@ -29,7 +28,6 @@ redis = { version = "0.26.0", features = ["tokio-comp", "aio", "connection-manag
 config = "0.14.0"
 trait-variant = "0.1.2"
 chrono = { version = "0.4", features = ["serde"] }
-# intern
-backoff = { path = "backoff" }
+backoff = { path = "../backoff" }
 base64 = "0.22.1"
 

@@ -1,14 +1,17 @@
-use tonic::transport::Channel;
-use tonic::Request;
-
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::message::Message;
 use crate::shared::connect_with_uds;
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
+use tonic::transport::Channel;
+use tonic::Request;
 
 pub mod proto {
     tonic::include_proto!("sink.v1");
 }
 
+const RECONNECT_INTERVAL: u64 = 1000;
+const MAX_RECONNECT_ATTEMPTS: usize = 5;
 const SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";
 const SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/sinker-server-info";
 
@@ -38,7 +41,16 @@ pub struct SinkClient {
 
 impl SinkClient {
     pub(crate) async fn connect(config: SinkConfig) -> Result<Self> {
-        let channel = connect_with_uds(config.socket_path.into()).await?;
+        let interval =
+            fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
+
+        let channel = Retry::retry(
+            interval,
+            || async { connect_with_uds(config.socket_path.clone().into()).await },
+            |_: &Error| true,
+        )
+        .await?;
+
         let client = proto::sink_client::SinkClient::new(channel)
             .max_decoding_message_size(config.max_message_size)
             .max_encoding_message_size(config.max_message_size);
@@ -65,6 +77,7 @@ impl SinkClient {
             .sink_fn(tokio_stream::wrappers::ReceiverStream::new(rx))
             .await?
             .into_inner();
+
         Ok(response)
     }
 
