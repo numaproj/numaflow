@@ -20,6 +20,7 @@ import (
 	"time"
 
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
+	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 const (
@@ -27,7 +28,7 @@ const (
 )
 
 // UpdateCount updates the count of processed messages for a pod at a given time
-func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podReadCounts *PodReadCount) {
+func UpdateCount(q *sharedqueue.OverflowQueue[*util.TimestampedCounts], time int64, podReadCounts *PodReadCount) {
 	items := q.Items()
 
 	// find the element matching the input timestamp and update it
@@ -39,13 +40,13 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 	}
 
 	// if we cannot find a matching element, it means we need to add a new timestamped count to the queue
-	tc := NewTimestampedCounts(time)
+	tc := util.NewTimestampedCounts(time)
 	tc.Update(podReadCounts)
 	q.Append(tc)
 }
 
 // CalculateRate calculates the rate of the vertex partition in the last lookback seconds
-func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, partitionName string) float64 {
+func CalculateRate(q *sharedqueue.OverflowQueue[*util.TimestampedCounts], lookbackSeconds int64, partitionName string) float64 {
 	counts := q.Items()
 	if len(counts) <= 1 {
 		return 0
@@ -74,7 +75,7 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 }
 
 // calculatePartitionDelta calculates the difference of the metric count between two timestamped counts for a given partition.
-func calculatePartitionDelta(tc1, tc2 *TimestampedCounts, partitionName string) float64 {
+func calculatePartitionDelta(tc1, tc2 *util.TimestampedCounts, partitionName string) float64 {
 	delta := float64(0)
 	if tc1 == nil || tc2 == nil {
 		// we calculate delta only when both input timestamped counts are non-nil
@@ -96,7 +97,7 @@ func calculatePartitionDelta(tc1, tc2 *TimestampedCounts, partitionName string) 
 }
 
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds
-func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
+func findStartIndex(lookbackSeconds int64, counts []*util.TimestampedCounts) int {
 	n := len(counts)
 	now := time.Now().Truncate(CountWindow).Unix()
 	if n < 2 || now-counts[n-2].timestamp > lookbackSeconds {

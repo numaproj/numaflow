@@ -1,23 +1,6 @@
-/*
-Copyright 2022 The Numaproj Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package rater
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
@@ -25,6 +8,7 @@ import (
 
 	"github.com/prometheus/common/expfmt"
 	"go.uber.org/zap"
+	"golang.org/x/net/context"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -34,16 +18,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
-type Ratable interface {
-	Start(ctx context.Context) error
-	GetRates(vertexName, partitionName string) map[string]*wrapperspb.DoubleValue
-}
-
-var _ Ratable = (*Rater)(nil)
-
-// CountWindow is the time window for which we maintain the timestamped counts, currently 10 seconds
-// e.g., if the current time is 12:00:07,
-// the retrieved count will be tracked in the 12:00:00-12:00:10 time window using 12:00:10 as the timestamp
 const CountWindow = time.Second * 10
 
 // metricsHttpClient interface for the GET/HEAD call to metrics endpoint.
@@ -53,20 +27,17 @@ type metricsHttpClient interface {
 	Head(url string) (*http.Response, error)
 }
 
-// fixedLookbackSeconds always maintain rate metrics for the following lookback seconds (1m, 5m, 15m)
-var fixedLookbackSeconds = map[string]int64{"1m": 60, "5m": 300, "15m": 900}
-
 // Rater is a struct that maintains information about the processing rate of each vertex.
 // It monitors the number of processed messages for each pod in a vertex and calculates the rate.
 type Rater struct {
-	pipeline   *v1alpha1.Pipeline
+	monoVertex *v1alpha1.MonoVertex
 	httpClient metricsHttpClient
 	log        *zap.SugaredLogger
 	podTracker *PodTracker
 	// timestampedPodCounts is a map between vertex name and a queue of timestamped counts for that vertex
-	timestampedPodCounts map[string]*sharedqueue.OverflowQueue[*util.TimestampedCounts]
+	timestampedPodCounts map[int]*sharedqueue.OverflowQueue[*util.TimestampedCounts]
 	// userSpecifiedLookBackSeconds is a map between vertex name and the user-specified lookback seconds for that vertex
-	userSpecifiedLookBackSeconds map[string]int64
+	userSpecifiedLookBackSeconds map[int]int64
 	options                      *options
 }
 
@@ -86,9 +57,9 @@ func (p *PodReadCount) PartitionReadCounts() map[string]float64 {
 	return p.partitionReadCounts
 }
 
-func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater {
+func NewRater(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...Option) *Rater {
 	rater := Rater{
-		pipeline: p,
+		monoVertex: mv,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -96,16 +67,16 @@ func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater 
 			Timeout: time.Second * 1,
 		},
 		log:                          logging.FromContext(ctx).Named("Rater"),
-		timestampedPodCounts:         make(map[string]*sharedqueue.OverflowQueue[*util.TimestampedCounts]),
-		userSpecifiedLookBackSeconds: make(map[string]int64),
+		timestampedPodCounts:         make(map[int]*sharedqueue.OverflowQueue[*util.TimestampedCounts]),
+		userSpecifiedLookBackSeconds: make(map[int]int64),
 		options:                      defaultOptions(),
 	}
 
-	rater.podTracker = NewPodTracker(ctx, p)
-	for _, v := range p.Spec.Vertices {
+	rater.podTracker = NewPodTracker(ctx, mv)
+	for i := 0; i < mv.GetReplicas(); i++ {
 		// maintain the total counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
-		rater.timestampedPodCounts[v.Name] = sharedqueue.New[*util.TimestampedCounts](int(1800 / CountWindow.Seconds()))
-		rater.userSpecifiedLookBackSeconds[v.Name] = int64(v.Scale.GetLookbackSeconds())
+		rater.timestampedPodCounts[i] = sharedqueue.New[*util.TimestampedCounts](int(1800 / CountWindow.Seconds()))
+		rater.userSpecifiedLookBackSeconds[i] = int64(mv.Spec.Scale.GetLookbackSeconds())
 	}
 
 	for _, opt := range opts {
@@ -136,83 +107,23 @@ func (r *Rater) monitor(ctx context.Context, id int, keyCh <-chan string) {
 func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error {
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("podKey", key)
 	log.Debugf("Working on key: %s", key)
-	podInfo, err := r.podTracker.GetPodInfo(key)
+	pInfo, err := r.podTracker.GetPodInfo(key)
 	if err != nil {
 		return err
 	}
 	var podReadCount *PodReadCount
 	if r.podTracker.IsActive(key) {
-		podReadCount = r.getPodReadCounts(podInfo.vertexName, podInfo.podName)
+		podReadCount = r.getPodReadCounts(pInfo.replica, pInfo.podName)
 		if podReadCount == nil {
-			log.Debugf("Failed retrieving total podReadCount for pod %s", podInfo.podName)
+			log.Debugf("Failed retrieving total podReadCount for pod %s", pInfo.podName)
 		}
 	} else {
-		log.Debugf("Pod %s does not exist, updating it with nil...", podInfo.podName)
+		log.Debugf("Pod %s does not exist, updating it with nil...", pInfo.podName)
 		podReadCount = nil
 	}
 	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
-	UpdateCount(r.timestampedPodCounts[podInfo.vertexName], now, podReadCount)
+	UpdateCount(r.timestampedPodCounts[pInfo.replica], now, podReadCount)
 	return nil
-}
-
-func (r *Rater) Start(ctx context.Context) error {
-	r.log.Infof("Starting rater...")
-	keyCh := make(chan string)
-	ctx, cancel := context.WithCancel(logging.WithLogger(ctx, r.log))
-	defer cancel()
-
-	go func() {
-		err := r.podTracker.Start(ctx)
-		if err != nil {
-			r.log.Errorw("Failed to start pod tracker", zap.Error(err))
-		}
-	}()
-
-	// Worker group
-	for i := 1; i <= r.options.workers; i++ {
-		go r.monitor(ctx, i, keyCh)
-	}
-
-	// Function assign() sends the least recently used podKey to the channel so that it can be picked up by a worker.
-	assign := func() {
-		if e := r.podTracker.LeastRecentlyUsed(); e != "" {
-			keyCh <- e
-			return
-		}
-	}
-
-	// Following for loop keeps calling assign() function to assign monitoring tasks to the workers.
-	// It makes sure each element in the list will be assigned every N milliseconds.
-	for {
-		select {
-		case <-ctx.Done():
-			r.log.Info("Shutting down monitoring job assigner")
-			return nil
-		default:
-			assign()
-			// Make sure each of the key will be assigned at least every taskInterval milliseconds.
-			sleep(ctx, time.Millisecond*time.Duration(func() int {
-				l := r.podTracker.GetActivePodsCount()
-				if l == 0 {
-					return r.options.taskInterval
-				}
-				result := r.options.taskInterval / l
-				if result > 0 {
-					return result
-				}
-				return 1
-			}()))
-		}
-	}
-}
-
-// sleep function uses a select statement to check if the context is canceled before sleeping for the given duration
-// it helps ensure the sleep will be released when the context is canceled, allowing the goroutine to exit gracefully
-func sleep(ctx context.Context, duration time.Duration) {
-	select {
-	case <-ctx.Done():
-	case <-time.After(duration):
-	}
 }
 
 // getPodReadCounts returns the total number of messages read by the pod

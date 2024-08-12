@@ -14,11 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package rater
+package util
 
 import (
 	"fmt"
 	"sync"
+
+	"github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
 )
 
 // TimestampedCounts track the total count of processed messages for a list of pods at a given timestamp
@@ -40,7 +42,7 @@ func NewTimestampedCounts(t int64) *TimestampedCounts {
 }
 
 // Update updates the count of processed messages for a pod
-func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
+func (tc *TimestampedCounts) Update(podReadCount *rater.PodReadCount) {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
 	if podReadCount == nil {
