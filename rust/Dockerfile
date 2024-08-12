@@ -7,9 +7,9 @@ RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/ca
 RUN apt-get update
 RUN apt-get install protobuf-compiler -y
 
-RUN cargo new numaflow-rs
+RUN cargo new numaflow
 # Create a new empty shell project
-WORKDIR /numaflow-rs
+WORKDIR /numaflow
 
 RUN cargo new servesink
 COPY ./servesink/Cargo.toml ./servesink/Cargo.toml
@@ -20,8 +20,8 @@ COPY ./backoff/Cargo.toml ./backoff/Cargo.toml
 RUN cargo new numaflow-models
 COPY ./numaflow-models/Cargo.toml ./numaflow-models/Cargo.toml
 
-RUN cargo new mono-vertex
-COPY mono-vertex/Cargo.toml ./mono-vertex/Cargo.toml
+RUN cargo new monovertex
+COPY monovertex/Cargo.toml ./monovertex/Cargo.toml
 
 RUN cargo new serving
 COPY ./serving/Cargo.toml ./serving/Cargo.toml
@@ -39,9 +39,9 @@ COPY ./servesink/src ./servesink/src
 COPY ./backoff/src ./backoff/src
 COPY ./numaflow-models/src ./numaflow-models/src
 COPY ./serving/src ./serving/src
-COPY mono-vertex/src ./mono-vertex/src
-COPY mono-vertex/build.rs ./mono-vertex/build.rs
-COPY mono-vertex/proto ./mono-vertex/proto
+COPY monovertex/src ./monovertex/src
+COPY monovertex/build.rs ./monovertex/build.rs
+COPY monovertex/proto ./monovertex/proto
 
 # Build the real binaries
 RUN touch src/bin/main.rs && \
@@ -52,7 +52,7 @@ FROM debian:bookworm as numaflow-ext
 
 RUN apt-get update && apt-get install -y libssl3
 
-COPY --from=builder /numaflow-rs/target/release/ .
+COPY --from=builder /numaflow/target/release/ .
 COPY serving/config config
 
 ENTRYPOINT ["./numaflow"]

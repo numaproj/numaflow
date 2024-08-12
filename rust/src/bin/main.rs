@@ -12,9 +12,9 @@ async fn main() {
         if let Err(e) = servesink::servesink().await {
             info!("Error running servesink: {}", e);
         }
-    } else if args.contains(&"--mono-vertex".to_string()) {
-        mono_vertex::mono_vertex().await;
+    } else if args.contains(&"--monovertex".to_string()) {
+        monovertex::mono_vertex().await;
     } else {
-        error!("Invalid argument. Use --serve, --servesink, or --mono-vertex.");
+        error!("Invalid argument. Use --serve, --servesink, or --monovertex.");
     }
 }

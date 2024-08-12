@@ -1,7 +1,4 @@
-use std::net::SocketAddr;
-use std::time::Duration;
-use tokio::signal;
-use tokio::task::JoinHandle;
+pub(crate) use self::error::Result;
 use crate::config::config;
 pub(crate) use crate::error::Error;
 use crate::forwarder::Forwarder;
@@ -9,12 +6,15 @@ use crate::metrics::{start_metrics_https_server, MetricsState};
 use crate::sink::{SinkClient, SinkConfig};
 use crate::source::{SourceClient, SourceConfig};
 use crate::transformer::{TransformerClient, TransformerConfig};
+use std::net::SocketAddr;
+use std::time::Duration;
+use tokio::signal;
+use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
 use tracing::level_filters::LevelFilter;
+use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
-pub(crate) use self::error::Result;
 
 /// SourcerSinker orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:

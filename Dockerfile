@@ -20,9 +20,9 @@ RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/ca
 RUN apt-get update
 RUN apt-get install protobuf-compiler -y
 
-RUN cargo new numaflow-rs
+RUN cargo new numaflow
 # Create a new empty shell project
-WORKDIR /numaflow-rs
+WORKDIR /numaflow
 
 RUN cargo new servesink
 COPY ./rust/servesink/Cargo.toml ./servesink/
@@ -33,8 +33,8 @@ COPY ./rust/backoff/Cargo.toml ./backoff/
 RUN cargo new numaflow-models
 COPY ./rust/numaflow-models/Cargo.toml ./numaflow-models/
 
-RUN cargo new mono-vertex
-COPY ./rust/mono-vertex/Cargo.toml ./mono-vertex/
+RUN cargo new monovertex
+COPY ./rust/monovertex/Cargo.toml ./monovertex/
 
 RUN cargo new serving
 COPY ./rust/serving/Cargo.toml ./serving/Cargo.toml
@@ -44,7 +44,7 @@ COPY ./rust/Cargo.toml ./rust/Cargo.lock ./
 
 # Build to cache dependencies
 RUN mkdir -p src/bin && echo "fn main() {}" > src/bin/main.rs && \
-    cargo build --workspace --all --release \
+    cargo build --workspace --all --release
 
 # Copy the actual source code files of the main project and the subprojects
 COPY ./rust/src ./src
@@ -52,9 +52,9 @@ COPY ./rust/servesink/src ./servesink/src
 COPY ./rust/backoff/src ./backoff/src
 COPY ./rust/numaflow-models/src ./numaflow-models/src
 COPY ./rust/serving/src ./serving/src
-COPY ./rust/mono-vertex/src ./mono-vertex/src
-COPY ./rust/mono-vertex/build.rs ./mono-vertex/build.rs
-COPY ./rust/mono-vertex/proto ./mono-vertex/proto
+COPY ./rust/monovertex/src ./monovertex/src
+COPY ./rust/monovertex/build.rs ./monovertex/build.rs
+COPY ./rust/monovertex/proto ./monovertex/proto
 
 # Build the real binaries
 RUN touch src/bin/main.rs && \
@@ -72,7 +72,7 @@ RUN apt-get update && apt-get install -y libssl3
 COPY --from=base /bin/numaflow /bin/numaflow
 COPY ui/build /ui/build
 
-COPY --from=extension-base /numaflow-rs/target/release/numaflow /bin/numaflow-rs
+COPY --from=extension-base /numaflow/target/release/numaflow /bin/numaflow-rs
 COPY ./rust/serving/config config
 
 ENTRYPOINT [ "/bin/numaflow" ]

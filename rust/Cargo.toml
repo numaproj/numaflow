@@ -1,4 +1,4 @@
-workspace = { members = ["backoff", "numaflow-models", "servesink", "serving", "mono-vertex"] }
+workspace = { members = ["backoff", "numaflow-models", "servesink", "serving", "monovertex"] }
 
 [[bin]]
 name = "numaflow"
@@ -15,5 +15,5 @@ tokio = "1.39.2"
 backoff = { path = "backoff" }
 servesink = { path = "servesink" }
 serving = { path = "serving" }
-mono-vertex = { path = "mono-vertex" }
+monovertex = { path = "monovertex" }
 tracing = "0.1.40"

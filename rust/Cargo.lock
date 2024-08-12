@@ -1556,11 +1556,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9be0862c1b3f26a88803c4a49de6889c10e608b3ee9344e6ef5b45fb37ad3d1"
 
 [[package]]
-name = "mono-vertex"
+name = "monovertex"
 version = "0.1.0"
 dependencies = [
  "axum",
  "axum-server",
+ "backoff",
  "base64 0.22.1",
  "bytes",
  "chrono",
@@ -1708,7 +1709,7 @@ name = "numaflow"
 version = "0.1.0"
 dependencies = [
  "backoff",
- "mono-vertex",
+ "monovertex",
  "servesink",
  "serving",
  "tokio",
