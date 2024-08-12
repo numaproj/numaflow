@@ -42,6 +42,10 @@ COPY ./rust/serving/Cargo.toml ./serving/Cargo.toml
 # Copy all Cargo.toml and Cargo.lock files for caching dependencies
 COPY ./rust/Cargo.toml ./rust/Cargo.lock ./
 
+# Build to cache dependencies
+RUN mkdir -p src/bin && echo "fn main() {}" > src/bin/main.rs && \
+    cargo build --workspace --all --release \
+
 # Copy the actual source code files of the main project and the subprojects
 COPY ./rust/src ./src
 COPY ./rust/servesink/src ./servesink/src
