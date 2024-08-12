@@ -22,16 +22,17 @@ import (
 )
 
 const (
-	LabelVersion            = "version"
-	LabelPlatform           = "platform"
-	LabelNamespace          = "ns"
-	LabelISBService         = "isbsvc"
-	LabelPipeline           = "pipeline"
-	LabelVertex             = "vertex"
-	LabelMonoVertex         = "mvtx"
-	LabelVertexReplicaIndex = "replica"
-	LabelVertexType         = "vertex_type"
-	LabelPartitionName      = "partition_name"
+	LabelVersion                = "version"
+	LabelPlatform               = "platform"
+	LabelNamespace              = "ns"
+	LabelISBService             = "isbsvc"
+	LabelPipeline               = "pipeline"
+	LabelVertex                 = "vertex"
+	LabelMonoVertex             = "mvtx"
+	LabelVertexReplicaIndex     = "replica"
+	LabelVertexType             = "vertex_type"
+	LabelPartitionName          = "partition_name"
+	LabelMonoVertexReplicaIndex = "mvtx-replica"
 
 	LabelReason = "reason"
 )

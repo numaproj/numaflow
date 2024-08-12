@@ -25,17 +25,17 @@ import (
 type TimestampedCounts struct {
 	// Timestamp in seconds is the time when the count is recorded
 	Timestamp int64
-	// the key of podPartitionCount represents the pod name, the value represents a partition counts map for the pod
+	// the key of podReadCount represents the pod name, the value represents a partition counts map for the pod
 	// partition counts map holds mappings between partition name and the count of messages processed by the partition
-	podPartitionCount map[string]map[string]float64
-	lock              *sync.RWMutex
+	podReadCount float64
+	lock         *sync.RWMutex
 }
 
 func NewTimestampedCounts(t int64) *TimestampedCounts {
 	return &TimestampedCounts{
-		Timestamp:         t,
-		podPartitionCount: make(map[string]map[string]float64),
-		lock:              new(sync.RWMutex),
+		Timestamp:    t,
+		podReadCount: 0,
+		lock:         new(sync.RWMutex),
 	}
 }
 
@@ -45,28 +45,24 @@ func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
 	defer tc.lock.Unlock()
 	if podReadCount == nil {
 		// we choose to skip updating when podReadCount is nil, instead of removing the pod from the map.
-		// imagine if the getPodReadCounts call fails to scrape the partitionReadCounts metric, and it's NOT because the pod is down.
+		// imagine if the getPodReadCounts call fails to scrape the readCount metric, and it's NOT because the pod is down.
 		// in this case getPodReadCounts returns nil.
-		// if we remove the pod from the map and then the next scrape successfully gets the partitionReadCounts, we can reach a state that in the timestamped counts,
-		// for this single pod, at t1, partitionReadCounts is 123456, at t2, the map doesn't contain this pod and t3, partitionReadCounts is 123457.
+		// if we remove the pod from the map and then the next scrape successfully gets the readCount, we can reach a state that in the timestamped counts,
+		// for this single pod, at t1, readCount is 123456, at t2, the map doesn't contain this pod and t3, readCount is 123457.
 		// when calculating the rate, as we sum up deltas among timestamps, we will get 123457 total delta instead of the real delta 1.
 		// one occurrence of such case can lead to extremely high rate and mess up the autoscaling.
-		// hence we'd rather keep the partitionReadCounts as it is to avoid wrong rate calculation.
+		// hence we'd rather keep the readCount as it is to avoid wrong rate calculation.
 		return
 	}
-	tc.podPartitionCount[podReadCount.Name()] = podReadCount.PartitionReadCounts()
+	tc.podReadCount = podReadCount.ReadCount()
 }
 
-// PodPartitionCountSnapshot returns a copy of podPartitionCount
+// PodPartitionCountSnapshot returns a copy of podReadCount
 // it's used to ensure the returned map is not modified by other goroutines
-func (tc *TimestampedCounts) PodPartitionCountSnapshot() map[string]map[string]float64 {
+func (tc *TimestampedCounts) PodPartitionCountSnapshot() float64 {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	counts := make(map[string]map[string]float64)
-	for k, v := range tc.podPartitionCount {
-		counts[k] = v
-	}
-	return counts
+	return tc.podReadCount
 }
 
 // String returns a string representation of the TimestampedCounts
@@ -74,5 +70,5 @@ func (tc *TimestampedCounts) PodPartitionCountSnapshot() map[string]map[string]f
 func (tc *TimestampedCounts) String() string {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	return fmt.Sprintf("{timestamp: %d, podPartitionCount: %v}", tc.Timestamp, tc.podPartitionCount)
+	return fmt.Sprintf("{timestamp: %d, podReadCount: %v}", tc.Timestamp, tc.podReadCount)
 }

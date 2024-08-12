@@ -40,6 +40,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
 	"github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service"
+	rateServer "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 )
@@ -90,6 +91,16 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	go func() { _ = grpcServer.Serve(grpcL) }()
 	go func() { _ = httpServer.Serve(httpL) }()
 	go func() { _ = tcpm.Serve() }()
+
+	// rater is used to calculate the processing rate for each of the vertices
+	rater := rateServer.NewRater(ctx, ds.monoVtx)
+
+	// Start the rater
+	go func() {
+		if err := rater.Start(ctx); err != nil {
+			log.Panic(fmt.Errorf("failed to start the rater: %w", err))
+		}
+	}()
 
 	version := numaflow.GetVersion()
 	monoVertexInfo.WithLabelValues(version.Version, version.Platform, ds.monoVtx.Name).Set(1)
