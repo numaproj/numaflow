@@ -49,7 +49,8 @@ export const usePodsViewFetch = (
               const containers: string[] = [];
               const containerSpecMap = new Map<string, PodContainerSpec>();
               pod?.spec?.containers?.forEach((container: any) => {
-                const cpu = container?.resources?.requests?.cpu;
+                ///const cpu = container?.resources?.requests?.cpu;
+                const cpu = container?.resources?.limits?.cpu;
                 let cpuParsed: undefined | number;
                 if (cpu) {
                   try {
@@ -58,7 +59,8 @@ export const usePodsViewFetch = (
                     cpuParsed = undefined;
                   }
                 }
-                const memory = container?.resources?.requests?.memory;
+                //const memory = container?.resources?.requests?.memory;
+                const memory = container?.resources?.limits?.memory;
                 let memoryParsed: undefined | number;
                 if (memory) {
                   try {
