@@ -56,9 +56,9 @@ func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
 	tc.podReadCounts[podReadCount.Name()] = podReadCount.ReadCount()
 }
 
-// PodPartitionCountSnapshot returns a copy of podReadCounts
+// PodCountSnapshot returns a copy of podReadCounts
 // it's used to ensure the returned map is not modified by other goroutines
-func (tc *TimestampedCounts) PodPartitionCountSnapshot() map[string]float64 {
+func (tc *TimestampedCounts) PodCountSnapshot() map[string]float64 {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
 	return tc.podReadCounts

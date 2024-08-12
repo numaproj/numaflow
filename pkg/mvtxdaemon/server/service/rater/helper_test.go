@@ -253,112 +253,36 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 25.0, CalculateRate(q, 35))
 	})
 
-	//t.Run("multiplePods_givenPodsComeAndGo_whenCalculateRate_thenReturnRate", func(t *testing.T) {
-	//	q := sharedqueue.New[*TimestampedCounts](1800)
-	//	now := time.Now()
-	//
-	//	tc1 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 30)
-	//	tc1.Update(&PodReadCount{"pod1", 200.0})
-	//	tc1.Update(&PodReadCount{"pod2", 90.0})
-	//	tc1.Update(&PodReadCount{"pod3", 50.0})
-	//	q.Append(tc1)
-	//	tc2 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 20)
-	//	tc2.Update(&PodReadCount{"pod1", 100.0})
-	//	tc2.Update(&PodReadCount{"pod2", 200.0})
-	//	q.Append(tc2)
-	//	tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
-	//	tc3.Update(&PodReadCount{"pod1", 50.0})
-	//	tc3.Update(&PodReadCount{"pod2", 300.0})
-	//	tc3.Update(&PodReadCount{"pod4", 100.0})
-	//	tc3.Update(&PodReadCount{"pod3", 200.0})
-	//	q.Append(tc3)
-	//	tc4 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
-	//	tc4.Update(&PodReadCount{"pod2", 400.0})
-	//	tc4.Update(&PodReadCount{"pod100", 200.0})
-	//	q.Append(tc4)
-	//
-	//	// no enough data collected within lookback seconds, expect rate 0
-	//	assert.Equal(t, 0.0, CalculateRate(q, 5))
-	//	// no enough data collected within lookback seconds, expect rate 0
-	//	assert.Equal(t, 0.0, CalculateRate(q, 15))
-	//	// tc2 and tc3 are used to calculate the rate
-	//	assert.Equal(t, 5.0, CalculateRate(q, 25))
-	//	// tc1, 2 and 3 are used to calculate the rate
-	//	assert.Equal(t, 7.5, CalculateRate(q, 35))
-	//	// tc1, 2 and 3 are used to calculate the rate
-	//	assert.Equal(t, 7.5, CalculateRate(q, 100))
-	//	//
-	//	//assert.Equal(t, 0.0, CalculateRate(q, 5))
-	//	//assert.Equal(t, 0.0, CalculateRate(q, 15))
-	//	//assert.Equal(t, 10.0, CalculateRate(q, 25))
-	//	//assert.Equal(t, 10.5, CalculateRate(q, 35))
-	//	//assert.Equal(t, 10.5, CalculateRate(q, 100))
-	//	//
-	//	//// partition3 rate
-	//	//assert.Equal(t, 0.0, CalculateRate(q, 5))
-	//	//assert.Equal(t, 0.0, CalculateRate(q, 15))
-	//	//assert.Equal(t, 20.0, CalculateRate(q, 25))
-	//	//assert.Equal(t, 10.0, CalculateRate(q, 35))
-	//	//assert.Equal(t, 10.0, CalculateRate(q, 100))
-	//	//
-	//	//// partition4 rate
-	//	//assert.Equal(t, 0.0, CalculateRate(q, 5))
-	//	//assert.Equal(t, 0.0, CalculateRate(q, 15))
-	//	//assert.Equal(t, 10.0, CalculateRate(q, 25))
-	//	//assert.Equal(t, 5.0, CalculateRate(q, 35))
-	//	//assert.Equal(t, 5.0, CalculateRate(q, 100))
-	//	//
-	//	//// partition100 rate
-	//	//assert.Equal(t, 0.0, CalculateRate(q, 5))
-	//	//assert.Equal(t, 0.0, CalculateRate(q, 15))
-	//	//assert.Equal(t, 0.0, CalculateRate(q, 25))
-	//	//assert.Equal(t, 0.0, CalculateRate(q, 35))
-	//	//assert.Equal(t, 0.0, CalculateRate(q, 100))
-	//})
-	//
-	//	t.Run("multiplePods_givenOnePodHandleMultiplePartitions_whenCalculateRate_thenReturnRate", func(t *testing.T) {
-	//		q := sharedqueue.New[*TimestampedCounts](1800)
-	//		now := time.Now()
-	//
-	//		// this test uses an extreme case where pod1 handle3 10 messages at a time for each partition, and pod 2 100, pod 3 1000
-	//		tc1 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 30)
-	//		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 10.0: 20.0}})
-	//		tc1.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 10.0: 20.0}})
-	//		tc1.Update(&PodReadCount{"pod3", map[string]float64{"partition1": 10.0, "partition2": 20.0}})
-	//		q.Append(tc1)
-	//		tc2 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 20)
-	//		tc2.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 20.0, "partition2": 30.0}})
-	//		tc2.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 110.0, "partition2": 120.0}})
-	//		tc2.Update(&PodReadCount{"pod3", map[string]float64{"partition1": 1010.0, "partition2": 1020.0}})
-	//		q.Append(tc2)
-	//		tc3 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 10)
-	//		tc3.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 30.0, "partition2": 40.0}})
-	//		tc3.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 210.0, "partition2": 220.0}})
-	//		tc3.Update(&PodReadCount{"pod3", map[string]float64{"partition1": 2010.0, "partition2": 2020.0}})
-	//		q.Append(tc3)
-	//		tc4 := NewTimestampedCounts(now.Truncate(time.Second * 10).Unix())
-	//		tc4.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 40.0, "partition2": 50.0}})
-	//		tc4.Update(&PodReadCount{"pod2", map[string]float64{"partition1": 310.0, "partition2": 320.0}})
-	//		tc4.Update(&PodReadCount{"pod3", map[string]float64{"partition1": 3010.0, "partition2": 3020.0}})
-	//		q.Append(tc4)
-	//
-	//		// partition1 rate
-	//		// no enough data collected within lookback seconds, expect rate 0
-	//		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
-	//		// no enough data collected within lookback seconds, expect rate 0
-	//		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
-	//		// tc2 and tc3 are used to calculate the rate
-	//		assert.Equal(t, 111.0, CalculateRate(q, 25, "partition1"))
-	//		// tc1, 2 and 3 are used to calculate the rate
-	//		assert.Equal(t, 111.0, CalculateRate(q, 35, "partition1"))
-	//		// tc1, 2 and 3 are used to calculate the rate
-	//		assert.Equal(t, 111.0, CalculateRate(q, 100, "partition1"))
-	//
-	//		// partition2 rate
-	//		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition2"))
-	//		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition2"))
-	//		assert.Equal(t, 111.0, CalculateRate(q, 25, "partition2"))
-	//		assert.Equal(t, 111.0, CalculateRate(q, 35, "partition2"))
-	//		assert.Equal(t, 111.0, CalculateRate(q, 100, "partition2"))
-	//	})
+	t.Run("multiplePods_givenPodsComeAndGo_whenCalculateRate_thenReturnRate", func(t *testing.T) {
+		q := sharedqueue.New[*TimestampedCounts](1800)
+		now := time.Now()
+
+		tc1 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 30)
+		tc1.Update(&PodReadCount{"pod1", 200.0})
+		tc1.Update(&PodReadCount{"pod2", 90.0})
+		tc1.Update(&PodReadCount{"pod3", 50.0})
+		q.Append(tc1)
+		tc2 := NewTimestampedCounts(now.Truncate(time.Second*10).Unix() - 20)
+		tc2.Update(&PodReadCount{"pod1", 100.0})
+		tc2.Update(&PodReadCount{"pod2", 200.0})
+		q.Append(tc2)
+		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10)
+		tc3.Update(&PodReadCount{"pod1", 50.0})
+		tc3.Update(&PodReadCount{"pod2", 300.0})
+		tc3.Update(&PodReadCount{"pod4", 100.0})
+		q.Append(tc3)
+
+		tc4 := NewTimestampedCounts(now.Truncate(CountWindow).Unix())
+		tc4.Update(&PodReadCount{"pod2", 400.0})
+		tc4.Update(&PodReadCount{"pod3", 200.0})
+		tc4.Update(&PodReadCount{"pod100", 200.0})
+		q.Append(tc4)
+
+		// vertex rate
+		assert.Equal(t, 0.0, CalculateRate(q, 5))
+		assert.Equal(t, 0.0, CalculateRate(q, 15))
+		assert.Equal(t, 25.0, CalculateRate(q, 25))
+		assert.Equal(t, 23.0, CalculateRate(q, 35))
+		assert.Equal(t, 23.0, CalculateRate(q, 100))
+	})
 }
