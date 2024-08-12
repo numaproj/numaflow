@@ -20,42 +20,40 @@ RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/ca
 RUN apt-get update
 RUN apt-get install protobuf-compiler -y
 
-RUN cargo new serve
+RUN cargo new numaflow-rs
 # Create a new empty shell project
-WORKDIR /serve
-RUN cargo new servesink
-COPY ./serving/servesink/Cargo.toml ./servesink/
+WORKDIR /numaflow-rs
 
-RUN cargo new extras/upstreams
-COPY ./serving/extras/upstreams/Cargo.toml ./extras/upstreams/
+RUN cargo new servesink
+COPY ./rust/servesink/Cargo.toml ./servesink/
 
 RUN cargo new backoff
-COPY ./serving/backoff/Cargo.toml ./backoff/
+COPY ./rust/backoff/Cargo.toml ./backoff/
 
 RUN cargo new numaflow-models
-COPY ./serving/numaflow-models/Cargo.toml ./numaflow-models/
+COPY ./rust/numaflow-models/Cargo.toml ./numaflow-models/
 
-RUN cargo new source-sink
-COPY ./serving/source-sink/Cargo.toml ./source-sink/
+RUN cargo new mono-vertex
+COPY ./rust/mono-vertex/Cargo.toml ./mono-vertex/
+
+RUN cargo new serving
+COPY ./rust/serving/Cargo.toml ./serving/Cargo.toml
 
 # Copy all Cargo.toml and Cargo.lock files for caching dependencies
-COPY ./serving/Cargo.toml ./serving/Cargo.lock ./
-
-# Build only the dependencies to cache them
-RUN cargo build --release
+COPY ./rust/Cargo.toml ./rust/Cargo.lock ./
 
 # Copy the actual source code files of the main project and the subprojects
-COPY ./serving/src ./src
-COPY ./serving/servesink/src ./servesink/src
-COPY ./serving/extras/upstreams/src ./extras/upstreams/src
-COPY ./serving/backoff/src ./backoff/src
-COPY ./serving/numaflow-models/src ./numaflow-models/src
-COPY ./serving/source-sink/src ./source-sink/src
-COPY ./serving/source-sink/build.rs ./source-sink/build.rs
-COPY ./serving/source-sink/proto ./source-sink/proto
+COPY ./rust/src ./src
+COPY ./rust/servesink/src ./servesink/src
+COPY ./rust/backoff/src ./backoff/src
+COPY ./rust/numaflow-models/src ./numaflow-models/src
+COPY ./rust/serving/src ./serving/src
+COPY ./rust/mono-vertex/src ./mono-vertex/src
+COPY ./rust/mono-vertex/build.rs ./mono-vertex/build.rs
+COPY ./rust/mono-vertex/proto ./mono-vertex/proto
 
 # Build the real binaries
-RUN touch src/main.rs servesink/src/main.rs numaflow-models/src/main.rs source-sink/src/main.rs && \
+RUN touch src/bin/main.rs && \
     cargo build --workspace --all --release
 
 ####################################################################################################
@@ -70,10 +68,8 @@ RUN apt-get update && apt-get install -y libssl3
 COPY --from=base /bin/numaflow /bin/numaflow
 COPY ui/build /ui/build
 
-COPY --from=extension-base /serve/target/release/serve /bin/serve
-COPY --from=extension-base /serve/target/release/sourcer-sinker /bin/sourcer-sinker
-
-COPY ./serving/config config
+COPY --from=extension-base /numaflow-rs/target/release/numaflow /bin/numaflow-rs
+COPY ./rust/serving/config config
 
 ENTRYPOINT [ "/bin/numaflow" ]
 
