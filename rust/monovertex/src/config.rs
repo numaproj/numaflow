@@ -145,7 +145,7 @@ mod tests {
         let settings = Settings::load().unwrap();
 
         // Verify settings
-        assert_eq!(settings.mono_vertex_name, "simple-monovertex");
+        assert_eq!(settings.mono_vertex_name, "simple-mono-vertex");
         assert_eq!(settings.batch_size, 500);
         assert_eq!(settings.timeout_in_ms, 1000);
         assert_eq!(settings.log_level, "debug");
