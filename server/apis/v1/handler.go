@@ -1006,6 +1006,18 @@ func (h *handler) GetPipelineStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
+func (h *handler) ListMonoVertices(c *gin.Context) {
+	// TODO - implement this
+}
+
+func (h *handler) GetMonoVertex(c *gin.Context) {
+	// TODO - implement this
+}
+
+func (h *handler) ListMonoVertexPods(c *gin.Context) {
+	// TODO - implement this
+}
+
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
 // except the kube system namespaces
 func getAllNamespaces(h *handler) ([]string, error) {
