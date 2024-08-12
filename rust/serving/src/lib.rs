@@ -1,12 +1,11 @@
 use tracing::{error, info};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
-pub use config::config;
-
-use crate::pipeline::pipeline_spec;
-use crate::{app::start_main_server, metrics::start_metrics_server};
-
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use crate::app::start_main_server;
+use crate::config::config;
 pub use self::error::{Error, Result};
+use crate::metrics::start_metrics_server;
+use crate::pipeline::pipeline_spec;
 
 mod app;
 mod config;
@@ -15,8 +14,7 @@ mod error;
 mod metrics;
 mod pipeline;
 
-#[tokio::main]
-async fn main() {
+pub async fn serve() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()

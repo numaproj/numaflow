@@ -1,17 +1,19 @@
+use crate::error::{Error, Result};
+use crate::message::{Message, Offset};
+use crate::shared::connect_with_uds;
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 use tonic::Request;
 
-use crate::error::{Error, Result};
-use crate::message::{Message, Offset};
-use crate::shared::connect_with_uds;
-
 pub mod proto {
     tonic::include_proto!("source.v1");
 }
-
+const RECONNECT_INTERVAL: u64 = 1000;
+const MAX_RECONNECT_ATTEMPTS: usize = 5;
 const SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
 const SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
@@ -41,7 +43,16 @@ pub(crate) struct SourceClient {
 
 impl SourceClient {
     pub(crate) async fn connect(config: SourceConfig) -> Result<Self> {
-        let channel = connect_with_uds(config.socket_path.into()).await?;
+        let interval =
+            fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
+
+        let channel = Retry::retry(
+            interval,
+            || async { connect_with_uds(config.socket_path.clone().into()).await },
+            |_: &Error| true,
+        )
+        .await?;
+
         let client = proto::source_client::SourceClient::new(channel)
             .max_encoding_message_size(config.max_message_size)
             .max_decoding_message_size(config.max_message_size);

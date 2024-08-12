@@ -1,15 +1,18 @@
-use tonic::transport::Channel;
-use tonic::Request;
-
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::message::Message;
 use crate::shared::{connect_with_uds, utc_from_timestamp};
 use crate::transformer::proto::SourceTransformRequest;
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
+use tonic::transport::Channel;
+use tonic::Request;
 
 pub mod proto {
     tonic::include_proto!("sourcetransformer.v1");
 }
 
+const RECONNECT_INTERVAL: u64 = 1000;
+const MAX_RECONNECT_ATTEMPTS: usize = 5;
 const TRANSFORMER_SOCKET: &str = "/var/run/numaflow/sourcetransform.sock";
 const TRANSFORMER_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcetransformer-server-info";
 
@@ -39,7 +42,16 @@ pub struct TransformerClient {
 
 impl TransformerClient {
     pub(crate) async fn connect(config: TransformerConfig) -> Result<Self> {
-        let channel = connect_with_uds(config.socket_path.into()).await?;
+        let interval =
+            fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
+
+        let channel = Retry::retry(
+            interval,
+            || async { connect_with_uds(config.socket_path.clone().into()).await },
+            |_: &Error| true,
+        )
+        .await?;
+
         let client = proto::source_transform_client::SourceTransformClient::new(channel)
             .max_decoding_message_size(config.max_message_size)
             .max_encoding_message_size(config.max_message_size);

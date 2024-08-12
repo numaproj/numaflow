@@ -107,16 +107,19 @@ jobs:
       - name: Install grcov
         run: cargo install grcov
 
+      - name: Install Protobuf Compiler
+        run: sudo apt-get install -y protobuf-compiler
+
       - name: Test Rust
-        working-directory: ./serving
+        working-directory: ./rust
         run: |
-          CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='./target/debug/coverage/cargo-test-%p-%m.profraw' cargo test --all-features
+          CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='./target/debug/coverage/cargo-test-%p-%m.profraw' cargo test --all-features --workspace --all 
           grcov . -s ./target/debug/coverage/ --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing -o ./target/debug/coverage/lcov.info
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
         with:
-          files: ./test/profile.cov,./serving/target/debug/coverage/lcov.info
+          files: ./test/profile.cov,./rust/target/debug/coverage/lcov.info
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
