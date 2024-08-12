@@ -20,7 +20,7 @@ const CountWindow = time.Second * 10
 
 type MonoVtxRatable interface {
 	Start(ctx context.Context) error
-	GetRates(replicaIdx int) map[string]*wrapperspb.DoubleValue
+	GetRates() map[string]*wrapperspb.DoubleValue
 }
 
 var _ MonoVtxRatable = (*Rater)(nil)
@@ -42,25 +42,27 @@ type Rater struct {
 	httpClient metricsHttpClient
 	log        *zap.SugaredLogger
 	podTracker *PodTracker
-	// timestampedPodCounts is a queue of timestamped counts for the vertex
+	// timestampedPodCounts is a queue of timestamped counts for the MonoVertex
 	timestampedPodCounts *sharedqueue.OverflowQueue[*TimestampedCounts]
 	// userSpecifiedLookBackSeconds is the user-specified lookback seconds for that MonoVertex
 	userSpecifiedLookBackSeconds int64
 	options                      *options
 }
 
-// PodReadCount is a struct to maintain count of messages read by a pod
+// PodReadCount is a struct to maintain count of messages read by a pod of MonoVertex
 type PodReadCount struct {
-	// pod name
+	// pod name of the pod
 	name string
 	// represents the count of messages read by the pod
 	readCount float64
 }
 
+// Name returns the pod name
 func (p *PodReadCount) Name() string {
 	return p.name
 }
 
+// ReadCount returns the value of the messages read by the Pod
 func (p *PodReadCount) ReadCount() float64 {
 	return p.readCount
 }

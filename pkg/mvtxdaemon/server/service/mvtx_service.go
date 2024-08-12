@@ -27,11 +27,13 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	"github.com/prometheus/common/expfmt"
+
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
 	"github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/prometheus/common/expfmt"
 )
 
 type MoveVertexService struct {
@@ -39,7 +41,7 @@ type MoveVertexService struct {
 	monoVtx    *v1alpha1.MonoVertex
 	httpClient *http.Client
 	// TODO: add rater
-	// rater      rater.Ratable
+	rater rater.MonoVtxRatable
 }
 
 var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MoveVertexService)(nil)
@@ -62,11 +64,11 @@ func NewMoveVertexService(
 
 func (mvs *MoveVertexService) GetMonoVertexMetrics(ctx context.Context, empty *emptypb.Empty) (*mvtxdaemon.GetMonoVertexMetricsResponse, error) {
 	resp := new(mvtxdaemon.GetMonoVertexMetricsResponse)
-	metrics := new(mvtxdaemon.MonoVertexMetrics)
-	metrics.MonoVertex = mvs.monoVtx.Name
-	metrics.Pendings = mvs.getPending(ctx)
-	// TODO: add processing rate
-	resp.Metrics = metrics
+	collectedMetrics := new(mvtxdaemon.MonoVertexMetrics)
+	collectedMetrics.MonoVertex = mvs.monoVtx.Name
+	collectedMetrics.Pendings = mvs.getPending(ctx)
+	collectedMetrics.ProcessingRates = mvs.rater.GetRates()
+	resp.Metrics = collectedMetrics
 	return resp, nil
 }
 
