@@ -167,7 +167,7 @@ func (r *Rater) getPodReadCounts(podName string) *PodReadCount {
 }
 
 // GetRates returns the processing rates of the vertex partition in the format of lookback second to rate mappings
-func (r *Rater) GetRates(replicaIdx int) map[string]*wrapperspb.DoubleValue {
+func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 	r.log.Debugf("Current timestampedPodCounts for MonoVertex %s is: %v", r.monoVertex.Name, r.timestampedPodCounts)
 	var result = make(map[string]*wrapperspb.DoubleValue)
 	// calculate rates for each lookback seconds
@@ -175,7 +175,7 @@ func (r *Rater) GetRates(replicaIdx int) map[string]*wrapperspb.DoubleValue {
 		rate := CalculateRate(r.timestampedPodCounts, i)
 		result[n] = wrapperspb.Double(rate)
 	}
-	r.log.Debugf("Got rates for MonoVertex %s, replica %d: %v", r.monoVertex.Name, replicaIdx, result)
+	r.log.Debugf("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result
 }
 
