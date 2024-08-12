@@ -106,13 +106,13 @@ func (pt *PodTracker) IsActive(podKey string) bool {
 }
 
 func (pt *PodTracker) isActive(podName string) bool {
+	headlessSvc := pt.monoVertex.GetHeadlessServiceName()
 	// using the MonoVertex headless service to check if a pod exists or not.
 	// example for 0th pod: https://simple-mono-vertex-mv-0.simple-mono-vertex-mv-headless.default.svc:2469/metrics
-	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, pt.monoVertex.Name+"-"+"mv"+"-headless", pt.monoVertex.Namespace, v1alpha1.MonoVertexMetricsPort)
+	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, headlessSvc, pt.monoVertex.Namespace, v1alpha1.MonoVertexMetricsPort)
 	resp, err := pt.httpClient.Head(url)
 	if err != nil {
 		// TODO(MonoVertex) - Verify that the service returns error when pod is inactive
-
 		pt.log.Debugf("Sending HEAD request to pod %s is unsuccessful: %v, treating the pod as inactive", podName, err)
 		return false
 	}

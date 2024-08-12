@@ -25,17 +25,16 @@ import (
 type TimestampedCounts struct {
 	// Timestamp in seconds is the time when the count is recorded
 	Timestamp int64
-	// the key of podReadCount represents the pod name, the value represents a partition counts map for the pod
-	// partition counts map holds mappings between partition name and the count of messages processed by the partition
-	podReadCount float64
-	lock         *sync.RWMutex
+	// the key of podReadCounts represents the pod name, the value represents a count of messages processed by the pod
+	podReadCounts map[string]float64
+	lock          *sync.RWMutex
 }
 
 func NewTimestampedCounts(t int64) *TimestampedCounts {
 	return &TimestampedCounts{
-		Timestamp:    t,
-		podReadCount: 0,
-		lock:         new(sync.RWMutex),
+		Timestamp:     t,
+		podReadCounts: make(map[string]float64),
+		lock:          new(sync.RWMutex),
 	}
 }
 
@@ -44,7 +43,7 @@ func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
 	if podReadCount == nil {
-		// we choose to skip updating when podReadCount is nil, instead of removing the pod from the map.
+		// we choose to skip updating when podReadCounts is nil, instead of removing the pod from the map.
 		// imagine if the getPodReadCounts call fails to scrape the readCount metric, and it's NOT because the pod is down.
 		// in this case getPodReadCounts returns nil.
 		// if we remove the pod from the map and then the next scrape successfully gets the readCount, we can reach a state that in the timestamped counts,
@@ -54,15 +53,15 @@ func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
 		// hence we'd rather keep the readCount as it is to avoid wrong rate calculation.
 		return
 	}
-	tc.podReadCount = podReadCount.ReadCount()
+	tc.podReadCounts[podReadCount.Name()] = podReadCount.ReadCount()
 }
 
-// PodPartitionCountSnapshot returns a copy of podReadCount
+// PodPartitionCountSnapshot returns a copy of podReadCounts
 // it's used to ensure the returned map is not modified by other goroutines
-func (tc *TimestampedCounts) PodPartitionCountSnapshot() float64 {
+func (tc *TimestampedCounts) PodPartitionCountSnapshot() map[string]float64 {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	return tc.podReadCount
+	return tc.podReadCounts
 }
 
 // String returns a string representation of the TimestampedCounts
@@ -70,5 +69,5 @@ func (tc *TimestampedCounts) PodPartitionCountSnapshot() float64 {
 func (tc *TimestampedCounts) String() string {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	return fmt.Sprintf("{timestamp: %d, podReadCount: %v}", tc.Timestamp, tc.podReadCount)
+	return fmt.Sprintf("{timestamp: %d, podReadCounts: %v}", tc.Timestamp, tc.podReadCounts)
 }

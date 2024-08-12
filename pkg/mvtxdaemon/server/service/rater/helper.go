@@ -89,14 +89,17 @@ func calculatePartitionDelta(tc1, tc2 *TimestampedCounts) float64 {
 		// we calculate delta only when both input timestamped counts are non-nil
 		return delta
 	}
-	prevCount := tc1.PodPartitionCountSnapshot()
-	currCount := tc2.PodPartitionCountSnapshot()
-	// pod delta will be equal to current count in case of restart
-	podDelta := currCount
-	if currCount >= prevCount {
-		podDelta = currCount - prevCount
+	prevPodReadCount := tc1.PodPartitionCountSnapshot()
+	currPodReadCount := tc2.PodPartitionCountSnapshot()
+	for podName, readCount := range currPodReadCount {
+		currCount := readCount
+		prevCount := prevPodReadCount[podName]
+		// pod delta will be equal to current count in case of restart
+		podDelta := currCount
+		if currCount >= prevCount {
+			podDelta = currCount - prevCount
+		}
+		delta += podDelta
 	}
-	delta += podDelta
-
 	return delta
 }
