@@ -5,8 +5,7 @@ use reqwest::Client;
 use tracing::{error, warn};
 use tracing_subscriber::prelude::*;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
+pub async fn servesink() -> Result<(), Box<dyn Error + Send + Sync>> {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()

@@ -1,0 +1,19 @@
+workspace = { members = ["backoff", "numaflow-models", "servesink", "serving", "monovertex"] }
+
+[[bin]]
+name = "numaflow"
+path = "src/bin/main.rs"
+
+[package]
+name = "numaflow"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+tokio = "1.39.2"
+backoff = { path = "backoff" }
+servesink = { path = "servesink" }
+serving = { path = "serving" }
+monovertex = { path = "monovertex" }
+tracing = "0.1.40"
