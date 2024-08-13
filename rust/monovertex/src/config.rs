@@ -61,6 +61,7 @@ impl Default for Settings {
             lag_check_interval_in_secs: DEFAULT_LAG_CHECK_INTERVAL_IN_SECS,
             lag_refresh_interval_in_secs: DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS,
             sink_max_retry_attempts: DEFAULT_MAX_SINK_RETRY_ATTEMPTS,
+            sink_retry_interval_in_ms: DEFAULT_SINK_RETRY_INTERVAL_IN_MS,
         }
     }
 }
