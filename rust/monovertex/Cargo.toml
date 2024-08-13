@@ -33,6 +33,8 @@ serde = { version = "1.0.204", features = ["derive"] }
 semver = "1.0"
 pep440_rs = "0.6.6"
 backoff = { path = "../backoff" }
+parking_lot = "0.12.3"
+prometheus-client = "0.22.3"
 
 [dev-dependencies]
 tower = "0.4.13"

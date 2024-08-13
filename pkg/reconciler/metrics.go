@@ -49,7 +49,7 @@ var (
 		Subsystem: "controller",
 		Name:      "mvtx_health",
 		Help:      "A metric to indicate whether the MonoVertex is healthy. '1' means healthy, '0' means unhealthy",
-	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertex})
+	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertexName})
 
 	// JetStreamISBSvcReplicas indicates the replicas of a JetStream ISB Service.
 	JetStreamISBSvcReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -84,14 +84,14 @@ var (
 		Subsystem: "controller",
 		Name:      "mvtx_desired_replicas",
 		Help:      "A metric indicates the desired replicas of a MonoVertex",
-	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertex})
+	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertexName})
 
 	// MonoVertexCurrentReplicas indicates the current replicas of a MonoVertex.
 	MonoVertexCurrentReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
 		Name:      "mvtx_current_replicas",
 		Help:      "A metric indicates the current replicas of a MonoVertex",
-	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertex})
+	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertexName})
 )
 
 func init() {

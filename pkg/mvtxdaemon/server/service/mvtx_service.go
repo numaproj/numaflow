@@ -27,19 +27,24 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	"github.com/prometheus/common/expfmt"
+
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
 	"github.com/numaproj/numaflow/pkg/metrics"
+	raterPkg "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/prometheus/common/expfmt"
 )
+
+// MonoVtxPendingMetric is the metric emitted from the MonoVtx lag reader for pending stats
+// Note: Please keep consistent with the definitions in rust/monovertex/sc/metrics.rs
+const MonoVtxPendingMetric = "monovtx_pending"
 
 type MoveVertexService struct {
 	mvtxdaemon.UnimplementedMonoVertexDaemonServiceServer
 	monoVtx    *v1alpha1.MonoVertex
 	httpClient *http.Client
-	// TODO: add rater
-	// rater      rater.Ratable
+	rater      raterPkg.MonoVtxRatable
 }
 
 var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MoveVertexService)(nil)
@@ -47,6 +52,7 @@ var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MoveVertexService)(nil)
 // NewMoveVertexService returns a new instance of MoveVertexService
 func NewMoveVertexService(
 	monoVtx *v1alpha1.MonoVertex,
+	rater raterPkg.MonoVtxRatable,
 ) (*MoveVertexService, error) {
 	mv := MoveVertexService{
 		monoVtx: monoVtx,
@@ -56,17 +62,18 @@ func NewMoveVertexService(
 			},
 			Timeout: time.Second * 3,
 		},
+		rater: rater,
 	}
 	return &mv, nil
 }
 
 func (mvs *MoveVertexService) GetMonoVertexMetrics(ctx context.Context, empty *emptypb.Empty) (*mvtxdaemon.GetMonoVertexMetricsResponse, error) {
 	resp := new(mvtxdaemon.GetMonoVertexMetricsResponse)
-	metrics := new(mvtxdaemon.MonoVertexMetrics)
-	metrics.MonoVertex = mvs.monoVtx.Name
-	metrics.Pendings = mvs.getPending(ctx)
-	// TODO: add processing rate
-	resp.Metrics = metrics
+	collectedMetrics := new(mvtxdaemon.MonoVertexMetrics)
+	collectedMetrics.MonoVertex = mvs.monoVtx.Name
+	collectedMetrics.Pendings = mvs.getPending(ctx)
+	collectedMetrics.ProcessingRates = mvs.rater.GetRates()
+	resp.Metrics = collectedMetrics
 	return resp, nil
 }
 
@@ -79,7 +86,7 @@ func (mvs *MoveVertexService) getPending(ctx context.Context) map[string]*wrappe
 	// Get the headless service name
 	// We can query the metrics endpoint of the (i)th pod to obtain this value.
 	// example for 0th pod : https://simple-mono-vertex-mv-0.simple-mono-vertex-mv-headless:2469/metrics
-	url := fmt.Sprintf("https://%s-mv-1.%s.%s.svc:%v/metrics", mvs.monoVtx.Name, headlessServiceName, mvs.monoVtx.Namespace, v1alpha1.MonoVertexMetricsPort)
+	url := fmt.Sprintf("https://%s-mv-0.%s.%s.svc:%v/metrics", mvs.monoVtx.Name, headlessServiceName, mvs.monoVtx.Namespace, v1alpha1.MonoVertexMetricsPort)
 	if res, err := mvs.httpClient.Get(url); err != nil {
 		log.Debugf("Error reading the metrics endpoint, it might be because of mono vertex scaling down to 0: %f", err.Error())
 		return nil
@@ -93,7 +100,7 @@ func (mvs *MoveVertexService) getPending(ctx context.Context) map[string]*wrappe
 		}
 
 		// Get the pending messages
-		if value, ok := result["TODO:metric-name"]; ok { // TODO: metric name
+		if value, ok := result[MonoVtxPendingMetric]; ok {
 			metricsList := value.GetMetric()
 			for _, metric := range metricsList {
 				labels := metric.GetLabel()

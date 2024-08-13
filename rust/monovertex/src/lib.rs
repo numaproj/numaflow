@@ -24,7 +24,7 @@ use tracing_subscriber::EnvFilter;
 /// - Send Acknowledgement back to the Source
 pub mod error;
 
-pub mod metrics;
+mod metrics;
 
 pub mod source;
 
