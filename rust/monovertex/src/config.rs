@@ -19,6 +19,8 @@ const DEFAULT_LAG_CHECK_INTERVAL_IN_SECS: u16 = 5;
 const DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS: u16 = 3;
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
+const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = 10;
+const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
 
 pub fn config() -> &'static Settings {
     static CONF: OnceLock<Settings> = OnceLock::new();
@@ -41,6 +43,8 @@ pub struct Settings {
     pub is_transformer_enabled: bool,
     pub lag_check_interval_in_secs: u16,
     pub lag_refresh_interval_in_secs: u16,
+    pub sink_max_retry_attempts: u16,
+    pub sink_retry_interval_in_ms: u32,
 }
 
 impl Default for Settings {
@@ -56,6 +60,8 @@ impl Default for Settings {
             is_transformer_enabled: false,
             lag_check_interval_in_secs: DEFAULT_LAG_CHECK_INTERVAL_IN_SECS,
             lag_refresh_interval_in_secs: DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS,
+            sink_max_retry_attempts: DEFAULT_MAX_SINK_RETRY_ATTEMPTS,
+            sink_retry_interval_in_ms: DEFAULT_SINK_RETRY_INTERVAL_IN_MS,
         }
     }
 }
