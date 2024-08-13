@@ -1,11 +1,11 @@
+pub use self::error::{Error, Result};
+use crate::app::start_main_server;
+use crate::config::config;
+use crate::metrics::start_metrics_server;
+use crate::pipeline::pipeline_spec;
 use tracing::{error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use crate::app::start_main_server;
-use crate::config::config;
-pub use self::error::{Error, Result};
-use crate::metrics::start_metrics_server;
-use crate::pipeline::pipeline_spec;
 
 mod app;
 mod config;
