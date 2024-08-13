@@ -17,7 +17,9 @@ import (
 )
 
 const CountWindow = time.Second * 10
+const MonoVtxReadMetricName = "monovtx_read_total"
 
+// MonoVtxRatable is the interface for the Rater struct.
 type MonoVtxRatable interface {
 	Start(ctx context.Context) error
 	GetRates() map[string]*wrapperspb.DoubleValue
@@ -41,6 +43,7 @@ type Rater struct {
 	monoVertex *v1alpha1.MonoVertex
 	httpClient metricsHttpClient
 	log        *zap.SugaredLogger
+	// podTracker keeps track of active pods and their counts
 	podTracker *PodTracker
 	// timestampedPodCounts is a queue of timestamped counts for the MonoVertex
 	timestampedPodCounts *sharedqueue.OverflowQueue[*TimestampedCounts]
@@ -110,6 +113,7 @@ func (r *Rater) monitor(ctx context.Context, id int, keyCh <-chan string) {
 	}
 }
 
+// monitorOnePod monitors a single pod and updates the rate metrics for the given pod.
 func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error {
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("podKey", key)
 	log.Debugf("Working on key: %s", key)
@@ -133,9 +137,8 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 }
 
 // getPodReadCounts returns the total number of messages read by the pod
-// since a pod can read from multiple partitions, we will return a map of partition to read count.
+// It fetches the total pod read counts from the Prometheus metrics endpoint.
 func (r *Rater) getPodReadCounts(podName string) *PodReadCount {
-	readTotalMetricName := "monovtx_read_total"
 	headlessServiceName := r.monoVertex.GetHeadlessServiceName()
 	// scrape the read total metric from pod metric port
 	// example for 0th pod: https://simple-mono-vertex-mv-0.simple-mono-vertex-mv-headless.default.svc:2469/metrics
@@ -154,11 +157,12 @@ func (r *Rater) getPodReadCounts(podName string) *PodReadCount {
 		return nil
 	}
 
-	// TODO(MonoVertex): Check the logic here
-	if value, ok := result[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
+	if value, ok := result[MonoVtxReadMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()
 		// Each pod should be emitting only one metric with this name, so we should be able to take the first value
 		// from the results safely.
+		// We use Untyped here as the counter metric family shows up as untyped from the rust client
+		// TODO(MonoVertex): Check further on this to understand why not type is counter
 		podReadCount := &PodReadCount{podName, metricsList[0].Untyped.GetValue()}
 		return podReadCount
 	} else {
@@ -167,7 +171,8 @@ func (r *Rater) getPodReadCounts(podName string) *PodReadCount {
 	}
 }
 
-// GetRates returns the processing rates of the vertex partition in the format of lookback second to rate mappings
+// GetRates returns the rate metrics for the MonoVertex.
+// It calculates the rate metrics for the given lookback seconds.
 func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 	r.log.Debugf("Current timestampedPodCounts for MonoVertex %s is: %v", r.monoVertex.Name, r.timestampedPodCounts)
 	var result = make(map[string]*wrapperspb.DoubleValue)

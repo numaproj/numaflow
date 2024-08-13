@@ -8,7 +8,6 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
-use metrics::describe_counter;
 use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 use tokio::net::{TcpListener, ToSocketAddrs};
@@ -18,7 +17,6 @@ use tokio::time;
 use tracing::{debug, error, info};
 
 use prometheus_client::encoding::text::encode;
-use prometheus_client::encoding::EncodeLabelSet;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
@@ -31,8 +29,9 @@ use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
 
 // Define the labels for the metrics
-pub const MONO_VERTEX_NAME: &str = "mono_vertex_name";
-pub const REPLICA_LABEL: &str = "replica";
+pub const MONO_VERTEX_NAME_LABEL: &str = "mvtx_name";
+pub const REPLICA_LABEL: &str = "mvtx_replica";
+const PENDING_PERIOD_LABEL: &str = "period";
 
 // Define the metrics
 const MONOVTX_READ_TOTAL: &str = "monovtx_read";
@@ -283,24 +282,6 @@ fn setup_metrics_recorder() -> crate::Result<PrometheusHandle> {
         .install_recorder()
         .map_err(|e| Error::MetricsError(format!("Prometheus install_recorder: {}", e)))?;
 
-    // Define forwarder metrics
-    describe_counter!(
-        MONOVTX_READ_TOTAL,
-        "Total number of Data Messages Read in the forwarder"
-    );
-    describe_counter!(
-        MONOVTX_READ_BYTES_TOTAL,
-        "Total number of bytes read in the forwarder"
-    );
-    describe_counter!(
-        MONOVTX_ACK_TOTAL,
-        "Total number of acknowledgments by the forwarder"
-    );
-    describe_counter!(
-        MONOVTX_SINK_WRITE_TOTAL,
-        "Total number of Data Messages written by the forwarder"
-    );
-
     Ok(prometheus_handle)
 }
 
@@ -422,7 +403,7 @@ async fn expose_pending_metrics(
             if pending != -1 {
                 forward_metrics()
                     .monovtx_pending
-                    .get_or_create(&vec![("period".to_string(), label.to_string())])
+                    .get_or_create(&vec![(PENDING_PERIOD_LABEL.to_string(), label.to_string())])
                     .set(pending);
                 info!("Pending messages ({}): {}", label, pending);
             }

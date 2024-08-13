@@ -32,7 +32,7 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 
 	// find the element matching the input timestamp and update it
 	for _, i := range items {
-		if i.Timestamp == time {
+		if i.timestamp == time {
 			i.Update(podReadCounts)
 			return
 		}
@@ -59,7 +59,7 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 	}
 
 	// time diff in seconds.
-	timeDiff := counts[endIndex].Timestamp - counts[startIndex].Timestamp
+	timeDiff := counts[endIndex].timestamp - counts[startIndex].timestamp
 	if timeDiff == 0 {
 		// if the time difference is 0, we return 0 to avoid division by 0
 		// this should not happen in practice because we are using a 10s interval
@@ -99,7 +99,7 @@ func calculatePartitionDelta(tc1, tc2 *TimestampedCounts, partitionName string) 
 func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	n := len(counts)
 	now := time.Now().Truncate(CountWindow).Unix()
-	if n < 2 || now-counts[n-2].Timestamp > lookbackSeconds {
+	if n < 2 || now-counts[n-2].timestamp > lookbackSeconds {
 		// if the second last element is already outside the lookback window, we return indexNotFound
 		return indexNotFound
 	}
@@ -110,7 +110,7 @@ func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	lastTimestamp := now - lookbackSeconds
 	for left <= right {
 		mid := left + (right-left)/2
-		if counts[mid].Timestamp >= lastTimestamp {
+		if counts[mid].timestamp >= lastTimestamp {
 			startIndex = mid
 			right = mid - 1
 		} else {

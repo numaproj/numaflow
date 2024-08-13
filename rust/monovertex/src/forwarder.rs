@@ -5,7 +5,7 @@ use tracing::{info, trace};
 
 use crate::config::config;
 use crate::error::{Error, Result};
-use crate::metrics::{forward_metrics, MONO_VERTEX_NAME, REPLICA_LABEL};
+use crate::metrics::{forward_metrics, MONO_VERTEX_NAME_LABEL, REPLICA_LABEL};
 use crate::sink::SinkClient;
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
@@ -31,7 +31,7 @@ impl Forwarder {
     ) -> Result<Self> {
         let common_labels = vec![
             (
-                MONO_VERTEX_NAME.to_string(),
+                MONO_VERTEX_NAME_LABEL.to_string(),
                 config().mono_vertex_name.clone(),
             ),
             (REPLICA_LABEL.to_string(), config().replica.to_string()),

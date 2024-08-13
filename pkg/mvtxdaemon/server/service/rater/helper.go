@@ -1,6 +1,5 @@
 package rater
 
-// UpdateCount updates the count of processed messages for a pod at a given time
 import (
 	"time"
 
@@ -8,15 +7,17 @@ import (
 )
 
 const (
+	// indexNotFound is returned when the start index cannot be found in the queue.
 	indexNotFound = -1
 )
 
+// UpdateCount updates the count for a given timestamp in the queue.
 func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podReadCounts *PodReadCount) {
 	items := q.Items()
 
 	// find the element matching the input timestamp and update it
 	for _, i := range items {
-		if i.Timestamp == time {
+		if i.timestamp == time {
 			i.Update(podReadCounts)
 			return
 		}
@@ -28,7 +29,7 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 	q.Append(tc)
 }
 
-// CalculateRate calculates the rate of the vertex partition in the last lookback seconds
+// CalculateRate calculates the rate of a MonoVertex for a given lookback period.
 func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) float64 {
 	counts := q.Items()
 	if len(counts) <= 1 {
@@ -43,7 +44,7 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 	}
 
 	// time diff in seconds.
-	timeDiff := counts[endIndex].Timestamp - counts[startIndex].Timestamp
+	timeDiff := counts[endIndex].timestamp - counts[startIndex].timestamp
 	if timeDiff == 0 {
 		// if the time difference is 0, we return 0 to avoid division by 0
 		// this should not happen in practice because we are using a 10s interval
@@ -52,6 +53,7 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 
 	delta := float64(0)
 	for i := startIndex; i < endIndex; i++ {
+		// calculate the difference between the current and previous pod count snapshots
 		delta += calculatePodDelta(counts[i], counts[i+1])
 	}
 	return delta / float64(timeDiff)
@@ -61,7 +63,7 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	n := len(counts)
 	now := time.Now().Truncate(CountWindow).Unix()
-	if n < 2 || now-counts[n-2].Timestamp > lookbackSeconds {
+	if n < 2 || now-counts[n-2].timestamp > lookbackSeconds {
 		// if the second last element is already outside the lookback window, we return indexNotFound
 		return indexNotFound
 	}
@@ -72,7 +74,7 @@ func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	lastTimestamp := now - lookbackSeconds
 	for left <= right {
 		mid := left + (right-left)/2
-		if counts[mid].Timestamp >= lastTimestamp {
+		if counts[mid].timestamp >= lastTimestamp {
 			startIndex = mid
 			right = mid - 1
 		} else {
@@ -82,7 +84,7 @@ func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	return startIndex
 }
 
-// calculatePodDelta calculates the difference of the metric count between two timestamped counts for a given partition.
+// calculatePodDelta calculates the difference between the current and previous pod count snapshots
 func calculatePodDelta(tc1, tc2 *TimestampedCounts) float64 {
 	delta := float64(0)
 	if tc1 == nil || tc2 == nil {

@@ -23,8 +23,8 @@ import (
 
 // TimestampedCounts track the total count of processed messages for a list of pods at a given timestamp
 type TimestampedCounts struct {
-	// Timestamp in seconds is the time when the count is recorded
-	Timestamp int64
+	// timestamp in seconds is the time when the count is recorded
+	timestamp int64
 	// the key of podReadCounts represents the pod name, the value represents a count of messages processed by the pod
 	podReadCounts map[string]float64
 	lock          *sync.RWMutex
@@ -32,7 +32,7 @@ type TimestampedCounts struct {
 
 func NewTimestampedCounts(t int64) *TimestampedCounts {
 	return &TimestampedCounts{
-		Timestamp:     t,
+		timestamp:     t,
 		podReadCounts: make(map[string]float64),
 		lock:          new(sync.RWMutex),
 	}
@@ -69,5 +69,5 @@ func (tc *TimestampedCounts) PodCountSnapshot() map[string]float64 {
 func (tc *TimestampedCounts) String() string {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	return fmt.Sprintf("{timestamp: %d, podReadCounts: %v}", tc.Timestamp, tc.podReadCounts)
+	return fmt.Sprintf("{timestamp: %d, podReadCounts: %v}", tc.timestamp, tc.podReadCounts)
 }

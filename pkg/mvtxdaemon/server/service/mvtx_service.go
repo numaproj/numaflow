@@ -36,12 +36,13 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
+const MonoVtxPendingMetric = "monovtx_pending"
+
 type MoveVertexService struct {
 	mvtxdaemon.UnimplementedMonoVertexDaemonServiceServer
 	monoVtx    *v1alpha1.MonoVertex
 	httpClient *http.Client
-	// TODO: add rater
-	rater raterPkg.MonoVtxRatable
+	rater      raterPkg.MonoVtxRatable
 }
 
 var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MoveVertexService)(nil)
@@ -79,7 +80,6 @@ func (mvs *MoveVertexService) getPending(ctx context.Context) map[string]*wrappe
 	log := logging.FromContext(ctx)
 	headlessServiceName := mvs.monoVtx.GetHeadlessServiceName()
 	pendingMap := make(map[string]*wrapperspb.Int64Value)
-	monovtxPendingMetric := "monovtx_pending"
 
 	// Get the headless service name
 	// We can query the metrics endpoint of the (i)th pod to obtain this value.
@@ -98,7 +98,7 @@ func (mvs *MoveVertexService) getPending(ctx context.Context) map[string]*wrappe
 		}
 
 		// Get the pending messages
-		if value, ok := result[monovtxPendingMetric]; ok {
+		if value, ok := result[MonoVtxPendingMetric]; ok {
 			metricsList := value.GetMetric()
 			for _, metric := range metricsList {
 				labels := metric.GetLabel()

@@ -59,7 +59,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	var (
 		err error
 	)
-	// rater is used to calculate the processing rate for each of the vertices
+	// rater is used to calculate the processing rate of the mono vertex
 	rater := rateServer.NewRater(ctx, ds.monoVtx)
 
 	// Start listener

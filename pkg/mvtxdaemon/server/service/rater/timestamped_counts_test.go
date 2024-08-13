@@ -25,7 +25,7 @@ import (
 func TestNewTimestampedCounts(t *testing.T) {
 	tc := NewTimestampedCounts(TestTime)
 	tc.Update(&PodReadCount{"pod1", 10.0})
-	assert.Equal(t, int64(TestTime), tc.Timestamp)
+	assert.Equal(t, int64(TestTime), tc.timestamp)
 	assert.Equal(t, 1, len(tc.podReadCounts))
 	assert.Equal(t, "{timestamp: 1620000000, podReadCounts: map[pod1:10]}", tc.String())
 }

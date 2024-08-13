@@ -62,7 +62,7 @@ func WithRefreshInterval(d time.Duration) PodTrackerOption {
 }
 
 func (pt *PodTracker) Start(ctx context.Context) error {
-	pt.log.Debugf("Starting tracking active pods for pipeline %s...", pt.monoVertex.Name)
+	pt.log.Debugf("Starting tracking active pods for MonoVertex %s...", pt.monoVertex.Name)
 	go pt.trackActivePods(ctx)
 	return nil
 }
@@ -73,7 +73,7 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			pt.log.Infof("Context is cancelled. Stopping tracking active pods for pipeline %s...", pt.monoVertex.Name)
+			pt.log.Infof("Context is cancelled. Stopping tracking active pods for MonoVertex %s...", pt.monoVertex.Name)
 			return
 		case <-ticker.C:
 			pt.updateActivePods()
@@ -81,8 +81,8 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 	}
 }
 
+// updateActivePods checks the status of all pods and updates the activePods set accordingly.
 func (pt *PodTracker) updateActivePods() {
-	// TODO(MonoVertex): check if this is always correct with replicas
 	for i := 0; i < int(pt.monoVertex.Spec.Scale.GetMaxReplicas()); i++ {
 		podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, i)
 		podKey := pt.getPodKey(i)
@@ -97,6 +97,9 @@ func (pt *PodTracker) updateActivePods() {
 
 func (pt *PodTracker) getPodKey(index int) string {
 	// podKey is used as a unique identifier for the pod, it is used by worker to determine the count of processed messages of the pod.
+	// we use the monoVertex name and the pod index to create a unique identifier.
+	// For example, if the monoVertex name is "simple-mono-vertex" and the pod index is 0, the podKey will be "simple-mono-vertex*0".
+	// This way, we can easily identify the pod based on its key.
 	return strings.Join([]string{pt.monoVertex.Name, fmt.Sprintf("%d", index)}, podInfoSeparator)
 }
 
@@ -112,7 +115,6 @@ func (pt *PodTracker) isActive(podName string) bool {
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, headlessSvc, pt.monoVertex.Namespace, v1alpha1.MonoVertexMetricsPort)
 	resp, err := pt.httpClient.Head(url)
 	if err != nil {
-		// TODO(MonoVertex) - Verify that the service returns error when pod is inactive
 		pt.log.Debugf("Sending HEAD request to pod %s is unsuccessful: %v, treating the pod as inactive", podName, err)
 		return false
 	}
