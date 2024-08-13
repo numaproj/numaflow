@@ -39,10 +39,10 @@ pub const PARTITION_LABEL: &str = "partition_name";
 pub const VERTEX_TYPE_LABEL: &str = "vertex_type";
 
 // Define the metrics
-pub const MONOVTX_READ_TOTAL: &str = "monovtx_read_total";
-pub const MONOVTX_READ_BYTES_TOTAL: &str = "monovtx_read_bytes_total";
-pub const MONOVTX_ACK_TOTAL: &str = "monovtx_ack_total";
-pub const MONOVTX_SINK_WRITE_TOTAL: &str = "monovtx_sink_write_total";
+pub const MONOVTX_READ_TOTAL: &str = "monovtx_read";
+pub const MONOVTX_READ_BYTES_TOTAL: &str = "monovtx_read_bytes";
+pub const MONOVTX_ACK_TOTAL: &str = "monovtx_ack";
+pub const MONOVTX_SINK_WRITE_TOTAL: &str = "monovtx_sink_write";
 pub const MONOVTX_PROCESSING_TIME: &str = "monovtx_processing_time";
 
 #[derive(Clone)]

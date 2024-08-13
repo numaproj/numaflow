@@ -135,8 +135,7 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 // getPodReadCounts returns the total number of messages read by the pod
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
 func (r *Rater) getPodReadCounts(podName string) *PodReadCount {
-	// TODO(MonoVertex) : update the metric
-	readTotalMetricName := "monovtx_read_total_total"
+	readTotalMetricName := "monovtx_read_total"
 	headlessServiceName := r.monoVertex.GetHeadlessServiceName()
 	// scrape the read total metric from pod metric port
 	// example for 0th pod: https://simple-mono-vertex-mv-0.simple-mono-vertex-mv-headless.default.svc:2469/metrics
@@ -160,7 +159,7 @@ func (r *Rater) getPodReadCounts(podName string) *PodReadCount {
 		metricsList := value.GetMetric()
 		// Each pod should be emitting only one metric with this name, so we should be able to take the first value
 		// from the results safely.
-		podReadCount := &PodReadCount{podName, metricsList[0].Counter.GetValue()}
+		podReadCount := &PodReadCount{podName, metricsList[0].Untyped.GetValue()}
 		return podReadCount
 	} else {
 		r.log.Errorf("[MonoVertex name  %s, pod name %s]: failed getting the read total metric, the metric is not available.", r.monoVertex.Name, podName)
