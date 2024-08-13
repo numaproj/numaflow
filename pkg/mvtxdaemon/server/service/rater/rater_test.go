@@ -50,7 +50,7 @@ func (m *raterMockHttpClient) Get(url string) (*http.Response, error) {
 			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
 # HELP monovtx_read A Counter to keep track of the total number of messages read from the source.
 # TYPE monovtx_read counter
-monovtx_read_total{mono_vertex_name="p",replica="0"} %d
+monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="0"} %d
 `, m.podOneCount))))}
 		return resp, nil
 	} else if url == "https://p-mv-1.p-mv-headless.default.svc:2469/metrics" {
@@ -60,7 +60,7 @@ monovtx_read_total{mono_vertex_name="p",replica="0"} %d
 			Body: io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`
 # HELP monovtx_read A Counter to keep track of the total number of messages read from the source.
 # TYPE monovtx_read counter
-monovtx_read_total{mono_vertex_name="p",replica="1"} %d
+monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="1"} %d
 `, m.podTwoCount))))}
 		return resp, nil
 	} else {

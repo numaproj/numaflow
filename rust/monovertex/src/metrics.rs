@@ -34,6 +34,9 @@ pub const REPLICA_LABEL: &str = "mvtx_replica";
 const PENDING_PERIOD_LABEL: &str = "period";
 
 // Define the metrics
+// Note: We do not add a suffix to the metric name, as the suffix is inferred through the metric type
+// by the prometheus client library
+// refer: https://github.com/prometheus/client_rust/blob/master/src/registry.rs#L102
 const MONOVTX_READ_TOTAL: &str = "monovtx_read";
 const MONOVTX_READ_BYTES_TOTAL: &str = "monovtx_read_bytes";
 const MONOVTX_ACK_TOTAL: &str = "monovtx_ack";
