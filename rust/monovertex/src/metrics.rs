@@ -1,4 +1,3 @@
-use std::future::ready;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -22,10 +21,9 @@ use prometheus_client::encoding::text::encode;
 use prometheus_client::encoding::EncodeLabelSet;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
 use prometheus_client::registry::Registry;
-use serde::{Deserialize, Serialize};
-use tower::load::pending_requests::Count;
 
 use crate::error::Error;
 use crate::sink::SinkClient;
@@ -33,17 +31,16 @@ use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
 
 // Define the labels for the metrics
-pub const MONO_VERTEX_NAME: &str = "vertex";
+pub const MONO_VERTEX_NAME: &str = "mono-vertex";
 pub const REPLICA_LABEL: &str = "replica";
-pub const PARTITION_LABEL: &str = "partition_name";
-pub const VERTEX_TYPE_LABEL: &str = "vertex_type";
 
 // Define the metrics
-pub const MONOVTX_READ_TOTAL: &str = "monovtx_read";
-pub const MONOVTX_READ_BYTES_TOTAL: &str = "monovtx_read_bytes";
-pub const MONOVTX_ACK_TOTAL: &str = "monovtx_ack";
-pub const MONOVTX_SINK_WRITE_TOTAL: &str = "monovtx_sink_write";
-pub const MONOVTX_PROCESSING_TIME: &str = "monovtx_processing_time";
+const MONOVTX_READ_TOTAL: &str = "monovtx_read";
+const MONOVTX_READ_BYTES_TOTAL: &str = "monovtx_read_bytes";
+const MONOVTX_ACK_TOTAL: &str = "monovtx_ack";
+const MONOVTX_SINK_WRITE_TOTAL: &str = "monovtx_sink_write";
+const MONOVTX_PROCESSING_TIME: &str = "monovtx_processing_time";
+const MONOVTX_PENDING: &str = "monovtx_pending";
 
 #[derive(Clone)]
 pub(crate) struct MetricsState {
@@ -75,32 +72,13 @@ pub fn global_registry() -> &'static GlobalRegistry {
     GLOBAL_REGISTER.get_or_init(GlobalRegistry::new)
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub(crate) struct Label {
-    vertex: String,
-    replica: String,
-    partition: String,
-    vertex_type: String,
-}
-
-impl Label {
-    // Create a new label from Strings
-    pub fn new(vertex: String, replica: String, partition: String, vertex_type: String) -> Self {
-        Label {
-            vertex,
-            replica,
-            partition,
-            vertex_type,
-        }
-    }
-}
-
 pub struct MonoVtxMetrics {
     pub monovtx_read_total: Family<Vec<(String, String)>, Counter>,
     pub monovtx_read_bytes_total: Family<Vec<(String, String)>, Counter>,
     pub monovtx_ack_total: Family<Vec<(String, String)>, Counter>,
     pub monovtx_sink_write_total: Family<Vec<(String, String)>, Counter>,
     pub monovtx_processing_time: Family<Vec<(String, String)>, Histogram>,
+    pub monovtx_pending: Family<Vec<(String, String)>, Gauge>,
 }
 
 impl MonoVtxMetrics {
@@ -120,6 +98,7 @@ impl MonoVtxMetrics {
             Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
             });
+        let monovtx_pending = Family::<Vec<(String, String)>, Gauge>::default();
 
         let metrics = MonoVtxMetrics {
             monovtx_read_total,
@@ -127,6 +106,7 @@ impl MonoVtxMetrics {
             monovtx_ack_total,
             monovtx_sink_write_total,
             monovtx_processing_time,
+            monovtx_pending,
         };
 
         let mut registry = global_registry().registry.lock();
@@ -149,6 +129,16 @@ impl MonoVtxMetrics {
             MONOVTX_PROCESSING_TIME,
             "A Histogram to keep track of the total time taken to forward a chunk, the time is in microseconds",
             metrics.monovtx_processing_time.clone(),
+        );
+        registry.register(
+            MONOVTX_READ_BYTES_TOTAL,
+            "A Counter to keep track of the total number of bytes read from the source",
+            metrics.monovtx_read_bytes_total.clone(),
+        );
+        registry.register(
+            MONOVTX_PENDING,
+            "A Gauge to keep track of the total number of pending messages for the monovtx",
+            metrics.monovtx_pending.clone(),
         );
         metrics
     }
@@ -430,7 +420,10 @@ async fn expose_pending_metrics(
         for (label, seconds) in &lookback_seconds_map {
             let pending = calculate_pending(*seconds, &pending_stats).await;
             if pending != -1 {
-                // TODO: emit it as a metric
+                forward_metrics()
+                    .monovtx_pending
+                    .get_or_create(&vec![("period".to_string(), label.to_string())])
+                    .set(pending);
                 info!("Pending messages ({}): {}", label, pending);
             }
         }

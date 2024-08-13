@@ -1,17 +1,14 @@
 use chrono::Utc;
-use metrics::counter;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, trace};
 
 use crate::config::config;
 use crate::error::{Error, Result};
-use crate::metrics::{forward_metrics, MONO_VERTEX_NAME, REPLICA_LABEL, VERTEX_TYPE_LABEL};
+use crate::metrics::{forward_metrics, MONO_VERTEX_NAME, REPLICA_LABEL};
 use crate::sink::SinkClient;
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
-
-const MONO_VERTEX_TYPE: &str = "mono_vertex";
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
@@ -37,7 +34,6 @@ impl Forwarder {
                 MONO_VERTEX_NAME.to_string(),
                 config().mono_vertex_name.clone(),
             ),
-            (VERTEX_TYPE_LABEL.to_string(), MONO_VERTEX_TYPE.to_string()),
             (REPLICA_LABEL.to_string(), config().replica.to_string()),
         ];
 
