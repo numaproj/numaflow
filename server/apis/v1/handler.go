@@ -327,7 +327,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 	// since we still want to pass these empty namespaces to the frontend, we add them here.
 	for _, ns := range namespaces {
 		if _, ok := namespaceSummaryMap[ns]; !ok {
-			// if the namespace is not in the namespaceSummaryMap, it means it has neither pipeline nor isbsvc
+			// if the namespace is not in the namespaceSummaryMap, it means it has none of the pipelines, isbsvc, or mono vertex
 			// taking advantage of golang by default initializing the struct with zero value
 			namespaceSummaryMap[ns] = namespaceSummary{}
 		}
@@ -1069,6 +1069,41 @@ func (h *handler) GetMonoVertex(c *gin.Context) {
 
 	monoVertexResp := NewMonoVertexInfo(status, &lag, mvt)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, monoVertexResp))
+}
+
+// CreateMonoVertex is used to create a mono vertex
+func (h *handler) CreateMonoVertex(c *gin.Context) {
+	if h.opts.readonly {
+		errMsg := "Failed to perform this operation in read only mode"
+		c.JSON(http.StatusForbidden, NewNumaflowAPIResponse(&errMsg, nil))
+		return
+	}
+
+	ns := c.Param("namespace")
+	// dryRun is used to check if the operation is just a validation or an actual creation
+	dryRun := strings.EqualFold("true", c.DefaultQuery("dry-run", "false"))
+
+	var monoVertexSpec dfv1.MonoVertex
+	if err := bindJson(c, &monoVertexSpec); err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body to mono vertex spec, %s", err.Error()))
+		return
+	}
+
+	if requestedNs := monoVertexSpec.Namespace; !isValidNamespaceSpec(requestedNs, ns) {
+		h.respondWithError(c, fmt.Sprintf("namespace mismatch, expected %s, got %s", ns, requestedNs))
+		return
+	}
+	monoVertexSpec.Namespace = ns
+	// if the validation flag "dryRun" is set to true, return without creating the pipeline
+	if dryRun {
+		c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+		return
+	}
+	if _, err := h.numaflowClient.MonoVertices(ns).Create(context.Background(), &monoVertexSpec, metav1.CreateOptions{}); err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to create mono vertex %q, %s", monoVertexSpec.Name, err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
 
 // ListMonoVertexPods is used to provide all the pods of a mono vertex

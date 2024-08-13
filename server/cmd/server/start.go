@@ -203,5 +203,6 @@ func CreateAuthRouteMap(baseHref string) authz.RouteMap {
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices":                             authz.NewRouteInfo(authz.ObjectMonoVertex, true),
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex":                authz.NewRouteInfo(authz.ObjectMonoVertex, true),
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/pods":           authz.NewRouteInfo(authz.ObjectMonoVertex, true),
+		"POST:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices":                            authz.NewRouteInfo(authz.ObjectMonoVertex, true),
 	}
 }

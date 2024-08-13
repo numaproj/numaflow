@@ -159,6 +159,8 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex", handler.GetMonoVertex)
 	// Get all the pods of a mono vertex.
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/pods", handler.ListMonoVertexPods)
+	// Create a mono vertex.
+	r.POST("/namespaces/:namespace/mono-vertices", handler.CreateMonoVertex)
 }
 
 // authMiddleware is the middleware for AuthN/AuthZ.
