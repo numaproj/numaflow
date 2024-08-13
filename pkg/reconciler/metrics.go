@@ -59,8 +59,8 @@ var (
 		Help:      "A metric indicates the replicas of a Redis ISB Service",
 	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
 
-	// VertexDisiredReplicas indicates the desired replicas of a Vertex.
-	VertexDisiredReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	// VertexDesiredReplicas indicates the desired replicas of a Vertex.
+	VertexDesiredReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
 		Name:      "vertex_desired_replicas",
 		Help:      "A metric indicates the desired replicas of a Vertex",
@@ -75,5 +75,5 @@ var (
 )
 
 func init() {
-	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcHealth, PipelineHealth, JetStreamISBSvcReplicas, RedisISBSvcReplicas, VertexDisiredReplicas, VertexCurrentReplicas)
+	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcHealth, PipelineHealth, JetStreamISBSvcReplicas, RedisISBSvcReplicas, VertexDesiredReplicas, VertexCurrentReplicas)
 }

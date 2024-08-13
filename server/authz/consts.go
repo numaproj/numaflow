@@ -20,15 +20,16 @@ const (
 	// PolicyMapPath is the path to the policy map.
 	policyMapPath = "/etc/numaflow/rbac-policy.csv"
 
-	// rbacPropertiesPath is the path to the rbac properties file. It includes configuraion for authorization like
+	// rbacPropertiesPath is the path to the rbac properties file. It includes configuration for authorization like
 	// scope, default policy etc.
 	rbacPropertiesPath = "/etc/numaflow/rbac-conf.yaml"
 
 	// Objects for the RBAC policy
-	ObjectAll      = "*"
-	ObjectPipeline = "pipeline"
-	ObjectISBSvc   = "isbsvc"
-	ObjectEvents   = "events"
+	ObjectAll        = "*"
+	ObjectPipeline   = "pipeline"
+	ObjectMonoVertex = "mono-vertex"
+	ObjectISBSvc     = "isbsvc"
+	ObjectEvents     = "events"
 
 	// Resouces for the RBAC policy
 	ResourceAll       = "*"
