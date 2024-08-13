@@ -5,7 +5,7 @@ use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-
+use tracing::log::warn;
 use crate::config::config;
 use crate::error::{Error, Result};
 use crate::message::Offset;
@@ -117,7 +117,7 @@ impl Forwarder {
                             Ok(response) => {
                                 info!("Sink latency - {}ms", start_time.elapsed().as_millis());
 
-                                let failed_ids: Vec<String> = response.results.iter()
+                                 let failed_ids: Vec<String> = response.results.iter()
                                     .filter(|result| result.status != proto::Status::Success as i32)
                                     .map(|result| result.id.clone())
                                     .collect();
@@ -133,13 +133,12 @@ impl Forwarder {
                                 self.source_client.ack_fn(successful_offsets).await?;
                                 counter!(FORWARDER_WRITE_TOTAL, &self.common_labels).increment(n as u64);
                                 attempts += 1;
-
-                                if retry_messages.is_empty() {
+                                
+                                if failed_ids.is_empty() {
                                     break;
                                 } else {
-                                    retry_messages.retain(|msg| failed_ids.contains(&msg.id));
-
                                     // Collect error messages and their counts
+                                    retry_messages.retain(|msg| failed_ids.contains(&msg.id));
                                     error_map.clear();
                                     for result in response.results {
                                         if result.status != proto::Status::Success as i32 {
@@ -147,7 +146,7 @@ impl Forwarder {
                                         }
                                     }
 
-                                    info!("Retry attempt {} due to retryable error. Errors: {:?}", attempts, error_map);
+                                    warn!("Retry attempt {} due to retryable error. Errors: {:?}", attempts, error_map);
                                     sleep(tokio::time::Duration::from_millis(1)).await;
                                 }
                             }
@@ -155,7 +154,7 @@ impl Forwarder {
                         }
                     }
 
-                    if !retry_messages.is_empty() {
+                    if !error_map.is_empty() {
                         return Err(Error::SinkError(format!(
                             "Failed to sink messages after {} attempts. Errors: {:?}",
                             attempts, error_map
