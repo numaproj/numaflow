@@ -60,6 +60,8 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	var (
 		err error
 	)
+	// rater is used to calculate the processing rate for each of the vertices
+	rater := rateServer.NewRater(ctx, ds.monoVtx)
 
 	// Start listener
 	var conn net.Listener
@@ -76,7 +78,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	}
 
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12}
-	grpcServer, err := ds.newGRPCServer()
+	grpcServer, err := ds.newGRPCServer(rater)
 	if err != nil {
 		return fmt.Errorf("failed to create grpc server: %w", err)
 	}
@@ -91,9 +93,6 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	go func() { _ = grpcServer.Serve(grpcL) }()
 	go func() { _ = httpServer.Serve(httpL) }()
 	go func() { _ = tcpm.Serve() }()
-
-	// rater is used to calculate the processing rate for each of the vertices
-	rater := rateServer.NewRater(ctx, ds.monoVtx)
 
 	// Start the rater
 	go func() {
@@ -110,7 +109,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	return nil
 }
 
-func (ds *daemonServer) newGRPCServer() (*grpc.Server, error) {
+func (ds *daemonServer) newGRPCServer(rater rateServer.MonoVtxRatable) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is a bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
 	// To enable them please call the following in your server initialization code:"
@@ -124,7 +123,7 @@ func (ds *daemonServer) newGRPCServer() (*grpc.Server, error) {
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	mvtxService, err := service.NewMoveVertexService(ds.monoVtx)
+	mvtxService, err := service.NewMoveVertexService(ds.monoVtx, rater)
 	if err != nil {
 		return nil, err
 	}

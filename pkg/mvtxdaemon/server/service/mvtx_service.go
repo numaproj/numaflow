@@ -32,7 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
 	"github.com/numaproj/numaflow/pkg/metrics"
-	"github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
+	raterPkg "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -41,7 +41,7 @@ type MoveVertexService struct {
 	monoVtx    *v1alpha1.MonoVertex
 	httpClient *http.Client
 	// TODO: add rater
-	rater rater.MonoVtxRatable
+	rater raterPkg.MonoVtxRatable
 }
 
 var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MoveVertexService)(nil)
@@ -49,6 +49,7 @@ var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MoveVertexService)(nil)
 // NewMoveVertexService returns a new instance of MoveVertexService
 func NewMoveVertexService(
 	monoVtx *v1alpha1.MonoVertex,
+	rater raterPkg.MonoVtxRatable,
 ) (*MoveVertexService, error) {
 	mv := MoveVertexService{
 		monoVtx: monoVtx,
@@ -58,6 +59,7 @@ func NewMoveVertexService(
 			},
 			Timeout: time.Second * 3,
 		},
+		rater: rater,
 	}
 	return &mv, nil
 }
