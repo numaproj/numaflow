@@ -147,7 +147,7 @@ impl Forwarder {
                                     }
 
                                     warn!("Retry attempt {} due to retryable error. Errors: {:?}", attempts, error_map);
-                                    sleep(tokio::time::Duration::from_millis(1)).await;
+                                    sleep(tokio::time::Duration::from_millis(config().sink_retry_interval_in_ms as u64)).await;
                                 }
                             }
                             Err(e) => return Err(e),
