@@ -1,10 +1,11 @@
 use std::future::ready;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
+use axum::body::Body;
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
@@ -16,6 +17,15 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
 use tracing::{debug, error, info};
+
+use prometheus_client::encoding::text::encode;
+use prometheus_client::encoding::EncodeLabelSet;
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
+use prometheus_client::registry::Registry;
+use serde::{Deserialize, Serialize};
+use tower::load::pending_requests::Count;
 
 use crate::error::Error;
 use crate::sink::SinkClient;
@@ -29,16 +39,139 @@ pub const PARTITION_LABEL: &str = "partition_name";
 pub const VERTEX_TYPE_LABEL: &str = "vertex_type";
 
 // Define the metrics
-pub const FORWARDER_READ_TOTAL: &str = "forwarder_read_total";
-pub const FORWARDER_READ_BYTES_TOTAL: &str = "forwarder_read_bytes_total";
-pub const FORWARDER_ACK_TOTAL: &str = "forwarder_ack_total";
-pub const FORWARDER_WRITE_TOTAL: &str = "forwarder_write_total";
+pub const MONOVTX_READ_TOTAL: &str = "monovtx_read_total";
+pub const MONOVTX_READ_BYTES_TOTAL: &str = "monovtx_read_bytes_total";
+pub const MONOVTX_ACK_TOTAL: &str = "monovtx_ack_total";
+pub const MONOVTX_SINK_WRITE_TOTAL: &str = "monovtx_sink_write_total";
+pub const MONOVTX_PROCESSING_TIME: &str = "monovtx_processing_time";
 
 #[derive(Clone)]
 pub(crate) struct MetricsState {
     pub source_client: SourceClient,
     pub sink_client: SinkClient,
     pub transformer_client: Option<TransformerClient>,
+}
+
+/// The global register of all metrics.
+#[derive(Default)]
+pub struct GlobalRegistry {
+    // It is okay to use std mutex because we register each metric only one time.
+    pub registry: parking_lot::Mutex<Registry>,
+}
+
+impl GlobalRegistry {
+    fn new() -> Self {
+        GlobalRegistry {
+            // Create a new registry with labels
+            // Create a labels for the registry with trait labels: impl Iterator<Item = (Cow<'static, str>, Cow<'static, str>)>)
+            registry: parking_lot::Mutex::new(Registry::default()),
+        }
+    }
+}
+
+static GLOBAL_REGISTER: OnceLock<GlobalRegistry> = OnceLock::new();
+
+pub fn global_registry() -> &'static GlobalRegistry {
+    GLOBAL_REGISTER.get_or_init(GlobalRegistry::new)
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+pub(crate) struct Label {
+    vertex: String,
+    replica: String,
+    partition: String,
+    vertex_type: String,
+}
+
+impl Label {
+    // Create a new label from Strings
+    pub fn new(vertex: String, replica: String, partition: String, vertex_type: String) -> Self {
+        Label {
+            vertex,
+            replica,
+            partition,
+            vertex_type,
+        }
+    }
+}
+
+pub struct MonoVtxMetrics {
+    pub monovtx_read_total: Family<Vec<(String, String)>, Counter>,
+    pub monovtx_read_bytes_total: Family<Vec<(String, String)>, Counter>,
+    pub monovtx_ack_total: Family<Vec<(String, String)>, Counter>,
+    pub monovtx_sink_write_total: Family<Vec<(String, String)>, Counter>,
+    pub monovtx_processing_time: Family<Vec<(String, String)>, Histogram>,
+}
+
+impl MonoVtxMetrics {
+    fn new() -> Self {
+        let log_to_power_of_sqrt2_bins: [f64; 62] = (0..62)
+            .map(|i| 2_f64.sqrt().powf(i as f64))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        let monovtx_read_total = Family::<Vec<(String, String)>, Counter>::default();
+        let monovtx_ack_total = Family::<Vec<(String, String)>, Counter>::default();
+        let monovtx_read_bytes_total = Family::<Vec<(String, String)>, Counter>::default();
+        let monovtx_sink_write_total = Family::<Vec<(String, String)>, Counter>::default();
+        // TODO: use the log_to_power_of_sqrt2_bins? or use the default exponential buckets?
+        let monovtx_processing_time =
+            Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
+            });
+
+        let metrics = MonoVtxMetrics {
+            monovtx_read_total,
+            monovtx_read_bytes_total,
+            monovtx_ack_total,
+            monovtx_sink_write_total,
+            monovtx_processing_time,
+        };
+
+        let mut registry = global_registry().registry.lock();
+        registry.register(
+            MONOVTX_READ_TOTAL,
+            "A Counter to keep track of the total number of messages read from the source",
+            metrics.monovtx_read_total.clone(),
+        );
+        registry.register(
+            MONOVTX_SINK_WRITE_TOTAL,
+            "A Counter to keep track of the total number of messages written to the sink",
+            metrics.monovtx_sink_write_total.clone(),
+        );
+        registry.register(
+            MONOVTX_ACK_TOTAL,
+            "A Counter to keep track of the total number of messages acknowledged by the sink",
+            metrics.monovtx_ack_total.clone(),
+        );
+        registry.register(
+            MONOVTX_PROCESSING_TIME,
+            "A Histogram to keep track of the total time taken to forward a chunk, the time is in microseconds",
+            metrics.monovtx_processing_time.clone(),
+        );
+        metrics
+    }
+}
+
+static MONOVTX_METRICS: OnceLock<MonoVtxMetrics> = OnceLock::new();
+
+pub fn forward_metrics() -> &'static MonoVtxMetrics {
+    MONOVTX_METRICS.get_or_init(|| {
+        let metrics = MonoVtxMetrics::new();
+        metrics
+    })
+}
+
+pub async fn metrics_handler() -> impl IntoResponse {
+    let state = global_registry().registry.lock();
+    let mut buffer = String::new();
+    encode(&mut buffer, &*state).unwrap();
+    println!("Metrics: {:?}", buffer);
+    Response::builder()
+        .status(StatusCode::OK)
+        .body(Body::from(buffer))
+        .unwrap()
 }
 
 /// Collect and emit prometheus metrics.
@@ -108,7 +241,9 @@ pub(crate) async fn start_metrics_https_server(
 /// router for metrics and k8s health endpoints
 fn metrics_router(recorder_handle: PrometheusHandle, metrics_state: MetricsState) -> Router {
     let metrics_app = Router::new()
-        .route("/metrics", get(move || ready(recorder_handle.render())))
+        // TODO(MonoVtx) : check if metric collection is c
+        // .route("/metrics", get(move || metrics_handler())
+        .route("/metrics", get(metrics_handler))
         .route("/livez", get(livez))
         .route("/readyz", get(readyz))
         .route("/sidecar-livez", get(sidecar_livez))
@@ -160,19 +295,19 @@ fn setup_metrics_recorder() -> crate::Result<PrometheusHandle> {
 
     // Define forwarder metrics
     describe_counter!(
-        FORWARDER_READ_TOTAL,
+        MONOVTX_READ_TOTAL,
         "Total number of Data Messages Read in the forwarder"
     );
     describe_counter!(
-        FORWARDER_READ_BYTES_TOTAL,
+        MONOVTX_READ_BYTES_TOTAL,
         "Total number of bytes read in the forwarder"
     );
     describe_counter!(
-        FORWARDER_ACK_TOTAL,
+        MONOVTX_ACK_TOTAL,
         "Total number of acknowledgments by the forwarder"
     );
     describe_counter!(
-        FORWARDER_WRITE_TOTAL,
+        MONOVTX_SINK_WRITE_TOTAL,
         "Total number of Data Messages written by the forwarder"
     );
 

@@ -6,10 +6,7 @@ use tracing::{info, trace};
 
 use crate::config::config;
 use crate::error::{Error, Result};
-use crate::metrics::{
-    FORWARDER_ACK_TOTAL, FORWARDER_READ_BYTES_TOTAL, FORWARDER_READ_TOTAL, FORWARDER_WRITE_TOTAL,
-    MONO_VERTEX_NAME, PARTITION_LABEL, REPLICA_LABEL, VERTEX_TYPE_LABEL,
-};
+use crate::metrics::{forward_metrics, MONO_VERTEX_NAME, REPLICA_LABEL, VERTEX_TYPE_LABEL};
 use crate::sink::SinkClient;
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
@@ -42,7 +39,6 @@ impl Forwarder {
             ),
             (VERTEX_TYPE_LABEL.to_string(), MONO_VERTEX_TYPE.to_string()),
             (REPLICA_LABEL.to_string(), config().replica.to_string()),
-            (PARTITION_LABEL.to_string(), "0".to_string()),
         ];
 
         Ok(Self {
@@ -74,10 +70,11 @@ impl Forwarder {
                     let messages = result?;
                     info!("Read batch size: {} and latency - {}ms", messages.len(), start_time.elapsed().as_millis());
 
+                    let msg_count = messages.len() as u64;
                     messages_count += messages.len() as u64;
                     let bytes_count = messages.iter().map(|msg| msg.value.len() as u64).sum::<u64>();
-                    counter!(FORWARDER_READ_TOTAL, &self.common_labels).increment(messages_count);
-                    counter!(FORWARDER_READ_BYTES_TOTAL, &self.common_labels).increment(bytes_count);
+                    forward_metrics().monovtx_read_total.get_or_create(&self.common_labels).inc_by(msg_count);
+                    forward_metrics().monovtx_read_bytes_total.get_or_create(&self.common_labels).inc_by(bytes_count);
 
                     // Extract offsets from the messages
                     let offsets = messages.iter().map(|message| message.offset.clone()).collect();
@@ -102,6 +99,7 @@ impl Forwarder {
                         messages
                     };
 
+                    let transformed_msg_count = transformed_messages.len() as u64;
                     // Write messages to the sink
                     // TODO: should we retry writing? what if the error is transient?
                     //    we could rely on gRPC retries and say that any error that is bubbled up is worthy of non-0 exit.
@@ -109,7 +107,7 @@ impl Forwarder {
                     let start_time = tokio::time::Instant::now();
                     self.sink_client.sink_fn(transformed_messages).await?;
                     info!("Sink latency - {}ms", start_time.elapsed().as_millis());
-                    counter!(FORWARDER_WRITE_TOTAL, &self.common_labels).increment(messages_count);
+                    forward_metrics().monovtx_sink_write_total.get_or_create(&self.common_labels).inc_by(transformed_msg_count);
 
                     // Acknowledge the messages
                     // TODO: should we retry acking? what if the error is transient?
@@ -119,7 +117,8 @@ impl Forwarder {
                     self.source_client.ack_fn(offsets).await?;
                     info!("Ack latency - {}ms", start_time.elapsed().as_millis());
 
-                    counter!(FORWARDER_ACK_TOTAL, &self.common_labels).increment(messages_count);
+                    // increment the acked messages count metric
+                    forward_metrics().monovtx_ack_total.get_or_create(&self.common_labels).inc_by(msg_count);
                     trace!("Forwarded {} messages", messages_count);
                 }
             }
@@ -133,6 +132,10 @@ impl Forwarder {
                 messages_count = 0;
                 last_forwarded_at = std::time::Instant::now();
             }
+            forward_metrics()
+                .monovtx_processing_time
+                .get_or_create(&self.common_labels)
+                .observe(start_time.elapsed().as_micros() as f64);
         }
         Ok(())
     }
