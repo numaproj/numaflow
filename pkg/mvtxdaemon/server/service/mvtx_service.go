@@ -36,6 +36,8 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
+// MonoVtxPendingMetric is the metric emitted from the MonoVtx lag reader for pending stats
+// Note: Please keep consistent with the definitions in rust/monovertex/sc/metrics.rs
 const MonoVtxPendingMetric = "monovtx_pending"
 
 type MoveVertexService struct {

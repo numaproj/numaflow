@@ -31,7 +31,7 @@ const (
 	LabelVertexReplicaIndex = "replica"
 	LabelVertexType         = "vertex_type"
 	LabelPartitionName      = "partition_name"
-	LabelMonoVertex         = "mvtx"
+	LabelMonoVertexName     = "mvtx_name"
 
 	LabelReason = "reason"
 )
