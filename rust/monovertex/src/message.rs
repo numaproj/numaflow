@@ -65,7 +65,7 @@ impl TryFrom<read_response::Result> for Message {
         Ok(Message {
             keys: result.keys,
             value: result.payload,
-            offset: source_offset,
+            offset: source_offset.clone(),
             event_time: utc_from_timestamp(result.event_time),
             id: format!("{}-{}", source_offset.partition_id, source_offset.offset),
             headers: result.headers,

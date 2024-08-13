@@ -153,6 +153,7 @@ mod tests {
                 offset: "0".into(),
             },
             event_time: chrono::Utc::now(),
+            id: "".to_string(),
             headers: Default::default(),
         };
 
