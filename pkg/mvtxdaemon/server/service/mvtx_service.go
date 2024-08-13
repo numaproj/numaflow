@@ -79,11 +79,12 @@ func (mvs *MoveVertexService) getPending(ctx context.Context) map[string]*wrappe
 	log := logging.FromContext(ctx)
 	headlessServiceName := mvs.monoVtx.GetHeadlessServiceName()
 	pendingMap := make(map[string]*wrapperspb.Int64Value)
+	monovtxPendingMetric := "monovtx_pending"
 
 	// Get the headless service name
 	// We can query the metrics endpoint of the (i)th pod to obtain this value.
 	// example for 0th pod : https://simple-mono-vertex-mv-0.simple-mono-vertex-mv-headless:2469/metrics
-	url := fmt.Sprintf("https://%s-mv-1.%s.%s.svc:%v/metrics", mvs.monoVtx.Name, headlessServiceName, mvs.monoVtx.Namespace, v1alpha1.MonoVertexMetricsPort)
+	url := fmt.Sprintf("https://%s-mv-0.%s.%s.svc:%v/metrics", mvs.monoVtx.Name, headlessServiceName, mvs.monoVtx.Namespace, v1alpha1.MonoVertexMetricsPort)
 	if res, err := mvs.httpClient.Get(url); err != nil {
 		log.Debugf("Error reading the metrics endpoint, it might be because of mono vertex scaling down to 0: %f", err.Error())
 		return nil
@@ -97,7 +98,7 @@ func (mvs *MoveVertexService) getPending(ctx context.Context) map[string]*wrappe
 		}
 
 		// Get the pending messages
-		if value, ok := result["TODO:metric-name"]; ok { // TODO: metric name
+		if value, ok := result[monovtxPendingMetric]; ok {
 			metricsList := value.GetMetric()
 			for _, metric := range metricsList {
 				labels := metric.GetLabel()
@@ -108,7 +109,7 @@ func (mvs *MoveVertexService) getPending(ctx context.Context) map[string]*wrappe
 						break
 					}
 				}
-				pendingMap[lookback] = wrapperspb.Int64(int64(metric.Gauge.GetValue()))
+				pendingMap[lookback] = wrapperspb.Int64(int64(metric.Untyped.GetValue()))
 			}
 		}
 	}
