@@ -109,7 +109,7 @@ func (mvs *MoveVertexService) getPending(ctx context.Context) map[string]*wrappe
 						break
 					}
 				}
-				pendingMap[lookback] = wrapperspb.Int64(int64(metric.Untyped.GetValue()))
+				pendingMap[lookback] = wrapperspb.Int64(int64(metric.Gauge.GetValue()))
 			}
 		}
 	}

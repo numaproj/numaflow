@@ -31,7 +31,7 @@ use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
 
 // Define the labels for the metrics
-pub const MONO_VERTEX_NAME: &str = "mono-vertex";
+pub const MONO_VERTEX_NAME: &str = "mono_vertex_name";
 pub const REPLICA_LABEL: &str = "replica";
 
 // Define the metrics
