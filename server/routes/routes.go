@@ -115,9 +115,9 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/cluster-summary", handler.GetClusterSummary)
 	// Create a Pipeline.
 	r.POST("/namespaces/:namespace/pipelines", handler.CreatePipeline)
-	// All pipelines for a given namespace.
+	// List all pipelines for a given namespace.
 	r.GET("/namespaces/:namespace/pipelines", handler.ListPipelines)
-	// Get a Pipeline information.
+	// Get the pipeline information.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline", handler.GetPipeline)
 	// Get a Pipeline health information.
 	r.GET("/namespaces/:namespace/pipelines/:pipeline/health", handler.GetPipelineStatus)
@@ -153,6 +153,14 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// List of the Kubernetes events of a namespace.
 	r.GET("/namespaces/:namespace/events", handler.GetNamespaceEvents)
+	// List all mono vertices for a given namespace.
+	r.GET("/namespaces/:namespace/mono-vertices", handler.ListMonoVertices)
+	// Get the mono vertex information.
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex", handler.GetMonoVertex)
+	// Get all the pods of a mono vertex.
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/pods", handler.ListMonoVertexPods)
+	// Create a mono vertex.
+	r.POST("/namespaces/:namespace/mono-vertices", handler.CreateMonoVertex)
 }
 
 // authMiddleware is the middleware for AuthN/AuthZ.
