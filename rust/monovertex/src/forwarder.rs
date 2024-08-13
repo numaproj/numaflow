@@ -6,11 +6,12 @@ use tracing::{info, trace};
 
 use crate::config::config;
 use crate::error::{Error, Result};
+use crate::message::Offset;
 use crate::metrics::{
     FORWARDER_ACK_TOTAL, FORWARDER_READ_BYTES_TOTAL, FORWARDER_READ_TOTAL, FORWARDER_WRITE_TOTAL,
     MONO_VERTEX_NAME, PARTITION_LABEL, REPLICA_LABEL, VERTEX_TYPE_LABEL,
 };
-use crate::sink::SinkClient;
+use crate::sink::{proto, SinkClient};
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
 
@@ -79,8 +80,6 @@ impl Forwarder {
                     counter!(FORWARDER_READ_TOTAL, &self.common_labels).increment(messages_count);
                     counter!(FORWARDER_READ_BYTES_TOTAL, &self.common_labels).increment(bytes_count);
 
-                    // Extract offsets from the messages
-                    let offsets = messages.iter().map(|message| message.offset.clone()).collect();
                     // Apply transformation if transformer is present
                     let transformed_messages = if let Some(transformer_client) = &self.transformer_client {
                         let start_time = tokio::time::Instant::now();
@@ -106,18 +105,45 @@ impl Forwarder {
                     // TODO: should we retry writing? what if the error is transient?
                     //    we could rely on gRPC retries and say that any error that is bubbled up is worthy of non-0 exit.
                     //    we need to confirm this via FMEA tests.
-                    let start_time = tokio::time::Instant::now();
-                    self.sink_client.sink_fn(transformed_messages).await?;
-                    info!("Sink latency - {}ms", start_time.elapsed().as_millis());
-                    counter!(FORWARDER_WRITE_TOTAL, &self.common_labels).increment(messages_count);
+                    let mut retry_messages = transformed_messages;
+                    let mut retry_attempts = 0;
 
-                    // Acknowledge the messages
-                    // TODO: should we retry acking? what if the error is transient?
-                    //    we could rely on gRPC retries and say that any error that is bubbled up is worthy of non-0 exit.
-                    //    we need to confirm this via FMEA tests.
-                    let start_time = tokio::time::Instant::now();
-                    self.source_client.ack_fn(offsets).await?;
-                    info!("Ack latency - {}ms", start_time.elapsed().as_millis());
+                    while retry_attempts < 10 {
+                        let start_time = tokio::time::Instant::now();
+                        match self.sink_client.sink_fn(retry_messages.clone()).await {
+                            Ok(response) => {
+                                info!("Sink latency - {}ms", start_time.elapsed().as_millis());
+
+                                let failed_ids: Vec<String> = response.results.iter()
+                                    .filter(|result| result.status != proto::Status::Success as i32)
+                                    .map(|result| result.id)
+                                    .collect();
+
+                                let successful_offsets: Vec<Offset> = retry_messages.iter()
+                                    .filter(|msg| !failed_ids.contains(&msg.id))
+                                    .map(|msg| msg.offset)
+                                    .collect();
+
+                                retry_messages.retain(|msg| failed_ids.contains(&msg.id));
+
+                                // ack the successful offsets
+                                let n = successful_offsets.len();
+                                self.source_client.ack_fn(successful_offsets).await?;
+                                counter!(FORWARDER_WRITE_TOTAL, &self.common_labels).increment(n as u64);
+
+                                if retry_messages.is_empty() {
+                                    break;
+                                } else {
+                                    retry_attempts += 1;
+                                    if retry_attempts >= 10 {
+                                        return Err(Error::SinkError("Max retry attempts reached".into()));
+                                    }
+                                    info!("Retry attempt {} due to retryable error", retry_attempts);
+                                }
+                            }
+                            Err(e) => return Err(e),
+                        }
+                    }
 
                     counter!(FORWARDER_ACK_TOTAL, &self.common_labels).increment(messages_count);
                     trace!("Forwarded {} messages", messages_count);

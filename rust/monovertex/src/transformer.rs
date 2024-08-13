@@ -61,6 +61,7 @@ impl TransformerClient {
     pub(crate) async fn transform_fn(&mut self, message: Message) -> Result<Vec<Message>> {
         // fields which will not be changed
         let offset = message.offset.clone();
+        let id = message.id.clone();
         let headers = message.headers.clone();
 
         // TODO: is this complex? the reason to do this is, tomorrow when we have the normal
@@ -77,6 +78,7 @@ impl TransformerClient {
                 keys: result.keys,
                 value: result.value,
                 offset: offset.clone(),
+                id: id.clone(),
                 event_time: utc_from_timestamp(result.event_time),
                 headers: headers.clone(),
             };

@@ -71,7 +71,6 @@ impl SinkClient {
             }
         });
 
-        // TODO: retry for response with failure status
         let response = self
             .client
             .sink_fn(tokio_stream::wrappers::ReceiverStream::new(rx))

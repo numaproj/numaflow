@@ -75,7 +75,7 @@ pub async fn mono_vertex() {
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
     // wait for SIG{INT,TERM} and invoke cancellation token.
-    let shutdown_handle: JoinHandle<crate::error::Result<()>> = tokio::spawn(async move {
+    let shutdown_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
         shutdown_signal().await;
         shutdown_cln_token.cancel();
         Ok(())
