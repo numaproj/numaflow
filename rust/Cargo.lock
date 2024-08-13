@@ -1572,8 +1572,6 @@ dependencies = [
  "bytes",
  "chrono",
  "hyper-util",
- "metrics",
- "metrics-exporter-prometheus",
  "numaflow 0.1.0 (git+https://github.com/numaproj/numaflow-rs.git?branch=main)",
  "numaflow-models",
  "once_cell",

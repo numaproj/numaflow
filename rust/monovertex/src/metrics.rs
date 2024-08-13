@@ -8,7 +8,6 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
-use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::Mutex;
@@ -224,7 +223,7 @@ pub(crate) async fn start_metrics_https_server(
 
 /// router for metrics and k8s health endpoints
 fn metrics_router(metrics_state: MetricsState) -> Router {
-    let metrics_app = Router::new()
+    Router::new()
         .route("/metrics", get(metrics_handler))
         .route("/livez", get(livez))
         .route("/readyz", get(readyz))

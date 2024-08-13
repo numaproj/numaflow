@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, trace};
 use tracing::log::warn;
 
 use crate::config::config;
@@ -99,15 +99,12 @@ impl Forwarder {
                     };
 
                     let transformed_msg_count = transformed_messages.len() as u64;
+                    forward_metrics().monovtx_sink_write_total.get_or_create(&self.common_labels).inc_by(transformed_msg_count);
+
                     // Write messages to the sink
                     // TODO: should we retry writing? what if the error is transient?
                     //    we could rely on gRPC retries and say that any error that is bubbled up is worthy of non-0 exit.
                     //    we need to confirm this via FMEA tests.
-
-                    let start_time = tokio::time::Instant::now();
-                    self.sink_client.sink_fn(transformed_messages).await?;
-                    info!("Sink latency - {}ms", start_time.elapsed().as_millis());
-                    forward_metrics().monovtx_sink_write_total.get_or_create(&self.common_labels).inc_by(transformed_msg_count);
 
                     let mut retry_messages = transformed_messages;
                     let mut attempts = 0;
@@ -131,9 +128,7 @@ impl Forwarder {
 
 
                                 // ack the successful offsets
-                                let n = successful_offsets.len();
                                 self.source_client.ack_fn(successful_offsets).await?;
-                                counter!(FORWARDER_WRITE_TOTAL, &self.common_labels).increment(n as u64);
                                 attempts += 1;
                                 
                                 if failed_ids.is_empty() {
