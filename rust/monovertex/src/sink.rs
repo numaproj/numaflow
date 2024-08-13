@@ -71,7 +71,6 @@ impl SinkClient {
             }
         });
 
-        // TODO: retry for response with failure status
         let response = self
             .client
             .sink_fn(tokio_stream::wrappers::ReceiverStream::new(rx))
@@ -159,6 +158,7 @@ mod tests {
                 },
                 event_time: Utc::now(),
                 headers: Default::default(),
+                id: "one".to_string(),
             },
             Message {
                 keys: vec![],
@@ -169,6 +169,7 @@ mod tests {
                 },
                 event_time: Utc::now(),
                 headers: Default::default(),
+                id: "two".to_string(),
             },
         ];
 

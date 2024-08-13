@@ -228,6 +228,10 @@ const (
 	PipelineStatusDeleting  = "deleting"
 	PipelineStatusUnhealthy = "unhealthy"
 
+	// MonoVertex health status
+	// TODO - more statuses to be added
+	MonoVertexStatusHealthy = "healthy"
+
 	// Callback annotation keys
 	CallbackEnabledKey = "numaflow.numaproj.io/callback"
 	CallbackURLKey     = "numaflow.numaproj.io/callback-url"

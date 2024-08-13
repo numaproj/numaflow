@@ -2,7 +2,7 @@ pub(crate) use self::error::Result;
 use crate::config::config;
 pub(crate) use crate::error::Error;
 use crate::forwarder::Forwarder;
-use crate::metrics::{start_metrics_https_server, MetricsState};
+use crate::metrics::{start_metrics_https_server, MetricsState, LagReaderBuilder};
 use crate::sink::{SinkClient, SinkConfig};
 use crate::source::{SourceClient, SourceConfig};
 use crate::transformer::{TransformerClient, TransformerConfig};
@@ -75,7 +75,7 @@ pub async fn mono_vertex() {
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
     // wait for SIG{INT,TERM} and invoke cancellation token.
-    let shutdown_handle: JoinHandle<crate::error::Result<()>> = tokio::spawn(async move {
+    let shutdown_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
         shutdown_signal().await;
         shutdown_cln_token.cancel();
         Ok(())
@@ -181,10 +181,12 @@ pub async fn init(
     });
 
     // start the lag reader to publish lag metrics
-    let mut lag_reader = metrics::LagReader::new(source_client.clone(), None, None);
+    let mut lag_reader = LagReaderBuilder::new(source_client.clone())
+        .lag_checking_interval(Duration::from_secs(config().lag_check_interval_in_secs.into()))
+        .refresh_interval(Duration::from_secs(config().lag_refresh_interval_in_secs.into()))
+        .build();
     lag_reader.start().await;
 
-    // TODO: use builder pattern of options like TIMEOUT, BATCH_SIZE, etc?
     let mut forwarder =
         Forwarder::new(source_client, sink_client, transformer_client, cln_token).await?;
 

@@ -141,4 +141,34 @@ var (
     }
 }
 `)
+	testMonoVertex1Name = "test-mono-vertex-1"
+	testMonoVertex1     = []byte(`
+{
+    "apiVersion": "numaflow.numaproj.io/v1alpha1",
+	"kind": "MonoVertex",
+	"metadata": {
+	  "name": "test-mono-vertex-1"
+	},
+	"spec": {
+	  "source": {
+		"udsource": {
+		  "container": {
+			"image": "quay.io/numaio/numaflow-java/source-simple-source:stable"
+		  }
+		},
+		"transformer": {
+		  "container": {
+			"image": "quay.io/numaio/numaflow-rs/source-transformer-now:stable"
+		  }
+		}
+      },
+	  "sink": {
+		"udsink": {
+		  "container": {
+			"image": "quay.io/numaio/numaflow-java/simple-sink:stable"
+		  }
+		}
+	  }
+	}
+}`)
 )

@@ -229,9 +229,7 @@ fn metrics_router(metrics_state: MetricsState) -> Router {
         .route("/livez", get(livez))
         .route("/readyz", get(readyz))
         .route("/sidecar-livez", get(sidecar_livez))
-        .with_state(metrics_state);
-
-    metrics_app
+        .with_state(metrics_state)
 }
 
 async fn livez() -> impl IntoResponse {
@@ -277,23 +275,46 @@ pub(crate) struct LagReader {
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 }
 
-impl LagReader {
-    /// Creates a new `LagReader` instance.
-    pub(crate) fn new(
-        source_client: SourceClient,
-        lag_checking_interval: Option<Duration>,
-        refresh_interval: Option<Duration>,
-    ) -> Self {
+
+/// LagReaderBuilder is used to build a `LagReader` instance.
+pub(crate) struct LagReaderBuilder {
+    source_client: SourceClient,
+    lag_checking_interval: Option<Duration>,
+    refresh_interval: Option<Duration>,
+}
+
+impl LagReaderBuilder {
+    pub(crate) fn new(source_client: SourceClient) -> Self {
         Self {
             source_client,
-            lag_checking_interval: lag_checking_interval.unwrap_or_else(|| Duration::from_secs(3)),
-            refresh_interval: refresh_interval.unwrap_or_else(|| Duration::from_secs(5)),
+            lag_checking_interval: None,
+            refresh_interval: None,
+        }
+    }
+
+    pub(crate) fn lag_checking_interval(mut self, interval: Duration) -> Self {
+        self.lag_checking_interval = Some(interval);
+        self
+    }
+
+    pub(crate) fn refresh_interval(mut self, interval: Duration) -> Self {
+        self.refresh_interval = Some(interval);
+        self
+    }
+
+    pub(crate) fn build(self) -> LagReader {
+        LagReader {
+            source_client: self.source_client,
+            lag_checking_interval: self.lag_checking_interval.unwrap_or_else(|| Duration::from_secs(3)),
+            refresh_interval: self.refresh_interval.unwrap_or_else(|| Duration::from_secs(5)),
             buildup_handle: None,
             expose_handle: None,
             pending_stats: Arc::new(Mutex::new(Vec::with_capacity(MAX_PENDING_STATS))),
         }
     }
+}
 
+impl LagReader {
     /// Starts the lag reader by spawning tasks to build up pending info and expose pending metrics.
     ///
     /// This method spawns two asynchronous tasks:
@@ -367,7 +388,7 @@ async fn expose_pending_metrics(
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
     let mut ticker = time::interval(refresh_interval);
-    let lookback_seconds_map = vec![("1m", 60), ("5m", 300), ("15m", 900)];
+    let lookback_seconds_map = vec![("1m", 60), ("default", 120), ("5m", 300), ("15m", 900)];
     loop {
         ticker.tick().await;
         for (label, seconds) in &lookback_seconds_map {
