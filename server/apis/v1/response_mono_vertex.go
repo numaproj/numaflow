@@ -18,25 +18,25 @@ package v1
 
 import "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 
-// Pipelines is a list of pipelines
-type Pipelines []PipelineInfo
+// MonoVertices is a list of mono vertices
+type MonoVertices []MonoVertexInfo
 
-type PipelineInfo struct {
+type MonoVertexInfo struct {
 	Name string `json:"name"`
-	// Status shows whether the pipeline is healthy, warning, critical or inactive.
+	// Status shows whether the mono vertex is healthy, warning, critical or inactive.
 	Status string `json:"status"`
-	// Lag shows the pipeline lag.
+	// Lag shows the mono vertex lag.
 	Lag *int64 `json:"lag,omitempty"`
-	// Pipeline contains the detailed pipeline spec.
-	Pipeline v1alpha1.Pipeline `json:"pipeline"`
+	// MonoVertex contains the detailed mono vertex spec.
+	MonoVertex v1alpha1.MonoVertex `json:"monoVertex"`
 }
 
-// NewPipelineInfo creates a new PipelineInfo object with the given status and lag
-func NewPipelineInfo(status string, lag *int64, pl *v1alpha1.Pipeline) PipelineInfo {
-	return PipelineInfo{
-		Name:     pl.Name,
-		Status:   status,
-		Lag:      lag,
-		Pipeline: *pl,
+// NewMonoVertexInfo creates a new MonoVertexInfo object with the given status and lag
+func NewMonoVertexInfo(status string, lag *int64, mvt *v1alpha1.MonoVertex) MonoVertexInfo {
+	return MonoVertexInfo{
+		Name:       mvt.Name,
+		Status:     status,
+		Lag:        lag,
+		MonoVertex: *mvt,
 	}
 }
