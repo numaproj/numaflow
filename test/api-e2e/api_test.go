@@ -123,6 +123,7 @@ func (s *APISuite) TestISBSVCReplica1() {
 }
 
 func (s *APISuite) TestPipeline0() {
+	// TODO - fix e2e test with mono vertx summary included.
 	defer s.Given().When().UXServerPodPortForward(8145, 8443).TerminateAllPodPortForwards()
 
 	namespaceBody := HTTPExpect(s.T(), "https://localhost:8145").GET("/api/v1/namespaces").
