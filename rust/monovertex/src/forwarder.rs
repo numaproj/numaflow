@@ -66,6 +66,7 @@ impl Forwarder {
                     let messages = result?;
                     info!("Read batch size: {} and latency - {}ms", messages.len(), start_time.elapsed().as_millis());
 
+                    // emit metrics
                     let msg_count = messages.len() as u64;
                     messages_count += messages.len() as u64;
                     let bytes_count = messages.iter().map(|msg| msg.value.len() as u64).sum::<u64>();

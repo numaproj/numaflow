@@ -73,10 +73,11 @@ impl GlobalRegistry {
 
 static GLOBAL_REGISTER: OnceLock<GlobalRegistry> = OnceLock::new();
 
-pub fn global_registry() -> &'static GlobalRegistry {
+fn global_registry() -> &'static GlobalRegistry {
     GLOBAL_REGISTER.get_or_init(GlobalRegistry::new)
 }
 
+// TODO: let's do sub-registry for forwarder so tomorrow we can add sink and source metrics.
 pub struct MonoVtxMetrics {
     pub monovtx_read_total: Family<Vec<(String, String)>, Counter>,
     pub monovtx_read_bytes_total: Family<Vec<(String, String)>, Counter>,
@@ -88,24 +89,18 @@ pub struct MonoVtxMetrics {
 
 impl MonoVtxMetrics {
     fn new() -> Self {
-        let log_to_power_of_sqrt2_bins: [f64; 62] = (0..62)
-            .map(|i| 2_f64.sqrt().powf(i as f64))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
         let monovtx_read_total = Family::<Vec<(String, String)>, Counter>::default();
         let monovtx_ack_total = Family::<Vec<(String, String)>, Counter>::default();
         let monovtx_read_bytes_total = Family::<Vec<(String, String)>, Counter>::default();
         let monovtx_sink_write_total = Family::<Vec<(String, String)>, Counter>::default();
-        // TODO: use the log_to_power_of_sqrt2_bins? or use the default exponential buckets?
+
         let monovtx_processing_time =
             Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
             });
         let monovtx_pending = Family::<Vec<(String, String)>, Gauge>::default();
 
-        let metrics = MonoVtxMetrics {
+        let metrics = Self {
             monovtx_read_total,
             monovtx_read_bytes_total,
             monovtx_ack_total,
@@ -145,13 +140,14 @@ impl MonoVtxMetrics {
             "A Gauge to keep track of the total number of pending messages for the monovtx",
             metrics.monovtx_pending.clone(),
         );
+
         metrics
     }
 }
 
 static MONOVTX_METRICS: OnceLock<MonoVtxMetrics> = OnceLock::new();
 
-pub fn forward_metrics() -> &'static MonoVtxMetrics {
+pub(crate) fn forward_metrics() -> &'static MonoVtxMetrics {
     MONOVTX_METRICS.get_or_init(|| {
         let metrics = MonoVtxMetrics::new();
         metrics
@@ -182,11 +178,7 @@ pub(crate) async fn start_metrics_http_server<A>(
 where
     A: ToSocketAddrs + std::fmt::Debug,
 {
-    // setup_metrics_recorder should only be invoked once
-    let recorder_handle = setup_metrics_recorder()?;
-
     let metrics_app = metrics_router(
-        recorder_handle,
         MetricsState {
             source_client,
             sink_client,
@@ -220,10 +212,7 @@ pub(crate) async fn start_metrics_https_server(
         .await
         .map_err(|e| Error::MetricsError(format!("Creating tlsConfig from pem: {}", e)))?;
 
-    // setup_metrics_recorder should only be invoked once
-    let recorder_handle = setup_metrics_recorder()?;
-
-    let metrics_app = metrics_router(recorder_handle, metrics_state);
+    let metrics_app = metrics_router(metrics_state);
 
     axum_server::bind_rustls(addr, tls_config)
         .serve(metrics_app.into_make_service())
@@ -234,10 +223,8 @@ pub(crate) async fn start_metrics_https_server(
 }
 
 /// router for metrics and k8s health endpoints
-fn metrics_router(recorder_handle: PrometheusHandle, metrics_state: MetricsState) -> Router {
+fn metrics_router(metrics_state: MetricsState) -> Router {
     let metrics_app = Router::new()
-        // TODO(MonoVtx) : check if metric collection is c
-        // .route("/metrics", get(move || metrics_handler())
         .route("/metrics", get(metrics_handler))
         .route("/livez", get(livez))
         .route("/readyz", get(readyz))
@@ -268,27 +255,6 @@ async fn sidecar_livez(State(mut state): State<MetricsState>) -> impl IntoRespon
         }
     }
     StatusCode::NO_CONTENT
-}
-
-/// setup the Prometheus metrics recorder.
-fn setup_metrics_recorder() -> crate::Result<PrometheusHandle> {
-    // 1 micro-sec < t < 1000 seconds
-    let log_to_power_of_sqrt2_bins: [f64; 62] = (0..62)
-        .map(|i| 2_f64.sqrt().powf(i as f64))
-        .collect::<Vec<_>>()
-        .try_into()
-        .unwrap();
-
-    let prometheus_handle = PrometheusBuilder::new()
-        .set_buckets_for_metric(
-            Matcher::Full("fac_total_duration_micros".to_string()), // fac == forward-a-chunk
-            &log_to_power_of_sqrt2_bins,
-        )
-        .map_err(|e| Error::MetricsError(format!("Prometheus install_recorder: {}", e)))?
-        .install_recorder()
-        .map_err(|e| Error::MetricsError(format!("Prometheus install_recorder: {}", e)))?;
-
-    Ok(prometheus_handle)
 }
 
 const MAX_PENDING_STATS: usize = 1800;
