@@ -65,8 +65,8 @@ type MonoVertexSummary struct {
 	Inactive int          `json:"inactive"`
 }
 
-func (ps *MonoVertexSummary) hasMonoVertex() bool {
-	return ps.Inactive > 0 || !ps.Active.isEmpty()
+func (mvs *MonoVertexSummary) hasMonoVertex() bool {
+	return mvs.Inactive > 0 || !mvs.Active.isEmpty()
 }
 
 // ClusterSummaryResponse is a list of NamespaceSummary

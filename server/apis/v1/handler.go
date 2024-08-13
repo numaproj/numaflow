@@ -1156,7 +1156,7 @@ func getMonoVertices(h *handler, namespace string) (MonoVertices, error) {
 		if err != nil {
 			return nil, err
 		}
-		// NOTE: we only calculate mono vertex lag for get single pipeline API
+		// NOTE: we only calculate mono vertex lag for get single mono vertex API
 		// to avoid massive gRPC calls
 		resp := NewMonoVertexInfo(status, nil, &mvt)
 		resList = append(resList, resp)
