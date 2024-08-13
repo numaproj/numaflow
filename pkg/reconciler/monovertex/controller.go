@@ -95,7 +95,7 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 		mr.scaler.StopWatching(mVtxKey)
 		// Clean up metrics
 		_ = reconciler.MonoVertexHealth.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
-		_ = reconciler.MonoVertexDisiredReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
+		_ = reconciler.MonoVertexDesiredReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
 		_ = reconciler.MonoVertexCurrentReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
 		return ctrl.Result{}, nil
 	}
@@ -157,7 +157,7 @@ func (mr *monoVertexReconciler) reconcilePods(ctx context.Context, monoVtx *dfv1
 	desiredReplicas := monoVtx.GetReplicas()
 	// Set metrics
 	defer func() {
-		reconciler.MonoVertexDisiredReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(desiredReplicas))
+		reconciler.MonoVertexDesiredReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(desiredReplicas))
 		reconciler.MonoVertexCurrentReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(monoVtx.Status.Replicas))
 	}()
 

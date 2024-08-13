@@ -79,8 +79,8 @@ var (
 		Help:      "A metric indicates the current replicas of a Vertex",
 	}, []string{metrics.LabelNamespace, metrics.LabelPipeline, metrics.LabelVertex})
 
-	// MonoVertexDisiredReplicas indicates the desired replicas of a MonoVertex.
-	MonoVertexDisiredReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	// MonoVertexDesiredReplicas indicates the desired replicas of a MonoVertex.
+	MonoVertexDesiredReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
 		Name:      "mvtx_desired_replicas",
 		Help:      "A metric indicates the desired replicas of a MonoVertex",
@@ -97,6 +97,6 @@ var (
 func init() {
 	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcHealth, PipelineHealth,
 		MonoVertexHealth, JetStreamISBSvcReplicas, RedisISBSvcReplicas,
-		VertexDisiredReplicas, VertexCurrentReplicas, MonoVertexDisiredReplicas,
+		VertexDesiredReplicas, VertexCurrentReplicas, MonoVertexDesiredReplicas,
 		MonoVertexCurrentReplicas)
 }
