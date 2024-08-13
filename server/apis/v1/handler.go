@@ -1046,7 +1046,6 @@ func (h *handler) ListMonoVertices(c *gin.Context) {
 
 // GetMonoVertex is used to provide the spec of a given mono vertex
 func (h *handler) GetMonoVertex(c *gin.Context) {
-	var lag int64
 	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
 	// get general mono vertex info
 	mvt, err := h.numaflowClient.MonoVertices(ns).Get(c, monoVertex, metav1.GetOptions{})
@@ -1063,11 +1062,7 @@ func (h *handler) GetMonoVertex(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch mono vertex %q from namespace %q, %s", monoVertex, ns, err.Error()))
 		return
 	}
-	// get mono vertex lag
-	// TODO - implement retrieving lag for a mono vertex
-	lag = -1
-
-	monoVertexResp := NewMonoVertexInfo(status, &lag, mvt)
+	monoVertexResp := NewMonoVertexInfo(status, mvt)
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, monoVertexResp))
 }
 
@@ -1191,9 +1186,7 @@ func getMonoVertices(h *handler, namespace string) (MonoVertices, error) {
 		if err != nil {
 			return nil, err
 		}
-		// NOTE: we only calculate mono vertex lag for get single mono vertex API
-		// to avoid massive gRPC calls
-		resp := NewMonoVertexInfo(status, nil, &mvt)
+		resp := NewMonoVertexInfo(status, &mvt)
 		resList = append(resList, resp)
 	}
 	return resList, nil

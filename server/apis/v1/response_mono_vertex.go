@@ -25,18 +25,15 @@ type MonoVertexInfo struct {
 	Name string `json:"name"`
 	// Status shows whether the mono vertex is healthy, warning, critical or inactive.
 	Status string `json:"status"`
-	// Lag shows the mono vertex lag.
-	Lag *int64 `json:"lag,omitempty"`
 	// MonoVertex contains the detailed mono vertex spec.
 	MonoVertex v1alpha1.MonoVertex `json:"monoVertex"`
 }
 
 // NewMonoVertexInfo creates a new MonoVertexInfo object with the given status and lag
-func NewMonoVertexInfo(status string, lag *int64, mvt *v1alpha1.MonoVertex) MonoVertexInfo {
+func NewMonoVertexInfo(status string, mvt *v1alpha1.MonoVertex) MonoVertexInfo {
 	return MonoVertexInfo{
 		Name:       mvt.Name,
 		Status:     status,
-		Lag:        lag,
 		MonoVertex: *mvt,
 	}
 }
