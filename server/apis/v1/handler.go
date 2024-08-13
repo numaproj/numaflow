@@ -243,12 +243,12 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 	type namespaceSummary struct {
 		pipelineSummary   PipelineSummary
 		isbsvcSummary     IsbServiceSummary
-		MonoVertexSummary MonoVertexSummary
+		monoVertexSummary MonoVertexSummary
 	}
 	var namespaceSummaryMap = make(map[string]namespaceSummary)
 
 	// get pipeline summary
-	pipelineList, err := h.numaflowClient.Pipelines("").List(context.Background(), metav1.ListOptions{})
+	pipelineList, err := h.numaflowClient.Pipelines("").List(c, metav1.ListOptions{})
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %s", err.Error()))
 		return
@@ -272,7 +272,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 	}
 
 	// get isbsvc summary
-	isbsvcList, err := h.numaflowClient.InterStepBufferServices("").List(context.Background(), metav1.ListOptions{})
+	isbsvcList, err := h.numaflowClient.InterStepBufferServices("").List(c, metav1.ListOptions{})
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %s", err.Error()))
 		return
@@ -296,7 +296,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 	}
 
 	// get mono vertex summary
-	mvtList, err := h.numaflowClient.MonoVertices("").List(context.Background(), metav1.ListOptions{})
+	mvtList, err := h.numaflowClient.MonoVertices("").List(c, metav1.ListOptions{})
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, failed to fetch mono vertex list, %s", err.Error()))
 		return
@@ -314,9 +314,9 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 		// if the mono vertex is healthy, increment the active count, otherwise increment the inactive count
 		// TODO - add more status types for mono vertex and update the logic here
 		if status == dfv1.MonoVertexStatusHealthy {
-			summary.MonoVertexSummary.Active.increment(status)
+			summary.monoVertexSummary.Active.increment(status)
 		} else {
-			summary.MonoVertexSummary.Inactive++
+			summary.monoVertexSummary.Inactive++
 		}
 		namespaceSummaryMap[monoVertex.Namespace] = summary
 	}
@@ -333,7 +333,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 		}
 	}
 	for name, summary := range namespaceSummaryMap {
-		clusterSummary = append(clusterSummary, NewNamespaceSummary(name, summary.pipelineSummary, summary.isbsvcSummary, summary.MonoVertexSummary))
+		clusterSummary = append(clusterSummary, NewNamespaceSummary(name, summary.pipelineSummary, summary.isbsvcSummary, summary.monoVertexSummary))
 	}
 
 	// sort the cluster summary by namespace in alphabetical order,
@@ -1049,7 +1049,7 @@ func (h *handler) GetMonoVertex(c *gin.Context) {
 	var lag int64
 	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
 	// get general mono vertex info
-	mvt, err := h.numaflowClient.MonoVertices(ns).Get(context.Background(), monoVertex, metav1.GetOptions{})
+	mvt, err := h.numaflowClient.MonoVertices(ns).Get(c, monoVertex, metav1.GetOptions{})
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to fetch mono vertex %q in namespace %q, %s", mvt, ns, err.Error()))
 		return
@@ -1075,7 +1075,7 @@ func (h *handler) GetMonoVertex(c *gin.Context) {
 func (h *handler) ListMonoVertexPods(c *gin.Context) {
 	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
-	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{
+	pods, err := h.kubeClient.CoreV1().Pods(ns).List(c, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", dfv1.KeyMonoVertexName, monoVertex),
 		Limit:         limit,
 		Continue:      c.Query("continue"),
