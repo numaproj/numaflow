@@ -1006,16 +1006,59 @@ func (h *handler) GetPipelineStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
+// ListMonoVertices is used to provide all the mono vertices in a namespace.
 func (h *handler) ListMonoVertices(c *gin.Context) {
-	// TODO - implement this
+	ns := c.Param("namespace")
+	mvtList, err := getMonoVertices(h, ns)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch all mono vertices for namespace %q, %s", ns, err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, mvtList))
 }
 
+// GetMonoVertex is used to provide the spec of a given mono vertex
 func (h *handler) GetMonoVertex(c *gin.Context) {
-	// TODO - implement this
+	var lag int64
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+	// get general mono vertex info
+	mvt, err := h.numaflowClient.MonoVertices(ns).Get(context.Background(), monoVertex, metav1.GetOptions{})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch mono vertex %q in namespace %q, %s", mvt, ns, err.Error()))
+		return
+	}
+	// set mono vertex kind and apiVersion
+	mvt.Kind = dfv1.MonoVertexGroupVersionKind.Kind
+	mvt.APIVersion = dfv1.SchemeGroupVersion.String()
+	// get mono vertex status
+	status, err := getMonoVertexStatus(mvt)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch mono vertex %q from namespace %q, %s", monoVertex, ns, err.Error()))
+		return
+	}
+	// get mono vertex lag
+	// TODO - implement retrieving lag for a mono vertex
+	lag = -1
+
+	monoVertexResp := NewMonoVertexInfo(status, &lag, mvt)
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, monoVertexResp))
 }
 
+// ListMonoVertexPods is used to provide all the pods of a mono vertex
 func (h *handler) ListMonoVertexPods(c *gin.Context) {
-	// TODO - implement this
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
+	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", dfv1.KeyMonoVertexName, monoVertex),
+		Limit:         limit,
+		Continue:      c.Query("continue"),
+	})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get a list of pods: namespace %q mono vertex %q: %s",
+			ns, monoVertex, err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pods.Items))
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
@@ -1074,6 +1117,26 @@ func getIsbServices(h *handler, namespace string) (ISBServices, error) {
 	return isbList, nil
 }
 
+// getMonoVertices is a utility used to fetch all the mono vertices in a given namespace
+func getMonoVertices(h *handler, namespace string) (MonoVertices, error) {
+	mvtList, err := h.numaflowClient.MonoVertices(namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	var resList MonoVertices
+	for _, mvt := range mvtList.Items {
+		status, err := getMonoVertexStatus(&mvt)
+		if err != nil {
+			return nil, err
+		}
+		// NOTE: we only calculate mono vertex lag for get single pipeline API
+		// to avoid massive gRPC calls
+		resp := NewMonoVertexInfo(status, nil, &mvt)
+		resList = append(resList, resp)
+	}
+	return resList, nil
+}
+
 // GetPipelineStatus is used to provide the status of a given pipeline
 // TODO(API): Change the Daemon service to return the consolidated status of the pipeline
 // to save on multiple calls to the daemon service
@@ -1102,6 +1165,11 @@ func getIsbServiceStatus(isbsvc *dfv1.InterStepBufferService) (string, error) {
 		retStatus = ISBServiceStatusCritical
 	}
 	return retStatus, nil
+}
+
+func getMonoVertexStatus(mvt *dfv1.MonoVertex) (string, error) {
+	// TODO - add more logic to determine the status of a mono vertex
+	return dfv1.MonoVertexStatusHealthy, nil
 }
 
 // validatePipelineSpec is used to validate the pipeline spec during create and update
