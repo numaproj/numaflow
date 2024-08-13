@@ -83,7 +83,6 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 
 func (pt *PodTracker) updateActivePods() {
 	// TODO(MonoVertex): check if this is always correct with replicas
-	fmt.Println("Replicas", pt.monoVertex.Spec.Scale.GetMaxReplicas())
 	for i := 0; i < int(pt.monoVertex.Spec.Scale.GetMaxReplicas()); i++ {
 		podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, i)
 		podKey := pt.getPodKey(i)
