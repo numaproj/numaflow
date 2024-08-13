@@ -59,6 +59,16 @@ func (is *IsbServiceSummary) hasIsbService() bool {
 	return is.Inactive > 0 || !is.Active.isEmpty()
 }
 
+// MonoVertexSummary summarizes the number of active and inactive mono vertices.
+type MonoVertexSummary struct {
+	Active   ActiveStatus `json:"active"`
+	Inactive int          `json:"inactive"`
+}
+
+func (ps *MonoVertexSummary) hasMonoVertex() bool {
+	return ps.Inactive > 0 || !ps.Active.isEmpty()
+}
+
 // ClusterSummaryResponse is a list of NamespaceSummary
 // of all the namespaces in a cluster wrapped in a list.
 type ClusterSummaryResponse []NamespaceSummary
@@ -72,15 +82,20 @@ type NamespaceSummary struct {
 	Namespace         string            `json:"namespace"`
 	PipelineSummary   PipelineSummary   `json:"pipelineSummary"`
 	IsbServiceSummary IsbServiceSummary `json:"isbServiceSummary"`
+	MonoVertexSummary MonoVertexSummary `json:"monoVertexSummary"`
 }
 
 // NewNamespaceSummary creates a new NamespaceSummary object with the given specifications.
-func NewNamespaceSummary(namespace string, pipelineSummary PipelineSummary,
-	isbSummary IsbServiceSummary) NamespaceSummary {
+func NewNamespaceSummary(
+	namespace string,
+	pipelineSummary PipelineSummary,
+	isbSummary IsbServiceSummary,
+	monoVertexSummary MonoVertexSummary) NamespaceSummary {
 	return NamespaceSummary{
-		IsEmpty:           !(pipelineSummary.hasPipeline() || isbSummary.hasIsbService()),
+		IsEmpty:           !(pipelineSummary.hasPipeline() || isbSummary.hasIsbService() || monoVertexSummary.hasMonoVertex()),
 		Namespace:         namespace,
 		PipelineSummary:   pipelineSummary,
 		IsbServiceSummary: isbSummary,
+		MonoVertexSummary: monoVertexSummary,
 	}
 }

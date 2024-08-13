@@ -241,8 +241,9 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 	}
 
 	type namespaceSummary struct {
-		pipelineSummary PipelineSummary
-		isbsvcSummary   IsbServiceSummary
+		pipelineSummary   PipelineSummary
+		isbsvcSummary     IsbServiceSummary
+		MonoVertexSummary MonoVertexSummary
 	}
 	var namespaceSummaryMap = make(map[string]namespaceSummary)
 
@@ -294,6 +295,32 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 		namespaceSummaryMap[isbsvc.Namespace] = summary
 	}
 
+	// get mono vertex summary
+	mvtList, err := h.numaflowClient.MonoVertices("").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, failed to fetch mono vertex list, %s", err.Error()))
+		return
+	}
+	for _, monoVertex := range mvtList.Items {
+		var summary namespaceSummary
+		if value, ok := namespaceSummaryMap[monoVertex.Namespace]; ok {
+			summary = value
+		}
+		status, err := getMonoVertexStatus(&monoVertex)
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, failed to get the status of the mono vertex %s, %s", monoVertex.Name, err.Error()))
+			return
+		}
+		// if the mono vertex is healthy, increment the active count, otherwise increment the inactive count
+		// TODO - add more status types for mono vertex and update the logic here
+		if status == dfv1.MonoVertexStatusHealthy {
+			summary.MonoVertexSummary.Active.increment(status)
+		} else {
+			summary.MonoVertexSummary.Inactive++
+		}
+		namespaceSummaryMap[monoVertex.Namespace] = summary
+	}
+
 	// get cluster summary
 	var clusterSummary ClusterSummaryResponse
 	// at this moment, if a namespace has neither pipeline nor isbsvc, it will not be included in the namespacedSummaryMap.
@@ -306,7 +333,7 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 		}
 	}
 	for name, summary := range namespaceSummaryMap {
-		clusterSummary = append(clusterSummary, NewNamespaceSummary(name, summary.pipelineSummary, summary.isbsvcSummary))
+		clusterSummary = append(clusterSummary, NewNamespaceSummary(name, summary.pipelineSummary, summary.isbsvcSummary, summary.MonoVertexSummary))
 	}
 
 	// sort the cluster summary by namespace in alphabetical order,
