@@ -37,7 +37,6 @@ import (
 
 	"github.com/numaproj/numaflow"
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
 	"github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service"
 	rateServer "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
@@ -82,7 +81,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create grpc server: %w", err)
 	}
-	httpServer := ds.newHTTPServer(ctx, v1alpha1.DaemonServicePort, tlsConfig)
+	httpServer := ds.newHTTPServer(ctx, v1alpha1.MonoVertexDaemonServicePort, tlsConfig)
 
 	conn = tls.NewListener(conn, tlsConfig)
 	// Cmux is used to support servicing gRPC and HTTP1.1+JSON on the same port
@@ -150,7 +149,7 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 			return key, true
 		}),
 	)
-	if err := daemon.RegisterDaemonServiceHandlerFromEndpoint(ctx, gwmux, endpoint, dialOpts); err != nil {
+	if err := mvtxdaemon.RegisterMonoVertexDaemonServiceHandlerFromEndpoint(ctx, gwmux, endpoint, dialOpts); err != nil {
 		log.Errorw("Failed to register daemon handler on HTTP Server", zap.Error(err))
 	}
 	mux := http.NewServeMux()
