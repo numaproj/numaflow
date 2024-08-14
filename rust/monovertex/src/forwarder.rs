@@ -97,8 +97,9 @@ impl Forwarder {
                         let mut results = Vec::new();
                         while let Some(task) = jh.join_next().await {
                             let result = task.map_err(|e| Error::TransformerError(format!("{:?}", e)))?;
-                            let result = result?;
-                            results.extend(result);
+                            if let Some(result) = result? {
+                                results.extend(result);
+                            }
                         }
                         info!("Transformer latency - {}ms", start_time.elapsed().as_millis());
                         results
