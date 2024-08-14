@@ -84,8 +84,8 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 	// Since we are sending 3s, the first returned message should be 102.
 	// There should be no other values.
 	w.Expect().RedisSinkContains("sink", "102")
-	w.Expect().SinkNotContains("sink", "99")
-	w.Expect().SinkNotContains("sink", "105")
+	w.Expect().RedisSinkNotContains("sink", "99")
+	w.Expect().RedisSinkNotContains("sink", "105")
 	done <- struct{}{}
 }
 
@@ -191,10 +191,10 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 	}()
 
 	w.Expect().RedisSinkContains("sink", "5")
-	w.Expect().SinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "1", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().RedisSinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().RedisSinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().RedisSinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().RedisSinkNotContains("sink", "1", SinkCheckWithTimeout(20*time.Second))
 	done <- struct{}{}
 }
 
