@@ -423,12 +423,12 @@ async fn expose_pending_metrics(
 ) {
     let mut ticker = time::interval(refresh_interval);
     let lookback_seconds_map = vec![("1m", 60), ("default", 120), ("5m", 300), ("15m", 900)];
-    let mut metric_labels = forward_metrics_labels().clone();
     loop {
         ticker.tick().await;
         for (label, seconds) in &lookback_seconds_map {
             let pending = calculate_pending(*seconds, &pending_stats).await;
             if pending != -1 {
+                let mut metric_labels = forward_metrics_labels().clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
                 forward_metrics()
                     .monovtx_pending
