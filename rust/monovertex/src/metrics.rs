@@ -15,17 +15,17 @@ use tokio::task::JoinHandle;
 use tokio::time;
 use tracing::{debug, error, info};
 
+use crate::config::config;
+use crate::error::Error;
+use crate::sink::SinkClient;
+use crate::source::SourceClient;
+use crate::transformer::TransformerClient;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
 use prometheus_client::registry::Registry;
-
-use crate::error::Error;
-use crate::sink::SinkClient;
-use crate::source::SourceClient;
-use crate::transformer::TransformerClient;
 
 // Define the labels for the metrics
 // Note: Please keep consistent with the definitions in MonoVertex daemon
@@ -164,6 +164,24 @@ pub(crate) fn forward_metrics() -> &'static MonoVtxMetrics {
     MONOVTX_METRICS.get_or_init(|| {
         let metrics = MonoVtxMetrics::new();
         metrics
+    })
+}
+
+/// MONOVTX_METRICS_LABELS are used to store the common labels used in the metrics
+static MONOVTX_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
+
+// forward_metrics_labels is a helper function used to fetch the
+// MONOVTX_METRICS_LABELS object
+pub(crate) fn forward_metrics_labels() -> &'static Vec<(String, String)> {
+    crate::metrics::MONOVTX_METRICS_LABELS.get_or_init(|| {
+        let common_labels = vec![
+            (
+                MONO_VERTEX_NAME_LABEL.to_string(),
+                config().mono_vertex_name.clone(),
+            ),
+            (REPLICA_LABEL.to_string(), config().replica.to_string()),
+        ];
+        common_labels
     })
 }
 
@@ -405,14 +423,16 @@ async fn expose_pending_metrics(
 ) {
     let mut ticker = time::interval(refresh_interval);
     let lookback_seconds_map = vec![("1m", 60), ("default", 120), ("5m", 300), ("15m", 900)];
+    let mut metric_labels = forward_metrics_labels().clone();
     loop {
         ticker.tick().await;
         for (label, seconds) in &lookback_seconds_map {
             let pending = calculate_pending(*seconds, &pending_stats).await;
             if pending != -1 {
+                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
                 forward_metrics()
                     .monovtx_pending
-                    .get_or_create(&vec![(PENDING_PERIOD_LABEL.to_string(), label.to_string())])
+                    .get_or_create(&metric_labels)
                     .set(pending);
                 info!("Pending messages ({}): {}", label, pending);
             }
