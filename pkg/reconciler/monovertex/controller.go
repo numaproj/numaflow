@@ -75,7 +75,7 @@ func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err != nil {
 		log.Errorw("Reconcile error", zap.Error(err))
 	}
-
+	monoVtxCopy.Status.LastUpdated = metav1.Now()
 	if !equality.Semantic.DeepEqual(monoVtx.Status, monoVtxCopy.Status) {
 		if err := mr.client.Status().Update(ctx, monoVtxCopy); err != nil {
 			return reconcile.Result{}, err
