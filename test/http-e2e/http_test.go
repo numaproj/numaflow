@@ -72,7 +72,7 @@ func (s *HTTPSuite) TestHTTPSourceAuthPipeline() {
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("no-auth"))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("with-auth")).WithHeader("Authorization", "Bearer faketoken"))
 	w.Expect().RedisSinkContains("out", "with-auth")
-	w.Expect().SinkNotContains("out", "no-auth")
+	w.Expect().RedisSinkNotContains("out", "no-auth")
 }
 
 func TestHTTPSuite(t *testing.T) {

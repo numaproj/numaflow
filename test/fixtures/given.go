@@ -94,7 +94,6 @@ func (g *Given) MonoVertex(text string) *Given {
 	l[Label] = LabelValue
 	g.monoVertex.SetLabels(l)
 	return g
-
 }
 
 func (g *Given) WithPipeline(p *dfv1.Pipeline) *Given {
@@ -162,6 +161,7 @@ func (g *Given) When() *When {
 		monoVertexClient: g.monoVertexClient,
 		isbSvc:           g.isbSvc,
 		pipeline:         g.pipeline,
+		monoVertex:       g.monoVertex,
 		restConfig:       g.restConfig,
 		kubeClient:       g.kubeClient,
 	}

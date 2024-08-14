@@ -282,10 +282,10 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 	w.Expect().
 		RedisSinkContains("sink", "30").
 		RedisSinkContains("sink", "60").
-		SinkNotContains("sink", "80").
+		RedisSinkNotContains("sink", "80").
 		RedisSinkContains("sink", "90").
 		RedisSinkContains("sink", "180").
-		SinkNotContains("sink", "210")
+		RedisSinkNotContains("sink", "210")
 	done <- struct{}{}
 }
 

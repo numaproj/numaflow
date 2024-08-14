@@ -397,7 +397,7 @@ func WaitForDaemonPodsRunning(kubeClient kubernetes.Interface, namespace, pipeli
 func WaitForMonoVertexDaemonPodsRunning(kubeClient kubernetes.Interface, namespace, monoVertexName string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, monoVertexName, dfv1.KeyComponent, dfv1.ComponentDaemon)
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, monoVertexName, dfv1.KeyComponent, dfv1.ComponentMonoVertexDaemon)
 	for {
 		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
 		if err != nil {

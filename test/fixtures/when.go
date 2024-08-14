@@ -342,6 +342,7 @@ func (w *When) Given() *Given {
 		monoVertexClient: w.monoVertexClient,
 		isbSvc:           w.isbSvc,
 		pipeline:         w.pipeline,
+		monoVertex:       w.monoVertex,
 		restConfig:       w.restConfig,
 		kubeClient:       w.kubeClient,
 	}
@@ -356,6 +357,7 @@ func (w *When) Expect() *Expect {
 		monoVertexClient: w.monoVertexClient,
 		isbSvc:           w.isbSvc,
 		pipeline:         w.pipeline,
+		monoVertex:       w.monoVertex,
 		restConfig:       w.restConfig,
 		kubeClient:       w.kubeClient,
 	}

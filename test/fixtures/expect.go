@@ -49,19 +49,20 @@ func (t *Expect) RedisSinkContains(sinkName string, targetStr string, opts ...Si
 	ctx := context.Background()
 	var contains bool
 	if t.pipeline != nil {
-		contains = RedisContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...)
+		if contains = RedisContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...); !contains {
+			t.t.Fatalf("Expected redis contains target string %s written by pipeline %s, sink %s.", targetStr, t.pipeline.Name, sinkName)
+		}
 	} else if t.monoVertex != nil {
-		contains = RedisContains(ctx, t.monoVertex.Name, sinkName, targetStr, opts...)
+		if contains = RedisContains(ctx, t.monoVertex.Name, sinkName, targetStr, opts...); !contains {
+			t.t.Fatalf("Expected redis contains target string %s written by mono vertex %s, sink %s.", targetStr, t.monoVertex.Name, sinkName)
+		}
 	} else {
 		t.t.Fatalf("Expected pipeline or mono vertex to be set")
-	}
-	if !contains {
-		t.t.Fatalf("Expected redis contains target string %s written by pipeline %s, sink %s.", targetStr, t.pipeline.Name, sinkName)
 	}
 	return t
 }
 
-func (t *Expect) SinkNotContains(sinkName string, targetStr string, opts ...SinkCheckOption) *Expect {
+func (t *Expect) RedisSinkNotContains(sinkName string, targetStr string, opts ...SinkCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
 	notContains := RedisNotContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...)
@@ -227,6 +228,7 @@ func (t *Expect) When() *When {
 		monoVertexClient: t.monoVertexClient,
 		isbSvc:           t.isbSvc,
 		pipeline:         t.pipeline,
+		monoVertex:       t.monoVertex,
 		restConfig:       t.restConfig,
 		kubeClient:       t.kubeClient,
 	}

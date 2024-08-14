@@ -171,9 +171,9 @@ func (s *FunctionalSuite) TestUDFFiltering() {
 
 	w.Expect().RedisSinkContains("out", expect3)
 	w.Expect().RedisSinkContains("out", expect4)
-	w.Expect().SinkNotContains("out", expect0)
-	w.Expect().SinkNotContains("out", expect1)
-	w.Expect().SinkNotContains("out", expect2)
+	w.Expect().RedisSinkNotContains("out", expect0)
+	w.Expect().RedisSinkNotContains("out", expect1)
+	w.Expect().RedisSinkNotContains("out", expect2)
 }
 
 func (s *FunctionalSuite) TestConditionalForwarding() {
@@ -197,16 +197,16 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("not an integer")))
 
 	w.Expect().RedisSinkContains("even-sink", "888888")
-	w.Expect().SinkNotContains("even-sink", "888889")
-	w.Expect().SinkNotContains("even-sink", "not an integer")
+	w.Expect().RedisSinkNotContains("even-sink", "888889")
+	w.Expect().RedisSinkNotContains("even-sink", "not an integer")
 
 	w.Expect().RedisSinkContains("odd-sink", "888889")
-	w.Expect().SinkNotContains("odd-sink", "888888")
-	w.Expect().SinkNotContains("odd-sink", "not an integer")
+	w.Expect().RedisSinkNotContains("odd-sink", "888888")
+	w.Expect().RedisSinkNotContains("odd-sink", "not an integer")
 
 	w.Expect().RedisSinkContains("number-sink", "888888")
 	w.Expect().RedisSinkContains("number-sink", "888889")
-	w.Expect().SinkNotContains("number-sink", "not an integer")
+	w.Expect().RedisSinkNotContains("number-sink", "not an integer")
 }
 
 func (s *FunctionalSuite) TestDropOnFull() {
