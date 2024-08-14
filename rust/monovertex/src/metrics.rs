@@ -63,20 +63,29 @@ pub struct GlobalRegistry {
 impl GlobalRegistry {
     fn new() -> Self {
         GlobalRegistry {
-            // Create a new registry with labels
-            // Create a labels for the registry with trait labels: impl Iterator<Item = (Cow<'static, str>, Cow<'static, str>)>)
+            // Create a new registry for the metrics
             registry: parking_lot::Mutex::new(Registry::default()),
         }
     }
 }
 
+/// GLOBAL_REGISTER is the static global registry which is initialized
+// only once.
 static GLOBAL_REGISTER: OnceLock<GlobalRegistry> = OnceLock::new();
 
+/// global_registry is a helper function to get the GLOBAL_REGISTER
 fn global_registry() -> &'static GlobalRegistry {
     GLOBAL_REGISTER.get_or_init(GlobalRegistry::new)
 }
 
 // TODO: let's do sub-registry for forwarder so tomorrow we can add sink and source metrics.
+/// MonoVtxMetrics is a struct which is used for storing the metrics related to MonoVertex
+// These fields are exposed as pub to be used by other modules for
+// changing the value of the metrics
+// Each metric is defined as family of metrics, which means that they can be
+// differentiated by their label values assigned.
+// The labels are provided in the form of Vec<(String, String)
+// The second argument is the metric kind.
 pub struct MonoVtxMetrics {
     pub monovtx_read_total: Family<Vec<(String, String)>, Counter>,
     pub monovtx_read_bytes_total: Family<Vec<(String, String)>, Counter>,
@@ -86,6 +95,7 @@ pub struct MonoVtxMetrics {
     pub monovtx_pending: Family<Vec<(String, String)>, Gauge>,
 }
 
+/// impl the MonoVtxMetrics struct and create a new object
 impl MonoVtxMetrics {
     fn new() -> Self {
         let monovtx_read_total = Family::<Vec<(String, String)>, Counter>::default();
@@ -109,6 +119,7 @@ impl MonoVtxMetrics {
         };
 
         let mut registry = global_registry().registry.lock();
+        // Register all the metrics to the global registry
         registry.register(
             MONOVTX_READ_TOTAL,
             "A Counter to keep track of the total number of messages read from the source",
@@ -144,8 +155,11 @@ impl MonoVtxMetrics {
     }
 }
 
+/// MONOVTX_METRICS is the MonoVtxMetrics object which stores the metrics
 static MONOVTX_METRICS: OnceLock<MonoVtxMetrics> = OnceLock::new();
 
+// forward_metrics is a helper function used to fetch the
+// MonoVtxMetrics object
 pub(crate) fn forward_metrics() -> &'static MonoVtxMetrics {
     MONOVTX_METRICS.get_or_init(|| {
         let metrics = MonoVtxMetrics::new();
@@ -153,6 +167,8 @@ pub(crate) fn forward_metrics() -> &'static MonoVtxMetrics {
     })
 }
 
+// metrics_handler is used to generate and return a snapshot of the
+// current state of the metrics in the global registry
 pub async fn metrics_handler() -> impl IntoResponse {
     let state = global_registry().registry.lock();
     let mut buffer = String::new();
@@ -177,13 +193,11 @@ pub(crate) async fn start_metrics_http_server<A>(
 where
     A: ToSocketAddrs + std::fmt::Debug,
 {
-    let metrics_app = metrics_router(
-        MetricsState {
-            source_client,
-            sink_client,
-            transformer_client,
-        },
-    );
+    let metrics_app = metrics_router(MetricsState {
+        source_client,
+        sink_client,
+        transformer_client,
+    });
 
     let listener = TcpListener::bind(&addr)
         .await
@@ -274,7 +288,6 @@ pub(crate) struct LagReader {
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 }
 
-
 /// LagReaderBuilder is used to build a `LagReader` instance.
 pub(crate) struct LagReaderBuilder {
     source_client: SourceClient,
@@ -304,8 +317,12 @@ impl LagReaderBuilder {
     pub(crate) fn build(self) -> LagReader {
         LagReader {
             source_client: self.source_client,
-            lag_checking_interval: self.lag_checking_interval.unwrap_or_else(|| Duration::from_secs(3)),
-            refresh_interval: self.refresh_interval.unwrap_or_else(|| Duration::from_secs(5)),
+            lag_checking_interval: self
+                .lag_checking_interval
+                .unwrap_or_else(|| Duration::from_secs(3)),
+            refresh_interval: self
+                .refresh_interval
+                .unwrap_or_else(|| Duration::from_secs(5)),
             buildup_handle: None,
             expose_handle: None,
             pending_stats: Arc::new(Mutex::new(Vec::with_capacity(MAX_PENDING_STATS))),

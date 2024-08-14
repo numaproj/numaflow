@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use tracing::{info, trace};
 use tracing::log::warn;
+use tracing::{info, trace};
 
 use crate::config::config;
 use crate::error::{Error, Result};
-use crate::metrics::{forward_metrics, MONO_VERTEX_NAME_LABEL, REPLICA_LABEL};
 use crate::message::Offset;
+use crate::metrics::{forward_metrics, MONO_VERTEX_NAME_LABEL, REPLICA_LABEL};
 use crate::sink::{proto, SinkClient};
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
@@ -130,7 +130,7 @@ impl Forwarder {
                                 // ack the successful offsets
                                 self.source_client.ack_fn(successful_offsets).await?;
                                 attempts += 1;
-                                
+
                                 if failed_ids.is_empty() {
                                     break;
                                 } else {

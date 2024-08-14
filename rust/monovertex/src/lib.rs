@@ -2,7 +2,7 @@ pub(crate) use self::error::Result;
 use crate::config::config;
 pub(crate) use crate::error::Error;
 use crate::forwarder::Forwarder;
-use crate::metrics::{start_metrics_https_server, MetricsState, LagReaderBuilder};
+use crate::metrics::{start_metrics_https_server, LagReaderBuilder, MetricsState};
 use crate::sink::{SinkClient, SinkConfig};
 use crate::source::{SourceClient, SourceConfig};
 use crate::transformer::{TransformerClient, TransformerConfig};
@@ -182,8 +182,12 @@ pub async fn init(
 
     // start the lag reader to publish lag metrics
     let mut lag_reader = LagReaderBuilder::new(source_client.clone())
-        .lag_checking_interval(Duration::from_secs(config().lag_check_interval_in_secs.into()))
-        .refresh_interval(Duration::from_secs(config().lag_refresh_interval_in_secs.into()))
+        .lag_checking_interval(Duration::from_secs(
+            config().lag_check_interval_in_secs.into(),
+        ))
+        .refresh_interval(Duration::from_secs(
+            config().lag_refresh_interval_in_secs.into(),
+        ))
         .build();
     lag_reader.start().await;
 
