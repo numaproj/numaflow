@@ -559,7 +559,7 @@ func (h *handler) DeletePipeline(c *gin.Context) {
 	// cleanup client after successfully deleting pipeline
 	// NOTE: if a pipeline was deleted by not through UI, the cache will not be updated,
 	// the entry becomes invalid and will be evicted only after the cache is full.
-	h.daemonClientsCache.Remove(daemonSvcAddress(ns, pipeline))
+	h.daemonClientsCache.Remove(pipelineDaemonSvcAddress(ns, pipeline))
 
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
@@ -1339,24 +1339,32 @@ func validatePipelinePatch(patch []byte) error {
 	return nil
 }
 
-func daemonSvcAddress(ns, name string) string {
-	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-daemon-svc", name), ns, dfv1.DaemonServicePort)
+func pipelineDaemonSvcAddress(ns, pipelineName string) string {
+	// the format is consistent with what we defined in GetDaemonServiceURL in `pkg/apis/numaflow/v1alpha1/pipeline_types.go`
+	// do not change it without changing the other.
+	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-daemon-svc", pipelineName), ns, dfv1.DaemonServicePort)
+}
+
+func monoVertexDaemonSvcAddress(ns, monoVertexName string) string {
+	// the format is consistent with what we defined in GetDaemonServiceURL in `pkg/apis/numaflow/v1alpha1/mono_vertex_types.go`
+	// do not change it without changing the other.
+	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-mv-daemon-svc", monoVertexName), ns, dfv1.DaemonServicePort)
 }
 
 func (h *handler) getPipelineDaemonClient(ns, pipeline string) (daemonclient.DaemonClient, error) {
-	if dClient, ok := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline)); !ok {
+	if dClient, ok := h.daemonClientsCache.Get(pipelineDaemonSvcAddress(ns, pipeline)); !ok {
 		var err error
 		var c daemonclient.DaemonClient
 		// Default to use gRPC client
 		if strings.EqualFold(h.opts.daemonClientProtocol, "http") {
-			c, err = daemonclient.NewRESTfulDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+			c, err = daemonclient.NewRESTfulDaemonServiceClient(pipelineDaemonSvcAddress(ns, pipeline))
 		} else {
-			c, err = daemonclient.NewGRPCDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+			c, err = daemonclient.NewGRPCDaemonServiceClient(pipelineDaemonSvcAddress(ns, pipeline))
 		}
 		if err != nil {
 			return nil, err
 		}
-		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), c)
+		h.daemonClientsCache.Add(pipelineDaemonSvcAddress(ns, pipeline), c)
 		return c, nil
 	} else {
 		return dClient, nil
@@ -1364,19 +1372,19 @@ func (h *handler) getPipelineDaemonClient(ns, pipeline string) (daemonclient.Dae
 }
 
 func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient.MonoVertexDaemonClient, error) {
-	if mvtDaemonClient, ok := h.mvtDaemonClientsCache.Get(daemonSvcAddress(ns, mvtName)); !ok {
+	if mvtDaemonClient, ok := h.mvtDaemonClientsCache.Get(monoVertexDaemonSvcAddress(ns, mvtName)); !ok {
 		var err error
 		var c mvtdaemonclient.MonoVertexDaemonClient
 		// Default to use gRPC client
 		if strings.EqualFold(h.opts.daemonClientProtocol, "http") {
-			c, err = mvtdaemonclient.NewRESTfulClient(daemonSvcAddress(ns, mvtName))
+			c, err = mvtdaemonclient.NewRESTfulClient(monoVertexDaemonSvcAddress(ns, mvtName))
 		} else {
-			c, err = mvtdaemonclient.NewGRPCClient(daemonSvcAddress(ns, mvtName))
+			c, err = mvtdaemonclient.NewGRPCClient(monoVertexDaemonSvcAddress(ns, mvtName))
 		}
 		if err != nil {
 			return nil, err
 		}
-		h.mvtDaemonClientsCache.Add(daemonSvcAddress(ns, mvtName), c)
+		h.mvtDaemonClientsCache.Add(monoVertexDaemonSvcAddress(ns, mvtName), c)
 		return c, nil
 	} else {
 		return mvtDaemonClient, nil

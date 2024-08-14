@@ -124,6 +124,8 @@ func (mv MonoVertex) GetDaemonDeploymentName() string {
 }
 
 func (mv MonoVertex) GetDaemonServiceURL() string {
+	// Note: the format of the URL is also used in `server/apis/v1/handler.go`
+	// Do not change it without updating the handler.
 	return fmt.Sprintf("%s.%s.svc:%d", mv.GetDaemonServiceName(), mv.Namespace, MonoVertexDaemonServicePort)
 }
 
