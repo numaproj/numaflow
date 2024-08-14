@@ -2,28 +2,25 @@ import React, { useCallback, useContext, useMemo, createContext } from "react";
 import { useLocation } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 import Box from "@mui/material/Box";
-import Graph from "./partials/Graph";
+import Graph from "../Pipeline/partials/Graph";
 import {
   SummaryPageLayout,
   SummarySection,
   SummarySectionType,
 } from "../../common/SummaryPageLayout";
-import { usePipelineSummaryFetch } from "../../../utils/fetchWrappers/pipelineFetch";
-import { usePipelineViewFetch } from "../../../utils/fetcherHooks/pipelineViewFetch";
-import { usePipelineHealthFetch } from "../../../utils/fetchWrappers/pipelineHealthFetch";
-import { PipelineStatus } from "./partials/PipelineStatus";
-import { PipelineSummaryStatus } from "./partials/PipelineSummaryStatus";
-import { PipelineISBStatus } from "./partials/PipelineISBStatus";
-import { PipelineISBSummaryStatus } from "./partials/PipelineISBSummaryStatus";
+import { useMonoVertexSummaryFetch } from "../../../utils/fetchWrappers/monoVertexFetch";
+import { useMonoVertexViewFetch } from "../../../utils/fetcherHooks/monoVertexViewFetch";
+import { MonoVertexStatus } from "./partials/MonoVertexStatus";
+import { MonoVertexSummaryStatus } from "./partials/MonoVertexSummaryStatus";
 import { AppContextProps } from "../../../types/declarations/app";
 import { AppContext } from "../../../App";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
-import { GetConsolidatedHealthStatus, UNKNOWN } from "../../../utils";
+import { UNKNOWN } from "../../../utils";
 import { SidebarType } from "../../common/SlidingSidebar";
 
 import "./style.css";
 
-export interface PipelineProps {
+export interface MonoVertexProps {
   namespaceId?: string;
 }
 
@@ -31,7 +28,8 @@ export const GeneratorColorContext = createContext<Map<string, string>>(
   new Map()
 );
 
-export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
+// TODO add health status + processing rate once implemented
+export function MonoVertex({ namespaceId: nsIdProp }: MonoVertexProps) {
   const location = useLocation();
   const query = new URLSearchParams(location.search);
   const pipelineId = query.get("pipeline") || "";
@@ -43,71 +41,39 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
     loading: summaryLoading,
     error,
     refresh: summaryRefresh,
-  } = usePipelineSummaryFetch({ namespaceId, pipelineId, addError });
+  } = useMonoVertexSummaryFetch({ namespaceId, pipelineId, addError });
 
   const {
     pipeline,
     vertices,
-    edges,
-    generatorToColorIdxMap,
     pipelineErr,
-    buffersErr,
     loading,
     refresh: graphRefresh,
-  } = usePipelineViewFetch(namespaceId, pipelineId, addError);
-
-  const {
-    data: healthData,
-    loading: healthLoading,
-    error: healthError,
-    refresh: healthRefresh,
-  } = usePipelineHealthFetch({ namespaceId, pipelineId, addError });
+  } = useMonoVertexViewFetch(namespaceId, pipelineId, addError);
 
   const refresh = useCallback(() => {
     graphRefresh();
     summaryRefresh();
-    healthRefresh();
-  }, [graphRefresh, summaryRefresh, healthRefresh]);
+  }, [graphRefresh, summaryRefresh]);
 
   const handleK8sEventsClick = useCallback(() => {
     if (!namespaceId || !pipelineId || !setSidebarProps) {
       return;
     }
     const vertexMap = new Map<string, string[]>();
-    if (vertices?.length) {
-      vertexMap.set(
-        pipelineId,
-        vertices.map((v) => v.id)
-      );
-    }
     setSidebarProps({
       type: SidebarType.NAMESPACE_K8s,
       k8sEventsProps: {
         namespaceId,
-        pipelineId,
+        pipelineId: `${pipelineId} (MonoVertex)`,
         headerText: "Pipeline K8s Events",
         vertexFilterOptions: vertexMap,
       },
     });
   }, [namespaceId, pipelineId, setSidebarProps, vertices]);
 
-  const getHealth = useCallback(
-    (pipelineStatus: string) => {
-      if (healthData) {
-        const { resourceHealthStatus, dataHealthStatus } = healthData;
-        return GetConsolidatedHealthStatus(
-          pipelineStatus,
-          resourceHealthStatus,
-          dataHealthStatus
-        );
-      }
-      return UNKNOWN;
-    },
-    [healthData]
-  );
-
   const summarySections: SummarySection[] = useMemo(() => {
-    if (summaryLoading || healthLoading) {
+    if (summaryLoading) {
       return [
         {
           type: SummarySectionType.CUSTOM,
@@ -120,7 +86,7 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
         },
       ];
     }
-    if (error || healthError) {
+    if (error) {
       return [
         {
           type: SummarySectionType.CUSTOM,
@@ -128,7 +94,7 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
             <ErrorDisplay
               key="pipeline-summary-error"
               title="Error loading pipeline summary"
-              message={error || healthError || ""}
+              message={error || ""}
             />
           ),
         },
@@ -137,47 +103,25 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
     if (!data) {
       return [];
     }
-    const pipelineData = data?.pipelineData;
-    const isbData = data?.isbData;
-    const pipelineStatus = pipelineData?.pipeline?.status?.phase || UNKNOWN;
-    const pipelineHealthStatus = getHealth(pipelineStatus);
+    const pipelineData = data?.monoVertexData;
+    const pipelineStatus = pipelineData?.monoVertex?.status?.phase || UNKNOWN;
     return [
       // pipeline collection
       {
         type: SummarySectionType.CUSTOM,
         customComponent: (
-          <PipelineStatus
-            status={pipelineStatus}
-            healthStatus={pipelineHealthStatus}
-            healthData={healthData}
-            key={"pipeline-status"}
-          />
+          <MonoVertexStatus status={pipelineStatus} key={"monoVertex-status"} />
         ),
       },
       {
         type: SummarySectionType.CUSTOM,
         customComponent: (
-          <PipelineSummaryStatus
+          <MonoVertexSummaryStatus
             pipelineId={pipelineId}
-            pipeline={pipelineData?.pipeline}
+            pipeline={pipelineData?.monoVertex}
             lag={pipelineData?.lag}
             refresh={refresh}
             key={"pipeline-summary-status"}
-          />
-        ),
-      },
-      {
-        type: SummarySectionType.CUSTOM,
-        customComponent: (
-          <PipelineISBStatus isbData={isbData} key={"pipeline-isb-status"} />
-        ),
-      },
-      {
-        type: SummarySectionType.CUSTOM,
-        customComponent: (
-          <PipelineISBSummaryStatus
-            isbData={isbData}
-            key={"pipeline-isb-status"}
           />
         ),
       },
@@ -194,19 +138,10 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
         ),
       },
     ];
-  }, [
-    summaryLoading,
-    error,
-    data,
-    pipelineId,
-    refresh,
-    healthData,
-    healthLoading,
-    healthError,
-  ]);
+  }, [summaryLoading, error, data, pipelineId, refresh]);
 
   const content = useMemo(() => {
-    if (pipelineErr || buffersErr) {
+    if (pipelineErr) {
       return (
         <Box
           sx={{
@@ -226,7 +161,7 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
           >
             <ErrorDisplay
               title="Error loading pipeline"
-              message={pipelineErr || buffersErr || ""}
+              message={pipelineErr || ""}
             />
           </Box>
         </Box>
@@ -249,26 +184,23 @@ export function Pipeline({ namespaceId: nsIdProp }: PipelineProps) {
       );
     }
     return (
-      <GeneratorColorContext.Provider value={generatorToColorIdxMap}>
+      <GeneratorColorContext.Provider value={new Map()}>
         <Graph
           data={{
-            edges: edges,
+            edges: [],
             vertices: vertices,
             pipeline: pipeline,
           }}
           namespaceId={namespaceId}
           pipelineId={pipelineId}
-          type={"pipeline"}
+          type={"monoVertex"}
           refresh={refresh}
         />
       </GeneratorColorContext.Provider>
     );
   }, [
-    generatorToColorIdxMap,
     pipelineErr,
-    buffersErr,
     loading,
-    edges,
     vertices,
     pipeline,
     namespaceId,

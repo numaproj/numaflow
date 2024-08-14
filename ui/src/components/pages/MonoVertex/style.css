@@ -1,0 +1,14 @@
+.react-flow__edge-textwrapper {
+    cursor: pointer;
+}
+
+.react-flow__edge-textbg {
+    fill: #fafafa;
+}
+
+.pipeline-status-title {
+    font-weight: 600;
+    color: #393A3D;
+    font-size: 1.3rem;
+    font-style: normal;
+}
