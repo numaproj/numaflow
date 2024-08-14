@@ -97,8 +97,7 @@ impl Forwarder {
                         let mut results = Vec::new();
                         while let Some(task) = jh.join_next().await {
                             let result = task.map_err(|e| Error::TransformerError(format!("{:?}", e)))?;
-                            let result = result?;
-                            if let Some(result) = result {
+                            if let Some(result) = result? {
                                 results.extend(result);
                             }
                         }

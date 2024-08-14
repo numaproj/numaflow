@@ -186,7 +186,7 @@ mod tests {
         ) -> Vec<sourcetransform::Message> {
             let message = sourcetransform::Message::new(input.value, chrono::offset::Utc::now())
                 .keys(input.keys)
-                .tags(vec!["U+005C__DROP__".to_string()]);
+                .tags(vec![crate::transformer::DROP.to_string()]);
             vec![message]
         }
     }
