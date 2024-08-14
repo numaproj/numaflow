@@ -76,6 +76,8 @@ impl Forwarder {
                     // Read messages from the source
                     let messages = result?;
                     info!("Read batch size: {} and latency - {}ms", messages.len(), start_time.elapsed().as_millis());
+
+                    // collect all the offsets as the transformer can drop (via filter) messages
                     let offsets = messages.iter().map(|msg| msg.offset.clone()).collect::<Vec<Offset>>();
 
                     messages_count += messages.len() as u64;
