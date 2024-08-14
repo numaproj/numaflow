@@ -385,7 +385,7 @@ func (s *Scaler) desiredReplicas(_ context.Context, vertex *dfv1.Vertex, partiti
 		if desired == 0 {
 			desired = 1
 		}
-		if desired > int32(pending) { // For some corner cases, we don't want to scale up to more than pending.
+		if desired > int32(pending) && pending > 0 { // For some corner cases, we don't want to scale up to more than pending.
 			desired = int32(pending)
 		}
 		// maxDesired is the max of all partitions
