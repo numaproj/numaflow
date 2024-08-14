@@ -14,12 +14,4 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package scaling provides the autoscaling capability for Vertex objects.
-//
-// A workqueue is implemented in this package to watch vertices in the cluster,
-// calculate the desired replica number for each of them periodically, and
-// patch the vertex spec.
-//
-// Function StartWatching() and StopWatching() are also provided in the package,
-// so that vertices can be added into and removed from the workqueue.
 package scaling

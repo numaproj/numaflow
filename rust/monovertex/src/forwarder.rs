@@ -1,23 +1,18 @@
 use crate::config::config;
 use crate::error::{Error, Result};
 use crate::message::Offset;
-use crate::metrics::{
-    FORWARDER_ACK_TOTAL, FORWARDER_READ_BYTES_TOTAL, FORWARDER_READ_TOTAL, FORWARDER_WRITE_TOTAL,
-    MONO_VERTEX_NAME, PARTITION_LABEL, REPLICA_LABEL, VERTEX_TYPE_LABEL,
-};
+use crate::metrics;
+use crate::metrics::forward_metrics;
 use crate::sink::{proto, SinkClient};
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
 use chrono::Utc;
-use metrics::counter;
 use std::collections::HashMap;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use tracing::log::warn;
-
-const MONO_VERTEX_TYPE: &str = "mono_vertex";
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
@@ -38,15 +33,7 @@ impl Forwarder {
         transformer_client: Option<TransformerClient>,
         cln_token: CancellationToken,
     ) -> Result<Self> {
-        let common_labels = vec![
-            (
-                MONO_VERTEX_NAME.to_string(),
-                config().mono_vertex_name.clone(),
-            ),
-            (VERTEX_TYPE_LABEL.to_string(), MONO_VERTEX_TYPE.to_string()),
-            (REPLICA_LABEL.to_string(), config().replica.to_string()),
-            (PARTITION_LABEL.to_string(), "0".to_string()),
-        ];
+        let common_labels = metrics::forward_metrics_labels().clone();
 
         Ok(Self {
             source_client,
@@ -76,14 +63,14 @@ impl Forwarder {
                     // Read messages from the source
                     let messages = result?;
                     info!("Read batch size: {} and latency - {}ms", messages.len(), start_time.elapsed().as_millis());
-
+                    // emit metrics
+                    let msg_count = messages.len() as u64;
                     // collect all the offsets as the transformer can drop (via filter) messages
                     let offsets = messages.iter().map(|msg| msg.offset.clone()).collect::<Vec<Offset>>();
-
                     messages_count += messages.len() as u64;
                     let bytes_count = messages.iter().map(|msg| msg.value.len() as u64).sum::<u64>();
-                    counter!(FORWARDER_READ_TOTAL, &self.common_labels).increment(messages_count);
-                    counter!(FORWARDER_READ_BYTES_TOTAL, &self.common_labels).increment(bytes_count);
+                    forward_metrics().monovtx_read_total.get_or_create(&self.common_labels).inc_by(msg_count);
+                    forward_metrics().monovtx_read_bytes_total.get_or_create(&self.common_labels).inc_by(bytes_count);
 
                     // Apply transformation if transformer is present
                     let transformed_messages = if let Some(transformer_client) = &self.transformer_client {
@@ -107,10 +94,14 @@ impl Forwarder {
                         messages
                     };
 
+                    let transformed_msg_count = transformed_messages.len() as u64;
+                    forward_metrics().monovtx_sink_write_total.get_or_create(&self.common_labels).inc_by(transformed_msg_count);
+
                     // Write messages to the sink
                     // TODO: should we retry writing? what if the error is transient?
                     //    we could rely on gRPC retries and say that any error that is bubbled up is worthy of non-0 exit.
                     //    we need to confirm this via FMEA tests.
+
                     let mut retry_messages = transformed_messages;
                     let mut attempts = 0;
                     let mut error_map = HashMap::new();
@@ -125,7 +116,6 @@ impl Forwarder {
                                     .filter(|result| result.status != proto::Status::Success as i32)
                                     .map(|result| result.id.clone())
                                     .collect();
-
                                 attempts += 1;
 
                                 if failed_ids.is_empty() {
@@ -154,13 +144,12 @@ impl Forwarder {
                             attempts, error_map
                         )));
                     }
-
                     // Acknowledge the messages back to the source
                     let start_time = tokio::time::Instant::now();
                     self.source_client.ack_fn(offsets).await?;
                     info!("Ack latency - {}ms", start_time.elapsed().as_millis());
-
-                    counter!(FORWARDER_ACK_TOTAL, &self.common_labels).increment(messages_count);
+                    // increment the acked messages count metric
+                    forward_metrics().monovtx_ack_total.get_or_create(&self.common_labels).inc_by(msg_count);
                 }
             }
             // if the last forward was more than 1 second ago, forward a chunk print the number of messages forwarded
@@ -173,6 +162,10 @@ impl Forwarder {
                 messages_count = 0;
                 last_forwarded_at = std::time::Instant::now();
             }
+            forward_metrics()
+                .monovtx_processing_time
+                .get_or_create(&self.common_labels)
+                .observe(start_time.elapsed().as_micros() as f64);
         }
         Ok(())
     }
