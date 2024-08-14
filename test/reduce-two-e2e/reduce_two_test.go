@@ -256,10 +256,10 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 
 	w.Expect().
 		RedisSinkContains("sink", "5").
-		SinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second)).
-		SinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second)).
-		SinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second)).
-		SinkNotContains("sink", "1", SinkCheckWithTimeout(20*time.Second))
+		RedisSinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second)).
+		RedisSinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second)).
+		RedisSinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second)).
+		RedisSinkNotContains("sink", "1", SinkCheckWithTimeout(20*time.Second))
 	done <- struct{}{}
 }
 

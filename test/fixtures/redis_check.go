@@ -24,8 +24,11 @@ import (
 // Retry checking redis every 5 seconds.
 const retryInterval = time.Second * 5
 
-// RedisNotContains verifies that there is no occurrence of targetStr in redis that is written by pipelineName, sinkName.
-func RedisNotContains(ctx context.Context, pipelineName, sinkName, targetStr string, opts ...SinkCheckOption) bool {
+// redisNotContains verifies that there is no occurrence of targetStr in redis that is written by sinkParentName, sinkName.
+// a sinkParentName can be a pipeline name or a mono vertex name.
+// if the sinkName is empty, the sinkParentName is the name of a mono vertex.
+// otherwise, the sinkParentName is the name of a pipeline.
+func redisNotContains(ctx context.Context, sinkParentName, sinkName, targetStr string, opts ...SinkCheckOption) bool {
 	o := defaultRedisCheckOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -34,14 +37,16 @@ func RedisNotContains(ctx context.Context, pipelineName, sinkName, targetStr str
 	}
 	ctx, cancel := context.WithTimeout(ctx, o.timeout)
 	defer cancel()
-
 	return runChecks(ctx, func() bool {
-		return !redisContains(pipelineName, sinkName, targetStr, 1)
+		return !redisContainsCount(generateRedisKey(sinkParentName, sinkName), targetStr, 1)
 	})
 }
 
-// RedisContains verifies that there are targetStr in redis written by pipelineName, sinkName.
-func RedisContains(ctx context.Context, pipelineName, sinkName, targetStr string, opts ...SinkCheckOption) bool {
+// redisContains verifies that there are targetStr in redis written by sinkParentName, sinkName.
+// a sinkParentName can be a pipeline name or a mono vertex name.
+// if the sinkName is empty, the sinkParentName is the name of a mono vertex.
+// otherwise, the sinkParentName is the name of a pipeline.
+func redisContains(ctx context.Context, sinkParentName, sinkName, targetStr string, opts ...SinkCheckOption) bool {
 	o := defaultRedisCheckOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -50,15 +55,21 @@ func RedisContains(ctx context.Context, pipelineName, sinkName, targetStr string
 	}
 	ctx, cancel := context.WithTimeout(ctx, o.timeout)
 	defer cancel()
-
 	return runChecks(ctx, func() bool {
-		return redisContains(pipelineName, sinkName, targetStr, o.count)
+		return redisContainsCount(generateRedisKey(sinkParentName, sinkName), targetStr, o.count)
 	})
 }
 
-func redisContains(pipelineName, sinkName, targetStr string, expectedCount int) bool {
-	// If number of matches is higher than expected, we treat it as passing the check.
-	return GetMsgCountContains(pipelineName, sinkName, targetStr) >= expectedCount
+func generateRedisKey(sinkParentName, sinkName string) string {
+	if sinkName == "" {
+		return sinkParentName
+	}
+	return sinkParentName + ":" + sinkName
+}
+
+func redisContainsCount(keyName, targetStr string, expectedCount int) bool {
+	// If the number of matches is higher than expected, we treat it as passing the check.
+	return getMsgCountContains(keyName, targetStr) >= expectedCount
 }
 
 type redisCheckOptions struct {

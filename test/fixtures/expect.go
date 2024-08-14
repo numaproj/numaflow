@@ -49,11 +49,11 @@ func (t *Expect) RedisSinkContains(sinkName string, targetStr string, opts ...Si
 	ctx := context.Background()
 	var contains bool
 	if t.pipeline != nil {
-		if contains = RedisContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...); !contains {
+		if contains = redisContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...); !contains {
 			t.t.Fatalf("Expected redis contains target string %s written by pipeline %s, sink %s.", targetStr, t.pipeline.Name, sinkName)
 		}
 	} else if t.monoVertex != nil {
-		if contains = RedisContains(ctx, t.monoVertex.Name, sinkName, targetStr, opts...); !contains {
+		if contains = redisContains(ctx, t.monoVertex.Name, sinkName, targetStr, opts...); !contains {
 			t.t.Fatalf("Expected redis contains target string %s written by mono vertex %s, sink %s.", targetStr, t.monoVertex.Name, sinkName)
 		}
 	} else {
@@ -65,9 +65,17 @@ func (t *Expect) RedisSinkContains(sinkName string, targetStr string, opts ...Si
 func (t *Expect) RedisSinkNotContains(sinkName string, targetStr string, opts ...SinkCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
-	notContains := RedisNotContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...)
-	if !notContains {
-		t.t.Fatalf("Not expected redis contains target string %s written by pipeline %s, sink %s.", targetStr, t.pipeline.Name, sinkName)
+	var notContains bool
+	if t.pipeline != nil {
+		if notContains = redisNotContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...); !notContains {
+			t.t.Fatalf("Not expected redis contains target string %s written by pipeline %s, sink %s.", targetStr, t.pipeline.Name, sinkName)
+		}
+	} else if t.monoVertex != nil {
+		if notContains = redisNotContains(ctx, t.monoVertex.Name, sinkName, targetStr, opts...); !notContains {
+			t.t.Fatalf("Not expected redis contains target string %s written by mono vertex %s.", targetStr, t.monoVertex.Name)
+		}
+	} else {
+		t.t.Fatalf("Expected pipeline or mono vertex to be set")
 	}
 	return t
 }
