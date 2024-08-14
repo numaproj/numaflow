@@ -1348,7 +1348,7 @@ func pipelineDaemonSvcAddress(ns, pipelineName string) string {
 func monoVertexDaemonSvcAddress(ns, monoVertexName string) string {
 	// the format is consistent with what we defined in GetDaemonServiceURL in `pkg/apis/numaflow/v1alpha1/mono_vertex_types.go`
 	// do not change it without changing the other.
-	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-mv-daemon-svc", monoVertexName), ns, dfv1.DaemonServicePort)
+	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-mv-daemon-svc", monoVertexName), ns, dfv1.MonoVertexDaemonServicePort)
 }
 
 func (h *handler) getPipelineDaemonClient(ns, pipeline string) (daemonclient.DaemonClient, error) {
