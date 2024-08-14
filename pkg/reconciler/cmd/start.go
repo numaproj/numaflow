@@ -40,6 +40,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	isbsvcctrl "github.com/numaproj/numaflow/pkg/reconciler/isbsvc"
 	monovtxctrl "github.com/numaproj/numaflow/pkg/reconciler/monovertex"
+	mvtxscaling "github.com/numaproj/numaflow/pkg/reconciler/monovertex/scaling"
 	plctrl "github.com/numaproj/numaflow/pkg/reconciler/pipeline"
 	vertexctrl "github.com/numaproj/numaflow/pkg/reconciler/vertex"
 	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
@@ -237,8 +238,9 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	// MonoVertex controller
+	mvtxAutoscaler := mvtxscaling.NewScaler(mgr.GetClient(), mvtxscaling.WithWorkers(20))
 	monoVertexController, err := controller.New(dfv1.ControllerMonoVertex, mgr, controller.Options{
-		Reconciler: monovtxctrl.NewReconciler(mgr.GetClient(), mgr.GetScheme(), config, image, logger, mgr.GetEventRecorderFor(dfv1.ControllerMonoVertex)),
+		Reconciler: monovtxctrl.NewReconciler(mgr.GetClient(), mgr.GetScheme(), config, image, mvtxAutoscaler, logger, mgr.GetEventRecorderFor(dfv1.ControllerMonoVertex)),
 	})
 	if err != nil {
 		logger.Fatalw("Unable to set up MonoVertex controller", zap.Error(err))
@@ -276,9 +278,14 @@ func Start(namespaced bool, managedNamespace string) {
 		logger.Fatalw("Unable to watch Deployments", zap.Error(err))
 	}
 
-	// Add autoscaling runner
+	// Add Vertex autoscaling runner
 	if err := mgr.Add(LeaderElectionRunner(autoscaler.Start)); err != nil {
-		logger.Fatalw("Unable to add autoscaling runner", zap.Error(err))
+		logger.Fatalw("Unable to add Vertex autoscaling runner", zap.Error(err))
+	}
+
+	// Add MonoVertex autoscaling runner
+	if err := mgr.Add(LeaderElectionRunner(mvtxAutoscaler.Start)); err != nil {
+		logger.Fatalw("Unable to add MonoVertex autoscaling runner", zap.Error(err))
 	}
 
 	version := numaflow.GetVersion()
