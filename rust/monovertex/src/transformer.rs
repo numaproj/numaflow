@@ -151,7 +151,7 @@ mod tests {
         .await?;
 
         let message = crate::message::Message {
-            keys: vec!["first".into(), "second".into()],
+            keys: vec!["first".into()],
             value: "hello".into(),
             offset: crate::message::Offset {
                 partition_id: 0,
@@ -163,11 +163,79 @@ mod tests {
         };
 
         let resp = client.is_ready().await;
-        assert_eq!(resp, true);
+        assert!(resp);
 
         let resp = client.transform_fn(message).await?;
         assert!(resp.is_some());
         assert_eq!(resp.unwrap().len(), 1);
+
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        handle.await.expect("failed to join server task");
+        Ok(())
+    }
+
+    struct FilterCat;
+
+    #[tonic::async_trait]
+    impl sourcetransform::SourceTransformer for FilterCat {
+        async fn transform(
+            &self,
+            input: sourcetransform::SourceTransformRequest,
+        ) -> Vec<sourcetransform::Message> {
+            let message = sourcetransform::Message::new(input.value, chrono::offset::Utc::now())
+                .keys(input.keys)
+                .tags(vec!["U+005C__DROP__".to_string()]);
+            vec![message]
+        }
+    }
+
+    #[tokio::test]
+    async fn transformer_operations_with_drop() -> Result<(), Box<dyn Error>> {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new()?;
+        let sock_file = tmp_dir.path().join("sourcetransform.sock");
+        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            sourcetransform::Server::new(FilterCat)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        let mut client = TransformerClient::connect(TransformerConfig {
+            socket_path: sock_file.to_str().unwrap().to_string(),
+            server_info_file: server_info_file.to_str().unwrap().to_string(),
+            max_message_size: 4 * 1024 * 1024,
+        })
+        .await?;
+
+        let message = crate::message::Message {
+            keys: vec!["second".into()],
+            value: "hello".into(),
+            offset: crate::message::Offset {
+                partition_id: 0,
+                offset: "0".into(),
+            },
+            event_time: chrono::Utc::now(),
+            id: "".to_string(),
+            headers: Default::default(),
+        };
+
+        let resp = client.is_ready().await;
+        assert!(resp);
+
+        let resp = client.transform_fn(message).await?;
+        assert!(resp.is_none());
 
         shutdown_tx
             .send(())
