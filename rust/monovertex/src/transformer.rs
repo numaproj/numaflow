@@ -11,6 +11,7 @@ pub mod proto {
     tonic::include_proto!("sourcetransformer.v1");
 }
 
+const DROP: &str = "U+005C__DROP__";
 const RECONNECT_INTERVAL: u64 = 1000;
 const MAX_RECONNECT_ATTEMPTS: usize = 5;
 const TRANSFORMER_SOCKET: &str = "/var/run/numaflow/sourcetransform.sock";
@@ -58,7 +59,7 @@ impl TransformerClient {
         Ok(Self { client })
     }
 
-    pub(crate) async fn transform_fn(&mut self, message: Message) -> Result<Vec<Message>> {
+    pub(crate) async fn transform_fn(&mut self, message: Message) -> Result<Option<Vec<Message>>> {
         // fields which will not be changed
         let offset = message.offset.clone();
         let id = message.id.clone();
@@ -74,6 +75,10 @@ impl TransformerClient {
 
         let mut messages = Vec::new();
         for result in response.results {
+            // if the message is tagged with DROP, we will not forward it.
+            if result.tags.contains(&DROP.to_string()) {
+                return Ok(None);
+            }
             let message = Message {
                 keys: result.keys,
                 value: result.value,
@@ -85,7 +90,7 @@ impl TransformerClient {
             messages.push(message);
         }
 
-        Ok(messages)
+        Ok(Some(messages))
     }
 
     pub(crate) async fn is_ready(&mut self) -> bool {
@@ -161,7 +166,8 @@ mod tests {
         assert_eq!(resp, true);
 
         let resp = client.transform_fn(message).await?;
-        assert_eq!(resp.len(), 1);
+        assert!(resp.is_some());
+        assert_eq!(resp.unwrap().len(), 1);
 
         shutdown_tx
             .send(())

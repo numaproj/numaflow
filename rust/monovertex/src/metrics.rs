@@ -107,7 +107,7 @@ pub(crate) async fn start_metrics_https_server(
 
 /// router for metrics and k8s health endpoints
 fn metrics_router(recorder_handle: PrometheusHandle, metrics_state: MetricsState) -> Router {
-     Router::new()
+    Router::new()
         .route("/metrics", get(move || ready(recorder_handle.render())))
         .route("/livez", get(livez))
         .route("/readyz", get(readyz))
@@ -197,7 +197,6 @@ pub(crate) struct LagReader {
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 }
 
-
 /// LagReaderBuilder is used to build a `LagReader` instance.
 pub(crate) struct LagReaderBuilder {
     source_client: SourceClient,
@@ -227,8 +226,12 @@ impl LagReaderBuilder {
     pub(crate) fn build(self) -> LagReader {
         LagReader {
             source_client: self.source_client,
-            lag_checking_interval: self.lag_checking_interval.unwrap_or_else(|| Duration::from_secs(3)),
-            refresh_interval: self.refresh_interval.unwrap_or_else(|| Duration::from_secs(5)),
+            lag_checking_interval: self
+                .lag_checking_interval
+                .unwrap_or_else(|| Duration::from_secs(3)),
+            refresh_interval: self
+                .refresh_interval
+                .unwrap_or_else(|| Duration::from_secs(5)),
             buildup_handle: None,
             expose_handle: None,
             pending_stats: Arc::new(Mutex::new(Vec::with_capacity(MAX_PENDING_STATS))),

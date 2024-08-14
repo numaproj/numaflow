@@ -1,11 +1,3 @@
-use chrono::Utc;
-use metrics::counter;
-use std::collections::HashMap;
-use tokio::task::JoinSet;
-use tokio::time::sleep;
-use tokio_util::sync::CancellationToken;
-use tracing::info;
-use tracing::log::warn;
 use crate::config::config;
 use crate::error::{Error, Result};
 use crate::message::Offset;
@@ -16,6 +8,14 @@ use crate::metrics::{
 use crate::sink::{proto, SinkClient};
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
+use chrono::Utc;
+use metrics::counter;
+use std::collections::HashMap;
+use tokio::task::JoinSet;
+use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
+use tracing::info;
+use tracing::log::warn;
 
 const MONO_VERTEX_TYPE: &str = "mono_vertex";
 
@@ -95,7 +95,9 @@ impl Forwarder {
                         while let Some(task) = jh.join_next().await {
                             let result = task.map_err(|e| Error::TransformerError(format!("{:?}", e)))?;
                             let result = result?;
-                            results.extend(result);
+                            if let Some(result) = result {
+                                results.extend(result);
+                            }
                         }
                         info!("Transformer latency - {}ms", start_time.elapsed().as_millis());
                         results
@@ -133,7 +135,7 @@ impl Forwarder {
                                 self.source_client.ack_fn(successful_offsets).await?;
                                 counter!(FORWARDER_WRITE_TOTAL, &self.common_labels).increment(n as u64);
                                 attempts += 1;
-                                
+
                                 if failed_ids.is_empty() {
                                     break;
                                 } else {
