@@ -47,7 +47,7 @@ var (
 
 	MonoVertexHealth = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
-		Name:      "mvtx_health",
+		Name:      "monovtx_health",
 		Help:      "A metric to indicate whether the MonoVertex is healthy. '1' means healthy, '0' means unhealthy",
 	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertexName})
 
@@ -82,14 +82,14 @@ var (
 	// MonoVertexDesiredReplicas indicates the desired replicas of a MonoVertex.
 	MonoVertexDesiredReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
-		Name:      "mvtx_desired_replicas",
+		Name:      "monovtx_desired_replicas",
 		Help:      "A metric indicates the desired replicas of a MonoVertex",
 	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertexName})
 
 	// MonoVertexCurrentReplicas indicates the current replicas of a MonoVertex.
 	MonoVertexCurrentReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
-		Name:      "mvtx_current_replicas",
+		Name:      "monovtx_current_replicas",
 		Help:      "A metric indicates the current replicas of a MonoVertex",
 	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertexName})
 )

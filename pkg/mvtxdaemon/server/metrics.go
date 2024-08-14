@@ -25,7 +25,7 @@ import (
 
 var (
 	monoVertexInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: "mvtx",
+		Subsystem: "monovtx",
 		Name:      "build_info",
 		Help:      "A metric with a constant value '1', labeled by Numaflow binary version and platform, as well as the mono vertex name",
 	}, []string{metrics.LabelVersion, metrics.LabelPlatform, metrics.LabelMonoVertexName})
