@@ -46,4 +46,5 @@ type Handler interface {
 	GetMonoVertex(c *gin.Context)
 	ListMonoVertexPods(c *gin.Context)
 	CreateMonoVertex(c *gin.Context)
+	GetMonoVertexMetrics(c *gin.Context)
 }

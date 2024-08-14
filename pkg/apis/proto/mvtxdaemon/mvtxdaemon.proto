@@ -1,0 +1,47 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+syntax = "proto3";
+
+option go_package = "github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon";
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/wrappers.proto";
+
+package mvtxdaemon;
+
+// MonoVertexMetrics is used to provide information about the mono vertex including processing rate.
+message MonoVertexMetrics {
+  string monoVertex = 1;
+  // Processing rate in the past period of time, 1m, 5m, 15m, default
+  map<string, google.protobuf.DoubleValue> processingRates = 2;
+  // Pending in the past period of time, 1m, 5m, 15m, default
+  map<string, google.protobuf.Int64Value> pendings = 3;
+}
+
+message GetMonoVertexMetricsResponse {
+  MonoVertexMetrics metrics = 1;
+}
+
+// MonoVertexDaemonService is a grpc service that is used to provide APIs for giving any MonoVertex information.
+service MonoVertexDaemonService {
+
+  rpc GetMonoVertexMetrics (google.protobuf.Empty) returns (GetMonoVertexMetricsResponse) {
+    option (google.api.http).get = "/api/v1/metrics";
+  };
+
+}
