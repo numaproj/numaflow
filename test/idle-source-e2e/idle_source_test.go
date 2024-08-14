@@ -87,8 +87,8 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 	// since the key can be even or odd and the window duration is 10s
 	// the sum should be 20(for even) and 40(for odd)
 	w.Expect().
-		SinkContains("sink", "20", SinkCheckWithTimeout(300*time.Second)).
-		SinkContains("sink", "40", SinkCheckWithTimeout(300*time.Second))
+		RedisSinkContains("sink", "20", SinkCheckWithTimeout(300*time.Second)).
+		RedisSinkContains("sink", "40", SinkCheckWithTimeout(300*time.Second))
 	done <- struct{}{}
 }
 
@@ -138,9 +138,9 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 	}()
 
 	// since the window duration is 10 second, so the count of event will be 20, when sending data to both partitions.
-	w.Expect().SinkContains("sink", "20", SinkCheckWithTimeout(300*time.Second))
+	w.Expect().RedisSinkContains("sink", "20", SinkCheckWithTimeout(300*time.Second))
 	// since the window duration is 10 second, so the count of event will be 10, when sending data to only one partition.
-	w.Expect().SinkContains("sink", "10", SinkCheckWithTimeout(300*time.Second))
+	w.Expect().RedisSinkContains("sink", "10", SinkCheckWithTimeout(300*time.Second))
 
 	done <- struct{}{}
 }

@@ -230,6 +230,66 @@ func WaitForPipelineRunning(ctx context.Context, pipelineClient flowpkg.Pipeline
 	}
 }
 
+func WaitForMonoVertexRunning(ctx context.Context, monoVertexClient flowpkg.MonoVertexInterface, monoVertexName string, timeout time.Duration) error {
+	fieldSelector := "metadata.name=" + monoVertexName
+	opts := metav1.ListOptions{FieldSelector: fieldSelector}
+	watch, err := monoVertexClient.Watch(ctx, opts)
+	if err != nil {
+		return err
+	}
+	defer watch.Stop()
+	timeoutCh := make(chan bool, 1)
+	go func() {
+		time.Sleep(timeout)
+		timeoutCh <- true
+	}()
+	for {
+		select {
+		case event := <-watch.ResultChan():
+			i, ok := event.Object.(*dfv1.MonoVertex)
+			if ok {
+				if i.Status.Phase == dfv1.MonoVertexPhaseRunning {
+					return nil
+				}
+			} else {
+				return fmt.Errorf("not monovertex")
+			}
+		case <-timeoutCh:
+			return fmt.Errorf("timeout after %v waiting for MonoVertex running", timeout)
+		}
+	}
+}
+
+func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClient flowpkg.MonoVertexInterface, namespace, monoVertexName string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	labelSelector := fmt.Sprintf("%s=%s", dfv1.KeyMonoVertexName, monoVertexName)
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout after %v waiting for monovertex pod running", timeout)
+		default:
+		}
+		monoVertexList, err := monoVertexClient.List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+		if err != nil {
+			return fmt.Errorf("error getting monovertex list: %w", err)
+		}
+		ok := len(monoVertexList.Items) == 1
+		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+		if err != nil {
+			return fmt.Errorf("error getting monovertex pod name: %w", err)
+		}
+		ok = ok && len(podList.Items) > 0
+		for _, p := range podList.Items {
+			ok = ok && p.Status.Phase == corev1.PodRunning
+		}
+		if ok {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
 func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowpkg.VertexInterface, namespace, pipelineName, vertexName string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -287,10 +347,57 @@ func WaitForVertexPodScalingTo(kubeClient kubernetes.Interface, vertexClient flo
 	}
 }
 
+func WaitForMonoVertexPodScalingTo(kubeClient kubernetes.Interface, monoVertexClient flowpkg.MonoVertexInterface, namespace, monoVertexName string, timeout time.Duration, size int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	labelSelector := fmt.Sprintf("%s=%s", dfv1.KeyMonoVertexName, monoVertexName)
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout after %v waiting for monovertex pod scaling", timeout)
+		default:
+		}
+		monoVertexList, err := monoVertexClient.List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+		if err != nil {
+			return fmt.Errorf("error getting monovertex list: %w", err)
+		}
+		ok := len(monoVertexList.Items) == 1
+		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+		if err != nil {
+			return fmt.Errorf("error getting monovertex pod list: %w", err)
+		}
+		ok = ok && len(podList.Items) == size
+		if ok {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
 func WaitForDaemonPodsRunning(kubeClient kubernetes.Interface, namespace, pipelineName string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyComponent, dfv1.ComponentDaemon)
+	for {
+		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+		if err != nil {
+			return fmt.Errorf("error getting daemon pod name: %w", err)
+		}
+		ok := len(podList.Items) > 0
+		for _, p := range podList.Items {
+			ok = ok && p.Status.Phase == corev1.PodRunning
+		}
+		if ok {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+func WaitForMonoVertexDaemonPodsRunning(kubeClient kubernetes.Interface, namespace, monoVertexName string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, monoVertexName, dfv1.KeyComponent, dfv1.ComponentDaemon)
 	for {
 		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
 		if err != nil {

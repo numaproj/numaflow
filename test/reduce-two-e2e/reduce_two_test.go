@@ -83,7 +83,7 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 	// The reduce stream application summarizes the input messages and returns the sum when the sum is greater than 100.
 	// Since we are sending 3s, the first returned message should be 102.
 	// There should be no other values.
-	w.Expect().SinkContains("sink", "102")
+	w.Expect().RedisSinkContains("sink", "102")
 	w.Expect().SinkNotContains("sink", "99")
 	w.Expect().SinkNotContains("sink", "105")
 	done <- struct{}{}
@@ -132,7 +132,7 @@ func (r *ReduceSuite) TestSimpleSessionPipeline() {
 		}
 	}()
 
-	w.Expect().SinkContains("sink", "1000")
+	w.Expect().RedisSinkContains("sink", "1000")
 	done <- struct{}{}
 }
 
@@ -190,7 +190,7 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 		}
 	}()
 
-	w.Expect().SinkContains("sink", "5")
+	w.Expect().RedisSinkContains("sink", "5")
 	w.Expect().SinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second))
 	w.Expect().SinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second))
 	w.Expect().SinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second))
@@ -255,7 +255,7 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 	}()
 
 	w.Expect().
-		SinkContains("sink", "5").
+		RedisSinkContains("sink", "5").
 		SinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second)).
 		SinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second)).
 		SinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second)).

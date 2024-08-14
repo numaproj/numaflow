@@ -1,0 +1,15 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: simple-mono-vertex
+spec:
+  source:
+    udsource:
+      container:
+        image:  quay.io/numaio/numaflow-go/source-simple-source:stable
+  sink:
+    udsink:
+      container:
+        # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis-sink
+        image: quay.io/numaio/numaflow-go/redis-sink:stable
+        imagePullPolicy: Always

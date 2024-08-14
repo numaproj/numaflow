@@ -61,8 +61,8 @@ func (s *TransformerSuite) TestSourceFiltering() {
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect3))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect4)))
 
-	w.Expect().SinkContains("out", expect3)
-	w.Expect().SinkContains("out", expect4)
+	w.Expect().RedisSinkContains("out", expect3)
+	w.Expect().RedisSinkContains("out", expect4)
 	w.Expect().SinkNotContains("out", expect0)
 	w.Expect().SinkNotContains("out", expect1)
 	w.Expect().SinkNotContains("out", expect2)

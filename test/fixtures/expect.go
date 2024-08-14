@@ -32,20 +32,29 @@ import (
 )
 
 type Expect struct {
-	t              *testing.T
-	isbSvcClient   flowpkg.InterStepBufferServiceInterface
-	pipelineClient flowpkg.PipelineInterface
-	vertexClient   flowpkg.VertexInterface
-	isbSvc         *dfv1.InterStepBufferService
-	pipeline       *dfv1.Pipeline
-	restConfig     *rest.Config
-	kubeClient     kubernetes.Interface
+	t                *testing.T
+	isbSvcClient     flowpkg.InterStepBufferServiceInterface
+	pipelineClient   flowpkg.PipelineInterface
+	vertexClient     flowpkg.VertexInterface
+	monoVertexClient flowpkg.MonoVertexInterface
+	isbSvc           *dfv1.InterStepBufferService
+	pipeline         *dfv1.Pipeline
+	monoVertex       *dfv1.MonoVertex
+	restConfig       *rest.Config
+	kubeClient       kubernetes.Interface
 }
 
-func (t *Expect) SinkContains(sinkName string, targetStr string, opts ...SinkCheckOption) *Expect {
+func (t *Expect) RedisSinkContains(sinkName string, targetStr string, opts ...SinkCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
-	contains := RedisContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...)
+	var contains bool
+	if t.pipeline != nil {
+		contains = RedisContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...)
+	} else if t.monoVertex != nil {
+		contains = RedisContains(ctx, t.monoVertex.Name, sinkName, targetStr, opts...)
+	} else {
+		t.t.Fatalf("Expected pipeline or mono vertex to be set")
+	}
 	if !contains {
 		t.t.Fatalf("Expected redis contains target string %s written by pipeline %s, sink %s.", targetStr, t.pipeline.Name, sinkName)
 	}
@@ -112,6 +121,15 @@ func (t *Expect) VertexPodsRunning() *Expect {
 	return t
 }
 
+func (t *Expect) MonoVertexPodsRunning() *Expect {
+	t.t.Helper()
+	if err := WaitForMonoVertexPodRunning(t.kubeClient, t.monoVertexClient, Namespace, t.monoVertex.Name, 2*time.Minute); err != nil {
+		t.t.Fatalf("Expected mono vertex %q pod running: %v", t.monoVertex.Name, err)
+	}
+	return t
+
+}
+
 func (t *Expect) VertexSizeScaledTo(v string, size int) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
@@ -125,6 +143,21 @@ func (t *Expect) VertexSizeScaledTo(v string, size int) *Expect {
 		t.t.Fatalf("Expected %d pods running on vertex %s : %v", size, v, err)
 	}
 	return t
+}
+
+func (t *Expect) MonoVertexSizeScaledTo(mv string, size int) *Expect {
+	t.t.Helper()
+	ctx := context.Background()
+	if _, err := t.monoVertexClient.Get(ctx, mv, metav1.GetOptions{}); err != nil {
+		t.t.Fatalf("Expected mono vertex %s existing: %v", mv, err)
+	}
+
+	timeout := 2 * time.Minute
+	if err := WaitForMonoVertexPodScalingTo(t.kubeClient, t.monoVertexClient, Namespace, mv, timeout, size); err != nil {
+		t.t.Fatalf("Expected %d pods running on mono vertex %s : %v", size, mv, err)
+	}
+	return t
+
 }
 
 func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCheckOption) *Expect {
@@ -163,6 +196,15 @@ func (t *Expect) DaemonPodsRunning() *Expect {
 	return t
 }
 
+func (t *Expect) MonoVertexDaemonPodsRunning() *Expect {
+	t.t.Helper()
+	timeout := 2 * time.Minute
+	if err := WaitForMonoVertexDaemonPodsRunning(t.kubeClient, Namespace, t.monoVertex.Name, timeout); err != nil {
+		t.t.Fatalf("Expected daemon pods of mono vertex %q running: %v", t.monoVertex.Name, err)
+	}
+	return t
+}
+
 func (t *Expect) DaemonPodLogContains(pipelineName, regex string, opts ...PodLogCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
@@ -178,13 +220,14 @@ func (t *Expect) DaemonPodLogContains(pipelineName, regex string, opts ...PodLog
 
 func (t *Expect) When() *When {
 	return &When{
-		t:              t.t,
-		isbSvcClient:   t.isbSvcClient,
-		pipelineClient: t.pipelineClient,
-		vertexClient:   t.vertexClient,
-		isbSvc:         t.isbSvc,
-		pipeline:       t.pipeline,
-		restConfig:     t.restConfig,
-		kubeClient:     t.kubeClient,
+		t:                t.t,
+		isbSvcClient:     t.isbSvcClient,
+		pipelineClient:   t.pipelineClient,
+		vertexClient:     t.vertexClient,
+		monoVertexClient: t.monoVertexClient,
+		isbSvc:           t.isbSvc,
+		pipeline:         t.pipeline,
+		restConfig:       t.restConfig,
+		kubeClient:       t.kubeClient,
 	}
 }

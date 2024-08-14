@@ -21,8 +21,9 @@ package jetstream_e2e
 import (
 	"testing"
 
-	"github.com/numaproj/numaflow/test/fixtures"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/numaproj/numaflow/test/fixtures"
 )
 
 //go:generate kubectl -n numaflow-system delete statefulset nats --ignore-not-found=true
@@ -47,7 +48,7 @@ func (ns *JetstreamSuite) TestJetstreamSource() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	w.Expect().SinkContains("out", msgPayload, fixtures.SinkCheckWithContainCount(100))
+	w.Expect().RedisSinkContains("out", msgPayload, fixtures.SinkCheckWithContainCount(100))
 }
 
 func TestJetstreamSuite(t *testing.T) {

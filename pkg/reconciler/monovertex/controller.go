@@ -163,21 +163,21 @@ func (mr *monoVertexReconciler) reconcilePods(ctx context.Context, monoVtx *dfv1
 			}
 		}
 		if needToCreate {
-			labels := map[string]string{}
+			podLabels := map[string]string{}
 			annotations := map[string]string{}
 			if x := monoVtx.Spec.Metadata; x != nil {
 				for k, v := range x.Annotations {
 					annotations[k] = v
 				}
 				for k, v := range x.Labels {
-					labels[k] = v
+					podLabels[k] = v
 				}
 			}
-			labels[dfv1.KeyPartOf] = dfv1.Project
-			labels[dfv1.KeyManagedBy] = dfv1.ControllerMonoVertex
-			labels[dfv1.KeyComponent] = dfv1.ComponentMonoVertex
-			labels[dfv1.KeyAppName] = monoVtx.Name
-			labels[dfv1.KeyMonoVertexName] = monoVtx.Name
+			podLabels[dfv1.KeyPartOf] = dfv1.Project
+			podLabels[dfv1.KeyManagedBy] = dfv1.ControllerMonoVertex
+			podLabels[dfv1.KeyComponent] = dfv1.ComponentMonoVertex
+			podLabels[dfv1.KeyAppName] = monoVtx.Name
+			podLabels[dfv1.KeyMonoVertexName] = monoVtx.Name
 			annotations[dfv1.KeyHash] = hash
 			annotations[dfv1.KeyReplica] = strconv.Itoa(replica)
 			// Defaults to udf
@@ -186,7 +186,7 @@ func (mr *monoVertexReconciler) reconcilePods(ctx context.Context, monoVtx *dfv1
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace:       monoVtx.Namespace,
 					Name:            podNamePrefix + sharedutil.RandomLowerCaseString(5),
-					Labels:          labels,
+					Labels:          podLabels,
 					Annotations:     annotations,
 					OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(monoVtx.GetObjectMeta(), dfv1.MonoVertexGroupVersionKind)},
 				},
@@ -369,10 +369,10 @@ func (mr *monoVertexReconciler) createOrUpdateDaemonDeployment(ctx context.Conte
 	return nil
 }
 
-func (r *monoVertexReconciler) findExistingPods(ctx context.Context, monoVtx *dfv1.MonoVertex) (map[string]corev1.Pod, error) {
+func (mr *monoVertexReconciler) findExistingPods(ctx context.Context, monoVtx *dfv1.MonoVertex) (map[string]corev1.Pod, error) {
 	pods := &corev1.PodList{}
 	selector, _ := labels.Parse(dfv1.KeyComponent + "=" + dfv1.ComponentMonoVertex + "," + dfv1.KeyMonoVertexName + "=" + monoVtx.Name)
-	if err := r.client.List(ctx, pods, &client.ListOptions{Namespace: monoVtx.Namespace, LabelSelector: selector}); err != nil {
+	if err := mr.client.List(ctx, pods, &client.ListOptions{Namespace: monoVtx.Namespace, LabelSelector: selector}); err != nil {
 		return nil, fmt.Errorf("failed to list mono vertex pods: %w", err)
 	}
 	result := make(map[string]corev1.Pod)

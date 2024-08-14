@@ -70,8 +70,8 @@ func (s *SideInputSuite) TestSimpleMapSideInputPipeline() {
 	}()
 
 	// map-even-data and map-odd-data message is generated based on map and side input data.
-	w.Expect().SinkContains("sink", "map-even-data")
-	w.Expect().SinkContains("sink", "map-odd-data")
+	w.Expect().RedisSinkContains("sink", "map-even-data")
+	w.Expect().RedisSinkContains("sink", "map-odd-data")
 
 	done <- struct{}{}
 }
@@ -114,7 +114,7 @@ func (s *SideInputSuite) TestSimpleReduceSideInputPipeline() {
 	}()
 
 	// here reduce-side-input text is generated based on reduce and side input data.
-	w.Expect().SinkContains("sink", "reduce_sideinput")
+	w.Expect().RedisSinkContains("sink", "reduce_sideinput")
 
 	done <- struct{}{}
 }
