@@ -1,11 +1,3 @@
-use chrono::Utc;
-use metrics::counter;
-use std::collections::HashMap;
-use tokio::task::JoinSet;
-use tokio::time::sleep;
-use tokio_util::sync::CancellationToken;
-use tracing::info;
-use tracing::log::warn;
 use crate::config::config;
 use crate::error::{Error, Result};
 use crate::message::Offset;
@@ -16,6 +8,14 @@ use crate::metrics::{
 use crate::sink::{proto, SinkClient};
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
+use chrono::Utc;
+use metrics::counter;
+use std::collections::HashMap;
+use tokio::task::JoinSet;
+use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
+use tracing::info;
+use tracing::log::warn;
 
 const MONO_VERTEX_TYPE: &str = "mono_vertex";
 
@@ -76,6 +76,7 @@ impl Forwarder {
                     // Read messages from the source
                     let messages = result?;
                     info!("Read batch size: {} and latency - {}ms", messages.len(), start_time.elapsed().as_millis());
+                    let offsets = messages.iter().map(|msg| msg.offset.clone()).collect::<Vec<Offset>>();
 
                     messages_count += messages.len() as u64;
                     let bytes_count = messages.iter().map(|msg| msg.value.len() as u64).sum::<u64>();
@@ -122,18 +123,8 @@ impl Forwarder {
                                     .map(|result| result.id.clone())
                                     .collect();
 
-                                let successful_offsets: Vec<Offset> = retry_messages.iter()
-                                    .filter(|msg| !failed_ids.contains(&msg.id))
-                                    .map(|msg| msg.offset.clone())
-                                    .collect();
-
-
-                                // ack the successful offsets
-                                let n = successful_offsets.len();
-                                self.source_client.ack_fn(successful_offsets).await?;
-                                counter!(FORWARDER_WRITE_TOTAL, &self.common_labels).increment(n as u64);
                                 attempts += 1;
-                                
+
                                 if failed_ids.is_empty() {
                                     break;
                                 } else {
@@ -160,6 +151,11 @@ impl Forwarder {
                             attempts, error_map
                         )));
                     }
+
+                    // Acknowledge the messages back to the source
+                    let start_time = tokio::time::Instant::now();
+                    self.source_client.ack_fn(offsets).await?;
+                    info!("Ack latency - {}ms", start_time.elapsed().as_millis());
 
                     counter!(FORWARDER_ACK_TOTAL, &self.common_labels).increment(messages_count);
                 }
