@@ -470,6 +470,18 @@ func VertexPodLogContains(ctx context.Context, kubeClient kubernetes.Interface, 
 	return PodsLogContains(ctx, kubeClient, namespace, regex, podList, opts...), nil
 }
 
+func MonoVertexPodLogContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, mvName, regex string, opts ...PodLogCheckOption) (bool, error) {
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, mvName, dfv1.KeyComponent, dfv1.ComponentMonoVertex)
+	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		return false, fmt.Errorf("error getting monovertex pods: %w", err)
+	}
+	if len(podList.Items) == 0 {
+		return false, fmt.Errorf("no monovertex pods found")
+	}
+	return PodsLogContains(ctx, kubeClient, namespace, regex, podList, opts...), nil
+}
+
 func DaemonPodLogContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, pipelineName, regex string, opts ...PodLogCheckOption) (bool, error) {
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyComponent, dfv1.ComponentDaemon)
 	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})

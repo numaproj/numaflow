@@ -2,6 +2,7 @@ package monovertex_e2e
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -33,8 +34,14 @@ func (s *MonoVertexSuite) TestMonoVertexWithTransformer() {
 	// FIXME - there is something wrong with retrieving pod status, hence this call times out
 	// I commented out temporarily to assume all pods are running.
 	// w.Expect().MonoVertexPodsRunning()
+	println("Sleeping for 60 seconds to allow the transformer to process the messages.")
+	time.Sleep(60 * time.Second)
+	println("Awake.")
 
-	// TODO: fix appropriate target string..
+	// Expect the messages to be processed by the transformer.
+	w.Expect().MonoVertexPodLogContains("AssignEventTime", PodLogCheckOptionWithContainer("transformer"))
+
+	// Expect the messages to reach the sink.
 	w.Expect().RedisSinkContains("transformer-mono-vertex", "199")
 	w.Expect().RedisSinkContains("transformer-mono-vertex", "200")
 }

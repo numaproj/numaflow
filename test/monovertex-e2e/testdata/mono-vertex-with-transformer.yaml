@@ -7,9 +7,11 @@ spec:
     udsource:
       container:
         image:  quay.io/numaio/numaflow-go/source-simple-source:stable
+        imagePullPolicy: Always
     transformer:
       container:
-          image: quay.io/numaio/numaflow-rs/mapt-event-time-filter:stable
+          image: quay.io/numaio/numaflow-go/mapt-assign-event-time:stable
+          imagePullPolicy: Always
   sink:
     udsink:
       container:
