@@ -61,11 +61,11 @@ func (s *TransformerSuite) TestSourceFiltering() {
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect3))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect4)))
 
-	w.Expect().RedisSinkContains("out", expect3)
-	w.Expect().RedisSinkContains("out", expect4)
-	w.Expect().RedisSinkNotContains("out", expect0)
-	w.Expect().RedisSinkNotContains("out", expect1)
-	w.Expect().RedisSinkNotContains("out", expect2)
+	w.Expect().RedisSinkContains("source-filtering-out", expect3)
+	w.Expect().RedisSinkContains("source-filtering-out", expect4)
+	w.Expect().RedisSinkNotContains("source-filtering-out", expect0)
+	w.Expect().RedisSinkNotContains("source-filtering-out", expect1)
+	w.Expect().RedisSinkNotContains("source-filtering-out", expect2)
 }
 
 func (s *TransformerSuite) TestTimeExtractionFilter() {
@@ -84,7 +84,7 @@ func (s *TransformerSuite) TestTimeExtractionFilter() {
 
 	testMsgTwo := `{"id": 101, "msg": "test", "time": "2021-01-18T21:54:42.123Z", "desc": "A bad ID."}`
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgTwo)))
-	w.Expect().RedisSinkNotContains("out", testMsgTwo)
+	w.Expect().RedisSinkNotContains("time-extraction-filter-out", testMsgTwo)
 }
 
 func (s *TransformerSuite) TestBuiltinEventTimeExtractor() {

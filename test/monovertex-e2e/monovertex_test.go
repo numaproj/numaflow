@@ -21,8 +21,8 @@ func (s *MonoVertexSuite) TestSimpleMonoVertex() {
 	// I commented out temporarily to assume all pods are running.
 	// w.Expect().MonoVertexPodsRunning()
 
-	w.Expect().RedisSinkContains("", "199")
-	w.Expect().RedisSinkContains("", "200")
+	w.Expect().RedisSinkContains("simple-mono-vertex", "199")
+	w.Expect().RedisSinkContains("simple-mono-vertex", "200")
 }
 
 func (s *MonoVertexSuite) TestMonoVertexWithTransformer() {
@@ -35,8 +35,8 @@ func (s *MonoVertexSuite) TestMonoVertexWithTransformer() {
 	// w.Expect().MonoVertexPodsRunning()
 
 	// TODO: fix appropriate target string..
-	w.Expect().RedisSinkContains("mono-vertex-with-transformer", "199")
-	w.Expect().RedisSinkContains("mono-vertex-with-transformer", "200")
+	w.Expect().RedisSinkContains("transformer-mono-vertex", "199")
+	w.Expect().RedisSinkContains("transformer-mono-vertex", "200")
 }
 
 func TestMonoVertexSuite(t *testing.T) {

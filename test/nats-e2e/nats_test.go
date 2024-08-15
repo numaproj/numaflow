@@ -45,7 +45,7 @@ func (ns *NatsSuite) TestNatsSource() {
 	w.Expect().VertexPodsRunning()
 
 	PumpNatsSubject(subject, 100, 20*time.Millisecond, 10, "test-message")
-	w.Expect().RedisSinkContains("out", "test-message", SinkCheckWithContainCount(100))
+	w.Expect().RedisSinkContains("nats-source-e2e-out", "test-message", SinkCheckWithContainCount(100))
 }
 
 func TestNatsSuite(t *testing.T) {

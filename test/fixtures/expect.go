@@ -44,38 +44,26 @@ type Expect struct {
 	kubeClient       kubernetes.Interface
 }
 
-func (t *Expect) RedisSinkContains(sinkName string, targetStr string, opts ...SinkCheckOption) *Expect {
+// RedisSinkContains checks if the target string is written to the redis sink
+// hashKey is the hash key environment variable set by the sink
+// targetStr is the target string to check
+func (t *Expect) RedisSinkContains(hashKey string, targetStr string, opts ...SinkCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
-	var contains bool
-	if t.pipeline != nil {
-		if contains = redisContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...); !contains {
-			t.t.Fatalf("Expected redis contains target string %s written by pipeline %s, sink %s.", targetStr, t.pipeline.Name, sinkName)
-		}
-	} else if t.monoVertex != nil {
-		if contains = redisContains(ctx, t.monoVertex.Name, sinkName, targetStr, opts...); !contains {
-			t.t.Fatalf("Expected redis contains target string %s written by mono vertex %s, sink %s.", targetStr, t.monoVertex.Name, sinkName)
-		}
-	} else {
-		t.t.Fatalf("Expected pipeline or mono vertex to be set")
+	if contains := redisContains(ctx, hashKey, targetStr, opts...); !contains {
+		t.t.Fatalf("Expected redis contains target string %s written under hash key %s.", targetStr, hashKey)
 	}
 	return t
 }
 
-func (t *Expect) RedisSinkNotContains(sinkName string, targetStr string, opts ...SinkCheckOption) *Expect {
+// RedisSinkNotContains checks if the target string is not written to the redis sink
+// hashKey is the hash key environment variable set by the sink
+// targetStr is the target string to check
+func (t *Expect) RedisSinkNotContains(hashKey string, targetStr string, opts ...SinkCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
-	var notContains bool
-	if t.pipeline != nil {
-		if notContains = redisNotContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...); !notContains {
-			t.t.Fatalf("Not expected redis contains target string %s written by pipeline %s, sink %s.", targetStr, t.pipeline.Name, sinkName)
-		}
-	} else if t.monoVertex != nil {
-		if notContains = redisNotContains(ctx, t.monoVertex.Name, sinkName, targetStr, opts...); !notContains {
-			t.t.Fatalf("Not expected redis contains target string %s written by mono vertex %s.", targetStr, t.monoVertex.Name)
-		}
-	} else {
-		t.t.Fatalf("Expected pipeline or mono vertex to be set")
+	if notContain := redisNotContains(ctx, hashKey, targetStr, opts...); !notContain {
+		t.t.Fatalf("Not expected redis contains target string %s written under hash key %s.", targetStr, hashKey)
 	}
 	return t
 }

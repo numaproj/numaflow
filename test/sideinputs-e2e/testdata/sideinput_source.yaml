@@ -29,8 +29,11 @@ spec:
         udsink:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis-sink
-            image: quay.io/numaio/numaflow-go/redis-sink:stable
+            image: quay.io/numaio/numaflow-go/redis-sink:hash
             imagePullPolicy: Always
+            env:
+              - name: SINK_HASH_KEY
+                value: "sideinput-source-test-redis-uds"
       sideInputs:
         - myticker
   edges:

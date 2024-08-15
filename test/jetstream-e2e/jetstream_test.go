@@ -48,7 +48,7 @@ func (ns *JetstreamSuite) TestJetstreamSource() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	w.Expect().RedisSinkContains("out", msgPayload, fixtures.SinkCheckWithContainCount(100))
+	w.Expect().RedisSinkContains("jetstream-source-e2e-out", msgPayload, fixtures.SinkCheckWithContainCount(100))
 }
 
 func TestJetstreamSuite(t *testing.T) {

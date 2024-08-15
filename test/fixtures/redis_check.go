@@ -24,11 +24,8 @@ import (
 // Retry checking redis every 5 seconds.
 const retryInterval = time.Second * 5
 
-// redisNotContains verifies that there is no occurrence of targetStr in redis that is written by sinkParentName, sinkName.
-// a sinkParentName can be a pipeline name or a mono vertex name.
-// if the sinkName is empty, the sinkParentName is the name of a mono vertex.
-// otherwise, the sinkParentName is the name of a pipeline.
-func redisNotContains(ctx context.Context, sinkParentName, sinkName, targetStr string, opts ...SinkCheckOption) bool {
+// redisNotContains verifies that there is no occurrence of targetStr in redis that is written under hashKey.
+func redisNotContains(ctx context.Context, hashKey, targetStr string, opts ...SinkCheckOption) bool {
 	o := defaultRedisCheckOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -38,15 +35,12 @@ func redisNotContains(ctx context.Context, sinkParentName, sinkName, targetStr s
 	ctx, cancel := context.WithTimeout(ctx, o.timeout)
 	defer cancel()
 	return runChecks(ctx, func() bool {
-		return !redisContainsCount(generateRedisKey(sinkParentName, sinkName), targetStr, 1)
+		return !redisContainsCount(hashKey, targetStr, 1)
 	})
 }
 
-// redisContains verifies that there are targetStr in redis written by sinkParentName, sinkName.
-// a sinkParentName can be a pipeline name or a mono vertex name.
-// if the sinkName is empty, the sinkParentName is the name of a mono vertex.
-// otherwise, the sinkParentName is the name of a pipeline.
-func redisContains(ctx context.Context, sinkParentName, sinkName, targetStr string, opts ...SinkCheckOption) bool {
+// redisContains verifies that there are targetStr in redis written under hashKey.
+func redisContains(ctx context.Context, hashKey, targetStr string, opts ...SinkCheckOption) bool {
 	o := defaultRedisCheckOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -56,20 +50,13 @@ func redisContains(ctx context.Context, sinkParentName, sinkName, targetStr stri
 	ctx, cancel := context.WithTimeout(ctx, o.timeout)
 	defer cancel()
 	return runChecks(ctx, func() bool {
-		return redisContainsCount(generateRedisKey(sinkParentName, sinkName), targetStr, o.count)
+		return redisContainsCount(hashKey, targetStr, o.count)
 	})
 }
 
-func generateRedisKey(sinkParentName, sinkName string) string {
-	if sinkName == "" {
-		return sinkParentName
-	}
-	return sinkParentName + ":" + sinkName
-}
-
-func redisContainsCount(keyName, targetStr string, expectedCount int) bool {
+func redisContainsCount(hashKey, targetStr string, expectedCount int) bool {
 	// If the number of matches is higher than expected, we treat it as passing the check.
-	return getMsgCountContains(keyName, targetStr) >= expectedCount
+	return getMsgCountContains(hashKey, targetStr) >= expectedCount
 }
 
 type redisCheckOptions struct {
@@ -107,8 +94,8 @@ type CheckFunc func() bool
 // runChecks executes a performChecks function with retry strategy (retryInterval with timeout).
 // If performChecks doesn't pass within timeout, runChecks returns false indicating the checks have failed.
 // This is to mitigate the problem that we don't know exactly when a numaflow pipeline finishes processing our test data.
-// Please notice such approach is not strictly accurate as there can be case where runChecks passes before pipeline finishes processing data.
-// Which could result in false positive test results. e.g. checking data doesn't exist can pass before data gets persisted to redis.
+// Please notice such an approach is not strictly accurate as there can be a case where runChecks passes before the pipeline finishes processing data.
+// Which could result in false positive test results. E.g., checking data doesn't exist can pass before data gets persisted to redis.
 func runChecks(ctx context.Context, performChecks CheckFunc) bool {
 	ticker := time.NewTicker(retryInterval)
 	defer ticker.Stop()

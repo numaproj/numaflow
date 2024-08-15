@@ -48,7 +48,7 @@ func (s *SideInputUDSSuite) TestSinkWithSideInput() {
 
 	w := s.setUpTests("@testdata/sideinput_sink.yaml")
 	defer w.DeletePipelineAndWait()
-	w.Expect().RedisSinkContains("redis-uds", "e2e-even", SinkCheckWithTimeout(2*time.Minute))
+	w.Expect().RedisSinkContains("sideinput-sink-test-redis-uds", "e2e-even", SinkCheckWithTimeout(2*time.Minute))
 
 }
 
@@ -61,7 +61,7 @@ func (s *SideInputUDSSuite) TestSourceWithSideInput() {
 
 	w := s.setUpTests("@testdata/sideinput_source.yaml")
 	defer w.DeletePipelineAndWait()
-	w.Expect().RedisSinkContains("redis-uds", "e2e-even", SinkCheckWithTimeout(2*time.Minute))
+	w.Expect().RedisSinkContains("sideinput-source-test-redis-uds", "e2e-even", SinkCheckWithTimeout(2*time.Minute))
 
 }
 
