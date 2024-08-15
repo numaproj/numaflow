@@ -4,28 +4,21 @@ import { useLocation } from "react-router-dom";
 import { SidebarType } from "../../../../common/SlidingSidebar";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
-import {
-  DurationString,
-  HTMLlTooltip,
-  MAX_LAG_TOOLTIP,
-} from "../../../../../utils";
 import { ViewType } from "../../../../common/SpecEditor";
 
 import "./style.css";
 
-export interface PipelineSummaryProps {
+export interface MonoVertexSummaryProps {
   pipelineId: any;
   pipeline: any;
-  lag: any;
   refresh: () => void;
 }
 
 export function MonoVertexSummaryStatus({
   pipelineId,
   pipeline,
-  lag,
   refresh,
-}: PipelineSummaryProps) {
+}: MonoVertexSummaryProps) {
   const location = useLocation();
   const query = new URLSearchParams(location.search);
   const namespaceId = query.get("namespace") || "";
@@ -123,24 +116,6 @@ export function MonoVertexSummaryStatus({
               width: "19.2rem",
             }}
           >
-            <div className="pipeline-summary-text">
-              <span className="pipeline-summary-subtitle">
-                <HTMLlTooltip
-                  title={MAX_LAG_TOOLTIP}
-                  placement="top-start"
-                  arrow
-                >
-                  <div>
-                    <span className="pipeline-summary-subtitle">Max lag:</span>
-                    <span className="pipeline-summary-text">
-                      {lag < 0 || lag > 1698893050690
-                        ? "Unavailable now"
-                        : DurationString(lag)}
-                    </span>
-                  </div>
-                </HTMLlTooltip>
-              </span>
-            </div>
             <div className="pipeline-summary-text">
               <span className="pipeline-summary-subtitle">
                 <div

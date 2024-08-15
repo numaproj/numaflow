@@ -119,7 +119,6 @@ export function MonoVertex({ namespaceId: nsIdProp }: MonoVertexProps) {
           <MonoVertexSummaryStatus
             pipelineId={pipelineId}
             pipeline={pipelineData?.monoVertex}
-            lag={pipelineData?.lag}
             refresh={refresh}
             key={"pipeline-summary-status"}
           />
