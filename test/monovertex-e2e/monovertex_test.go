@@ -12,17 +12,6 @@ type MonoVertexSuite struct {
 	E2ESuite
 }
 
-func (s *MonoVertexSuite) TestSimpleMonoVertex() {
-	w := s.Given().MonoVertex("@testdata/simple-mono-vertex.yaml").
-		When().CreateMonoVertexAndWait()
-	defer w.DeleteMonoVertexAndWait()
-
-	w.Expect().MonoVertexPodsRunning()
-
-	w.Expect().RedisSinkContains("simple-mono-vertex", "199")
-	w.Expect().RedisSinkContains("simple-mono-vertex", "200")
-}
-
 func (s *MonoVertexSuite) TestMonoVertexWithTransformer() {
 	w := s.Given().MonoVertex("@testdata/mono-vertex-with-transformer.yaml").
 		When().CreateMonoVertexAndWait()

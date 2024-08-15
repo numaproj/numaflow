@@ -124,7 +124,6 @@ func (t *Expect) MonoVertexPodsRunning() *Expect {
 		t.t.Fatalf("Expected mono vertex %q pod running: %v", t.monoVertex.Name, err)
 	}
 	return t
-
 }
 
 func (t *Expect) VertexSizeScaledTo(v string, size int) *Expect {
@@ -188,15 +187,6 @@ func (t *Expect) DaemonPodsRunning() *Expect {
 	timeout := 2 * time.Minute
 	if err := WaitForDaemonPodsRunning(t.kubeClient, Namespace, t.pipeline.Name, timeout); err != nil {
 		t.t.Fatalf("Expected daemon pods of pipeline %q running: %v", t.pipeline.Name, err)
-	}
-	return t
-}
-
-func (t *Expect) MonoVertexDaemonPodsRunning() *Expect {
-	t.t.Helper()
-	timeout := 2 * time.Minute
-	if err := WaitForMonoVertexDaemonPodsRunning(t.kubeClient, Namespace, t.monoVertex.Name, timeout); err != nil {
-		t.t.Fatalf("Expected daemon pods of mono vertex %q running: %v", t.monoVertex.Name, err)
 	}
 	return t
 }
