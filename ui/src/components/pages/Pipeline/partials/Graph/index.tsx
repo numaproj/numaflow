@@ -64,6 +64,7 @@ import source from "../../../../../images/source.png";
 import map from "../../../../../images/map.png";
 import reduce from "../../../../../images/reduce.png";
 import sink from "../../../../../images/sink.png";
+import monoVertex from "../../../../../images/monoVertex.svg";
 import input from "../../../../../images/input0.svg";
 import generator from "../../../../../images/generator0.svg";
 
@@ -522,7 +523,7 @@ const Flow = (props: FlowProps) => {
           <AccordionDetails>
             {type === "monoVertex" && (
               <div className={"legend-title"}>
-                <img src={source} alt={"source"} />
+                <img src={monoVertex} alt={"monoVertex"} />
                 <div className={"legend-text"}>MonoVertex</div>
               </div>
             )}

@@ -12,7 +12,8 @@ import { CloseModal } from "../CloseModal";
 import sourceIcon from "../../../../../images/source.png";
 import sinkIcon from "../../../../../images/sink.png";
 import mapIcon from "../../../../../images/map.png";
-import reducIcon from "../../../../../images/reduce.png";
+import reduceIcon from "../../../../../images/reduce.png";
+import monoVertexIcon from "../../../../../images/monoVertex.svg";
 
 import "./style.css";
 
@@ -101,7 +102,7 @@ export function VertexDetails({
         return (
           <Box sx={headerContainerStyle}>
             <img
-              src={reducIcon}
+              src={reduceIcon}
               alt="reduce vertex"
               className={"vertex-details-header-icon"}
             />
@@ -134,7 +135,7 @@ export function VertexDetails({
         return (
           <Box sx={headerContainerStyle}>
             <img
-              src={sourceIcon}
+              src={monoVertexIcon}
               alt="mono vertex"
               className={"vertex-details-header-icon"}
             />
