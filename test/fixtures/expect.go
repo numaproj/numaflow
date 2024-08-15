@@ -142,21 +142,6 @@ func (t *Expect) VertexSizeScaledTo(v string, size int) *Expect {
 	return t
 }
 
-func (t *Expect) MonoVertexSizeScaledTo(mv string, size int) *Expect {
-	t.t.Helper()
-	ctx := context.Background()
-	if _, err := t.monoVertexClient.Get(ctx, mv, metav1.GetOptions{}); err != nil {
-		t.t.Fatalf("Expected mono vertex %s existing: %v", mv, err)
-	}
-
-	timeout := 2 * time.Minute
-	if err := WaitForMonoVertexPodScalingTo(t.kubeClient, t.monoVertexClient, Namespace, mv, timeout, size); err != nil {
-		t.t.Fatalf("Expected %d pods running on mono vertex %s : %v", size, mv, err)
-	}
-	return t
-
-}
-
 func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()

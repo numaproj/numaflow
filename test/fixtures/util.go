@@ -246,20 +246,19 @@ func WaitForMonoVertexRunning(ctx context.Context, monoVertexClient flowpkg.Mono
 	for {
 		select {
 		case event := <-watch.ResultChan():
+			println("keran is testing - I found a mono-vertex")
 			i, ok := event.Object.(*dfv1.MonoVertex)
 			if ok {
 				if i.Status.Phase == dfv1.MonoVertexPhaseRunning {
+					println("keran is testing - the mono-vertex is running")
 					return nil
 				}
 			} else {
 				return fmt.Errorf("not monovertex")
 			}
 		case <-timeoutCh:
-			// FIXME - there is something wrong with watching the mono vertex CRD, hence it times out
-			// no result sent to channel but the mono vertex is actually running.
-			// I commented out temporarily to make the test pass.
-			// return fmt.Errorf("timeout after %v waiting for MonoVertex running", timeout)
-			return nil
+			println("keran is testing - timeout waiting for mono-vertex running")
+			return fmt.Errorf("timeout after %v waiting for MonoVertex running", timeout)
 		}
 	}
 }
@@ -267,23 +266,26 @@ func WaitForMonoVertexRunning(ctx context.Context, monoVertexClient flowpkg.Mono
 func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClient flowpkg.MonoVertexInterface, namespace, monoVertexName string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	labelSelector := fmt.Sprintf("%s=%s", dfv1.KeyMonoVertexName, monoVertexName)
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, monoVertexName, dfv1.KeyComponent, dfv1.ComponentMonoVertex)
 	for {
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("timeout after %v waiting for monovertex pod running", timeout)
 		default:
 		}
-		monoVertexList, err := monoVertexClient.List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+		_, err := monoVertexClient.Get(ctx, monoVertexName, metav1.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("error getting monovertex list: %w", err)
+			return fmt.Errorf("error getting the monovertex: %w", err)
 		}
-		ok := len(monoVertexList.Items) == 1
-		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {
-			return fmt.Errorf("error getting monovertex pod name: %w", err)
+			return fmt.Errorf("error getting monovertex pod list: %w", err)
 		}
-		ok = ok && len(podList.Items) > 0
+		// TODO - match replica count?
+		ok := len(podList.Items) > 0
+		if !ok {
+			return fmt.Errorf("expected more than 0 pod, got %d", len(podList.Items))
+		}
 		for _, p := range podList.Items {
 			ok = ok && p.Status.Phase == corev1.PodRunning
 		}
@@ -342,33 +344,6 @@ func WaitForVertexPodScalingTo(kubeClient kubernetes.Interface, vertexClient flo
 		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
 		if err != nil {
 			return fmt.Errorf("error getting vertex pod list: %w", err)
-		}
-		ok = ok && len(podList.Items) == size
-		if ok {
-			return nil
-		}
-		time.Sleep(2 * time.Second)
-	}
-}
-
-func WaitForMonoVertexPodScalingTo(kubeClient kubernetes.Interface, monoVertexClient flowpkg.MonoVertexInterface, namespace, monoVertexName string, timeout time.Duration, size int) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	labelSelector := fmt.Sprintf("%s=%s", dfv1.KeyMonoVertexName, monoVertexName)
-	for {
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("timeout after %v waiting for monovertex pod scaling", timeout)
-		default:
-		}
-		monoVertexList, err := monoVertexClient.List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
-		if err != nil {
-			return fmt.Errorf("error getting monovertex list: %w", err)
-		}
-		ok := len(monoVertexList.Items) == 1
-		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
-		if err != nil {
-			return fmt.Errorf("error getting monovertex pod list: %w", err)
 		}
 		ok = ok && len(podList.Items) == size
 		if ok {
