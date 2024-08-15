@@ -293,6 +293,7 @@ export function VertexDetails({
           <ProcessingRates
             vertexId={vertexId}
             pipelineId={pipelineId}
+            type={type}
             vertexMetrics={vertexMetrics}
           />
         )}

@@ -122,6 +122,14 @@ export interface MonoVertexSpec {
   scale: any;
 }
 
+export interface MonoVertexMetrics {
+  ratePerMin: string;
+  ratePerFiveMin: string;
+  ratePerFifteenMin: string;
+  podMetrics: any[];
+  error: boolean;
+}
+
 export interface MonoVertexSummary {
   name: string;
   status: string;
