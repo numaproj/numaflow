@@ -62,9 +62,9 @@ jobs:
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
       - name: Rename binary
-        run: cp -pv rust/target/x86_64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-amd64
+        run: cp -pv target/x86_64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-amd64
       - name: Upload numaflow binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: numaflow-rs-linux-amd64
           path: numaflow-rs-linux-amd64
@@ -94,9 +94,9 @@ jobs:
       - name: Build binary
         run: export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER='aarch64-linux-gnu-gcc' && RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target aarch64-unknown-linux-gnu
       - name: Rename binary
-        run: cp -pv rust/target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
+        run: cp -pv target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
       - name: Upload numaflow binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: numaflow-rs-linux-arm64
           path: numaflow-rs-linux-arm64
