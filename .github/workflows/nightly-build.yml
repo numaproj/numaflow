@@ -67,7 +67,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: numaflow-rs-linux-amd64
-          path: numaflow-rs-linux-amd64
+          path: rust/numaflow-rs-linux-amd64
 
   build-rust-arm64:
     runs-on: ubuntu-latest
@@ -99,7 +99,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: numaflow-rs-linux-arm64
-          path: numaflow-rs-linux-arm64
+          path: rust/numaflow-rs-linux-arm64
 
   build-push-linux-multi:
     name: Build & push linux/amd64 and linux/arm64
