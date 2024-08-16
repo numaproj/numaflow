@@ -111,6 +111,7 @@ export function NamespaceListingWrapper({
   data,
   pipelineData,
   isbData,
+  monoVertexData,
   refresh,
 }: NamespacePipelineListingProps) {
   const { setSidebarProps, isReadOnly } =
@@ -433,6 +434,7 @@ export function NamespaceListingWrapper({
           <PipelineListing
             pipelineData={pipelineData}
             isbData={isbData}
+            monoVertexData={monoVertexData}
             totalCount={data.pipelinesCount}
             statusFilter={status}
             healthFilter={health}

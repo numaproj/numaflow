@@ -1,0 +1,24 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: transformer-mono-vertex
+spec:
+  source:
+    udsource:
+      container:
+        image:  quay.io/numaio/numaflow-go/source-simple-source:stable
+        imagePullPolicy: Always
+    transformer:
+      container:
+          image: quay.io/numaio/numaflow-go/mapt-assign-event-time:stable
+          imagePullPolicy: Always
+  sink:
+    udsink:
+      container:
+        # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis-sink
+        image: quay.io/numaio/numaflow-go/redis-sink:stable
+        imagePullPolicy: Always
+        env:
+          - name: SINK_HASH_KEY
+            # Use the name of the mono vertex as the key
+            value: "transformer-mono-vertex"

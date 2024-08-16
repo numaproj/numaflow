@@ -32,14 +32,6 @@ import "react-toastify/dist/ReactToastify.css";
 const MAX_ERRORS = 6;
 
 function App(props: AppProps) {
-  // TODO remove, used for testing ns only installation
-  // const { systemInfo, error: systemInfoError } = {
-  //   systemInfo: {
-  //     namespaced: true,
-  //     managedNamespace: "test",
-  //   },
-  //   error: undefined,
-  // };
   const { hostUrl = "", namespace = "" } = props;
   const pageRef = useRef<any>();
   const [pageWidth, setPageWidth] = useState(0);
