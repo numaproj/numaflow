@@ -165,7 +165,7 @@ jobs:
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
       - name: Rename binary
-        run: cp -pv rust/target/x86_64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-amd64
+        run: cp -pv target/x86_64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-amd64
       - name: Upload numaflow binary
         uses: actions/upload-artifact@v4
         with:
