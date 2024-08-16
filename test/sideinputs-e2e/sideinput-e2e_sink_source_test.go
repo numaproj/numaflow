@@ -40,16 +40,14 @@ func (s *SideInputUDSSuite) setUpTests(pipeLineFile string) *When {
 }
 
 func (s *SideInputUDSSuite) TestSinkWithSideInput() {
-
 	// the side inputs feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		s.T().SkipNow()
 	}
 
-	w := s.setUpTests("@testdata/sideinput_sink.yaml")
+	w := s.setUpTests("@testdata/sideinput-sink.yaml")
 	defer w.DeletePipelineAndWait()
-	w.Expect().SinkContains("redis-uds", "e2e-even", SinkCheckWithTimeout(2*time.Minute))
-
+	w.Expect().RedisSinkContains("sideinput-sink-test-redis-uds", "e2e-even", SinkCheckWithTimeout(2*time.Minute))
 }
 
 func (s *SideInputUDSSuite) TestSourceWithSideInput() {
@@ -59,9 +57,9 @@ func (s *SideInputUDSSuite) TestSourceWithSideInput() {
 		s.T().SkipNow()
 	}
 
-	w := s.setUpTests("@testdata/sideinput_source.yaml")
+	w := s.setUpTests("@testdata/sideinput-source.yaml")
 	defer w.DeletePipelineAndWait()
-	w.Expect().SinkContains("redis-uds", "e2e-even", SinkCheckWithTimeout(2*time.Minute))
+	w.Expect().RedisSinkContains("sideinput-source-test-redis-uds", "e2e-even", SinkCheckWithTimeout(2*time.Minute))
 
 }
 
