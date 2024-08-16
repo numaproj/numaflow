@@ -219,7 +219,7 @@ jobs:
           path: ui/node_modules
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
       - name: Download Rust amd64 binaries
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: numaflow-rs-linux-amd64
       - name: Install k3d
