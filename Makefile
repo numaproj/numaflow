@@ -165,12 +165,16 @@ ui-test: ui-build
 
 .PHONY: image
 image: clean ui-build dist/$(BINARY_NAME)-linux-$(LOCAL_ARCH)
+ifdef GITHUB_ACTIONS
+	cp -pv numaflow-rs-linux-amd64 dist/numaflow-rs-linux-amd64
+else
 	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION) --target builder -f $(DOCKERFILE) . --load
-	$(eval RUST_BUILDER=$(shell docker create $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)))
+	$(eval RUST_BUILDER := $(shell docker create quay.io/numaproj/numaflow-rust-builder:latest))
 	docker cp $(RUST_BUILDER):/root/numaflow-rs-linux-$(LOCAL_ARCH) dist/numaflow-rs-linux-$(LOCAL_ARCH)
 	docker rm $(RUST_BUILDER)
 	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target numaflow -f $(DOCKERFILE) .
 	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
+endif
 ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
