@@ -62,27 +62,26 @@ spec:
             # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/log
             image: quay.io/numaio/numaflow-python/sink-log:stable
             imagePullPolicy: Always
-## FIXME(map-batch): enable Java
-#    - name: java-split
-#      partitions: 3
-#      limits:
-#        readBatchSize: 1
-#      scale:
-#        min: 1
-#      udf:
-#        container:
-#          # Split input message into an array with comma, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/mapstream/flatmapstream
-#          image: quay.io/numaio/numaflow-java/flat-map-stream:stable
-#          imagePullPolicy: Always
-#    - name: java-udsink
-#      scale:
-#        min: 1
-#      sink:
-#        udsink:
-#          container:
-#            # https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple
-#            image: quay.io/numaio/numaflow-java/simple-sink:stable
-#            imagePullPolicy: Always
+    - name: java-split
+      partitions: 3
+      limits:
+        readBatchSize: 1
+      scale:
+        min: 1
+      udf:
+        container:
+          # Split input message into an array with comma, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/mapstream/flatmapstream
+          image: quay.io/numaio/numaflow-java/flat-map-stream:stable
+          imagePullPolicy: Always
+    - name: java-udsink
+      scale:
+        min: 1
+      sink:
+        udsink:
+          container:
+            # https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple
+            image: quay.io/numaio/numaflow-java/simple-sink:stable
+            imagePullPolicy: Always
   edges:
     - from: in
       to: go-split
