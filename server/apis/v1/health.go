@@ -260,7 +260,7 @@ func checkMonoVtxHealth(h *handler, ns string, monoVtx string, log *zap.SugaredL
 	if err != nil {
 		return &resourceHealthResponse{
 			Status:  dfv1.MonoVertexStatusUnknown,
-			Message: fmt.Sprintf("Error in getting Mono Vertex %q status: %v", monoVtx, err),
+			Message: fmt.Sprintf("error in getting Mono Vertex %q status: %v", monoVtx, err),
 			Code:    "M4",
 		}, err
 	}
