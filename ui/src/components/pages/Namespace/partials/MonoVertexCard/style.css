@@ -1,0 +1,10 @@
+.pipeline-card-name {
+    font-size: 2rem;
+    font-style: normal;
+    font-weight: 400;
+    color: #000;
+}
+
+.pipeline-card-icon {
+    width: 2.4rem;
+}
