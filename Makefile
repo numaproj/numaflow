@@ -172,9 +172,9 @@ else
 	$(eval RUST_BUILDER := $(shell docker create quay.io/numaproj/numaflow-rust-builder:latest))
 	docker cp $(RUST_BUILDER):/root/numaflow-rs-linux-$(LOCAL_ARCH) dist/numaflow-rs-linux-$(LOCAL_ARCH)
 	docker rm $(RUST_BUILDER)
+endif
 	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target numaflow -f $(DOCKERFILE) .
 	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
-endif
 ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
