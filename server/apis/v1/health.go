@@ -247,6 +247,10 @@ func (hc *HealthChecker) getMonoVtxResourceHealth(h *handler, ns string,
 // 4. Unknown: The Mono Vertex is in an unknown state
 // We use the kubernetes client to get the spec of the MonoVertex and
 // then check its status to derive the resource health status
+
+// We perform the following checks:
+// 1) Check the `phase“ in the Status field of the spec, it should be “Running”
+// 2) Check if the `conditions` field of the spec, all of them shoudl be true
 func checkMonoVtxHealth(h *handler, ns string, monoVtx string, log *zap.SugaredLogger) (
 	*resourceHealthResponse, error) {
 	// fetch the current spec of the Mono Vertex

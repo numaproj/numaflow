@@ -1145,7 +1145,10 @@ func (h *handler) GetMonoVertexMetrics(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, metrics))
 }
 
-// GetMonoVertexHealth is used to the health information about one mono vertex
+// GetMonoVertexHealth is used to the health information about a mono vertex
+// We use two checks to determine the health of the mono vertex:
+// 1. Resource Health: It is based on the health of the mono vertex deployement and pods.
+// 2. Data Criticality: It is based on the data movement of the mono vertex
 func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
 
