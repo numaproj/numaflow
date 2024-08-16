@@ -102,7 +102,7 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 
 	// Set metrics
 	defer func() {
-		if monoVtx.Status.IsHealthy() {
+		if monoVtx.Status.IsHealthy() == nil {
 			reconciler.MonoVertexHealth.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(1)
 		} else {
 			reconciler.MonoVertexHealth.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(0)

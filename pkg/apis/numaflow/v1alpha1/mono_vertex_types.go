@@ -529,14 +529,21 @@ func (mvs *MonoVertexStatus) MarkPhaseRunning() {
 }
 
 // IsHealthy indicates whether the MonoVertex is in healthy status
-func (mvs *MonoVertexStatus) IsHealthy() bool {
+// It returns an error if any issues exists
+// No errors indicate that the MonoVertex is healthy
+// TODO: Add support for paused whenever added in MonoVtx?
+func (mvs *MonoVertexStatus) IsHealthy() error {
+	// check for the phase field first
 	switch mvs.Phase {
+	// Directly return an error if the phase is failed
 	case MonoVertexPhaseFailed:
-		return false
+		return fmt.Errorf("monoVertex status phase is Failed")
+	// Check if the MonoVertex is ready if the phase is running,
+	// We check if all the required conditions are true for it to be healthy
 	case MonoVertexPhaseRunning:
-		return mvs.IsReady()
+		return mvs.IsReadyWithError()
 	default:
-		return false
+		return nil
 	}
 }
 
