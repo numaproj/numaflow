@@ -61,7 +61,7 @@ impl SinkClient {
         let requests: Vec<proto::SinkRequest> =
             messages.into_iter().map(|message| message.into()).collect();
 
-        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        let (tx, rx) = tokio::sync::mpsc::channel(500);
 
         tokio::spawn(async move {
             for request in requests {
