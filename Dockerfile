@@ -53,7 +53,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # numaflow
 ####################################################################################################
 ARG BASE_IMAGE
-FROM debian:bookworm AS numaflow
+FROM gcr.io/distroless/static-debian12 AS numaflow
 ARG ARCH
 
 COPY dist/numaflow-linux-${ARCH} /bin/numaflow
