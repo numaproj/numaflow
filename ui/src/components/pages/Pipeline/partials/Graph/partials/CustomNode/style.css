@@ -1,160 +1,193 @@
 .node-rate {
-    display: flex;
-    width: 9rem;
-    height: 2.2rem;
-    border-radius: 2rem;
-    background: #D1DEE9;
-    color: #274C77;
-    font-family: "IBM Plex Sans", sans-serif;
-    font-size: 1.2rem;
-    font-style: normal;
-    font-weight: 500;
-    line-height: normal;
-    justify-content: center;
-    align-items: center;
-    position: absolute;
-    bottom: -12.5%;
-    right: 8%;
-    text-transform: lowercase;
+  display: flex;
+  width: 9rem;
+  height: 2.2rem;
+  border-radius: 2rem;
+  background: #d1dee9;
+  color: #274c77;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 1.2rem;
+  font-style: normal;
+  font-weight: 500;
+  line-height: normal;
+  justify-content: center;
+  align-items: center;
+  position: absolute;
+  bottom: -12.5%;
+  right: 8%;
+  text-transform: lowercase;
 }
 
 .node-pods {
-    display: flex;
-    width: 10rem;
-    height: 2.2rem;
-    border-radius: 2rem;
-    background: #D1DEE9;
-    color: #274C77;
-    font-family: "IBM Plex Sans", sans-serif;
-    font-size: 1.2rem;
-    font-style: normal;
-    font-weight: 700;
-    line-height: normal;
-    justify-content: space-evenly;
-    align-items: center;
-    position: absolute;
-    top: -13.5%;
-    left: 10%;
-    text-transform: lowercase;
+  display: flex;
+  width: 10rem;
+  height: 2.2rem;
+  border-radius: 2rem;
+  background: #d1dee9;
+  color: #274c77;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 1.2rem;
+  font-style: normal;
+  font-weight: 700;
+  line-height: normal;
+  justify-content: space-evenly;
+  align-items: center;
+  position: absolute;
+  top: -13.5%;
+  left: 10%;
+  text-transform: lowercase;
 }
 
 .node-pods > img {
-    width: 2rem;
+  width: 2rem;
 }
 
 .node-status {
-    width: 2.2rem;
-    height: 2.2rem;
-    border-radius: 2rem;
-    background: #D1DEE9;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: absolute;
-    bottom: -12.5%;
-    left: 8%;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 2rem;
+  background: #d1dee9;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: absolute;
+  bottom: -12.5%;
+  left: 8%;
 }
 
 .node-tooltip {
-    font-size: 1.2rem;
-    font-weight: 600;
-    font-family: "Avenir", sans-serif;
-    cursor: pointer;
+  font-size: 1.2rem;
+  font-weight: 600;
+  font-family: "Avenir", sans-serif;
+  cursor: pointer;
 }
 
 .react-flow__node-input {
-    width: 25.2rem;
-    height: 7.8rem;
-    border-radius: 2rem;
-    border: 0.01rem solid #009EAC;
-    background: var(--boxes, #F8F8FB);
-    box-shadow: 0 2.4rem 4.8rem -0.8rem rgba(39, 76, 119, 0.16);
-    cursor: pointer;
+  width: 25.2rem;
+  height: 7.8rem;
+  border-radius: 2rem;
+  border: 0.01rem solid #009eac;
+  background: var(--boxes, #f8f8fb);
+  box-shadow: 0 2.4rem 4.8rem -0.8rem rgba(39, 76, 119, 0.16);
+  cursor: pointer;
 }
 
 .node-info {
-    display: flex;
-    width: 100%;
-    height: 100%;
-    flex-direction: column;
-    justify-content: center;
-    color: #274C77;
-    text-align: center;
-    font-family: "IBM Plex Sans", sans-serif;
-    font-size: 1.4rem;
-    font-style: normal;
-    font-weight: 500;
-    line-height: normal;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  color: #274c77;
+  text-align: center;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 1.4rem;
+  font-style: normal;
+  font-weight: 500;
+  line-height: normal;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.node-info-mono {
+  display: flex;
+  width: 100%;
+  height: 50%;
+  flex-direction: column;
+  justify-content: center;
+  color: #274c77;
+  text-align: center;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 1.4rem;
+  font-style: normal;
+  font-weight: 500;
+  line-height: normal;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mono-vertex-img-wrapper {
+  height: 2rem;
+  width: 2rem;
+  border-radius: 50%;
+  border: 1px solid #d1dee9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mono-vertex-img {
+  height: 1rem;
+  width: 1rem;
 }
 
 .node-icon {
-    width: 1.144rem;
-    height: 1.144rem;
-    display: inline-block;
-    vertical-align: middle;
-    position: relative;
-    margin-left: 0.01rem;
-    margin-right: 0.01rem;
-    padding-bottom: 0.05rem;
+  width: 1.144rem;
+  height: 1.144rem;
+  display: inline-block;
+  vertical-align: middle;
+  position: relative;
+  margin-left: 0.01rem;
+  margin-right: 0.01rem;
+  padding-bottom: 0.05rem;
 }
 
 .node-podnum {
-    font-weight: bold;
+  font-weight: bold;
 }
 
 .react-flow__handle {
-    /*background : #8D9096;*/
-    z-index: -1;
-    margin: -0.32rem;
-    height: 1.6rem;
-    width: 1.6rem;
+  /*background : #8D9096;*/
+  z-index: -1;
+  margin: -0.32rem;
+  height: 1.6rem;
+  width: 1.6rem;
 }
 
 .sideInput_node {
-    display: flex;
-    cursor: pointer;
+  display: flex;
+  cursor: pointer;
 }
 
 .sideInput_node_ele {
-    width: 3.6rem;
-    height: 3rem;
-    background: #E0E0E0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  width: 3.6rem;
+  height: 3rem;
+  background: #e0e0e0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .generator_handle {
-    top: 60%;
-    left: 82.5%;
-    background: none;
+  top: 60%;
+  left: 82.5%;
+  background: none;
 }
 
 .generator_node {
-    font-size: 1.6rem;
-    background: #F8F8FB;
-    padding: 1.6rem 2.4rem 1.6rem 2.4rem;
-    margin-left: -2.4rem;
-    border-radius: 2rem;
-    border: 0.1rem solid #DAE3E8;
-    color: #6B6C72;
+  font-size: 1.6rem;
+  background: #f8f8fb;
+  padding: 1.6rem 2.4rem 1.6rem 2.4rem;
+  margin-left: -2.4rem;
+  border-radius: 2rem;
+  border: 0.1rem solid #dae3e8;
+  color: #6b6c72;
 }
 
 .react-flow__handle-bottom {
-    z-index: -1;
-    margin: -0.32rem;
-    height: 1.6rem;
-    width: 1.6rem;
-    border: none;
-    bottom: -15%;
-    background: none !important;
+  z-index: -1;
+  margin: -0.32rem;
+  height: 1.6rem;
+  width: 1.6rem;
+  border: none;
+  bottom: -15%;
+  background: none !important;
 }
 
 .sideInput_handle {
-    bottom: -26% ;
-    position: absolute;
-    cursor: pointer;
+  bottom: -26%;
+  position: absolute;
+  cursor: pointer;
 }

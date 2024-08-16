@@ -16,6 +16,20 @@ interface Pipeline {
   status: Status;
 }
 
+export interface MonoVertexData {
+  name: string;
+  status: string;
+  monoVertex: MonoVertex;
+}
+
+interface MonoVertex {
+  kind: string;
+  apiVersion: string;
+  metadata: any;
+  spec: any;
+  status: any;
+}
+
 interface Status {
   conditions: Condition[];
   phase: string;

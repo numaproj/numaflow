@@ -12,7 +12,8 @@ import { CloseModal } from "../CloseModal";
 import sourceIcon from "../../../../../images/source.png";
 import sinkIcon from "../../../../../images/sink.png";
 import mapIcon from "../../../../../images/map.png";
-import reducIcon from "../../../../../images/reduce.png";
+import reduceIcon from "../../../../../images/reduce.png";
+import monoVertexIcon from "../../../../../images/monoVertex.svg";
 
 import "./style.css";
 
@@ -27,6 +28,7 @@ export enum VertexType {
   SINK,
   MAP,
   REDUCE,
+  MONOVERTEX,
 }
 
 export interface VertexDetailsProps {
@@ -71,6 +73,8 @@ export function VertexDetails({
       setVertexType(VertexType.MAP);
     } else if (type === "sink") {
       setVertexType(VertexType.SINK);
+    } else if (type === "monoVertex") {
+      setVertexType(VertexType.MONOVERTEX);
     }
     setVertexSpec(vertexSpecs);
   }, [vertexSpecs, type]);
@@ -98,7 +102,7 @@ export function VertexDetails({
         return (
           <Box sx={headerContainerStyle}>
             <img
-              src={reducIcon}
+              src={reduceIcon}
               alt="reduce vertex"
               className={"vertex-details-header-icon"}
             />
@@ -125,6 +129,17 @@ export function VertexDetails({
               className={"vertex-details-header-icon"}
             />
             <span className={textClass}>Sink Vertex</span>
+          </Box>
+        );
+      case VertexType.MONOVERTEX:
+        return (
+          <Box sx={headerContainerStyle}>
+            <img
+              src={monoVertexIcon}
+              alt="mono vertex"
+              className={"vertex-details-header-icon"}
+            />
+            <span className={textClass}>Mono Vertex</span>
           </Box>
         );
       default:
@@ -246,6 +261,7 @@ export function VertexDetails({
             namespaceId={namespaceId}
             pipelineId={pipelineId}
             vertexId={vertexId}
+            type={type}
           />
         )}
       </div>
@@ -261,6 +277,7 @@ export function VertexDetails({
               pipelineId={pipelineId}
               vertexId={vertexId}
               vertexSpec={vertexSpec}
+              type={type}
               setModalOnClose={handleUpdateModalClose}
               refresh={refresh}
             />
@@ -276,6 +293,7 @@ export function VertexDetails({
           <ProcessingRates
             vertexId={vertexId}
             pipelineId={pipelineId}
+            type={type}
             vertexMetrics={vertexMetrics}
           />
         )}
@@ -288,8 +306,10 @@ export function VertexDetails({
         {tabValue === K8S_EVENTS_TAB_INDEX && (
           <K8sEvents
             namespaceId={namespaceId}
-            pipelineId={pipelineId}
-            vertexId={vertexId}
+            pipelineId={
+              type === "monoVertex" ? `${pipelineId} (MonoVertex)` : pipelineId
+            }
+            vertexId={type === "monoVertex" ? undefined : vertexId}
             excludeHeader
             square
           />

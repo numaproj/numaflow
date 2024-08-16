@@ -19,6 +19,7 @@ export const usePodsViewFetch = (
   pipelineId: string | undefined,
   vertexId: string | undefined,
   selectedPod: Pod | undefined,
+  type: string,
   setSelectedPod: Dispatch<SetStateAction<Pod | undefined>>,
   setSelectedContainer: Dispatch<SetStateAction<string | undefined>>
 ) => {
@@ -39,12 +40,19 @@ export const usePodsViewFetch = (
     const fetchPods = async () => {
       try {
         const response = await fetch(
-          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/vertices/${vertexId}/pods?refreshKey=${requestKey}`
+          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}${
+            type === "monoVertex"
+              ? `/mono-vertices`
+              : `/pipelines/${pipelineId}/vertices`
+          }/${vertexId}/pods?refreshKey=${requestKey}`
         );
         if (response.ok) {
           const json = await response.json();
           if (json?.data) {
-            const data = json?.data;
+            let data = json?.data;
+            data = data.filter(
+              (pod: any) => !pod?.metadata?.name.includes("-daemon-")
+            );
             const pList = data?.map((pod: any) => {
               const containers: string[] = [];
               const containerSpecMap = new Map<string, PodContainerSpec>();
