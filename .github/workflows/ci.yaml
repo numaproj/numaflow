@@ -222,7 +222,6 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: numaflow-rs-linux-amd64
-          path: numaflow-rs-linux-amd64
       - name: Install k3d
         run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
       - name: Create a cluster
