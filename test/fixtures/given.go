@@ -21,23 +21,26 @@ import (
 	"strings"
 	"testing"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	flowpkg "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
+
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	flowpkg "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 )
 
 type Given struct {
-	t              *testing.T
-	isbSvcClient   flowpkg.InterStepBufferServiceInterface
-	pipelineClient flowpkg.PipelineInterface
-	vertexClient   flowpkg.VertexInterface
-	isbSvc         *dfv1.InterStepBufferService
-	pipeline       *dfv1.Pipeline
-	restConfig     *rest.Config
-	kubeClient     kubernetes.Interface
+	t                *testing.T
+	isbSvcClient     flowpkg.InterStepBufferServiceInterface
+	pipelineClient   flowpkg.PipelineInterface
+	vertexClient     flowpkg.VertexInterface
+	monoVertexClient flowpkg.MonoVertexInterface
+	isbSvc           *dfv1.InterStepBufferService
+	pipeline         *dfv1.Pipeline
+	monoVertex       *dfv1.MonoVertex
+	restConfig       *rest.Config
+	kubeClient       kubernetes.Interface
 }
 
 // creates an ISBSvc based on the parameter, this may be:
@@ -76,6 +79,23 @@ func (g *Given) Pipeline(text string) *Given {
 	return g
 }
 
+// / creates a MonoVertex based on the parameter, this may be:
+//
+// 1. A file name if it starts with "@"
+// 2. Raw YAML.
+func (g *Given) MonoVertex(text string) *Given {
+	g.t.Helper()
+	g.monoVertex = &dfv1.MonoVertex{}
+	g.readResource(text, g.monoVertex)
+	l := g.monoVertex.GetLabels()
+	if l == nil {
+		l = map[string]string{}
+	}
+	l[Label] = LabelValue
+	g.monoVertex.SetLabels(l)
+	return g
+}
+
 func (g *Given) WithPipeline(p *dfv1.Pipeline) *Given {
 	g.t.Helper()
 	g.pipeline = p
@@ -86,6 +106,18 @@ func (g *Given) WithPipeline(p *dfv1.Pipeline) *Given {
 	l[Label] = LabelValue
 	g.pipeline.SetLabels(l)
 	g.pipeline.Spec.InterStepBufferServiceName = ISBSvcName
+	return g
+}
+
+func (g *Given) WithMonoVertex(mv *dfv1.MonoVertex) *Given {
+	g.t.Helper()
+	g.monoVertex = mv
+	l := g.monoVertex.GetLabels()
+	if l == nil {
+		l = map[string]string{}
+	}
+	l[Label] = LabelValue
+	g.monoVertex.SetLabels(l)
 	return g
 }
 
@@ -122,13 +154,15 @@ func (g *Given) readResource(text string, v metav1.Object) {
 
 func (g *Given) When() *When {
 	return &When{
-		t:              g.t,
-		isbSvcClient:   g.isbSvcClient,
-		pipelineClient: g.pipelineClient,
-		vertexClient:   g.vertexClient,
-		isbSvc:         g.isbSvc,
-		pipeline:       g.pipeline,
-		restConfig:     g.restConfig,
-		kubeClient:     g.kubeClient,
+		t:                g.t,
+		isbSvcClient:     g.isbSvcClient,
+		pipelineClient:   g.pipelineClient,
+		vertexClient:     g.vertexClient,
+		monoVertexClient: g.monoVertexClient,
+		isbSvc:           g.isbSvc,
+		pipeline:         g.pipeline,
+		monoVertex:       g.monoVertex,
+		restConfig:       g.restConfig,
+		kubeClient:       g.kubeClient,
 	}
 }
