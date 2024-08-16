@@ -167,6 +167,7 @@ ui-test: ui-build
 image: clean ui-build dist/$(BINARY_NAME)-linux-$(LOCAL_ARCH)
 ifdef GITHUB_ACTIONS
 	cp -pv numaflow-rs-linux-amd64 dist/numaflow-rs-linux-amd64
+	cp -pv dist/numaflow-linux-x86_64 dist/numaflow-linux-amd64
 else
 	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION) --target builder -f $(DOCKERFILE) . --load
 	$(eval RUST_BUILDER := $(shell docker create quay.io/numaproj/numaflow-rust-builder:latest))
