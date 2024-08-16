@@ -2,6 +2,7 @@ SHELL:=/bin/bash
 
 PACKAGE=github.com/numaproj/numaflow
 CURRENT_DIR=$(shell pwd)
+LOCAL_ARCH=$(shell arch)
 DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=numaflow
 DOCKERFILE:=Dockerfile
@@ -68,6 +69,7 @@ dist/$(BINARY_NAME)-%.gz: dist/$(BINARY_NAME)-%
 	@[[ -e dist/$(BINARY_NAME)-$*.gz ]] || gzip -k dist/$(BINARY_NAME)-$*
 
 dist/$(BINARY_NAME): GOARGS = GOOS= GOARCH=
+dist/$(BINARY_NAME)-linux-$(LOCAL_ARCH): GOARGS = GOOS=linux
 dist/$(BINARY_NAME)-linux-amd64: GOARGS = GOOS=linux GOARCH=amd64
 dist/$(BINARY_NAME)-linux-arm64: GOARGS = GOOS=linux GOARCH=arm64
 dist/$(BINARY_NAME)-linux-arm: GOARGS = GOOS=linux GOARCH=arm
@@ -162,14 +164,33 @@ ui-test: ui-build
 	./hack/test-ui.sh
 
 .PHONY: image
-image: clean ui-build dist/$(BINARY_NAME)-linux-amd64
-	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "ARCH=amd64" --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
+image: clean ui-build dist/$(BINARY_NAME)-linux-$(LOCAL_ARCH)
+	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION) --target builder -f $(DOCKERFILE) .
+	$(eval RUST_BUILDER=$(shell docker create $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)))
+	docker cp $(RUST_BUILDER):/root/numaflow-rs-linux-$(LOCAL_ARCH) dist/numaflow-rs-linux-$(LOCAL_ARCH)
+	docker rm $(RUST_BUILDER)
+	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target numaflow -f $(DOCKERFILE) .
 	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
 ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
 
+.PHONY: build-rust-in-docker
+build-rust-in-docker:
+	mkdir -p dist
+	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)-amd64 --platform linux/amd64 --target builder -f $(DOCKERFILE) .
+	$(eval RUST_BUILDER=$(shell docker create --platform linux/amd64 $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)-amd64))
+	docker cp $(RUST_BUILDER):/root/numaflow-rs-linux-amd64 dist/numaflow-rs-linux-amd64
+	docker rm $(RUST_BUILDER)
+	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)-arm64 --platform linux/arm64 --target builder -f $(DOCKERFILE) .
+	$(eval RUST_BUILDER=$(shell docker create --platform linux/arm64 $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)-arm64))
+	docker cp $(RUST_BUILDER):/root/numaflow-rs-linux-arm64 dist/numaflow-rs-linux-arm64
+	docker rm $(RUST_BUILDER)
+
 image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
+ifndef GITHUB_ACTIONS
+image-multi: build-rust-in-docker
+endif
 	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file $(DOCKERFILE) ${PUSH_OPTION} .
 
 set-qemu:
