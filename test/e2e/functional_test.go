@@ -169,15 +169,14 @@ func (s *FunctionalSuite) TestUDFFiltering() {
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect3))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect4)))
 
-	w.Expect().SinkContains("out", expect3)
-	w.Expect().SinkContains("out", expect4)
-	w.Expect().SinkNotContains("out", expect0)
-	w.Expect().SinkNotContains("out", expect1)
-	w.Expect().SinkNotContains("out", expect2)
+	w.Expect().RedisSinkContains("udf-filtering-out", expect3)
+	w.Expect().RedisSinkContains("udf-filtering-out", expect4)
+	w.Expect().RedisSinkNotContains("udf-filtering-out", expect0)
+	w.Expect().RedisSinkNotContains("udf-filtering-out", expect1)
+	w.Expect().RedisSinkNotContains("udf-filtering-out", expect2)
 }
 
 func (s *FunctionalSuite) TestConditionalForwarding() {
-
 	// FIXME: flaky when redis is used as isb
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		s.T().SkipNow()
@@ -196,17 +195,17 @@ func (s *FunctionalSuite) TestConditionalForwarding() {
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("888889"))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("not an integer")))
 
-	w.Expect().SinkContains("even-sink", "888888")
-	w.Expect().SinkNotContains("even-sink", "888889")
-	w.Expect().SinkNotContains("even-sink", "not an integer")
+	w.Expect().RedisSinkContains("even-odd-even-sink", "888888")
+	w.Expect().RedisSinkNotContains("even-odd-even-sink", "888889")
+	w.Expect().RedisSinkNotContains("even-odd-even-sink", "not an integer")
 
-	w.Expect().SinkContains("odd-sink", "888889")
-	w.Expect().SinkNotContains("odd-sink", "888888")
-	w.Expect().SinkNotContains("odd-sink", "not an integer")
+	w.Expect().RedisSinkContains("even-odd-odd-sink", "888889")
+	w.Expect().RedisSinkNotContains("even-odd-odd-sink", "888888")
+	w.Expect().RedisSinkNotContains("even-odd-odd-sink", "not an integer")
 
-	w.Expect().SinkContains("number-sink", "888888")
-	w.Expect().SinkContains("number-sink", "888889")
-	w.Expect().SinkNotContains("number-sink", "not an integer")
+	w.Expect().RedisSinkContains("even-odd-number-sink", "888888")
+	w.Expect().RedisSinkContains("even-odd-number-sink", "888889")
+	w.Expect().RedisSinkNotContains("even-odd-number-sink", "not an integer")
 }
 
 func (s *FunctionalSuite) TestDropOnFull() {
@@ -354,7 +353,7 @@ func (s *FunctionalSuite) TestFallbackSink() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	w.Expect().SinkContains("output", "fallback-message")
+	w.Expect().RedisSinkContains("simple-fallback-output", "fallback-message")
 }
 
 func TestFunctionalSuite(t *testing.T) {

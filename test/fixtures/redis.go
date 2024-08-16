@@ -22,9 +22,10 @@ import (
 	"strconv"
 )
 
-// GetMsgCountContains returns number of occurrences of the targetStr in redis that are written by pipelineName, sinkName.
-func GetMsgCountContains(pipelineName, sinkName, targetStr string) int {
-	str := InvokeE2EAPI("/redis/get-msg-count-contains?pipelineName=%s&sinkName=%s&targetStr=%s", pipelineName, sinkName, url.QueryEscape(targetStr))
+// getMsgCountContains returns the number of occurrences of the targetStr in redis
+// that are written by under hash key keyName.
+func getMsgCountContains(keyName, targetStr string) int {
+	str := InvokeE2EAPI("/redis/get-msg-count-contains?keyName=%s&targetStr=%s", keyName, url.QueryEscape(targetStr))
 	count, err := strconv.Atoi(str)
 	if err != nil {
 		panic(fmt.Sprintf("Can't parse string %s to an integer.", str))

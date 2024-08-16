@@ -32,32 +32,38 @@ import (
 )
 
 type Expect struct {
-	t              *testing.T
-	isbSvcClient   flowpkg.InterStepBufferServiceInterface
-	pipelineClient flowpkg.PipelineInterface
-	vertexClient   flowpkg.VertexInterface
-	isbSvc         *dfv1.InterStepBufferService
-	pipeline       *dfv1.Pipeline
-	restConfig     *rest.Config
-	kubeClient     kubernetes.Interface
+	t                *testing.T
+	isbSvcClient     flowpkg.InterStepBufferServiceInterface
+	pipelineClient   flowpkg.PipelineInterface
+	vertexClient     flowpkg.VertexInterface
+	monoVertexClient flowpkg.MonoVertexInterface
+	isbSvc           *dfv1.InterStepBufferService
+	pipeline         *dfv1.Pipeline
+	monoVertex       *dfv1.MonoVertex
+	restConfig       *rest.Config
+	kubeClient       kubernetes.Interface
 }
 
-func (t *Expect) SinkContains(sinkName string, targetStr string, opts ...SinkCheckOption) *Expect {
+// RedisSinkContains checks if the target string is written to the redis sink
+// hashKey is the hash key environment variable set by the sink
+// targetStr is the target string to check
+func (t *Expect) RedisSinkContains(hashKey string, targetStr string, opts ...SinkCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
-	contains := RedisContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...)
-	if !contains {
-		t.t.Fatalf("Expected redis contains target string %s written by pipeline %s, sink %s.", targetStr, t.pipeline.Name, sinkName)
+	if contains := redisContains(ctx, hashKey, targetStr, opts...); !contains {
+		t.t.Fatalf("Expected redis contains target string %s written under hash key %s.", targetStr, hashKey)
 	}
 	return t
 }
 
-func (t *Expect) SinkNotContains(sinkName string, targetStr string, opts ...SinkCheckOption) *Expect {
+// RedisSinkNotContains checks if the target string is not written to the redis sink
+// hashKey is the hash key environment variable set by the sink
+// targetStr is the target string to check
+func (t *Expect) RedisSinkNotContains(hashKey string, targetStr string, opts ...SinkCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
-	notContains := RedisNotContains(ctx, t.pipeline.Name, sinkName, targetStr, opts...)
-	if !notContains {
-		t.t.Fatalf("Not expected redis contains target string %s written by pipeline %s, sink %s.", targetStr, t.pipeline.Name, sinkName)
+	if notContain := redisNotContains(ctx, hashKey, targetStr, opts...); !notContain {
+		t.t.Fatalf("Not expected redis contains target string %s written under hash key %s.", targetStr, hashKey)
 	}
 	return t
 }
@@ -112,6 +118,14 @@ func (t *Expect) VertexPodsRunning() *Expect {
 	return t
 }
 
+func (t *Expect) MonoVertexPodsRunning() *Expect {
+	t.t.Helper()
+	if err := WaitForMonoVertexPodRunning(t.kubeClient, t.monoVertexClient, Namespace, t.monoVertex.Name, 2*time.Minute); err != nil {
+		t.t.Fatalf("Expected mono vertex %q pod running: %v", t.monoVertex.Name, err)
+	}
+	return t
+}
+
 func (t *Expect) VertexSizeScaledTo(v string, size int) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
@@ -138,6 +152,20 @@ func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCh
 		t.t.Fatalf("Expected vertex [%q] pod log to contain [%q] but didn't.", vertexName, regex)
 	}
 	t.t.Logf("Expected vertex %q pod contains %q", vertexName, regex)
+	return t
+}
+
+func (t *Expect) MonoVertexPodLogContains(regex string, opts ...PodLogCheckOption) *Expect {
+	t.t.Helper()
+	ctx := context.Background()
+	contains, err := MonoVertexPodLogContains(ctx, t.kubeClient, Namespace, t.monoVertex.Name, regex, opts...)
+	if err != nil {
+		t.t.Fatalf("Failed to check mono vertex %q pod logs: %v", t.monoVertex.Name, err)
+	}
+	if !contains {
+		t.t.Fatalf("Expected mono vertex [%q] pod log to contain [%q] but didn't.", t.monoVertex.Name, regex)
+	}
+	t.t.Logf("Expected mono vertex %q pod contains %q", t.monoVertex.Name, regex)
 	return t
 }
 
@@ -178,13 +206,15 @@ func (t *Expect) DaemonPodLogContains(pipelineName, regex string, opts ...PodLog
 
 func (t *Expect) When() *When {
 	return &When{
-		t:              t.t,
-		isbSvcClient:   t.isbSvcClient,
-		pipelineClient: t.pipelineClient,
-		vertexClient:   t.vertexClient,
-		isbSvc:         t.isbSvc,
-		pipeline:       t.pipeline,
-		restConfig:     t.restConfig,
-		kubeClient:     t.kubeClient,
+		t:                t.t,
+		isbSvcClient:     t.isbSvcClient,
+		pipelineClient:   t.pipelineClient,
+		vertexClient:     t.vertexClient,
+		monoVertexClient: t.monoVertexClient,
+		isbSvc:           t.isbSvc,
+		pipeline:         t.pipeline,
+		monoVertex:       t.monoVertex,
+		restConfig:       t.restConfig,
+		kubeClient:       t.kubeClient,
 	}
 }

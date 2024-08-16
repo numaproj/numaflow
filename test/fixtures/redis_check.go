@@ -24,8 +24,8 @@ import (
 // Retry checking redis every 5 seconds.
 const retryInterval = time.Second * 5
 
-// RedisNotContains verifies that there is no occurrence of targetStr in redis that is written by pipelineName, sinkName.
-func RedisNotContains(ctx context.Context, pipelineName, sinkName, targetStr string, opts ...SinkCheckOption) bool {
+// redisNotContains verifies that there is no occurrence of targetStr in redis that is written under hashKey.
+func redisNotContains(ctx context.Context, hashKey, targetStr string, opts ...SinkCheckOption) bool {
 	o := defaultRedisCheckOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -34,14 +34,13 @@ func RedisNotContains(ctx context.Context, pipelineName, sinkName, targetStr str
 	}
 	ctx, cancel := context.WithTimeout(ctx, o.timeout)
 	defer cancel()
-
 	return runChecks(ctx, func() bool {
-		return !redisContains(pipelineName, sinkName, targetStr, 1)
+		return !redisContainsCount(hashKey, targetStr, 1)
 	})
 }
 
-// RedisContains verifies that there are targetStr in redis written by pipelineName, sinkName.
-func RedisContains(ctx context.Context, pipelineName, sinkName, targetStr string, opts ...SinkCheckOption) bool {
+// redisContains verifies that there are targetStr in redis written under hashKey.
+func redisContains(ctx context.Context, hashKey, targetStr string, opts ...SinkCheckOption) bool {
 	o := defaultRedisCheckOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -50,15 +49,14 @@ func RedisContains(ctx context.Context, pipelineName, sinkName, targetStr string
 	}
 	ctx, cancel := context.WithTimeout(ctx, o.timeout)
 	defer cancel()
-
 	return runChecks(ctx, func() bool {
-		return redisContains(pipelineName, sinkName, targetStr, o.count)
+		return redisContainsCount(hashKey, targetStr, o.count)
 	})
 }
 
-func redisContains(pipelineName, sinkName, targetStr string, expectedCount int) bool {
-	// If number of matches is higher than expected, we treat it as passing the check.
-	return GetMsgCountContains(pipelineName, sinkName, targetStr) >= expectedCount
+func redisContainsCount(hashKey, targetStr string, expectedCount int) bool {
+	// If the number of matches is higher than expected, we treat it as passing the check.
+	return getMsgCountContains(hashKey, targetStr) >= expectedCount
 }
 
 type redisCheckOptions struct {
@@ -96,8 +94,8 @@ type CheckFunc func() bool
 // runChecks executes a performChecks function with retry strategy (retryInterval with timeout).
 // If performChecks doesn't pass within timeout, runChecks returns false indicating the checks have failed.
 // This is to mitigate the problem that we don't know exactly when a numaflow pipeline finishes processing our test data.
-// Please notice such approach is not strictly accurate as there can be case where runChecks passes before pipeline finishes processing data.
-// Which could result in false positive test results. e.g. checking data doesn't exist can pass before data gets persisted to redis.
+// Please notice such an approach is not strictly accurate as there can be a case where runChecks passes before the pipeline finishes processing data.
+// Which could result in false positive test results. E.g., checking data doesn't exist can pass before data gets persisted to redis.
 func runChecks(ctx context.Context, performChecks CheckFunc) bool {
 	ticker := time.NewTicker(retryInterval)
 	defer ticker.Stop()
