@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 )
@@ -198,7 +199,15 @@ func TestGetPodSpec(t *testing.T) {
 			{Name: "test-env", Value: "test-val"},
 		},
 		SideInputsStoreName: "test-store",
+		DefaultResources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
+			},
+			Limits: corev1.ResourceList{},
+		},
 	}
+
 	t.Run("test source", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Source = &Source{}
@@ -214,6 +223,18 @@ func TestGetPodSpec(t *testing.T) {
 			AutomountServiceAccountToken: ptr.To[bool](true),
 			DNSPolicy:                    corev1.DNSClusterFirstWithHostNet,
 			DNSConfig:                    &corev1.PodDNSConfig{Nameservers: []string{"aaa.aaa"}},
+		}
+		testObj.Spec.ContainerTemplate = &ContainerTemplate{
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("200m"),
+					corev1.ResourceMemory: resource.MustParse("200Mi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("200m"),
+					corev1.ResourceMemory: resource.MustParse("200Mi"),
+				},
+			},
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
@@ -252,6 +273,14 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSource))
 		assert.Equal(t, 1, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
+		assert.Equal(t, "200m", s.Containers[0].Resources.Requests.Cpu().String())
+		assert.Equal(t, "200m", s.Containers[0].Resources.Limits.Cpu().String())
+		assert.Equal(t, "200Mi", s.Containers[0].Resources.Requests.Memory().String())
+		assert.Equal(t, "200Mi", s.Containers[0].Resources.Limits.Memory().String())
+		assert.Equal(t, "100m", s.InitContainers[0].Resources.Requests.Cpu().String())
+		assert.Equal(t, "100Mi", s.InitContainers[0].Resources.Requests.Memory().String())
+		assert.Equal(t, "0", s.InitContainers[0].Resources.Limits.Cpu().String())
+		assert.Equal(t, "0", s.InitContainers[0].Resources.Limits.Memory().String())
 	})
 
 	t.Run("test sink", func(t *testing.T) {

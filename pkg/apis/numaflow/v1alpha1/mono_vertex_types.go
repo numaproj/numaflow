@@ -123,6 +123,16 @@ func (mv MonoVertex) GetDaemonDeploymentName() string {
 	return fmt.Sprintf("%s-mv-daemon", mv.Name)
 }
 
+func (mv MonoVertex) GetDaemonServiceURL() string {
+	// Note: the format of the URL is also used in `server/apis/v1/handler.go`
+	// Do not change it without updating the handler.
+	return fmt.Sprintf("%s.%s.svc:%d", mv.GetDaemonServiceName(), mv.Namespace, MonoVertexDaemonServicePort)
+}
+
+func (mv MonoVertex) Scalable() bool {
+	return !mv.Spec.Scale.Disabled
+}
+
 func (mv MonoVertex) GetDaemonServiceObj() *corev1.Service {
 	labels := map[string]string{
 		KeyPartOf:         Project,
@@ -516,6 +526,18 @@ func (mvs *MonoVertexStatus) MarkPhaseFailed(reason, message string) {
 // MarkPhaseRunning marks the phase as running.
 func (mvs *MonoVertexStatus) MarkPhaseRunning() {
 	mvs.MarkPhase(MonoVertexPhaseRunning, "", "")
+}
+
+// IsHealthy indicates whether the MonoVertex is in healthy status
+func (mvs *MonoVertexStatus) IsHealthy() bool {
+	switch mvs.Phase {
+	case MonoVertexPhaseFailed:
+		return false
+	case MonoVertexPhaseRunning:
+		return mvs.IsReady()
+	default:
+		return false
+	}
 }
 
 // +kubebuilder:object:root=true
