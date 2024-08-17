@@ -36,9 +36,10 @@ type JetstreamSuite struct {
 func (ns *JetstreamSuite) TestJetstreamSource() {
 	const streamName = "test-stream"
 	const msgPayload = "jetstream-test-message"
+	const msgCount = 100
 
-	// The source pods expects stream to exist
-	fixtures.PumpJetstream(streamName, msgPayload, 100)
+	// The source pods expect stream to exist
+	fixtures.PumpJetstream(streamName, msgPayload, msgCount)
 
 	w := ns.Given().Pipeline("@testdata/jetstream-source-pipeline.yaml").
 		When().
@@ -48,7 +49,7 @@ func (ns *JetstreamSuite) TestJetstreamSource() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	w.Expect().RedisSinkContains("jetstream-source-e2e-out", msgPayload, fixtures.SinkCheckWithContainCount(100))
+	w.Expect().RedisSinkContains("jetstream-source-e2e-out", msgPayload, fixtures.SinkCheckWithContainCount(msgCount))
 }
 
 func TestJetstreamSuite(t *testing.T) {

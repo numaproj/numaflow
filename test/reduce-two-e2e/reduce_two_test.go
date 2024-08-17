@@ -61,8 +61,6 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
-
 	done := make(chan struct{})
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
@@ -162,8 +160,6 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
-
 	count := 0
 	done := make(chan struct{})
 	go func() {
@@ -219,7 +215,6 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 	args := "kubectl delete po -n numaflow-system -l " +
 		"numaflow.numaproj.io/pipeline-name=simple-session-counter-go,numaflow.numaproj.io/vertex-name=compute-count"
 
-	defer w.StreamVertexPodlogs("compute-count", "numa").TerminateAllPodLogs()
 	// Kill the reducer pods before processing to trigger failover.
 	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 	done := make(chan struct{})
@@ -245,7 +240,6 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 					w.Expect().VertexPodsRunning()
 					w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 					w.Expect().VertexPodsRunning()
-					w.StreamVertexPodlogs("compute-sum", "numa")
 				}
 				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime))

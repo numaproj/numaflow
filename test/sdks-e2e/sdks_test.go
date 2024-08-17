@@ -234,6 +234,6 @@ func (s *SDKsSuite) testSourceTransformer(lang string) {
 		VertexPodLogNotContains("sink-after-2022", "Before2022", PodLogCheckOptionWithTimeout(1*time.Second))
 }
 
-func TestHTTPSuite(t *testing.T) {
+func TestSDKsSuite(t *testing.T) {
 	suite.Run(t, new(SDKsSuite))
 }

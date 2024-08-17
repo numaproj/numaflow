@@ -193,7 +193,6 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 
 	w.Expect().VertexPodsRunning()
 
-	defer w.StreamVertexPodlogs("compute-sum", "numa").TerminateAllPodLogs()
 	go func() {
 		startTime := int(time.Unix(1000, 0).UnixMilli())
 		for i := 1; true; i++ {
@@ -209,7 +208,6 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 					w.Expect().VertexPodsRunning()
 					w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 					w.Expect().VertexPodsRunning()
-					w.StreamVertexPodlogs("compute-sum", "numa")
 				}
 				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
