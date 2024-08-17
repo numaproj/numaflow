@@ -79,6 +79,7 @@ func (mvs *MonoVertexService) GetMonoVertexMetrics(ctx context.Context, empty *e
 
 func (mvs *MonoVertexService) GetMonoVertexStatus(context.Context, *mvtxdaemon.GetMonoVertexStatusRequest) (*mvtxdaemon.GetMonoVertexStatusResponse, error) {
 	resp := new(mvtxdaemon.GetMonoVertexStatusResponse)
+	// TODO(MonoVertex): Add health support here
 	return resp, nil
 }
 
