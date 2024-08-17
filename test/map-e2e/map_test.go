@@ -26,11 +26,11 @@ import (
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
-type SDKsSuite struct {
+type MapSuite struct {
 	E2ESuite
 }
 
-func (s *SDKsSuite) TestBatchMapUDFunctionAndSink() {
+func (s *MapSuite) TestBatchMapUDFunctionAndSink() {
 	w := s.Given().Pipeline("@testdata/flatmap-batch.yaml").
 		When().
 		CreatePipelineAndWait()
@@ -59,7 +59,7 @@ func (s *SDKsSuite) TestBatchMapUDFunctionAndSink() {
 		VertexPodLogContains("java-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
 }
 
-func (s *SDKsSuite) TestUDFunctionAndSink() {
+func (s *MapSuite) TestUDFunctionAndSink() {
 	w := s.Given().Pipeline("@testdata/flatmap.yaml").
 		When().
 		CreatePipelineAndWait()
@@ -85,7 +85,7 @@ func (s *SDKsSuite) TestUDFunctionAndSink() {
 		VertexPodLogContains("python-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
 }
 
-func (s *SDKsSuite) TestMapStreamUDFunctionAndSink() {
+func (s *MapSuite) TestMapStreamUDFunctionAndSink() {
 	w := s.Given().Pipeline("@testdata/flatmap-stream.yaml").
 		When().
 		CreatePipelineAndWait()
@@ -116,6 +116,6 @@ func (s *SDKsSuite) TestMapStreamUDFunctionAndSink() {
 		VertexPodLogContains("java-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(4))
 }
 
-func TestSDKsSuite(t *testing.T) {
-	suite.Run(t, new(SDKsSuite))
+func TestMapSuite(t *testing.T) {
+	suite.Run(t, new(MapSuite))
 }
