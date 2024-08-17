@@ -525,6 +525,7 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 				return s.Err()
 			}
 			data := s.Bytes()
+			log.Printf("pod=%s, container=%s msg=%s", podName, containerName, string(data))
 			if exp.Match(data) {
 				result <- true
 			}
