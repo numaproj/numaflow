@@ -50,7 +50,8 @@ secrecy = "0.8.0"
 {{^supportAsync}}
 [dependencies.reqwest]
 version = "^0.11"
-features = ["json", "blocking", "multipart"]
+default-features = false
+features = ["json", "blocking", "multipart", "rustls-tls"]
 {{/supportAsync}}
 {{#supportAsync}}
 {{#supportMiddleware}}
@@ -58,6 +59,7 @@ reqwest-middleware = "0.2.0"
 {{/supportMiddleware}}
 [dependencies.reqwest]
 version = "^0.11"
-features = ["json", "multipart"]
+default-features = false
+features = ["json", "multipart", "rustls-tls"]
 {{/supportAsync}}
 {{/reqwest}}

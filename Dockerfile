@@ -1,9 +1,13 @@
-ARG BASE_IMAGE=gcr.io/distroless/cc-debian12
+ARG BASE_IMAGE=scratch
 ARG ARCH=$TARGETARCH
 ####################################################################################################
 # base
 ####################################################################################################
-FROM debian:bullseye as base
+FROM alpine:3.17 AS base
+ARG ARCH
+RUN apk update && apk upgrade && \
+    apk add ca-certificates && \
+    apk --no-cache add tzdata
 ARG ARCH
 
 COPY dist/numaflow-linux-${ARCH} /bin/numaflow
@@ -13,12 +17,10 @@ RUN chmod +x /bin/numaflow
 ####################################################################################################
 # extension base
 ####################################################################################################
-FROM rust:1.79-bookworm as extension-base
+FROM rust:1.80-bookworm AS extension-base
+ARG TARGETPLATFORM
 
-RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-
-RUN apt-get update
-RUN apt-get install protobuf-compiler -y
+RUN apt-get update && apt-get install protobuf-compiler -y
 
 RUN cargo new numaflow
 # Create a new empty shell project
@@ -43,8 +45,15 @@ COPY ./rust/serving/Cargo.toml ./serving/Cargo.toml
 COPY ./rust/Cargo.toml ./rust/Cargo.lock ./
 
 # Build to cache dependencies
-RUN mkdir -p src/bin && echo "fn main() {}" > src/bin/main.rs && \
-    cargo build --workspace --all --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    case ${TARGETPLATFORM} in \
+        "linux/amd64") TARGET="x86_64-unknown-linux-gnu" ;; \
+        "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
+    *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
+    esac && \
+    mkdir -p src/bin && echo "fn main() {}" > src/bin/main.rs && \
+    RUSTFLAGS='-C target-feature=+crt-static' cargo build --workspace --all --release --target ${TARGET}
 
 # Copy the actual source code files of the main project and the subprojects
 COPY ./rust/src ./src
@@ -57,22 +66,29 @@ COPY ./rust/monovertex/build.rs ./monovertex/build.rs
 COPY ./rust/monovertex/proto ./monovertex/proto
 
 # Build the real binaries
-RUN touch src/bin/main.rs && \
-    cargo build --workspace --all --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    case ${TARGETPLATFORM} in \
+        "linux/amd64") TARGET="x86_64-unknown-linux-gnu" ;; \
+        "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
+    *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
+    esac && \
+    touch src/bin/main.rs && \
+    RUSTFLAGS='-C target-feature=+crt-static' cargo build --workspace --all --release --target ${TARGET} && \
+    cp -pv target/${TARGET}/release/numaflow /root/numaflow
 
 ####################################################################################################
 # numaflow
 ####################################################################################################
 ARG BASE_IMAGE
-FROM debian:bookworm as numaflow
+FROM ${BASE_IMAGE} AS numaflow
 
-# Install necessary libraries
-RUN apt-get update && apt-get install -y libssl3
-
+COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=base /bin/numaflow /bin/numaflow
 COPY ui/build /ui/build
 
-COPY --from=extension-base /numaflow/target/release/numaflow /bin/numaflow-rs
+COPY --from=extension-base /root/numaflow /bin/numaflow-rs
 COPY ./rust/serving/config config
 
 ENTRYPOINT [ "/bin/numaflow" ]
@@ -80,7 +96,7 @@ ENTRYPOINT [ "/bin/numaflow" ]
 ####################################################################################################
 # testbase
 ####################################################################################################
-FROM alpine:3.17 as testbase
+FROM alpine:3.17 AS testbase
 RUN apk update && apk upgrade && \
     apk add ca-certificates && \
     apk --no-cache add tzdata
