@@ -91,7 +91,7 @@ COPY ui/build /ui/build
 COPY --from=extension-base /root/numaflow /bin/numaflow-rs
 COPY ./rust/serving/config config
 
-ENTRYPOINT [ "/bin/numaflow-rs" ]
+ENTRYPOINT [ "/bin/numaflow" ]
 
 ####################################################################################################
 # testbase
