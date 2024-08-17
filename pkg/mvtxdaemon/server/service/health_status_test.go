@@ -1,815 +1,187 @@
 package service
 
+import (
+	"testing"
+
+	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
+)
+
+func TestGetCurrentHealth(t *testing.T) {
+	monoVertex := &v1alpha1.MonoVertex{} // Simplified for testing
+	hc := NewHealthChecker(monoVertex)
+	expected := defaultDataHealthResponse
+
+	if result := hc.getCurrentHealth(); result != expected {
+		t.Errorf("Expected %v, got %v", expected, result)
+	}
+}
+
+func TestSetCurrentHealth(t *testing.T) {
+	monoVertex := &v1alpha1.MonoVertex{} // Simplified
+	hc := NewHealthChecker(monoVertex)
+	newStatus := newDataHealthResponse("Healthy", "All systems green", "D1")
+
+	hc.setCurrentHealth(newStatus)
+
+	if result := hc.getCurrentHealth(); result != newStatus {
+		t.Errorf("Expected %v, got %v", newStatus, result)
+	}
+}
+
+func TestConvertMonoVtxStateToHealthResp(t *testing.T) {
+	monoVertex := &v1alpha1.MonoVertex{} // Simplified
+	hc := NewHealthChecker(monoVertex)
+
+	tests := []struct {
+		name     string
+		state    *monoVtxState
+		expected *dataHealthResponse
+	}{
+		{
+			name:     "Healthy State",
+			state:    newMonoVtxState("vertex1", v1alpha1.MonoVertexStatusHealthy),
+			expected: newDataHealthResponse(v1alpha1.MonoVertexStatusHealthy, "MonoVertex data flow is healthy", "D1"),
+		},
+		{
+			name:     "Critical State",
+			state:    newMonoVtxState("vertex1", v1alpha1.MonoVertexStatusCritical),
+			expected: newDataHealthResponse(v1alpha1.MonoVertexStatusCritical, "MonoVertex data flow is in a critical state for vertex1", "D3"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := hc.convertMonoVtxStateToHealthResp(test.state)
+			if result.Status != test.expected.Status || result.Message != test.expected.Message || result.Code != test.expected.Code {
+				t.Errorf("Expected %+v, got %+v", test.expected, result)
+			}
+		})
+	}
+}
+
+func TestGetDesiredReplica(t *testing.T) {
+	targetProcessingSeconds := uint32(5)
+	monoVertex := &v1alpha1.MonoVertex{
+		Spec: v1alpha1.MonoVertexSpec{
+			Scale: v1alpha1.Scale{TargetProcessingSeconds: &targetProcessingSeconds},
+		},
+		Status: v1alpha1.MonoVertexStatus{Replicas: 4},
+	}
+	hc := NewHealthChecker(monoVertex)
+
+	metrics := &mvtxdaemon.MonoVertexMetrics{
+		MonoVertex: "vertex",
+		ProcessingRates: map[string]*wrapperspb.DoubleValue{
+			"default": {Value: 100},
+		},
+		Pendings: map[string]*wrapperspb.Int64Value{
+			"default": {Value: 500},
+		},
+	}
+
+	expected := int(4)
+	result, err := hc.getDesiredReplica(metrics)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != expected {
+		t.Errorf("Expected %d, got %d", expected, result)
+	}
+}
+
+func TestGetDesiredReplicaNoRateAvailable(t *testing.T) {
+	monoVertex := &v1alpha1.MonoVertex{
+		Status: v1alpha1.MonoVertexStatus{Replicas: 4},
+	}
+	hc := NewHealthChecker(monoVertex)
+
+	metrics := &mvtxdaemon.MonoVertexMetrics{
+		MonoVertex: "vertex",
+		Pendings: map[string]*wrapperspb.Int64Value{
+			"default": {Value: 100},
+		},
+	}
+
+	_, err := hc.getDesiredReplica(metrics)
+	if err == nil {
+		t.Errorf("Expected error for no rate information, got nil")
+	}
+}
+
+func TestGetDesiredReplicaPendingNotAvailable(t *testing.T) {
+	monoVertex := &v1alpha1.MonoVertex{}
+	hc := NewHealthChecker(monoVertex)
+
+	metrics := &mvtxdaemon.MonoVertexMetrics{
+		MonoVertex: "vertex",
+		ProcessingRates: map[string]*wrapperspb.DoubleValue{
+			"default": {Value: 100},
+		},
+	}
+
+	_, err := hc.getDesiredReplica(metrics)
+	if err == nil {
+		t.Errorf("Expected error for no pending information, got nil")
+	}
+}
+
 //
-//import (
-//	"fmt"
-//	"sync"
-//	"testing"
-//	"time"
-//
-//	"github.com/stretchr/testify/assert"
-//	"google.golang.org/protobuf/types/known/wrapperspb"
-//
-//	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-//	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
-//	"github.com/numaproj/numaflow/pkg/isbsvc"
-//	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
-//)
-//
-//func TestNewDataHealthResponse(t *testing.T) {
-//	tests := []struct {
-//		name           string
-//		status         string
-//		message        string
-//		code           string
-//		expectedStatus string
-//		expectedMsg    string
-//		expectedCode   string
-//	}{
-//		{
-//			name:           "Healthy response",
-//			status:         "healthy",
-//			message:        "All systems operational",
-//			code:           "200",
-//			expectedStatus: "healthy",
-//			expectedMsg:    "All systems operational",
-//			expectedCode:   "200",
-//		},
-//		{
-//			name:           "Unhealthy response",
-//			status:         "unhealthy",
-//			message:        "Service degradation detected",
-//			code:           "503",
-//			expectedStatus: "unhealthy",
-//			expectedMsg:    "Service degradation detected",
-//			expectedCode:   "503",
-//		},
-//		{
-//			name:           "Empty response",
-//			status:         "",
-//			message:        "",
-//			code:           "",
-//			expectedStatus: "",
-//			expectedMsg:    "",
-//			expectedCode:   "",
-//		},
-//	}
-//
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			response := newDataHealthResponse(tt.status, tt.message, tt.code)
-//			assert.NotNil(t, response)
-//			assert.Equal(t, tt.expectedStatus, response.Status)
-//			assert.Equal(t, tt.expectedMsg, response.Message)
-//			assert.Equal(t, tt.expectedCode, response.Code)
-//		})
-//	}
-//}
-//
-//func TestNewHealthChecker(t *testing.T) {
-//	tests := []struct {
-//		name     string
-//		pipeline *v1alpha1.Pipeline
-//		isbSvc   isbsvc.ISBService
-//	}{
-//		{
-//			name:     "With nil pipeline and nil ISBService",
-//			pipeline: nil,
-//			isbSvc:   nil,
-//		},
-//		{
-//			name:     "With non-nil pipeline and nil ISBService",
-//			pipeline: &v1alpha1.Pipeline{},
-//			isbSvc:   nil,
-//		},
-//		{
-//			name:     "With nil pipeline and non-nil ISBService",
-//			pipeline: nil,
-//			isbSvc:   &mockISBService{},
-//		},
-//		{
-//			name:     "With non-nil pipeline and non-nil ISBService",
-//			pipeline: &v1alpha1.Pipeline{},
-//			isbSvc:   &mockISBService{},
-//		},
-//	}
-//
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			hc := NewHealthChecker(tt.pipeline, tt.isbSvc)
-//			assert.NotNil(t, hc)
-//			assert.Equal(t, defaultDataHealthResponse, hc.currentDataStatus)
-//			assert.Equal(t, tt.isbSvc, hc.isbSvcClient)
-//			assert.Equal(t, tt.pipeline, hc.pipeline)
-//			assert.NotNil(t, hc.timelineData)
-//			assert.Empty(t, hc.timelineData)
-//			assert.NotNil(t, hc.statusLock)
-//		})
-//	}
-//}
-//
-//type mockISBService struct {
-//	isbsvc.ISBService
-//}
-//
-//func TestNewVertexState(t *testing.T) {
-//	tests := []struct {
-//		name          string
-//		vertexName    string
-//		monoVtxState   string
-//		expectedName  string
-//		expectedState string
-//	}{
-//		{
-//			name:          "Normal vertex state",
-//			vertexName:    "vertex1",
-//			monoVtxState:   "running",
-//			expectedName:  "vertex1",
-//			expectedState: "running",
-//		},
-//		{
-//			name:          "Empty vertex name",
-//			vertexName:    "",
-//			monoVtxState:   "pending",
-//			expectedName:  "",
-//			expectedState: "pending",
-//		},
-//		{
-//			name:          "Empty vertex state",
-//			vertexName:    "vertex2",
-//			monoVtxState:   "",
-//			expectedName:  "vertex2",
-//			expectedState: "",
-//		},
-//		{
-//			name:          "Special characters in vertex name",
-//			vertexName:    "vertex-3_@#$",
-//			monoVtxState:   "completed",
-//			expectedName:  "vertex-3_@#$",
-//			expectedState: "completed",
-//		},
-//		{
-//			name:          "Long vertex name and state",
-//			vertexName:    "very_long_vertex_name_that_exceeds_normal_length",
-//			monoVtxState:   "very_long_state_description_that_exceeds_normal_length",
-//			expectedName:  "very_long_vertex_name_that_exceeds_normal_length",
-//			expectedState: "very_long_state_description_that_exceeds_normal_length",
-//		},
-//	}
-//
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			result := newMonoVtxState(tt.vertexName, tt.monoVtxState)
-//			assert.NotNil(t, result)
-//			assert.Equal(t, tt.expectedName, result.Name)
-//			assert.Equal(t, tt.expectedState, result.State)
-//		})
-//	}
-//}
-//
-//func TestGetCurrentHealth(t *testing.T) {
-//	tests := []struct {
-//		name           string
-//		initialStatus  *dataHealthResponse
-//		expectedStatus *dataHealthResponse
-//	}{
-//		{
-//			name: "Default health status",
-//			initialStatus: &dataHealthResponse{
-//				Status:  "healthy",
-//				Message: "All systems operational",
-//				Code:    "200",
-//			},
-//			expectedStatus: &dataHealthResponse{
-//				Status:  "healthy",
-//				Message: "All systems operational",
-//				Code:    "200",
+//func TestGetMonoVertexDataCriticality(t *testing.T) {
+//	maxReplicas := int32(5)
+//	monoVertex := &v1alpha1.MonoVertex{
+//		Spec: v1alpha1.MonoVertexSpec{
+//			Scale: v1alpha1.Scale{
+//				Max: &maxReplicas,
 //			},
 //		},
+//	}
+//	hc := NewHealthChecker(monoVertex)
+//
+//	tests := []struct {
+//		name            string
+//		metrics         *mvtxdaemon.MonoVertexMetrics
+//		currentReplicas int
+//		desiredReplicas int
+//		expectedState   string
+//	}{
 //		{
-//			name: "Custom health status",
-//			initialStatus: &dataHealthResponse{
-//				Status:  "degraded",
-//				Message: "Partial system outage",
-//				Code:    "503",
+//			name: "Current equal max, desired more than max (Critical)",
+//			metrics: &mvtxdaemon.MonoVertexMetrics{
+//				MonoVertex: "vertex",
 //			},
-//			expectedStatus: &dataHealthResponse{
-//				Status:  "degraded",
-//				Message: "Partial system outage",
-//				Code:    "503",
-//			},
+//			currentReplicas: 5,
+//			desiredReplicas: 6,
+//			expectedState:   v1alpha1.MonoVertexStatusCritical,
 //		},
 //		{
-//			name:           "Nil health status",
-//			initialStatus:  nil,
-//			expectedStatus: nil,
+//			name: "Current less than max, desired more than max (Healthy)",
+//			metrics: &mvtxdaemon.MonoVertexMetrics{
+//				MonoVertex: "vertex",
+//			},
+//			currentReplicas: 4,
+//			desiredReplicas: 6,
+//			expectedState:   v1alpha1.MonoVertexStatusHealthy,
 //		},
 //	}
 //
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			hc := &HealthChecker{
-//				currentDataStatus: tt.initialStatus,
-//				statusLock:        &sync.RWMutex{},
+//	for _, test := range tests {
+//		t.Run(test.name, func(t *testing.T) {
+//			hc.monoVertex.Status.Replicas = uint32(test.currentReplicas)
+//			// Mock getDesiredReplica to return desiredReplicas directly
+//			hc.getDesiredReplica = func(*mvtxdaemon.MonoVertexMetrics) (int, error) {
+//				return test.desiredReplicas, nil
 //			}
 //
-//			result := hc.getCurrentHealth()
-//			assert.Equal(t, tt.expectedStatus, result)
-//		})
-//	}
-//}
-//
-//func TestGetCurrentHealthConcurrency(t *testing.T) {
-//	hc := &HealthChecker{
-//		currentDataStatus: &dataHealthResponse{
-//			Status:  "healthy",
-//			Message: "All systems operational",
-//			Code:    "200",
-//		},
-//		statusLock: &sync.RWMutex{},
-//	}
-//
-//	const numGoroutines = 100
-//	var wg sync.WaitGroup
-//	wg.Add(numGoroutines)
-//
-//	for i := 0; i < numGoroutines; i++ {
-//		go func() {
-//			defer wg.Done()
-//			result := hc.getCurrentHealth()
-//			assert.NotNil(t, result)
-//			assert.Equal(t, "healthy", result.Status)
-//			assert.Equal(t, "All systems operational", result.Message)
-//			assert.Equal(t, "200", result.Code)
-//		}()
-//	}
-//
-//	wg.Wait()
-//}
-//
-//func TestGetCurrentHealthWithUpdates(t *testing.T) {
-//	hc := &HealthChecker{
-//		currentDataStatus: &dataHealthResponse{
-//			Status:  "healthy",
-//			Message: "All systems operational",
-//			Code:    "200",
-//		},
-//		statusLock: &sync.RWMutex{},
-//	}
-//
-//	// Initial check
-//	result := hc.getCurrentHealth()
-//	assert.Equal(t, "healthy", result.Status)
-//
-//	// Update health status
-//	hc.statusLock.Lock()
-//	hc.currentDataStatus = &dataHealthResponse{
-//		Status:  "unhealthy",
-//		Message: "System outage",
-//		Code:    "503",
-//	}
-//	hc.statusLock.Unlock()
-//
-//	// Check updated status
-//	result = hc.getCurrentHealth()
-//	assert.Equal(t, "unhealthy", result.Status)
-//	assert.Equal(t, "System outage", result.Message)
-//	assert.Equal(t, "503", result.Code)
-//}
-//
-//func TestSetCurrentHealth(t *testing.T) {
-//	tests := []struct {
-//		name           string
-//		initialStatus  *dataHealthResponse
-//		newStatus      *dataHealthResponse
-//		expectedStatus *dataHealthResponse
-//	}{
-//		{
-//			name: "Update from healthy to unhealthy",
-//			initialStatus: &dataHealthResponse{
-//				Status:  "healthy",
-//				Message: "All systems operational",
-//				Code:    "200",
-//			},
-//			newStatus: &dataHealthResponse{
-//				Status:  "unhealthy",
-//				Message: "System failure",
-//				Code:    "500",
-//			},
-//			expectedStatus: &dataHealthResponse{
-//				Status:  "unhealthy",
-//				Message: "System failure",
-//				Code:    "500",
-//			},
-//		},
-//		{
-//			name: "Update from unhealthy to healthy",
-//			initialStatus: &dataHealthResponse{
-//				Status:  "unhealthy",
-//				Message: "System failure",
-//				Code:    "500",
-//			},
-//			newStatus: &dataHealthResponse{
-//				Status:  "healthy",
-//				Message: "All systems operational",
-//				Code:    "200",
-//			},
-//			expectedStatus: &dataHealthResponse{
-//				Status:  "healthy",
-//				Message: "All systems operational",
-//				Code:    "200",
-//			},
-//		},
-//		{
-//			name:          "Update from nil to valid status",
-//			initialStatus: nil,
-//			newStatus: &dataHealthResponse{
-//				Status:  "degraded",
-//				Message: "Partial system outage",
-//				Code:    "503",
-//			},
-//			expectedStatus: &dataHealthResponse{
-//				Status:  "degraded",
-//				Message: "Partial system outage",
-//				Code:    "503",
-//			},
-//		},
-//		{
-//			name: "Update to nil status",
-//			initialStatus: &dataHealthResponse{
-//				Status:  "healthy",
-//				Message: "All systems operational",
-//				Code:    "200",
-//			},
-//			newStatus:      nil,
-//			expectedStatus: nil,
-//		},
-//	}
-//
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			hc := &HealthChecker{
-//				currentDataStatus: tt.initialStatus,
-//				statusLock:        &sync.RWMutex{},
+//			vertexState, err := hc.getMonoVertexDataCriticality(context.Background(), test.metrics)
+//			if err != nil {
+//				t.Fatal(err)
 //			}
-//
-//			hc.setCurrentHealth(tt.newStatus)
-//
-//			assert.Equal(t, tt.expectedStatus, hc.currentDataStatus)
-//		})
-//	}
-//}
-//
-//func TestSetCurrentHealthConcurrency(t *testing.T) {
-//	hc := &HealthChecker{
-//		currentDataStatus: &dataHealthResponse{
-//			Status:  "healthy",
-//			Message: "All systems operational",
-//			Code:    "200",
-//		},
-//		statusLock: &sync.RWMutex{},
-//	}
-//
-//	const numGoroutines = 100
-//	var wg sync.WaitGroup
-//	wg.Add(numGoroutines)
-//
-//	for i := 0; i < numGoroutines; i++ {
-//		go func(i int) {
-//			defer wg.Done()
-//			newStatus := &dataHealthResponse{
-//				Status:  fmt.Sprintf("status_%d", i),
-//				Message: fmt.Sprintf("message_%d", i),
-//				Code:    fmt.Sprintf("%d", i),
+//			if vertexState.State != test.expectedState {
+//				t.Errorf("Expected state %s, got %s", test.expectedState, vertexState.State)
 //			}
-//			hc.setCurrentHealth(newStatus)
-//		}(i)
-//	}
-//
-//	wg.Wait()
-//
-//	finalStatus := hc.getCurrentHealth()
-//	assert.NotNil(t, finalStatus)
-//	assert.Contains(t, finalStatus.Status, "status_")
-//	assert.Contains(t, finalStatus.Message, "message_")
-//	assert.NotEqual(t, "", finalStatus.Code)
-//}
-//
-//func TestSetCurrentHealthWithGetCurrentHealth(t *testing.T) {
-//	hc := &HealthChecker{
-//		currentDataStatus: &dataHealthResponse{
-//			Status:  "healthy",
-//			Message: "All systems operational",
-//			Code:    "200",
-//		},
-//		statusLock: &sync.RWMutex{},
-//	}
-//
-//	var wg sync.WaitGroup
-//	wg.Add(2)
-//
-//	go func() {
-//		defer wg.Done()
-//		for i := 0; i < 100; i++ {
-//			newStatus := &dataHealthResponse{
-//				Status:  fmt.Sprintf("status_%d", i),
-//				Message: fmt.Sprintf("message_%d", i),
-//				Code:    fmt.Sprintf("%d", i),
-//			}
-//			hc.setCurrentHealth(newStatus)
-//			time.Sleep(time.Millisecond)
-//		}
-//	}()
-//
-//	go func() {
-//		defer wg.Done()
-//		for i := 0; i < 100; i++ {
-//			status := hc.getCurrentHealth()
-//			assert.NotNil(t, status)
-//			time.Sleep(time.Millisecond)
-//		}
-//	}()
-//
-//	wg.Wait()
-//
-//	finalStatus := hc.getCurrentHealth()
-//	assert.NotNil(t, finalStatus)
-//	assert.Contains(t, finalStatus.Status, "status_")
-//	assert.Contains(t, finalStatus.Message, "message_")
-//	assert.NotEqual(t, "", finalStatus.Code)
-//}
-//
-//func TestUpdateUsageTimeline(t *testing.T) {
-//	tests := []struct {
-//		name       string
-//		bufferList []*daemon.BufferInfo
-//		expected   map[string]int
-//	}{
-//		{
-//			name: "Single buffer update",
-//			bufferList: []*daemon.BufferInfo{
-//				{
-//					BufferName:  "buffer1",
-//					BufferUsage: wrapperspb.Double(0.5),
-//				},
-//			},
-//			expected: map[string]int{
-//				"buffer1": 1,
-//			},
-//		},
-//		{
-//			name: "Multiple buffer update",
-//			bufferList: []*daemon.BufferInfo{
-//				{
-//					BufferName:  "buffer1",
-//					BufferUsage: wrapperspb.Double(0.3),
-//				},
-//				{
-//					BufferName:  "buffer2",
-//					BufferUsage: wrapperspb.Double(0.7),
-//				},
-//			},
-//			expected: map[string]int{
-//				"buffer1": 1,
-//				"buffer2": 1,
-//			},
-//		},
-//		{
-//			name:       "Empty buffer list",
-//			bufferList: []*daemon.BufferInfo{},
-//			expected:   map[string]int{},
-//		},
-//		{
-//			name: "Buffer with zero usage",
-//			bufferList: []*daemon.BufferInfo{
-//				{
-//					BufferName:  "buffer1",
-//					BufferUsage: wrapperspb.Double(0),
-//				},
-//			},
-//			expected: map[string]int{
-//				"buffer1": 1,
-//			},
-//		},
-//		{
-//			name: "Buffer with full usage",
-//			bufferList: []*daemon.BufferInfo{
-//				{
-//					BufferName:  "buffer1",
-//					BufferUsage: wrapperspb.Double(1),
-//				},
-//			},
-//			expected: map[string]int{
-//				"buffer1": 1,
-//			},
-//		},
-//	}
-//
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			hc := &HealthChecker{
-//				timelineData: make(map[string]*sharedqueue.OverflowQueue[*timelineEntry]),
-//			}
-//
-//			hc.updateUsageTimeline(tt.bufferList)
-//
-//			for bufferName, expectedCount := range tt.expected {
-//				assert.NotNil(t, hc.timelineData[bufferName])
-//				assert.Equal(t, expectedCount, hc.timelineData[bufferName].Length())
-//
-//				if expectedCount > 0 {
-//					lastEntry := hc.timelineData[bufferName].Items()[0]
-//					assert.NotZero(t, lastEntry.Time)
-//				}
-//			}
-//		})
-//	}
-//}
-//
-//func TestUpdateAverageBufferUsage(t *testing.T) {
-//	tests := []struct {
-//		name     string
-//		timeline []*timelineEntry
-//		newEntry float64
-//		expected float64
-//	}{
-//		{
-//			name:     "Empty timeline",
-//			timeline: []*timelineEntry{},
-//			newEntry: 0.5,
-//			expected: 0.5,
-//		},
-//		{
-//			name: "Timeline with one entry",
-//			timeline: []*timelineEntry{
-//				{BufferUsage: 0.3, AverageBufferUsage: 0.3},
-//			},
-//			newEntry: 0.7,
-//			expected: 0.5,
-//		},
-//		{
-//			name: "Full timeline",
-//			timeline: []*timelineEntry{
-//				{BufferUsage: 0.1, AverageBufferUsage: 0.1},
-//				{BufferUsage: 0.2, AverageBufferUsage: 0.15},
-//				{BufferUsage: 0.3, AverageBufferUsage: 0.2},
-//				{BufferUsage: 0.4, AverageBufferUsage: 0.25},
-//				{BufferUsage: 0.5, AverageBufferUsage: 0.3},
-//			},
-//			newEntry: 0.6,
-//			expected: 0.35,
-//		},
-//	}
-//
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			result := updateAverageBufferUsage(tt.timeline, tt.newEntry)
-//			assert.InDelta(t, tt.expected, result, 0.001, "Expected average buffer usage to be %v, but got %v", tt.expected, result)
-//		})
-//	}
-//}
-//
-//func TestAssignStateToBufferUsage(t *testing.T) {
-//	tests := []struct {
-//		name      string
-//		ewmaValue float64
-//		expected  string
-//	}{
-//		{
-//			name:      "Critical state",
-//			ewmaValue: 96,
-//			expected:  criticalState,
-//		},
-//		{
-//			name:      "Warning state",
-//			ewmaValue: 85,
-//			expected:  warningState,
-//		},
-//		{
-//			name:      "Healthy state",
-//			ewmaValue: 30,
-//			expected:  healthyState,
-//		},
-//	}
-//
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			result := assignStateToBufferUsage(tt.ewmaValue)
-//			assert.Equal(t, tt.expected, result)
-//		})
-//	}
-//}
-//
-//func TestAssignStateToTimeline(t *testing.T) {
-//	tests := []struct {
-//		name       string
-//		ewmaValues []float64
-//		lookBack   bool
-//		expected   string
-//	}{
-//		{
-//			name:       "Single healthy value",
-//			ewmaValues: []float64{30},
-//			lookBack:   false,
-//			expected:   healthyState,
-//		},
-//		{
-//			name:       "Single warning value",
-//			ewmaValues: []float64{85},
-//			lookBack:   false,
-//			expected:   warningState,
-//		},
-//		{
-//			name:       "Single critical value without lookback",
-//			ewmaValues: []float64{96},
-//			lookBack:   false,
-//			expected:   criticalState,
-//		},
-//		{
-//			name:       "Single critical value with lookback",
-//			ewmaValues: []float64{96},
-//			lookBack:   true,
-//			expected:   warningState,
-//		},
-//		{
-//			name:       "Multiple values ending with critical, no lookback",
-//			ewmaValues: []float64{30, 85, 96},
-//			lookBack:   false,
-//			expected:   criticalState,
-//		},
-//		{
-//			name:       "Multiple values ending with critical, with lookback, insufficient critical count",
-//			ewmaValues: []float64{30, 85, 96, 96},
-//			lookBack:   true,
-//			expected:   warningState,
-//		},
-//		{
-//			name:       "Multiple values ending with critical, with lookback, sufficient critical count",
-//			ewmaValues: []float64{96, 96, 96, 96, 96},
-//			lookBack:   true,
-//			expected:   criticalState,
-//		},
-//		{
-//			name:       "Values fluctuating between warning and critical",
-//			ewmaValues: []float64{85, 96, 85, 96, 85},
-//			lookBack:   true,
-//			expected:   warningState,
-//		},
-//		{
-//			name:       "Values increasing from healthy to critical",
-//			ewmaValues: []float64{30, 50, 70, 90, 96},
-//			lookBack:   true,
-//			expected:   warningState,
-//		},
-//		{
-//			name:       "Values decreasing from critical to healthy",
-//			ewmaValues: []float64{96, 90, 70, 50, 30},
-//			lookBack:   true,
-//			expected:   healthyState,
-//		},
-//	}
-//
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			result := assignStateToTimeline(tt.ewmaValues, tt.lookBack)
-//			assert.Equal(t, tt.expected, result)
-//		})
-//	}
-//}
-//
-//func TestConvertVertexStateToPipelineState(t *testing.T) {
-//	tests := []struct {
-//		name         string
-//		vertexStates []*monoVtxState
-//		expected     *dataHealthResponse
-//	}{
-//		{
-//			name: "All vertices healthy",
-//			vertexStates: []*monoVtxState{
-//				{Name: "vertex1", State: v1alpha1.PipelineStatusHealthy},
-//				{Name: "vertex2", State: v1alpha1.PipelineStatusHealthy},
-//			},
-//			expected: newDataHealthResponse(v1alpha1.PipelineStatusHealthy, "Pipeline data flow is healthy", "D1"),
-//		},
-//		{
-//			name: "One vertex warning",
-//			vertexStates: []*monoVtxState{
-//				{Name: "vertex1", State: v1alpha1.PipelineStatusHealthy},
-//				{Name: "vertex2", State: v1alpha1.PipelineStatusWarning},
-//			},
-//			expected: newDataHealthResponse(v1alpha1.PipelineStatusWarning, "Pipeline data flow is in a warning state for vertex2", "D2"),
-//		},
-//		{
-//			name: "One vertex critical",
-//			vertexStates: []*monoVtxState{
-//				{Name: "vertex1", State: v1alpha1.PipelineStatusHealthy},
-//				{Name: "vertex2", State: v1alpha1.PipelineStatusCritical},
-//			},
-//			expected: newDataHealthResponse(v1alpha1.PipelineStatusCritical, "Pipeline data flow is in a critical state for vertex2", "D3"),
-//		},
-//		{
-//			name: "One vertex unknown",
-//			vertexStates: []*monoVtxState{
-//				{Name: "vertex1", State: v1alpha1.PipelineStatusHealthy},
-//				{Name: "vertex2", State: v1alpha1.PipelineStatusUnknown},
-//			},
-//			expected: newDataHealthResponse(v1alpha1.PipelineStatusUnknown, "Pipeline data flow is in an unknown state due to vertex2", "D4"),
-//		},
-//		{
-//			name:         "Empty vertex state list",
-//			vertexStates: []*monoVtxState{},
-//			expected:     newDataHealthResponse(v1alpha1.PipelineStatusHealthy, "Pipeline data flow is healthy", "D1"),
-//		},
-//		{
-//			name:         "Nil vertex state list",
-//			vertexStates: nil,
-//			expected:     newDataHealthResponse(v1alpha1.PipelineStatusHealthy, "Pipeline data flow is healthy", "D1"),
-//		},
-//		{
-//			name: "Multiple vertices with same highest state",
-//			vertexStates: []*monoVtxState{
-//				{Name: "vertex1", State: v1alpha1.PipelineStatusHealthy},
-//				{Name: "vertex2", State: v1alpha1.PipelineStatusWarning},
-//				{Name: "vertex3", State: v1alpha1.PipelineStatusWarning},
-//			},
-//			expected: newDataHealthResponse(v1alpha1.PipelineStatusWarning, "Pipeline data flow is in a warning state for vertex2", "D2"),
-//		},
-//	}
-//
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			result := convertMonoVtxStateToHealthResp(tt.vertexStates)
-//			assert.Equal(t, tt.expected, result)
-//		})
-//	}
-//}
-//
-//func TestGenerateDataHealthResponse(t *testing.T) {
-//	tests := []struct {
-//		name           string
-//		state          string
-//		vertex         string
-//		expectedStatus string
-//		expectedMsg    string
-//		expectedCode   string
-//	}{
-//		{
-//			name:           "Healthy state",
-//			state:          v1alpha1.PipelineStatusHealthy,
-//			vertex:         "vertex1",
-//			expectedStatus: v1alpha1.PipelineStatusHealthy,
-//			expectedMsg:    "Pipeline data flow is healthy",
-//			expectedCode:   "D1",
-//		},
-//		{
-//			name:           "Warning state",
-//			state:          v1alpha1.PipelineStatusWarning,
-//			vertex:         "vertex2",
-//			expectedStatus: v1alpha1.PipelineStatusWarning,
-//			expectedMsg:    "Pipeline data flow is in a warning state for vertex2",
-//			expectedCode:   "D2",
-//		},
-//		{
-//			name:           "Critical state",
-//			state:          v1alpha1.PipelineStatusCritical,
-//			vertex:         "vertex3",
-//			expectedStatus: v1alpha1.PipelineStatusCritical,
-//			expectedMsg:    "Pipeline data flow is in a critical state for vertex3",
-//			expectedCode:   "D3",
-//		},
-//		{
-//			name:           "Unknown state",
-//			state:          v1alpha1.PipelineStatusUnknown,
-//			vertex:         "vertex4",
-//			expectedStatus: v1alpha1.PipelineStatusUnknown,
-//			expectedMsg:    "Pipeline data flow is in an unknown state due to vertex4",
-//			expectedCode:   "D4",
-//		},
-//		{
-//			name:           "Invalid state",
-//			state:          "invalid",
-//			vertex:         "vertex5",
-//			expectedStatus: defaultDataHealthResponse.Status,
-//			expectedMsg:    defaultDataHealthResponse.Message,
-//			expectedCode:   defaultDataHealthResponse.Code,
-//		},
-//		{
-//			name:           "Empty state and vertex",
-//			state:          "",
-//			vertex:         "",
-//			expectedStatus: defaultDataHealthResponse.Status,
-//			expectedMsg:    defaultDataHealthResponse.Message,
-//			expectedCode:   defaultDataHealthResponse.Code,
-//		},
-//	}
-//
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			result := generateDataHealthResponse(tt.state, tt.vertex)
-//			assert.NotNil(t, result)
-//			assert.Equal(t, tt.expectedStatus, result.Status)
-//			assert.Equal(t, tt.expectedMsg, result.Message)
-//			assert.Equal(t, tt.expectedCode, result.Code)
 //		})
 //	}
 //}
