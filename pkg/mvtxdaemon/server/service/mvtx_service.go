@@ -40,21 +40,21 @@ import (
 // Note: Please keep consistent with the definitions in rust/monovertex/sc/metrics.rs
 const MonoVtxPendingMetric = "monovtx_pending"
 
-type MoveVertexService struct {
+type MonoVertexService struct {
 	mvtxdaemon.UnimplementedMonoVertexDaemonServiceServer
 	monoVtx    *v1alpha1.MonoVertex
 	httpClient *http.Client
 	rater      raterPkg.MonoVtxRatable
 }
 
-var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MoveVertexService)(nil)
+var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
 
-// NewMoveVertexService returns a new instance of MoveVertexService
+// NewMoveVertexService returns a new instance of MonoVertexService
 func NewMoveVertexService(
 	monoVtx *v1alpha1.MonoVertex,
 	rater raterPkg.MonoVtxRatable,
-) (*MoveVertexService, error) {
-	mv := MoveVertexService{
+) (*MonoVertexService, error) {
+	mv := MonoVertexService{
 		monoVtx: monoVtx,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
@@ -67,7 +67,7 @@ func NewMoveVertexService(
 	return &mv, nil
 }
 
-func (mvs *MoveVertexService) GetMonoVertexMetrics(ctx context.Context, empty *emptypb.Empty) (*mvtxdaemon.GetMonoVertexMetricsResponse, error) {
+func (mvs *MonoVertexService) GetMonoVertexMetrics(ctx context.Context, empty *emptypb.Empty) (*mvtxdaemon.GetMonoVertexMetricsResponse, error) {
 	resp := new(mvtxdaemon.GetMonoVertexMetricsResponse)
 	collectedMetrics := new(mvtxdaemon.MonoVertexMetrics)
 	collectedMetrics.MonoVertex = mvs.monoVtx.Name
@@ -77,8 +77,13 @@ func (mvs *MoveVertexService) GetMonoVertexMetrics(ctx context.Context, empty *e
 	return resp, nil
 }
 
+func (mvs *MonoVertexService) GetMonoVertexStatus(context.Context, *mvtxdaemon.GetMonoVertexStatusRequest) (*mvtxdaemon.GetMonoVertexStatusResponse, error) {
+	resp := new(mvtxdaemon.GetMonoVertexStatusResponse)
+	return resp, nil
+}
+
 // getPending returns the pending count for the mono vertex
-func (mvs *MoveVertexService) getPending(ctx context.Context) map[string]*wrapperspb.Int64Value {
+func (mvs *MonoVertexService) getPending(ctx context.Context) map[string]*wrapperspb.Int64Value {
 	log := logging.FromContext(ctx)
 	headlessServiceName := mvs.monoVtx.GetHeadlessServiceName()
 	pendingMap := make(map[string]*wrapperspb.Int64Value)

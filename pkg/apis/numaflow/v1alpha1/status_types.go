@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"fmt"
 	"reflect"
 	"sort"
 	"time"
@@ -124,18 +123,4 @@ func (s *Status) IsReady() bool {
 		}
 	}
 	return true
-}
-
-// IsReadyWithError returns no error when all the conditions are true,
-// Else it returns the message as error with the failed condition
-func (s *Status) IsReadyWithError() error {
-	if len(s.Conditions) == 0 {
-		return fmt.Errorf("monovertex status conditions not populated")
-	}
-	for _, c := range s.Conditions {
-		if c.Status != metav1.ConditionTrue {
-			return fmt.Errorf("condition %s for monovertex is not true", c.Type)
-		}
-	}
-	return nil
 }

@@ -229,7 +229,7 @@ func (hc *HealthChecker) getMonoVtxResourceHealth(h *handler, ns string,
 		return status, nil
 	}
 	// if not present in cache, check for the current Mono Vertex status
-	status, err := checkMonoVtxHealth(h, ns, monoVtx, hc.log)
+	status, err := checkMonoVtxHealth(h, ns, monoVtx)
 	if err != nil {
 		return nil, err
 	}
@@ -251,8 +251,7 @@ func (hc *HealthChecker) getMonoVtxResourceHealth(h *handler, ns string,
 // We perform the following checks:
 // 1) Check the `phase“ in the Status field of the spec, it should be “Running”
 // 2) Check if the `conditions` field of the spec, all of them shoudl be true
-func checkMonoVtxHealth(h *handler, ns string, monoVtx string, log *zap.SugaredLogger) (
-	*resourceHealthResponse, error) {
+func checkMonoVtxHealth(h *handler, ns string, monoVtx string) (*resourceHealthResponse, error) {
 	// fetch the current spec of the Mono Vertex
 	v, err := h.numaflowClient.MonoVertices(ns).Get(context.Background(), monoVtx, metav1.GetOptions{})
 	// if there is an error fetching the spec, return an error
@@ -264,13 +263,12 @@ func checkMonoVtxHealth(h *handler, ns string, monoVtx string, log *zap.SugaredL
 			Code:    "M4",
 		}, err
 	}
-	// check if the Mono vertex is healthy or not through the status field
-	// of the spec
+	// check if the Mono vertex is healthy or not through the status field of the spec
 	isMvtxHealthy := v.Status.IsHealthy()
-	if isMvtxHealthy != nil {
+	if !isMvtxHealthy {
 		return &resourceHealthResponse{
 			Status:  dfv1.MonoVertexStatusUnhealthy,
-			Message: fmt.Sprintf("mono vertex %q is unhealthy: %s", monoVtx, isMvtxHealthy.Error()),
+			Message: fmt.Sprintf("mono vertex %q is unhealthy: %s:%s", monoVtx, v.Status.Message, v.Status.Reason),
 			Code:    "M2",
 		}, nil
 	}

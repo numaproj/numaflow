@@ -89,3 +89,8 @@ func (rc *restfulClient) GetMonoVertexMetrics(ctx context.Context) (*mvtxdaemon.
 		return res.Metrics, nil
 	}
 }
+
+func (rc *restfulClient) GetMonoVertexStatus(ctx context.Context, monoVertex string) (*mvtxdaemon.GetMonoVertexStatusResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}

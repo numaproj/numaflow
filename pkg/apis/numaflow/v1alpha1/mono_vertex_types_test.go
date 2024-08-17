@@ -41,15 +41,15 @@ func TestMonoVertex_IsHealthy(t *testing.T) {
 	mvs.MarkDaemonHealthy()
 	mvs.MarkPodHealthy("AllGood", "All pod are up and running")
 
-	err := mvs.IsHealthy()
-	if err != nil {
-		t.Error("IsHealthy should return nil when everything is healthy, got:", err)
+	isHealthy := mvs.IsHealthy()
+	if !isHealthy {
+		t.Error("IsHealthy should return true when everything is healthy")
 	}
 
 	mvs.MarkPodNotHealthy("PodIssue", "One of the pods is down")
-	err = mvs.IsHealthy()
-	if err == nil || err.Error() != "condition PodsHealthy for monovertex is not true" {
-		t.Error("IsHealthy should return an error when pod condition is not healthy, got:", err)
+	isHealthy = mvs.IsHealthy()
+	if isHealthy {
+		t.Error("IsHealthy should return false when pod condition is not healthy")
 	}
 }
 
