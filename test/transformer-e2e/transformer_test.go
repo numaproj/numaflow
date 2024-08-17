@@ -23,7 +23,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -191,7 +193,7 @@ func (s *TransformerSuite) TestSourceTransformer() {
 	wg.Wait()
 }
 
-func (s *SDKsSuite) testSourceTransformer(lang string) {
+func (s *TransformerSuite) testSourceTransformer(lang string) {
 	w := s.Given().Pipeline(fmt.Sprintf("@testdata/event-time-filter-%s.yaml", lang)).
 		When().
 		CreatePipelineAndWait()
