@@ -1159,11 +1159,13 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 		return
 	}
 
+	// Create a new daemon client to get the data status
 	client, err := h.getMonoVertexDaemonClient(ns, monoVertex)
 	if err != nil || client == nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for mono vertex %q, %s", monoVertex, err.Error()))
 		return
 	}
+	// Data level health status
 	dataHealth, err := client.GetMonoVertexStatus(c)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get the mono vertex dataStatus: namespace %q mono vertex %q: %s", ns, monoVertex, err.Error()))
