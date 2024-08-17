@@ -44,10 +44,6 @@ message MonoVertexStatus {
   string code = 3;
 }
 
-message GetMonoVertexStatusRequest {
-  string monovertex = 1;
-}
-
 message GetMonoVertexStatusResponse {
   MonoVertexStatus status = 1;
 }
@@ -59,7 +55,7 @@ service MonoVertexDaemonService {
     option (google.api.http).get = "/api/v1/metrics";
   };
 
-  rpc GetMonoVertexStatus (GetMonoVertexStatusRequest) returns (GetMonoVertexStatusResponse) {
+  rpc GetMonoVertexStatus (google.protobuf.Empty) returns (GetMonoVertexStatusResponse) {
     option (google.api.http).get = "/api/v1/monovertex/{monovertex}/status";
   };
 

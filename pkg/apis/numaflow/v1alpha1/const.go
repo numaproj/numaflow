@@ -233,6 +233,8 @@ const (
 	MonoVertexStatusHealthy   = "healthy"
 	MonoVertexStatusUnhealthy = "unhealthy"
 	MonoVertexStatusUnknown   = "unknown"
+	MonoVertexStatusCritical  = "critical"
+	MonoVertexStatusWarning   = "warning"
 
 	// Callback annotation keys
 	CallbackEnabledKey = "numaflow.numaproj.io/callback"

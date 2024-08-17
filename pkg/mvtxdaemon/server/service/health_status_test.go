@@ -116,42 +116,42 @@ package service
 //	tests := []struct {
 //		name          string
 //		vertexName    string
-//		vertexState   string
+//		monoVtxState   string
 //		expectedName  string
 //		expectedState string
 //	}{
 //		{
 //			name:          "Normal vertex state",
 //			vertexName:    "vertex1",
-//			vertexState:   "running",
+//			monoVtxState:   "running",
 //			expectedName:  "vertex1",
 //			expectedState: "running",
 //		},
 //		{
 //			name:          "Empty vertex name",
 //			vertexName:    "",
-//			vertexState:   "pending",
+//			monoVtxState:   "pending",
 //			expectedName:  "",
 //			expectedState: "pending",
 //		},
 //		{
 //			name:          "Empty vertex state",
 //			vertexName:    "vertex2",
-//			vertexState:   "",
+//			monoVtxState:   "",
 //			expectedName:  "vertex2",
 //			expectedState: "",
 //		},
 //		{
 //			name:          "Special characters in vertex name",
 //			vertexName:    "vertex-3_@#$",
-//			vertexState:   "completed",
+//			monoVtxState:   "completed",
 //			expectedName:  "vertex-3_@#$",
 //			expectedState: "completed",
 //		},
 //		{
 //			name:          "Long vertex name and state",
 //			vertexName:    "very_long_vertex_name_that_exceeds_normal_length",
-//			vertexState:   "very_long_state_description_that_exceeds_normal_length",
+//			monoVtxState:   "very_long_state_description_that_exceeds_normal_length",
 //			expectedName:  "very_long_vertex_name_that_exceeds_normal_length",
 //			expectedState: "very_long_state_description_that_exceeds_normal_length",
 //		},
@@ -159,7 +159,7 @@ package service
 //
 //	for _, tt := range tests {
 //		t.Run(tt.name, func(t *testing.T) {
-//			result := newVertexState(tt.vertexName, tt.vertexState)
+//			result := newMonoVtxState(tt.vertexName, tt.monoVtxState)
 //			assert.NotNil(t, result)
 //			assert.Equal(t, tt.expectedName, result.Name)
 //			assert.Equal(t, tt.expectedState, result.State)
@@ -680,12 +680,12 @@ package service
 //func TestConvertVertexStateToPipelineState(t *testing.T) {
 //	tests := []struct {
 //		name         string
-//		vertexStates []*vertexState
+//		vertexStates []*monoVtxState
 //		expected     *dataHealthResponse
 //	}{
 //		{
 //			name: "All vertices healthy",
-//			vertexStates: []*vertexState{
+//			vertexStates: []*monoVtxState{
 //				{Name: "vertex1", State: v1alpha1.PipelineStatusHealthy},
 //				{Name: "vertex2", State: v1alpha1.PipelineStatusHealthy},
 //			},
@@ -693,7 +693,7 @@ package service
 //		},
 //		{
 //			name: "One vertex warning",
-//			vertexStates: []*vertexState{
+//			vertexStates: []*monoVtxState{
 //				{Name: "vertex1", State: v1alpha1.PipelineStatusHealthy},
 //				{Name: "vertex2", State: v1alpha1.PipelineStatusWarning},
 //			},
@@ -701,7 +701,7 @@ package service
 //		},
 //		{
 //			name: "One vertex critical",
-//			vertexStates: []*vertexState{
+//			vertexStates: []*monoVtxState{
 //				{Name: "vertex1", State: v1alpha1.PipelineStatusHealthy},
 //				{Name: "vertex2", State: v1alpha1.PipelineStatusCritical},
 //			},
@@ -709,7 +709,7 @@ package service
 //		},
 //		{
 //			name: "One vertex unknown",
-//			vertexStates: []*vertexState{
+//			vertexStates: []*monoVtxState{
 //				{Name: "vertex1", State: v1alpha1.PipelineStatusHealthy},
 //				{Name: "vertex2", State: v1alpha1.PipelineStatusUnknown},
 //			},
@@ -717,7 +717,7 @@ package service
 //		},
 //		{
 //			name:         "Empty vertex state list",
-//			vertexStates: []*vertexState{},
+//			vertexStates: []*monoVtxState{},
 //			expected:     newDataHealthResponse(v1alpha1.PipelineStatusHealthy, "Pipeline data flow is healthy", "D1"),
 //		},
 //		{
@@ -727,7 +727,7 @@ package service
 //		},
 //		{
 //			name: "Multiple vertices with same highest state",
-//			vertexStates: []*vertexState{
+//			vertexStates: []*monoVtxState{
 //				{Name: "vertex1", State: v1alpha1.PipelineStatusHealthy},
 //				{Name: "vertex2", State: v1alpha1.PipelineStatusWarning},
 //				{Name: "vertex3", State: v1alpha1.PipelineStatusWarning},
@@ -738,7 +738,7 @@ package service
 //
 //	for _, tt := range tests {
 //		t.Run(tt.name, func(t *testing.T) {
-//			result := convertVertexStateToPipelineState(tt.vertexStates)
+//			result := convertMonoVtxStateToHealthResp(tt.vertexStates)
 //			assert.Equal(t, tt.expected, result)
 //		})
 //	}
