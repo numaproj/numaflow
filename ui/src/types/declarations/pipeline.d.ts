@@ -109,6 +109,45 @@ export interface PipelineSummaryFetchResult {
   refresh: () => void;
 }
 
+export interface MonoVertex {
+  spec: any;
+  metadata: any;
+  status?: any;
+}
+
+export interface MonoVertexSpec {
+  replicas: number;
+  source: any;
+  sink: any;
+  scale: any;
+}
+
+export interface MonoVertexMetrics {
+  ratePerMin: string;
+  ratePerFiveMin: string;
+  ratePerFifteenMin: string;
+  podMetrics: any[];
+  error: boolean;
+}
+
+export interface MonoVertexSummary {
+  name: string;
+  status: string;
+  lag?: number;
+  monoVertex: MonoVertex;
+}
+
+export interface MonoVertexMergeSummaryData {
+  monoVertexData: MonoVertexSummary;
+}
+
+export interface MonoVertexSummaryFetchResult {
+  data?: MonoVertexMergeSummaryData;
+  loading: boolean;
+  error: any;
+  refresh: () => void;
+}
+
 export interface PipelineUpdateFetchResult {
   pipelineAvailable: boolean;
 }

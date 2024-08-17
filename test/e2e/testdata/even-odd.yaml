@@ -22,18 +22,32 @@ spec:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis-sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
             imagePullPolicy: Always
+            env:
+              - name: SINK_HASH_KEY
+                # The key is set in the format of "pipeline_name-vertex_name"
+                value: "even-odd-even-sink"
     - name: odd-sink
       sink:
         udsink:
           container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis-sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
             imagePullPolicy: Always
+            env:
+              - name: SINK_HASH_KEY
+                # The key is set in the format of "pipeline_name-vertex_name"
+                value: "even-odd-odd-sink"
     - name: number-sink
       sink:
         udsink:
           container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis-sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
             imagePullPolicy: Always
+            env:
+              - name: SINK_HASH_KEY
+                # The key is set in the format of "pipeline_name-vertex_name"
+                value: "even-odd-number-sink"
   edges:
     - from: in
       to: even-or-odd

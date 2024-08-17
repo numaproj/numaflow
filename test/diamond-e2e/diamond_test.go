@@ -45,7 +45,7 @@ func (s *DiamondSuite) TestJoinOnReducePipeline() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	w := s.Given().Pipeline("@testdata/join-on-reduce-pipeline.yaml").
+	w := s.Given().Pipeline("@testdata/join-on-reduce.yaml").
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
@@ -74,13 +74,13 @@ func (s *DiamondSuite) TestJoinOnReducePipeline() {
 	}()
 	// todo: this only tests for one occurrence: ideally should verify all
 	w.Expect().
-		SinkContains("sink", "40"). // per 10-second window: (10 * 2) * 2 atoi vertices
-		SinkContains("sink", "80")  // per 10-second window: 10 * (1 + 3) * 2 atoi vertices
+		RedisSinkContains("join-on-reduce-sink", "40"). // per 10-second window: (10 * 2) * 2 atoi vertices
+		RedisSinkContains("join-on-reduce-sink", "80")  // per 10-second window: 10 * (1 + 3) * 2 atoi vertices
 	done <- struct{}{}
 }
 
 func (s *DiamondSuite) TestJoinOnMapPipeline() {
-	w := s.Given().Pipeline("@testdata/join-on-map-pipeline.yaml").
+	w := s.Given().Pipeline("@testdata/join-on-map.yaml").
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
@@ -93,8 +93,8 @@ func (s *DiamondSuite) TestJoinOnMapPipeline() {
 	w.SendMessageTo(pipelineName, "in-1", NewHttpPostRequest().WithBody([]byte("2")))
 
 	w.Expect().
-		SinkContains("sink", "1").
-		SinkContains("sink", "2")
+		RedisSinkContains("join-on-map-sink", "1").
+		RedisSinkContains("join-on-map-sink", "2")
 }
 
 func (s *DiamondSuite) TestJoinOnSinkVertex() {
@@ -110,8 +110,8 @@ func (s *DiamondSuite) TestJoinOnSinkVertex() {
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("888888"))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("888889")))
 
-	w.Expect().SinkContains("out", "888888")
-	w.Expect().SinkContains("out", "888889")
+	w.Expect().RedisSinkContains("join-on-sink-out", "888888")
+	w.Expect().RedisSinkContains("join-on-sink-out", "888889")
 }
 
 func (s *DiamondSuite) TestCycleToSelf() {
@@ -136,7 +136,7 @@ func (s *DiamondSuite) TestCycleToSelf() {
 		}
 	}
 	for i := 0; i < 10; i++ {
-		w.Expect().SinkContains("out", msgs[i])
+		w.Expect().RedisSinkContains("cycle-to-self-out", msgs[i])
 	}
 
 }
@@ -162,7 +162,7 @@ func (s *DiamondSuite) TestCycleBackward() {
 		}
 	}
 	for i := 0; i < 10; i++ {
-		w.Expect().SinkContains("out", msgs[i])
+		w.Expect().RedisSinkContains("cycle-backward-out", msgs[i])
 	}
 }
 

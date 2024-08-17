@@ -20,7 +20,7 @@ import {
 } from "../../../../../../../../../types/declarations/pods";
 
 export function Pods(props: PodsProps) {
-  const { namespaceId, pipelineId, vertexId } = props;
+  const { namespaceId, pipelineId, vertexId, type } = props;
 
   if (!namespaceId || !pipelineId || !vertexId) {
     return (
@@ -41,6 +41,7 @@ export function Pods(props: PodsProps) {
       pipelineId,
       vertexId,
       selectedPod,
+      type,
       setSelectedPod,
       setSelectedContainer
     );

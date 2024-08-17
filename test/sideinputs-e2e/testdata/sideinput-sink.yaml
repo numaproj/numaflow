@@ -26,8 +26,11 @@ spec:
         udsink:
           container:
             # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/sink_sideinput
-            image: quay.io/numaio/numaflow-go/redis-sink-with-sideinput:stable
+            image: quay.io/numaio/numaflow-go/redis-sink-with-sideinput:hash
             imagePullPolicy: Always
+            env:
+              - name: SINK_HASH_KEY
+                value: "sideinput-sink-test-redis-uds"
       sideInputs:
         - myticker
 
