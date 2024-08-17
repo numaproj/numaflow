@@ -170,11 +170,11 @@ ifdef GITHUB_ACTIONS
 	cp -pv dist/numaflow-linux-x86_64 dist/numaflow-linux-amd64
 else
 	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION) --target builder -f $(DOCKERFILE) . --load
-	$(eval RUST_BUILDER := $(shell docker create quay.io/numaproj/numaflow-rust-builder:latest))
+	$(eval RUST_BUILDER := $(shell docker create $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)))
 	docker cp $(RUST_BUILDER):/root/numaflow-rs-linux-$(LOCAL_ARCH) dist/numaflow-rs-linux-$(LOCAL_ARCH)
 	docker rm $(RUST_BUILDER)
 endif
-	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target numaflow -f $(DOCKERFILE) .
+	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target numaflow -f $(DOCKERFILE) . --load
 	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
 ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
@@ -258,7 +258,7 @@ start: image
 
 .PHONY: e2eapi-image
 e2eapi-image: clean dist/e2eapi
-	DOCKER_BUILDKIT=1 $(DOCKER) build . --build-arg "ARCH=amd64" --target e2eapi --tag $(IMAGE_NAMESPACE)/e2eapi:$(VERSION) --build-arg VERSION="$(VERSION)"
+	DOCKER_BUILDKIT=1 $(DOCKER) build . --target e2eapi --tag $(IMAGE_NAMESPACE)/e2eapi:$(VERSION) --build-arg VERSION="$(VERSION)" --load
 	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/e2eapi:$(VERSION); fi
 ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/e2eapi:$(VERSION)
