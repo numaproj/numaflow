@@ -25,8 +25,9 @@ spec:
       partitions: 1
       udf:
         container:
-          # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:stable
+          # compute the sum, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reduce/sum
+          # this also serves as a Java reduce sdk test case
+          image: quay.io/numaio/numaflow-java/reduce-sum:stable
           imagePullPolicy: Always
         groupBy:
           window:
