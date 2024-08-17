@@ -41,8 +41,10 @@ type HealthChecker struct {
 // NewHealthChecker is used to create a new health checker
 func NewHealthChecker(ctx context.Context) *HealthChecker {
 	c := evictCache.NewLRU[string, *resourceHealthResponse](500, nil, resourceCacheRefreshDuration)
+	mvCache := evictCache.NewLRU[string, *resourceHealthResponse](500, nil, resourceCacheRefreshDuration)
 	return &HealthChecker{
 		pipelineResourceStatusCache: c,
+		monoVtxResourceStatusCache:  mvCache,
 		log:                         logging.FromContext(ctx),
 	}
 }
