@@ -35,7 +35,7 @@ var monoVtxResourceMap = map[string]*HealthCodeInfo{
 // 2. Warning: The MonoVertex is in a warning state
 // 3. Healthy: The MonoVertex is healthy
 
-var monoVtxDataflowHealthMap = map[string]*HealthCodeInfo{
+var _ = map[string]*HealthCodeInfo{
 	"D1": newHealthCodeInfo(
 		"Dataflow is healthy",
 		"Healthy",

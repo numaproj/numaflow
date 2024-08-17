@@ -54,8 +54,8 @@ func (dc *grpcClient) GetMonoVertexMetrics(ctx context.Context) (*mvtxdaemon.Mon
 	}
 }
 
-func (dc *grpcClient) GetMonoVertexStatus(ctx context.Context, monoVertex string) (*mvtxdaemon.MonoVertexStatus, error) {
-	if rspn, err := dc.client.GetMonoVertexStatus(ctx, &mvtxdaemon.GetMonoVertexStatusRequest{Monovertex: monoVertex}); err != nil {
+func (dc *grpcClient) GetMonoVertexStatus(ctx context.Context) (*mvtxdaemon.MonoVertexStatus, error) {
+	if rspn, err := dc.client.GetMonoVertexStatus(ctx, &emptypb.Empty{}); err != nil {
 		return nil, err
 	} else {
 		return rspn.Status, nil

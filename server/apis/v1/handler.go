@@ -1155,20 +1155,16 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 	// Resource level health
 	resourceHealth, err := h.healthChecker.getMonoVtxResourceHealth(h, ns, monoVertex)
 	if err != nil {
-		return
-	}
-	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get the resourceHealth for MonoVertex %q: %s", monoVertex, err.Error()))
 		return
 	}
 
-	// TODO(MonoVertex): Add data health status
 	client, err := h.getMonoVertexDaemonClient(ns, monoVertex)
 	if err != nil || client == nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for mono vertex %q, %s", monoVertex, err.Error()))
 		return
 	}
-	_, err = client.GetMonoVertexStatus(c, monoVertex)
+	dataHealth, err := client.GetMonoVertexStatus(c)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to get the mono vertex dataStatus: namespace %q mono vertex %q: %s", ns, monoVertex, err.Error()))
 		return
@@ -1176,8 +1172,8 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 
 	// Create a response string based on the vertex health and data criticality
 	// We combine both the states to get the final dataStatus of the pipeline
-	response := NewHealthResponse(resourceHealth.Status, "dataStatus.GetStatus()",
-		resourceHealth.Message, "dataStatus.GetMessage()", resourceHealth.Code, "dataStatus.GetCode()")
+	response := NewHealthResponse(resourceHealth.Status, dataHealth.GetStatus(),
+		resourceHealth.Message, dataHealth.GetMessage(), resourceHealth.Code, dataHealth.GetCode())
 
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }

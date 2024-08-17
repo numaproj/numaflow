@@ -122,14 +122,14 @@ func (hc *HealthChecker) setCurrentHealth(status *dataHealthResponse) {
 // We need to check the following things to determine the data criticality of the pipeline:
 // 1. The buffer usage of each buffer in the pipeline
 func (hc *HealthChecker) getMonoVertexDataCriticality(ctx context.Context, mvtxMetrics *mvtxdaemon.MonoVertexMetrics) (*monoVtxState, error) {
-	desiredReplics, err := hc.getDesiredReplica(mvtxMetrics)
+	desiredReplicas, err := hc.getDesiredReplica(mvtxMetrics)
 	if err != nil {
 		return nil, err
 	}
 	currentReplicas := hc.monoVertex.GetReplicas()
 	maxReplicas := int(hc.monoVertex.Spec.Scale.GetMaxReplicas())
 	status := v1alpha1.MonoVertexStatusHealthy
-	if currentReplicas == maxReplicas && desiredReplics > maxReplicas {
+	if currentReplicas == maxReplicas && desiredReplicas > maxReplicas {
 		status = v1alpha1.MonoVertexStatusCritical
 	}
 	return newMonoVtxState(mvtxMetrics.MonoVertex, status), nil
@@ -163,8 +163,8 @@ func (hc *HealthChecker) getDesiredReplica(mvtxMetrics *mvtxdaemon.MonoVertexMet
 		return 0, nil
 	}
 
-	// TODO(MonoVertex): Something is wrong
-	// That the MonoVertex is not processing any data even though the pending is still around.
+	//TODO(MonoVertex): Something is wrong
+	// MonoVertex is not processing any data even though the pending is still around.
 	// It could be a slow processor, but zero rate isn't ideal
 	// we should mark this up as warning maybe?
 	if totalRate == 0 {

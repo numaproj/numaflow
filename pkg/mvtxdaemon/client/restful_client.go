@@ -90,8 +90,8 @@ func (rc *restfulClient) GetMonoVertexMetrics(ctx context.Context) (*mvtxdaemon.
 	}
 }
 
-func (rc *restfulClient) GetMonoVertexStatus(ctx context.Context, monoVertex string) (*mvtxdaemon.MonoVertexStatus, error) {
-	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/monovertex/%s/status", rc.hostURL, monoVertex))
+func (rc *restfulClient) GetMonoVertexStatus(ctx context.Context) (*mvtxdaemon.MonoVertexStatus, error) {
+	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/status", rc.hostURL))
 	if err != nil {
 		return nil, fmt.Errorf("failed to call get mono vertex status RESTful API, %w", err)
 	}

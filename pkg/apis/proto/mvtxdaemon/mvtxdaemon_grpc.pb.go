@@ -44,7 +44,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MonoVertexDaemonServiceClient interface {
 	GetMonoVertexMetrics(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetMonoVertexMetricsResponse, error)
-	GetMonoVertexStatus(ctx context.Context, in *GetMonoVertexStatusRequest, opts ...grpc.CallOption) (*GetMonoVertexStatusResponse, error)
+	GetMonoVertexStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetMonoVertexStatusResponse, error)
 }
 
 type monoVertexDaemonServiceClient struct {
@@ -64,7 +64,7 @@ func (c *monoVertexDaemonServiceClient) GetMonoVertexMetrics(ctx context.Context
 	return out, nil
 }
 
-func (c *monoVertexDaemonServiceClient) GetMonoVertexStatus(ctx context.Context, in *GetMonoVertexStatusRequest, opts ...grpc.CallOption) (*GetMonoVertexStatusResponse, error) {
+func (c *monoVertexDaemonServiceClient) GetMonoVertexStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetMonoVertexStatusResponse, error) {
 	out := new(GetMonoVertexStatusResponse)
 	err := c.cc.Invoke(ctx, MonoVertexDaemonService_GetMonoVertexStatus_FullMethodName, in, out, opts...)
 	if err != nil {
@@ -78,7 +78,7 @@ func (c *monoVertexDaemonServiceClient) GetMonoVertexStatus(ctx context.Context,
 // for forward compatibility
 type MonoVertexDaemonServiceServer interface {
 	GetMonoVertexMetrics(context.Context, *emptypb.Empty) (*GetMonoVertexMetricsResponse, error)
-	GetMonoVertexStatus(context.Context, *GetMonoVertexStatusRequest) (*GetMonoVertexStatusResponse, error)
+	GetMonoVertexStatus(context.Context, *emptypb.Empty) (*GetMonoVertexStatusResponse, error)
 	mustEmbedUnimplementedMonoVertexDaemonServiceServer()
 }
 
@@ -89,7 +89,7 @@ type UnimplementedMonoVertexDaemonServiceServer struct {
 func (UnimplementedMonoVertexDaemonServiceServer) GetMonoVertexMetrics(context.Context, *emptypb.Empty) (*GetMonoVertexMetricsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMonoVertexMetrics not implemented")
 }
-func (UnimplementedMonoVertexDaemonServiceServer) GetMonoVertexStatus(context.Context, *GetMonoVertexStatusRequest) (*GetMonoVertexStatusResponse, error) {
+func (UnimplementedMonoVertexDaemonServiceServer) GetMonoVertexStatus(context.Context, *emptypb.Empty) (*GetMonoVertexStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMonoVertexStatus not implemented")
 }
 func (UnimplementedMonoVertexDaemonServiceServer) mustEmbedUnimplementedMonoVertexDaemonServiceServer() {
@@ -125,7 +125,7 @@ func _MonoVertexDaemonService_GetMonoVertexMetrics_Handler(srv interface{}, ctx 
 }
 
 func _MonoVertexDaemonService_GetMonoVertexStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetMonoVertexStatusRequest)
+	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func _MonoVertexDaemonService_GetMonoVertexStatus_Handler(srv interface{}, ctx c
 		FullMethod: MonoVertexDaemonService_GetMonoVertexStatus_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MonoVertexDaemonServiceServer).GetMonoVertexStatus(ctx, req.(*GetMonoVertexStatusRequest))
+		return srv.(MonoVertexDaemonServiceServer).GetMonoVertexStatus(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }

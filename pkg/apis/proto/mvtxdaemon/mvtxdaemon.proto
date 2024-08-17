@@ -56,7 +56,7 @@ service MonoVertexDaemonService {
   };
 
   rpc GetMonoVertexStatus (google.protobuf.Empty) returns (GetMonoVertexStatusResponse) {
-    option (google.api.http).get = "/api/v1/monovertex/{monovertex}/status";
+    option (google.api.http).get = "/api/v1/status";
   };
 
 }
