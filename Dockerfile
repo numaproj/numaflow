@@ -1,9 +1,13 @@
-ARG BASE_IMAGE=gcr.io/distroless/cc-debian12
+ARG BASE_IMAGE=scratch
 ARG ARCH=$TARGETARCH
 ####################################################################################################
 # base
 ####################################################################################################
-FROM debian:bullseye AS base
+FROM alpine:3.17 AS base
+ARG ARCH
+RUN apk update && apk upgrade && \
+    apk add ca-certificates && \
+    apk --no-cache add tzdata
 ARG ARCH
 
 COPY dist/numaflow-linux-${ARCH} /bin/numaflow
@@ -79,13 +83,15 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE} AS numaflow
 
+COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=base /bin/numaflow /bin/numaflow
 COPY ui/build /ui/build
 
 COPY --from=extension-base /root/numaflow /bin/numaflow-rs
 COPY ./rust/serving/config config
 
-ENTRYPOINT [ "/bin/numaflow" ]
+ENTRYPOINT [ "/bin/numaflow-rs" ]
 
 ####################################################################################################
 # testbase
