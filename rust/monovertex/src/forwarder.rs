@@ -21,29 +21,63 @@ pub(crate) struct Forwarder {
     source_client: SourceClient,
     sink_client: SinkClient,
     transformer_client: Option<TransformerClient>,
+    fallback_client: Option<SinkClient>,
     cln_token: CancellationToken,
     common_labels: Vec<(String, String)>,
 }
 
-impl Forwarder {
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) async fn new(
+/// ForwarderBuilder is used to build a Forwarder instance with optional fields.
+pub(crate) struct ForwarderBuilder {
+    source_client: SourceClient,
+    sink_client: SinkClient,
+    cln_token: CancellationToken,
+    transformer_client: Option<TransformerClient>,
+    fb_sink_client: Option<SinkClient>,
+}
+
+impl ForwarderBuilder {
+    // Create a new builder with mandatory fields
+    pub(crate) fn new(
         source_client: SourceClient,
         sink_client: SinkClient,
-        transformer_client: Option<TransformerClient>,
         cln_token: CancellationToken,
-    ) -> Result<Self> {
-        let common_labels = metrics::forward_metrics_labels().clone();
-
-        Ok(Self {
+    ) -> Self {
+        Self {
             source_client,
             sink_client,
-            transformer_client,
-            common_labels,
             cln_token,
-        })
+            transformer_client: None,
+            fb_sink_client: None,
+        }
     }
 
+    // Set the optional transformer client
+    pub(crate) fn transformer_client(mut self, transformer_client: TransformerClient) -> Self {
+        self.transformer_client = Some(transformer_client);
+        self
+    }
+
+    // Set the optional fallback client
+    pub(crate) fn fb_sink_client(mut self, fallback_client: SinkClient) -> Self {
+        self.fb_sink_client = Some(fallback_client);
+        self
+    }
+
+    // Build the Forwarder instance
+    pub(crate) fn build(self) -> Forwarder {
+        let common_labels = metrics::forward_metrics_labels().clone();
+        Forwarder {
+            source_client: self.source_client,
+            sink_client: self.sink_client,
+            transformer_client: self.transformer_client,
+            fallback_client: self.fb_sink_client,
+            cln_token: self.cln_token,
+            common_labels,
+        }
+    }
+}
+
+impl Forwarder {
     /// run starts the forward-a-chunk loop and exits only after a chunk has been forwarded and ack'ed.
     /// this means that, in the happy path scenario a block is always completely processed.
     /// this function will return on any error and will cause end up in a non-0 exit code.
@@ -56,18 +90,20 @@ impl Forwarder {
             // two arms, either shutdown or forward-a-chunk
             tokio::select! {
                 _ = self.cln_token.cancelled() => {
-                    info!("Shutdown signal received, stopping forwarder...");
+                    println!("Shutdown signal received, stopping forwarder...");
                     break;
                 }
                 result = self.source_client.read_fn(config().batch_size, config().timeout_in_ms) => {
                     // Read messages from the source
                     let messages = result?;
                     info!("Read batch size: {} and latency - {}ms", messages.len(), start_time.elapsed().as_millis());
-                    // emit metrics
                     let msg_count = messages.len() as u64;
+                    messages_count += messages.len() as u64;
+
                     // collect all the offsets as the transformer can drop (via filter) messages
                     let offsets = messages.iter().map(|msg| msg.offset.clone()).collect::<Vec<Offset>>();
-                    messages_count += messages.len() as u64;
+
+                    // emit metrics
                     let bytes_count = messages.iter().map(|msg| msg.value.len() as u64).sum::<u64>();
                     forward_metrics().monovtx_read_total.get_or_create(&self.common_labels).inc_by(msg_count);
                     forward_metrics().monovtx_read_bytes_total.get_or_create(&self.common_labels).inc_by(bytes_count);
@@ -97,35 +133,35 @@ impl Forwarder {
                     let transformed_msg_count = transformed_messages.len() as u64;
                     forward_metrics().monovtx_sink_write_total.get_or_create(&self.common_labels).inc_by(transformed_msg_count);
 
-                    // Write messages to the sink
-                    // TODO: should we retry writing? what if the error is transient?
-                    //    we could rely on gRPC retries and say that any error that is bubbled up is worthy of non-0 exit.
-                    //    we need to confirm this via FMEA tests.
-
-                    let mut retry_messages = transformed_messages;
+                    let mut retry_msgs = transformed_messages;
                     let mut attempts = 0;
                     let mut error_map = HashMap::new();
+                    let mut fallback_msgs = Vec::new();
 
                     while attempts <= config().sink_max_retry_attempts {
                         let start_time = tokio::time::Instant::now();
-                        match self.sink_client.sink_fn(retry_messages.clone()).await {
+                        match self.sink_client.sink_fn(retry_msgs.clone()).await {
                             Ok(response) => {
                                 info!("Sink latency - {}ms", start_time.elapsed().as_millis());
-
-                                 let failed_ids: Vec<String> = response.results.iter()
-                                    .filter(|result| result.status != proto::Status::Success as i32)
-                                    .map(|result| result.id.clone())
-                                    .collect();
                                 attempts += 1;
 
-                                if failed_ids.is_empty() {
+                                fallback_msgs.extend(response.results.iter()
+                                    .filter(|result| result.status == proto::Status::Fallback as i32)
+                                    .map(|result| retry_msgs.iter().find(|msg| msg.id == result.id).unwrap().clone())
+                                    .collect::<Vec<_>>());
+
+                                 retry_msgs = response.results.iter()
+                                    .filter(|result| result.status == proto::Status::Failure as i32)
+                                    .map(|result| retry_msgs.iter().find(|msg| msg.id == result.id).unwrap().clone())
+                                    .collect::<Vec<_>>();
+
+                                if retry_msgs.is_empty() {
                                     break;
                                 } else {
                                     // Collect error messages and their counts
-                                    retry_messages.retain(|msg| failed_ids.contains(&msg.id));
                                     error_map.clear();
                                     for result in response.results {
-                                        if result.status != proto::Status::Success as i32 {
+                                        if result.status == proto::Status::Failure as i32 {
                                             *error_map.entry(result.err_msg).or_insert(0) += 1;
                                         }
                                     }
@@ -138,12 +174,71 @@ impl Forwarder {
                         }
                     }
 
-                    if !error_map.is_empty() {
+                    if !retry_msgs.is_empty() {
                         return Err(Error::SinkError(format!(
                             "Failed to sink messages after {} attempts. Errors: {:?}",
                             attempts, error_map
                         )));
                     }
+
+                    // If there are fallback messages, write them to the fallback sink
+                    if !fallback_msgs.is_empty() {
+                        match self.fallback_client {
+                            Some(ref mut fallback_client) => {
+                                let mut retry_fallback_msgs = fallback_msgs;
+                                let mut attempts = 0;
+                                let mut fallback_error_map = HashMap::new();
+
+                                while attempts <= config().sink_max_retry_attempts {
+                                    let start_time = tokio::time::Instant::now();
+                                    match fallback_client.sink_fn(retry_fallback_msgs.clone()).await {
+                                        Ok(response) => {
+                                            info!("Fallback sink latency - {}ms", start_time.elapsed().as_millis());
+
+                                            retry_fallback_msgs = response.results.iter()
+                                                .filter(|result| result.status == proto::Status::Failure as i32)
+                                                .map(|result| retry_fallback_msgs.iter().find(|msg| msg.id == result.id).unwrap().clone())
+                                                .collect::<Vec<_>>();
+
+                                            // if any one of response has status fallback return error saying, can't specify fallback inside fallback sink
+                                            if response.results.iter().any(|result| result.status == proto::Status::Fallback as i32) {
+                                                return Err(Error::SinkError("Fallback sink can't specify status fallback".to_string()));
+                                            }
+
+                                            attempts += 1;
+
+                                            if retry_fallback_msgs.is_empty() {
+                                                break;
+                                            } else {
+                                                // Collect error messages and their counts
+                                                fallback_error_map.clear();
+                                                for result in response.results {
+                                                    if result.status != proto::Status::Success as i32 {
+                                                        *fallback_error_map.entry(result.err_msg).or_insert(0) += 1;
+                                                    }
+                                                }
+
+                                                warn!("Fallback sink retry attempt {} due to retryable error. Errors: {:?}", attempts, fallback_error_map);
+                                                sleep(tokio::time::Duration::from_millis(config().sink_retry_interval_in_ms as u64)).await;
+                                            }
+                                        }
+                                        Err(e) => return Err(e),
+                                    }
+                                }
+
+                                if !retry_fallback_msgs.is_empty() {
+                                    return Err(Error::SinkError(format!(
+                                        "Failed to write messages to fallback sink after {} attempts. Errors: {:?}",
+                                        attempts, fallback_error_map
+                                    )));
+                                }
+                            }
+                            None => {
+                                return Err(Error::SinkError("Response contains fallback messages but no fallback sink is configured".to_string()));
+                            }
+                        }
+                    }
+
                     // Acknowledge the messages back to the source
                     let start_time = tokio::time::Instant::now();
                     self.source_client.ack_fn(offsets).await?;
@@ -176,7 +271,7 @@ mod tests {
     use std::collections::HashSet;
 
     use crate::error::Error;
-    use crate::forwarder::Forwarder;
+    use crate::forwarder::ForwarderBuilder;
     use crate::sink::{SinkClient, SinkConfig};
     use crate::source::{SourceClient, SourceConfig};
     use crate::transformer::{TransformerClient, TransformerConfig};
@@ -396,14 +491,9 @@ mod tests {
             .await
             .expect("failed to connect to transformer server");
 
-        let mut forwarder = Forwarder::new(
-            source_client,
-            sink_client,
-            Some(transformer_client),
-            cln_token.clone(),
-        )
-        .await
-        .expect("failed to create forwarder");
+        let mut forwarder = ForwarderBuilder::new(source_client, sink_client, cln_token.clone())
+            .transformer_client(transformer_client)
+            .build();
 
         let forwarder_handle = tokio::spawn(async move {
             forwarder.run().await.unwrap();
@@ -524,9 +614,8 @@ mod tests {
             .await
             .expect("failed to connect to sink server");
 
-        let mut forwarder = Forwarder::new(source_client, sink_client, None, cln_token.clone())
-            .await
-            .expect("failed to create forwarder");
+        let mut forwarder =
+            ForwarderBuilder::new(source_client, sink_client, cln_token.clone()).build();
 
         let forwarder_handle = tokio::spawn(async move {
             forwarder.run().await?;

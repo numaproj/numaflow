@@ -13,7 +13,9 @@ pub mod proto {
 const RECONNECT_INTERVAL: u64 = 1000;
 const MAX_RECONNECT_ATTEMPTS: usize = 5;
 const SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";
+pub(crate) const FB_SINK_SOCKET: &str = "/var/run/numaflow/fb-sink.sock";
 const SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/sinker-server-info";
+pub(crate) const FB_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/fb-sinker-server-info";
 
 /// SinkConfig is the configuration for the sink server.
 #[derive(Debug, Clone)]
@@ -58,10 +60,10 @@ impl SinkClient {
     }
 
     pub(crate) async fn sink_fn(&mut self, messages: Vec<Message>) -> Result<proto::SinkResponse> {
+        let (tx, rx) = tokio::sync::mpsc::channel(messages.len());
+
         let requests: Vec<proto::SinkRequest> =
             messages.into_iter().map(|message| message.into()).collect();
-
-        let (tx, rx) = tokio::sync::mpsc::channel(1);
 
         tokio::spawn(async move {
             for request in requests {

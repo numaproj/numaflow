@@ -51,6 +51,7 @@ pub(crate) struct MetricsState {
     pub source_client: SourceClient,
     pub sink_client: SinkClient,
     pub transformer_client: Option<TransformerClient>,
+    pub fb_sink_client: Option<SinkClient>,
 }
 
 /// The global register of all metrics.
@@ -190,7 +191,7 @@ pub(crate) fn forward_metrics_labels() -> &'static Vec<(String, String)> {
 pub async fn metrics_handler() -> impl IntoResponse {
     let state = global_registry().registry.lock();
     let mut buffer = String::new();
-    encode(&mut buffer, &*state).unwrap();
+    encode(&mut buffer, &state).unwrap();
     debug!("Exposing Metrics: {:?}", buffer);
     Response::builder()
         .status(StatusCode::OK)
@@ -204,18 +205,12 @@ pub async fn metrics_handler() -> impl IntoResponse {
 #[allow(dead_code)]
 pub(crate) async fn start_metrics_http_server<A>(
     addr: A,
-    source_client: SourceClient,
-    sink_client: SinkClient,
-    transformer_client: Option<TransformerClient>,
+    metrics_state: MetricsState,
 ) -> crate::Result<()>
 where
     A: ToSocketAddrs + std::fmt::Debug,
 {
-    let metrics_app = metrics_router(MetricsState {
-        source_client,
-        sink_client,
-        transformer_client,
-    });
+    let metrics_app = metrics_router(metrics_state);
 
     let listener = TcpListener::bind(&addr)
         .await
@@ -273,13 +268,22 @@ async fn readyz() -> impl IntoResponse {
 
 async fn sidecar_livez(State(mut state): State<MetricsState>) -> impl IntoResponse {
     if !state.source_client.is_ready().await {
+        error!("Source client is not available");
         return StatusCode::SERVICE_UNAVAILABLE;
     }
     if !state.sink_client.is_ready().await {
+        error!("Sink client is not available");
         return StatusCode::SERVICE_UNAVAILABLE;
     }
     if let Some(mut transformer_client) = state.transformer_client {
         if !transformer_client.is_ready().await {
+            error!("Transformer client is not available");
+            return StatusCode::SERVICE_UNAVAILABLE;
+        }
+    }
+    if let Some(mut fb_sink_client) = state.fb_sink_client {
+        if !fb_sink_client.is_ready().await {
+            error!("Fallback sink client is not available");
             return StatusCode::SERVICE_UNAVAILABLE;
         }
     }
