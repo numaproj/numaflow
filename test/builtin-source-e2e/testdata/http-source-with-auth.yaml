@@ -1,0 +1,27 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: http-auth-source
+spec:
+  vertices:
+    - name: in
+      source:
+        http:
+          auth:
+            token:
+              name: http-source-fake-token
+              key: fake-token
+    - name: out
+      sink:
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis-sink
+            image: quay.io/numaio/numaflow-go/redis-sink:stable
+            imagePullPolicy: Always
+            env:
+              - name: SINK_HASH_KEY
+                # The key is set in the format of "pipeline_name-vertex_name"
+                value: "http-auth-source-out"
+  edges:
+    - from: in
+      to: out

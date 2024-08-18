@@ -29,6 +29,7 @@ import (
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
+// FIXME - this test is not executed in CI. We should include source and sink side-input tests in the CI.
 type SideInputUDSSuite struct {
 	E2ESuite
 }
