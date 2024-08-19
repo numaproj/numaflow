@@ -106,7 +106,7 @@ func TestUpdateCount(t *testing.T) {
 }
 
 func TestCalculateRate(t *testing.T) {
-	t.Run("givenCollectedTimeLessThanTwo_whenCalculateRate_thenReturnZero", func(t *testing.T) {
+	t.Run("givenCollectedTimeLessThanTwo_whenCalculateRate_thenReturnRateNotAvailable", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		// no data
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 10))
