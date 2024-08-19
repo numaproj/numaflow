@@ -1,9 +1,9 @@
 pub(crate) use self::error::Result;
 use crate::config::config;
 pub(crate) use crate::error::Error;
-use crate::forwarder::Forwarder;
+use crate::forwarder::ForwarderBuilder;
 use crate::metrics::{start_metrics_https_server, LagReaderBuilder, MetricsState};
-use crate::sink::{SinkClient, SinkConfig};
+use crate::sink::{SinkClient, SinkConfig, FB_SINK_SERVER_INFO_FILE, FB_SINK_SOCKET};
 use crate::source::{SourceClient, SourceConfig};
 use crate::transformer::{TransformerClient, TransformerConfig};
 use std::net::SocketAddr;
@@ -72,6 +72,16 @@ pub async fn mono_vertex() {
         None
     };
 
+    let fb_sink_config = if config().is_fallback_enabled {
+        Some(SinkConfig {
+            max_message_size: config().grpc_max_message_size,
+            socket_path: FB_SINK_SOCKET.to_string(),
+            server_info_file: FB_SINK_SERVER_INFO_FILE.to_string(),
+        })
+    } else {
+        None
+    };
+
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
     // wait for SIG{INT,TERM} and invoke cancellation token.
@@ -82,7 +92,15 @@ pub async fn mono_vertex() {
     });
 
     // Run the forwarder with cancellation token.
-    if let Err(e) = init(source_config, sink_config, transformer_config, cln_token).await {
+    if let Err(e) = init(
+        source_config,
+        sink_config,
+        transformer_config,
+        fb_sink_config,
+        cln_token,
+    )
+    .await
+    {
         error!("Application error: {:?}", e);
 
         // abort the task since we have an error
@@ -122,6 +140,7 @@ pub async fn init(
     source_config: SourceConfig,
     sink_config: SinkConfig,
     transformer_config: Option<TransformerConfig>,
+    fb_sink_config: Option<SinkConfig>,
     cln_token: CancellationToken,
 ) -> Result<()> {
     server_info::check_for_server_compatibility(&source_config.server_info_file, cln_token.clone())
@@ -153,11 +172,24 @@ pub async fn init(
         None
     };
 
+    let mut fb_sink_client = if let Some(config) = fb_sink_config {
+        server_info::check_for_server_compatibility(&config.server_info_file, cln_token.clone())
+            .await
+            .map_err(|e| {
+                warn!("Error waiting for fallback sink server info file: {:?}", e);
+                Error::ForwarderError("Error waiting for server info file".to_string())
+            })?;
+        Some(SinkClient::connect(config).await?)
+    } else {
+        None
+    };
+
     // readiness check for all the ud containers
     wait_until_ready(
         &mut source_client,
         &mut sink_client,
         &mut transformer_client,
+        &mut fb_sink_client,
     )
     .await?;
 
@@ -173,6 +205,7 @@ pub async fn init(
         source_client: source_client.clone(),
         sink_client: sink_client.clone(),
         transformer_client: transformer_client.clone(),
+        fb_sink_client: fb_sink_client.clone(),
     };
     tokio::spawn(async move {
         if let Err(e) = start_metrics_https_server(metrics_addr, metrics_state).await {
@@ -191,10 +224,20 @@ pub async fn init(
         .build();
     lag_reader.start().await;
 
-    let mut forwarder =
-        Forwarder::new(source_client, sink_client, transformer_client, cln_token).await?;
+    // build the forwarder
+    let mut forwarder_builder = ForwarderBuilder::new(source_client, sink_client, cln_token);
+    if let Some(transformer_client) = transformer_client {
+        forwarder_builder = forwarder_builder.transformer_client(transformer_client);
+    }
 
-    forwarder.run().await?;
+    if let Some(fb_sink_client) = fb_sink_client {
+        forwarder_builder = forwarder_builder.fb_sink_client(fb_sink_client);
+    }
+
+    let mut forwarder = forwarder_builder.build();
+
+    // start the forwarder
+    forwarder.start().await?;
 
     info!("Forwarder stopped gracefully");
     Ok(())
@@ -204,6 +247,7 @@ async fn wait_until_ready(
     source_client: &mut SourceClient,
     sink_client: &mut SinkClient,
     transformer_client: &mut Option<TransformerClient>,
+    fb_sink_client: &mut Option<SinkClient>,
 ) -> Result<()> {
     loop {
         let source_ready = source_client.is_ready().await;
@@ -226,7 +270,17 @@ async fn wait_until_ready(
             true
         };
 
-        if source_ready && sink_ready && transformer_ready {
+        let fb_sink_ready = if let Some(client) = fb_sink_client {
+            let ready = client.is_ready().await;
+            if !ready {
+                info!("Fallback Sink is not ready, waiting...");
+            }
+            ready
+        } else {
+            true
+        };
+
+        if source_ready && sink_ready && transformer_ready && fb_sink_ready {
             break;
         }
 
@@ -330,7 +384,8 @@ mod tests {
 
         let forwarder_cln_token = cln_token.clone();
         let forwarder_handle = tokio::spawn(async move {
-            let result = super::init(source_config, sink_config, None, forwarder_cln_token).await;
+            let result =
+                super::init(source_config, sink_config, None, None, forwarder_cln_token).await;
             assert!(result.is_ok());
         });
 
