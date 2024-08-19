@@ -237,7 +237,7 @@ pub async fn init(
     let mut forwarder = forwarder_builder.build();
 
     // start the forwarder
-    forwarder.run().await?;
+    forwarder.start().await?;
 
     info!("Forwarder stopped gracefully");
     Ok(())
