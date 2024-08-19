@@ -11,8 +11,8 @@ use std::collections::HashMap;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use tracing::info;
 use tracing::log::warn;
+use tracing::{debug, info};
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
@@ -83,7 +83,7 @@ impl Forwarder {
     /// this means that, in the happy path scenario a block is always completely processed.
     /// this function will return on any error and will cause end up in a non-0 exit code.
     pub(crate) async fn start(&mut self) -> Result<()> {
-        let mut messages_count: u64 = 0;
+        let mut processed_msgs_count: usize = 0;
         let mut last_forwarded_at = std::time::Instant::now();
         loop {
             let start_time = tokio::time::Instant::now();
@@ -91,16 +91,16 @@ impl Forwarder {
                 break;
             }
 
-            self.read_and_process_messages().await?;
+            processed_msgs_count += self.read_and_process_messages().await?;
 
             // if the last forward was more than 1 second ago, forward a chunk print the number of messages forwarded
             if last_forwarded_at.elapsed().as_millis() >= 1000 {
                 info!(
                     "Forwarded {} messages at time {}",
-                    messages_count,
+                    processed_msgs_count,
                     Utc::now()
                 );
-                messages_count = 0;
+                processed_msgs_count = 0;
                 last_forwarded_at = std::time::Instant::now();
             }
 
@@ -117,13 +117,13 @@ impl Forwarder {
         write the messages to the sink, if fallback messages are present write them to the fallback sink,
         and then acknowledge the messages back to the source.
     */
-    async fn read_and_process_messages(&mut self) -> Result<()> {
+    async fn read_and_process_messages(&mut self) -> Result<usize> {
         let start_time = tokio::time::Instant::now();
         let messages = self
             .source_client
             .read_fn(config().batch_size, config().timeout_in_ms)
             .await?;
-        info!(
+        debug!(
             "Read batch size: {} and latency - {}ms",
             messages.len(),
             start_time.elapsed().as_millis()
@@ -131,8 +131,22 @@ impl Forwarder {
 
         // nothing more to be done.
         if messages.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
+
+        let msg_count = messages.len() as u64;
+        let bytes_count = messages
+            .iter()
+            .map(|msg| msg.value.len() as u64)
+            .sum::<u64>();
+        forward_metrics()
+            .monovtx_read_total
+            .get_or_create(&self.common_labels)
+            .inc_by(msg_count);
+        forward_metrics()
+            .monovtx_read_bytes_total
+            .get_or_create(&self.common_labels)
+            .inc_by(bytes_count);
 
         // collect all the offsets as the transformer can drop (via filter) messages
         let offsets = messages
@@ -141,18 +155,20 @@ impl Forwarder {
             .collect::<Vec<Offset>>();
 
         // Apply transformation if transformer is present
-        let transformed_messages = self.apply_transformations(messages).await?;
+        let transformed_messages = self.apply_transformer(messages).await?;
 
         // Write the messages to the sink
         self.write_to_sink(transformed_messages).await?;
 
         // Acknowledge the messages back to the source
-        self.acknowledge_messages(offsets).await
+        self.acknowledge_messages(offsets).await?;
+
+        Ok(msg_count as usize)
     }
 
     // Applies transformation to the messages if transformer is present
     // we concurrently apply transformation to all the messages.
-    async fn apply_transformations(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
+    async fn apply_transformer(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
         if let Some(transformer_client) = &self.transformer_client {
             let start_time = tokio::time::Instant::now();
             let mut jh = JoinSet::new();
@@ -168,7 +184,7 @@ impl Forwarder {
                     results.extend(result);
                 }
             }
-            info!(
+            debug!(
                 "Transformer latency - {}ms",
                 start_time.elapsed().as_millis()
             );
@@ -180,6 +196,8 @@ impl Forwarder {
 
     // Writes the messages to the sink and handles fallback messages if present
     async fn write_to_sink(&mut self, mut messages: Vec<Message>) -> Result<()> {
+        let msg_count = messages.len() as u64;
+
         if messages.is_empty() {
             return Ok(());
         }
@@ -192,7 +210,7 @@ impl Forwarder {
             let start_time = tokio::time::Instant::now();
             match self.sink_client.sink_fn(messages.clone()).await {
                 Ok(response) => {
-                    info!("Sink latency - {}ms", start_time.elapsed().as_millis());
+                    debug!("Sink latency - {}ms", start_time.elapsed().as_millis());
                     attempts += 1;
 
                     fallback_msgs.extend(
@@ -259,6 +277,10 @@ impl Forwarder {
             self.handle_fallback_messages(fallback_msgs).await?;
         }
 
+        forward_metrics()
+            .monovtx_sink_write_total
+            .get_or_create(&self.common_labels)
+            .inc_by(msg_count);
         Ok(())
     }
 
@@ -279,7 +301,7 @@ impl Forwarder {
             let start_time = tokio::time::Instant::now();
             match fallback_client.sink_fn(fallback_msgs.clone()).await {
                 Ok(fb_response) => {
-                    info!(
+                    debug!(
                         "Fallback sink latency - {}ms",
                         start_time.elapsed().as_millis()
                     );
@@ -349,7 +371,7 @@ impl Forwarder {
         let n = offsets.len();
         let start_time = tokio::time::Instant::now();
         self.source_client.ack_fn(offsets).await?;
-        info!("Ack latency - {}ms", start_time.elapsed().as_millis());
+        debug!("Ack latency - {}ms", start_time.elapsed().as_millis());
         forward_metrics()
             .monovtx_ack_total
             .get_or_create(&self.common_labels)
