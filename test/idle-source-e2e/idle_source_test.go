@@ -62,8 +62,6 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
-
 	done := make(chan struct{})
 	go func() {
 		// publish messages to source vertex, with event time starting from 0
@@ -111,7 +109,6 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
-	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
 
 	defer DeleteKafkaTopic(topic)
 

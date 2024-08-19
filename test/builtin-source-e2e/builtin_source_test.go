@@ -1,3 +1,5 @@
+//go:build test
+
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -14,24 +16,41 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package http_e2e
+package builtin_source_e2e
 
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
+//go:generate kubectl -n numaflow-system delete statefulset nats --ignore-not-found=true
 //go:generate kubectl apply -f testdata/http-auth-fake-secret.yaml -n numaflow-system
-type HTTPSuite struct {
+//go:generate kubectl apply -k ../../config/apps/nats -n numaflow-system
+type BuiltinSourceSuite struct {
 	E2ESuite
 }
 
-func (s *HTTPSuite) TestHTTPSourcePipeline() {
-	w := s.Given().Pipeline("@testdata/http-source.yaml").
+func (bss *BuiltinSourceSuite) TestNatsSource() {
+	subject := "test-subject"
+	w := bss.Given().Pipeline("@testdata/nats-source-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	PumpNatsSubject(subject, 100, 20*time.Millisecond, 10, "test-message")
+	w.Expect().RedisSinkContains("nats-source-e2e-out", "test-message", SinkCheckWithContainCount(100))
+}
+
+func (bss *BuiltinSourceSuite) TestHTTPSourcePipeline() {
+	w := bss.Given().Pipeline("@testdata/http-source.yaml").
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
@@ -59,8 +78,8 @@ func (s *HTTPSuite) TestHTTPSourcePipeline() {
 	w.Expect().RedisSinkContains("http-source-out", "with-id", SinkCheckWithContainCount(2))
 }
 
-func (s *HTTPSuite) TestHTTPSourceAuthPipeline() {
-	w := s.Given().Pipeline("@testdata/http-source-with-auth.yaml").
+func (bss *BuiltinSourceSuite) TestHTTPSourceAuthPipeline() {
+	w := bss.Given().Pipeline("@testdata/http-source-with-auth.yaml").
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
@@ -75,6 +94,25 @@ func (s *HTTPSuite) TestHTTPSourceAuthPipeline() {
 	w.Expect().RedisSinkNotContains("http-auth-source-out", "no-auth")
 }
 
-func TestHTTPSuite(t *testing.T) {
-	suite.Run(t, new(HTTPSuite))
+func (bss *BuiltinSourceSuite) TestJetstreamSource() {
+	const streamName = "test-stream"
+	const msgPayload = "jetstream-test-message"
+	const msgCount = 100
+
+	// The source pods expect stream to exist
+	PumpJetstream(streamName, msgPayload, msgCount)
+
+	w := bss.Given().Pipeline("@testdata/jetstream-source-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	w.Expect().RedisSinkContains("jetstream-source-e2e-out", msgPayload, SinkCheckWithContainCount(msgCount))
+}
+
+func TestBuiltinSourceSuite(t *testing.T) {
+	suite.Run(t, new(BuiltinSourceSuite))
 }

@@ -35,7 +35,6 @@ type SideInputSuite struct {
 }
 
 func (s *SideInputSuite) TestSimpleMapSideInputPipeline() {
-
 	// the side inputs feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		s.T().SkipNow()
@@ -77,7 +76,6 @@ func (s *SideInputSuite) TestSimpleMapSideInputPipeline() {
 }
 
 func (s *SideInputSuite) TestSimpleReduceSideInputPipeline() {
-
 	// the side inputs feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		s.T().SkipNow()
