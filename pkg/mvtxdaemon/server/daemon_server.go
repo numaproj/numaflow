@@ -45,12 +45,14 @@ import (
 )
 
 type daemonServer struct {
-	monoVtx *v1alpha1.MonoVertex
+	monoVtx     *v1alpha1.MonoVertex
+	mvtxService *service.MonoVertexService
 }
 
 func NewDaemonServer(monoVtx *v1alpha1.MonoVertex) *daemonServer {
 	return &daemonServer{
-		monoVtx: monoVtx,
+		monoVtx:     monoVtx,
+		mvtxService: nil,
 	}
 }
 
@@ -93,6 +95,11 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	go func() { _ = httpServer.Serve(httpL) }()
 	go func() { _ = tcpm.Serve() }()
 
+	// Start the Data flow health status updater
+	go func() {
+		ds.mvtxService.StartHealthCheck(ctx)
+	}()
+
 	// Start the rater
 	go func() {
 		if err := rater.Start(ctx); err != nil {
@@ -127,6 +134,7 @@ func (ds *daemonServer) newGRPCServer(rater rateServer.MonoVtxRatable) (*grpc.Se
 		return nil, err
 	}
 	mvtxdaemon.RegisterMonoVertexDaemonServiceServer(grpcServer, mvtxService)
+	ds.mvtxService = mvtxService
 	return grpcServer, nil
 }
 

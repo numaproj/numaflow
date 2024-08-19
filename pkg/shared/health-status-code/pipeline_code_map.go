@@ -16,20 +16,6 @@ limitations under the License.
 
 package health_status_code
 
-// HealthCodeInfo is used to maintain status codes for vertex level health
-type HealthCodeInfo struct {
-	Status      string
-	Criticality string
-}
-
-// newHealthCodeInfo is used to create a new HealthCodeInfo object
-func newHealthCodeInfo(status string, criticality string) *HealthCodeInfo {
-	return &HealthCodeInfo{
-		Status:      status,
-		Criticality: criticality,
-	}
-}
-
 // VertexHealthMap is used to maintain status codes for vertex level health
 // Each map entry is a map of status code as the key to the status message and the criticality of the status.
 // Status codes are in incremental like

@@ -1016,7 +1016,7 @@ func (h *handler) GetPipelineStatus(c *gin.Context) {
 	// Get the vertex level health of the pipeline
 	resourceHealth, err := h.healthChecker.getPipelineResourceHealth(h, ns, pipeline)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the dataStatus for pipeline %q: %s", pipeline, err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to get the resourceHealth for pipeline %q: %s", pipeline, err.Error()))
 		return
 	}
 
@@ -1143,6 +1143,41 @@ func (h *handler) GetMonoVertexMetrics(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, metrics))
+}
+
+// GetMonoVertexHealth is used to the health information about a mono vertex
+// We use two checks to determine the health of the mono vertex:
+// 1. Resource Health: It is based on the health of the mono vertex deployment and pods.
+// 2. Data Criticality: It is based on the data movement of the mono vertex
+func (h *handler) GetMonoVertexHealth(c *gin.Context) {
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+
+	// Resource level health
+	resourceHealth, err := h.healthChecker.getMonoVtxResourceHealth(h, ns, monoVertex)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the resourceHealth for MonoVertex %q: %s", monoVertex, err.Error()))
+		return
+	}
+
+	// Create a new daemon client to get the data status
+	client, err := h.getMonoVertexDaemonClient(ns, monoVertex)
+	if err != nil || client == nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for mono vertex %q, %s", monoVertex, err.Error()))
+		return
+	}
+	// Data level health status
+	dataHealth, err := client.GetMonoVertexStatus(c)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the mono vertex dataStatus: namespace %q mono vertex %q: %s", ns, monoVertex, err.Error()))
+		return
+	}
+
+	// Create a response string based on the vertex health and data criticality
+	// We combine both the states to get the final dataStatus of the pipeline
+	response := NewHealthResponse(resourceHealth.Status, dataHealth.GetStatus(),
+		resourceHealth.Message, dataHealth.GetMessage(), resourceHealth.Code, dataHealth.GetCode())
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster

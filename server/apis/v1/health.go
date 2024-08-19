@@ -14,32 +14,38 @@ import (
 )
 
 const (
-	// resourceCacheRefreshDuration is the duration after which the vertex status cache is refreshed
+	// resourceCacheRefreshDuration is the duration after which the resource status cache is refreshed
 	resourceCacheRefreshDuration = 30 * time.Second
 )
 
-// resourceHealthResponse is the response returned by the vertex health check API
+// resourceHealthResponse is the response returned by the health check API
 type resourceHealthResponse struct {
-	// Status is the overall vertex status of the pipeline
+	// Status is the overall resource status of the corresponding resource
 	Status string `json:"status"`
 	// Message is the error message if any
 	Message string `json:"message"`
-	// Code is the status code for the vertex health
+	// Code is the status code for the resource health
 	Code string `json:"code"`
 }
 
-// HealthChecker is the struct to hold the resource status cache for the pipeline
+// HealthChecker is the struct to hold the resource status cache for the
+// pipeline and Mono Vertex
 type HealthChecker struct {
-	resourceStatusCache *evictCache.LRU[string, *resourceHealthResponse]
-	log                 *zap.SugaredLogger
+	// pipelineResourceStatusCache is a cache to store the pipeline resource status
+	pipelineResourceStatusCache *evictCache.LRU[string, *resourceHealthResponse]
+	// monoVtxResourceStatusCache is a cache to store the Mono Vertex resource status
+	monoVtxResourceStatusCache *evictCache.LRU[string, *resourceHealthResponse]
+	log                        *zap.SugaredLogger
 }
 
 // NewHealthChecker is used to create a new health checker
 func NewHealthChecker(ctx context.Context) *HealthChecker {
 	c := evictCache.NewLRU[string, *resourceHealthResponse](500, nil, resourceCacheRefreshDuration)
+	mvCache := evictCache.NewLRU[string, *resourceHealthResponse](500, nil, resourceCacheRefreshDuration)
 	return &HealthChecker{
-		resourceStatusCache: c,
-		log:                 logging.FromContext(ctx),
+		pipelineResourceStatusCache: c,
+		monoVtxResourceStatusCache:  mvCache,
+		log:                         logging.FromContext(ctx),
 	}
 }
 
@@ -55,7 +61,7 @@ func (hc *HealthChecker) getPipelineResourceHealth(h *handler, ns string,
 	cacheKey := fmt.Sprintf("%s-%s", ns, pipeline)
 
 	// check if the pipeline status is cached
-	if status, ok := hc.resourceStatusCache.Get(cacheKey); ok {
+	if status, ok := hc.pipelineResourceStatusCache.Get(cacheKey); ok {
 		hc.log.Info("Pipeline status from cache: ", status)
 		return status, nil
 	}
@@ -65,7 +71,7 @@ func (hc *HealthChecker) getPipelineResourceHealth(h *handler, ns string,
 		return status, err
 	}
 	// update cache with the new pipeline status
-	hc.resourceStatusCache.Add(cacheKey, status)
+	hc.pipelineResourceStatusCache.Add(cacheKey, status)
 
 	return status, nil
 }
@@ -205,5 +211,72 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 	return true, &resourceHealthResponse{
 		Message: fmt.Sprintf("Vertex %q is healthy", vertexName),
 		Code:    "V1",
+	}, nil
+}
+
+// getMonoVtxResourceHealth is used to provide the overall resouce health and status of the Mono Vertex
+// This first check if the Mono Vertex status is cached, if not,
+// it checks for the current Mono Vertex status
+func (hc *HealthChecker) getMonoVtxResourceHealth(h *handler, ns string,
+	monoVtx string) (*resourceHealthResponse, error) {
+
+	// create a cache key for the Mono Vertex
+	// It is a combination of namespace and Mono Vertex name
+	// In the form of <namespace>-<monoVtx>
+	cacheKey := fmt.Sprintf("%s-%s", ns, monoVtx)
+
+	// check if the Mono Vertex status is cached
+	if status, ok := hc.monoVtxResourceStatusCache.Get(cacheKey); ok {
+		hc.log.Info("Mono Vertex status from cache: ", status)
+		return status, nil
+	}
+	// if not present in cache, check for the current Mono Vertex status
+	status, err := checkMonoVtxHealth(h, ns, monoVtx)
+	if err != nil {
+		return nil, err
+	}
+	// update cache with the new Mono Vertex status
+	hc.monoVtxResourceStatusCache.Add(cacheKey, status)
+
+	return status, nil
+}
+
+// checkMonoVtxHealth is used to provide the overall Mono Vertex health and status of the Mono Vertex
+// They can be of the following types:
+// 1. Healthy: The Mono Vertex is healthy
+// 2. Unhealthy: The Mono Vertex is unhealthy
+// 3. Paused: The Mono Vertex is paused (Not supported right now)
+// 4. Unknown: The Mono Vertex is in an unknown state
+// We use the kubernetes client to get the spec of the MonoVertex and
+// then check its status to derive the resource health status
+
+// We perform the following checks:
+// 1) Check the `phase“ in the Status field of the spec, it should be “Running”
+// 2) Check if the `conditions` field of the spec, all of them shoudl be true
+func checkMonoVtxHealth(h *handler, ns string, monoVtx string) (*resourceHealthResponse, error) {
+	// fetch the current spec of the Mono Vertex
+	v, err := h.numaflowClient.MonoVertices(ns).Get(context.Background(), monoVtx, metav1.GetOptions{})
+	// if there is an error fetching the spec, return an error
+	// with status unknown
+	if err != nil {
+		return &resourceHealthResponse{
+			Status:  dfv1.MonoVertexStatusUnknown,
+			Message: fmt.Sprintf("error in getting Mono Vertex %q status: %v", monoVtx, err),
+			Code:    "M4",
+		}, err
+	}
+	// check if the Mono vertex is healthy or not through the status field of the spec
+	isMvtxHealthy := v.Status.IsHealthy()
+	if !isMvtxHealthy {
+		return &resourceHealthResponse{
+			Status:  dfv1.MonoVertexStatusUnhealthy,
+			Message: fmt.Sprintf("mono vertex %q is unhealthy: %s:%s", monoVtx, v.Status.Message, v.Status.Reason),
+			Code:    "M2",
+		}, nil
+	}
+	return &resourceHealthResponse{
+		Status:  dfv1.MonoVertexStatusHealthy,
+		Message: fmt.Sprintf("mono vertex %q is healthy", monoVtx),
+		Code:    "M1",
 	}, nil
 }
