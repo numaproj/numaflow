@@ -15,34 +15,22 @@ COPY dist/numaflow-linux-${ARCH} /bin/numaflow
 RUN chmod +x /bin/numaflow
 
 ####################################################################################################
-# extension base
+# Rust binary
 ####################################################################################################
-FROM rust:1.80-bookworm AS extension-base
+FROM lukemathwalker/cargo-chef:latest-rust-1.80 AS chef
 ARG TARGETPLATFORM
-
-RUN apt-get update && apt-get install protobuf-compiler -y
-
-RUN cargo new numaflow
-# Create a new empty shell project
 WORKDIR /numaflow
+RUN apt-get update && apt-get install -y protobuf-compiler clang curl
 
-RUN cargo new servesink
-COPY ./rust/servesink/Cargo.toml ./servesink/
 
-RUN cargo new backoff
-COPY ./rust/backoff/Cargo.toml ./backoff/
+FROM chef AS planner
+COPY ./rust/ .
+RUN cargo chef prepare --recipe-path recipe.json
 
-RUN cargo new numaflow-models
-COPY ./rust/numaflow-models/Cargo.toml ./numaflow-models/
-
-RUN cargo new monovertex
-COPY ./rust/monovertex/Cargo.toml ./monovertex/
-
-RUN cargo new serving
-COPY ./rust/serving/Cargo.toml ./serving/Cargo.toml
-
-# Copy all Cargo.toml and Cargo.lock files for caching dependencies
-COPY ./rust/Cargo.toml ./rust/Cargo.lock ./
+FROM chef AS rust-builder
+ARG TARGETPLATFORM
+ARG ARCH
+COPY --from=planner /numaflow/recipe.json recipe.json
 
 # Build to cache dependencies
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
@@ -52,18 +40,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
     *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
     esac && \
-    mkdir -p src/bin && echo "fn main() {}" > src/bin/main.rs && \
-    RUSTFLAGS='-C target-feature=+crt-static' cargo build --workspace --all --release --target ${TARGET}
+    RUSTFLAGS='-C target-feature=+crt-static' cargo chef cook --workspace --release --target ${TARGET} --recipe-path recipe.json
 
 # Copy the actual source code files of the main project and the subprojects
-COPY ./rust/src ./src
-COPY ./rust/servesink/src ./servesink/src
-COPY ./rust/backoff/src ./backoff/src
-COPY ./rust/numaflow-models/src ./numaflow-models/src
-COPY ./rust/serving/src ./serving/src
-COPY ./rust/monovertex/src ./monovertex/src
-COPY ./rust/monovertex/build.rs ./monovertex/build.rs
-COPY ./rust/monovertex/proto ./monovertex/proto
+COPY ./rust/ .
 
 # Build the real binaries
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
@@ -73,7 +53,6 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
     *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
     esac && \
-    touch src/bin/main.rs && \
     RUSTFLAGS='-C target-feature=+crt-static' cargo build --workspace --all --release --target ${TARGET} && \
     cp -pv target/${TARGET}/release/numaflow /root/numaflow
 
@@ -88,7 +67,7 @@ COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificat
 COPY --from=base /bin/numaflow /bin/numaflow
 COPY ui/build /ui/build
 
-COPY --from=extension-base /root/numaflow /bin/numaflow-rs
+COPY --from=rust-builder /root/numaflow /bin/numaflow-rs
 COPY ./rust/serving/config config
 
 ENTRYPOINT [ "/bin/numaflow" ]
