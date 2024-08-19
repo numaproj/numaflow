@@ -36,7 +36,7 @@ pub(crate) struct ForwarderBuilder {
 }
 
 impl ForwarderBuilder {
-    // Create a new builder with mandatory fields
+    /// Create a new builder with mandatory fields
     pub(crate) fn new(
         source_client: SourceClient,
         sink_client: SinkClient,
@@ -51,19 +51,20 @@ impl ForwarderBuilder {
         }
     }
 
-    // Set the optional transformer client
+    /// Set the optional transformer client
     pub(crate) fn transformer_client(mut self, transformer_client: TransformerClient) -> Self {
         self.transformer_client = Some(transformer_client);
         self
     }
 
-    // Set the optional fallback client
+    /// Set the optional fallback client
     pub(crate) fn fb_sink_client(mut self, fallback_client: SinkClient) -> Self {
         self.fb_sink_client = Some(fallback_client);
         self
     }
 
-    // Build the Forwarder instance
+    /// Build the Forwarder instance
+    #[must_use]
     pub(crate) fn build(self) -> Forwarder {
         let common_labels = metrics::forward_metrics_labels().clone();
         Forwarder {
@@ -103,6 +104,7 @@ impl Forwarder {
                     info!("Read batch size: {} and latency - {}ms", messages.len(), start_time.elapsed().as_millis());
 
                     let msg_count = messages.len() as u64;
+                    // nothing more to be done.
                     if msg_count == 0 {
                         continue;
                     }
