@@ -1699,7 +1699,7 @@ dependencies = [
 
 [[package]]
 name = "numaflow-models"
-version = "1.3.0-rc1"
+version = "1.3.0"
 dependencies = [
  "k8s-openapi",
  "kube",

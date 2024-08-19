@@ -1,6 +1,6 @@
 [package]
 name = "numaflow-models"
-version = "1.3.0-rc1"
+version = "1.3.0"
 authors = ["The Numaproj Authors"]
 description = "Numaflow models"
 license = "Apache-2.0 license"
