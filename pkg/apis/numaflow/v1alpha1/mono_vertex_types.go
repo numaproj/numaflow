@@ -425,6 +425,9 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) []corev1.Conta
 	if mvspec.Sink.UDSink != nil { // Only support UDSink for now.
 		containers = append(containers, mvspec.Sink.getUDSinkContainer(req))
 	}
+	if mvspec.Sink.Fallback != nil {
+		containers = append(containers, mvspec.Sink.getFallbackUDSinkContainer(req))
+	}
 	// Fallback sink is not supported.
 	containers = append(containers, mvspec.Sidecars...)
 	return containers
@@ -529,10 +532,17 @@ func (mvs *MonoVertexStatus) MarkPhaseRunning() {
 }
 
 // IsHealthy indicates whether the MonoVertex is in healthy status
+// It returns false if any issues exists
+// True indicates that the MonoVertex is healthy
+// TODO: Add support for paused whenever added in MonoVtx?
 func (mvs *MonoVertexStatus) IsHealthy() bool {
+	// check for the phase field first
 	switch mvs.Phase {
+	// Directly return an error if the phase is failed
 	case MonoVertexPhaseFailed:
 		return false
+	// Check if the MonoVertex is ready if the phase is running,
+	// We check if all the required conditions are true for it to be healthy
 	case MonoVertexPhaseRunning:
 		return mvs.IsReady()
 	default:

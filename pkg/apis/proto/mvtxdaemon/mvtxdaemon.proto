@@ -37,11 +37,26 @@ message GetMonoVertexMetricsResponse {
   MonoVertexMetrics metrics = 1;
 }
 
+// MonoVertexStatus is used to provide information about the mono vertex status.
+message MonoVertexStatus {
+  string status = 1;
+  string message = 2;
+  string code = 3;
+}
+
+message GetMonoVertexStatusResponse {
+  MonoVertexStatus status = 1;
+}
+
 // MonoVertexDaemonService is a grpc service that is used to provide APIs for giving any MonoVertex information.
 service MonoVertexDaemonService {
 
   rpc GetMonoVertexMetrics (google.protobuf.Empty) returns (GetMonoVertexMetricsResponse) {
     option (google.api.http).get = "/api/v1/metrics";
+  };
+
+  rpc GetMonoVertexStatus (google.protobuf.Empty) returns (GetMonoVertexStatusResponse) {
+    option (google.api.http).get = "/api/v1/status";
   };
 
 }
