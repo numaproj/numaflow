@@ -2,6 +2,16 @@ SHELL:=/bin/bash
 
 PACKAGE=github.com/numaproj/numaflow
 CURRENT_DIR=$(shell pwd)
+
+HOST_ARCH=$(shell arch)
+# Github actions instances are x86_64
+ifeq ($(HOST_ARCH),x86_64)
+	HOST_ARCH=amd64
+endif
+ifeq ($(HOST_ARCH),aarch64)
+	HOST_ARCH=arm64
+endif
+
 DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=numaflow
 DOCKERFILE:=Dockerfile
@@ -75,26 +85,32 @@ dist/$(BINARY_NAME)-linux-ppc64le: GOARGS = GOOS=linux GOARCH=ppc64le
 dist/$(BINARY_NAME)-linux-s390x: GOARGS = GOOS=linux GOARCH=s390x
 
 dist/$(BINARY_NAME):
+	@echo -e "\n------MAKE: $@ ------"
 	go build -v -ldflags '${LDFLAGS}' -o ${DIST_DIR}/$(BINARY_NAME) ./cmd
 
 dist/e2eapi:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -v -ldflags '${LDFLAGS}' -o ${DIST_DIR}/e2eapi ./test/e2e-api
+	@echo -e "\n------MAKE: $@ ------"
+	CGO_ENABLED=0 GOOS=linux go build -v -ldflags '${LDFLAGS}' -o ${DIST_DIR}/e2eapi ./test/e2e-api
 
 dist/$(BINARY_NAME)-%:
+	@echo -e "\n------MAKE: $@ ------"
 	CGO_ENABLED=0 $(GOARGS) go build -v -ldflags '${LDFLAGS}' -o ${DIST_DIR}/$(BINARY_NAME)-$* ./cmd
 
 .PHONY: test
 test:
+	@echo -e "\n------MAKE: $@ ------"
 	go test $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/) -race -short -v -timeout 60s
 
 .PHONY: test-coverage
 test-coverage:
+	@echo -e "\n------MAKE: $@ ------"
 	go test -covermode=atomic -coverprofile=test/profile.cov $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
 	go tool cover -func=test/profile.cov
 
 
 .PHONY: test-coverage-with-isb
 test-coverage-with-isb:
+	@echo -e "\n------MAKE: $@ ------"
 	go test -covermode=atomic -coverprofile=test/profile.cov -tags=isb_redis $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
 	go tool cover -func=test/profile.cov
 
@@ -116,6 +132,7 @@ test-transformer-e2e:
 test-diamond-e2e:
 test-sideinputs-e2e:
 test-%:
+	@echo -e "\n------MAKE: $@ ------"
 	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
 	$(MAKE) restart-control-plane-components
@@ -125,16 +142,19 @@ test-%:
 	$(MAKE) cleanup-e2e
 
 image-restart:
+	@echo -e "\n------MAKE: $@ ------"
 	$(MAKE) image
 	$(MAKE) restart-control-plane-components
 
 restart-control-plane-components:
+	@echo -e "\n------MAKE: $@ ------"
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow --ignore-not-found=true
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=numaflow-ux,app.kubernetes.io/part-of=numaflow --ignore-not-found=true
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=numaflow-webhook,app.kubernetes.io/part-of=numaflow --ignore-not-found=true
 
 .PHONY: cleanup-e2e
 cleanup-e2e:
+	@echo -e "\n------MAKE: $@ ------"
 	kubectl -n numaflow-system delete svc -lnumaflow-e2e=true --ignore-not-found=true
 	kubectl -n numaflow-system delete sts -lnumaflow-e2e=true --ignore-not-found=true
 	kubectl -n numaflow-system delete deploy -lnumaflow-e2e=true --ignore-not-found=true
@@ -144,6 +164,7 @@ cleanup-e2e:
 
 # To run just one of the e2e tests by name (i.e. 'make TestCreateSimplePipeline'):
 Test%:
+	@echo -e "\n------MAKE: $@ ------"
 	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
 	kubectl -n numaflow-system delete po -lapp.kubernetes.io/component=controller-manager,app.kubernetes.io/part-of=numaflow
@@ -155,38 +176,46 @@ Test%:
 
 .PHONY: ui-build
 ui-build:
+	@echo -e "\n------MAKE: $@ ------"
 	./hack/build-ui.sh
 
 .PHONY: ui-test
 ui-test: ui-build
+	@echo -e "\n------MAKE: $@ ------"
 	./hack/test-ui.sh
 
 .PHONY: image
-image: clean ui-build dist/$(BINARY_NAME)-linux-amd64
-	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "ARCH=amd64" --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
+image: clean ui-build dist/$(BINARY_NAME)-linux-$(HOST_ARCH)
+	@echo -e "\n------MAKE: $@ ------"
+	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) -f $(DOCKERFILE) .
 	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION); fi
 ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
 
 image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
+	@echo -e "\n------MAKE: $@ ------"
 	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file $(DOCKERFILE) ${PUSH_OPTION} .
 
 set-qemu:
+	@echo -e "\n------MAKE: $@ ------"
 	$(DOCKER) pull tonistiigi/binfmt:latest
 	$(DOCKER) run --rm --privileged tonistiigi/binfmt:latest --install amd64,arm64
 
 
 .PHONY: swagger
 swagger:
+	@echo -e "\n------MAKE: $@ ------"
 	./hack/swagger-gen.sh ${VERSION}
 	$(MAKE) api/json-schema/schema.json
 
 api/json-schema/schema.json: api/openapi-spec/swagger.json hack/json-schema/main.go
+	@echo -e "\n------MAKE: $@ ------"
 	go run ./hack/json-schema
 
 .PHONY: codegen
 codegen:
+	@echo -e "\n------MAKE: $@ ------"
 	./hack/generate-proto.sh
 	./hack/update-codegen.sh
 	./hack/openapi-gen.sh
@@ -198,14 +227,17 @@ codegen:
 	$(MAKE) --directory rust/numaflow-models generate
 
 clean:
+	@echo -e "\n------MAKE: $@ ------"
 	-rm -rf ${CURRENT_DIR}/dist
 
 .PHONY: crds
 crds:
+	@echo -e "\n------MAKE: $@ ------"
 	./hack/crdgen.sh
 
 .PHONY: manifests
 manifests: crds
+	@echo -e "\n------MAKE: $@ ------"
 	kubectl kustomize config/cluster-install > config/install.yaml
 	kubectl kustomize config/namespace-install > config/namespace-install.yaml
 	kubectl kustomize config/advanced-install/namespaced-controller > config/advanced-install/namespaced-controller-wo-crds.yaml
@@ -216,15 +248,18 @@ manifests: crds
 	kubectl kustomize config/extensions/webhook > config/validating-webhook-install.yaml
 
 $(GOPATH)/bin/golangci-lint:
+	@echo -e "\n------MAKE: $@ ------"
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b `go env GOPATH`/bin v1.54.1
 
 .PHONY: lint
 lint: $(GOPATH)/bin/golangci-lint
+	@echo -e "\n------MAKE: $@ ------"
 	go mod tidy
 	golangci-lint run --fix --verbose --concurrency 4 --timeout 5m --enable goimports
 
 .PHONY: start
 start: image
+	@echo -e "\n------MAKE: $@ ------"
 	kubectl apply -f test/manifests/numaflow-ns.yaml
 	kubectl -n numaflow-system delete cm numaflow-cmd-params-config --ignore-not-found=true
 	kubectl kustomize test/manifests | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:$(BASE_VERSION)/:$(VERSION)/' | kubectl -n numaflow-system apply -l app.kubernetes.io/part-of=numaflow --prune=false --force -f -
@@ -232,13 +267,15 @@ start: image
 
 .PHONY: e2eapi-image
 e2eapi-image: clean dist/e2eapi
-	DOCKER_BUILDKIT=1 $(DOCKER) build . --build-arg "ARCH=amd64" --target e2eapi --tag $(IMAGE_NAMESPACE)/e2eapi:$(VERSION) --build-arg VERSION="$(VERSION)"
+	@echo -e "\n------MAKE: $@ ------"
+	DOCKER_BUILDKIT=1 $(DOCKER) build . --target e2eapi --tag $(IMAGE_NAMESPACE)/e2eapi:$(VERSION) --build-arg VERSION="$(VERSION)"
 	@if [[ "$(DOCKER_PUSH)" = "true" ]]; then $(DOCKER) push $(IMAGE_NAMESPACE)/e2eapi:$(VERSION); fi
 ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/e2eapi:$(VERSION)
 endif
 
 /usr/local/bin/mkdocs:
+	@echo -e "\n------MAKE: $@ ------"
 	$(PYTHON) -m pip install mkdocs==1.3.0 mkdocs_material==8.3.9 mkdocs-embed-external-markdown==2.3.0
 
 /usr/local/bin/lychee:
@@ -254,32 +291,39 @@ endif
 
 .PHONY: docs
 docs: /usr/local/bin/mkdocs docs-linkcheck
+	@echo -e "\n------MAKE: $@ ------"
 	mkdocs build
 
 .PHONY: docs-serve
 docs-serve: docs
+	@echo -e "\n------MAKE: $@ ------"
 	mkdocs serve
 
 .PHONY: docs-linkcheck
 docs-linkcheck: /usr/local/bin/lychee
+	@echo -e "\n------MAKE: $@ ------"
 	lychee --exclude-path=CHANGELOG.md --exclude-mail *.md --include "https://github.com/numaproj/*" $(shell find ./test -type f) $(wildcard ./docs/*.md)
 
 # pre-push checks
 
 .git/hooks/%: hack/git/hooks/%
+	@echo -e "\n------MAKE: $@ ------"
 	@mkdir -p .git/hooks
 	cp hack/git/hooks/$* .git/hooks/$*
 
 .PHONY: githooks
 githooks: .git/hooks/commit-msg
+	@echo -e "\n------MAKE: $@ ------"
 
 .PHONY: pre-push
 pre-push: codegen lint
+	@echo -e "\n------MAKE: $@ ------"
 	# marker file, based on it's modification time, we know how long ago this target was run
 	touch dist/pre-push
 
 .PHONY: checksums
 checksums:
+	@echo -e "\n------MAKE: $@ ------"
 	sha256sum ./dist/$(BINARY_NAME)-*.gz | awk -F './dist/' '{print $$1 $$2}' > ./dist/$(BINARY_NAME)-checksums.txt
 
 # release - targets only available on release branch
@@ -287,11 +331,13 @@ ifneq ($(findstring release,$(GIT_BRANCH)),)
 
 .PHONY: prepare-release
 prepare-release: check-version-warning clean update-manifests-version codegen
+	@echo -e "\n------MAKE: $@ ------"
 	git status
 	@git diff --quiet || echo "\n\nPlease run 'git diff' to confirm the file changes are correct.\n"
 
 .PHONY: release
 release: check-version-warning
+	@echo -e "\n------MAKE: $@ ------"
 	@echo
 	@echo "1. Make sure you have run 'VERSION=$(VERSION) make prepare-release', and confirmed all the changes are expected."
 	@echo
@@ -308,10 +354,12 @@ endif
 
 .PHONY: check-version-warning
 check-version-warning:
+	@echo -e "\n------MAKE: $@ ------"
 	@if [[ ! "$(VERSION)" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$  ]]; then echo -n "It looks like you're not using a version format like 'v1.2.3', or 'v1.2.3-rc2', that version format is required for our releases. Do you wish to continue anyway? [y/N]" && read ans && [[ $${ans:-N} = y ]]; fi
 
 .PHONY: update-manifests-version
 update-manifests-version:
+	@echo -e "\n------MAKE: $@ ------"
 	cat config/base/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/tmp_kustomization.yaml
 	mv /tmp/tmp_kustomization.yaml config/base/kustomization.yaml
 	cat config/advanced-install/namespaced-controller/kustomization.yaml | sed 's/newTag: .*/newTag: $(VERSION)/' | sed 's@value: quay.io/numaproj/numaflow:.*@value: quay.io/numaproj/numaflow:$(VERSION)@' > /tmp/tmp_kustomization.yaml
