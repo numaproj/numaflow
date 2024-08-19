@@ -104,10 +104,7 @@ test-code:
 
 test-e2e:
 test-kafka-e2e:
-test-http-e2e:
-test-nats-e2e:
-test-jetstream-e2e:
-test-sdks-e2e:
+test-map-e2e:
 test-reduce-one-e2e:
 test-reduce-two-e2e:
 test-api-e2e:
@@ -115,6 +112,9 @@ test-udsource-e2e:
 test-transformer-e2e:
 test-diamond-e2e:
 test-sideinputs-e2e:
+test-monovertex-e2e:
+test-idle-source-e2e:
+test-builtin-source-e2e:
 test-%:
 	$(MAKE) cleanup-e2e
 	$(MAKE) image e2eapi-image
