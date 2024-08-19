@@ -29,7 +29,6 @@ import (
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
-// FIXME - this test is not executed in CI. We should include source and sink side-input tests in the CI.
 type SideInputUDSSuite struct {
 	E2ESuite
 }
@@ -52,7 +51,6 @@ func (s *SideInputUDSSuite) TestSinkWithSideInput() {
 }
 
 func (s *SideInputUDSSuite) TestSourceWithSideInput() {
-
 	// the side inputs feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		s.T().SkipNow()
@@ -61,7 +59,6 @@ func (s *SideInputUDSSuite) TestSourceWithSideInput() {
 	w := s.setUpTests("@testdata/sideinput-source.yaml")
 	defer w.DeletePipelineAndWait()
 	w.Expect().RedisSinkContains("sideinput-source-test-redis-uds", "e2e-even", SinkCheckWithTimeout(2*time.Minute))
-
 }
 
 func TestSideInputUDSSuite(t *testing.T) {
