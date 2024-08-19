@@ -94,6 +94,7 @@ impl Forwarder {
             processed_msgs_count += self.read_and_process_messages().await?;
 
             // if the last forward was more than 1 second ago, forward a chunk print the number of messages forwarded
+            // TODO: add histogram details (p99, etc.)
             if last_forwarded_at.elapsed().as_millis() >= 1000 {
                 info!(
                     "Forwarded {} messages at time {}",
@@ -112,11 +113,9 @@ impl Forwarder {
         Ok(())
     }
 
-    /*
-        Read messages from the source, apply transformation if transformer is present,
-        write the messages to the sink, if fallback messages are present write them to the fallback sink,
-        and then acknowledge the messages back to the source.
-    */
+    /// Read messages from the source, apply transformation if transformer is present,
+    /// write the messages to the sink, if fallback messages are present write them to the fallback sink,
+    /// and then acknowledge the messages back to the source.
     async fn read_and_process_messages(&mut self) -> Result<usize> {
         let start_time = tokio::time::Instant::now();
         let messages = self
@@ -129,20 +128,23 @@ impl Forwarder {
             start_time.elapsed().as_millis()
         );
 
-        // nothing more to be done.
+        // read returned 0 messages, nothing more to be done.
         if messages.is_empty() {
             return Ok(0);
         }
 
         let msg_count = messages.len() as u64;
-        let bytes_count = messages
-            .iter()
-            .map(|msg| msg.value.len() as u64)
-            .sum::<u64>();
         forward_metrics()
             .monovtx_read_total
             .get_or_create(&self.common_labels)
             .inc_by(msg_count);
+        // TODO: not really thrilled that we have to do this O(N) operations, perhaps this metrics
+        //   should come from the source since it is anyways reading it? Or move the iteration to
+        //   collect the offsets?
+        let bytes_count = messages
+            .iter()
+            .map(|msg| msg.value.len() as u64)
+            .sum::<u64>();
         forward_metrics()
             .monovtx_read_bytes_total
             .get_or_create(&self.common_labels)
@@ -169,29 +171,35 @@ impl Forwarder {
     // Applies transformation to the messages if transformer is present
     // we concurrently apply transformation to all the messages.
     async fn apply_transformer(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
-        if let Some(transformer_client) = &self.transformer_client {
-            let start_time = tokio::time::Instant::now();
-            let mut jh = JoinSet::new();
-            for message in messages {
-                let mut transformer_client = transformer_client.clone();
-                jh.spawn(async move { transformer_client.transform_fn(message).await });
-            }
-
-            let mut results = Vec::new();
-            while let Some(task) = jh.join_next().await {
-                let result = task.map_err(|e| Error::TransformerError(format!("{:?}", e)))?;
-                if let Some(result) = result? {
-                    results.extend(result);
-                }
-            }
-            debug!(
-                "Transformer latency - {}ms",
-                start_time.elapsed().as_millis()
-            );
-            Ok(results)
+        let transformer_client;
+        if let Some(trf_client) = &self.transformer_client {
+            transformer_client = trf_client;
         } else {
-            Ok(messages)
+            // return early if there is no transformer
+            return Ok(messages);
         }
+
+        let start_time = tokio::time::Instant::now();
+        let mut jh = JoinSet::new();
+        for message in messages {
+            let mut transformer_client = transformer_client.clone();
+            jh.spawn(async move { transformer_client.transform_fn(message).await });
+        }
+
+        let mut results = Vec::new();
+        while let Some(task) = jh.join_next().await {
+            let result = task.map_err(|e| Error::TransformerError(format!("{:?}", e)))?;
+            if let Some(result) = result? {
+                results.extend(result);
+            }
+        }
+
+        debug!(
+            "Transformer latency - {}ms",
+            start_time.elapsed().as_millis()
+        );
+
+        Ok(results)
     }
 
     // Writes the messages to the sink and handles fallback messages if present
@@ -241,6 +249,8 @@ impl Forwarder {
                         })
                         .collect::<Vec<_>>();
 
+                    // TODO: add doc on why we can break on messages.is_empty()? aren't we filtering failures?
+                    //   what if all are failures?
                     if messages.is_empty() {
                         break;
                     } else {
