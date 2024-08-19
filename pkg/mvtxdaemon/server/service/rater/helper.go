@@ -17,6 +17,7 @@ limitations under the License.
 package rater
 
 import (
+	"math"
 	"time"
 
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
@@ -25,6 +26,9 @@ import (
 const (
 	// indexNotFound is returned when the start index cannot be found in the queue.
 	indexNotFound = -1
+	// rateNotAvailable is returned when the processing rate cannot be derived from the currently
+	// available pod data, a negative min is returned to indicate this.
+	rateNotAvailable = float64(math.MinInt)
 )
 
 // UpdateCount updates the count for a given timestamp in the queue.
@@ -49,14 +53,14 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) float64 {
 	counts := q.Items()
 	if len(counts) <= 1 {
-		return 0
+		return rateNotAvailable
 	}
 	startIndex := findStartIndex(lookbackSeconds, counts)
 	// we consider the last but one element as the end index because the last element might be incomplete
 	// we can be sure that the last but one element in the queue is complete.
 	endIndex := len(counts) - 2
 	if startIndex == indexNotFound {
-		return 0
+		return rateNotAvailable
 	}
 
 	// time diff in seconds.
@@ -64,7 +68,7 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 	if timeDiff == 0 {
 		// if the time difference is 0, we return 0 to avoid division by 0
 		// this should not happen in practice because we are using a 10s interval
-		return 0
+		return rateNotAvailable
 	}
 
 	delta := float64(0)
