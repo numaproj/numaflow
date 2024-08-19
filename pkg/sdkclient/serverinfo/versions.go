@@ -23,7 +23,7 @@ import (
 type sdkConstraints map[info.Language]string
 
 var minimumSupportedSDKVersions = sdkConstraints{
-	info.Go:     "0.7.0-rc2",
-	info.Python: "0.7.0a1",
-	info.Java:   "0.7.2-0",
+	info.Go:     "0.8.0",
+	info.Python: "0.8.0",
+	info.Java:   "0.8.0",
 }
