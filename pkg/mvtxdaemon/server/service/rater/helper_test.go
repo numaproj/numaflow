@@ -109,14 +109,14 @@ func TestCalculateRate(t *testing.T) {
 	t.Run("givenCollectedTimeLessThanTwo_whenCalculateRate_thenReturnZero", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		// no data
-		assert.Equal(t, 0.0, CalculateRate(q, 10))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 10))
 
 		// only one data
 		now := time.Now()
 		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
 		tc1.Update(&PodReadCount{"pod1", 5.0})
 		q.Append(tc1)
-		assert.Equal(t, 0.0, CalculateRate(q, 10))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 10))
 	})
 
 	t.Run("singlePod_givenCountIncreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -134,9 +134,9 @@ func TestCalculateRate(t *testing.T) {
 		q.Append(tc3)
 
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 5))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 15))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15))
 		// tc1 and tc2 are used to calculate the rate
 		assert.Equal(t, 0.5, CalculateRate(q, 25))
 		// tc1 and tc2 are used to calculate the rate
@@ -161,9 +161,9 @@ func TestCalculateRate(t *testing.T) {
 		q.Append(tc4)
 
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 5))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 15))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15))
 		// tc2 and tc3 are used to calculate the rate
 		assert.Equal(t, 5.0, CalculateRate(q, 25))
 		// tc1, 2 and 3 are used to calculate the rate
@@ -190,11 +190,11 @@ func TestCalculateRate(t *testing.T) {
 		q.Append(tc3)
 
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 5))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 15))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 25))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 25))
 		// tc1 and tc2 are used to calculate the rate
 		assert.Equal(t, 15.0, CalculateRate(q, 35))
 	})
@@ -217,11 +217,11 @@ func TestCalculateRate(t *testing.T) {
 		q.Append(tc3)
 
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 5))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 15))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 25))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 25))
 		// tc1 and tc2 are used to calculate the rate
 		assert.Equal(t, 30.0, CalculateRate(q, 35))
 	})
@@ -244,11 +244,11 @@ func TestCalculateRate(t *testing.T) {
 		q.Append(tc3)
 
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 5))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 15))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 25))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 25))
 		// tc1 and tc2 are used to calculate the rate
 		assert.Equal(t, 25.0, CalculateRate(q, 35))
 	})
@@ -279,8 +279,8 @@ func TestCalculateRate(t *testing.T) {
 		q.Append(tc4)
 
 		// vertex rate
-		assert.Equal(t, 0.0, CalculateRate(q, 5))
-		assert.Equal(t, 0.0, CalculateRate(q, 15))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15))
 		assert.Equal(t, 25.0, CalculateRate(q, 25))
 		assert.Equal(t, 23.0, CalculateRate(q, 35))
 		assert.Equal(t, 23.0, CalculateRate(q, 100))

@@ -122,14 +122,14 @@ func TestCalculateRate(t *testing.T) {
 	t.Run("givenCollectedTimeLessThanTwo_whenCalculateRate_thenReturnZero", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
 		// no data
-		assert.Equal(t, 0.0, CalculateRate(q, 10, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 10, "partition1"))
 
 		// only one data
 		now := time.Now()
 		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
 		tc1.Update(&PodReadCount{"pod1", map[string]float64{"partition1": 5.0}})
 		q.Append(tc1)
-		assert.Equal(t, 0.0, CalculateRate(q, 10, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 10, "partition1"))
 	})
 
 	t.Run("singlePod_givenCountIncreases_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -147,9 +147,9 @@ func TestCalculateRate(t *testing.T) {
 		q.Append(tc3)
 
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition1"))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition1"))
 		// tc1 and tc2 are used to calculate the rate
 		assert.Equal(t, 0.5, CalculateRate(q, 25, "partition1"))
 		// tc1 and tc2 are used to calculate the rate
@@ -174,9 +174,9 @@ func TestCalculateRate(t *testing.T) {
 		q.Append(tc4)
 
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition1"))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition1"))
 		// tc2 and tc3 are used to calculate the rate
 		assert.Equal(t, 5.0, CalculateRate(q, 25, "partition1"))
 		// tc1, 2 and 3 are used to calculate the rate
@@ -203,11 +203,11 @@ func TestCalculateRate(t *testing.T) {
 		q.Append(tc3)
 
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition1"))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition1"))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 25, "partition1"))
 		// tc1 and tc2 are used to calculate the rate
 		assert.Equal(t, 15.0, CalculateRate(q, 35, "partition1"))
 	})
@@ -230,11 +230,11 @@ func TestCalculateRate(t *testing.T) {
 		q.Append(tc3)
 
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition1"))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition1"))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 25, "partition1"))
 		// tc1 and tc2 are used to calculate the rate
 		assert.Equal(t, 30.0, CalculateRate(q, 35, "partition1"))
 	})
@@ -257,11 +257,11 @@ func TestCalculateRate(t *testing.T) {
 		q.Append(tc3)
 
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition1"))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition1"))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 25, "partition1"))
 		// tc1 and tc2 are used to calculate the rate
 		assert.Equal(t, 25.0, CalculateRate(q, 35, "partition1"))
 	})
@@ -292,9 +292,9 @@ func TestCalculateRate(t *testing.T) {
 
 		// partition1 rate
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition1"))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition1"))
 		// tc2 and tc3 are used to calculate the rate
 		assert.Equal(t, 5.0, CalculateRate(q, 25, "partition1"))
 		// tc1, 2 and 3 are used to calculate the rate
@@ -303,32 +303,32 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 7.5, CalculateRate(q, 100, "partition1"))
 
 		// partition2 rate
-		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition2"))
-		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition2"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition2"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition2"))
 		assert.Equal(t, 10.0, CalculateRate(q, 25, "partition2"))
 		assert.Equal(t, 10.5, CalculateRate(q, 35, "partition2"))
 		assert.Equal(t, 10.5, CalculateRate(q, 100, "partition2"))
 
 		// partition3 rate
-		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition3"))
-		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition3"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition3"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition3"))
 		assert.Equal(t, 20.0, CalculateRate(q, 25, "partition3"))
 		assert.Equal(t, 10.0, CalculateRate(q, 35, "partition3"))
 		assert.Equal(t, 10.0, CalculateRate(q, 100, "partition3"))
 
 		// partition4 rate
-		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition4"))
-		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition4"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition4"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition4"))
 		assert.Equal(t, 10.0, CalculateRate(q, 25, "partition4"))
 		assert.Equal(t, 5.0, CalculateRate(q, 35, "partition4"))
 		assert.Equal(t, 5.0, CalculateRate(q, 100, "partition4"))
 
 		// partition100 rate
-		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition100"))
-		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition100"))
-		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition100"))
-		assert.Equal(t, 0.0, CalculateRate(q, 35, "partition100"))
-		assert.Equal(t, 0.0, CalculateRate(q, 100, "partition100"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition100"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition100"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 25, "partition100"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 35, "partition100"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 100, "partition100"))
 	})
 
 	t.Run("multiplePods_givenOnePodHandleMultiplePartitions_whenCalculateRate_thenReturnRate", func(t *testing.T) {
@@ -359,9 +359,9 @@ func TestCalculateRate(t *testing.T) {
 
 		// partition1 rate
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition1"))
 		// no enough data collected within lookback seconds, expect rate 0
-		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition1"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition1"))
 		// tc2 and tc3 are used to calculate the rate
 		assert.Equal(t, 111.0, CalculateRate(q, 25, "partition1"))
 		// tc1, 2 and 3 are used to calculate the rate
@@ -370,8 +370,8 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 111.0, CalculateRate(q, 100, "partition1"))
 
 		// partition2 rate
-		assert.Equal(t, 0.0, CalculateRate(q, 5, "partition2"))
-		assert.Equal(t, 0.0, CalculateRate(q, 15, "partition2"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition2"))
+		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition2"))
 		assert.Equal(t, 111.0, CalculateRate(q, 25, "partition2"))
 		assert.Equal(t, 111.0, CalculateRate(q, 35, "partition2"))
 		assert.Equal(t, 111.0, CalculateRate(q, 100, "partition2"))
