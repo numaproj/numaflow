@@ -1,6 +1,6 @@
 use crate::config::config;
 use crate::error::{Error, Result};
-use crate::message::Offset;
+use crate::message::{Message, Offset};
 use crate::metrics;
 use crate::metrics::forward_metrics;
 use crate::sink::{proto, SinkClient};
@@ -98,7 +98,7 @@ impl Forwarder {
                     Read messages from the source, apply transformation if transformer is present,
                     write the messages to the sink, if fallback messages are present write them to the fallback sink,
                     and then acknowledge the messages back to the source.
-                 */
+                */
                 result = self.source_client.read_fn(config().batch_size, config().timeout_in_ms) => {
                     let messages = result?;
                     info!("Read batch size: {} and latency - {}ms", messages.len(), start_time.elapsed().as_millis());
@@ -142,17 +142,12 @@ impl Forwarder {
                     let transformed_msg_count = transformed_messages.len() as u64;
                     forward_metrics().monovtx_sink_write_total.get_or_create(&self.common_labels).inc_by(transformed_msg_count);
 
-                    // if all messages are dropped by the transformer, skip the sink
-                    if transformed_messages.is_empty() {
-                        continue;
-                    }
-
                     let mut retry_msgs = transformed_messages;
                     let mut attempts = 0;
                     let mut error_map = HashMap::new();
                     let mut fallback_msgs = Vec::new();
 
-                    while attempts <= config().sink_max_retry_attempts {
+                    while attempts <= config().sink_max_retry_attempts && !retry_msgs.is_empty() {
                         let start_time = tokio::time::Instant::now();
                         match self.sink_client.sink_fn(retry_msgs.clone()).await {
                             Ok(response) => {
@@ -197,59 +192,57 @@ impl Forwarder {
 
                     // If there are fallback messages, write them to the fallback sink
                     if !fallback_msgs.is_empty() {
-                        match self.fallback_client {
-                            Some(ref mut fallback_client) => {
-                                let mut retry_fallback_msgs = fallback_msgs;
-                                let mut attempts = 0;
-                                let mut fallback_error_map = HashMap::new();
+                        if self.fallback_client.is_none() {
+                            return Err(Error::SinkError("Response contains fallback messages but no fallback sink is configured".to_string()));
+                        }
 
-                                while attempts <= config().sink_max_retry_attempts {
-                                    let start_time = tokio::time::Instant::now();
-                                    match fallback_client.sink_fn(retry_fallback_msgs.clone()).await {
-                                        Ok(response) => {
-                                            info!("Fallback sink latency - {}ms", start_time.elapsed().as_millis());
+                        let fallback_client = self.fallback_client.as_mut().unwrap();
+                        let mut retry_fallback_msgs = fallback_msgs;
+                        let mut attempts = 0;
+                        let mut fallback_error_map = HashMap::new();
 
-                                            retry_fallback_msgs = response.results.iter()
-                                                .filter(|result| result.status == proto::Status::Failure as i32)
-                                                .map(|result| retry_fallback_msgs.iter().find(|msg| msg.id == result.id).unwrap().clone())
-                                                .collect::<Vec<_>>();
+                        while attempts <= config().sink_max_retry_attempts {
+                            let start_time = tokio::time::Instant::now();
+                            match fallback_client.sink_fn(retry_fallback_msgs.clone()).await {
+                                Ok(response) => {
+                                    info!("Fallback sink latency - {}ms", start_time.elapsed().as_millis());
 
-                                            // if any one of response has status fallback return error saying, can't specify fallback inside fallback sink
-                                            if response.results.iter().any(|result| result.status == proto::Status::Fallback as i32) {
-                                                return Err(Error::SinkError("Fallback sink can't specify status fallback".to_string()));
-                                            }
+                                    retry_fallback_msgs = response.results.iter()
+                                        .filter(|result| result.status == proto::Status::Failure as i32)
+                                        .map(|result| retry_fallback_msgs.iter().find(|msg| msg.id == result.id).unwrap().clone())
+                                        .collect::<Vec<_>>();
 
-                                            attempts += 1;
+                                    // if any one of response has status fallback return error saying, can't specify fallback inside fallback sink
+                                    if response.results.iter().any(|result| result.status == proto::Status::Fallback as i32) {
+                                        return Err(Error::SinkError("Fallback sink can't specify status fallback".to_string()));
+                                    }
 
-                                            if retry_fallback_msgs.is_empty() {
-                                                break;
-                                            } else {
-                                                // Collect error messages and their counts
-                                                fallback_error_map.clear();
-                                                for result in response.results {
-                                                    if result.status != proto::Status::Success as i32 {
-                                                        *fallback_error_map.entry(result.err_msg).or_insert(0) += 1;
-                                                    }
-                                                }
+                                    attempts += 1;
 
-                                                warn!("Fallback sink retry attempt {} due to retryable error. Errors: {:?}", attempts, fallback_error_map);
-                                                sleep(tokio::time::Duration::from_millis(config().sink_retry_interval_in_ms as u64)).await;
+                                    if retry_fallback_msgs.is_empty() {
+                                        break;
+                                    } else {
+                                        // Collect error messages and their counts
+                                        fallback_error_map.clear();
+                                        for result in response.results {
+                                            if result.status != proto::Status::Success as i32 {
+                                                *fallback_error_map.entry(result.err_msg).or_insert(0) += 1;
                                             }
                                         }
-                                        Err(e) => return Err(e),
+
+                                        warn!("Fallback sink retry attempt {} due to retryable error. Errors: {:?}", attempts, fallback_error_map);
+                                        sleep(tokio::time::Duration::from_millis(config().sink_retry_interval_in_ms as u64)).await;
                                     }
                                 }
+                                Err(e) => return Err(e),
+                            }
+                        }
 
-                                if !retry_fallback_msgs.is_empty() {
-                                    return Err(Error::SinkError(format!(
-                                        "Failed to write messages to fallback sink after {} attempts. Errors: {:?}",
-                                        attempts, fallback_error_map
-                                    )));
-                                }
-                            }
-                            None => {
-                                return Err(Error::SinkError("Response contains fallback messages but no fallback sink is configured".to_string()));
-                            }
+                        if !retry_fallback_msgs.is_empty() {
+                            return Err(Error::SinkError(format!(
+                                "Failed to write messages to fallback sink after {} attempts. Errors: {:?}",
+                                attempts, fallback_error_map
+                            )));
                         }
                     }
 
@@ -260,6 +253,7 @@ impl Forwarder {
                     forward_metrics().monovtx_ack_total.get_or_create(&self.common_labels).inc_by(msg_count);
                 }
             }
+
             // if the last forward was more than 1 second ago, forward a chunk print the number of messages forwarded
             if last_forwarded_at.elapsed().as_millis() >= 1000 {
                 info!(

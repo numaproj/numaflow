@@ -60,7 +60,11 @@ impl SinkClient {
     }
 
     pub(crate) async fn sink_fn(&mut self, messages: Vec<Message>) -> Result<proto::SinkResponse> {
-        let (tx, rx) = tokio::sync::mpsc::channel(messages.len());
+        let (tx, rx) = tokio::sync::mpsc::channel(if messages.is_empty() {
+            1
+        } else {
+            messages.len()
+        });
 
         let requests: Vec<proto::SinkRequest> =
             messages.into_iter().map(|message| message.into()).collect();
