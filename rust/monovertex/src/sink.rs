@@ -1,3 +1,4 @@
+use crate::config::config;
 use crate::error::{Error, Result};
 use crate::message::Message;
 use crate::shared::connect_with_uds;
@@ -5,7 +6,6 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use tonic::transport::Channel;
 use tonic::Request;
-use crate::config::config;
 
 pub mod proto {
     tonic::include_proto!("sink.v1");

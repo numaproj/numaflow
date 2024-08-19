@@ -24,21 +24,23 @@ use tracing_subscriber::EnvFilter;
 /// - Send Acknowledgement back to the Source
 pub mod error;
 
-mod metrics;
+pub(crate) mod source;
 
-pub mod source;
+pub(crate) mod sink;
 
-pub mod sink;
+pub(crate) mod transformer;
 
-pub mod transformer;
+pub(crate) mod forwarder;
 
-pub mod forwarder;
+pub(crate) mod config;
 
-pub mod config;
+pub(crate) mod message;
 
-pub mod message;
-mod server_info;
 pub(crate) mod shared;
+
+mod server_info;
+
+mod metrics;
 
 pub async fn mono_vertex() {
     // Initialize the logger
@@ -99,7 +101,7 @@ pub async fn mono_vertex() {
     {
         error!("Application error: {:?}", e);
 
-        // abort the task since we have an error
+        // abort the signal handler task since we have an error and we are shutting down
         if !shutdown_handle.is_finished() {
             shutdown_handle.abort();
         }
@@ -222,17 +224,18 @@ pub async fn init(
 
     // build the forwarder
     let mut forwarder_builder = ForwarderBuilder::new(source_client, sink_client, cln_token);
+    // add transformer if exists
     if let Some(transformer_client) = transformer_client {
         forwarder_builder = forwarder_builder.transformer_client(transformer_client);
     }
-
+    // add fallback sink if exists
     if let Some(fb_sink_client) = fb_sink_client {
         forwarder_builder = forwarder_builder.fb_sink_client(fb_sink_client);
     }
-
+    // build the final forwarder
     let mut forwarder = forwarder_builder.build();
 
-    // start the forwarder
+    // start the forwarder, it will return only on Signal
     forwarder.start().await?;
 
     info!("Forwarder stopped gracefully");
@@ -373,8 +376,10 @@ mod tests {
         // FIXME: we need to have a better way, this is flaky
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        env::set_var("SOURCE_SOCKET", src_sock_file.to_str().unwrap());
-        env::set_var("SINK_SOCKET", sink_sock_file.to_str().unwrap());
+        unsafe {
+            env::set_var("SOURCE_SOCKET", src_sock_file.to_str().unwrap());
+            env::set_var("SINK_SOCKET", sink_sock_file.to_str().unwrap());
+        }
 
         let cln_token = CancellationToken::new();
 
