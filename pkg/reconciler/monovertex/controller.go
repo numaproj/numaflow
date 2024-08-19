@@ -39,6 +39,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
+	mvtxscaling "github.com/numaproj/numaflow/pkg/reconciler/monovertex/scaling"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
@@ -52,11 +53,12 @@ type monoVertexReconciler struct {
 	image  string
 	logger *zap.SugaredLogger
 
+	scaler   *mvtxscaling.Scaler
 	recorder record.EventRecorder
 }
 
-func NewReconciler(client client.Client, scheme *runtime.Scheme, config *reconciler.GlobalConfig, image string, logger *zap.SugaredLogger, recorder record.EventRecorder) reconcile.Reconciler {
-	return &monoVertexReconciler{client: client, scheme: scheme, config: config, image: image, logger: logger, recorder: recorder}
+func NewReconciler(client client.Client, scheme *runtime.Scheme, config *reconciler.GlobalConfig, image string, scaler *mvtxscaling.Scaler, logger *zap.SugaredLogger, recorder record.EventRecorder) reconcile.Reconciler {
+	return &monoVertexReconciler{client: client, scheme: scheme, config: config, image: image, scaler: scaler, logger: logger, recorder: recorder}
 }
 
 func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -87,13 +89,28 @@ func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // reconcile does the real logic.
 func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.MonoVertex) (ctrl.Result, error) {
 	log := logging.FromContext(ctx)
+	mVtxKey := mvtxscaling.KeyOfMonoVertex(*monoVtx)
 	if !monoVtx.DeletionTimestamp.IsZero() {
 		log.Info("Deleting mono vertex")
+		mr.scaler.StopWatching(mVtxKey)
+		// Clean up metrics
+		_ = reconciler.MonoVertexHealth.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
+		_ = reconciler.MonoVertexDesiredReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
+		_ = reconciler.MonoVertexCurrentReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
 		return ctrl.Result{}, nil
 	}
 
-	monoVtx.Status.SetObservedGeneration(monoVtx.Generation)
+	// Set metrics
+	defer func() {
+		if monoVtx.Status.IsHealthy() {
+			reconciler.MonoVertexHealth.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(1)
+		} else {
+			reconciler.MonoVertexHealth.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(0)
+		}
+	}()
 
+	monoVtx.Status.SetObservedGeneration(monoVtx.Generation)
+	mr.scaler.StartWatching(mVtxKey)
 	// TODO: handle lifecycle changes
 
 	// Regular mono vertex change
@@ -137,13 +154,19 @@ func (mr *monoVertexReconciler) reconcileNonLifecycleChanges(ctx context.Context
 }
 
 func (mr *monoVertexReconciler) reconcilePods(ctx context.Context, monoVtx *dfv1.MonoVertex) error {
+	desiredReplicas := monoVtx.GetReplicas()
+	// Set metrics
+	defer func() {
+		reconciler.MonoVertexDesiredReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(desiredReplicas))
+		reconciler.MonoVertexCurrentReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(monoVtx.Status.Replicas))
+	}()
+
 	log := logging.FromContext(ctx)
 	existingPods, err := mr.findExistingPods(ctx, monoVtx)
 	if err != nil {
 		mr.markDeploymentFailedAndLogEvent(monoVtx, false, log, "FindExistingPodFailed", err.Error(), "Failed to find existing mono vertex pods", zap.Error(err))
 		return err
 	}
-	desiredReplicas := monoVtx.GetReplicas()
 	for replica := 0; replica < desiredReplicas; replica++ {
 		podSpec, err := mr.buildPodSpec(monoVtx)
 		if err != nil {
@@ -163,21 +186,21 @@ func (mr *monoVertexReconciler) reconcilePods(ctx context.Context, monoVtx *dfv1
 			}
 		}
 		if needToCreate {
-			labels := map[string]string{}
+			podLabels := map[string]string{}
 			annotations := map[string]string{}
 			if x := monoVtx.Spec.Metadata; x != nil {
 				for k, v := range x.Annotations {
 					annotations[k] = v
 				}
 				for k, v := range x.Labels {
-					labels[k] = v
+					podLabels[k] = v
 				}
 			}
-			labels[dfv1.KeyPartOf] = dfv1.Project
-			labels[dfv1.KeyManagedBy] = dfv1.ControllerMonoVertex
-			labels[dfv1.KeyComponent] = dfv1.ComponentMonoVertex
-			labels[dfv1.KeyAppName] = monoVtx.Name
-			labels[dfv1.KeyMonoVertexName] = monoVtx.Name
+			podLabels[dfv1.KeyPartOf] = dfv1.Project
+			podLabels[dfv1.KeyManagedBy] = dfv1.ControllerMonoVertex
+			podLabels[dfv1.KeyComponent] = dfv1.ComponentMonoVertex
+			podLabels[dfv1.KeyAppName] = monoVtx.Name
+			podLabels[dfv1.KeyMonoVertexName] = monoVtx.Name
 			annotations[dfv1.KeyHash] = hash
 			annotations[dfv1.KeyReplica] = strconv.Itoa(replica)
 			// Defaults to udf
@@ -186,7 +209,7 @@ func (mr *monoVertexReconciler) reconcilePods(ctx context.Context, monoVtx *dfv1
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace:       monoVtx.Namespace,
 					Name:            podNamePrefix + sharedutil.RandomLowerCaseString(5),
-					Labels:          labels,
+					Labels:          podLabels,
 					Annotations:     annotations,
 					OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(monoVtx.GetObjectMeta(), dfv1.MonoVertexGroupVersionKind)},
 				},
@@ -369,10 +392,10 @@ func (mr *monoVertexReconciler) createOrUpdateDaemonDeployment(ctx context.Conte
 	return nil
 }
 
-func (r *monoVertexReconciler) findExistingPods(ctx context.Context, monoVtx *dfv1.MonoVertex) (map[string]corev1.Pod, error) {
+func (mr *monoVertexReconciler) findExistingPods(ctx context.Context, monoVtx *dfv1.MonoVertex) (map[string]corev1.Pod, error) {
 	pods := &corev1.PodList{}
 	selector, _ := labels.Parse(dfv1.KeyComponent + "=" + dfv1.ComponentMonoVertex + "," + dfv1.KeyMonoVertexName + "=" + monoVtx.Name)
-	if err := r.client.List(ctx, pods, &client.ListOptions{Namespace: monoVtx.Namespace, LabelSelector: selector}); err != nil {
+	if err := mr.client.List(ctx, pods, &client.ListOptions{Namespace: monoVtx.Namespace, LabelSelector: selector}); err != nil {
 		return nil, fmt.Errorf("failed to list mono vertex pods: %w", err)
 	}
 	result := make(map[string]corev1.Pod)

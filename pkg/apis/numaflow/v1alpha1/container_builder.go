@@ -25,7 +25,7 @@ func (b containerBuilder) init(req getContainerReq) containerBuilder {
 	b.Image = req.image
 	b.ImagePullPolicy = req.imagePullPolicy
 	b.Name = CtrMain
-	b.Resources = req.resources
+	b.Resources = *req.resources.DeepCopy()
 	b.VolumeMounts = req.volumeMounts
 	return b
 }
