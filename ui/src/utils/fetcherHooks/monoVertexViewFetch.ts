@@ -18,6 +18,7 @@ export const useMonoVertexViewFetch = (
   const [requestKey, setRequestKey] = useState("");
   const [pipeline, setPipeline] = useState<MonoVertex | undefined>(undefined);
   const [spec, setSpec] = useState<MonoVertexSpec | undefined>(undefined);
+  const [replicas, setReplicas] = useState<number | undefined>(undefined);
   const [monoVertexPods, setMonoVertexPods] = useState<Map<string, number>>(
     new Map()
   );
@@ -45,7 +46,12 @@ export const useMonoVertexViewFetch = (
             // Update pipeline state with data from the response
             setPipeline(json.data?.monoVertex);
             // Update spec state if it is not equal to the spec from the response
-            if (!isEqual(spec, json.data)) setSpec(json.data?.monoVertex?.spec);
+            if (!isEqual(spec, json.data?.monoVertex?.spec)) {
+              setSpec(json.data.monoVertex.spec);
+            }
+            if (replicas !== json.data?.monoVertex?.status?.replicas) {
+              setReplicas(json.data.monoVertex.status.replicas);
+            }
             setPipelineErr(undefined);
           } else if (json?.errMsg) {
             // pipeline API call returns an error message
@@ -245,7 +251,7 @@ export const useMonoVertexViewFetch = (
       const name = pipelineId ?? "";
       newNode.id = name;
       newNode.data = { name: name };
-      newNode.data.podnum = spec?.replicas ? spec.replicas : 0;
+      newNode.data.podnum = replicas ? replicas : 0;
       newNode.position = { x: 0, y: 0 };
       // change this in the future if you would like to make it draggable
       newNode.draggable = false;
@@ -266,7 +272,7 @@ export const useMonoVertexViewFetch = (
     if (pipeline && vertices?.length > 0) {
       setLoading(false);
     }
-  }, [pipeline, vertices]);
+  }, [pipeline, vertices, replicas]);
 
   return {
     pipeline,
