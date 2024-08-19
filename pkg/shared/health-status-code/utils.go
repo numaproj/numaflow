@@ -14,17 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package client
+package health_status_code
 
-import (
-	"context"
-	"io"
+// HealthCodeInfo is used to maintain status codes for vertex level health
+type HealthCodeInfo struct {
+	Status      string
+	Criticality string
+}
 
-	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
-)
-
-type MonoVertexDaemonClient interface {
-	io.Closer
-	GetMonoVertexMetrics(ctx context.Context) (*mvtxdaemon.MonoVertexMetrics, error)
-	GetMonoVertexStatus(ctx context.Context) (*mvtxdaemon.MonoVertexStatus, error)
+// newHealthCodeInfo is used to create a new HealthCodeInfo object
+func newHealthCodeInfo(status string, criticality string) *HealthCodeInfo {
+	return &HealthCodeInfo{
+		Status:      status,
+		Criticality: criticality,
+	}
 }

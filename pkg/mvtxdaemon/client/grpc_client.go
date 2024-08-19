@@ -54,6 +54,14 @@ func (dc *grpcClient) GetMonoVertexMetrics(ctx context.Context) (*mvtxdaemon.Mon
 	}
 }
 
+func (dc *grpcClient) GetMonoVertexStatus(ctx context.Context) (*mvtxdaemon.MonoVertexStatus, error) {
+	if rspn, err := dc.client.GetMonoVertexStatus(ctx, &emptypb.Empty{}); err != nil {
+		return nil, err
+	} else {
+		return rspn.Status, nil
+	}
+}
+
 // Close function closes the gRPC connection, it has to be called after a daemon client has finished all its jobs.
 func (dc *grpcClient) Close() error {
 	if dc.conn != nil {
