@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.3.0 (2024-08-19)
+
+ * [4de121c2](https://github.com/numaproj/numaflow/commit/4de121c2c3b436ac51fba97c8ce5153afc5364c9) Update manifests to v1.3.0
+ * [a566548b](https://github.com/numaproj/numaflow/commit/a566548b8d1be71367dc01049086b5a685b610eb) refactor: re-arrange e2e tests  (#1961)
+ * [a30649de](https://github.com/numaproj/numaflow/commit/a30649decdf381950e54187c1633b0e27fe85cff) fix: replicas derived in UI from mvtx status instead of spec (#1965)
+ * [5a22c321](https://github.com/numaproj/numaflow/commit/5a22c321912df0a5e4d59d8027a1173acfe0079c) feat: add health for monovertex (#1954)
+ * [1087e860](https://github.com/numaproj/numaflow/commit/1087e860c2896a861fb5068f9416dac39a948b30) feat: enable fallback sink for mvtx (#1957)
+ * [b5aa6ffb](https://github.com/numaproj/numaflow/commit/b5aa6ffba0466f87727354d6a069e8d6fb8e07ba) feat: Mono vertex UI (#1941)
+ * [447cd3f4](https://github.com/numaproj/numaflow/commit/447cd3f47cfaf7856c191ee27815fc338cea1cf3) fix: default resources mutated when applying templates (#1948)
+ * [5a531620](https://github.com/numaproj/numaflow/commit/5a53162077305cea43e6bf9d23dd19805c8c8bb4) feat: autoscaling for MonoVertex (#1927)
+ * [78468019](https://github.com/numaproj/numaflow/commit/78468019b0a292749ab688b4a74af1149b43d540) fix: retry failed messages for MonoVertex sink (#1933)
+ * [206a535f](https://github.com/numaproj/numaflow/commit/206a535f7e86f860ed5597616b0e3b1d9ab93ec0) Add Lockheed to Users.md (#1934)
+ * [c1d25acd](https://github.com/numaproj/numaflow/commit/c1d25acd0d1722c6011ada6ccff06cd5dc8812be) feat: add server-info support and versioning to MonoVertex (#1918)
+ * [292e3eae](https://github.com/numaproj/numaflow/commit/292e3eae4537c6d497f1eb2de5f72d3f657b4360) feat: source to sink with an optional transformer without ISB (#1904)
+
+### Contributors
+
+ * Derek Wang
+ * Keran Yang
+ * Sidhant Kohli
+ * Vedant Gupta
+ * Vigith Maurice
+ * Yashash H L
+ * mdwarne1
+
 ## v1.3.0-rc1 (2024-08-08)
 
  * [179f5967](https://github.com/numaproj/numaflow/commit/179f59674a0a61eb7ae7cd7a83612f0eb7b3be7f) Update manifests to v1.3.0-rc1
