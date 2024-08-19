@@ -41,6 +41,7 @@ pub struct Settings {
     pub log_level: String,
     pub grpc_max_message_size: usize,
     pub is_transformer_enabled: bool,
+    pub is_fallback_enabled: bool,
     pub lag_check_interval_in_secs: u16,
     pub lag_refresh_interval_in_secs: u16,
     pub sink_max_retry_attempts: u16,
@@ -58,6 +59,7 @@ impl Default for Settings {
             log_level: LevelFilter::INFO.to_string(),
             grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
             is_transformer_enabled: false,
+            is_fallback_enabled: false,
             lag_check_interval_in_secs: DEFAULT_LAG_CHECK_INTERVAL_IN_SECS,
             lag_refresh_interval_in_secs: DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS,
             sink_max_retry_attempts: DEFAULT_MAX_SINK_RETRY_ATTEMPTS,
@@ -110,6 +112,13 @@ impl Settings {
                 .source
                 .ok_or(Error::ConfigError("Source not found".to_string()))?
                 .transformer
+                .is_some();
+
+            settings.is_fallback_enabled = mono_vertex_obj
+                .spec
+                .sink
+                .ok_or(Error::ConfigError("Sink not found".to_string()))?
+                .fallback
                 .is_some();
         }
 
