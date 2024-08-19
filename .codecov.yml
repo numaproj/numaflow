@@ -8,7 +8,7 @@ ignore:
 - "vendor/.*"
 - "test/.*"
 - "rust/**/error.rs"
-- "rust/numaflow-models/*" # ignore generated files
+- "rust/numaflow-models/**" # ignore generated files
 coverage:
   status:
     patch: off
