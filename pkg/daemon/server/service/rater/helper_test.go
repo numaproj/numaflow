@@ -326,9 +326,9 @@ func TestCalculateRate(t *testing.T) {
 		// partition100 rate
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 5, "partition100"))
 		assert.Equal(t, rateNotAvailable, CalculateRate(q, 15, "partition100"))
-		assert.Equal(t, rateNotAvailable, CalculateRate(q, 25, "partition100"))
-		assert.Equal(t, rateNotAvailable, CalculateRate(q, 35, "partition100"))
-		assert.Equal(t, rateNotAvailable, CalculateRate(q, 100, "partition100"))
+		assert.Equal(t, 0.0, CalculateRate(q, 25, "partition100"))
+		assert.Equal(t, 0.0, CalculateRate(q, 35, "partition100"))
+		assert.Equal(t, 0.0, CalculateRate(q, 100, "partition100"))
 	})
 
 	t.Run("multiplePods_givenOnePodHandleMultiplePartitions_whenCalculateRate_thenReturnRate", func(t *testing.T) {
