@@ -3,7 +3,7 @@ use crate::config::config;
 pub(crate) use crate::error::Error;
 use crate::forwarder::ForwarderBuilder;
 use crate::metrics::{start_metrics_https_server, LagReaderBuilder, MetricsState};
-use crate::sink::{SinkClient, SinkConfig, FB_SINK_SERVER_INFO_FILE, FB_SINK_SOCKET};
+use crate::sink::{SinkClient, SinkConfig};
 use crate::source::{SourceClient, SourceConfig};
 use crate::transformer::{TransformerClient, TransformerConfig};
 use std::net::SocketAddr;
@@ -73,11 +73,7 @@ pub async fn mono_vertex() {
     };
 
     let fb_sink_config = if config().is_fallback_enabled {
-        Some(SinkConfig {
-            max_message_size: config().grpc_max_message_size,
-            socket_path: FB_SINK_SOCKET.to_string(),
-            server_info_file: FB_SINK_SERVER_INFO_FILE.to_string(),
-        })
+        Some(SinkConfig::fallback_default())
     } else {
         None
     };
