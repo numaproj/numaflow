@@ -116,7 +116,6 @@ export interface MonoVertex {
 }
 
 export interface MonoVertexSpec {
-  replicas: number;
   source: any;
   sink: any;
   scale: any;
