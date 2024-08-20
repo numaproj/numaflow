@@ -330,7 +330,7 @@ impl Forwarder {
                                 true
                             } else if result.status == proto::Status::Fallback as i32 {
                                 contains_fallback_status = true;
-                                true
+                                false
                             } else {
                                 false
                             }
