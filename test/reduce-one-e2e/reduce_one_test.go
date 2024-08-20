@@ -1,3 +1,5 @@
+//go:build test
+
 /*
 Copyright 2022 The Numaproj Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +36,6 @@ type ReduceSuite struct {
 
 // one reduce vertex (keyed)
 func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
-
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
@@ -79,7 +80,6 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 
 // one reduce vertex(non keyed)
 func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
-
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
@@ -123,7 +123,6 @@ func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
 
 // two reduce vertex(keyed and non keyed)
 func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
-
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
@@ -166,7 +165,6 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 }
 
 func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
-
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
@@ -193,7 +191,6 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 
 	w.Expect().VertexPodsRunning()
 
-	defer w.StreamVertexPodlogs("compute-sum", "numa").TerminateAllPodLogs()
 	go func() {
 		startTime := int(time.Unix(1000, 0).UnixMilli())
 		for i := 1; true; i++ {
@@ -209,7 +206,6 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 					w.Expect().VertexPodsRunning()
 					w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 					w.Expect().VertexPodsRunning()
-					w.StreamVertexPodlogs("compute-sum", "numa")
 				}
 				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
@@ -229,7 +225,6 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 
 // two reduce vertices (keyed and non-keyed) followed by a sliding window vertex
 func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
-
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
