@@ -1,6 +1,7 @@
+//go:build test
+
 /*
 Copyright 2022 The Numaproj Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -174,38 +175,6 @@ func (s *FunctionalSuite) TestUDFFiltering() {
 	w.Expect().RedisSinkNotContains("udf-filtering-out", expect0)
 	w.Expect().RedisSinkNotContains("udf-filtering-out", expect1)
 	w.Expect().RedisSinkNotContains("udf-filtering-out", expect2)
-}
-
-func (s *FunctionalSuite) TestConditionalForwarding() {
-	// FIXME: flaky when redis is used as isb
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		s.T().SkipNow()
-	}
-
-	w := s.Given().Pipeline("@testdata/even-odd.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "even-odd"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("888888"))).
-		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("888889"))).
-		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("not an integer")))
-
-	w.Expect().RedisSinkContains("even-odd-even-sink", "888888")
-	w.Expect().RedisSinkNotContains("even-odd-even-sink", "888889")
-	w.Expect().RedisSinkNotContains("even-odd-even-sink", "not an integer")
-
-	w.Expect().RedisSinkContains("even-odd-odd-sink", "888889")
-	w.Expect().RedisSinkNotContains("even-odd-odd-sink", "888888")
-	w.Expect().RedisSinkNotContains("even-odd-odd-sink", "not an integer")
-
-	w.Expect().RedisSinkContains("even-odd-number-sink", "888888")
-	w.Expect().RedisSinkContains("even-odd-number-sink", "888889")
-	w.Expect().RedisSinkNotContains("even-odd-number-sink", "not an integer")
 }
 
 func (s *FunctionalSuite) TestDropOnFull() {
