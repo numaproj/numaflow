@@ -214,21 +214,29 @@ impl Forwarder {
         let mut error_map = HashMap::new();
         let mut fallback_msgs = Vec::new();
 
+        // start with the original set of message to be sent.
+        // we will overwrite this vec with failed messages and will keep retrying.
+        let mut messages_to_send = messages;
+
         while attempts <= config().sink_max_retry_attempts {
             let start_time = tokio::time::Instant::now();
-            match self.sink_client.sink_fn(messages.clone()).await {
+            match self.sink_client.sink_fn(messages_to_send.clone()).await {
                 Ok(response) => {
                     debug!("Sink latency - {}ms", start_time.elapsed().as_millis());
                     attempts += 1;
 
+                    // collect all the fallback messages to be sent.
+                    // we might add more to this list in the subsequent iterations if sink sends more
+                    // fallback messages while retrying.
                     fallback_msgs.extend(
                         response
                             .results
                             .iter()
                             .filter(|result| result.status == proto::Status::Fallback as i32)
                             .map(|result| {
-                                messages
+                                messages_to_send
                                     .iter()
+                                    // FIXME: this is O(N^2)
                                     .find(|msg| msg.id == result.id)
                                     .unwrap()
                                     .clone()
@@ -236,22 +244,22 @@ impl Forwarder {
                             .collect::<Vec<_>>(),
                     );
 
-                    messages = response
+                    // collect all the failure messages to be sent again
+                    messages_to_send = response
                         .results
                         .iter()
                         .filter(|result| result.status == proto::Status::Failure as i32)
                         .map(|result| {
-                            messages
+                            messages_to_send
                                 .iter()
+                                // FIXME: this is O(N^2)
                                 .find(|msg| msg.id == result.id)
                                 .unwrap()
                                 .clone()
                         })
                         .collect::<Vec<_>>();
 
-                    // TODO: add doc on why we can break on messages.is_empty()? aren't we filtering failures?
-                    //   what if all are failures?
-                    if messages.is_empty() {
+                    if messages_to_send.is_empty() {
                         break;
                     } else {
                         error_map.clear();
@@ -275,7 +283,7 @@ impl Forwarder {
             }
         }
 
-        if !messages.is_empty() {
+        if !messages_to_send.is_empty() {
             return Err(Error::SinkError(format!(
                 "Failed to sink messages after {} attempts. Errors: {:?}",
                 attempts, error_map
