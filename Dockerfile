@@ -8,7 +8,6 @@ ARG ARCH
 RUN apk update && apk upgrade && \
     apk add ca-certificates && \
     apk --no-cache add tzdata
-ARG ARCH
 
 COPY dist/numaflow-linux-${ARCH} /bin/numaflow
 
@@ -20,7 +19,7 @@ RUN chmod +x /bin/numaflow
 FROM lukemathwalker/cargo-chef:latest-rust-1.80 AS chef
 ARG TARGETPLATFORM
 WORKDIR /numaflow
-RUN apt-get update && apt-get install -y protobuf-compiler clang curl
+RUN apt-get update && apt-get install -y protobuf-compiler
 
 
 FROM chef AS planner
@@ -61,13 +60,14 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 ####################################################################################################
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE} AS numaflow
+ARG ARCH
 
 COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=base /bin/numaflow /bin/numaflow
 COPY ui/build /ui/build
 
-COPY --from=rust-builder /root/numaflow /bin/numaflow-rs
+COPY dist/numaflow-rs-linux-${ARCH} /bin/numaflow-rs
 COPY ./rust/serving/config config
 
 ENTRYPOINT [ "/bin/numaflow" ]
