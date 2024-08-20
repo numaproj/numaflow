@@ -15,7 +15,8 @@ type MonoVertexSuite struct {
 func (s *MonoVertexSuite) TestMonoVertexWithTransformer() {
 	w := s.Given().MonoVertex("@testdata/mono-vertex-with-transformer.yaml").
 		When().CreateMonoVertexAndWait()
-	defer w.DeleteMonoVertexAndWait()
+	// FIXME: for debugging
+	//defer w.DeleteMonoVertexAndWait()
 
 	w.Expect().MonoVertexPodsRunning()
 
