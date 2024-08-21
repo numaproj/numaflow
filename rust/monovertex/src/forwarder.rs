@@ -229,8 +229,10 @@ impl Forwarder {
                         .map(|result| (result.id.clone(), result))
                         .collect();
 
+                    error_map.clear();
                     // drain all the messages that were successfully written
                     // and keep only the failed messages to send again
+                    // construct the error map for the failed messages
                     messages_to_send.retain(|msg| {
                         if let Some(result) = result_map.get(&msg.id) {
                             return if result.status == proto::Status::Success as i32 {
@@ -255,7 +257,6 @@ impl Forwarder {
                         "Retry attempt {} due to retryable error. Errors: {:?}",
                         attempts, error_map
                     );
-                    error_map.clear();
                     sleep(tokio::time::Duration::from_millis(
                         config().sink_retry_interval_in_ms as u64,
                     ))
@@ -319,8 +320,10 @@ impl Forwarder {
 
                     let mut contains_fallback_status = false;
 
+                    fallback_error_map.clear();
                     // drain all the messages that were successfully written
                     // and keep only the failed messages to send again
+                    // construct the error map for the failed messages
                     messages_to_send.retain(|msg| {
                         if let Some(result) = result_map.get(&msg.id) {
                             if result.status == proto::Status::Failure as i32 {
