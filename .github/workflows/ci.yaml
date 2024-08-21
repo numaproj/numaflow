@@ -186,7 +186,7 @@ jobs:
           path: ui/node_modules
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
       - name: Install k3d
-        run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
+        run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash
       - name: Create a cluster
         run: |
           k3d cluster create e2e
