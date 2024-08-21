@@ -117,6 +117,9 @@ func (s *E2ESuite) SetupSuite() {
 		CreateISBSvc().
 		WaitForISBSvcReady()
 	s.T().Log("ISB svc is ready")
+
+	s.Given().When().StreamISBLogs("main")
+
 	err = PodPortForward(s.restConfig, Namespace, "e2e-api-pod", 8378, 8378, s.stopch)
 	s.CheckError(err)
 
@@ -142,6 +145,8 @@ func (s *E2ESuite) TearDownSuite() {
 		Wait(3 * time.Second).
 		Expect().
 		ISBSvcDeleted(defaultTimeout)
+
+	s.Given().When().TerminateAllPodLogs()
 
 	s.T().Log("ISB svc is deleted")
 	deleteCMD := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", Namespace)

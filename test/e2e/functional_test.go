@@ -157,7 +157,6 @@ func (s *FunctionalSuite) TestUDFFiltering() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
-	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	expect0 := `{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`
 	expect1 := `{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`
@@ -193,7 +192,6 @@ func (s *FunctionalSuite) TestDropOnFull() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
-	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 	defer w.VertexPodPortForward("in", 8001, dfv1.VertexMetricsPort).
 		TerminateAllPodPortForwards()
 
@@ -247,7 +245,6 @@ func (s *FunctionalSuite) TestWatermarkEnabled() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning().DaemonPodsRunning()
-	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	defer w.DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
 		TerminateAllPodPortForwards()
@@ -324,7 +321,6 @@ func (s *FunctionalSuite) TestFallbackSink() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
-	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	w.Expect().RedisSinkContains("simple-fallback-output", "fallback-message")
 }
