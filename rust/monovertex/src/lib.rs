@@ -49,6 +49,7 @@ pub async fn mono_vertex() {
                 .parse_lossy(&config().log_level),
         )
         .with_target(false)
+        .with_ansi(false)
         .init();
 
     // Initialize the source, sink and transformer configurations
