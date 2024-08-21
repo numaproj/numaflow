@@ -298,6 +298,10 @@ const CustomNode: FC<NodeProps> = ({
     );
   }, []);
 
+  const formatRate = (rate?: number): string => {
+    return rate !== undefined && rate >= 0 ? `${rate}/sec` : "Not Available";
+  };
+
   return (
     <Box data-testid={data?.name}>
       <Box
@@ -395,16 +399,20 @@ const CustomNode: FC<NodeProps> = ({
           title={
             <Box className={"node-tooltip"}>
               <Box>Processing Rates</Box>
-              <Box>1 min: {data?.vertexMetrics?.ratePerMin}/sec</Box>
-              <Box>5 min: {data?.vertexMetrics?.ratePerFiveMin}/sec</Box>
-              <Box>15 min: {data?.vertexMetrics?.ratePerFifteenMin}/sec</Box>
+              <Box>1 min: {formatRate(data?.vertexMetrics?.ratePerMin)}</Box>
+              <Box>
+                5 min: {formatRate(data?.vertexMetrics?.ratePerFiveMin)}
+              </Box>
+              <Box>
+                15 min: {formatRate(data?.vertexMetrics?.ratePerFifteenMin)}
+              </Box>
             </Box>
           }
           arrow
           placement={"bottom-end"}
         >
           <Box className={"node-rate"}>
-            {data?.vertexMetrics?.ratePerMin}/sec
+            {formatRate(data?.vertexMetrics?.ratePerMin)}
           </Box>
         </Tooltip>
 
