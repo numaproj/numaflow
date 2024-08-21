@@ -36,7 +36,6 @@ type SideInputUDSSuite struct {
 func (s *SideInputUDSSuite) setUpTests(pipeLineFile string) *When {
 	w := s.Given().Pipeline(pipeLineFile).When().CreatePipelineAndWait()
 	w.Expect().VertexPodsRunning()
-	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 	return w
 }
 
