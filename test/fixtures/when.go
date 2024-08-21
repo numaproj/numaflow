@@ -76,7 +76,11 @@ func (w *When) DeleteISBSvc() *When {
 	}
 	w.t.Log("Deleting ISB svc", w.isbSvc.Name)
 	ctx := context.Background()
-	err := w.isbSvcClient.Delete(ctx, w.isbSvc.Name, metav1.DeleteOptions{})
+	deleteOpt := metav1.DeleteOptions{GracePeriodSeconds: new(int64)}
+	// if not specified, the default grace period is 30 seconds
+	// set to 0 to delete immediately because DeleteISBSvc is invoked after all tests finished.
+	*deleteOpt.GracePeriodSeconds = 0
+	err := w.isbSvcClient.Delete(ctx, w.isbSvc.Name, deleteOpt)
 	if err != nil {
 		w.t.Fatal(err)
 	}
