@@ -53,6 +53,7 @@ func (s *DiamondSuite) TestJoinOnReducePipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	done := make(chan struct{})
 	go func() {
@@ -88,6 +89,7 @@ func (s *DiamondSuite) TestJoinOnMapPipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	w.SendMessageTo(pipelineName, "in-0", NewHttpPostRequest().WithBody([]byte("1")))
 	w.SendMessageTo(pipelineName, "in-1", NewHttpPostRequest().WithBody([]byte("2")))
@@ -106,6 +108,7 @@ func (s *DiamondSuite) TestJoinOnSinkVertex() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("888888"))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("888889")))
@@ -123,6 +126,7 @@ func (s *DiamondSuite) TestCycleToSelf() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	msgs := [10]string{}
 	for i := 0; i < 10; i++ {
@@ -149,6 +153,7 @@ func (s *DiamondSuite) TestCycleBackward() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	msgs := [10]string{}
 	for i := 0; i < 10; i++ {

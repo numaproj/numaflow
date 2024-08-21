@@ -50,6 +50,7 @@ func (s *SideInputSuite) TestSimpleMapSideInputPipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	done := make(chan struct{})
 	go func() {
@@ -91,6 +92,7 @@ func (s *SideInputSuite) TestSimpleReduceSideInputPipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	done := make(chan struct{})
 	go func() {

@@ -76,6 +76,7 @@ func (s *UserDefinedSourceSuite) testSimpleSource(lang string, verifyRate bool) 
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	// we use the log sink instead of redis to verify the output because the simple user-defined source generates
 	// such a large amount of data that the redis sink is not able to handle it, it breaks with OOM error

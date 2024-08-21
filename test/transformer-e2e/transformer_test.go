@@ -50,6 +50,7 @@ func (s *TransformerSuite) TestSourceFiltering() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	expect0 := `{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`
 	expect1 := `{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`
@@ -79,6 +80,7 @@ func (s *TransformerSuite) TestTimeExtractionFilter() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	testMsgOne := `{"id": 80, "msg": "hello", "time": "2021-01-18T21:54:42.123Z", "desc": "A good ID."}`
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgOne)))
@@ -202,6 +204,7 @@ func (s *TransformerSuite) testSourceTransformer(lang string) {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	eventTimeBefore2022_1 := strconv.FormatInt(time.Date(2021, 4, 2, 7, 4, 5, 2, time.UTC).UnixMilli(), 10)
 	eventTimeBefore2022_2 := strconv.FormatInt(time.Date(1998, 4, 2, 8, 4, 5, 2, time.UTC).UnixMilli(), 10)

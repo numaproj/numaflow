@@ -50,6 +50,7 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	done := make(chan struct{})
 	go func() {
@@ -95,6 +96,7 @@ func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	done := make(chan struct{})
 	go func() {
@@ -138,6 +140,7 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	done := make(chan struct{})
 	go func() {
@@ -181,6 +184,7 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	args := "kubectl delete po -n numaflow-system -l " +
 		"numaflow.numaproj.io/pipeline-name=even-odd-sum,numaflow.numaproj.io/vertex-name=compute-sum"
@@ -190,6 +194,7 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 	done := make(chan struct{})
 
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	go func() {
 		startTime := int(time.Unix(1000, 0).UnixMilli())
@@ -240,6 +245,7 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	done := make(chan struct{})
 	go func() {

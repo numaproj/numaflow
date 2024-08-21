@@ -44,6 +44,7 @@ func (bss *BuiltinSourceSuite) TestNatsSource() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	PumpNatsSubject(subject, 100, 20*time.Millisecond, 10, "test-message")
 	w.Expect().RedisSinkContains("nats-source-e2e-out", "test-message", SinkCheckWithContainCount(100))
@@ -58,6 +59,7 @@ func (bss *BuiltinSourceSuite) TestHTTPSourcePipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	// Check Service
 	cmd := fmt.Sprintf("kubectl -n %s get svc -lnumaflow.numaproj.io/pipeline-name=%s,numaflow.numaproj.io/vertex-name=%s | grep -v CLUSTER-IP | grep -v headless", Namespace, "http-source", "in")
@@ -87,6 +89,7 @@ func (bss *BuiltinSourceSuite) TestHTTPSourceAuthPipeline() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("no-auth"))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("with-auth")).WithHeader("Authorization", "Bearer faketoken"))
@@ -109,6 +112,7 @@ func (bss *BuiltinSourceSuite) TestJetstreamSource() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	w.Expect().RedisSinkContains("jetstream-source-e2e-out", msgPayload, SinkCheckWithContainCount(msgCount))
 }

@@ -61,6 +61,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	done := make(chan struct{})
 	go func() {
@@ -109,6 +110,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+	defer w.StreamISBLogs("main").TerminateAllPodLogs()
 
 	defer DeleteKafkaTopic(topic)
 
