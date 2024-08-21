@@ -347,13 +347,13 @@ ifneq ($(findstring release,$(GIT_BRANCH)),)
 prepare-release: check-version-warning clean update-manifests-version codegen
 	@echo -e "\n------MAKE: $@ ------"
 	git status
-	@git diff --quiet || echo "\n\nPlease run 'git diff' to confirm the file changes are correct.\n"
+	@git diff --quiet || printf "\n\nPlease run 'git diff' to confirm the file changes are correct.\n\n"
 
 .PHONY: release
 release: check-version-warning
 	@echo -e "\n------MAKE: $@ ------"
 	@echo
-	@echo "1. Make sure you have run 'VERSION=$(VERSION) make prepare-release', and confirmed all the changes are expected."
+	@echo "1. Make sure you have run 'make prepare-release VERSION=$(VERSION)', and confirmed all the changes are expected."
 	@echo
 	@echo "2. Run following commands to commit the changes to the release branch, add give a tag."
 	@echo
