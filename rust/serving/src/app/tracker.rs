@@ -108,7 +108,7 @@ impl MessageGraph {
         if result {
             match serde_json::to_string(&subgraph) {
                 Ok(json) => Ok(Some(json)),
-                Err(e) => Err(Error::SubGraphGeneratorError(e.to_string())),
+                Err(e) => Err(Error::SubGraphGenerator(e.to_string())),
             }
         } else {
             Ok(None)

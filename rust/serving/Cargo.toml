@@ -11,10 +11,9 @@ all-tests = ["redis-tests", "nats-tests"]
 [dependencies]
 async-nats = "0.35.1"
 axum = "0.7.5"
+axum-server = { version = "0.7.1", features = ["tls-rustls"] }
 axum-macros = "0.4.1"
 hyper-util = { version = "0.1.6", features = ["client-legacy"] }
-metrics = { version = "0.23.0", default-features = false }
-metrics-exporter-prometheus = { version = "0.15.3", default-features = false }
 serde = { version = "1.0.204", features = ["derive"] }
 serde_json = "1.0.120"
 tokio = { version = "1.36.0", features = ["full"] }
@@ -30,4 +29,8 @@ trait-variant = "0.1.2"
 chrono = { version = "0.4", features = ["serde"] }
 backoff = { path = "../backoff" }
 base64 = "0.22.1"
+rcgen = "0.13.1"
+parking_lot = "0.12.3"
+prometheus-client = "0.22.3"
+thiserror = "1.0.63"
 

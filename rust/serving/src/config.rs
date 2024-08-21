@@ -1,13 +1,15 @@
-use std::fmt::Debug;
-use std::path::Path;
-use std::{env, sync::OnceLock};
-
+use async_nats::rustls;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use config::Config;
+use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
+use std::path::Path;
+use std::{env, sync::OnceLock};
 use tracing::info;
 
+use crate::Error::ParseConfig;
 use crate::{Error, Result};
 
 const ENV_PREFIX: &str = "NUMAFLOW_SERVING";
@@ -33,12 +35,23 @@ pub fn config() -> &'static Settings {
     })
 }
 
+static GLOBAL_TLS_CONFIG: OnceLock<(Certificate, KeyPair)> = OnceLock::new();
+
+fn init_cert_key_pair() -> std::result::Result<(Certificate, KeyPair), String> {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
+        .map_err(|e| format!("Failed to generate cert {:?}", e))?;
+    Ok((cert, key_pair))
+}
+
+pub fn cert_key_pair() -> &'static (Certificate, KeyPair) {
+    GLOBAL_TLS_CONFIG.get_or_init(|| init_cert_key_pair().expect("Failed to initialize TLS config"))
+}
+
 #[derive(Debug, Deserialize)]
 pub struct JetStreamConfig {
     pub stream: String,
     pub url: String,
-    pub user: Option<String>,
-    pub password: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -94,11 +107,11 @@ impl Settings {
                     .separator("."),
             )
             .build()
-            .map_err(|e| format!("generating runtime configuration: {e:?}"))?;
+            .map_err(|e| ParseConfig(format!("generating runtime configuration: {e:?}")))?;
 
         let mut settings = settings
             .try_deserialize::<Self>()
-            .map_err(|e| format!("parsing runtime configuration: {e:?}"))?;
+            .map_err(|e| ParseConfig(format!("parsing runtime configuration: {e:?}")))?;
 
         // Update JetStreamConfig from environment variables
         if let Ok(url) = env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_URL) {
@@ -114,10 +127,10 @@ impl Settings {
             Ok(source_spec_encoded) => {
                 let source_spec_decoded = BASE64_STANDARD
                     .decode(source_spec_encoded.as_bytes())
-                    .map_err(|e| format!("decoding NUMAFLOW_SERVING_SOURCE: {e:?}"))?;
+                    .map_err(|e| ParseConfig(format!("decoding NUMAFLOW_SERVING_SOURCE: {e:?}")))?;
 
                 let source_spec = serde_json::from_slice::<Serving>(&source_spec_decoded)
-                    .map_err(|e| format!("parsing NUMAFLOW_SERVING_SOURCE: {e:?}"))?;
+                    .map_err(|e| ParseConfig(format!("parsing NUMAFLOW_SERVING_SOURCE: {e:?}")))?;
 
                 // Update tid_header from source_spec
                 if let Some(msg_id_header_key) = source_spec.msg_id_header_key {
@@ -130,10 +143,10 @@ impl Settings {
                 // Update redis.ttl_secs from environment variable
                 settings.redis.ttl_secs = match env::var(ENV_NUMAFLOW_SERVING_STORE_TTL) {
                     Ok(ttl_secs) => Some(ttl_secs.parse().map_err(|e| {
-                        format!(
+                        ParseConfig(format!(
                             "parsing NUMAFLOW_SERVING_STORE_TTL: expected u32, got {:?}",
                             e
-                        )
+                        ))
                     })?),
                     Err(_) => None,
                 };
