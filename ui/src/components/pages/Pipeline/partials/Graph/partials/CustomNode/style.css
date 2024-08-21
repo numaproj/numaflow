@@ -1,6 +1,6 @@
 .node-rate {
   display: flex;
-  width: 9rem;
+  min-width: 9rem;
   height: 2.2rem;
   border-radius: 2rem;
   background: #d1dee9;
@@ -15,7 +15,6 @@
   position: absolute;
   bottom: -12.5%;
   right: 8%;
-  text-transform: lowercase;
 }
 
 .node-pods {

@@ -56,6 +56,10 @@ export function ProcessingRates({
     setFoundRates(rates);
   }, [vertexMetrics, pipelineId, vertexId]);
 
+  const formatRate = (rate?: number): string => {
+    return rate !== undefined && rate >= 0 ? `${rate}/sec` : "Not Available";
+  };
+
   return (
     <Box
       sx={{
@@ -88,9 +92,9 @@ export function ProcessingRates({
                   {type !== "monoVertex" && (
                     <TableCell>{metric.partition}</TableCell>
                   )}
-                  <TableCell>{metric.oneM}/sec</TableCell>
-                  <TableCell>{metric.fiveM}/sec</TableCell>
-                  <TableCell>{metric.fifteenM}/sec</TableCell>
+                  <TableCell>{formatRate(metric.oneM)}</TableCell>
+                  <TableCell>{formatRate(metric.fiveM)}</TableCell>
+                  <TableCell>{formatRate(metric.fifteenM)}</TableCell>
                 </TableRow>
               ))}
           </TableBody>
