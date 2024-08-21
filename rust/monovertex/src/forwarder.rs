@@ -94,6 +94,7 @@ impl Forwarder {
             processed_msgs_count += self.read_and_process_messages().await?;
 
             // if the last forward was more than 1 second ago, forward a chunk print the number of messages forwarded
+            // TODO: add histogram details (p99, etc.)
             if last_forwarded_at.elapsed().as_millis() >= 1000 {
                 info!(
                     "Forwarded {} messages at time {}",
@@ -112,11 +113,9 @@ impl Forwarder {
         Ok(())
     }
 
-    /*
-        Read messages from the source, apply transformation if transformer is present,
-        write the messages to the sink, if fallback messages are present write them to the fallback sink,
-        and then acknowledge the messages back to the source.
-    */
+    /// Read messages from the source, apply transformation if transformer is present,
+    /// write the messages to the sink, if fallback messages are present write them to the fallback sink,
+    /// and then acknowledge the messages back to the source.
     async fn read_and_process_messages(&mut self) -> Result<usize> {
         let start_time = tokio::time::Instant::now();
         let messages = self
@@ -129,30 +128,30 @@ impl Forwarder {
             start_time.elapsed().as_millis()
         );
 
-        // nothing more to be done.
+        // read returned 0 messages, nothing more to be done.
         if messages.is_empty() {
             return Ok(0);
         }
 
         let msg_count = messages.len() as u64;
-        let bytes_count = messages
-            .iter()
-            .map(|msg| msg.value.len() as u64)
-            .sum::<u64>();
         forward_metrics()
             .monovtx_read_total
             .get_or_create(&self.common_labels)
             .inc_by(msg_count);
+
+        let (offsets, bytes_count): (Vec<Offset>, u64) = messages.iter().fold(
+            (Vec::with_capacity(messages.len()), 0),
+            |(mut offsets, mut bytes_count), msg| {
+                offsets.push(msg.offset.clone());
+                bytes_count += msg.value.len() as u64;
+                (offsets, bytes_count)
+            },
+        );
+
         forward_metrics()
             .monovtx_read_bytes_total
             .get_or_create(&self.common_labels)
             .inc_by(bytes_count);
-
-        // collect all the offsets as the transformer can drop (via filter) messages
-        let offsets = messages
-            .iter()
-            .map(|msg| msg.offset.clone())
-            .collect::<Vec<Offset>>();
 
         // Apply transformation if transformer is present
         let transformed_messages = self.apply_transformer(messages).await?;
@@ -169,33 +168,39 @@ impl Forwarder {
     // Applies transformation to the messages if transformer is present
     // we concurrently apply transformation to all the messages.
     async fn apply_transformer(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
-        if let Some(transformer_client) = &self.transformer_client {
-            let start_time = tokio::time::Instant::now();
-            let mut jh = JoinSet::new();
-            for message in messages {
-                let mut transformer_client = transformer_client.clone();
-                jh.spawn(async move { transformer_client.transform_fn(message).await });
-            }
-
-            let mut results = Vec::new();
-            while let Some(task) = jh.join_next().await {
-                let result = task.map_err(|e| Error::TransformerError(format!("{:?}", e)))?;
-                if let Some(result) = result? {
-                    results.extend(result);
-                }
-            }
-            debug!(
-                "Transformer latency - {}ms",
-                start_time.elapsed().as_millis()
-            );
-            Ok(results)
+        let transformer_client;
+        if let Some(trf_client) = &self.transformer_client {
+            transformer_client = trf_client;
         } else {
-            Ok(messages)
+            // return early if there is no transformer
+            return Ok(messages);
         }
+
+        let start_time = tokio::time::Instant::now();
+        let mut jh = JoinSet::new();
+        for message in messages {
+            let mut transformer_client = transformer_client.clone();
+            jh.spawn(async move { transformer_client.transform_fn(message).await });
+        }
+
+        let mut results = Vec::new();
+        while let Some(task) = jh.join_next().await {
+            let result = task.map_err(|e| Error::TransformerError(format!("{:?}", e)))?;
+            if let Some(result) = result? {
+                results.extend(result);
+            }
+        }
+
+        debug!(
+            "Transformer latency - {}ms",
+            start_time.elapsed().as_millis()
+        );
+
+        Ok(results)
     }
 
     // Writes the messages to the sink and handles fallback messages if present
-    async fn write_to_sink(&mut self, mut messages: Vec<Message>) -> Result<()> {
+    async fn write_to_sink(&mut self, messages: Vec<Message>) -> Result<()> {
         let msg_count = messages.len() as u64;
 
         if messages.is_empty() {
@@ -205,67 +210,63 @@ impl Forwarder {
         let mut attempts = 0;
         let mut error_map = HashMap::new();
         let mut fallback_msgs = Vec::new();
+        // start with the original set of message to be sent.
+        // we will overwrite this vec with failed messages and will keep retrying.
+        let mut messages_to_send = messages;
 
         while attempts <= config().sink_max_retry_attempts {
             let start_time = tokio::time::Instant::now();
-            match self.sink_client.sink_fn(messages.clone()).await {
+            match self.sink_client.sink_fn(messages_to_send.clone()).await {
                 Ok(response) => {
                     debug!("Sink latency - {}ms", start_time.elapsed().as_millis());
                     attempts += 1;
 
-                    fallback_msgs.extend(
-                        response
-                            .results
-                            .iter()
-                            .filter(|result| result.status == proto::Status::Fallback as i32)
-                            .map(|result| {
-                                messages
-                                    .iter()
-                                    .find(|msg| msg.id == result.id)
-                                    .unwrap()
-                                    .clone()
-                            })
-                            .collect::<Vec<_>>(),
-                    );
-
-                    messages = response
+                    // create a map of id to result, since there is no strict requirement
+                    // for the udsink to return the results in the same order as the requests
+                    let result_map: HashMap<_, _> = response
                         .results
                         .iter()
-                        .filter(|result| result.status == proto::Status::Failure as i32)
-                        .map(|result| {
-                            messages
-                                .iter()
-                                .find(|msg| msg.id == result.id)
-                                .unwrap()
-                                .clone()
-                        })
-                        .collect::<Vec<_>>();
+                        .map(|result| (result.id.clone(), result))
+                        .collect();
 
-                    if messages.is_empty() {
-                        break;
-                    } else {
-                        error_map.clear();
-                        for result in response.results {
-                            if result.status == proto::Status::Failure as i32 {
-                                *error_map.entry(result.err_msg).or_insert(0) += 1;
-                            }
+                    error_map.clear();
+                    // drain all the messages that were successfully written
+                    // and keep only the failed messages to send again
+                    // construct the error map for the failed messages
+                    messages_to_send.retain(|msg| {
+                        if let Some(result) = result_map.get(&msg.id) {
+                            return if result.status == proto::Status::Success as i32 {
+                                false
+                            } else if result.status == proto::Status::Fallback as i32 {
+                                fallback_msgs.push(msg.clone()); // add to fallback messages
+                                false
+                            } else {
+                                *error_map.entry(result.err_msg.clone()).or_insert(0) += 1;
+                                true
+                            };
                         }
+                        false
+                    });
 
-                        warn!(
-                            "Retry attempt {} due to retryable error. Errors: {:?}",
-                            attempts, error_map
-                        );
-                        sleep(tokio::time::Duration::from_millis(
-                            config().sink_retry_interval_in_ms as u64,
-                        ))
-                        .await;
+                    // if all messages are successfully written, break the loop
+                    if messages_to_send.is_empty() {
+                        break;
                     }
+
+                    warn!(
+                        "Retry attempt {} due to retryable error. Errors: {:?}",
+                        attempts, error_map
+                    );
+                    sleep(tokio::time::Duration::from_millis(
+                        config().sink_retry_interval_in_ms as u64,
+                    ))
+                    .await;
                 }
                 Err(e) => return Err(e),
             }
         }
 
-        if !messages.is_empty() {
+        if !messages_to_send.is_empty() {
             return Err(Error::SinkError(format!(
                 "Failed to sink messages after {} attempts. Errors: {:?}",
                 attempts, error_map
@@ -285,7 +286,7 @@ impl Forwarder {
     }
 
     // Writes the fallback messages to the fallback sink
-    async fn handle_fallback_messages(&mut self, mut fallback_msgs: Vec<Message>) -> Result<()> {
+    async fn handle_fallback_messages(&mut self, fallback_msgs: Vec<Message>) -> Result<()> {
         if self.fallback_client.is_none() {
             return Err(Error::SinkError(
                 "Response contains fallback messages but no fallback sink is configured"
@@ -296,67 +297,78 @@ impl Forwarder {
         let fallback_client = self.fallback_client.as_mut().unwrap();
         let mut attempts = 0;
         let mut fallback_error_map = HashMap::new();
+        // start with the original set of message to be sent.
+        // we will overwrite this vec with failed messages and will keep retrying.
+        let mut messages_to_send = fallback_msgs;
 
         while attempts <= config().sink_max_retry_attempts {
             let start_time = tokio::time::Instant::now();
-            match fallback_client.sink_fn(fallback_msgs.clone()).await {
+            match fallback_client.sink_fn(messages_to_send.clone()).await {
                 Ok(fb_response) => {
                     debug!(
                         "Fallback sink latency - {}ms",
                         start_time.elapsed().as_millis()
                     );
 
-                    fallback_msgs = fb_response
+                    // create a map of id to result, since there is no strict requirement
+                    // for the udsink to return the results in the same order as the requests
+                    let result_map: HashMap<_, _> = fb_response
                         .results
                         .iter()
-                        .filter(|result| result.status == proto::Status::Failure as i32)
-                        .map(|result| {
-                            fallback_msgs
-                                .iter()
-                                .find(|msg| msg.id == result.id)
-                                .unwrap()
-                                .clone()
-                        })
-                        .collect::<Vec<_>>();
+                        .map(|result| (result.id.clone(), result))
+                        .collect();
 
-                    // we can't specify fallback response inside fallback sink
-                    if fb_response
-                        .results
-                        .iter()
-                        .any(|result| result.status == proto::Status::Fallback as i32)
-                    {
+                    let mut contains_fallback_status = false;
+
+                    fallback_error_map.clear();
+                    // drain all the messages that were successfully written
+                    // and keep only the failed messages to send again
+                    // construct the error map for the failed messages
+                    messages_to_send.retain(|msg| {
+                        if let Some(result) = result_map.get(&msg.id) {
+                            if result.status == proto::Status::Failure as i32 {
+                                *fallback_error_map
+                                    .entry(result.err_msg.clone())
+                                    .or_insert(0) += 1;
+                                true
+                            } else if result.status == proto::Status::Fallback as i32 {
+                                contains_fallback_status = true;
+                                false
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    });
+
+                    // specifying fallback status in fallback response is not allowed
+                    if contains_fallback_status {
                         return Err(Error::SinkError(
-                            "Fallback sink can't specify status fallback".to_string(),
+                            "Fallback response contains fallback status".to_string(),
                         ));
                     }
 
                     attempts += 1;
 
-                    if fallback_msgs.is_empty() {
+                    if messages_to_send.is_empty() {
                         break;
-                    } else {
-                        fallback_error_map.clear();
-                        for result in fb_response.results {
-                            if result.status != proto::Status::Success as i32 {
-                                *fallback_error_map.entry(result.err_msg).or_insert(0) += 1;
-                            }
-                        }
-
-                        warn!(
-                            "Fallback sink retry attempt {} due to retryable error. Errors: {:?}",
-                            attempts, fallback_error_map
-                        );
-                        sleep(tokio::time::Duration::from_millis(
-                            config().sink_retry_interval_in_ms as u64,
-                        ))
-                        .await;
                     }
+
+                    warn!(
+                        "Retry attempt {} due to retryable error. Errors: {:?}",
+                        attempts, fallback_error_map
+                    );
+                    sleep(tokio::time::Duration::from_millis(
+                        config().sink_retry_interval_in_ms as u64,
+                    ))
+                    .await;
                 }
                 Err(e) => return Err(e),
             }
         }
 
-        if !fallback_msgs.is_empty() {
+        if !messages_to_send.is_empty() {
             return Err(Error::SinkError(format!(
                 "Failed to write messages to fallback sink after {} attempts. Errors: {:?}",
                 attempts, fallback_error_map
