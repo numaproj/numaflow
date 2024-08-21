@@ -3,7 +3,7 @@ SHELL:=/bin/bash
 PACKAGE=github.com/numaproj/numaflow
 CURRENT_DIR=$(shell pwd)
 
-HOST_ARCH=$(shell arch)
+HOST_ARCH=$(shell uname -m)
 # Github actions instances are x86_64
 ifeq ($(HOST_ARCH),x86_64)
 	HOST_ARCH=amd64
