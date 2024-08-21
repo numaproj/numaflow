@@ -144,7 +144,7 @@ jobs:
       - run: git diff --exit-code
 
   build-rust-amd64:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     defaults:
       run:
         working-directory: ./rust

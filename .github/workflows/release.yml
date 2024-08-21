@@ -39,7 +39,7 @@ jobs:
           path: dist
 
   build-rust-amd64:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     defaults:
       run:
         working-directory: ./rust
@@ -62,7 +62,7 @@ jobs:
           path: rust/numaflow-rs-linux-amd64
 
   build-rust-arm64:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     defaults:
       run:
         working-directory: ./rust
