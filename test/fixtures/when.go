@@ -318,6 +318,25 @@ func (w *When) StreamISBLogs(containerName string) *When {
 	return w
 }
 
+func (w *When) StreamControllerLogs() *When {
+	w.t.Helper()
+	ctx := context.Background()
+	labelSelector := fmt.Sprintf("%s=%s", dfv1.KeyComponent, dfv1.ComponentControllerManager)
+	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		w.t.Fatalf("Error getting the controller pods: %v", err)
+	}
+	for _, pod := range podList.Items {
+		stopCh := make(chan struct{}, 1)
+		streamPodLogs(ctx, w.kubeClient, Namespace, pod.Name, "controller-manager", stopCh)
+		if w.streamLogsStopChannels == nil {
+			w.streamLogsStopChannels = make(map[string]chan struct{})
+		}
+		w.streamLogsStopChannels[pod.Name+":"+"controller-manager"] = stopCh
+	}
+	return w
+}
+
 func (w *When) TerminateAllPodLogs() *When {
 	w.t.Helper()
 	if len(w.streamLogsStopChannels) > 0 {
