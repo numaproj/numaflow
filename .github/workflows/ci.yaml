@@ -143,9 +143,42 @@ jobs:
       - run: make lint
       - run: git diff --exit-code
 
+  build-rust-amd64:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: ./rust
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
+        with:
+          rustflags: ''
+      - name: Configure sccache
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.5
+      - name: Install dependencies
+        run: sudo apt-get install -y protobuf-compiler
+      - name: Build binary
+        run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
+      - name: Rename binary
+        run: cp -pv target/x86_64-unknown-linux-gnu/release/numaflow ./numaflow-rs-linux-amd64
+      - name: List files
+        run: pwd && ls -al && file ./numaflow-rs-linux-amd64
+      - name: Upload numaflow binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: numaflow-rs-linux-amd64
+          path: rust/numaflow-rs-linux-amd64
+          if-no-files-found: error
+
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
+    needs: [ build-rust-amd64 ]
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -185,6 +218,10 @@ jobs:
         with:
           path: ui/node_modules
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
+      - name: Download Rust amd64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: numaflow-rs-linux-amd64
       - name: Install k3d
         run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
       - name: Create a cluster
