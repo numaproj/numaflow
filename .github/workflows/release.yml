@@ -13,7 +13,7 @@ defaults:
     shell: bash
 
 jobs:
-  build-binaries:
+  build-go-binaries:
     runs-on: ubuntu-20.04
     if: github.repository == 'numaproj/numaflow'
     name: Build binaries
@@ -38,9 +38,58 @@ jobs:
           name: binaries
           path: dist
 
+  build-rust-amd64:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./rust
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
+        with:
+          rustflags: ''
+      - name: Install dependencies
+        run: sudo apt-get install -y protobuf-compiler
+      - name: Build binary
+        run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
+      - name: Rename binary
+        run: cp -pv target/x86_64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-amd64
+      - name: Upload numaflow binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: numaflow-rs-linux-amd64
+          path: rust/numaflow-rs-linux-amd64
+
+  build-rust-arm64:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./rust
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update Rust Toolchain Target
+        run: |
+          echo "targets = ['aarch64-unknown-linux-gnu']" >> rust-toolchain.toml
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
+        with:
+          rustflags: ''
+      - name: Install dependenices
+        run: sudo apt-get install -y gcc-aarch64-linux-gnu protobuf-compiler
+      - name: Build binary
+        run: export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER='aarch64-linux-gnu-gcc' && RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target aarch64-unknown-linux-gnu
+      - name: Rename binary
+        run: cp -pv target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
+      - name: Upload numaflow binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: numaflow-rs-linux-arm64
+          path: rust/numaflow-rs-linux-arm64
+
   build-push-linux-multi:
     name: Build & push linux/amd64 and linux/arm64
-    needs: [ build-binaries ]
+    needs: [ build-go-binaries, build-rust-amd64, build-rust-arm64]
     runs-on: ubuntu-20.04
     if: github.repository == 'numaproj/numaflow'
     strategy:
@@ -61,11 +110,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Download binaries
+      - name: Download Go binaries
         uses: actions/download-artifact@v3
         with:
           name: binaries
           path: dist/
+
+      - name: Download Rust amd64 binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: numaflow-rs-linux-amd64
+          path: dist/numaflow-rs-linux-amd64
+
+      - name: Download Rust arm64 binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: numaflow-rs-linux-arm64
+          path: dist/numaflow-rs-linux-arm64
 
       - name: Registry Login
         uses: docker/login-action@v2
