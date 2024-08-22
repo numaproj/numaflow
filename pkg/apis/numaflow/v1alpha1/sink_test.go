@@ -45,7 +45,7 @@ func Test_Sink_getUDSinkContainer(t *testing.T) {
 	x := Sink{
 		AbstractSink: AbstractSink{
 			UDSink: &UDSink{
-				Container: Container{
+				Container: &Container{
 					Image:           "my-image",
 					Args:            []string{"my-arg"},
 					SecurityContext: &corev1.SecurityContext{},
@@ -84,7 +84,7 @@ func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
 	x := Sink{
 		AbstractSink: AbstractSink{
 			UDSink: &UDSink{
-				Container: Container{
+				Container: &Container{
 					Image:           "my-image",
 					Args:            []string{"my-arg"},
 					SecurityContext: &corev1.SecurityContext{},
@@ -96,7 +96,7 @@ func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
 		},
 		Fallback: &AbstractSink{
 			UDSink: &UDSink{
-				Container: Container{
+				Container: &Container{
 					Image:           "my-image",
 					Args:            []string{"my-arg"},
 					SecurityContext: &corev1.SecurityContext{},

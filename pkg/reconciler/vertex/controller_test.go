@@ -317,7 +317,7 @@ func Test_BuildPodSpec(t *testing.T) {
 		testObj.Spec.Sink = &dfv1.Sink{
 			AbstractSink: dfv1.AbstractSink{
 				UDSink: &dfv1.UDSink{
-					Container: dfv1.Container{
+					Container: &dfv1.Container{
 						Image:   "image",
 						Command: []string{"cmd"},
 						Args:    []string{"arg0"},

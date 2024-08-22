@@ -4899,8 +4899,7 @@ func schema_pkg_apis_numaflow_v1alpha1_UDSink(ref common.ReferenceCallback) comm
 				Properties: map[string]spec.Schema{
 					"container": {
 						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"),
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"),
 						},
 					},
 				},
