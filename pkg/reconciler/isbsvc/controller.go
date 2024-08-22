@@ -92,7 +92,12 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 				log.Errorw("Failed to uninstall", zap.Error(err))
 				return err
 			}
+			log.Infof("keran is testing: successfully uninstalled ISB Service %s, PVC all deleted.", isbSvc.Name)
 			controllerutil.RemoveFinalizer(isbSvc, finalizerName)
+			log.Infof("keran is testing: finalizer %s removed from ISB Service %s", finalizerName, isbSvc.Name)
+
+			log.Infof("keran is testing: do we have any finalizers left? should be no. finalizer list: %v", isbSvc.GetFinalizers())
+
 			// Clean up metrics
 			_ = reconciler.ISBSvcHealth.DeleteLabelValues(isbSvc.Namespace, isbSvc.Name)
 		}
