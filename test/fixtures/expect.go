@@ -97,6 +97,22 @@ func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
 		default:
 			t.t.Logf("Keran is testing, still got %d ISB svc pods", len(podList.Items))
 			t.t.Logf("Keran is testing, the pods are %v", podList.Items)
+			// does the statefulset still exist?
+			_, err := t.kubeClient.AppsV1().StatefulSets(Namespace).Get(ctx, fmt.Sprintf("isbsvc-%s-js", ISBSvcName), metav1.GetOptions{})
+			if err != nil && !apierr.IsNotFound(err) {
+				t.t.Logf("Keran is testing, Failed to check if ISB svc statefulset has been deleted: %v", err)
+			} else if apierr.IsNotFound(err) {
+				t.t.Logf("Keran is testing, ISB svc statefulset has been deleted")
+			} else {
+				t.t.Logf("Keran is testing, ISB svc statefulset still exists")
+			}
+			// does the pod contain a finalizer?
+			pod := podList.Items[0]
+			if len(pod.Finalizers) > 0 {
+				t.t.Logf("Keran is testing, the pod %s still contains finalizers, %v", pod.Name, pod.GetFinalizers())
+			} else {
+				t.t.Logf("Keran is testing, the pod %s doesn't contain finalizers", pod.Name)
+			}
 		}
 	}
 }
