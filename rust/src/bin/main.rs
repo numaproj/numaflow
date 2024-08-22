@@ -7,7 +7,9 @@ async fn main() {
 
     // Based on the argument, run the appropriate component.
     if args.contains(&"--serving".to_string()) {
-        serving::serve().await;
+        if let Err(e) = serving::serve().await {
+            error!("Error running serving: {}", e);
+        }
     } else if args.contains(&"--servesink".to_string()) {
         if let Err(e) = servesink::servesink().await {
             info!("Error running servesink: {}", e);

@@ -6,10 +6,10 @@ edition = "2021"
 [dependencies]
 axum = "0.7.5"
 axum-server = { version = "0.7.1", features = ["tls-rustls"] }
-tonic = "0.12.0"
+tonic = "0.12.1"
 bytes = "1.7.1"
 thiserror = "1.0.63"
-tokio = { version = "1.39.2", features = ["full"] }
+tokio = { version = "1.39.3", features = ["full"] }
 tracing = "0.1.40"
 tokio-util = "0.7.11"
 tokio-stream = "0.1.15"

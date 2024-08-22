@@ -1,6 +1,7 @@
 use std::env;
 use std::sync::OnceLock;
 
+use crate::Error::ParseConfig;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -79,18 +80,18 @@ impl Pipeline {
                 // If the environment variable is set, decode and parse the pipeline
                 let decoded = BASE64_STANDARD
                     .decode(env_value.as_bytes())
-                    .map_err(|e| format!("decoding pipeline from env: {e:?}"))?;
+                    .map_err(|e| ParseConfig(format!("decoding pipeline from env: {e:?}")))?;
 
                 serde_json::from_slice::<Pipeline>(&decoded)
-                    .map_err(|e| format!("parsing pipeline from env: {e:?}"))?
+                    .map_err(|e| ParseConfig(format!("parsing pipeline from env: {e:?}")))?
             }
             Err(_) => {
                 // If the environment variable is not set, read the pipeline from a file
                 let file_path = "./config/pipeline_spec.json";
                 let file_contents = std::fs::read_to_string(file_path)
-                    .map_err(|e| format!("reading pipeline file: {e:?}"))?;
+                    .map_err(|e| ParseConfig(format!("reading pipeline file: {e:?}")))?;
                 serde_json::from_str::<Pipeline>(&file_contents)
-                    .map_err(|e| format!("parsing pipeline file: {e:?}"))?
+                    .map_err(|e| ParseConfig(format!("parsing pipeline file: {e:?}")))?
             }
         };
         Ok(pipeline)
