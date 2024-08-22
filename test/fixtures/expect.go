@@ -121,7 +121,8 @@ func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
 					// the stateful set has been deleted, the pod has no finalizer and is running
 					// we can safely force to delete the pod
 					t.t.Logf("Keran is testing, the statefulset has been deleted, the pod %s has no finalizer and is running, force to delete it", pod.Name)
-					err := t.kubeClient.CoreV1().Pods(Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
+					gracePeriodSeconds := int64(0)
+					err := t.kubeClient.CoreV1().Pods(Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{GracePeriodSeconds: &gracePeriodSeconds})
 					if err != nil {
 						t.t.Fatalf("Failed to force delete pod %s: %v", pod.Name, err)
 					}
