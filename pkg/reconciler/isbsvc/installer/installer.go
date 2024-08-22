@@ -51,12 +51,10 @@ func Install(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client cl
 		logger.Errorw("installation error", zap.Error(err))
 		return err
 	}
-	/*
-		if err := installer.CheckChildrenResourceStatus(ctx); err != nil {
-			logger.Errorw("failed to check children resource status", zap.Error(err))
-			return err
-		}
-	*/
+	if err := installer.CheckChildrenResourceStatus(ctx); err != nil {
+		logger.Errorw("failed to check children resource status", zap.Error(err))
+		return err
+	}
 	isbSvc.Status.Config = *bufferConfig
 
 	return nil
