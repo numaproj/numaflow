@@ -2,7 +2,7 @@ pub use self::error::{Error, Result};
 use crate::app::start_main_server;
 use crate::config::{cert_key_pair, config};
 use crate::metrics::start_https_metrics_server;
-use crate::pipeline::pipeline_spec;
+use crate::pipeline::min_pipeline_spec;
 use axum_server::tls_rustls::RustlsConfig;
 use std::net::SocketAddr;
 use tracing::info;
@@ -33,7 +33,7 @@ pub async fn serve() -> std::result::Result<(), Box<dyn std::error::Error + Send
         .with(tracing_subscriber::fmt::layer().with_ansi(false))
         .init();
 
-    info!(config = ?config(), pipeline_spec = ? pipeline_spec(), "Starting server with config and pipeline spec");
+    info!(config = ?config(), pipeline_spec = ? min_pipeline_spec(), "Starting server with config and pipeline spec");
 
     // Start the metrics server, which serves the prometheus metrics.
     let metrics_addr: SocketAddr =

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::app::callback::CallbackRequest;
-use crate::pipeline::{Edge, OperatorType, Pipeline};
+use crate::pipeline::{Edge, MinPipelineSpec, OperatorType};
 use crate::Error;
 
 fn compare_slice(operator: &OperatorType, a: &[String], b: &[String]) -> bool {
@@ -225,7 +225,7 @@ impl MessageGraph {
     }
 
     // from_env reads the pipeline stored in the environment variable and creates a MessageGraph from it.
-    pub(crate) fn from_pipeline(pipeline_spec: &Pipeline) -> Result<Self, Error> {
+    pub(crate) fn from_pipeline(pipeline_spec: &MinPipelineSpec) -> Result<Self, Error> {
         let mut dag = Graph::with_capacity(pipeline_spec.edges.len());
         for edge in &pipeline_spec.edges {
             dag.entry(edge.from.clone()).or_default().push(edge.clone());
@@ -369,7 +369,7 @@ mod tests {
 
     #[test]
     fn test_generate_subgraph_complex() {
-        let pipeline = Pipeline {
+        let pipeline = MinPipelineSpec {
             vertices: vec![
                 Vertex {
                     name: "a".to_string(),
@@ -561,7 +561,7 @@ mod tests {
 
     #[test]
     fn test_simple_dropped_message() {
-        let pipeline = Pipeline {
+        let pipeline = MinPipelineSpec {
             vertices: vec![
                 Vertex {
                     name: "a".to_string(),
@@ -636,7 +636,7 @@ mod tests {
 
     #[test]
     fn test_complex_dropped_message() {
-        let pipeline = Pipeline {
+        let pipeline = MinPipelineSpec {
             vertices: vec![
                 Vertex {
                     name: "a".to_string(),
@@ -805,7 +805,7 @@ mod tests {
 
     #[test]
     fn test_simple_cycle_pipeline() {
-        let pipeline = Pipeline {
+        let pipeline = MinPipelineSpec {
             vertices: vec![
                 Vertex {
                     name: "a".to_string(),
