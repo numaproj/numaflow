@@ -109,13 +109,11 @@ func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
 			stsDeleted := apierr.IsNotFound(err)
 
 			for _, pod := range podList.Items {
-				podHasFinalizer := true
+				podHasFinalizer := len(pod.Finalizers) > 0
 				podIsRunning := pod.Status.Phase == "Running"
-				if len(pod.Finalizers) > 0 {
-					podHasFinalizer = true
+				if podHasFinalizer {
 					t.t.Logf("Keran is testing, the pod %s still contains finalizers, %v", pod.Name, pod.GetFinalizers())
 				} else {
-					podHasFinalizer = false
 					t.t.Logf("Keran is testing, the pod %s doesn't contain finalizers", pod.Name)
 				}
 				t.t.Logf("Keran is testing, the pod %s has status %v", pod.Name, pod.Status)
