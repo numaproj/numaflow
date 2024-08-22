@@ -106,14 +106,29 @@ func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
 			} else {
 				t.t.Logf("Keran is testing, ISB svc statefulset still exists")
 			}
-			// does the pod contain a finalizer?
-			pod := podList.Items[0]
-			if len(pod.Finalizers) > 0 {
-				t.t.Logf("Keran is testing, the pod %s still contains finalizers, %v", pod.Name, pod.GetFinalizers())
-			} else {
-				t.t.Logf("Keran is testing, the pod %s doesn't contain finalizers", pod.Name)
+			stsDeleted := apierr.IsNotFound(err)
+
+			for _, pod := range podList.Items {
+				podHasFinalizer := true
+				podIsRunning := pod.Status.Phase == "Running"
+				if len(pod.Finalizers) > 0 {
+					podHasFinalizer = true
+					t.t.Logf("Keran is testing, the pod %s still contains finalizers, %v", pod.Name, pod.GetFinalizers())
+				} else {
+					podHasFinalizer = false
+					t.t.Logf("Keran is testing, the pod %s doesn't contain finalizers", pod.Name)
+				}
+				t.t.Logf("Keran is testing, the pod %s has status %v", pod.Name, pod.Status)
+				if stsDeleted && !podHasFinalizer && podIsRunning {
+					// the stateful set has been deleted, the pod has no finalizer and is running
+					// we can safely force to delete the pod
+					t.t.Logf("Keran is testing, the statefulset has been deleted, the pod %s has no finalizer and is running, force to delete it", pod.Name)
+					err := t.kubeClient.CoreV1().Pods(Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{})
+					if err != nil {
+						t.t.Fatalf("Failed to force delete pod %s: %v", pod.Name, err)
+					}
+				}
 			}
-			t.t.Logf("Keran is testing, the pod %s has status %v", pod.Name, pod.Status)
 		}
 	}
 }
