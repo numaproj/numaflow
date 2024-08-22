@@ -113,6 +113,7 @@ func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
 			} else {
 				t.t.Logf("Keran is testing, the pod %s doesn't contain finalizers", pod.Name)
 			}
+			t.t.Logf("Keran is testing, the pod %s has status %v", pod.Name, pod.Status)
 		}
 	}
 }
