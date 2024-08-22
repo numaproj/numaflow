@@ -324,7 +324,7 @@ func TestGetPodSpec(t *testing.T) {
 		testObj.Spec.Sink = &Sink{
 			AbstractSink: AbstractSink{
 				UDSink: &UDSink{
-					Container: Container{
+					Container: &Container{
 						Image:   "image",
 						Command: []string{"cmd"},
 						Args:    []string{"arg0"},
