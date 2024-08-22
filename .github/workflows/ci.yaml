@@ -108,7 +108,8 @@ jobs:
         working-directory: ./rust
         run: rustup component add llvm-tools-preview
 
-      - uses: taiki-e/install-action@v2
+      - name: Install grcov
+        uses: taiki-e/install-action@v2
         with:
           tool: grcov
 
