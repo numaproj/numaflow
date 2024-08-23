@@ -4,15 +4,16 @@ use std::sync::OnceLock;
 use crate::Error::ParseConfig;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use numaflow_models::models::PipelineSpec;
 use serde::{Deserialize, Serialize};
 
 const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 
-pub fn pipeline_spec() -> &'static Pipeline {
-    static PIPELINE: OnceLock<Pipeline> = OnceLock::new();
-    PIPELINE.get_or_init(|| match Pipeline::load() {
+pub fn min_pipeline_spec() -> &'static PipelineDCG {
+    static PIPELINE: OnceLock<PipelineDCG> = OnceLock::new();
+    PIPELINE.get_or_init(|| match PipelineDCG::load() {
         Ok(pipeline) => pipeline,
-        Err(e) => panic!("Failed to load pipeline: {:?}", e),
+        Err(e) => panic!("Failed to load minimum pipeline spec: {:?}", e),
     })
 }
 
@@ -39,6 +40,17 @@ impl OperatorType {
     }
 }
 
+impl From<String> for OperatorType {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "and" => OperatorType::And,
+            "or" => OperatorType::Or,
+            "not" => OperatorType::Not,
+            _ => panic!("Invalid operator type: {}", s),
+        }
+    }
+}
+
 // Tag is a struct that contains the information about the tags for the edge
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Tag {
@@ -60,10 +72,11 @@ pub struct Edge {
     pub conditions: Option<Conditions>,
 }
 
-// Pipeline is a struct that contains the information about the pipeline.
+/// DCG (directed compute graph) of the pipeline with minimal information build using vertices and edges
+/// from the pipeline spec
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde()]
-pub struct Pipeline {
+pub struct PipelineDCG {
     pub vertices: Vec<Vertex>,
     pub edges: Vec<Edge>,
 }
@@ -73,16 +86,16 @@ pub struct Vertex {
     pub name: String,
 }
 
-impl Pipeline {
+impl PipelineDCG {
     pub fn load() -> crate::Result<Self> {
-        let pipeline = match env::var(ENV_MIN_PIPELINE_SPEC) {
+        let full_pipeline_spec = match env::var(ENV_MIN_PIPELINE_SPEC) {
             Ok(env_value) => {
                 // If the environment variable is set, decode and parse the pipeline
                 let decoded = BASE64_STANDARD
                     .decode(env_value.as_bytes())
                     .map_err(|e| ParseConfig(format!("decoding pipeline from env: {e:?}")))?;
 
-                serde_json::from_slice::<Pipeline>(&decoded)
+                serde_json::from_slice::<PipelineSpec>(&decoded)
                     .map_err(|e| ParseConfig(format!("parsing pipeline from env: {e:?}")))?
             }
             Err(_) => {
@@ -90,11 +103,41 @@ impl Pipeline {
                 let file_path = "./config/pipeline_spec.json";
                 let file_contents = std::fs::read_to_string(file_path)
                     .map_err(|e| ParseConfig(format!("reading pipeline file: {e:?}")))?;
-                serde_json::from_str::<Pipeline>(&file_contents)
+                serde_json::from_str::<PipelineSpec>(&file_contents)
                     .map_err(|e| ParseConfig(format!("parsing pipeline file: {e:?}")))?
             }
         };
-        Ok(pipeline)
+
+        let vertices: Vec<Vertex> = full_pipeline_spec
+            .vertices
+            .ok_or(ParseConfig("missing vertices in pipeline spec".to_string()))?
+            .iter()
+            .map(|v| Vertex {
+                name: v.name.clone(),
+            })
+            .collect();
+
+        let edges: Vec<Edge> = full_pipeline_spec
+            .edges
+            .ok_or(ParseConfig("missing edges in pipeline spec".to_string()))?
+            .iter()
+            .map(|e| {
+                let conditions = e.conditions.clone().map(|c| Conditions {
+                    tags: Some(Tag {
+                        operator: c.tags.operator.map(|o| o.into()),
+                        values: c.tags.values.clone(),
+                    }),
+                });
+
+                Edge {
+                    from: e.from.clone(),
+                    to: e.to.clone(),
+                    conditions,
+                }
+            })
+            .collect();
+
+        Ok(PipelineDCG { vertices, edges })
     }
 }
 
@@ -104,8 +147,7 @@ mod tests {
 
     #[test]
     fn test_pipeline_load() {
-        let pipeline = pipeline_spec();
-
+        let pipeline = min_pipeline_spec();
         assert_eq!(pipeline.vertices.len(), 3);
         assert_eq!(pipeline.edges.len(), 2);
         assert_eq!(pipeline.vertices[0].name, "in");

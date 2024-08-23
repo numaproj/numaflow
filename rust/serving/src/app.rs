@@ -26,7 +26,7 @@ use self::{
 };
 use crate::app::callback::store::Store;
 use crate::app::tracker::MessageGraph;
-use crate::pipeline::pipeline_spec;
+use crate::pipeline::min_pipeline_spec;
 use crate::Error::{InitError, MetricsServer};
 use crate::{app::callback::state::State as CallbackState, config, metrics::capture_metrics};
 
@@ -89,7 +89,7 @@ pub(crate) async fn start_main_server(
         .layer(middleware::from_fn(auth_middleware));
 
     // Create the message graph from the pipeline spec and the redis store
-    let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).map_err(|e| {
+    let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).map_err(|e| {
         InitError(format!(
             "Creating message graph from pipeline spec: {:?}",
             e
@@ -328,7 +328,7 @@ mod tests {
         assert!(stream.is_ok());
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
 
         let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
@@ -354,7 +354,7 @@ mod tests {
         assert!(stream.is_ok());
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
 
         let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
@@ -387,7 +387,7 @@ mod tests {
         assert!(stream.is_ok());
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
 
         let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
@@ -427,7 +427,7 @@ mod tests {
         assert!(stream.is_ok());
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
         let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
         let app = Router::new()
