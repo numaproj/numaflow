@@ -51,7 +51,7 @@ import (
 func Start(namespaced bool, managedNamespace string) {
 	logger := logging.NewLogger().Named("controller-manager")
 	config, err := reconciler.LoadConfig(func(err error) {
-		logger.Errorf("Failed to reload global configuration file", zap.Error(err))
+		logger.Errorf("Failed to reload global configuration file: %v", zap.Error(err))
 	})
 	if err != nil {
 		logger.Fatalw("Failed to load global configuration file", zap.Error(err))
