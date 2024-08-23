@@ -85,7 +85,7 @@ func runWithTimeout(cmd *exec.Cmd) (string, error) {
 	}
 	done := make(chan error)
 	go func() { done <- cmd.Wait() }()
-	timeout := time.After(defaultTimeout)
+	timeout := time.After(60 * time.Second)
 	select {
 	case <-timeout:
 		_ = cmd.Process.Kill()
