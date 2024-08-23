@@ -170,8 +170,8 @@ statefulSetWatch:
 
 	podNames := make(map[string]bool)
 	for {
-		if len(podNames) == 3 {
-			// defaults to 3 Pods
+		if len(podNames) == 1 {
+			// defaults to 1 Pod
 			return nil
 		}
 		select {
