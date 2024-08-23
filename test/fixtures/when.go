@@ -77,8 +77,9 @@ func (w *When) DeleteISBSvc() *When {
 	w.t.Log("Deleting ISB svc", w.isbSvc.Name)
 	ctx := context.Background()
 	deleteOpt := metav1.DeleteOptions{GracePeriodSeconds: new(int64)}
-	// if not specified, the default grace period is 30 seconds
+	// if not specified, the default grace period is 30 seconds.
 	// set to 0 to delete immediately because DeleteISBSvc is invoked after all tests finished.
+	// there is no reason to wait.
 	*deleteOpt.GracePeriodSeconds = 0
 	err := w.isbSvcClient.Delete(ctx, w.isbSvc.Name, deleteOpt)
 	if err != nil {
@@ -299,7 +300,7 @@ func (w *When) StreamVertexPodLogs(vertexName, containerName string) *When {
 	return w
 }
 
-func (w *When) StreamISBLogs(containerName string) *When {
+func (w *When) StreamISBLogs() *When {
 	w.t.Helper()
 	ctx := context.Background()
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyComponent, dfv1.ComponentISBSvc, dfv1.KeyManagedBy, dfv1.ControllerISBSvc)
@@ -309,11 +310,11 @@ func (w *When) StreamISBLogs(containerName string) *When {
 	}
 	for _, pod := range podList.Items {
 		stopCh := make(chan struct{}, 1)
-		streamPodLogs(ctx, w.kubeClient, Namespace, pod.Name, containerName, stopCh)
+		streamPodLogs(ctx, w.kubeClient, Namespace, pod.Name, "main", stopCh)
 		if w.streamLogsStopChannels == nil {
 			w.streamLogsStopChannels = make(map[string]chan struct{})
 		}
-		w.streamLogsStopChannels[pod.Name+":"+containerName] = stopCh
+		w.streamLogsStopChannels[pod.Name+":main"] = stopCh
 	}
 	return w
 }
@@ -332,7 +333,7 @@ func (w *When) StreamControllerLogs() *When {
 		if w.streamLogsStopChannels == nil {
 			w.streamLogsStopChannels = make(map[string]chan struct{})
 		}
-		w.streamLogsStopChannels[pod.Name+":"+"controller-manager"] = stopCh
+		w.streamLogsStopChannels[pod.Name+":controller-manager"] = stopCh
 	}
 	return w
 }

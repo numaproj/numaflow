@@ -45,7 +45,7 @@ const (
 	// the number 90 is carefully chosen to ensure the test suite can finish within a reasonable time without timing out.
 	// please exercise caution when updating this value, as it may cause e2e tests to be flaky.
 	// if updated, consider running the entire e2e test suite multiple times to ensure stability.
-	defaultTimeout = 60 * time.Second
+	defaultTimeout = 90 * time.Second
 
 	LogSourceVertexStarted    = "Start processing source messages"
 	SinkVertexStarted         = "Start processing sink messages"
@@ -115,15 +115,11 @@ func (s *E2ESuite) SetupSuite() {
 		Expect().
 		ISBSvcDeleted(defaultTimeout)
 
-	s.Given().When().StreamControllerLogs()
-
 	s.Given().ISBSvc(getISBSvcSpec()).
 		When().
 		CreateISBSvc().
 		WaitForISBSvcReady()
 	s.T().Log("ISB svc is ready")
-
-	s.Given().When().StreamISBLogs("main")
 
 	err = PodPortForward(s.restConfig, Namespace, "e2e-api-pod", 8378, 8378, s.stopch)
 	s.CheckError(err)
@@ -150,8 +146,6 @@ func (s *E2ESuite) TearDownSuite() {
 		Wait(3 * time.Second).
 		Expect().
 		ISBSvcDeleted(defaultTimeout)
-
-	s.Given().When().TerminateAllPodLogs()
 
 	s.T().Log("ISB svc is deleted")
 	deleteCMD := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", Namespace)

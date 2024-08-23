@@ -95,34 +95,21 @@ func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
 		case <-timeoutCh:
 			t.t.Fatalf("Timeout after %v waiting for ISB svc to be deleted", timeout)
 		default:
-			t.t.Logf("Keran is testing, still got %d ISB svc pods", len(podList.Items))
-			t.t.Logf("Keran is testing, the pods are %v", podList.Items)
-			// does the statefulset still exist?
-			_, err := t.kubeClient.AppsV1().StatefulSets(Namespace).Get(ctx, fmt.Sprintf("isbsvc-%s-js", ISBSvcName), metav1.GetOptions{})
-			if err != nil && !apierr.IsNotFound(err) {
-				t.t.Logf("Keran is testing, Failed to check if ISB svc statefulset has been deleted: %v", err)
-			} else if apierr.IsNotFound(err) {
-				t.t.Logf("Keran is testing, ISB svc statefulset has been deleted")
-			} else {
-				t.t.Logf("Keran is testing, ISB svc statefulset still exists")
-			}
+			// the format of the stateful set name is isbsvc-<isbsvc-name>-js,
+			// which matches what is used in jetstream installer (pkg/reconciler/isbsvc/installer/jetstream.go).
+			_, err = t.kubeClient.AppsV1().StatefulSets(Namespace).Get(ctx, fmt.Sprintf("isbsvc-%s-js", ISBSvcName), metav1.GetOptions{})
 			stsDeleted := apierr.IsNotFound(err)
-
 			for _, pod := range podList.Items {
 				podHasFinalizer := len(pod.Finalizers) > 0
 				podIsRunning := pod.Status.Phase == "Running"
-				if podHasFinalizer {
-					t.t.Logf("Keran is testing, the pod %s still contains finalizers, %v", pod.Name, pod.GetFinalizers())
-				} else {
-					t.t.Logf("Keran is testing, the pod %s doesn't contain finalizers", pod.Name)
-				}
-				t.t.Logf("Keran is testing, the pod %s has status %v", pod.Name, pod.Status)
 				if stsDeleted && !podHasFinalizer && podIsRunning {
 					// the stateful set has been deleted, the pod has no finalizer and is running
 					// we can safely force to delete the pod
-					t.t.Logf("Keran is testing, the statefulset has been deleted, the pod %s has no finalizer and is running, force to delete it", pod.Name)
-					gracePeriodSeconds := int64(0)
-					err := t.kubeClient.CoreV1().Pods(Namespace).Delete(ctx, pod.Name, metav1.DeleteOptions{GracePeriodSeconds: &gracePeriodSeconds})
+					t.t.Logf("The statefulset has been deleted, the pod %s has no finalizer and is running, force to delete it", pod.Name)
+					deleteOpt := metav1.DeleteOptions{GracePeriodSeconds: new(int64)}
+					// immediately delete the pod
+					*deleteOpt.GracePeriodSeconds = 0
+					err := t.kubeClient.CoreV1().Pods(Namespace).Delete(ctx, pod.Name, deleteOpt)
 					if err != nil {
 						t.t.Fatalf("Failed to force delete pod %s: %v", pod.Name, err)
 					}
