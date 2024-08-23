@@ -142,13 +142,15 @@ func (s *E2ESuite) TearDownSuite() {
 		When().
 		Wait(5 * time.Second).
 		DeleteISBSvc().
-		Wait(3 * time.Second).
-		Expect().
-		ISBSvcDeleted(defaultTimeout)
-
+		Wait(3 * time.Second)
+	// force deleting the ISB svc pods because we have seen pods stuck in terminating state after CRD deletion,
+	// which causes e2e tests to timeout, this is a workaround to avoid the issue.
+	deleteISBPodsCMD := fmt.Sprintf("kubectl delete pods -n %s -l %s:%s,%s:%s  --ignore-not-found=true", Namespace, dfv1.KeyManagedBy, dfv1.KeyComponent, dfv1.ComponentISBSvc, ISBSvcName)
+	s.Given().When().Exec("sh", []string{"-c", deleteISBPodsCMD}, OutputRegexp(`isb service pods deleted`))
+	s.Given().When().Expect().ISBSvcDeleted(defaultTimeout)
 	s.T().Log("ISB svc is deleted")
-	deleteCMD := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", Namespace)
-	s.Given().When().Exec("sh", []string{"-c", deleteCMD}, OutputRegexp(`service "redis" deleted`))
+	deleteRedisCMD := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", Namespace)
+	s.Given().When().Exec("sh", []string{"-c", deleteRedisCMD}, OutputRegexp(`service "redis" deleted`))
 	s.T().Log("Redis resources are deleted")
 	close(s.stopch)
 }
