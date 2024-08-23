@@ -7,11 +7,11 @@ use tokio::sync::Semaphore;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 
+use super::PayloadToSave;
 use crate::app::callback::CallbackRequest;
 use crate::consts::SAVED;
+use crate::Error::Connection;
 use crate::{config, Error};
-
-use super::PayloadToSave;
 
 const LPUSH: &str = "LPUSH";
 const LRANGE: &str = "LRANGE";
@@ -27,12 +27,12 @@ pub(crate) struct RedisConnection {
 impl RedisConnection {
     /// Creates a new RedisConnection with concurrent operations on Redis set by max_tasks.
     pub(crate) async fn new(addr: &str, max_tasks: usize) -> crate::Result<Self> {
-        let client =
-            redis::Client::open(addr).map_err(|e| format!("Creating Redis client: {e:?}"))?;
+        let client = redis::Client::open(addr)
+            .map_err(|e| Connection(format!("Creating Redis client: {e:?}")))?;
         let conn = client
             .get_connection_manager()
             .await
-            .map_err(|e| format!("Connecting to Redis server: {e:?}"))?;
+            .map_err(|e| Connection(format!("Connecting to Redis server: {e:?}")))?;
         Ok(Self {
             conn_manager: conn,
             max_tasks,

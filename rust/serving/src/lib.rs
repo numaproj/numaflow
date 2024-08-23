@@ -1,9 +1,11 @@
 pub use self::error::{Error, Result};
 use crate::app::start_main_server;
-use crate::config::config;
-use crate::metrics::start_metrics_server;
-use crate::pipeline::pipeline_spec;
-use tracing::{error, info};
+use crate::config::{cert_key_pair, config};
+use crate::metrics::start_https_metrics_server;
+use crate::pipeline::min_pipeline_spec;
+use axum_server::tls_rustls::RustlsConfig;
+use std::net::SocketAddr;
+use tracing::info;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -14,7 +16,13 @@ mod error;
 mod metrics;
 mod pipeline;
 
-pub async fn serve() {
+pub async fn serve() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let (cert, key) = cert_key_pair();
+
+    let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
+        .await
+        .map_err(|e| format!("Failed to create tls config {:?}", e))?;
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -25,21 +33,24 @@ pub async fn serve() {
         .with(tracing_subscriber::fmt::layer().with_ansi(false))
         .init();
 
-    info!(config = ?config(), pipeline_spec = ? pipeline_spec(), "Starting server with config and pipeline spec");
+    info!(config = ?config(), pipeline_spec = ? min_pipeline_spec(), "Starting server with config and pipeline spec");
 
-    let metrics_server_handle = tokio::spawn(start_metrics_server((
-        "0.0.0.0",
-        config().metrics_server_listen_port,
-    )));
-    let app_server_handle = tokio::spawn(start_main_server(("0.0.0.0", config().app_listen_port)));
+    // Start the metrics server, which serves the prometheus metrics.
+    let metrics_addr: SocketAddr =
+        format!("0.0.0.0:{}", &config().metrics_server_listen_port).parse()?;
+
+    let metrics_server_handle =
+        tokio::spawn(start_https_metrics_server(metrics_addr, tls_config.clone()));
+
+    let app_addr: SocketAddr = format!("0.0.0.0:{}", &config().app_listen_port).parse()?;
+
+    // Start the main server, which serves the application.
+    let app_server_handle = tokio::spawn(start_main_server(app_addr, tls_config));
 
     // TODO: is try_join the best? we need to short-circuit at the first failure
-    let servers = tokio::try_join!(flatten(app_server_handle), flatten(metrics_server_handle));
+    tokio::try_join!(flatten(app_server_handle), flatten(metrics_server_handle))?;
 
-    if let Err(e) = servers {
-        error!(error=?e, "Failed to run the servers");
-        std::process::exit(1)
-    }
+    Ok(())
 }
 
 async fn flatten<T>(handle: tokio::task::JoinHandle<Result<T>>) -> Result<T> {

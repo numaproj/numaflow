@@ -174,7 +174,7 @@ static MONOVTX_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new()
 // forward_metrics_labels is a helper function used to fetch the
 // MONOVTX_METRICS_LABELS object
 pub(crate) fn forward_metrics_labels() -> &'static Vec<(String, String)> {
-    crate::metrics::MONOVTX_METRICS_LABELS.get_or_init(|| {
+    MONOVTX_METRICS_LABELS.get_or_init(|| {
         let common_labels = vec![
             (
                 MONO_VERTEX_NAME_LABEL.to_string(),

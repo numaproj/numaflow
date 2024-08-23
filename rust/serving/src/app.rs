@@ -1,4 +1,5 @@
 use std::env;
+use std::net::SocketAddr;
 use std::time::Duration;
 
 use async_nats::jetstream;
@@ -8,14 +9,15 @@ use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
 use axum::{body::Body, http::Request, middleware, response::IntoResponse, routing::get, Router};
+use axum_server::tls_rustls::RustlsConfig;
+use axum_server::Handle;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
-use tokio::net::TcpListener;
 use tokio::signal;
 use tower::ServiceBuilder;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
-use tracing::{debug, info_span, Level};
+use tracing::{debug, info, info_span, Level};
 use uuid::Uuid;
 
 use self::{
@@ -24,7 +26,8 @@ use self::{
 };
 use crate::app::callback::store::Store;
 use crate::app::tracker::MessageGraph;
-use crate::pipeline::pipeline_spec;
+use crate::pipeline::min_pipeline_spec;
+use crate::Error::{InitError, MetricsServer};
 use crate::{app::callback::state::State as CallbackState, config, metrics::capture_metrics};
 
 /// manage callbacks
@@ -48,14 +51,10 @@ const ENV_NUMAFLOW_SERVING_AUTH_TOKEN: &str = "NUMAFLOW_SERVING_AUTH_TOKEN";
 // - [ ] outer fallback for /v1/direct
 
 /// Start the main application Router and the axum server.
-pub(crate) async fn start_main_server<A>(addr: A) -> crate::Result<()>
-where
-    A: tokio::net::ToSocketAddrs + std::fmt::Debug,
-{
-    let listener = TcpListener::bind(&addr)
-        .await
-        .map_err(|e| format!("Creating listener on {:?}: {}", addr, e))?;
-
+pub(crate) async fn start_main_server(
+    addr: SocketAddr,
+    tls_config: RustlsConfig,
+) -> crate::Result<()> {
     debug!(?addr, "App server started");
 
     let layers = ServiceBuilder::new()
@@ -90,8 +89,14 @@ where
         .layer(middleware::from_fn(auth_middleware));
 
     // Create the message graph from the pipeline spec and the redis store
-    let msg_graph = MessageGraph::from_pipeline(pipeline_spec())
-        .map_err(|e| format!("Creating message graph from pipeline spec: {:?}", e))?;
+    let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).map_err(|e| {
+        InitError(format!(
+            "Creating message graph from pipeline spec: {:?}",
+            e
+        ))
+    })?;
+
+    // Create a redis store to store the callbacks and the custom responses
     let redis_store = callback::store::redisstore::RedisConnection::new(
         &config().redis.addr,
         config().redis.max_tasks,
@@ -99,16 +104,49 @@ where
     .await?;
     let state = CallbackState::new(msg_graph, redis_store).await?;
 
+    let handle = Handle::new();
+    // Spawn a task to gracefully shutdown server.
+    tokio::spawn(graceful_shutdown(handle.clone()));
+
     // Create a Jetstream context
     let js_context = create_js_context().await?;
 
     let router = setup_app(js_context, state).await?.layer(layers);
-    axum::serve(listener, router)
-        .with_graceful_shutdown(shutdown_signal())
+    axum_server::bind_rustls(addr, tls_config)
+        .handle(handle)
+        .serve(router.into_make_service())
         .await
-        .map_err(|e| format!("Starting web server: {}", e))?;
+        .map_err(|e| MetricsServer(format!("Starting web server for metrics: {}", e)))?;
 
     Ok(())
+}
+
+// Gracefully shutdown the server on receiving SIGINT or SIGTERM
+// by sending a shutdown signal to the server using the handle.
+async fn graceful_shutdown(handle: Handle) {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    info!("sending graceful shutdown signal");
+
+    // Signal the server to shutdown using Handle.
+    // TODO: make the duration configurable
+    handle.graceful_shutdown(Some(Duration::from_secs(30)));
 }
 
 async fn create_js_context() -> crate::Result<Context> {
@@ -130,11 +168,11 @@ async fn create_js_context() -> crate::Result<Context> {
         _ => async_nats::connect(&js_config.url).await,
     }
     .map_err(|e| {
-        format!(
+        InitError(format!(
             "Connecting to jetstream server {}: {}",
             &config().jetstream.url,
             e
-        )
+        ))
     })?;
     Ok(jetstream::new(js_client))
 }
@@ -240,30 +278,11 @@ async fn routes<T: Clone + Send + Sync + Store + 'static>(
         .merge(message_path_handler))
 }
 
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-    };
-
-    let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::app::callback::store::memstore::InMemoryStore;
+    use crate::config::cert_key_pair;
     use async_nats::jetstream::stream;
     use axum::http::StatusCode;
     use std::net::SocketAddr;
@@ -272,9 +291,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_start_main_server() {
+        let (cert, key) = cert_key_pair();
+
+        let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
+            .await
+            .unwrap();
+
         let addr = SocketAddr::from(([127, 0, 0, 1], 0));
         let server = tokio::spawn(async move {
-            let result = start_main_server(addr).await;
+            let result = start_main_server(addr, tls_config).await;
             assert!(result.is_ok())
         });
 
@@ -303,7 +328,7 @@ mod tests {
         assert!(stream.is_ok());
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
 
         let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
@@ -329,7 +354,7 @@ mod tests {
         assert!(stream.is_ok());
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
 
         let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
@@ -362,7 +387,7 @@ mod tests {
         assert!(stream.is_ok());
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
 
         let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
@@ -402,7 +427,7 @@ mod tests {
         assert!(stream.is_ok());
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
         let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
         let app = Router::new()

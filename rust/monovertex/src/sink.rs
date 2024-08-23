@@ -1,3 +1,4 @@
+use crate::config::config;
 use crate::error::{Error, Result};
 use crate::message::Message;
 use crate::shared::connect_with_uds;
@@ -13,9 +14,10 @@ pub mod proto {
 const RECONNECT_INTERVAL: u64 = 1000;
 const MAX_RECONNECT_ATTEMPTS: usize = 5;
 const SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";
-pub(crate) const FB_SINK_SOCKET: &str = "/var/run/numaflow/fb-sink.sock";
+const FB_SINK_SOCKET: &str = "/var/run/numaflow/fb-sink.sock";
+
 const SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/sinker-server-info";
-pub(crate) const FB_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/fb-sinker-server-info";
+const FB_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/fb-sinker-server-info";
 
 /// SinkConfig is the configuration for the sink server.
 #[derive(Debug, Clone)]
@@ -30,7 +32,18 @@ impl Default for SinkConfig {
         SinkConfig {
             socket_path: SINK_SOCKET.to_string(),
             server_info_file: SINK_SERVER_INFO_FILE.to_string(),
-            max_message_size: 64 * 1024 * 1024, // 64 MB
+            max_message_size: config().grpc_max_message_size,
+        }
+    }
+}
+
+impl SinkConfig {
+    /// default config for fallback sink
+    pub(crate) fn fallback_default() -> Self {
+        SinkConfig {
+            max_message_size: config().grpc_max_message_size,
+            socket_path: FB_SINK_SOCKET.to_string(),
+            server_info_file: FB_SINK_SERVER_INFO_FILE.to_string(),
         }
     }
 }
@@ -60,6 +73,7 @@ impl SinkClient {
     }
 
     pub(crate) async fn sink_fn(&mut self, messages: Vec<Message>) -> Result<proto::SinkResponse> {
+        // create a channel with at least size
         let (tx, rx) = tokio::sync::mpsc::channel(if messages.is_empty() {
             1
         } else {
