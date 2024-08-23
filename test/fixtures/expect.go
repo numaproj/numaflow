@@ -68,6 +68,11 @@ func (t *Expect) RedisSinkNotContains(hashKey string, targetStr string, opts ...
 	return t
 }
 
+// ISBSvcDeleted checks if the isbsvc is deleted by checking if the ISB service is not found
+// and ALL the isbsvc-managed pods are deleted.
+// it was observed that sometimes the stateful set was deleted,
+// but the pods were stuck at running, causing e2e tests cleanup to timeout.
+// when such a case happens, ISBSvcDeleted will force to delete the pods.
 func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
