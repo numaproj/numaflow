@@ -411,7 +411,7 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 	svcName := generateJetStreamServiceName(r.isbSvc)
 	ssName := generateJetStreamStatefulSetName(r.isbSvc)
 	replicas := r.isbSvc.Spec.JetStream.GetReplicas()
-	routes := []string{}
+	var routes []string
 	for j := 0; j < replicas; j++ {
 		routes = append(routes, fmt.Sprintf("nats://%s-%s.%s.%s.svc:%s", ssName, strconv.Itoa(j), svcName, r.isbSvc.Namespace, strconv.Itoa(int(clusterPort))))
 	}

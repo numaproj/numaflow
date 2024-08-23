@@ -76,7 +76,7 @@ func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
 		t.t.Fatalf("Expected ISB svc to be deleted: %v", err)
 	}
 
-	labelSelector := fmt.Sprintf("%s=isbsvc-controller,%s=%s", dfv1.KeyManagedBy, dfv1.KeyISBSvcName, ISBSvcName)
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyManagedBy, dfv1.ControllerISBSvc, dfv1.KeyISBSvcName, ISBSvcName)
 	opts := metav1.ListOptions{LabelSelector: labelSelector}
 	timeoutCh := make(chan bool, 1)
 	go func() {

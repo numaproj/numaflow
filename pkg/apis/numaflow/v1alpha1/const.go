@@ -87,14 +87,15 @@ const (
 	ServingSourceContainer  = "serving"
 
 	// components
-	ComponentISBSvc           = "isbsvc"
-	ComponentDaemon           = "daemon"
-	ComponentVertex           = "vertex"
-	ComponentMonoVertex       = "mono-vertex"
-	ComponentMonoVertexDaemon = "mono-vertex-daemon"
-	ComponentJob              = "job"
-	ComponentSideInputManager = "side-inputs-manager"
-	ComponentUXServer         = "numaflow-ux"
+	ComponentISBSvc            = "isbsvc"
+	ComponentDaemon            = "daemon"
+	ComponentVertex            = "vertex"
+	ComponentMonoVertex        = "mono-vertex"
+	ComponentMonoVertexDaemon  = "mono-vertex-daemon"
+	ComponentJob               = "job"
+	ComponentSideInputManager  = "side-inputs-manager"
+	ComponentUXServer          = "numaflow-ux"
+	ComponentControllerManager = "controller-manager"
 
 	// controllers
 	ControllerISBSvc     = "isbsvc-controller"
