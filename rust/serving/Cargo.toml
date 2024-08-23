@@ -33,4 +33,5 @@ rcgen = "0.13.1"
 parking_lot = "0.12.3"
 prometheus-client = "0.22.3"
 thiserror = "1.0.63"
+numaflow-models = { path = "../numaflow-models" }
 

@@ -75,14 +75,14 @@ mod tests {
 
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::app::tracker::MessageGraph;
-    use crate::pipeline::pipeline_spec;
+    use crate::pipeline::min_pipeline_spec;
 
     use super::*;
 
     #[tokio::test]
     async fn test_callback_failure() {
         let store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
         let state = CallbackState::new(msg_graph, store).await.unwrap();
         let app = callback_handler(state);
 
@@ -109,7 +109,7 @@ mod tests {
     #[tokio::test]
     async fn test_callback_success() {
         let store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
         let mut state = CallbackState::new(msg_graph, store).await.unwrap();
 
         let x = state.register("test_id".to_string());
@@ -160,7 +160,7 @@ mod tests {
     #[tokio::test]
     async fn test_callback_save() {
         let store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
         let state = CallbackState::new(msg_graph, store).await.unwrap();
         let app = callback_handler(state);
 
@@ -179,7 +179,7 @@ mod tests {
     #[tokio::test]
     async fn test_without_id_header() {
         let store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
         let state = CallbackState::new(msg_graph, store).await.unwrap();
         let app = callback_handler(state);
 

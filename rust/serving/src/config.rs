@@ -1,3 +1,5 @@
+use crate::Error::ParseConfig;
+use crate::{Error, Result};
 use async_nats::rustls;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
@@ -8,9 +10,6 @@ use std::fmt::Debug;
 use std::path::Path;
 use std::{env, sync::OnceLock};
 use tracing::info;
-
-use crate::Error::ParseConfig;
-use crate::{Error, Result};
 
 const ENV_PREFIX: &str = "NUMAFLOW_SERVING";
 const ENV_NUMAFLOW_SERVING_SOURCE_OBJECT: &str = "NUMAFLOW_SERVING_SOURCE_OBJECT";

@@ -57,7 +57,7 @@ pub(crate) async fn jetstream_proxy<T: Clone + Send + Sync + Store + 'static>(
         callback: callback_store,
         stream: &config().jetstream.stream,
         callback_url: format!(
-            "http://{}:{}/v1/process/callback",
+            "https://{}:{}/v1/process/callback",
             config().host_ip,
             config().app_listen_port
         ),
@@ -277,7 +277,7 @@ mod tests {
     use crate::app::callback::store::PayloadToSave;
     use crate::app::callback::CallbackRequest;
     use crate::app::tracker::MessageGraph;
-    use crate::pipeline::pipeline_spec;
+    use crate::pipeline::min_pipeline_spec;
     use crate::Error;
 
     use super::*;
@@ -323,7 +323,7 @@ mod tests {
             .map_err(|e| format!("creating stream {}: {}", &config().jetstream.url, e))?;
 
         let mock_store = MockStore {};
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec())
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec())
             .map_err(|e| format!("Failed to create message graph from pipeline spec: {:?}", e))?;
 
         let callback_state = CallbackState::new(msg_graph, mock_store).await?;
@@ -401,7 +401,7 @@ mod tests {
             .map_err(|e| format!("creating stream {}: {}", &config().jetstream.url, e));
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
 
         let mut callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
@@ -465,7 +465,7 @@ mod tests {
             .map_err(|e| format!("creating stream {}: {}", &config().jetstream.url, e));
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
 
         let mut callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
