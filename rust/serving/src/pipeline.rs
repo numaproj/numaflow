@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 
 const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 
-pub fn min_pipeline_spec() -> &'static MinPipelineSpec {
-    static PIPELINE: OnceLock<MinPipelineSpec> = OnceLock::new();
-    PIPELINE.get_or_init(|| match MinPipelineSpec::load() {
+pub fn min_pipeline_spec() -> &'static PipelineDCG {
+    static PIPELINE: OnceLock<PipelineDCG> = OnceLock::new();
+    PIPELINE.get_or_init(|| match PipelineDCG::load() {
         Ok(pipeline) => pipeline,
         Err(e) => panic!("Failed to load minimum pipeline spec: {:?}", e),
     })
@@ -72,11 +72,11 @@ pub struct Edge {
     pub conditions: Option<Conditions>,
 }
 
-// MinPipelineSpec is a struct that contains the minimum information about the pipeline
-// that is required to construct the dag.
+/// DCG (directed compute graph) of the pipeline with minimal information build using vertices and edges
+/// from the pipeline spec
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde()]
-pub struct MinPipelineSpec {
+pub struct PipelineDCG {
     pub vertices: Vec<Vertex>,
     pub edges: Vec<Edge>,
 }
@@ -86,7 +86,7 @@ pub struct Vertex {
     pub name: String,
 }
 
-impl MinPipelineSpec {
+impl PipelineDCG {
     pub fn load() -> crate::Result<Self> {
         let full_pipeline_spec = match env::var(ENV_MIN_PIPELINE_SPEC) {
             Ok(env_value) => {
@@ -137,7 +137,7 @@ impl MinPipelineSpec {
             })
             .collect();
 
-        Ok(MinPipelineSpec { vertices, edges })
+        Ok(PipelineDCG { vertices, edges })
     }
 }
 
