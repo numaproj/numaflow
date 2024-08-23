@@ -43,7 +43,7 @@ type Given struct {
 	kubeClient       kubernetes.Interface
 }
 
-// creates an ISBSvc based on the parameter, this may be:
+// ISBSvc creates an ISBSvc based on the parameter, this may be:
 //
 // 1. A file name if it starts with "@"
 // 2. Raw YAML.
@@ -61,7 +61,7 @@ func (g *Given) ISBSvc(text string) *Given {
 	return g
 }
 
-// creates a Pipeline based on the parameter, this may be:
+// Pipeline creates a Pipeline based on the parameter, this may be:
 //
 // 1. A file name if it starts with "@"
 // 2. Raw YAML.
@@ -79,7 +79,7 @@ func (g *Given) Pipeline(text string) *Given {
 	return g
 }
 
-// / creates a MonoVertex based on the parameter, this may be:
+// MonoVertex creates a MonoVertex based on the parameter, this may be:
 //
 // 1. A file name if it starts with "@"
 // 2. Raw YAML.
