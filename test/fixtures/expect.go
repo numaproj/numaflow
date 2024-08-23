@@ -68,10 +68,11 @@ func (t *Expect) RedisSinkNotContains(hashKey string, targetStr string, opts ...
 	return t
 }
 
-// ISBSvcDeleted checks if the isbsvc is deleted by checking if the ISB service is not found
-// and ALL the isbsvc-managed pods are deleted.
-// it was observed that sometimes the stateful set was deleted,
-// but the pods were stuck at running, causing e2e tests cleanup to timeout.
+// ISBSvcDeleted checks if the isbsvc is deleted by checking
+// 1. the isbsvc CRD itself is deleted and
+// 2. ALL the isbsvc-managed pods are deleted.
+// it was observed that sometimes, although the stateful set are deleted,
+// the pods can still be stuck at running, causing e2e tests cleanup to timeout.
 // when such a case happens, ISBSvcDeleted will force to delete the pods.
 func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
 	t.t.Helper()
@@ -103,11 +104,11 @@ func (t *Expect) ISBSvcDeleted(timeout time.Duration) *Expect {
 			// the format of the stateful set name is isbsvc-<isbsvc-name>-js,
 			// which matches what is used in jetstream installer (pkg/reconciler/isbsvc/installer/jetstream.go).
 			_, err = t.kubeClient.AppsV1().StatefulSets(Namespace).Get(ctx, fmt.Sprintf("isbsvc-%s-js", ISBSvcName), metav1.GetOptions{})
-			stsDeleted := apierr.IsNotFound(err)
+			stsIsDeleted := apierr.IsNotFound(err)
 			for _, pod := range podList.Items {
 				podHasFinalizer := len(pod.Finalizers) > 0
 				podIsRunning := pod.Status.Phase == "Running"
-				if stsDeleted && !podHasFinalizer && podIsRunning {
+				if stsIsDeleted && !podHasFinalizer && podIsRunning {
 					// the stateful set has been deleted, the pod has no finalizer and is running
 					// we can safely force to delete the pod
 					t.t.Logf("The statefulset has been deleted, the pod %s has no finalizer and is running, force to delete it", pod.Name)

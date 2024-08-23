@@ -120,7 +120,6 @@ func (s *E2ESuite) SetupSuite() {
 		CreateISBSvc().
 		WaitForISBSvcReady()
 	s.T().Log("ISB svc is ready")
-
 	err = PodPortForward(s.restConfig, Namespace, "e2e-api-pod", 8378, 8378, s.stopch)
 	s.CheckError(err)
 
