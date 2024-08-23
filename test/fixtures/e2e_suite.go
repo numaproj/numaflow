@@ -73,9 +73,10 @@ metadata:
     numaflow-e2e: "true"
 spec:
   jetstream:
+    replicas: 1
     version: latest
     persistence:
-      volumeSize: 50Mi`
+      volumeSize: 200Mi`
 )
 
 type E2ESuite struct {
