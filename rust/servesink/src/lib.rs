@@ -99,7 +99,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_serve_sink_without_url_header() {
-        let logger = ServeSink::new();
+        let serve_sink = ServeSink::new();
         let (tx, rx) = mpsc::channel(1);
 
         let mut headers = HashMap::new();
@@ -117,14 +117,14 @@ mod tests {
         tx.send(request).await.unwrap();
         drop(tx); // Close the sender to end the stream
 
-        let responses = logger.sink(rx).await;
+        let responses = serve_sink.sink(rx).await;
         assert_eq!(responses.len(), 1);
         assert!(responses[0].success);
     }
 
     #[tokio::test]
     async fn test_serve_sink_without_id_header() {
-        let logger = ServeSink::new();
+        let serve_sink = ServeSink::new();
         let (tx, rx) = mpsc::channel(1);
 
         let mut headers = HashMap::new();
@@ -145,7 +145,7 @@ mod tests {
         tx.send(request).await.unwrap();
         drop(tx); // Close the sender to end the stream
 
-        let responses = logger.sink(rx).await;
+        let responses = serve_sink.sink(rx).await;
         assert_eq!(responses.len(), 1);
         assert!(responses[0].success);
     }
@@ -186,7 +186,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_serve_sink() {
-        let logger = ServeSink::new();
+        let serve_sink = ServeSink::new();
 
         let (addr, shutdown_tx) = start_server().await;
 
@@ -212,7 +212,7 @@ mod tests {
         tx.send(request).await.unwrap();
         drop(tx); // Close the sender to end the stream
 
-        let responses = logger.sink(rx).await;
+        let responses = serve_sink.sink(rx).await;
         assert_eq!(responses.len(), 1);
         assert!(responses[0].success);
 
