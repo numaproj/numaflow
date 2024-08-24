@@ -38,10 +38,13 @@ import (
 )
 
 const (
-	Namespace      = "numaflow-system"
-	Label          = "numaflow-e2e"
-	LabelValue     = "true"
-	ISBSvcName     = "numaflow-e2e"
+	Namespace  = "numaflow-system"
+	Label      = "numaflow-e2e"
+	LabelValue = "true"
+	ISBSvcName = "numaflow-e2e"
+	// the number 90 is carefully chosen to ensure the test suite can finish within a reasonable time without timing out.
+	// please exercise caution when updating this value, as it may cause e2e tests to be flaky.
+	// if updated, consider running the entire e2e test suite multiple times to ensure stability.
 	defaultTimeout = 90 * time.Second
 
 	LogSourceVertexStarted    = "Start processing source messages"
@@ -139,13 +142,18 @@ func (s *E2ESuite) TearDownSuite() {
 		When().
 		Wait(5 * time.Second).
 		DeleteISBSvc().
-		Wait(3 * time.Second).
+		Wait(3 * time.Second)
+	// force deleting the ISB svc pods because we have seen pods stuck in terminating state after CRD deletion,
+	// which causes e2e tests to timeout, this is a workaround to avoid the issue.
+	deleteISBPodsCMD := fmt.Sprintf("kubectl delete pods -n %s -l %s=%s,%s=%s --ignore-not-found=true --grace-period=0 --force", Namespace, dfv1.KeyComponent, dfv1.ComponentISBSvc, dfv1.KeyISBSvcName, ISBSvcName)
+	s.Given().When().Exec("sh", []string{"-c", deleteISBPodsCMD}, OutputRegexp(""))
+	s.Given().ISBSvc(getISBSvcSpec()).
+		When().
 		Expect().
 		ISBSvcDeleted(defaultTimeout)
-
 	s.T().Log("ISB svc is deleted")
-	deleteCMD := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", Namespace)
-	s.Given().When().Exec("sh", []string{"-c", deleteCMD}, OutputRegexp(`service "redis" deleted`))
+	deleteRedisCMD := fmt.Sprintf("kubectl delete -k ../../config/apps/redis -n %s --ignore-not-found=true", Namespace)
+	s.Given().When().Exec("sh", []string{"-c", deleteRedisCMD}, OutputRegexp(`service "redis" deleted`))
 	s.T().Log("Redis resources are deleted")
 	close(s.stopch)
 }

@@ -690,7 +690,7 @@ func (pls *PipelineStatus) MarkDeployFailed(reason, message string) {
 	pls.SetPhase(PipelinePhaseFailed, message)
 }
 
-// MarkVerticesHealthy set the daemon service of the pipeline is healthy.
+// MarkDaemonServiceHealthy set the daemon service of the pipeline is healthy.
 func (pls *PipelineStatus) MarkDaemonServiceHealthy() {
 	pls.MarkTrue(PipelineConditionDaemonServiceHealthy)
 }
