@@ -168,13 +168,10 @@ impl Forwarder {
     // Applies transformation to the messages if transformer is present
     // we concurrently apply transformation to all the messages.
     async fn apply_transformer(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
-        let transformer_client;
-        if let Some(trf_client) = &self.transformer_client {
-            transformer_client = trf_client;
-        } else {
+        let Some(transformer_client) = &self.transformer_client else {
             // return early if there is no transformer
             return Ok(messages);
-        }
+        };
 
         let start_time = tokio::time::Instant::now();
         let mut jh = JoinSet::new();

@@ -104,8 +104,6 @@ impl SourceClient {
         Ok(self.client.ack_fn(request).await?.into_inner())
     }
 
-    #[allow(dead_code)]
-    // TODO: remove dead_code
     pub(crate) async fn pending_fn(&mut self) -> Result<i64> {
         let request = Request::new(());
         let response = self
@@ -114,7 +112,7 @@ impl SourceClient {
             .await?
             .into_inner()
             .result
-            .map_or(0, |r| r.count);
+            .map_or(-1, |r| r.count); // default to -1(unavailable)
         Ok(response)
     }
 
