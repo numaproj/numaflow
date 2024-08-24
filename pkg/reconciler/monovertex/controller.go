@@ -110,7 +110,9 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 	}()
 
 	monoVtx.Status.SetObservedGeneration(monoVtx.Generation)
-	mr.scaler.StartWatching(mVtxKey)
+	if monoVtx.Scalable() {
+		mr.scaler.StartWatching(mVtxKey)
+	}
 	// TODO: handle lifecycle changes
 
 	// Regular mono vertex change
@@ -155,6 +157,16 @@ func (mr *monoVertexReconciler) reconcileNonLifecycleChanges(ctx context.Context
 
 func (mr *monoVertexReconciler) reconcilePods(ctx context.Context, monoVtx *dfv1.MonoVertex) error {
 	desiredReplicas := monoVtx.GetReplicas()
+	// Don't allow replicas to be out of the range of min and max when auto scaling is enabled
+	if s := monoVtx.Spec.Scale; !s.Disabled {
+		max := int(s.GetMaxReplicas())
+		min := int(s.GetMinReplicas())
+		if desiredReplicas < min {
+			desiredReplicas = min
+		} else if desiredReplicas > max {
+			desiredReplicas = max
+		}
+	}
 	// Set metrics
 	defer func() {
 		reconciler.MonoVertexDesiredReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(desiredReplicas))
