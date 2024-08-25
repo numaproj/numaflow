@@ -5,6 +5,7 @@ resources:
   - nats.yaml
   - nats-auth-fake-token.yaml
 
-commonLabels:
-  "numaflow-e2e": "true"
-
+labels:
+  - includeSelectors: true
+    pairs:
+      numaflow-e2e: "true"
