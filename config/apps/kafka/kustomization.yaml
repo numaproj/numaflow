@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   - kafka-minimal.yaml
 
-commonLabels:
-  "numaflow-e2e": "true"
-
+labels:
+  - includeSelectors: true
+    pairs:
+      numaflow-e2e: "true"

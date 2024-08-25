@@ -127,7 +127,11 @@ test-idle-source-e2e:
 test-builtin-source-e2e:
 test-%:
 	$(MAKE) cleanup-e2e
-	$(MAKE) image e2eapi-image
+ifndef SKIP_IMAGE_BUILD
+	# Skip building image in CI since the image would have been built during "make start"
+	$(MAKE) image
+endif
+	$(MAKE) e2eapi-image
 	$(MAKE) restart-control-plane-components
 	cat test/manifests/e2e-api-pod.yaml | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./test/$* -name '*.go')
