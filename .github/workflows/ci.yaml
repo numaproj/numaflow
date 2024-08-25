@@ -243,4 +243,4 @@ jobs:
       - name: Run tests
         env:
           GOPATH: /home/runner/go
-        run: KUBECONFIG=~/.kube/numaflow-e2e-config VERSION=${{ github.sha }} ISBSVC=${{matrix.driver}} make test-${{matrix.case}}
+        run: KUBECONFIG=~/.kube/numaflow-e2e-config VERSION=${{ github.sha }} ISBSVC=${{matrix.driver}} SKIP_IMAGE_BUILD=true make test-${{matrix.case}}
