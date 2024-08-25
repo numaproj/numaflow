@@ -128,7 +128,7 @@ test-builtin-source-e2e:
 test-%:
 	$(MAKE) cleanup-e2e
 ifndef SKIP_IMAGE_BUILD
-	# Skip building image in CI
+	# Skip building image in CI since the image would have been built during "make start"
 	$(MAKE) image
 endif
 	$(MAKE) e2eapi-image
