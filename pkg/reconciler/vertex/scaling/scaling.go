@@ -311,11 +311,11 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	if current > max || current < min { // Someone might have manually scaled up/down the vertex
 		return s.patchVertexReplicas(ctx, vertex, desired)
 	}
-	maxAllowed := int32(vertex.Spec.Scale.GetReplicasPerScale())
 	if desired < current {
+		maxAllowedDown := int32(vertex.Spec.Scale.GetReplicasPerScaleDown())
 		diff := current - desired
-		if diff > maxAllowed {
-			diff = maxAllowed
+		if diff > maxAllowedDown {
+			diff = maxAllowedDown
 		}
 		if secondsSinceLastScale < scaleDownCooldown {
 			log.Infof("Cooldown period for scaling down, skip scaling.")
@@ -338,9 +338,10 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 			log.Infof("Vertex %s has back pressure in downstream vertices, skip scaling.", key)
 			return nil
 		}
+		maxAllowedUp := int32(vertex.Spec.Scale.GetReplicasPerScaleUp())
 		diff := desired - current
-		if diff > maxAllowed {
-			diff = maxAllowed
+		if diff > maxAllowedUp {
+			diff = maxAllowedUp
 		}
 		if secondsSinceLastScale < scaleUpCooldown {
 			log.Infof("Cooldown period for scaling up, skip scaling.")
@@ -375,7 +376,7 @@ func (s *Scaler) desiredReplicas(_ context.Context, vertex *dfv1.Vertex, partiti
 			// then we figure out how many replicas are needed to keep the available buffer length at target level.
 			if pending >= partitionBufferLengths[i] {
 				// Simply return current replica number + max allowed if the pending messages are more than available buffer length
-				desired = int32(vertex.Status.Replicas) + int32(vertex.Spec.Scale.GetReplicasPerScale())
+				desired = int32(vertex.Status.Replicas) + int32(vertex.Spec.Scale.GetReplicasPerScaleUp())
 			} else {
 				singleReplicaContribution := float64(partitionBufferLengths[i]-pending) / float64(vertex.Status.Replicas)
 				desired = int32(math.Round(float64(partitionAvailableBufferLengths[i]) / singleReplicaContribution))

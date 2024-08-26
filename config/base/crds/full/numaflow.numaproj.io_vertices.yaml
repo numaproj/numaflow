@@ -1587,9 +1587,6 @@ spec:
                 type: string
               scale:
                 properties:
-                  cooldownSeconds:
-                    format: int32
-                    type: integer
                   disabled:
                     type: boolean
                   lookbackSeconds:
@@ -1602,6 +1599,12 @@ spec:
                     format: int32
                     type: integer
                   replicasPerScale:
+                    format: int32
+                    type: integer
+                  replicasPerScaleDown:
+                    format: int32
+                    type: integer
+                  replicasPerScaleUp:
                     format: int32
                     type: integer
                   scaleDownCooldownSeconds:

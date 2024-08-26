@@ -239,11 +239,11 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 	if current > max || current < min { // Someone might have manually scaled up/down the MonoVertex
 		return s.patchMonoVertexReplicas(ctx, monoVtx, desired)
 	}
-	maxAllowed := int32(monoVtx.Spec.Scale.GetReplicasPerScale())
 	if desired < current {
+		maxAllowedDown := int32(monoVtx.Spec.Scale.GetReplicasPerScaleDown())
 		diff := current - desired
-		if diff > maxAllowed {
-			diff = maxAllowed
+		if diff > maxAllowedDown {
+			diff = maxAllowedDown
 		}
 		if secondsSinceLastScale < scaleDownCooldown {
 			log.Infof("Cooldown period for scaling down, skip scaling.")
@@ -252,9 +252,10 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		return s.patchMonoVertexReplicas(ctx, monoVtx, current-diff) // We scale down gradually
 	}
 	if desired > current {
+		maxAllowedUp := int32(monoVtx.Spec.Scale.GetReplicasPerScaleUp())
 		diff := desired - current
-		if diff > maxAllowed {
-			diff = maxAllowed
+		if diff > maxAllowedUp {
+			diff = maxAllowedUp
 		}
 		if secondsSinceLastScale < scaleUpCooldown {
 			log.Infof("Cooldown period for scaling up, skip scaling.")
