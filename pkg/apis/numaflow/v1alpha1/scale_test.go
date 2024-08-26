@@ -50,6 +50,7 @@ func Test_Scale_Parameters(t *testing.T) {
 		ScaleDownCooldownSeconds: &downcds,
 		LookbackSeconds:          &lbs,
 		ReplicasPerScaleUp:       &rpsu,
+		ReplicasPerScaleDown:     &rpsd,
 		TargetProcessingSeconds:  &tps,
 		TargetBufferAvailability: &tbu,
 		ZeroReplicaSleepSeconds:  &zrss,
