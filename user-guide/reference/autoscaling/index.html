@@ -2352,7 +2352,8 @@ the <a href="../../sources/overview/"><code>Source</code></a> vertices (please c
 <span class="w">        </span><span class="nt">zeroReplicaSleepSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">120</span><span class="w"> </span><span class="c1"># Optional, defaults to 120.</span>
 <span class="w">        </span><span class="nt">targetProcessingSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span><span class="w"> </span><span class="c1"># Optional, defaults to 20.</span>
 <span class="w">        </span><span class="nt">targetBufferAvailability</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span><span class="w"> </span><span class="c1"># Optional, defaults to 50.</span>
-<span class="w">        </span><span class="nt">replicasPerScale</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w"> </span><span class="c1"># Optional, defaults to 2.</span>
+<span class="w">        </span><span class="nt">replicasPerScaleUp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w"> </span><span class="c1"># Optional, defaults to 2.</span>
+<span class="w">        </span><span class="nt">replicasPerScaleDown</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w"> </span><span class="c1"># Optional, defaults to 2.</span>
 </code></pre></div>
 <ul>
 <li><code>disabled</code> - Whether to disable Numaflow autoscaling, defaults to <code>false</code>.</li>
@@ -2377,8 +2378,11 @@ the <a href="../../sources/overview/"><code>Source</code></a> vertices (please c
   support autoscaling, typically increasing the value leads to lower processing rate, thus less replicas.</li>
 <li><code>targetBufferAvailability</code> - Targeted buffer availability in percentage, defaults to <code>50</code>. It is only effective for <code>UDF</code>
   and <code>Sink</code> vertices, it determines how aggressive you want to do for autoscaling, increasing the value will bring more replicas.</li>
-<li><code>replicasPerScale</code> - Maximum number of replicas change happens in one scale up or down operation, defaults to <code>2</code>. For
+<li><code>replicasPerScaleUp</code> - Maximum number of replica change happens in one scale up operation, defaults to <code>2</code>. For
   example, if current replica number is 3, the calculated desired replica number is 8; instead of scaling up the vertex to 8, it only does 5.</li>
+<li><code>replicasPerScaleDown</code> - Maximum number of replica change happens in one scale down operation, defaults to <code>2</code>. For
+  example, if current replica number is 9, the calculated desired replica number is 4; instead of scaling down the vertex to 4, it only does 7.</li>
+<li><code>replicasPerScale</code> - (Deprecated: Use <code>replicasPerScaleUp</code> and <code>replicasPerScaleDown</code> instead, will be removed in v1.5) Maximum number of replica change happens in one scale up or down operation, defaults to <code>2</code>.</li>
 </ul>
 <p>To disable Numaflow autoscaling, set <code>disabled: true</code> as following.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
