@@ -32,16 +32,16 @@ pub struct Scale {
     /// Minimum replicas.
     #[serde(rename = "min", skip_serializing_if = "Option::is_none")]
     pub min: Option<i32>,
-    /// DeprecatedReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead
+    /// DeprecatedReplicasPerScale defines the number of maximum replicas that can be changed in a single scale up or down operation. The is use to prevent from too aggressive scaling operations Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead
     #[serde(rename = "replicasPerScale", skip_serializing_if = "Option::is_none")]
     pub replicas_per_scale: Option<i64>,
-    /// ReplicasPerScaleDown defines maximum replicas can be scaled down at once. The is use to prevent too aggressive scaling down operations
+    /// ReplicasPerScaleDown defines the number of maximum replicas that can be changed in a single scaled down operation. The is use to prevent from too aggressive scaling down operations
     #[serde(
         rename = "replicasPerScaleDown",
         skip_serializing_if = "Option::is_none"
     )]
     pub replicas_per_scale_down: Option<i64>,
-    /// ReplicasPerScaleUp defines maximum replicas can be scaled up at once. The is use to prevent too aggressive scaling up operations
+    /// ReplicasPerScaleUp defines the number of maximum replicas that can be changed in a single scaled up operation. The is use to prevent from too aggressive scaling up operations
     #[serde(rename = "replicasPerScaleUp", skip_serializing_if = "Option::is_none")]
     pub replicas_per_scale_up: Option<i64>,
     /// ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down. It defaults to the CooldownSeconds if not set.

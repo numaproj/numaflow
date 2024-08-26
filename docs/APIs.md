@@ -8502,9 +8502,10 @@ have buffers to read.
 <em>(Optional)</em>
 <p>
 
-DeprecatedReplicasPerScale defines maximum replicas can be scaled up or
-down at once. The is use to prevent too aggressive scaling operations
-Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead
+DeprecatedReplicasPerScale defines the number of maximum replicas that
+can be changed in a single scale up or down operation. The is use to
+prevent from too aggressive scaling operations Deprecated: Use
+ReplicasPerScaleUp and ReplicasPerScaleDown instead
 </p>
 
 </td>
@@ -8565,8 +8566,9 @@ CooldownSeconds if not set.
 <em>(Optional)</em>
 <p>
 
-ReplicasPerScaleUp defines maximum replicas can be scaled up at once.
-The is use to prevent too aggressive scaling up operations
+ReplicasPerScaleUp defines the number of maximum replicas that can be
+changed in a single scaled up operation. The is use to prevent from too
+aggressive scaling up operations
 </p>
 
 </td>
@@ -8585,8 +8587,9 @@ The is use to prevent too aggressive scaling up operations
 <em>(Optional)</em>
 <p>
 
-ReplicasPerScaleDown defines maximum replicas can be scaled down at
-once. The is use to prevent too aggressive scaling down operations
+ReplicasPerScaleDown defines the number of maximum replicas that can be
+changed in a single scaled down operation. The is use to prevent from
+too aggressive scaling down operations
 </p>
 
 </td>

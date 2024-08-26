@@ -4190,7 +4190,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					},
 					"replicasPerScale": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DeprecatedReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead",
+							Description: "DeprecatedReplicasPerScale defines the number of maximum replicas that can be changed in a single scale up or down operation. The is use to prevent from too aggressive scaling operations Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -4211,14 +4211,14 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					},
 					"replicasPerScaleUp": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ReplicasPerScaleUp defines maximum replicas can be scaled up at once. The is use to prevent too aggressive scaling up operations",
+							Description: "ReplicasPerScaleUp defines the number of maximum replicas that can be changed in a single scaled up operation. The is use to prevent from too aggressive scaling up operations",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
 					"replicasPerScaleDown": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ReplicasPerScaleDown defines maximum replicas can be scaled down at once. The is use to prevent too aggressive scaling down operations",
+							Description: "ReplicasPerScaleDown defines the number of maximum replicas that can be changed in a single scaled down operation. The is use to prevent from too aggressive scaling down operations",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},

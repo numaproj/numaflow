@@ -19754,17 +19754,17 @@
           "type": "integer"
         },
         "replicasPerScale": {
-          "description": "DeprecatedReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead",
+          "description": "DeprecatedReplicasPerScale defines the number of maximum replicas that can be changed in a single scale up or down operation. The is use to prevent from too aggressive scaling operations Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead",
           "format": "int64",
           "type": "integer"
         },
         "replicasPerScaleDown": {
-          "description": "ReplicasPerScaleDown defines maximum replicas can be scaled down at once. The is use to prevent too aggressive scaling down operations",
+          "description": "ReplicasPerScaleDown defines the number of maximum replicas that can be changed in a single scaled down operation. The is use to prevent from too aggressive scaling down operations",
           "format": "int64",
           "type": "integer"
         },
         "replicasPerScaleUp": {
-          "description": "ReplicasPerScaleUp defines maximum replicas can be scaled up at once. The is use to prevent too aggressive scaling up operations",
+          "description": "ReplicasPerScaleUp defines the number of maximum replicas that can be changed in a single scaled up operation. The is use to prevent from too aggressive scaling up operations",
           "format": "int64",
           "type": "integer"
         },

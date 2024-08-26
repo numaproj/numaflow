@@ -44,10 +44,10 @@ type Scale struct {
 	// It only applies to UDF and Sink vertices because only they have buffers to read.
 	// +optional
 	TargetBufferAvailability *uint32 `json:"targetBufferAvailability,omitempty" protobuf:"varint,7,opt,name=targetBufferAvailability"`
-	// DeprecatedReplicasPerScale defines maximum replicas can be scaled up or down at once.
-	// The is use to prevent too aggressive scaling operations
-	// +optional
+	// DeprecatedReplicasPerScale defines the number of maximum replicas that can be changed in a single scale up or down operation.
+	// The is use to prevent from too aggressive scaling operations
 	// Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead
+	// +optional
 	DeprecatedReplicasPerScale *uint32 `json:"replicasPerScale,omitempty" protobuf:"varint,8,opt,name=replicasPerScale"`
 	// ScaleUpCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling up.
 	// It defaults to the CooldownSeconds if not set.
@@ -57,12 +57,12 @@ type Scale struct {
 	// It defaults to the CooldownSeconds if not set.
 	// +optional
 	ScaleDownCooldownSeconds *uint32 `json:"scaleDownCooldownSeconds,omitempty" protobuf:"varint,10,opt,name=scaleDownCooldownSeconds"`
-	// ReplicasPerScaleUp defines maximum replicas can be scaled up at once.
-	// The is use to prevent too aggressive scaling up operations
+	// ReplicasPerScaleUp defines the number of maximum replicas that can be changed in a single scaled up operation.
+	// The is use to prevent from too aggressive scaling up operations
 	// +optional
 	ReplicasPerScaleUp *uint32 `json:"replicasPerScaleUp,omitempty" protobuf:"varint,11,opt,name=replicasPerScaleUp"`
-	// ReplicasPerScaleDown defines maximum replicas can be scaled down at once.
-	// The is use to prevent too aggressive scaling down operations
+	// ReplicasPerScaleDown defines the number of maximum replicas that can be changed in a single scaled down operation.
+	// The is use to prevent from too aggressive scaling down operations
 	// +optional
 	ReplicasPerScaleDown *uint32 `json:"replicasPerScaleDown,omitempty" protobuf:"varint,12,opt,name=replicasPerScaleDown"`
 }
