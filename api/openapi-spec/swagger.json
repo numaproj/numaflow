@@ -19721,11 +19721,6 @@
       "description": "Scale defines the parameters for autoscaling.",
       "type": "object",
       "properties": {
-        "cooldownSeconds": {
-          "description": "Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead. Cooldown seconds after a scaling operation before another one.",
-          "type": "integer",
-          "format": "int64"
-        },
         "disabled": {
           "description": "Whether to disable autoscaling. Set to \"true\" when using Kubernetes HPA or any other 3rd party autoscaling strategies.",
           "type": "boolean"
@@ -19746,7 +19741,17 @@
           "format": "int32"
         },
         "replicasPerScale": {
-          "description": "ReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations",
+          "description": "DeprecatedReplicasPerScale defines the number of maximum replicas that can be changed in a single scale up or down operation. The is use to prevent from too aggressive scaling operations Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead",
+          "type": "integer",
+          "format": "int64"
+        },
+        "replicasPerScaleDown": {
+          "description": "ReplicasPerScaleDown defines the number of maximum replicas that can be changed in a single scaled down operation. The is use to prevent from too aggressive scaling down operations",
+          "type": "integer",
+          "format": "int64"
+        },
+        "replicasPerScaleUp": {
+          "description": "ReplicasPerScaleUp defines the number of maximum replicas that can be changed in a single scaled up operation. The is use to prevent from too aggressive scaling up operations",
           "type": "integer",
           "format": "int64"
         },
