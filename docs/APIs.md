@@ -8428,26 +8428,6 @@ processing rate.
 
 <td>
 
-<code>cooldownSeconds</code></br> <em> uint32 </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-<p>
-
-Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds
-instead. Cooldown seconds after a scaling operation before another one.
-</p>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
 <code>zeroReplicaSleepSeconds</code></br> <em> uint32 </em>
 </td>
 
@@ -8522,8 +8502,9 @@ have buffers to read.
 <em>(Optional)</em>
 <p>
 
-ReplicasPerScale defines maximum replicas can be scaled up or down at
-once. The is use to prevent too aggressive scaling operations
+DeprecatedReplicasPerScale defines maximum replicas can be scaled up or
+down at once. The is use to prevent too aggressive scaling operations
+Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead
 </p>
 
 </td>
@@ -8566,6 +8547,46 @@ CooldownSeconds if not set.
 ScaleDownCooldownSeconds defines the cooldown seconds after a scaling
 operation, before a follow-up scaling down. It defaults to the
 CooldownSeconds if not set.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>replicasPerScaleUp</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ReplicasPerScaleUp defines maximum replicas can be scaled up at once.
+The is use to prevent too aggressive scaling up operations
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>replicasPerScaleDown</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ReplicasPerScaleDown defines maximum replicas can be scaled down at
+once. The is use to prevent too aggressive scaling down operations
 </p>
 
 </td>

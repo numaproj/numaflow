@@ -20,9 +20,6 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Scale {
-    /// Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead. Cooldown seconds after a scaling operation before another one.
-    #[serde(rename = "cooldownSeconds", skip_serializing_if = "Option::is_none")]
-    pub cooldown_seconds: Option<i64>,
     /// Whether to disable autoscaling. Set to \"true\" when using Kubernetes HPA or any other 3rd party autoscaling strategies.
     #[serde(rename = "disabled", skip_serializing_if = "Option::is_none")]
     pub disabled: Option<bool>,
@@ -35,9 +32,18 @@ pub struct Scale {
     /// Minimum replicas.
     #[serde(rename = "min", skip_serializing_if = "Option::is_none")]
     pub min: Option<i32>,
-    /// ReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations
+    /// DeprecatedReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead
     #[serde(rename = "replicasPerScale", skip_serializing_if = "Option::is_none")]
     pub replicas_per_scale: Option<i64>,
+    /// ReplicasPerScaleDown defines maximum replicas can be scaled down at once. The is use to prevent too aggressive scaling down operations
+    #[serde(
+        rename = "replicasPerScaleDown",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub replicas_per_scale_down: Option<i64>,
+    /// ReplicasPerScaleUp defines maximum replicas can be scaled up at once. The is use to prevent too aggressive scaling up operations
+    #[serde(rename = "replicasPerScaleUp", skip_serializing_if = "Option::is_none")]
+    pub replicas_per_scale_up: Option<i64>,
     /// ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down. It defaults to the CooldownSeconds if not set.
     #[serde(
         rename = "scaleDownCooldownSeconds",
@@ -74,12 +80,13 @@ impl Scale {
     /// Scale defines the parameters for autoscaling.
     pub fn new() -> Scale {
         Scale {
-            cooldown_seconds: None,
             disabled: None,
             lookback_seconds: None,
             max: None,
             min: None,
             replicas_per_scale: None,
+            replicas_per_scale_down: None,
+            replicas_per_scale_up: None,
             scale_down_cooldown_seconds: None,
             scale_up_cooldown_seconds: None,
             target_buffer_availability: None,

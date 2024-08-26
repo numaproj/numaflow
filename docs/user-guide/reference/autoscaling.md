@@ -35,7 +35,8 @@ spec:
         zeroReplicaSleepSeconds: 120 # Optional, defaults to 120.
         targetProcessingSeconds: 20 # Optional, defaults to 20.
         targetBufferAvailability: 50 # Optional, defaults to 50.
-        replicasPerScale: 2 # Optional, defaults to 2.
+        replicasPerScaleUp: 2 # Optional, defaults to 2.
+        replicasPerScaleDown: 2 # Optional, defaults to 2.
 ```
 
 - `disabled` - Whether to disable Numaflow autoscaling, defaults to `false`.
@@ -60,8 +61,11 @@ spec:
   support autoscaling, typically increasing the value leads to lower processing rate, thus less replicas.
 - `targetBufferAvailability` - Targeted buffer availability in percentage, defaults to `50`. It is only effective for `UDF`
   and `Sink` vertices, it determines how aggressive you want to do for autoscaling, increasing the value will bring more replicas.
-- `replicasPerScale` - Maximum number of replicas change happens in one scale up or down operation, defaults to `2`. For
+- `replicasPerScaleUp` - Maximum number of replicas change happens in one scale up operation, defaults to `2`. For
   example, if current replica number is 3, the calculated desired replica number is 8; instead of scaling up the vertex to 8, it only does 5.
+- `replicasPerScaleDown` - Maximum number of replicas change happens in one scale down operation, defaults to `2`. For
+  example, if current replica number is 9, the calculated desired replica number is 4; instead of scaling down the vertex to 4, it only does 7.
+- `replicasPerScale` - (Deprecated: Use `replicasPerScaleUp` and `replicasPerScaleDown` instead, will be removed in v1.5) Maximum number of replicas change happens in one scale up or down operation, defaults to `2`.
 
 To disable Numaflow autoscaling, set `disabled: true` as following.
 

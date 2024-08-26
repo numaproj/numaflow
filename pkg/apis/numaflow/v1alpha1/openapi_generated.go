@@ -4167,13 +4167,6 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 							Format:      "int64",
 						},
 					},
-					"cooldownSeconds": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead. Cooldown seconds after a scaling operation before another one.",
-							Type:        []string{"integer"},
-							Format:      "int64",
-						},
-					},
 					"zeroReplicaSleepSeconds": {
 						SchemaProps: spec.SchemaProps{
 							Description: "After scaling down the source vertex to 0, sleep how many seconds before scaling the source vertex back up to peek.",
@@ -4197,7 +4190,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					},
 					"replicasPerScale": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations",
+							Description: "DeprecatedReplicasPerScale defines maximum replicas can be scaled up or down at once. The is use to prevent too aggressive scaling operations Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -4212,6 +4205,20 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 					"scaleDownCooldownSeconds": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down. It defaults to the CooldownSeconds if not set.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"replicasPerScaleUp": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReplicasPerScaleUp defines maximum replicas can be scaled up at once. The is use to prevent too aggressive scaling up operations",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"replicasPerScaleDown": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReplicasPerScaleDown defines maximum replicas can be scaled down at once. The is use to prevent too aggressive scaling down operations",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
