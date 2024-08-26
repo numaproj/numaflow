@@ -1264,41 +1264,47 @@ message Scale {
   // +optional
   optional uint32 lookbackSeconds = 4;
 
-  // Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead.
-  // Cooldown seconds after a scaling operation before another one.
-  // +optional
-  optional uint32 cooldownSeconds = 5;
-
   // After scaling down the source vertex to 0, sleep how many seconds before scaling the source vertex back up to peek.
   // +optional
-  optional uint32 zeroReplicaSleepSeconds = 6;
+  optional uint32 zeroReplicaSleepSeconds = 5;
 
   // TargetProcessingSeconds is used to tune the aggressiveness of autoscaling for source vertices, it measures how fast
   // you want the vertex to process all the pending messages. Typically increasing the value, which leads to lower processing
   // rate, thus less replicas. It's only effective for source vertices.
   // +optional
-  optional uint32 targetProcessingSeconds = 7;
+  optional uint32 targetProcessingSeconds = 6;
 
   // TargetBufferAvailability is used to define the target percentage of the buffer availability.
   // A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
   // It only applies to UDF and Sink vertices because only they have buffers to read.
   // +optional
-  optional uint32 targetBufferAvailability = 8;
+  optional uint32 targetBufferAvailability = 7;
 
-  // ReplicasPerScale defines maximum replicas can be scaled up or down at once.
-  // The is use to prevent too aggressive scaling operations
+  // DeprecatedReplicasPerScale defines the number of maximum replicas that can be changed in a single scale up or down operation.
+  // The is use to prevent from too aggressive scaling operations
+  // Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead
   // +optional
-  optional uint32 replicasPerScale = 9;
+  optional uint32 replicasPerScale = 8;
 
   // ScaleUpCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling up.
   // It defaults to the CooldownSeconds if not set.
   // +optional
-  optional uint32 scaleUpCooldownSeconds = 10;
+  optional uint32 scaleUpCooldownSeconds = 9;
 
   // ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down.
   // It defaults to the CooldownSeconds if not set.
   // +optional
-  optional uint32 scaleDownCooldownSeconds = 11;
+  optional uint32 scaleDownCooldownSeconds = 10;
+
+  // ReplicasPerScaleUp defines the number of maximum replicas that can be changed in a single scaled up operation.
+  // The is use to prevent from too aggressive scaling up operations
+  // +optional
+  optional uint32 replicasPerScaleUp = 11;
+
+  // ReplicasPerScaleDown defines the number of maximum replicas that can be changed in a single scaled down operation.
+  // The is use to prevent from too aggressive scaling down operations
+  // +optional
+  optional uint32 replicasPerScaleDown = 12;
 }
 
 // ServingSource is the HTTP endpoint for Numaflow.
