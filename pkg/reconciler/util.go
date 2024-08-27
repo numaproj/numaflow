@@ -18,12 +18,17 @@ package reconciler
 
 import (
 	"fmt"
+	"slices"
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
+
+// unhealthyWaitingStatus contains the status messages for a pod in waiting state
+// which should be considered as unhealthy
+var unhealthyWaitingStatus = []string{"CrashLoopBackOff", "ImagePullBackOff"}
 
 // CheckVertexPodsStatus checks the status by iterating over pods objects
 func CheckVertexPodsStatus(vertexPods *corev1.PodList) (healthy bool, reason string, message string) {
@@ -45,7 +50,7 @@ func CheckVertexPodsStatus(vertexPods *corev1.PodList) (healthy bool, reason str
 
 func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
 	for _, c := range pod.Status.ContainerStatuses {
-		if c.State.Waiting != nil && c.State.Waiting.Reason == "CrashLoopBackOff" {
+		if c.State.Waiting != nil && slices.Contains(unhealthyWaitingStatus, c.State.Waiting.Reason) {
 			return false, c.State.Waiting.Reason
 		}
 		if c.State.Terminated != nil && c.State.Terminated.Reason == "Error" {
