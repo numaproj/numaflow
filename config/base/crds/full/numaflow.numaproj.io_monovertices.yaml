@@ -5551,6 +5551,9 @@ spec:
                 - Paused
                 - Deleting
                 type: string
+              readyReplicas:
+                format: int32
+                type: integer
               reason:
                 type: string
               replicas:
@@ -5558,8 +5561,6 @@ spec:
                 type: integer
               selector:
                 type: string
-            required:
-            - replicas
             type: object
         required:
         - spec

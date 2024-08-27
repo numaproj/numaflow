@@ -708,14 +708,27 @@ func (v VertexSpec) getType() containerSupplier {
 }
 
 type VertexStatus struct {
-	Status             `json:",inline" protobuf:"bytes,1,opt,name=status"`
-	Phase              VertexPhase `json:"phase" protobuf:"bytes,2,opt,name=phase,casttype=VertexPhase"`
-	Replicas           uint32      `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
-	Selector           string      `json:"selector,omitempty" protobuf:"bytes,4,opt,name=selector"`
-	Reason             string      `json:"reason,omitempty" protobuf:"bytes,5,opt,name=reason"`
-	Message            string      `json:"message,omitempty" protobuf:"bytes,6,opt,name=message"`
-	LastScaledAt       metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,7,opt,name=lastScaledAt"`
-	ObservedGeneration int64       `json:"observedGeneration,omitempty" protobuf:"varint,8,opt,name=observedGeneration"`
+	Status `json:",inline" protobuf:"bytes,1,opt,name=status"`
+	// +optional
+	Phase VertexPhase `json:"phase" protobuf:"bytes,2,opt,name=phase,casttype=VertexPhase"`
+	// Total number of non-terminated pods targeted by this Vertex (their labels match the selector).
+	// +optional
+	Replicas uint32 `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
+	// +optional
+	Selector string `json:"selector,omitempty" protobuf:"bytes,4,opt,name=selector"`
+	// +optional
+	Reason string `json:"reason,omitempty" protobuf:"bytes,5,opt,name=reason"`
+	// +optional
+	Message string `json:"message,omitempty" protobuf:"bytes,6,opt,name=message"`
+	// Time of last scaling operation.
+	// +optional
+	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,7,opt,name=lastScaledAt"`
+	// The generation observed by the Vertex controller.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,8,opt,name=observedGeneration"`
+	// The number of pods targeted by this Vertex with a Ready Condition.
+	// +optional
+	ReadyReplicas uint32 `json:"readyReplicas,omitempty" protobuf:"varint,9,opt,name=readyReplicas"`
 }
 
 func (vs *VertexStatus) MarkPhase(phase VertexPhase, reason, message string) {
