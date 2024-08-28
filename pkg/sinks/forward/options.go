@@ -48,6 +48,7 @@ func DefaultOptions() *options {
 		readBatchSize:   dfv1.DefaultReadBatchSize,
 		sinkConcurrency: dfv1.DefaultReadBatchSize,
 		logger:          logging.NewLogger(),
+		retryStrategy:   dfv1.GetDefaultSinkRetryStrategy(),
 	}
 }
 

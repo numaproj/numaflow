@@ -143,15 +143,8 @@ func (a *AbstractSink) IsAnySinkSpecified() bool {
 
 func (s *Sink) GetRetryStrategy() *RetryStrategy {
 	fmt.Println("RETRYYY", s.RetryStrategy)
-	defaultRetrySteps := uint32(DefaultRetrySteps)
-	onFailure := OnFailRetry
-	retryStrategy := &RetryStrategy{
-		BackOff: &Backoff{
-			Interval: &metav1.Duration{Duration: DefaultRetryInterval},
-			Steps:    &defaultRetrySteps,
-		},
-		OnFailure: &onFailure,
-	}
+	retryStrategy := GetDefaultSinkRetryStrategy()
+
 	if s.RetryStrategy == nil {
 		return retryStrategy
 	}
@@ -173,4 +166,16 @@ func (s *Sink) GetRetryStrategy() *RetryStrategy {
 	fmt.Println("RETRYYY - 2", s.RetryStrategy)
 
 	return retryStrategy
+}
+
+func GetDefaultSinkRetryStrategy() *RetryStrategy {
+	defaultRetrySteps := uint32(DefaultRetrySteps)
+	onFailure := OnFailRetry
+	return &RetryStrategy{
+		BackOff: &Backoff{
+			Interval: &metav1.Duration{Duration: DefaultRetryInterval},
+			Steps:    &defaultRetrySteps,
+		},
+		OnFailure: &onFailure,
+	}
 }

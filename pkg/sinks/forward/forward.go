@@ -438,7 +438,7 @@ func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWr
 		if ok, _ := df.IsShuttingDown(); err != nil && ok {
 			return nil, nil, err
 		}
-		// check what is the error strategy after retry is completed and we still have messages to be
+		// check what is the error strategy after retry is completed, and we still have messages to be
 		// handled
 		if len(messagesToTry) > 0 {
 			df.opts.logger.Info("MYDEBUG: I'm not done yet")
@@ -480,11 +480,11 @@ func (df *DataForward) getBackOffConditions(infinite bool) (wait.Backoff, dfv1.O
 	if infinite {
 		return df.getInfiniteBackOffConditions(), dfv1.OnFailRetry
 	}
-	return df.getDefaultBackOffConditions(), *df.opts.retryStrategy.OnFailure
+	return df.getSpecBackOffConditions(), *df.opts.retryStrategy.OnFailure
 }
 
-// getDefaultBackOffConditions retrieves the standard backoff conditions from the configuration options.
-func (df *DataForward) getDefaultBackOffConditions() wait.Backoff {
+// getSpecBackOffConditions retrieves the standard backoff conditions from the configuration options.
+func (df *DataForward) getSpecBackOffConditions() wait.Backoff {
 	// Initial interval duration and number of retries are taken from DataForward settings.
 	return wait.Backoff{
 		Duration: df.opts.retryStrategy.BackOff.Interval.Duration,
