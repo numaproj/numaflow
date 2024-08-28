@@ -90,6 +90,13 @@ type AbstractPodTemplate struct {
 	// configuration based on DNSPolicy.
 	// +optional
 	DNSConfig *corev1.PodDNSConfig `json:"dnsConfig,omitempty" protobuf:"bytes,13,opt,name=dnsConfig"`
+	// ResourceClaims defines which ResourceClaims must be allocated and reserved
+	// before the Pod is allowed to start. The resources will be made available to those
+	// containers which consume them by name.
+	// +patchMergeKey=name
+	// +patchStrategy=merge,retainKeys
+	// +optional
+	ResourceClaims []corev1.PodResourceClaim `json:"resourceClaims,omitempty" patchStrategy:"merge,retainKeys" patchMergeKey:"name" protobuf:"bytes,14,rep,name=resourceClaims"`
 }
 
 // ApplyToPodSpec updates the PodSpec with the values in the AbstractPodTemplate
@@ -129,6 +136,9 @@ func (apt *AbstractPodTemplate) ApplyToPodSpec(ps *corev1.PodSpec) {
 	}
 	if ps.DNSConfig == nil {
 		ps.DNSConfig = apt.DNSConfig
+	}
+	if len(ps.ResourceClaims) == 0 {
+		ps.ResourceClaims = apt.ResourceClaims
 	}
 }
 

@@ -114,6 +114,14 @@ message AbstractPodTemplate {
   // configuration based on DNSPolicy.
   // +optional
   optional k8s.io.api.core.v1.PodDNSConfig dnsConfig = 13;
+
+  // ResourceClaims defines which ResourceClaims must be allocated and reserved
+  // before the Pod is allowed to start. The resources will be made available to those
+  // containers which consume them by name.
+  // +patchMergeKey=name
+  // +patchStrategy=merge,retainKeys
+  // +optional
+  repeated k8s.io.api.core.v1.PodResourceClaim resourceClaims = 14;
 }
 
 message AbstractSink {
