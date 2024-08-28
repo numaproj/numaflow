@@ -1412,6 +1412,20 @@
   
   
     <li class="md-nav__item">
+      <a href="../pod-specifications/" class="md-nav__link">
+        Pod Specifications
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../container-resources/" class="md-nav__link">
         Container Resources
       </a>
@@ -2332,6 +2346,9 @@
 <span class="w">      </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-priority-class-name</span>
 <span class="w">      </span><span class="nt">priority</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
 <span class="w">      </span><span class="nt">serviceAccountName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-service-account</span>
+<span class="w">      </span><span class="nt">resourceClaims</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-claim</span>
+<span class="w">          </span><span class="l l-Scalar l-Scalar-Plain">xxx</span>
 <span class="w">      </span><span class="nt">affinity</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">podAntiAffinity</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">requiredDuringSchedulingIgnoredDuringExecution</span><span class="p">:</span>
@@ -2354,6 +2371,8 @@
 <span class="w">        </span><span class="nt">resources</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">limits</span><span class="p">:</span>
 <span class="w">            </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500Mi</span>
+<span class="w">          </span><span class="nt">claims</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-claim</span>
 <span class="w">      </span><span class="nt">initContainerTemplate</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">env</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MY_ENV_NAME</span>
@@ -2420,7 +2439,6 @@
 <span class="w">          </span><span class="nt">my-label-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-label-value</span>
 <span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">my-annotation-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-annotation-value</span>
-<span class="w">      </span><span class="c1"># Pod spec</span>
 <span class="w">      </span><span class="nt">nodeSelector</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">my-node-label-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-node-label-value</span>
 <span class="w">      </span><span class="nt">tolerations</span><span class="p">:</span>
@@ -2488,6 +2506,9 @@
 <span class="w">      </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-priority-class-name</span>
 <span class="w">      </span><span class="nt">priority</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span>
 <span class="w">      </span><span class="nt">serviceAccountName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-service-account</span>
+<span class="w">      </span><span class="nt">resourceClaims</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-claim</span>
+<span class="w">          </span><span class="l l-Scalar l-Scalar-Plain">xxx</span>
 <span class="w">      </span><span class="nt">affinity</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">podAntiAffinity</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">requiredDuringSchedulingIgnoredDuringExecution</span><span class="p">:</span>
@@ -2506,6 +2527,8 @@
 <span class="w">        </span><span class="nt">resources</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">limits</span><span class="p">:</span>
 <span class="w">            </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500Mi</span>
+<span class="w">          </span><span class="nt">claims</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-claim</span>
 <span class="w">      </span><span class="nt">initContainerTemplate</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">env</span><span class="p">:</span>
 <span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MY_ENV_NAME</span>
