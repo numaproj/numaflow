@@ -71,6 +71,11 @@ func TestApplyToPodSpec(t *testing.T) {
 			},
 		},
 		ServiceAccountName: "template-sa",
+		ResourceClaims: []corev1.PodResourceClaim{
+			{
+				Name: "template-resource-claim",
+			},
+		},
 	}
 
 	podSpec := &corev1.PodSpec{
@@ -92,4 +97,5 @@ func TestApplyToPodSpec(t *testing.T) {
 	assert.Equal(t, podSpec.Priority, abstractPodTemplate.Priority)
 	assert.Equal(t, podSpec.Affinity, abstractPodTemplate.Affinity)
 	assert.Equal(t, podSpec.ServiceAccountName, "spec-sa")
+	assert.Equal(t, podSpec.ResourceClaims[0].Name, "template-resource-claim")
 }

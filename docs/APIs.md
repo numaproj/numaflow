@@ -369,6 +369,29 @@ merged to the generated DNS configuration based on DNSPolicy.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>resourceClaims</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#podresourceclaim-v1-core">
+\[\]Kubernetes core/v1.PodResourceClaim </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ResourceClaims defines which ResourceClaims must be allocated and
+reserved before the Pod is allowed to start. The resources will be made
+available to those containers which consume them by name.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>

@@ -93,6 +93,7 @@ nav:
           - user-guide/reference/multi-partition.md
           - user-guide/reference/side-inputs.md
           - Configuration:              
+            - user-guide/reference/configuration/pod-specifications.md
             - user-guide/reference/configuration/container-resources.md
             - user-guide/reference/configuration/volumes.md
             - user-guide/reference/configuration/environment-variables.md

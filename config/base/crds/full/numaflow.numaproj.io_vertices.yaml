@@ -1583,6 +1583,22 @@ spec:
                 default: 1
                 format: int32
                 type: integer
+              resourceClaims:
+                items:
+                  properties:
+                    name:
+                      type: string
+                    source:
+                      properties:
+                        resourceClaimName:
+                          type: string
+                        resourceClaimTemplateName:
+                          type: string
+                      type: object
+                  required:
+                  - name
+                  type: object
+                type: array
               runtimeClassName:
                 type: string
               scale:

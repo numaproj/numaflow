@@ -62,6 +62,9 @@ pub struct AbstractVertex {
     /// If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
     #[serde(rename = "priorityClassName", skip_serializing_if = "Option::is_none")]
     pub priority_class_name: Option<String>,
+    /// ResourceClaims defines which ResourceClaims must be allocated and reserved before the Pod is allowed to start. The resources will be made available to those containers which consume them by name.
+    #[serde(rename = "resourceClaims", skip_serializing_if = "Option::is_none")]
+    pub resource_claims: Option<Vec<k8s_openapi::api::core::v1::PodResourceClaim>>,
     /// RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class
     #[serde(rename = "runtimeClassName", skip_serializing_if = "Option::is_none")]
     pub runtime_class_name: Option<String>,
@@ -114,6 +117,7 @@ impl AbstractVertex {
             partitions: None,
             priority: None,
             priority_class_name: None,
+            resource_claims: None,
             runtime_class_name: None,
             scale: None,
             security_context: None,

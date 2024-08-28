@@ -84,6 +84,13 @@ func (in *AbstractPodTemplate) DeepCopyInto(out *AbstractPodTemplate) {
 		*out = new(v1.PodDNSConfig)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.ResourceClaims != nil {
+		in, out := &in.ResourceClaims, &out.ResourceClaims
+		*out = make([]v1.PodResourceClaim, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	return
 }
 
