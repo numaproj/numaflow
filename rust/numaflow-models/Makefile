@@ -50,6 +50,7 @@ generate:
 		--type-mappings CoreV1ContainerResizePolicy="k8s_openapi::api::core::v1::ContainerResizePolicy" \
 		--type-mappings CoreV1Container="k8s_openapi::api::core::v1::Container" \
 		--type-mappings CoreV1Volume="k8s_openapi::api::core::v1::Volume" \
+		--type-mappings CoreV1PodResourceClaim="k8s_openapi::api::core::v1::PodResourceClaim" \
 		--type-mappings CoreV1EmptyDirVolumeSource="k8s_openapi::api::core::v1::EmptyDirVolumeSource" \
 		--type-mappings MetaV1Duration="kube::core::Duration" \
 		--type-mappings MetaV1ListMeta="k8s_openapi::apimachinery::pkg::apis::meta::v1::ListMeta" \
