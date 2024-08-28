@@ -1,6 +1,6 @@
 # Pod Specifications
 
-Most of the Kunernetes Pod specification fields are supported in the `Pipeline`, `MonoVertex` and `InterStepBufferService` spec. Those fields include:
+Most of the Kunernetes Pod specification fields are supported in the spec of `Pipeline`, `MonoVertex` and `InterStepBufferService`. Those fields include:
 
 - `nodeSelector`
 - `tolerations`
