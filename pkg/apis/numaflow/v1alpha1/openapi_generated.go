@@ -91,6 +91,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisBufferService":               schema_pkg_apis_numaflow_v1alpha1_RedisBufferService(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisConfig":                      schema_pkg_apis_numaflow_v1alpha1_RedisConfig(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSettings":                    schema_pkg_apis_numaflow_v1alpha1_RedisSettings(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy":                    schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL":                             schema_pkg_apis_numaflow_v1alpha1_SASL(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain":                        schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale":                            schema_pkg_apis_numaflow_v1alpha1_Scale(ref),
@@ -4052,6 +4053,39 @@ func schema_pkg_apis_numaflow_v1alpha1_RedisSettings(ref common.ReferenceCallbac
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "RetryStrategy defines the criteria and method for retrying a failed write operation in the Sink. This type is used to customize how retries are handled, ensuring messages that fail to be delivered can be resent based on the configured strategy. It includes settings for fixed interval retry strategy and specific actions to take on failures.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"timeout": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Timeout sets the time to wait before the next retry, after a failure occurs.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"retryCount": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
+					"onFailure": {
+						SchemaProps: spec.SchemaProps{
+							Description: "OnFailure specifies the action to take when a retry fails. The default action is to retry.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration", "k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_SASL(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -4578,11 +4612,17 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink"),
 						},
 					},
+					"retryStrategy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
 	}
 }
 

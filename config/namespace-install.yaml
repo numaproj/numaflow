@@ -6192,6 +6192,21 @@ spec:
                     type: object
                   log:
                     type: object
+                  retryStrategy:
+                    properties:
+                      onFailure:
+                        default: retry
+                        type: string
+                      retryCount:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        default: 0
+                        x-kubernetes-int-or-string: true
+                      timeout:
+                        default: 1ms
+                        type: string
+                    type: object
                   udsink:
                     properties:
                       container:
@@ -15651,6 +15666,21 @@ spec:
                           type: object
                         log:
                           type: object
+                        retryStrategy:
+                          properties:
+                            onFailure:
+                              default: retry
+                              type: string
+                            retryCount:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              default: 0
+                              x-kubernetes-int-or-string: true
+                            timeout:
+                              default: 1ms
+                              type: string
+                          type: object
                         udsink:
                           properties:
                             container:
@@ -21075,6 +21105,21 @@ spec:
                     - topic
                     type: object
                   log:
+                    type: object
+                  retryStrategy:
+                    properties:
+                      onFailure:
+                        default: retry
+                        type: string
+                      retryCount:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        default: 0
+                        x-kubernetes-int-or-string: true
+                      timeout:
+                        default: 1ms
+                        type: string
                     type: object
                   udsink:
                     properties:

@@ -26,6 +26,7 @@ import "k8s.io/apimachinery/pkg/api/resource/generated.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
+import "k8s.io/apimachinery/pkg/util/intstr/generated.proto";
 
 // Package-wide variables from generator "generated".
 option go_package = "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1";
@@ -1213,6 +1214,26 @@ message RedisSettings {
   optional string sentinel = 4;
 }
 
+// RetryStrategy defines the criteria and method for retrying a failed write operation in the Sink.
+// This type is used to customize how retries are handled, ensuring messages that fail to be delivered
+// can be resent based on the configured strategy. It includes settings for fixed interval retry
+// strategy and specific actions to take on failures.
+message RetryStrategy {
+  // Timeout sets the time to wait before the next retry, after a failure occurs.
+  // +kubebuilder:default="1ms"
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration timeout = 1;
+
+  // +optional
+  // +kubebuilder:default=0
+  optional k8s.io.apimachinery.pkg.util.intstr.IntOrString retryCount = 2;
+
+  // OnFailure specifies the action to take when a retry fails. The default action is to retry.
+  // +optional
+  // +kubebuilder:default="retry"
+  optional string onFailure = 3;
+}
+
 message SASL {
   // SASL mechanism to use
   optional string mechanism = 1;
@@ -1383,6 +1404,10 @@ message Sink {
   // initiated if the ud-sink response field sets it.
   // +optional
   optional AbstractSink fallback = 2;
+
+  // RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.
+  // +optional
+  optional RetryStrategy retryStrategy = 3;
 }
 
 // SlidingWindow describes a sliding window

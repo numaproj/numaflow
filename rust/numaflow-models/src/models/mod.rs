@@ -124,6 +124,8 @@ pub mod redis_config;
 pub use self::redis_config::RedisConfig;
 pub mod redis_settings;
 pub use self::redis_settings::RedisSettings;
+pub mod retry_strategy;
+pub use self::retry_strategy::RetryStrategy;
 pub mod sasl;
 pub use self::sasl::Sasl;
 pub mod sasl_plain;

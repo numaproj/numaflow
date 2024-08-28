@@ -6707,6 +6707,23 @@ etc.).
 
 </p>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.OnFailRetryStrategy">
+
+OnFailRetryStrategy (<code>string</code> alias)
+</p>
+
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RetryStrategy">RetryStrategy</a>)
+</p>
+
+<p>
+
+</p>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.PBQStorage">
 
 PBQStorage
@@ -8045,6 +8062,115 @@ config
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.RetryStrategy">
+
+RetryStrategy
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
+</p>
+
+<p>
+
+<p>
+
+RetryStrategy defines the criteria and method for retrying a failed
+write operation in the Sink. This type is used to customize how retries
+are handled, ensuring messages that fail to be delivered can be resent
+based on the configured strategy. It includes settings for fixed
+interval retry strategy and specific actions to take on failures.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>timeout</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Timeout sets the time to wait before the next retry, after a failure
+occurs.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>retryCount</code></br> <em>
+k8s.io/apimachinery/pkg/util/intstr.IntOrString </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>onFailure</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.OnFailRetryStrategy">
+OnFailRetryStrategy </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+OnFailure specifies the action to take when a retry fails. The default
+action is to retry.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.SASL">
 
 SASL
@@ -9231,6 +9357,28 @@ Description
 Fallback sink can be imagined as DLQ for primary Sink. The writes to
 Fallback sink will only be initiated if the ud-sink response field sets
 it.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>retryStrategy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RetryStrategy"> RetryStrategy
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+RetryStrategy struct encapsulates the settings for retrying operations
+in the event of failures.
 </p>
 
 </td>

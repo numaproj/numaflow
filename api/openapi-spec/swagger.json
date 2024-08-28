@@ -19669,6 +19669,23 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.RetryStrategy": {
+      "description": "RetryStrategy defines the criteria and method for retrying a failed write operation in the Sink. This type is used to customize how retries are handled, ensuring messages that fail to be delivered can be resent based on the configured strategy. It includes settings for fixed interval retry strategy and specific actions to take on failures.",
+      "type": "object",
+      "properties": {
+        "onFailure": {
+          "description": "OnFailure specifies the action to take when a retry fails. The default action is to retry.",
+          "type": "string"
+        },
+        "retryCount": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.util.intstr.IntOrString"
+        },
+        "timeout": {
+          "description": "Timeout sets the time to wait before the next retry, after a failure occurs.",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.SASL": {
       "type": "object",
       "required": [
@@ -19972,6 +19989,10 @@
         "log": {
           "description": "Log sink is used to write the data to the log.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
+        },
+        "retryStrategy": {
+          "description": "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RetryStrategy"
         },
         "udsink": {
           "description": "UDSink sink is used to write the data to the user-defined sink.",
