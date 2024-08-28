@@ -1043,6 +1043,22 @@ spec:
                     default: 3
                     format: int32
                     type: integer
+                  resourceClaims:
+                    items:
+                      properties:
+                        name:
+                          type: string
+                        source:
+                          properties:
+                            resourceClaimName:
+                              type: string
+                            resourceClaimTemplateName:
+                              type: string
+                          type: object
+                      required:
+                      - name
+                      type: object
+                    type: array
                   runtimeClassName:
                     type: string
                   securityContext:
@@ -2171,6 +2187,22 @@ spec:
                         default: 3
                         format: int32
                         type: integer
+                      resourceClaims:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            source:
+                              properties:
+                                resourceClaimName:
+                                  type: string
+                                resourceClaimTemplateName:
+                                  type: string
+                              type: object
+                          required:
+                          - name
+                          type: object
+                        type: array
                       runtimeClassName:
                         type: string
                       securityContext:
@@ -4040,6 +4072,22 @@ spec:
                   replicas:
                     format: int32
                     type: integer
+                  resourceClaims:
+                    items:
+                      properties:
+                        name:
+                          type: string
+                        source:
+                          properties:
+                            resourceClaimName:
+                              type: string
+                            resourceClaimTemplateName:
+                              type: string
+                          type: object
+                      required:
+                      - name
+                      type: object
+                    type: array
                   runtimeClassName:
                     type: string
                   securityContext:
@@ -4818,6 +4866,22 @@ spec:
                 default: 1
                 format: int32
                 type: integer
+              resourceClaims:
+                items:
+                  properties:
+                    name:
+                      type: string
+                    source:
+                      properties:
+                        resourceClaimName:
+                          type: string
+                        resourceClaimTemplateName:
+                          type: string
+                      type: object
+                  required:
+                  - name
+                  type: object
+                type: array
               runtimeClassName:
                 type: string
               scale:
@@ -10064,6 +10128,22 @@ spec:
                       replicas:
                         format: int32
                         type: integer
+                      resourceClaims:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            source:
+                              properties:
+                                resourceClaimName:
+                                  type: string
+                                resourceClaimTemplateName:
+                                  type: string
+                              type: object
+                          required:
+                          - name
+                          type: object
+                        type: array
                       runtimeClassName:
                         type: string
                       securityContext:
@@ -10777,6 +10857,22 @@ spec:
                         type: integer
                       priorityClassName:
                         type: string
+                      resourceClaims:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            source:
+                              properties:
+                                resourceClaimName:
+                                  type: string
+                                resourceClaimTemplateName:
+                                  type: string
+                              type: object
+                          required:
+                          - name
+                          type: object
+                        type: array
                       runtimeClassName:
                         type: string
                       securityContext:
@@ -11668,6 +11764,22 @@ spec:
                         type: integer
                       priorityClassName:
                         type: string
+                      resourceClaims:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            source:
+                              properties:
+                                resourceClaimName:
+                                  type: string
+                                resourceClaimTemplateName:
+                                  type: string
+                              type: object
+                          required:
+                          - name
+                          type: object
+                        type: array
                       runtimeClassName:
                         type: string
                       securityContext:
@@ -12556,6 +12668,22 @@ spec:
                         type: integer
                       priorityClassName:
                         type: string
+                      resourceClaims:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            source:
+                              properties:
+                                resourceClaimName:
+                                  type: string
+                                resourceClaimTemplateName:
+                                  type: string
+                              type: object
+                          required:
+                          - name
+                          type: object
+                        type: array
                       runtimeClassName:
                         type: string
                       securityContext:
@@ -14095,6 +14223,22 @@ spec:
                       type: integer
                     priorityClassName:
                       type: string
+                    resourceClaims:
+                      items:
+                        properties:
+                          name:
+                            type: string
+                          source:
+                            properties:
+                              resourceClaimName:
+                                type: string
+                              resourceClaimTemplateName:
+                                type: string
+                            type: object
+                        required:
+                        - name
+                        type: object
+                      type: array
                     runtimeClassName:
                       type: string
                     scale:
@@ -19520,6 +19664,22 @@ spec:
                 default: 1
                 format: int32
                 type: integer
+              resourceClaims:
+                items:
+                  properties:
+                    name:
+                      type: string
+                    source:
+                      properties:
+                        resourceClaimName:
+                          type: string
+                        resourceClaimTemplateName:
+                          type: string
+                      type: object
+                  required:
+                  - name
+                  type: object
+                type: array
               runtimeClassName:
                 type: string
               scale:

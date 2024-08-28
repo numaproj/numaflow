@@ -39,6 +39,9 @@ spec:
       priorityClassName: my-priority-class-name
       priority: 50
       serviceAccountName: my-service-account
+      resourceClaims:
+        - name: my-claim
+          xxx
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -61,6 +64,8 @@ spec:
         resources:
           limits:
             memory: 500Mi
+          claims:
+            - name: my-claim
       initContainerTemplate:
         env:
           - name: MY_ENV_NAME
@@ -137,7 +142,6 @@ spec:
           my-label-name: my-label-value
         annotations:
           my-annotation-name: my-annotation-value
-      # Pod spec
       nodeSelector:
         my-node-label-name: my-node-label-value
       tolerations:
@@ -210,6 +214,9 @@ spec:
       priorityClassName: my-priority-class-name
       priority: 50
       serviceAccountName: my-service-account
+      resourceClaims:
+        - name: my-claim
+          xxx
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -228,6 +235,8 @@ spec:
         resources:
           limits:
             memory: 500Mi
+          claims:
+            - name: my-claim
       initContainerTemplate:
         env:
           - name: MY_ENV_NAME
