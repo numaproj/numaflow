@@ -243,6 +243,10 @@ const (
 
 	// Serving source
 	DefaultServingTTL = 24 * time.Hour
+
+	// Retry Strategy
+	DefaultRetryInterval = 1 * time.Millisecond
+	DefaultRetrySteps    = 0
 )
 
 var (

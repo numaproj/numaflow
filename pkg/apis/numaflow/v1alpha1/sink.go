@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -142,5 +143,34 @@ func (a *AbstractSink) IsAnySinkSpecified() bool {
 
 func (s *Sink) GetRetryStrategy() *RetryStrategy {
 	fmt.Println("RETRYYY", s.RetryStrategy)
-	return nil
+	defaultRetrySteps := uint32(DefaultRetrySteps)
+	onFailure := OnFailRetry
+	retryStrategy := &RetryStrategy{
+		BackOff: &Backoff{
+			Interval: &metav1.Duration{Duration: DefaultRetryInterval},
+			Steps:    &defaultRetrySteps,
+		},
+		OnFailure: &onFailure,
+	}
+	if s.RetryStrategy == nil {
+		return retryStrategy
+	}
+
+	if s.RetryStrategy.BackOff != nil {
+		if s.RetryStrategy.BackOff.Interval != nil {
+			retryStrategy.BackOff.Interval = s.RetryStrategy.BackOff.Interval
+		}
+
+		if s.RetryStrategy.BackOff.Steps != nil {
+			retryStrategy.BackOff.Steps = s.RetryStrategy.BackOff.Steps
+		}
+	}
+
+	if s.RetryStrategy.OnFailure != nil {
+		retryStrategy.OnFailure = s.RetryStrategy.OnFailure
+	}
+
+	fmt.Println("RETRYYY - 2", s.RetryStrategy)
+
+	return retryStrategy
 }
