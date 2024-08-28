@@ -19,7 +19,6 @@ generate:
 		sed 's/io.k8s.api.core.v1./CoreV1/' | \
 		sed 's/io.k8s.apimachinery.pkg.apis.meta.v1./MetaV1/' | \
 		sed 's/io.k8s.apimachinery.pkg.api.resource.Quantity/ResourceQuantity/' | \
-		sed 's/io.k8s.apimachinery.pkg.util.intstr.IntOrString/UtilIntStr/' | \
 		sed 's/io.numaproj.numaflow.v1alpha1.//' \
 		> ./dist/swagger.json
 	$(DOCKER) openapitools/openapi-generator-cli:$(GENERATOR_VERSION) \
@@ -58,7 +57,6 @@ generate:
 		--type-mappings MetaV1Time="k8s_openapi::apimachinery::pkg::apis::meta::v1::Time" \
 		--type-mappings MetaV1ObjectMeta="k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta" \
 		--type-mappings ResourceQuantity="k8s_openapi::apimachinery::pkg::api::resource::Quantity" \
-		--type-mappings UtilIntStr="k8s_openapi::apimachinery::pkg::util::intstr::IntOrString" \
 		--generate-alias-as-model
 
 	cargo add kube

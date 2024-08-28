@@ -17790,6 +17790,21 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.Backoff": {
+      "description": "Backoff defines parameters used to systematically configure the retry strategy.",
+      "properties": {
+        "interval": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "Interval sets the delay to wait before retry, after a failure occurs."
+        },
+        "steps": {
+          "description": "Steps defines the number of times to retry after a failure occurs.",
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.BasicAuth": {
       "description": "BasicAuth represents the basic authentication approach which contains a user name and a password.",
       "properties": {
@@ -19684,18 +19699,15 @@
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.RetryStrategy": {
-      "description": "RetryStrategy defines the criteria and method for retrying a failed write operation in the Sink. This type is used to customize how retries are handled, ensuring messages that fail to be delivered can be resent based on the configured strategy. It includes settings for fixed interval retry strategy and specific actions to take on failures.",
+      "description": "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures. It includes a BackOff strategy to manage the timing of retries and defines the action to take upon failure.",
       "properties": {
+        "backoff": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Backoff",
+          "description": "BackOff specifies the parameters for the backoff strategy, controlling how delays between retries should increase."
+        },
         "onFailure": {
           "description": "OnFailure specifies the action to take when a retry fails. The default action is to retry.",
           "type": "string"
-        },
-        "retryCount": {
-          "$ref": "#/definitions/io.k8s.apimachinery.pkg.util.intstr.IntOrString"
-        },
-        "timeout": {
-          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
-          "description": "Timeout sets the time to wait before the next retry, after a failure occurs."
         }
       },
       "type": "object"

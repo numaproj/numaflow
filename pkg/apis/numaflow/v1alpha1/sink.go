@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -138,6 +140,7 @@ func (a *AbstractSink) IsAnySinkSpecified() bool {
 	return a.Log != nil || a.Kafka != nil || a.Blackhole != nil || a.UDSink != nil
 }
 
-//func (s *Sink) GetRetryStrategy() *RetryStrategy {
-//
-//}
+func (s *Sink) GetRetryStrategy() *RetryStrategy {
+	fmt.Println("RETRYYY", s.RetryStrategy)
+	return nil
+}

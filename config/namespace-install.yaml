@@ -6194,17 +6194,18 @@ spec:
                     type: object
                   retryStrategy:
                     properties:
+                      backoff:
+                        properties:
+                          interval:
+                            default: 1ms
+                            type: string
+                          steps:
+                            default: 0
+                            format: int32
+                            type: integer
+                        type: object
                       onFailure:
                         default: retry
-                        type: string
-                      retryCount:
-                        anyOf:
-                        - type: integer
-                        - type: string
-                        default: 0
-                        x-kubernetes-int-or-string: true
-                      timeout:
-                        default: 1ms
                         type: string
                     type: object
                   udsink:
@@ -15668,17 +15669,18 @@ spec:
                           type: object
                         retryStrategy:
                           properties:
+                            backoff:
+                              properties:
+                                interval:
+                                  default: 1ms
+                                  type: string
+                                steps:
+                                  default: 0
+                                  format: int32
+                                  type: integer
+                              type: object
                             onFailure:
                               default: retry
-                              type: string
-                            retryCount:
-                              anyOf:
-                              - type: integer
-                              - type: string
-                              default: 0
-                              x-kubernetes-int-or-string: true
-                            timeout:
-                              default: 1ms
                               type: string
                           type: object
                         udsink:
@@ -21108,17 +21110,18 @@ spec:
                     type: object
                   retryStrategy:
                     properties:
+                      backoff:
+                        properties:
+                          interval:
+                            default: 1ms
+                            type: string
+                          steps:
+                            default: 0
+                            format: int32
+                            type: integer
+                        type: object
                       onFailure:
                         default: retry
-                        type: string
-                      retryCount:
-                        anyOf:
-                        - type: integer
-                        - type: string
-                        default: 0
-                        x-kubernetes-int-or-string: true
-                      timeout:
-                        default: 1ms
                         type: string
                     type: object
                   udsink:

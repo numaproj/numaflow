@@ -885,6 +885,93 @@ needs to add “Authorization: Bearer <token>” in the header
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.Backoff">
+
+Backoff
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RetryStrategy">RetryStrategy</a>)
+</p>
+
+<p>
+
+<p>
+
+Backoff defines parameters used to systematically configure the retry
+strategy.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>interval</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Interval sets the delay to wait before retry, after a failure occurs.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>steps</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Steps defines the number of times to retry after a failure occurs.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.BasicAuth">
 
 BasicAuth
@@ -8077,11 +8164,9 @@ RetryStrategy
 
 <p>
 
-RetryStrategy defines the criteria and method for retrying a failed
-write operation in the Sink. This type is used to customize how retries
-are handled, ensuring messages that fail to be delivered can be resent
-based on the configured strategy. It includes settings for fixed
-interval retry strategy and specific actions to take on failures.
+RetryStrategy struct encapsulates the settings for retrying operations
+in the event of failures. It includes a BackOff strategy to manage the
+timing of retries and defines the action to take upon failure.
 </p>
 
 </p>
@@ -8112,9 +8197,8 @@ Description
 
 <td>
 
-<code>timeout</code></br> <em>
-<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
-Kubernetes meta/v1.Duration </a> </em>
+<code>backoff</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Backoff"> Backoff </a> </em>
 </td>
 
 <td>
@@ -8122,25 +8206,10 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 
-Timeout sets the time to wait before the next retry, after a failure
-occurs.
+BackOff specifies the parameters for the backoff strategy, controlling
+how delays between retries should increase.
 </p>
 
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>retryCount</code></br> <em>
-k8s.io/apimachinery/pkg/util/intstr.IntOrString </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
 </td>
 
 </tr>

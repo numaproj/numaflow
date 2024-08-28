@@ -34,6 +34,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink":                     schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex":                   schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization":                    schema_pkg_apis_numaflow_v1alpha1_Authorization(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Backoff":                          schema_pkg_apis_numaflow_v1alpha1_Backoff(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BasicAuth":                        schema_pkg_apis_numaflow_v1alpha1_BasicAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole":                        schema_pkg_apis_numaflow_v1alpha1_Blackhole(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BufferServiceConfig":              schema_pkg_apis_numaflow_v1alpha1_BufferServiceConfig(ref),
@@ -566,6 +567,34 @@ func schema_pkg_apis_numaflow_v1alpha1_Authorization(ref common.ReferenceCallbac
 		},
 		Dependencies: []string{
 			"k8s.io/api/core/v1.SecretKeySelector"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_Backoff(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Backoff defines parameters used to systematically configure the retry strategy.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"interval": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Interval sets the delay to wait before retry, after a failure occurs.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"steps": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Steps defines the number of times to retry after a failure occurs.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
@@ -4057,18 +4086,13 @@ func schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref common.ReferenceCallbac
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "RetryStrategy defines the criteria and method for retrying a failed write operation in the Sink. This type is used to customize how retries are handled, ensuring messages that fail to be delivered can be resent based on the configured strategy. It includes settings for fixed interval retry strategy and specific actions to take on failures.",
+				Description: "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures. It includes a BackOff strategy to manage the timing of retries and defines the action to take upon failure.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"timeout": {
+					"backoff": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Timeout sets the time to wait before the next retry, after a failure occurs.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
-						},
-					},
-					"retryCount": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+							Description: "BackOff specifies the parameters for the backoff strategy, controlling how delays between retries should increase.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Backoff"),
 						},
 					},
 					"onFailure": {
@@ -4082,7 +4106,7 @@ func schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref common.ReferenceCallbac
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration", "k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Backoff"},
 	}
 }
 
