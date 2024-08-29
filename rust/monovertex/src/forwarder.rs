@@ -301,15 +301,18 @@ impl Forwarder {
             break;
         }
 
+        let fallback_msgs_count = fallback_msgs.len() as u64;
         // If there are fallback messages, write them to the fallback sink
-        if !fallback_msgs.is_empty() {
+        if fallback_msgs_count > 0 {
             self.handle_fallback_messages(fallback_msgs).await?;
         }
 
+        // update the metric for number of messages written to the primary sink
+        // we increment fallback sink count in a separate metric
         forward_metrics()
             .monovtx_sink_write_total
             .get_or_create(&self.common_labels)
-            .inc_by(msg_count);
+            .inc_by(msg_count - fallback_msgs_count);
         Ok(())
     }
 
@@ -328,6 +331,7 @@ impl Forwarder {
         // start with the original set of message to be sent.
         // we will overwrite this vec with failed messages and will keep retrying.
         let mut messages_to_send = fallback_msgs;
+        let fb_msg_count = messages_to_send.len() as u64;
 
         while attempts <= DEFAULT_MAX_SINK_RETRY_ATTEMPTS {
             let start_time = tokio::time::Instant::now();
@@ -395,14 +399,17 @@ impl Forwarder {
                 Err(e) => return Err(e),
             }
         }
-
         if !messages_to_send.is_empty() {
             return Err(Error::SinkError(format!(
                 "Failed to write messages to fallback sink after {} attempts. Errors: {:?}",
                 attempts, fallback_error_map
             )));
         }
-
+        // increment the metric for the fallback sink write
+        forward_metrics()
+            .monovtx_fbsink_write_total
+            .get_or_create(&self.common_labels)
+            .inc_by(fb_msg_count);
         Ok(())
     }
 

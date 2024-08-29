@@ -439,8 +439,8 @@ func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWr
 			}
 			return true, nil
 		})
-		// Forced shutdown
-		// TODO(Retry-Sink): Check for ctx done? That should be covered in shutdown
+		// If we exited out of the loop and it was due to a forced shutdown we should exit
+		// TODO(Retry-Sink): Check for ctx done separately? That should be covered in shutdown
 		if ok, _ := df.IsShuttingDown(); err != nil && ok {
 			return nil, nil, err
 		}

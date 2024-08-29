@@ -46,6 +46,7 @@ const MONOVTX_SINK_WRITE_TOTAL: &str = "monovtx_sink_write";
 const MONOVTX_PROCESSING_TIME: &str = "monovtx_processing_time";
 const MONOVTX_PENDING: &str = "monovtx_pending";
 const MONOVTX_DROPPED: &str = "monovtx_dropped";
+const MONOVTX_FALLBACK_SINK_WRITE_TOTAL: &str = "monovtx_fallback_sink_write";
 
 #[derive(Clone)]
 pub(crate) struct MetricsState {
@@ -96,6 +97,7 @@ pub struct MonoVtxMetrics {
     pub monovtx_processing_time: Family<Vec<(String, String)>, Histogram>,
     pub monovtx_pending: Family<Vec<(String, String)>, Gauge>,
     pub monovtx_dropped_total: Family<Vec<(String, String)>, Counter>,
+    pub monovtx_fbsink_write_total: Family<Vec<(String, String)>, Counter>,
 }
 
 /// impl the MonoVtxMetrics struct and create a new object
@@ -111,7 +113,8 @@ impl MonoVtxMetrics {
                 Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
             });
         let monovtx_pending = Family::<Vec<(String, String)>, Gauge>::default();
-        let monovtx_dropped = Family::<Vec<(String, String)>, Counter>::default();
+        let monovtx_dropped_total = Family::<Vec<(String, String)>, Counter>::default();
+        let monovtx_fbsink_write_total = Family::<Vec<(String, String)>, Counter>::default();
 
         let metrics = Self {
             monovtx_read_total,
@@ -120,7 +123,8 @@ impl MonoVtxMetrics {
             monovtx_sink_write_total,
             monovtx_processing_time,
             monovtx_pending,
-            monovtx_dropped_total: monovtx_dropped,
+            monovtx_dropped_total,
+            monovtx_fbsink_write_total,
         };
 
         let mut registry = global_registry().registry.lock();
@@ -161,6 +165,11 @@ impl MonoVtxMetrics {
             metrics.monovtx_dropped_total.clone(),
         );
 
+        registry.register(
+            MONOVTX_FALLBACK_SINK_WRITE_TOTAL,
+            "A Counter to keep track of the total number of messages written to the fallback sink",
+            metrics.monovtx_fbsink_write_total.clone(),
+        );
         metrics
     }
 }
