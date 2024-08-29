@@ -178,9 +178,9 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.sink.IsValidSinkRetryStrategy(tt.strategy)
+			err := tt.sink.isValidSinkRetryStrategy(tt.strategy)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("IsValidSinkRetryStrategy() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("isValidSinkRetryStrategy() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -238,14 +238,14 @@ func TestGetRetryStrategy(t *testing.T) {
 					Interval: &customInterval,
 					Steps:    &customSteps,
 				},
-				OnFailure: func() *OnFailureRetryStrategy { s := OnFailureFallback; return &s }(),
+				OnFailure: func() *OnFailureRetryStrategy { s := OnFailureDrop; return &s }(),
 			},
 			want: &RetryStrategy{
 				BackOff: &Backoff{
 					Interval: &customInterval,
 					Steps:    &customSteps,
 				},
-				OnFailure: func() *OnFailureRetryStrategy { s := OnFailureFallback; return &s }(),
+				OnFailure: func() *OnFailureRetryStrategy { s := OnFailureDrop; return &s }(),
 			},
 		},
 	}
@@ -258,7 +258,7 @@ func TestGetRetryStrategy(t *testing.T) {
 			s.RetryStrategy = tt.customStrategy
 
 			// Get the retry strategy
-			got := s.GetRetryStrategy()
+			got, _ := s.GetRetryStrategy()
 
 			// Compare results
 			if got.BackOff.Interval != nil && *got.BackOff.Interval != *tt.want.BackOff.Interval {

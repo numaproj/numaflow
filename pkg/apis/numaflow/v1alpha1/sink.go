@@ -144,13 +144,14 @@ func (a *AbstractSink) IsAnySinkSpecified() bool {
 // GetRetryStrategy retrieves the currently configured retry strategy from the sink object.
 // If no strategy is explicitly set, it uses a default strategy. It's capable of merging personalized
 // retry settings from a defined strategy with the default ones where some components have not been specified.
-func (s *Sink) GetRetryStrategy() *RetryStrategy {
+// It further checks if the retry strategy is valid
+func (s *Sink) GetRetryStrategy() (*RetryStrategy, error) {
 	// Obtains a default retry strategy which could be overridden by specific settings.
 	retryStrategy := GetDefaultSinkRetryStrategy()
 
 	// If no custom retry strategy is defined, return the default strategy.
 	if s.RetryStrategy == nil {
-		return retryStrategy
+		return retryStrategy, nil
 	}
 
 	// If a custom back-off configuration is present, check and substitute the respective parts.
@@ -168,8 +169,13 @@ func (s *Sink) GetRetryStrategy() *RetryStrategy {
 		retryStrategy.OnFailure = s.RetryStrategy.OnFailure
 	}
 
+	// validate the retry strategy
+	if err := s.isValidSinkRetryStrategy(retryStrategy); err != nil {
+		return nil, err
+	}
+
 	// Returns either the final retry strategy.
-	return retryStrategy
+	return retryStrategy, nil
 }
 
 // GetDefaultSinkRetryStrategy constructs and returns a default retry strategy with preset configurations.
@@ -196,9 +202,9 @@ func (s *Sink) hasValidFallbackSink() bool {
 	return s.Fallback != nil && s.Fallback.UDSink != nil
 }
 
-// IsValidSinkRetryStrategy checks if the provided RetryStrategy is valid based on the sink's configuration.
+// isValidSinkRetryStrategy checks if the provided RetryStrategy is valid based on the sink's configuration.
 // This validation ensures that the retry strategy is compatible with the sink's current setup
-func (s *Sink) IsValidSinkRetryStrategy(strategy *RetryStrategy) error {
+func (s *Sink) isValidSinkRetryStrategy(strategy *RetryStrategy) error {
 	// If the OnFailure strategy is set to fallback, but no fallback sink is provided in the Sink struct,
 	// we return an error
 	if *strategy.OnFailure == OnFailureFallback && !s.hasValidFallbackSink() {

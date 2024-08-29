@@ -247,10 +247,9 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 
 		// Derive the retryStrategy from the spec and add to the forwarder if it is valid
-		retryStrategy := u.VertexInstance.Vertex.Spec.Sink.GetRetryStrategy()
-
-		if ok := u.VertexInstance.Vertex.Spec.Sink.IsValidSinkRetryStrategy(retryStrategy); ok != nil {
-			return fmt.Errorf("invalid retryStrategy defined in spec: %s ", ok.Error())
+		retryStrategy, err := u.VertexInstance.Vertex.Spec.Sink.GetRetryStrategy()
+		if err != nil {
+			return fmt.Errorf("invalid retryStrategy defined in spec: %s ", err.Error())
 		}
 		forwardOpts = append(forwardOpts, sinkforward.WithRetryStrategy(retryStrategy))
 

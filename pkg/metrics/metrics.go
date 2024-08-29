@@ -86,7 +86,7 @@ var (
 		Help:      "Total number of bytes written",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
-	// WriteMessagesError is used to indicate the number of errors while writing to a sink
+	// WriteMessagesError is used to indicate the number of errors encountered while writing messages
 	WriteMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "write_error_total",
