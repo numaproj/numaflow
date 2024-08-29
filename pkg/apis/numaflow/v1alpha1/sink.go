@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -187,4 +189,17 @@ func GetDefaultSinkRetryStrategy() *RetryStrategy {
 		// Default action when all retries fail.
 		OnFailure: &onFailure,
 	}
+}
+
+// IsValidSinkRetryStrategy checks if the provided RetryStrategy is valid based on the sink's configuration.
+// This validation ensures that the retry strategy is compatible with the sink's current setup
+func (s *Sink) IsValidSinkRetryStrategy(strategy *RetryStrategy) error {
+	// If the OnFailure strategy is set to fallback, but no fallback sink is provided in the Sink struct,
+	// we return an error
+	if *strategy.OnFailure == OnFailureFallback && s.Fallback == nil {
+		return fmt.Errorf("given OnFailure strategy is fallback but fallback sink is not provided")
+	}
+
+	// If no errors are found, the function returns nil indicating the validation passed.
+	return nil
 }

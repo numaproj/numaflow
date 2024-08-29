@@ -130,3 +130,46 @@ func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
 	assert.Equal(t, testImagePullPolicy, c.ImagePullPolicy)
 	assert.True(t, c.LivenessProbe != nil)
 }
+
+func TestIsValidSinkRetryStrategy(t *testing.T) {
+	tests := []struct {
+		name     string
+		sink     *Sink
+		strategy *RetryStrategy
+		wantErr  bool
+	}{
+		{
+			name: "valid strategy with fallback configured",
+			sink: &Sink{Fallback: &AbstractSink{}},
+			strategy: &RetryStrategy{
+				OnFailure: func() *OnFailureRetryStrategy { str := OnFailureFallback; return &str }(),
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid strategy with no fallback configured",
+			sink: &Sink{},
+			strategy: &RetryStrategy{
+				OnFailure: func() *OnFailureRetryStrategy { str := OnFailureFallback; return &str }(),
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid strategy with drop and no fallback needed",
+			sink: &Sink{},
+			strategy: &RetryStrategy{
+				OnFailure: func() *OnFailureRetryStrategy { str := OnFailureDrop; return &str }(),
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.sink.IsValidSinkRetryStrategy(tt.strategy)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("IsValidSinkRetryStrategy() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
