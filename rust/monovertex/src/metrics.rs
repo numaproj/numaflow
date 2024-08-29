@@ -29,7 +29,7 @@ use prometheus_client::registry::Registry;
 
 // Define the labels for the metrics
 // Note: Please keep consistent with the definitions in MonoVertex daemon
-const VERTEX_NAME_LABEL: &str = "mvtx_name";
+const MVTX_NAME_LABEL: &str = "mvtx_name";
 const REPLICA_LABEL: &str = "mvtx_replica";
 const PENDING_PERIOD_LABEL: &str = "period";
 
@@ -37,14 +37,21 @@ const PENDING_PERIOD_LABEL: &str = "period";
 // Note: We do not add a suffix to the metric name, as the suffix is inferred through the metric type
 // by the prometheus client library
 // refer: https://github.com/prometheus/client_rust/blob/master/src/registry.rs#L102
-
 // Note: Please keep consistent with the definitions in MonoVertex daemon
+
+// counters (please note the prefix _total, and read above link)
 const READ_TOTAL: &str = "monovtx_read";
 const READ_BYTES_TOTAL: &str = "monovtx_read_bytes";
 const ACK_TOTAL: &str = "monovtx_ack";
 const SINK_WRITE_TOTAL: &str = "monovtx_sink_write";
-const E2E_PROCESSING_TIME: &str = "monovtx_processing_time";
+// pending as gauge
 const SOURCE_PENDING: &str = "monovtx_pending";
+// processing times as timers
+const E2E_TIME: &str = "monovtx_processing_time";
+const READ_TIME: &str = "monovtx_read_time";
+const TRANSFORM_TIME: &str = "monovtx_transformer_time";
+const ACK_TIME: &str = "monovtx_ack_time";
+const SINK_TIME: &str = "monovtx_sink_time";
 
 #[derive(Clone)]
 pub(crate) struct MetricsState {
@@ -88,35 +95,47 @@ fn global_registry() -> &'static GlobalRegistry {
 // The labels are provided in the form of Vec<(String, String)
 // The second argument is the metric kind.
 pub struct MonoVtxMetrics {
+    // counters
     pub read_total: Family<Vec<(String, String)>, Counter>,
     pub read_bytes_total: Family<Vec<(String, String)>, Counter>,
     pub ack_total: Family<Vec<(String, String)>, Counter>,
     pub sink_write_total: Family<Vec<(String, String)>, Counter>,
-    pub e2e_processing_time: Family<Vec<(String, String)>, Histogram>,
+    // gauge
     pub source_pending: Family<Vec<(String, String)>, Gauge>,
+    // timers
+    pub e2e_time: Family<Vec<(String, String)>, Histogram>,
+    pub read_time: Family<Vec<(String, String)>, Histogram>,
+    pub transform_time: Family<Vec<(String, String)>, Histogram>,
+    pub ack_time: Family<Vec<(String, String)>, Histogram>,
+    pub sink_time: Family<Vec<(String, String)>, Histogram>,
 }
 
 /// impl the MonoVtxMetrics struct and create a new object
 impl MonoVtxMetrics {
     fn new() -> Self {
-        let monovtx_read_total = Family::<Vec<(String, String)>, Counter>::default();
-        let monovtx_ack_total = Family::<Vec<(String, String)>, Counter>::default();
-        let monovtx_read_bytes_total = Family::<Vec<(String, String)>, Counter>::default();
-        let monovtx_sink_write_total = Family::<Vec<(String, String)>, Counter>::default();
-
-        let monovtx_processing_time =
-            Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
-            });
-        let monovtx_pending = Family::<Vec<(String, String)>, Gauge>::default();
-
         let metrics = Self {
-            read_total: monovtx_read_total,
-            read_bytes_total: monovtx_read_bytes_total,
-            ack_total: monovtx_ack_total,
-            sink_write_total: monovtx_sink_write_total,
-            e2e_processing_time: monovtx_processing_time,
-            source_pending: monovtx_pending,
+            read_total: Family::<Vec<(String, String)>, Counter>::default(),
+            read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+            ack_total: Family::<Vec<(String, String)>, Counter>::default(),
+            sink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+            // gauge
+            source_pending: Family::<Vec<(String, String)>, Gauge>::default(),
+            // timers
+            e2e_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
+            }),
+            read_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
+            }),
+            transform_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10)),
+            ),
+            ack_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
+            }),
+            sink_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
+            }),
         };
 
         let mut registry = global_registry().registry.lock();
@@ -137,19 +156,41 @@ impl MonoVtxMetrics {
             metrics.ack_total.clone(),
         );
         registry.register(
-            E2E_PROCESSING_TIME,
-            "A Histogram to keep track of the total time taken to forward a chunk, the time is in microseconds",
-            metrics.e2e_processing_time.clone(),
-        );
-        registry.register(
             READ_BYTES_TOTAL,
             "A Counter to keep track of the total number of bytes read from the source",
             metrics.read_bytes_total.clone(),
         );
+        // gauges
         registry.register(
             SOURCE_PENDING,
             "A Gauge to keep track of the total number of pending messages for the monovtx",
             metrics.source_pending.clone(),
+        );
+        // timers
+        registry.register(
+            E2E_TIME,
+            "A Histogram to keep track of the total time taken to forward a chunk, in microseconds",
+            metrics.e2e_time.clone(),
+        );
+        registry.register(
+            READ_TIME,
+            "A Histogram to keep track of the total time taken to Read from the Source, in microseconds",
+            metrics.read_time.clone(),
+        );
+        registry.register(
+            TRANSFORM_TIME,
+            "A Histogram to keep track of the total time taken to Transform, in microseconds",
+            metrics.transform_time.clone(),
+        );
+        registry.register(
+            ACK_TIME,
+            "A Histogram to keep track of the total time taken to Ack to the Source, in microseconds",
+            metrics.ack_time.clone(),
+        );
+        registry.register(
+            SINK_TIME,
+            "A Histogram to keep track of the total time taken to Write to the Sink, in microseconds",
+            metrics.sink_time.clone(),
         );
 
         metrics
@@ -177,7 +218,7 @@ pub(crate) fn forward_metrics_labels() -> &'static Vec<(String, String)> {
     MONOVTX_METRICS_LABELS.get_or_init(|| {
         let common_labels = vec![
             (
-                VERTEX_NAME_LABEL.to_string(),
+                MVTX_NAME_LABEL.to_string(),
                 config().mono_vertex_name.clone(),
             ),
             (REPLICA_LABEL.to_string(), config().replica.to_string()),
