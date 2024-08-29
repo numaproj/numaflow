@@ -453,7 +453,14 @@ func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWr
 				// If on fail we want to Drop in that case lets, not retry further a
 				df.opts.logger.Info("Dropping the failed messages after retry in the Sink")
 				// Update the drop metric count with the messages left
-				metrics.DropMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: sinkWriter.GetName()}).Add(float64(len(messagesToTry)))
+				metrics.DropMessagesCount.With(map[string]string{
+					metrics.LabelVertex:             df.vertexName,
+					metrics.LabelPipeline:           df.pipelineName,
+					metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
+					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+					metrics.LabelPartitionName:      sinkWriter.GetName(),
+					metrics.LabelReason:             "Dropping after retry exhausted in the Sink",
+				}).Add(float64(len(messagesToTry)))
 			}
 		}
 		break
