@@ -445,7 +445,8 @@ func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWr
 		}
 		// Check if we still have messages left to be processed
 		if len(messagesToTry) > 0 {
-			df.opts.logger.Info("MYDEBUG: I'm not done yet")
+			df.opts.logger.Infof("%d tries exhausted in sink, messagesLeft %d, Next strategy %s",
+				backoffCond.Steps, len(messagesToTry), failStrategy)
 			// Check what is the failure strategy to be followed after retry exhaustion
 			switch failStrategy {
 			case dfv1.OnFailRetry:
