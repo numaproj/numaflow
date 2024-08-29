@@ -6256,6 +6256,22 @@ spec:
                     type: object
                   log:
                     type: object
+                  retryStrategy:
+                    properties:
+                      backoff:
+                        properties:
+                          interval:
+                            default: 1ms
+                            type: string
+                          steps:
+                            default: 0
+                            format: int32
+                            type: integer
+                        type: object
+                      onFailure:
+                        default: retry
+                        type: string
+                    type: object
                   udsink:
                     properties:
                       container:
@@ -15795,6 +15811,22 @@ spec:
                           type: object
                         log:
                           type: object
+                        retryStrategy:
+                          properties:
+                            backoff:
+                              properties:
+                                interval:
+                                  default: 1ms
+                                  type: string
+                                steps:
+                                  default: 0
+                                  format: int32
+                                  type: integer
+                              type: object
+                            onFailure:
+                              default: retry
+                              type: string
+                          type: object
                         udsink:
                           properties:
                             container:
@@ -21235,6 +21267,22 @@ spec:
                     - topic
                     type: object
                   log:
+                    type: object
+                  retryStrategy:
+                    properties:
+                      backoff:
+                        properties:
+                          interval:
+                            default: 1ms
+                            type: string
+                          steps:
+                            default: 0
+                            format: int32
+                            type: integer
+                        type: object
+                      onFailure:
+                        default: retry
+                        type: string
                     type: object
                   udsink:
                     properties:

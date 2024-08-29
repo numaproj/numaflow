@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -243,6 +244,29 @@ const (
 
 	// Serving source
 	DefaultServingTTL = 24 * time.Hour
+
+	// Retry Strategy
+
+	// DefaultSinkRetryInterval specifies the default time interval between retry attempts.
+	// This value can be adjusted depending on the specific requirements
+	// for responsiveness and system load considerations.
+	DefaultSinkRetryInterval = 1 * time.Millisecond
+
+	// DefaultSinkRetrySteps is defined to dictate how many times the platform should attempt to retry
+	// a write operation to a sink following a failure. The value is set to math.MaxInt32 - 1,
+	// effectively indicating an almost indefinite number of retries. This large default is chosen
+	// to ensure that the system will try persistently to carry out the operation unless explicitly
+	// configured otherwise. This approach can be useful in environments where loss of data
+	// due to intermittent failures is unacceptable.
+	DefaultSinkRetrySteps = math.MaxInt32 - 1
+
+	// DefaultSinkRetryStrategy specifies the strategy to be used when the write to a sink fails and
+	// the retries count specified are exhausted.
+	// Setting this to 'OnFailRetry' means the system is configured by default
+	// to retry the failed operation until successful completion.
+	// This strategy argues for robustness in operations, aiming
+	// to minimize the chances of data loss or failed deliveries in transient failure scenarios.
+	DefaultSinkRetryStrategy = OnFailRetry
 )
 
 var (
