@@ -140,11 +140,21 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 	}{
 		{
 			name: "valid strategy with fallback configured",
-			sink: &Sink{Fallback: &AbstractSink{}},
+			sink: &Sink{Fallback: &AbstractSink{
+				UDSink: &UDSink{},
+			}},
 			strategy: &RetryStrategy{
 				OnFailure: func() *OnFailureRetryStrategy { str := OnFailureFallback; return &str }(),
 			},
 			wantErr: false,
+		},
+		{
+			name: "invalid valid strategy with fallback not configured properly",
+			sink: &Sink{Fallback: &AbstractSink{}},
+			strategy: &RetryStrategy{
+				OnFailure: func() *OnFailureRetryStrategy { str := OnFailureFallback; return &str }(),
+			},
+			wantErr: true,
 		},
 		{
 			name: "invalid strategy with no fallback configured",

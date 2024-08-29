@@ -642,7 +642,7 @@ func (av AbstractVertex) HasUDTransformer() bool {
 }
 
 func (av AbstractVertex) HasFallbackUDSink() bool {
-	return av.IsASink() && av.Sink.Fallback != nil && av.Sink.Fallback.UDSink != nil
+	return av.IsASink() && av.Sink.hasValidFallbackSink()
 }
 
 func (av AbstractVertex) IsUDSource() bool {
