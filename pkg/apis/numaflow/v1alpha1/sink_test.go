@@ -18,10 +18,12 @@ package v1alpha1
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func Test_Sink_getContainers(t *testing.T) {
@@ -179,6 +181,94 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 			err := tt.sink.IsValidSinkRetryStrategy(tt.strategy)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("IsValidSinkRetryStrategy() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestGetRetryStrategy(t *testing.T) {
+	defaultStrategy := GetDefaultSinkRetryStrategy()
+	customInterval := metav1.Duration{Duration: 2 * time.Second}
+	customSteps := uint32(5)
+
+	tests := []struct {
+		name           string
+		customStrategy *RetryStrategy
+		want           *RetryStrategy
+	}{
+		{
+			name:           "No custom strategy, use defaults",
+			customStrategy: nil,
+			want:           defaultStrategy,
+		},
+		{
+			name: "Custom interval only",
+			customStrategy: &RetryStrategy{
+				BackOff: &Backoff{
+					Interval: &customInterval,
+				},
+			},
+			want: &RetryStrategy{
+				BackOff: &Backoff{
+					Interval: &customInterval,
+					Steps:    defaultStrategy.BackOff.Steps,
+				},
+				OnFailure: defaultStrategy.OnFailure,
+			},
+		},
+		{
+			name: "Custom steps only",
+			customStrategy: &RetryStrategy{
+				BackOff: &Backoff{
+					Steps: &customSteps,
+				},
+			},
+			want: &RetryStrategy{
+				BackOff: &Backoff{
+					Interval: defaultStrategy.BackOff.Interval,
+					Steps:    &customSteps,
+				},
+				OnFailure: defaultStrategy.OnFailure,
+			},
+		},
+		{
+			name: "Full custom strategy",
+			customStrategy: &RetryStrategy{
+				BackOff: &Backoff{
+					Interval: &customInterval,
+					Steps:    &customSteps,
+				},
+				OnFailure: func() *OnFailureRetryStrategy { s := OnFailureFallback; return &s }(),
+			},
+			want: &RetryStrategy{
+				BackOff: &Backoff{
+					Interval: &customInterval,
+					Steps:    &customSteps,
+				},
+				OnFailure: func() *OnFailureRetryStrategy { s := OnFailureFallback; return &s }(),
+			},
+		},
+	}
+
+	s := &Sink{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup custom strategy if applicable
+			s.RetryStrategy = tt.customStrategy
+
+			// Get the retry strategy
+			got := s.GetRetryStrategy()
+
+			// Compare results
+			if got.BackOff.Interval != nil && *got.BackOff.Interval != *tt.want.BackOff.Interval {
+				t.Errorf("GetRetryStrategy() got Interval = %v, want %v", *got.BackOff.Interval, *tt.want.BackOff.Interval)
+			}
+			if got.BackOff.Steps != nil && *got.BackOff.Steps != *tt.want.BackOff.Steps {
+				t.Errorf("GetRetryStrategy() got Steps = %v, want %v", *got.BackOff.Steps, *tt.want.BackOff.Steps)
+			}
+			if got.OnFailure != nil && *got.OnFailure != *tt.want.OnFailure {
+				t.Errorf("GetRetryStrategy() got OnFailure = %v, want %v", *got.OnFailure, *tt.want.OnFailure)
 			}
 		})
 	}
