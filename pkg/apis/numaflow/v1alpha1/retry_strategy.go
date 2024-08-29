@@ -1,9 +1,12 @@
 /*
 Copyright 2022 The Numaproj Authors.
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
+
     http://www.apache.org/licenses/LICENSE-2.0
+
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,13 +20,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type OnFailRetryStrategy string
+type OnFailureRetryStrategy string
 
 // Constants representing the possible actions that can be taken when a failure occurs during an operation.
 const (
-	OnFailRetry    OnFailRetryStrategy = "retry"    // Retry the operation.
-	OnFailFallback OnFailRetryStrategy = "fallback" // Reroute the operation to a fallback mechanism.
-	OnFailDrop     OnFailRetryStrategy = "drop"     // Drop the operation and perform no further action.
+	OnFailureRetry    OnFailureRetryStrategy = "retry"    // Retry the operation.
+	OnFailureFallback OnFailureRetryStrategy = "fallback" // Reroute the operation to a fallback mechanism.
+	OnFailureDrop     OnFailureRetryStrategy = "drop"     // Drop the operation and perform no further action.
 )
 
 // RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.
@@ -35,7 +38,7 @@ type RetryStrategy struct {
 	// OnFailure specifies the action to take when a retry fails. The default action is to retry.
 	// +optional
 	// +kubebuilder:default="retry"
-	OnFailure *OnFailRetryStrategy `json:"onFailure,omitempty" protobuf:"bytes,2,opt,name=onFailure"`
+	OnFailure *OnFailureRetryStrategy `json:"onFailure,omitempty" protobuf:"bytes,2,opt,name=onFailure"`
 }
 
 // Backoff defines parameters used to systematically configure the retry strategy.

@@ -125,7 +125,12 @@ impl Settings {
                 .fallback
                 .is_some();
 
-            if let Some(retry_strategy) = mono_vertex_obj.spec.sink.clone().unwrap().retry_strategy
+            if let Some(retry_strategy) = mono_vertex_obj
+                .spec
+                .sink
+                .clone()
+                .expect("sink should not be empty")
+                .retry_strategy
             {
                 // Backoff settings extracted directly without cloning using references when possible
                 if let Some(sink_backoff) = &retry_strategy.backoff {

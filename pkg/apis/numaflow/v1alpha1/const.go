@@ -262,11 +262,11 @@ const (
 
 	// DefaultSinkRetryStrategy specifies the strategy to be used when the write to a sink fails and
 	// the retries count specified are exhausted.
-	// Setting this to 'OnFailRetry' means the system is configured by default
+	// Setting this to 'OnFailureRetry' means the system is configured by default
 	// to retry the failed operation until successful completion.
 	// This strategy argues for robustness in operations, aiming
 	// to minimize the chances of data loss or failed deliveries in transient failure scenarios.
-	DefaultSinkRetryStrategy = OnFailRetry
+	DefaultSinkRetryStrategy = OnFailureRetry
 )
 
 var (

@@ -6817,9 +6817,9 @@ etc.).
 
 </p>
 
-<h3 id="numaflow.numaproj.io/v1alpha1.OnFailRetryStrategy">
+<h3 id="numaflow.numaproj.io/v1alpha1.OnFailureRetryStrategy">
 
-OnFailRetryStrategy (<code>string</code> alias)
+OnFailureRetryStrategy (<code>string</code> alias)
 </p>
 
 </h3>
@@ -8242,8 +8242,8 @@ how delays between retries should increase.
 <td>
 
 <code>onFailure</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.OnFailRetryStrategy">
-OnFailRetryStrategy </a> </em>
+<a href="#numaflow.numaproj.io/v1alpha1.OnFailureRetryStrategy">
+OnFailureRetryStrategy </a> </em>
 </td>
 
 <td>

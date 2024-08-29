@@ -1993,7 +1993,7 @@ func (in *RetryStrategy) DeepCopyInto(out *RetryStrategy) {
 	}
 	if in.OnFailure != nil {
 		in, out := &in.OnFailure, &out.OnFailure
-		*out = new(OnFailRetryStrategy)
+		*out = new(OnFailureRetryStrategy)
 		**out = **in
 	}
 	return
