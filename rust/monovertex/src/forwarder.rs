@@ -105,6 +105,11 @@ impl Forwarder {
                 last_forwarded_at = std::time::Instant::now();
             }
 
+            info!(
+                "Forwarded messages={}, latency={}",
+                processed_msgs_count,
+                start_time.elapsed().as_millis()
+            );
             forward_metrics()
                 .monovtx_processing_time
                 .get_or_create(&self.common_labels)
