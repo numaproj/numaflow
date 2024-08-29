@@ -45,6 +45,7 @@ const MONOVTX_ACK_TOTAL: &str = "monovtx_ack";
 const MONOVTX_SINK_WRITE_TOTAL: &str = "monovtx_sink_write";
 const MONOVTX_PROCESSING_TIME: &str = "monovtx_processing_time";
 const MONOVTX_PENDING: &str = "monovtx_pending";
+const MONOVTX_DROPPED: &str = "monovtx_dropped";
 
 #[derive(Clone)]
 pub(crate) struct MetricsState {
@@ -94,6 +95,7 @@ pub struct MonoVtxMetrics {
     pub monovtx_sink_write_total: Family<Vec<(String, String)>, Counter>,
     pub monovtx_processing_time: Family<Vec<(String, String)>, Histogram>,
     pub monovtx_pending: Family<Vec<(String, String)>, Gauge>,
+    pub monovtx_dropped_total: Family<Vec<(String, String)>, Counter>,
 }
 
 /// impl the MonoVtxMetrics struct and create a new object
@@ -109,6 +111,7 @@ impl MonoVtxMetrics {
                 Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
             });
         let monovtx_pending = Family::<Vec<(String, String)>, Gauge>::default();
+        let monovtx_dropped = Family::<Vec<(String, String)>, Counter>::default();
 
         let metrics = Self {
             monovtx_read_total,
@@ -117,6 +120,7 @@ impl MonoVtxMetrics {
             monovtx_sink_write_total,
             monovtx_processing_time,
             monovtx_pending,
+            monovtx_dropped_total: monovtx_dropped,
         };
 
         let mut registry = global_registry().registry.lock();
@@ -150,6 +154,11 @@ impl MonoVtxMetrics {
             MONOVTX_PENDING,
             "A Gauge to keep track of the total number of pending messages for the monovtx",
             metrics.monovtx_pending.clone(),
+        );
+        registry.register(
+            MONOVTX_DROPPED,
+            "A Counter to keep track of the total number of messages dropped by the monovtx",
+            metrics.monovtx_dropped_total.clone(),
         );
 
         metrics

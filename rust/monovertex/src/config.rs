@@ -19,8 +19,9 @@ const DEFAULT_LAG_CHECK_INTERVAL_IN_SECS: u16 = 5;
 const DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS: u16 = 3;
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
-const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = 10;
-const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
+pub const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX - 1;
+pub const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
+const DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY: &str = "retry";
 
 pub fn config() -> &'static Settings {
     static CONF: OnceLock<Settings> = OnceLock::new();
@@ -46,6 +47,7 @@ pub struct Settings {
     pub lag_refresh_interval_in_secs: u16,
     pub sink_max_retry_attempts: u16,
     pub sink_retry_interval_in_ms: u32,
+    pub sink_retry_on_fail_strategy: String,
 }
 
 impl Default for Settings {
@@ -64,6 +66,7 @@ impl Default for Settings {
             lag_refresh_interval_in_secs: DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS,
             sink_max_retry_attempts: DEFAULT_MAX_SINK_RETRY_ATTEMPTS,
             sink_retry_interval_in_ms: DEFAULT_SINK_RETRY_INTERVAL_IN_MS,
+            sink_retry_on_fail_strategy: DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY.to_string(),
         }
     }
 }
@@ -117,9 +120,33 @@ impl Settings {
             settings.is_fallback_enabled = mono_vertex_obj
                 .spec
                 .sink
+                .clone()
                 .ok_or(Error::ConfigError("Sink not found".to_string()))?
                 .fallback
                 .is_some();
+
+            if let Some(retry_strategy) = mono_vertex_obj.spec.sink.clone().unwrap().retry_strategy
+            {
+                // Backoff settings extracted directly without cloning using references when possible
+                if let Some(sink_backoff) = &retry_strategy.backoff {
+                    // Set the max retry attempts and retry interval using direct reference
+                    settings.sink_retry_interval_in_ms = sink_backoff
+                        .interval
+                        .map(|x| std::time::Duration::from(x).as_millis() as u32)
+                        .unwrap_or(DEFAULT_SINK_RETRY_INTERVAL_IN_MS);
+
+                    settings.sink_max_retry_attempts = sink_backoff
+                        .steps
+                        .map(|x| x as u16)
+                        .unwrap_or(DEFAULT_MAX_SINK_RETRY_ATTEMPTS);
+                }
+
+                // Set the retry strategy using a direct reference whenever possible
+                settings.sink_retry_on_fail_strategy = retry_strategy
+                    .on_failure
+                    .clone()
+                    .unwrap_or_else(|| DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY.to_string());
+            }
         }
 
         settings.log_level =
