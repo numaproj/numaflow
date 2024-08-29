@@ -92,6 +92,7 @@ func WithCallbackUploader(cp *callback.Uploader) Option {
 	}
 }
 
+// WithRetryStrategy sets the retryStrategy for the Sink
 func WithRetryStrategy(f *dfv1.RetryStrategy) Option {
 	return func(o *options) error {
 		o.retryStrategy = f

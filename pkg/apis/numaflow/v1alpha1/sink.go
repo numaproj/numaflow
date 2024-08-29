@@ -17,8 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"fmt"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -141,41 +139,52 @@ func (a *AbstractSink) IsAnySinkSpecified() bool {
 	return a.Log != nil || a.Kafka != nil || a.Blackhole != nil || a.UDSink != nil
 }
 
+// GetRetryStrategy retrieves the currently configured retry strategy from the sink object.
+// If no strategy is explicitly set, it uses a default strategy. It's capable of merging personalized
+// retry settings from a defined strategy with the default ones where some components have not been specified.
 func (s *Sink) GetRetryStrategy() *RetryStrategy {
-	fmt.Println("RETRYYY", s.RetryStrategy)
+	// Obtains a default retry strategy which could be overridden by specific settings.
 	retryStrategy := GetDefaultSinkRetryStrategy()
 
+	// If no custom retry strategy is defined, return the default strategy.
 	if s.RetryStrategy == nil {
 		return retryStrategy
 	}
 
+	// If a custom back-off configuration is present, check and substitute the respective parts.
 	if s.RetryStrategy.BackOff != nil {
 		if s.RetryStrategy.BackOff.Interval != nil {
 			retryStrategy.BackOff.Interval = s.RetryStrategy.BackOff.Interval
 		}
-
 		if s.RetryStrategy.BackOff.Steps != nil {
 			retryStrategy.BackOff.Steps = s.RetryStrategy.BackOff.Steps
 		}
 	}
 
+	// If a custom on-failure behavior is specified, override the default.
 	if s.RetryStrategy.OnFailure != nil {
 		retryStrategy.OnFailure = s.RetryStrategy.OnFailure
 	}
-
-	fmt.Println("RETRYYY - 2", s.RetryStrategy)
-
+	
+	// Returns either the final retry strategy.
 	return retryStrategy
 }
 
+// GetDefaultSinkRetryStrategy constructs and returns a default retry strategy with preset configurations.
 func GetDefaultSinkRetryStrategy() *RetryStrategy {
-	defaultRetrySteps := uint32(DefaultRetrySteps)
-	onFailure := OnFailRetry
+	// Default number of retry steps and handling strategy on failure, globally defined.
+	defaultRetrySteps := uint32(DefaultSinkRetrySteps)
+	onFailure := DefaultSinkRetryStrategy
+
+	// Assemble and return the default retry strategy encapsulating backoff mechanics and failure response.
 	return &RetryStrategy{
 		BackOff: &Backoff{
-			Interval: &metav1.Duration{Duration: DefaultRetryInterval},
-			Steps:    &defaultRetrySteps,
+			// Default interval between retries.
+			Interval: &metav1.Duration{Duration: DefaultSinkRetryInterval},
+			// Default number of attempted retries.
+			Steps: &defaultRetrySteps,
 		},
+		// Default action when all retries fail.
 		OnFailure: &onFailure,
 	}
 }

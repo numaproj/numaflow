@@ -246,6 +246,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			forwardOpts = append(forwardOpts, sinkforward.WithCallbackUploader(cbPublisher))
 		}
 
+		// Derive the retryStrategy from the spec and add to the forwarder
 		forwardOpts = append(forwardOpts,
 			sinkforward.WithRetryStrategy(u.VertexInstance.Vertex.Spec.Sink.GetRetryStrategy()))
 
