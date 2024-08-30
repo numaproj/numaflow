@@ -227,7 +227,7 @@ impl Forwarder {
             match self.sink_client.sink_fn(messages_to_send.clone()).await {
                 Ok(response) => {
                     debug!(
-                        attempts=attempts,
+                        attempts = attempts,
                         "Sink latency - {}ms",
                         start_time.elapsed().as_millis()
                     );

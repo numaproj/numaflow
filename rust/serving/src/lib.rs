@@ -6,8 +6,6 @@ use crate::pipeline::min_pipeline_spec;
 use axum_server::tls_rustls::RustlsConfig;
 use std::net::SocketAddr;
 use tracing::info;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 mod app;
 mod config;
@@ -22,16 +20,6 @@ pub async fn serve() -> std::result::Result<(), Box<dyn std::error::Error + Send
     let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
         .await
         .map_err(|e| format!("Failed to create tls config {:?}", e))?;
-
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                // axum logs rejections from built-in extractors with the `axum::rejection`
-                // target, at `TRACE` level. `axum::rejection=trace` enables showing those events
-                .unwrap_or_else(|_| "info,numaserve=debug,axum::rejection=trace".into()),
-        )
-        .with(tracing_subscriber::fmt::layer().with_ansi(false))
-        .init();
 
     info!(config = ?config(), pipeline_spec = ? min_pipeline_spec(), "Starting server with config and pipeline spec");
 
