@@ -223,56 +223,22 @@ impl Forwarder {
         // start with the original set of message to be sent.
         // we will overwrite this vec with failed messages and will keep retrying.
         let mut messages_to_send = messages;
+
+        // only breaks out of this loop based on the retry strategy unless all the messages have been written to sink
+        // successfully.
         loop {
             while attempts <= config().sink_max_retry_attempts {
-                let start_time = tokio::time::Instant::now();
-                match self.sink_client.sink_fn(messages_to_send.clone()).await {
-                    Ok(response) => {
-                        debug!("Sink latency - {}ms", start_time.elapsed().as_millis());
+                let status = self.write_to_sink_once(&mut error_map, &mut fallback_msgs, &mut messages_to_send).await;
+                match status {
+                    Ok(true) => break,
+                    Ok(false) => {
                         attempts += 1;
-
-                        // create a map of id to result, since there is no strict requirement
-                        // for the udsink to return the results in the same order as the requests
-                        let result_map: HashMap<_, _> = response
-                            .results
-                            .iter()
-                            .map(|result| (result.id.clone(), result))
-                            .collect();
-
-                        error_map.clear();
-                        // drain all the messages that were successfully written
-                        // and keep only the failed messages to send again
-                        // construct the error map for the failed messages
-                        messages_to_send.retain(|msg| {
-                            if let Some(result) = result_map.get(&msg.id) {
-                                return if result.status == proto::Status::Success as i32 {
-                                    false
-                                } else if result.status == proto::Status::Fallback as i32 {
-                                    fallback_msgs.push(msg.clone()); // add to fallback messages
-                                    false
-                                } else {
-                                    *error_map.entry(result.err_msg.clone()).or_insert(0) += 1;
-                                    true
-                                };
-                            }
-                            false
-                        });
-
-                        // if all messages are successfully written, break the loop
-                        if messages_to_send.is_empty() {
-                            break;
-                        }
-
                         warn!(
                             "Retry attempt {} due to retryable error. Errors: {:?}",
                             attempts, error_map
                         );
-                        sleep(tokio::time::Duration::from_millis(
-                            config().sink_retry_interval_in_ms as u64,
-                        ))
-                        .await;
-                    }
-                    Err(e) => return Err(e),
+                    },
+                    Err(e) => Err(e)?,
                 }
             }
 
@@ -331,6 +297,59 @@ impl Forwarder {
             .get_or_create(&self.common_labels)
             .inc_by(msg_count - fallback_msgs_count);
         Ok(())
+    }
+
+    /// Writes to sink once and will return true if successful, else false. Please note that it
+    /// mutates is incoming fields.
+    async fn write_to_sink_once(&mut self, error_map: &mut HashMap<String, i32>, fallback_msgs: &mut Vec<Message>, messages_to_send: &mut Vec<Message>) -> Result<bool> {
+        let start_time = tokio::time::Instant::now();
+        match self.sink_client.sink_fn(messages_to_send.clone()).await {
+            Ok(response) => {
+                debug!("Sink latency - {}ms", start_time.elapsed().as_millis());
+
+                // create a map of id to result, since there is no strict requirement
+                // for the udsink to return the results in the same order as the requests
+                let result_map: HashMap<_, _> = response
+                    .results
+                    .iter()
+                    .map(|result| (result.id.clone(), result))
+                    .collect();
+
+                error_map.clear();
+                // drain all the messages that were successfully written
+                // and keep only the failed messages to send again
+                // construct the error map for the failed messages
+                messages_to_send.retain(|msg| {
+                    if let Some(result) = result_map.get(&msg.id) {
+                        return if result.status == proto::Status::Success as i32 {
+                            false
+                        } else if result.status == proto::Status::Fallback as i32 {
+                            fallback_msgs.push(msg.clone()); // add to fallback messages
+                            false
+                        } else {
+                            *error_map.entry(result.err_msg.clone()).or_insert(0) += 1;
+                            true
+                        };
+                    }
+                    false
+                });
+
+                // if all messages are successfully written, break the loop
+                if messages_to_send.is_empty() {
+                    return Ok(true)
+                }
+
+
+                sleep(tokio::time::Duration::from_millis(
+                    config().sink_retry_interval_in_ms as u64,
+                ))
+                    .await;
+
+                // we need to retry
+                return Ok(false)
+            }
+            Err(e) => return Err(e),
+        }
     }
 
     // Writes the fallback messages to the fallback sink
