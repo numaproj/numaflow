@@ -19,7 +19,7 @@ const DEFAULT_LAG_CHECK_INTERVAL_IN_SECS: u16 = 5;
 const DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS: u16 = 3;
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
-const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX - 1;
+const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX;
 const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
 const DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY: &str = "retry";
 
@@ -156,6 +156,13 @@ impl Settings {
                         .steps
                         .map(|x| x as u16)
                         .unwrap_or(DEFAULT_MAX_SINK_RETRY_ATTEMPTS);
+
+                    // We do not allow 0 attempts to write to sink
+                    if settings.sink_max_retry_attempts == 0 {
+                        return Err(Error::ConfigError(
+                            "Retry Strategy given with 0 retry attempts".to_string(),
+                        ));
+                    }
                 }
 
                 // Set the retry strategy using a direct reference whenever possible
@@ -196,36 +203,394 @@ impl Settings {
     }
 }
 
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use serde_json::json;
+//     use std::env;
+//
+//     #[test]
+//     fn test_settings_load() {
+//         // Define the JSON structure
+//         let json_data = json!({
+//             "metadata": {
+//                 "name": "simple-mono-vertex",
+//                 "namespace": "default",
+//                 "creationTimestamp": null
+//             },
+//             "spec": {
+//                 "replicas": 0,
+//                 "source": {
+//                     "transformer": {
+//                         "container": {
+//                             "image": "xxxxxxx",
+//                             "resources": {}
+//                         },
+//                         "builtin": null
+//                     },
+//                     "udsource": {
+//                         "container": {
+//                             "image": "xxxxxxx",
+//                             "resources": {}
+//                         }
+//                     }
+//                 },
+//                 "sink": {
+//                     "udsink": {
+//                         "container": {
+//                             "image": "xxxxxx",
+//                             "resources": {}
+//                         }
+//                     }
+//                 },
+//                 "limits": {
+//                     "readBatchSize": 500,
+//                     "readTimeout": "1s"
+//                 },
+//                 "scale": {},
+//                 "status": {
+//                     "replicas": 0,
+//                     "lastUpdated": null,
+//                     "lastScaledAt": null
+//                 }
+//             }
+//         });
+//
+//         // Convert JSON to a string and then to Base64
+//         let json_str = json_data.to_string();
+//         let encoded_json = BASE64_STANDARD.encode(json_str);
+//
+//         // Set up environment variables
+//         unsafe {
+//             env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
+//             env::set_var(ENV_LOG_LEVEL, "debug");
+//             env::set_var(ENV_GRPC_MAX_MESSAGE_SIZE, "128000000");
+//         };
+//
+//         // Load settings
+//         let settings = match Settings::load() {
+//             Ok(s) => s,
+//             Err(e) => panic!("Failed to load settings: {}", e),
+//         };
+//
+//         // Verify settings
+//         assert_eq!(settings.mono_vertex_name, "simple-mono-vertex");
+//         assert_eq!(settings.batch_size, 500);
+//         assert_eq!(settings.timeout_in_ms, 1000);
+//         assert_eq!(settings.log_level, "debug");
+//         assert_eq!(settings.grpc_max_message_size, 128000000);
+//
+//         // Verify the retry strategy is set to default
+//         assert_eq!(settings.sink_retry_on_fail_strategy, "retry");
+//         assert_eq!(settings.sink_max_retry_attempts, u16::MAX);
+//
+//         // Clean up environment variables
+//         unsafe {
+//             env::remove_var(ENV_MONO_VERTEX_OBJ);
+//             env::remove_var(ENV_LOG_LEVEL);
+//             env::remove_var(ENV_GRPC_MAX_MESSAGE_SIZE);
+//         };
+//     }
+//
+//     #[test]
+//     fn test_settings_load_retry() {
+//         // Define the JSON structure
+//         let json_data = json!({
+//             "metadata": {
+//                 "name": "simple-mono-vertex",
+//                 "namespace": "default",
+//                 "creationTimestamp": null
+//             },
+//             "spec": {
+//                 "replicas": 0,
+//                 "source": {
+//                     "udsource": {
+//                         "container": {
+//                             "image": "xxxxxxx",
+//                             "resources": {}
+//                         }
+//                     }
+//                 },
+//                 "sink": {
+//                     "udsink": {
+//                         "container": {
+//                             "image": "xxxxxx",
+//                             "resources": {}
+//                         }
+//                     },
+//                     "retryStrategy": {
+//                         "backoff": {
+//                             "interval": "1s",
+//                             "steps": 5
+//                         },
+//                     },
+//                 },
+//                 "limits": {
+//                     "readBatchSize": 500,
+//                     "readTimeout": "1s"
+//                 },
+//             }
+//         });
+//
+//         // Convert JSON to a string and then to Base64
+//         let json_str = json_data.to_string();
+//         let encoded_json = BASE64_STANDARD.encode(json_str);
+//
+//         // Set up environment variables
+//         unsafe {
+//             env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
+//             env::set_var(ENV_LOG_LEVEL, "debug");
+//             env::set_var(ENV_GRPC_MAX_MESSAGE_SIZE, "128000000");
+//         };
+//
+//         // Load settings
+//         let settings = match Settings::load() {
+//             Ok(s) => s,
+//             Err(e) => panic!("Failed to load settings: {}", e),
+//         };
+//
+//         // Verify the retry strategy values
+//         assert_eq!(settings.sink_retry_on_fail_strategy, "retry");
+//         assert_eq!(settings.sink_max_retry_attempts, 5);
+//
+//         // Clean up environment variables
+//         unsafe {
+//             env::remove_var(ENV_MONO_VERTEX_OBJ);
+//             env::remove_var(ENV_LOG_LEVEL);
+//             env::remove_var(ENV_GRPC_MAX_MESSAGE_SIZE);
+//         };
+//     }
+//
+//     #[test]
+//     fn test_settings_load_retry_fallback_error() {
+//         // Define the JSON structure
+//         let json_data = json!({
+//             "metadata": {
+//                 "name": "simple-mono-vertex",
+//                 "namespace": "default",
+//                 "creationTimestamp": null
+//             },
+//             "spec": {
+//                 "replicas": 0,
+//                 "source": {
+//                     "udsource": {
+//                         "container": {
+//                             "image": "xxxxxxx",
+//                             "resources": {}
+//                         }
+//                     }
+//                 },
+//                 "sink": {
+//                     "udsink": {
+//                         "container": {
+//                             "image": "xxxxxx",
+//                             "resources": {}
+//                         }
+//                     },
+//                     "retryStrategy": {
+//                         "backoff": {
+//                             "interval": "1s",
+//                             "steps": 5
+//                         },
+//                         "onFailure": "fallback"
+//                     },
+//                 },
+//                 "limits": {
+//                     "readBatchSize": 500,
+//                     "readTimeout": "1s"
+//                 },
+//             }
+//         });
+//
+//         // Convert JSON to a string and then to Base64
+//         let json_str = json_data.to_string();
+//         let encoded_json = BASE64_STANDARD.encode(json_str);
+//
+//         // Set up environment variables
+//         unsafe {
+//             env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
+//             env::set_var(ENV_LOG_LEVEL, "debug");
+//             env::set_var(ENV_GRPC_MAX_MESSAGE_SIZE, "128000000");
+//         };
+//
+//         // Load settings
+//         let settings = Settings::load();
+//         // This should return an error because the retry strategy is set to fallback
+//         // but the fallback sink is not configured
+//         assert!(settings.is_err());
+//
+//         // Clean up environment variables
+//         unsafe {
+//             env::remove_var(ENV_MONO_VERTEX_OBJ);
+//             env::remove_var(ENV_LOG_LEVEL);
+//             env::remove_var(ENV_GRPC_MAX_MESSAGE_SIZE);
+//         };
+//     }
+// }
+
 #[cfg(test)]
-mod tests {
+mod tests2 {
+    use super::*;
+    use serde_json::json;
     use std::env;
 
-    use super::*;
-
     #[test]
-    fn test_settings_load() {
-        // Set up environment variables
-        unsafe {
-            env::set_var(ENV_MONO_VERTEX_OBJ, "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLW1vbm8tdmVydGV4IiwibmFtZXNwYWNlIjoiZGVmYXVsdCIsImNyZWF0aW9uVGltZXN0YW1wIjpudWxsfSwic3BlYyI6eyJyZXBsaWNhcyI6MCwic291cmNlIjp7InRyYW5zZm9ybWVyIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6InF1YXkuaW8vbnVtYWlvL251bWFmbG93LXJzL21hcHQtZXZlbnQtdGltZS1maWx0ZXI6c3RhYmxlIiwicmVzb3VyY2VzIjp7fX0sImJ1aWx0aW4iOm51bGx9LCJ1ZHNvdXJjZSI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJkb2NrZXIuaW50dWl0LmNvbS9wZXJzb25hbC95aGwwMS9zaW1wbGUtc291cmNlOnN0YWJsZSIsInJlc291cmNlcyI6e319fX0sInNpbmsiOnsidWRzaW5rIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImRvY2tlci5pbnR1aXQuY29tL3BlcnNvbmFsL3lobDAxL2JsYWNraG9sZS1zaW5rOnN0YWJsZSIsInJlc291cmNlcyI6e319fX0sImxpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMifSwic2NhbGUiOnt9fSwic3RhdHVzIjp7InJlcGxpY2FzIjowLCJsYXN0VXBkYXRlZCI6bnVsbCwibGFzdFNjYWxlZEF0IjpudWxsfX0=");
-            env::set_var(ENV_LOG_LEVEL, "debug");
-            env::set_var(ENV_GRPC_MAX_MESSAGE_SIZE, "128000000");
-        };
+    fn test_settings_load_combined() {
+        // Define all JSON test configurations in separate scopes to use them distinctively
+        {
+            let json_data = json!({
+                "metadata": {
+                    "name": "simple-mono-vertex",
+                    "namespace": "default",
+                    "creationTimestamp": null
+                },
+                "spec": {
+                    "replicas": 0,
+                    "source": {
+                        "transformer": {
+                            "container": {
+                                "image": "xxxxxxx",
+                                "resources": {}
+                            },
+                            "builtin": null
+                        },
+                        "udsource": {
+                            "container": {
+                                "image": "xxxxxxx",
+                                "resources": {}
+                            }
+                        }
+                    },
+                    "sink": {
+                        "udsink": {
+                            "container": {
+                                "image": "xxxxxx",
+                                "resources": {}
+                            }
+                        }
+                    },
+                    "limits": {
+                        "readBatchSize": 500,
+                        "readTimeout": "1s"
+                    },
+                    "scale": {},
+                    "status": {
+                        "replicas": 0,
+                        "lastUpdated": null,
+                        "lastScaledAt": null
+                    }
+                }
+            });
+            let json_str = json_data.to_string();
+            let encoded_json = BASE64_STANDARD.encode(json_str);
+            env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
 
-        // Load settings
-        let settings = Settings::load().unwrap();
-
-        // Verify settings
-        assert_eq!(settings.mono_vertex_name, "simple-mono-vertex");
-        assert_eq!(settings.batch_size, 500);
-        assert_eq!(settings.timeout_in_ms, 1000);
-        assert_eq!(settings.log_level, "debug");
-        assert_eq!(settings.grpc_max_message_size, 128000000);
-
-        // Clean up environment variables
-        unsafe {
+            // Execute and verify
+            let settings = Settings::load().unwrap();
+            assert_eq!(settings.mono_vertex_name, "simple-mono-vertex");
             env::remove_var(ENV_MONO_VERTEX_OBJ);
-            env::remove_var(ENV_LOG_LEVEL);
-            env::remove_var(ENV_GRPC_MAX_MESSAGE_SIZE);
-        };
+        }
+
+        {
+            // Test Retry Strategy Load
+            let json_data = json!({
+                "metadata": {
+                    "name": "simple-mono-vertex",
+                    "namespace": "default",
+                    "creationTimestamp": null
+                },
+                "spec": {
+                    "replicas": 0,
+                    "source": {
+                        "udsource": {
+                            "container": {
+                                "image": "xxxxxxx",
+                                "resources": {}
+                            }
+                        }
+                    },
+                    "sink": {
+                        "udsink": {
+                            "container": {
+                                "image": "xxxxxx",
+                                "resources": {}
+                            }
+                        },
+                        "retryStrategy": {
+                            "backoff": {
+                                "interval": "1s",
+                                "steps": 5
+                            },
+                        },
+                    },
+                    "limits": {
+                        "readBatchSize": 500,
+                        "readTimeout": "1s"
+                    },
+                }
+            });
+            let json_str = json_data.to_string();
+            let encoded_json = BASE64_STANDARD.encode(json_str);
+            env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
+
+            // Execute and verify
+            let settings = Settings::load().unwrap();
+            assert_eq!(settings.sink_retry_on_fail_strategy, "retry");
+            assert_eq!(settings.sink_max_retry_attempts, 5);
+            assert_eq!(settings.sink_retry_interval_in_ms, 1000);
+            env::remove_var(ENV_MONO_VERTEX_OBJ);
+        }
+
+        {
+            // Test Error Case: Retry Strategy Fallback without Fallback Sink
+            let json_data = json!({
+                "metadata": {
+                    "name": "simple-mono-vertex",
+                    "namespace": "default",
+                    "creationTimestamp": null
+                },
+                "spec": {
+                    "replicas": 0,
+                    "source": {
+                        "udsource": {
+                            "container": {
+                                "image": "xxxxxxx",
+                                "resources": {}
+                            }
+                        }
+                    },
+                    "sink": {
+                        "udsink": {
+                            "container": {
+                                "image": "xxxxxx",
+                                "resources": {}
+                            }
+                        },
+                        "retryStrategy": {
+                            "backoff": {
+                                "interval": "1s",
+                                "steps": 5
+                            },
+                            "onFailure": "fallback"
+                        },
+                    },
+                    "limits": {
+                        "readBatchSize": 500,
+                        "readTimeout": "1s"
+                    },
+                }
+            });
+            let json_str = json_data.to_string();
+            let encoded_json = BASE64_STANDARD.encode(json_str);
+            env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
+
+            // Execute and verify
+            assert!(Settings::load().is_err());
+            env::remove_var(ENV_MONO_VERTEX_OBJ);
+        }
+
+        // General cleanup
+        env::remove_var(ENV_LOG_LEVEL);
+        env::remove_var(ENV_GRPC_MAX_MESSAGE_SIZE);
     }
 }

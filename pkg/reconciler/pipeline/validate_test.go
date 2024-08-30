@@ -1114,6 +1114,7 @@ func TestValidateSink(t *testing.T) {
 }
 
 func TestIsValidSinkRetryStrategy(t *testing.T) {
+	zeroSteps := uint32(0)
 	tests := []struct {
 		name     string
 		sink     dfv1.Sink
@@ -1153,6 +1154,17 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 				OnFailure: func() *dfv1.OnFailureRetryStrategy { str := dfv1.OnFailureDrop; return &str }(),
 			},
 			wantErr: false,
+		},
+		{
+			name: "invalid strategy with 0 steps",
+			sink: dfv1.Sink{},
+			strategy: dfv1.RetryStrategy{
+				BackOff: &dfv1.Backoff{
+					Steps: &zeroSteps,
+				},
+				OnFailure: func() *dfv1.OnFailureRetryStrategy { str := dfv1.OnFailureDrop; return &str }(),
+			},
+			wantErr: true,
 		},
 	}
 

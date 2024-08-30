@@ -216,7 +216,7 @@ message Backoff {
   // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration interval = 1;
 
-  // Steps defines the number of times to retry after a failure occurs.
+  // Steps defines the number of times to try writing to a sink including retries
   // +optional
   optional uint32 steps = 2;
 }

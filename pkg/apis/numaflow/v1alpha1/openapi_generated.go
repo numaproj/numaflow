@@ -625,7 +625,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Backoff(ref common.ReferenceCallback) com
 					},
 					"steps": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Steps defines the number of times to retry after a failure occurs.",
+							Description: "Steps defines the number of times to try writing to a sink including retries",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},

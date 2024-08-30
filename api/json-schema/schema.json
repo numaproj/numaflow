@@ -17816,7 +17816,7 @@
           "description": "Interval sets the delay to wait before retry, after a failure occurs."
         },
         "steps": {
-          "description": "Steps defines the number of times to retry after a failure occurs.",
+          "description": "Steps defines the number of times to try writing to a sink including retries",
           "format": "int64",
           "type": "integer"
         }

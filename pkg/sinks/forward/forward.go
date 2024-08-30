@@ -495,17 +495,6 @@ func (df *DataForward) handlePostRetryFailures(messagesToTry *[]isb.Message, fai
 // updateSinkWriteMetrics updates metrics related to data writes to a sink.
 // Metrics are updated based on whether the operation involves the primary or fallback sink.
 func (df *DataForward) updateSinkWriteMetrics(writeCount int, writeBytes float64, sinkWriterName string, isFallback bool) {
-	// Use default metrics for primary sink operations
-	writeCountMetric := metrics.WriteMessagesCount
-	writeBytesMetric := metrics.WriteBytesCount
-
-	// Assign fallback-specific metrics for both write count and write bytes
-	// if this is for Fallback Sink
-	if isFallback {
-		writeCountMetric = metrics.FbSinkWriteMessagesCount
-		writeBytesMetric = metrics.FbSinkWriteBytesCount
-	}
-
 	// Define labels to keep track of the data related to the specific operation
 	labels := map[string]string{
 		metrics.LabelVertex:             df.vertexName,
@@ -516,29 +505,34 @@ func (df *DataForward) updateSinkWriteMetrics(writeCount int, writeBytes float64
 	}
 
 	// Increment the metrics for message count and bytes
-	writeCountMetric.With(labels).Add(float64(writeCount))
-	writeBytesMetric.With(labels).Add(writeBytes)
+	metrics.WriteMessagesCount.With(labels).Add(float64(writeCount))
+	metrics.WriteBytesCount.With(labels).Add(writeBytes)
+
+	// if this is for Fallback Sink, increment specific metrics as well
+	if isFallback {
+		metrics.FbSinkWriteMessagesCount.With(labels).Add(float64(writeCount))
+		metrics.FbSinkWriteBytesCount.With(labels).Add(writeBytes)
+	}
 }
 
 // incrementErrorMetric updates the appropriate error metric based on whether the operation involves a fallback sink.
 func (df *DataForward) incrementErrorMetric(sinkWriter string, isFbSinkWriter bool) {
-	// Standard metric for primary sink operations
-	writeMessageErrorMetric := metrics.WriteMessagesError
-
-	// use fallback specific metric if fallback mode
-	if isFbSinkWriter {
-		writeMessageErrorMetric = metrics.FbSinkWriteMessagesError
-	}
-
-	// Increment the selected metric and attach labels to provide detailed context:
-	// Increment the metric
-	writeMessageErrorMetric.With(map[string]string{
+	// Define labels to keep track of the data related to the specific operation
+	labels := map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
 		metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 		metrics.LabelPartitionName:      sinkWriter,
-	}).Inc()
+	}
+
+	// Increment the selected metric and attach labels to provide detailed context:
+	metrics.WriteMessagesError.With(labels).Inc()
+
+	// Increment fallback specific metric if fallback mode
+	if isFbSinkWriter {
+		metrics.FbSinkWriteMessagesError.With(labels).Inc()
+	}
 }
 
 // errorArrayToMap summarizes an error array to map
@@ -558,13 +552,9 @@ func (df *DataForward) getBackOffConditions(isFallbackSink bool) (wait.Backoff, 
 	if isFallbackSink {
 		return wait.Backoff{
 			Duration: dfv1.DefaultRetryInterval,
-			// Always account for the first try
-			Steps: dfv1.DefaultRetrySteps + 1,
+			Steps:    dfv1.DefaultRetrySteps,
 		}, dfv1.OnFailureRetry
 	}
 	// Initial interval duration and number of retries are taken from DataForward settings.
-	backoff := df.opts.retryStrategy.GetBackoff()
-	// Adding a step for the first try
-	backoff.Steps = backoff.Steps + 1
-	return backoff, df.opts.retryStrategy.GetOnFailureRetryStrategy()
+	return df.opts.retryStrategy.GetBackoff(), df.opts.retryStrategy.GetOnFailureRetryStrategy()
 }

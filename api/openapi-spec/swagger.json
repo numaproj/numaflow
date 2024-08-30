@@ -17821,7 +17821,7 @@
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         },
         "steps": {
-          "description": "Steps defines the number of times to retry after a failure occurs.",
+          "description": "Steps defines the number of times to try writing to a sink including retries",
           "type": "integer",
           "format": "int64"
         }

@@ -48,7 +48,7 @@ type Backoff struct {
 	// +kubebuilder:default="1ms"
 	// +optional
 	Interval *metav1.Duration `json:"interval,omitempty" protobuf:"bytes,1,opt,name=interval"`
-	// Steps defines the number of times to retry after a failure occurs.
+	// Steps defines the number of times to try writing to a sink including retries
 	// +optional
 	Steps *uint32 `json:"steps,omitempty" protobuf:"bytes,2,opt,name=steps"`
 	// TODO(Retry): Enable after we add support for exponential backoff

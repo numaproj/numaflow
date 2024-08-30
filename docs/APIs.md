@@ -984,7 +984,8 @@ Interval sets the delay to wait before retry, after a failure occurs.
 <em>(Optional)</em>
 <p>
 
-Steps defines the number of times to retry after a failure occurs.
+Steps defines the number of times to try writing to a sink including
+retries
 </p>
 
 </td>

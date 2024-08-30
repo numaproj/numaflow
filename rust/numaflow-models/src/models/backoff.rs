@@ -22,7 +22,7 @@ limitations under the License.
 pub struct Backoff {
     #[serde(rename = "interval", skip_serializing_if = "Option::is_none")]
     pub interval: Option<kube::core::Duration>,
-    /// Steps defines the number of times to retry after a failure occurs.
+    /// Steps defines the number of times to try writing to a sink including retries
     #[serde(rename = "steps", skip_serializing_if = "Option::is_none")]
     pub steps: Option<i64>,
 }

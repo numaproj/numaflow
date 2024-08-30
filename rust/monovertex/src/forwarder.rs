@@ -287,17 +287,17 @@ impl Forwarder {
             self.handle_fallback_messages(fallback_msgs).await?;
         }
 
-        // update the metric for number of messages written to the primary sink
-        // we increment fallback sink count in a separate metric
         forward_metrics()
             .sink_time
             .get_or_create(&self.common_labels)
             .observe(start_time_e2e.elapsed().as_micros() as f64);
 
+        // update the metric for number of messages written to the sink
+        // this included primary and fallback sink
         forward_metrics()
             .sink_write_total
             .get_or_create(&self.common_labels)
-            .inc_by(msg_count - fallback_msgs_count);
+            .inc_by(msg_count);
         Ok(())
     }
 

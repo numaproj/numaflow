@@ -575,6 +575,10 @@ func HasValidSinkRetryStrategy(s dfv1.Sink) bool {
 	if s.RetryStrategy.OnFailure != nil && *s.RetryStrategy.OnFailure == dfv1.OnFailureFallback && !hasValidFallbackSink(&s) {
 		return false
 	}
+	// If steps are provided in the strategy they cannot be 0, as we do not allow no tries for writing
+	if s.RetryStrategy.BackOff != nil && s.RetryStrategy.BackOff.Steps != nil && *s.RetryStrategy.BackOff.Steps == 0 {
+		return false
+	}
 	// If no errors are found, the function returns true indicating the validation passed.
 	return true
 }
