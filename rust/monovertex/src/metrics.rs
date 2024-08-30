@@ -253,16 +253,12 @@ fn metrics_router(metrics_state: MetricsState) -> Router {
     Router::new()
         .route("/metrics", get(metrics_handler))
         .route("/livez", get(livez))
-        .route("/readyz", get(readyz))
+        .route("/readyz", get(sidecar_livez))
         .route("/sidecar-livez", get(sidecar_livez))
         .with_state(metrics_state)
 }
 
 async fn livez() -> impl IntoResponse {
-    StatusCode::NO_CONTENT
-}
-
-async fn readyz() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 

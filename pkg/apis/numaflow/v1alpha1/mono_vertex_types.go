@@ -56,6 +56,7 @@ const (
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.readyReplicas`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
@@ -463,15 +464,29 @@ func (mvl MonoVertexLimits) GetReadTimeout() time.Duration {
 }
 
 type MonoVertexStatus struct {
-	Status             `json:",inline" protobuf:"bytes,1,opt,name=status"`
-	Phase              MonoVertexPhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=MonoVertexPhase"`
-	Replicas           uint32          `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
-	Selector           string          `json:"selector,omitempty" protobuf:"bytes,4,opt,name=selector"`
-	Reason             string          `json:"reason,omitempty" protobuf:"bytes,5,opt,name=reason"`
-	Message            string          `json:"message,omitempty" protobuf:"bytes,6,opt,name=message"`
-	LastUpdated        metav1.Time     `json:"lastUpdated,omitempty" protobuf:"bytes,7,opt,name=lastUpdated"`
-	LastScaledAt       metav1.Time     `json:"lastScaledAt,omitempty" protobuf:"bytes,8,opt,name=lastScaledAt"`
-	ObservedGeneration int64           `json:"observedGeneration,omitempty" protobuf:"varint,9,opt,name=observedGeneration"`
+	Status `json:",inline" protobuf:"bytes,1,opt,name=status"`
+	// +optional
+	Phase MonoVertexPhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=MonoVertexPhase"`
+	// Total number of non-terminated pods targeted by this MonoVertex (their labels match the selector).
+	// +optional
+	Replicas uint32 `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
+	// +optional
+	Selector string `json:"selector,omitempty" protobuf:"bytes,4,opt,name=selector"`
+	// +optional
+	Reason string `json:"reason,omitempty" protobuf:"bytes,5,opt,name=reason"`
+	// +optional
+	Message string `json:"message,omitempty" protobuf:"bytes,6,opt,name=message"`
+	// +optional
+	LastUpdated metav1.Time `json:"lastUpdated,omitempty" protobuf:"bytes,7,opt,name=lastUpdated"`
+	// Time of last scaling operation.
+	// +optional
+	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,8,opt,name=lastScaledAt"`
+	// The generation observed by the MonoVertex controller.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,9,opt,name=observedGeneration"`
+	// The number of pods targeted by this MonoVertex with a Ready Condition.
+	// +optional
+	ReadyReplicas uint32 `json:"readyReplicas,omitempty" protobuf:"varint,10,opt,name=readyReplicas"`
 }
 
 // SetObservedGeneration sets the Status ObservedGeneration

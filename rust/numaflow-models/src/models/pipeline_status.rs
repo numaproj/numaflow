@@ -27,6 +27,7 @@ pub struct PipelineStatus {
     pub map_udf_count: Option<i64>,
     #[serde(rename = "message", skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    /// The generation observed by the Pipeline controller.
     #[serde(rename = "observedGeneration", skip_serializing_if = "Option::is_none")]
     pub observed_generation: Option<i64>,
     #[serde(rename = "phase", skip_serializing_if = "Option::is_none")]

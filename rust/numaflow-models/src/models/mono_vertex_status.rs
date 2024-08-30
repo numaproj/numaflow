@@ -27,20 +27,25 @@ pub struct MonoVertexStatus {
     pub last_updated: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Time>,
     #[serde(rename = "message", skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    /// The generation observed by the MonoVertex controller.
     #[serde(rename = "observedGeneration", skip_serializing_if = "Option::is_none")]
     pub observed_generation: Option<i64>,
     #[serde(rename = "phase", skip_serializing_if = "Option::is_none")]
     pub phase: Option<String>,
+    /// The number of pods targeted by this MonoVertex with a Ready Condition.
+    #[serde(rename = "readyReplicas", skip_serializing_if = "Option::is_none")]
+    pub ready_replicas: Option<i64>,
     #[serde(rename = "reason", skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
-    #[serde(rename = "replicas")]
-    pub replicas: i64,
+    /// Total number of non-terminated pods targeted by this MonoVertex (their labels match the selector).
+    #[serde(rename = "replicas", skip_serializing_if = "Option::is_none")]
+    pub replicas: Option<i64>,
     #[serde(rename = "selector", skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
 }
 
 impl MonoVertexStatus {
-    pub fn new(replicas: i64) -> MonoVertexStatus {
+    pub fn new() -> MonoVertexStatus {
         MonoVertexStatus {
             conditions: None,
             last_scaled_at: None,
@@ -48,8 +53,9 @@ impl MonoVertexStatus {
             message: None,
             observed_generation: None,
             phase: None,
+            ready_replicas: None,
             reason: None,
-            replicas,
+            replicas: None,
             selector: None,
         }
     }

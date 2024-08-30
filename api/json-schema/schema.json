@@ -19278,7 +19278,8 @@
           "x-kubernetes-patch-strategy": "merge"
         },
         "lastScaledAt": {
-          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time",
+          "description": "Time of last scaling operation."
         },
         "lastUpdated": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
@@ -19287,16 +19288,23 @@
           "type": "string"
         },
         "observedGeneration": {
+          "description": "The generation observed by the MonoVertex controller.",
           "format": "int64",
           "type": "integer"
         },
         "phase": {
           "type": "string"
         },
+        "readyReplicas": {
+          "description": "The number of pods targeted by this MonoVertex with a Ready Condition.",
+          "format": "int64",
+          "type": "integer"
+        },
         "reason": {
           "type": "string"
         },
         "replicas": {
+          "description": "Total number of non-terminated pods targeted by this MonoVertex (their labels match the selector).",
           "format": "int64",
           "type": "integer"
         },
@@ -19304,9 +19312,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "replicas"
-      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.NativeRedis": {
@@ -19654,6 +19659,7 @@
           "type": "string"
         },
         "observedGeneration": {
+          "description": "The generation observed by the Pipeline controller.",
           "format": "int64",
           "type": "integer"
         },
@@ -20542,22 +20548,30 @@
           "x-kubernetes-patch-strategy": "merge"
         },
         "lastScaledAt": {
-          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time",
+          "description": "Time of last scaling operation."
         },
         "message": {
           "type": "string"
         },
         "observedGeneration": {
+          "description": "The generation observed by the Vertex controller.",
           "format": "int64",
           "type": "integer"
         },
         "phase": {
           "type": "string"
         },
+        "readyReplicas": {
+          "description": "The number of pods targeted by this Vertex with a Ready Condition.",
+          "format": "int64",
+          "type": "integer"
+        },
         "reason": {
           "type": "string"
         },
         "replicas": {
+          "description": "Total number of non-terminated pods targeted by this Vertex (their labels match the selector).",
           "format": "int64",
           "type": "integer"
         },
@@ -20565,10 +20579,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "phase",
-        "replicas"
-      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.VertexTemplate": {

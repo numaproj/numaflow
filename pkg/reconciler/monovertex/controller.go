@@ -484,7 +484,12 @@ func (mr *monoVertexReconciler) checkChildrenResourceStatus(ctx context.Context,
 		monoVtx.Status.MarkPodNotHealthy("ListMonoVerticesPodsFailed", err.Error())
 		return fmt.Errorf("failed to get pods of a vertex: %w", err)
 	}
-	if healthy, reason, msg := reconciler.CheckVertexPodsStatus(&podList); healthy {
+	readyPods := reconciler.NumOfReadyPods(podList)
+	if readyPods > int(monoVtx.Status.Replicas) { // It might happen in some corner cases, such as during rollout
+		readyPods = int(monoVtx.Status.Replicas)
+	}
+	monoVtx.Status.ReadyReplicas = uint32(readyPods)
+	if healthy, reason, msg := reconciler.CheckPodsStatus(&podList); healthy {
 		monoVtx.Status.MarkPodHealthy(reason, msg)
 	} else {
 		// Do not need to explicitly requeue, since the it keeps watching the status change of the pods
