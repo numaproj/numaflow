@@ -3393,6 +3393,34 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref common.ReferenceCall
 							Format:      "int64",
 						},
 					},
+					"currentReplicas": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The number of Pods created by the controller from the MonoVertex version indicated by currentHash.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"updatedReplicas": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The number of Pods created by the controller from the MonoVertex version indicated by updateHash.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"currentRevision": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If not empty, indicates the version of the MonoVertex used to generate Pods in the sequence [0,currentReplicas).",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"updateRevision": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If not empty, indicates the version of the MonoVertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
@@ -5703,6 +5731,34 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexStatus(ref common.ReferenceCallback
 							Description: "The number of pods targeted by this Vertex with a Ready Condition.",
 							Type:        []string{"integer"},
 							Format:      "int64",
+						},
+					},
+					"currentReplicas": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The number of Pods created by the controller from the Vertex version indicated by currentHash.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"updatedReplicas": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The number of Pods created by the controller from the Vertex version indicated by updateHash.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"currentRevision": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If not empty, indicates the version of the Vertex used to generate Pods in the sequence [0,currentReplicas).",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"updateRevision": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If not empty, indicates the version of the Vertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},

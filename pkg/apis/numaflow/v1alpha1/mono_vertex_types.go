@@ -487,6 +487,14 @@ type MonoVertexStatus struct {
 	// The number of pods targeted by this MonoVertex with a Ready Condition.
 	// +optional
 	ReadyReplicas uint32 `json:"readyReplicas,omitempty" protobuf:"varint,10,opt,name=readyReplicas"`
+	// The number of Pods created by the controller from the MonoVertex version indicated by currentHash.
+	CurrentReplicas int32 `json:"currentReplicas,omitempty" protobuf:"varint,11,opt,name=currentReplicas"`
+	// The number of Pods created by the controller from the MonoVertex version indicated by updateHash.
+	UpdatedReplicas int32 `json:"updatedReplicas,omitempty" protobuf:"varint,12,opt,name=updatedReplicas"`
+	// If not empty, indicates the version of the MonoVertex used to generate Pods in the sequence [0,currentReplicas).
+	CurrentHash string `json:"currentRevision,omitempty" protobuf:"bytes,13,opt,name=currentRevision"`
+	// If not empty, indicates the version of the MonoVertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)
+	UpdateHash string `json:"updateRevision,omitempty" protobuf:"bytes,14,opt,name=updateRevision"`
 }
 
 // SetObservedGeneration sets the Status ObservedGeneration

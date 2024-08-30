@@ -5469,6 +5469,11 @@ spec:
                   - type
                   type: object
                 type: array
+              currentReplicas:
+                format: int32
+                type: integer
+              currentRevision:
+                type: string
               lastScaledAt:
                 format: date-time
                 type: string
@@ -5493,6 +5498,11 @@ spec:
                 type: integer
               selector:
                 type: string
+              updateRevision:
+                type: string
+              updatedReplicas:
+                format: int32
+                type: integer
             type: object
         required:
         - spec
