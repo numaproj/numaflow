@@ -867,6 +867,7 @@ message Metadata {
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.readyReplicas`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
@@ -947,21 +948,36 @@ message MonoVertexSpec {
 message MonoVertexStatus {
   optional Status status = 1;
 
+  // +optional
   optional string phase = 2;
 
+  // Total number of non-terminated pods targeted by this MonoVertex (their labels match the selector).
+  // +optional
   optional uint32 replicas = 3;
 
+  // +optional
   optional string selector = 4;
 
+  // +optional
   optional string reason = 5;
 
+  // +optional
   optional string message = 6;
 
+  // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastUpdated = 7;
 
+  // Time of last scaling operation.
+  // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 8;
 
+  // The generation observed by the MonoVertex controller.
+  // +optional
   optional int64 observedGeneration = 9;
+
+  // The number of pods targeted by this MonoVertex with a Ready Condition.
+  // +optional
+  optional uint32 readyReplicas = 10;
 }
 
 message NativeRedis {
@@ -1161,24 +1177,35 @@ message PipelineSpec {
 message PipelineStatus {
   optional Status status = 1;
 
+  // +optional
   optional string phase = 2;
 
+  // +optional
   optional string message = 3;
 
+  // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastUpdated = 4;
 
+  // +optional
   optional uint32 vertexCount = 5;
 
+  // +optional
   optional uint32 sourceCount = 6;
 
+  // +optional
   optional uint32 sinkCount = 7;
 
+  // +optional
   optional uint32 udfCount = 8;
 
+  // +optional
   optional uint32 mapUDFCount = 9;
 
+  // +optional
   optional uint32 reduceUDFCount = 10;
 
+  // The generation observed by the Pipeline controller.
+  // +optional
   optional int64 observedGeneration = 11;
 }
 
@@ -1563,6 +1590,7 @@ message UDTransformer {
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.readyReplicas`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
@@ -1643,19 +1671,33 @@ message VertexSpec {
 message VertexStatus {
   optional Status status = 1;
 
+  // +optional
   optional string phase = 2;
 
+  // Total number of non-terminated pods targeted by this Vertex (their labels match the selector).
+  // +optional
   optional uint32 replicas = 3;
 
+  // +optional
   optional string selector = 4;
 
+  // +optional
   optional string reason = 5;
 
+  // +optional
   optional string message = 6;
 
+  // Time of last scaling operation.
+  // +optional
   optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 7;
 
+  // The generation observed by the Vertex controller.
+  // +optional
   optional int64 observedGeneration = 8;
+
+  // The number of pods targeted by this Vertex with a Ready Condition.
+  // +optional
+  optional uint32 readyReplicas = 9;
 }
 
 message VertexTemplate {

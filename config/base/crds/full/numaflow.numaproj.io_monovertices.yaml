@@ -27,6 +27,9 @@ spec:
     - jsonPath: .status.replicas
       name: Current
       type: string
+    - jsonPath: .status.readyReplicas
+      name: Ready
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -5567,6 +5570,9 @@ spec:
                 - Paused
                 - Deleting
                 type: string
+              readyReplicas:
+                format: int32
+                type: integer
               reason:
                 type: string
               replicas:
@@ -5574,8 +5580,6 @@ spec:
                 type: integer
               selector:
                 type: string
-            required:
-            - replicas
             type: object
         required:
         - spec

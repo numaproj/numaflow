@@ -106,7 +106,7 @@ impl Forwarder {
             }
 
             forward_metrics()
-                .e2e_processing_time
+                .e2e_time
                 .get_or_create(&self.common_labels)
                 .observe(start_time.elapsed().as_micros() as f64);
         }
@@ -127,6 +127,10 @@ impl Forwarder {
             messages.len(),
             start_time.elapsed().as_millis()
         );
+        forward_metrics()
+            .read_time
+            .get_or_create(&self.common_labels)
+            .observe(start_time.elapsed().as_micros() as f64);
 
         // read returned 0 messages, nothing more to be done.
         if messages.is_empty() {
@@ -192,6 +196,10 @@ impl Forwarder {
             "Transformer latency - {}ms",
             start_time.elapsed().as_millis()
         );
+        forward_metrics()
+            .transform_time
+            .get_or_create(&self.common_labels)
+            .observe(start_time.elapsed().as_micros() as f64);
 
         Ok(results)
     }
@@ -204,13 +212,15 @@ impl Forwarder {
             return Ok(());
         }
 
+        // this start time is for tracking the total time taken
+        let start_time_e2e = tokio::time::Instant::now();
+
         let mut attempts = 0;
         let mut error_map = HashMap::new();
         let mut fallback_msgs = Vec::new();
         // start with the original set of message to be sent.
         // we will overwrite this vec with failed messages and will keep retrying.
         let mut messages_to_send = messages;
-
         loop {
             while attempts <= config().sink_max_retry_attempts {
                 let start_time = tokio::time::Instant::now();
@@ -309,6 +319,11 @@ impl Forwarder {
 
         // update the metric for number of messages written to the primary sink
         // we increment fallback sink count in a separate metric
+        forward_metrics()
+            .sink_time
+            .get_or_create(&self.common_labels)
+            .observe(start_time_e2e.elapsed().as_micros() as f64);
+      
         forward_metrics()
             .sink_write_total
             .get_or_create(&self.common_labels)
@@ -422,8 +437,16 @@ impl Forwarder {
     async fn acknowledge_messages(&mut self, offsets: Vec<Offset>) -> Result<()> {
         let n = offsets.len();
         let start_time = tokio::time::Instant::now();
+
         self.source_client.ack_fn(offsets).await?;
+
         debug!("Ack latency - {}ms", start_time.elapsed().as_millis());
+
+        forward_metrics()
+            .ack_time
+            .get_or_create(&self.common_labels)
+            .observe(start_time.elapsed().as_micros() as f64);
+
         forward_metrics()
             .ack_total
             .get_or_create(&self.common_labels)

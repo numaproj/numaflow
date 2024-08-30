@@ -6229,6 +6229,7 @@ MonoVertexPhase </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -6241,6 +6242,13 @@ MonoVertexPhase </a> </em>
 </td>
 
 <td>
+
+<em>(Optional)</em>
+<p>
+
+Total number of non-terminated pods targeted by this MonoVertex (their
+labels match the selector).
+</p>
 
 </td>
 
@@ -6255,6 +6263,7 @@ MonoVertexPhase </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -6268,6 +6277,7 @@ MonoVertexPhase </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -6281,6 +6291,7 @@ MonoVertexPhase </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -6296,6 +6307,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -6311,6 +6323,12 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
+<p>
+
+Time of last scaling operation.
+</p>
+
 </td>
 
 </tr>
@@ -6323,6 +6341,31 @@ Kubernetes meta/v1.Time </a> </em>
 </td>
 
 <td>
+
+<em>(Optional)</em>
+<p>
+
+The generation observed by the MonoVertex controller.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>readyReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The number of pods targeted by this MonoVertex with a Ready Condition.
+</p>
 
 </td>
 
@@ -7683,6 +7726,7 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7696,6 +7740,7 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7711,6 +7756,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7724,6 +7770,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7737,6 +7784,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7750,6 +7798,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7763,6 +7812,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7776,6 +7826,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7789,6 +7840,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7801,6 +7853,12 @@ Kubernetes meta/v1.Time </a> </em>
 </td>
 
 <td>
+
+<em>(Optional)</em>
+<p>
+
+The generation observed by the Pipeline controller.
+</p>
 
 </td>
 
@@ -11158,6 +11216,7 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -11170,6 +11229,13 @@ Description
 </td>
 
 <td>
+
+<em>(Optional)</em>
+<p>
+
+Total number of non-terminated pods targeted by this Vertex (their
+labels match the selector).
+</p>
 
 </td>
 
@@ -11184,6 +11250,7 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -11197,6 +11264,7 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -11210,6 +11278,7 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -11225,6 +11294,12 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
+<p>
+
+Time of last scaling operation.
+</p>
+
 </td>
 
 </tr>
@@ -11237,6 +11312,31 @@ Kubernetes meta/v1.Time </a> </em>
 </td>
 
 <td>
+
+<em>(Optional)</em>
+<p>
+
+The generation observed by the Vertex controller.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>readyReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The number of pods targeted by this Vertex with a Ready Condition.
+</p>
 
 </td>
 
