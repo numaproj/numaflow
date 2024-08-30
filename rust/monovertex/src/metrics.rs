@@ -53,7 +53,6 @@ const TRANSFORM_TIME: &str = "monovtx_transformer_time";
 const ACK_TIME: &str = "monovtx_ack_time";
 const SINK_TIME: &str = "monovtx_sink_time";
 
-
 #[derive(Clone)]
 pub(crate) struct MetricsState {
     pub source_client: SourceClient,
@@ -204,10 +203,7 @@ static MONOVTX_METRICS: OnceLock<MonoVtxMetrics> = OnceLock::new();
 // forward_metrics is a helper function used to fetch the
 // MonoVtxMetrics object
 pub(crate) fn forward_metrics() -> &'static MonoVtxMetrics {
-    MONOVTX_METRICS.get_or_init(|| {
-        let metrics = MonoVtxMetrics::new();
-        metrics
-    })
+    MONOVTX_METRICS.get_or_init(MonoVtxMetrics::new)
 }
 
 /// MONOVTX_METRICS_LABELS are used to store the common labels used in the metrics

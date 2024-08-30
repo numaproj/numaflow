@@ -12,9 +12,7 @@ use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use tracing::level_filters::LevelFilter;
 use tracing::{error, info, warn};
-use tracing_subscriber::EnvFilter;
 
 /// SourcerSinker orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
@@ -43,17 +41,6 @@ mod server_info;
 mod metrics;
 
 pub async fn mono_vertex() {
-    // Initialize the logger
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::builder()
-                .with_default_directive(LevelFilter::INFO.into())
-                .parse_lossy(&config().log_level),
-        )
-        .with_target(false)
-        .with_ansi(false)
-        .init();
-
     // Initialize the source, sink and transformer configurations
     // We are using the default configurations for now.
     let source_config = SourceConfig {
@@ -83,6 +70,7 @@ pub async fn mono_vertex() {
 
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
+
     // wait for SIG{INT,TERM} and invoke cancellation token.
     let shutdown_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
         shutdown_signal().await;

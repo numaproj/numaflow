@@ -3,7 +3,6 @@ use std::sync::OnceLock;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use tracing::level_filters::LevelFilter;
 
 use numaflow_models::models::MonoVertex;
 
@@ -14,7 +13,6 @@ const ENV_GRPC_MAX_MESSAGE_SIZE: &str = "NUMAFLOW_GRPC_MAX_MESSAGE_SIZE";
 const ENV_POD_REPLICA: &str = "NUMAFLOW_REPLICA";
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_METRICS_PORT: u16 = 2469;
-const ENV_LOG_LEVEL: &str = "NUMAFLOW_DEBUG";
 const DEFAULT_LAG_CHECK_INTERVAL_IN_SECS: u16 = 5;
 const DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS: u16 = 3;
 const DEFAULT_BATCH_SIZE: u64 = 500;
@@ -38,7 +36,6 @@ pub struct Settings {
     pub batch_size: u64,
     pub timeout_in_ms: u32,
     pub metrics_server_listen_port: u16,
-    pub log_level: String,
     pub grpc_max_message_size: usize,
     pub is_transformer_enabled: bool,
     pub is_fallback_enabled: bool,
@@ -56,7 +53,6 @@ impl Default for Settings {
             batch_size: DEFAULT_BATCH_SIZE,
             timeout_in_ms: DEFAULT_TIMEOUT_IN_MS,
             metrics_server_listen_port: DEFAULT_METRICS_PORT,
-            log_level: LevelFilter::INFO.to_string(),
             grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
             is_transformer_enabled: false,
             is_fallback_enabled: false,
@@ -122,9 +118,6 @@ impl Settings {
                 .is_some();
         }
 
-        settings.log_level =
-            env::var(ENV_LOG_LEVEL).unwrap_or_else(|_| LevelFilter::INFO.to_string());
-
         settings.grpc_max_message_size = env::var(ENV_GRPC_MAX_MESSAGE_SIZE)
             .unwrap_or_else(|_| DEFAULT_GRPC_MAX_MESSAGE_SIZE.to_string())
             .parse()
@@ -152,7 +145,6 @@ mod tests {
         // Set up environment variables
         unsafe {
             env::set_var(ENV_MONO_VERTEX_OBJ, "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLW1vbm8tdmVydGV4IiwibmFtZXNwYWNlIjoiZGVmYXVsdCIsImNyZWF0aW9uVGltZXN0YW1wIjpudWxsfSwic3BlYyI6eyJyZXBsaWNhcyI6MCwic291cmNlIjp7InRyYW5zZm9ybWVyIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6InF1YXkuaW8vbnVtYWlvL251bWFmbG93LXJzL21hcHQtZXZlbnQtdGltZS1maWx0ZXI6c3RhYmxlIiwicmVzb3VyY2VzIjp7fX0sImJ1aWx0aW4iOm51bGx9LCJ1ZHNvdXJjZSI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJkb2NrZXIuaW50dWl0LmNvbS9wZXJzb25hbC95aGwwMS9zaW1wbGUtc291cmNlOnN0YWJsZSIsInJlc291cmNlcyI6e319fX0sInNpbmsiOnsidWRzaW5rIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImRvY2tlci5pbnR1aXQuY29tL3BlcnNvbmFsL3lobDAxL2JsYWNraG9sZS1zaW5rOnN0YWJsZSIsInJlc291cmNlcyI6e319fX0sImxpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMifSwic2NhbGUiOnt9fSwic3RhdHVzIjp7InJlcGxpY2FzIjowLCJsYXN0VXBkYXRlZCI6bnVsbCwibGFzdFNjYWxlZEF0IjpudWxsfX0=");
-            env::set_var(ENV_LOG_LEVEL, "debug");
             env::set_var(ENV_GRPC_MAX_MESSAGE_SIZE, "128000000");
         };
 
@@ -163,13 +155,11 @@ mod tests {
         assert_eq!(settings.mono_vertex_name, "simple-mono-vertex");
         assert_eq!(settings.batch_size, 500);
         assert_eq!(settings.timeout_in_ms, 1000);
-        assert_eq!(settings.log_level, "debug");
         assert_eq!(settings.grpc_max_message_size, 128000000);
 
         // Clean up environment variables
         unsafe {
             env::remove_var(ENV_MONO_VERTEX_OBJ);
-            env::remove_var(ENV_LOG_LEVEL);
             env::remove_var(ENV_GRPC_MAX_MESSAGE_SIZE);
         };
     }
