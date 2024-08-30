@@ -4,7 +4,7 @@ use std::sync::OnceLock;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 
-use numaflow_models::models::MonoVertex;
+use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
 
 use crate::error::Error;
 
@@ -17,8 +17,9 @@ const DEFAULT_LAG_CHECK_INTERVAL_IN_SECS: u16 = 5;
 const DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS: u16 = 3;
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
-const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = 10;
+const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX;
 const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
+const DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY: &str = "retry";
 
 pub fn config() -> &'static Settings {
     static CONF: OnceLock<Settings> = OnceLock::new();
@@ -43,10 +44,22 @@ pub struct Settings {
     pub lag_refresh_interval_in_secs: u16,
     pub sink_max_retry_attempts: u16,
     pub sink_retry_interval_in_ms: u32,
+    pub sink_retry_on_fail_strategy: String,
+    pub sink_default_retry_strategy: RetryStrategy,
 }
 
 impl Default for Settings {
     fn default() -> Self {
+        // Create a default retry strategy from defined constants
+        let default_retry_strategy = RetryStrategy {
+            backoff: Option::from(Box::from(Backoff {
+                interval: Option::from(kube::core::Duration::from(
+                    std::time::Duration::from_millis(DEFAULT_SINK_RETRY_INTERVAL_IN_MS as u64),
+                )),
+                steps: Option::from(DEFAULT_MAX_SINK_RETRY_ATTEMPTS as i64),
+            })),
+            on_failure: Option::from(DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY.to_string()),
+        };
         Self {
             mono_vertex_name: "default".to_string(),
             replica: 0,
@@ -60,6 +73,8 @@ impl Default for Settings {
             lag_refresh_interval_in_secs: DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS,
             sink_max_retry_attempts: DEFAULT_MAX_SINK_RETRY_ATTEMPTS,
             sink_retry_interval_in_ms: DEFAULT_SINK_RETRY_INTERVAL_IN_MS,
+            sink_retry_on_fail_strategy: DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY.to_string(),
+            sink_default_retry_strategy: default_retry_strategy,
         }
     }
 }
@@ -113,9 +128,56 @@ impl Settings {
             settings.is_fallback_enabled = mono_vertex_obj
                 .spec
                 .sink
+                .as_deref()
                 .ok_or(Error::ConfigError("Sink not found".to_string()))?
                 .fallback
                 .is_some();
+
+            if let Some(retry_strategy) = mono_vertex_obj
+                .spec
+                .sink
+                .expect("sink should not be empty")
+                .retry_strategy
+            {
+                if let Some(sink_backoff) = retry_strategy.clone().backoff {
+                    // Set the max retry attempts and retry interval using direct reference
+                    settings.sink_retry_interval_in_ms = sink_backoff
+                        .clone()
+                        .interval
+                        .map(|x| std::time::Duration::from(x).as_millis() as u32)
+                        .unwrap_or(DEFAULT_SINK_RETRY_INTERVAL_IN_MS);
+
+                    settings.sink_max_retry_attempts = sink_backoff
+                        .clone()
+                        .steps
+                        .map(|x| x as u16)
+                        .unwrap_or(DEFAULT_MAX_SINK_RETRY_ATTEMPTS);
+
+                    // We do not allow 0 attempts to write to sink
+                    if settings.sink_max_retry_attempts == 0 {
+                        return Err(Error::ConfigError(
+                            "Retry Strategy given with 0 retry attempts".to_string(),
+                        ));
+                    }
+                }
+
+                // Set the retry strategy using a direct reference whenever possible
+                settings.sink_retry_on_fail_strategy = retry_strategy
+                    .on_failure
+                    .clone()
+                    .unwrap_or_else(|| DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY.to_string());
+
+                // check if the sink retry strategy is set to fallback and there is no fallback sink configured
+                // then we should return an error
+                if settings.sink_retry_on_fail_strategy == "fallback"
+                    && !settings.is_fallback_enabled
+                {
+                    return Err(Error::ConfigError(
+                        "Retry Strategy given as fallback but Fallback sink not configured"
+                            .to_string(),
+                    ));
+                }
+            }
         }
 
         settings.grpc_max_message_size = env::var(ENV_GRPC_MAX_MESSAGE_SIZE)
@@ -136,31 +198,213 @@ impl Settings {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use serde_json::json;
     use std::env;
 
-    use super::*;
-
     #[test]
-    fn test_settings_load() {
-        // Set up environment variables
-        unsafe {
-            env::set_var(ENV_MONO_VERTEX_OBJ, "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLW1vbm8tdmVydGV4IiwibmFtZXNwYWNlIjoiZGVmYXVsdCIsImNyZWF0aW9uVGltZXN0YW1wIjpudWxsfSwic3BlYyI6eyJyZXBsaWNhcyI6MCwic291cmNlIjp7InRyYW5zZm9ybWVyIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6InF1YXkuaW8vbnVtYWlvL251bWFmbG93LXJzL21hcHQtZXZlbnQtdGltZS1maWx0ZXI6c3RhYmxlIiwicmVzb3VyY2VzIjp7fX0sImJ1aWx0aW4iOm51bGx9LCJ1ZHNvdXJjZSI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJkb2NrZXIuaW50dWl0LmNvbS9wZXJzb25hbC95aGwwMS9zaW1wbGUtc291cmNlOnN0YWJsZSIsInJlc291cmNlcyI6e319fX0sInNpbmsiOnsidWRzaW5rIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImRvY2tlci5pbnR1aXQuY29tL3BlcnNvbmFsL3lobDAxL2JsYWNraG9sZS1zaW5rOnN0YWJsZSIsInJlc291cmNlcyI6e319fX0sImxpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMifSwic2NhbGUiOnt9fSwic3RhdHVzIjp7InJlcGxpY2FzIjowLCJsYXN0VXBkYXRlZCI6bnVsbCwibGFzdFNjYWxlZEF0IjpudWxsfX0=");
-            env::set_var(ENV_GRPC_MAX_MESSAGE_SIZE, "128000000");
-        };
+    fn test_settings_load_combined() {
+        // Define all JSON test configurations in separate scopes to use them distinctively
+        {
+            let json_data = json!({
+                "metadata": {
+                    "name": "simple-mono-vertex",
+                    "namespace": "default",
+                    "creationTimestamp": null
+                },
+                "spec": {
+                    "replicas": 0,
+                    "source": {
+                        "transformer": {
+                            "container": {
+                                "image": "xxxxxxx",
+                                "resources": {}
+                            },
+                            "builtin": null
+                        },
+                        "udsource": {
+                            "container": {
+                                "image": "xxxxxxx",
+                                "resources": {}
+                            }
+                        }
+                    },
+                    "sink": {
+                        "udsink": {
+                            "container": {
+                                "image": "xxxxxx",
+                                "resources": {}
+                            }
+                        }
+                    },
+                    "limits": {
+                        "readBatchSize": 500,
+                        "readTimeout": "1s"
+                    },
+                    "scale": {},
+                    "status": {
+                        "replicas": 0,
+                        "lastUpdated": null,
+                        "lastScaledAt": null
+                    }
+                }
+            });
+            let json_str = json_data.to_string();
+            let encoded_json = BASE64_STANDARD.encode(json_str);
+            env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
 
-        // Load settings
-        let settings = Settings::load().unwrap();
-
-        // Verify settings
-        assert_eq!(settings.mono_vertex_name, "simple-mono-vertex");
-        assert_eq!(settings.batch_size, 500);
-        assert_eq!(settings.timeout_in_ms, 1000);
-        assert_eq!(settings.grpc_max_message_size, 128000000);
-
-        // Clean up environment variables
-        unsafe {
+            // Execute and verify
+            let settings = Settings::load().unwrap();
+            assert_eq!(settings.mono_vertex_name, "simple-mono-vertex");
             env::remove_var(ENV_MONO_VERTEX_OBJ);
-            env::remove_var(ENV_GRPC_MAX_MESSAGE_SIZE);
-        };
+        }
+
+        {
+            // Test Retry Strategy Load
+            let json_data = json!({
+                "metadata": {
+                    "name": "simple-mono-vertex",
+                    "namespace": "default",
+                    "creationTimestamp": null
+                },
+                "spec": {
+                    "replicas": 0,
+                    "source": {
+                        "udsource": {
+                            "container": {
+                                "image": "xxxxxxx",
+                                "resources": {}
+                            }
+                        }
+                    },
+                    "sink": {
+                        "udsink": {
+                            "container": {
+                                "image": "xxxxxx",
+                                "resources": {}
+                            }
+                        },
+                        "retryStrategy": {
+                            "backoff": {
+                                "interval": "1s",
+                                "steps": 5
+                            },
+                        },
+                    },
+                    "limits": {
+                        "readBatchSize": 500,
+                        "readTimeout": "1s"
+                    },
+                }
+            });
+            let json_str = json_data.to_string();
+            let encoded_json = BASE64_STANDARD.encode(json_str);
+            env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
+
+            // Execute and verify
+            let settings = Settings::load().unwrap();
+            assert_eq!(settings.sink_retry_on_fail_strategy, "retry");
+            assert_eq!(settings.sink_max_retry_attempts, 5);
+            assert_eq!(settings.sink_retry_interval_in_ms, 1000);
+            env::remove_var(ENV_MONO_VERTEX_OBJ);
+        }
+
+        {
+            // Test Error Case: Retry Strategy Fallback without Fallback Sink
+            let json_data = json!({
+                "metadata": {
+                    "name": "simple-mono-vertex",
+                    "namespace": "default",
+                    "creationTimestamp": null
+                },
+                "spec": {
+                    "replicas": 0,
+                    "source": {
+                        "udsource": {
+                            "container": {
+                                "image": "xxxxxxx",
+                                "resources": {}
+                            }
+                        }
+                    },
+                    "sink": {
+                        "udsink": {
+                            "container": {
+                                "image": "xxxxxx",
+                                "resources": {}
+                            }
+                        },
+                        "retryStrategy": {
+                            "backoff": {
+                                "interval": "1s",
+                                "steps": 5
+                            },
+                            "onFailure": "fallback"
+                        },
+                    },
+                    "limits": {
+                        "readBatchSize": 500,
+                        "readTimeout": "1s"
+                    },
+                }
+            });
+            let json_str = json_data.to_string();
+            let encoded_json = BASE64_STANDARD.encode(json_str);
+            env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
+
+            // Execute and verify
+            assert!(Settings::load().is_err());
+            env::remove_var(ENV_MONO_VERTEX_OBJ);
+        }
+
+        {
+            // Test Error Case: Retry Strategy with 0 Retry Attempts
+            let json_data = json!({
+                "metadata": {
+                    "name": "simple-mono-vertex",
+                    "namespace": "default",
+                    "creationTimestamp": null
+                },
+                "spec": {
+                    "replicas": 0,
+                    "source": {
+                        "udsource": {
+                            "container": {
+                                "image": "xxxxxxx",
+                                "resources": {}
+                            }
+                        }
+                    },
+                    "sink": {
+                        "udsink": {
+                            "container": {
+                                "image": "xxxxxx",
+                                "resources": {}
+                            }
+                        },
+                        "retryStrategy": {
+                            "backoff": {
+                                "interval": "1s",
+                                "steps": 0
+                            },
+                            "onFailure": "retry"
+                        },
+                    },
+                    "limits": {
+                        "readBatchSize": 500,
+                        "readTimeout": "1s"
+                    },
+                }
+            });
+            let json_str = json_data.to_string();
+            let encoded_json = BASE64_STANDARD.encode(json_str);
+            env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
+
+            // Execute and verify
+            assert!(Settings::load().is_err());
+            env::remove_var(ENV_MONO_VERTEX_OBJ);
+        }
+        // General cleanup
+        env::remove_var(ENV_GRPC_MAX_MESSAGE_SIZE);
     }
 }

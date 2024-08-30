@@ -86,7 +86,7 @@ var (
 		Help:      "Total number of bytes written",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
-	// WriteMessagesError is used to indicate the number of errors messages written
+	// WriteMessagesError is used to indicate the number of errors encountered while writing messages
 	WriteMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "write_error_total",
@@ -296,5 +296,29 @@ var (
 		Subsystem: "idlemanager",
 		Name:      "ctrl_msg_total",
 		Help:      "Total number of ctrl Messages sent",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+)
+
+// Sink forwarder metrics
+var (
+	// FbSinkWriteMessagesCount is used to indicate the number of messages written to a fallback sink
+	FbSinkWriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "fbsink_write_total",
+		Help:      "Total number of Messages written to a fallback sink",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// FbSinkWriteBytesCount is to indicate the number of bytes written to a fallback sink
+	FbSinkWriteBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "fbsink_write_bytes_total",
+		Help:      "Total number of bytes written to a fallback sink",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// FbSinkWriteMessagesError is used to indicate the number of errors while writing to a fallback sink
+	FbSinkWriteMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "fbsink_write_error_total",
+		Help:      "Total number of Write Errors while writing to a fallback sink",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 )
