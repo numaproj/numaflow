@@ -246,9 +246,6 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			forwardOpts = append(forwardOpts, sinkforward.WithCallbackUploader(cbPublisher))
 		}
 
-		// Derive the retryStrategy from the spec and add to the forwarder
-		forwardOpts = append(forwardOpts, sinkforward.WithRetryStrategy(u.VertexInstance.Vertex.Spec.Sink.RetryStrategy))
-
 		df, err := sinkforward.NewDataForward(u.VertexInstance, readers[index], sinkWriter, fetchWatermark, publishWatermark[vertexName], idleManager, forwardOpts...)
 		if err != nil {
 			return fmt.Errorf("failed to create data forward, error: %w", err)

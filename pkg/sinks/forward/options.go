@@ -37,8 +37,6 @@ type options struct {
 	logger *zap.SugaredLogger
 	// cbPublisher is the callback publisher for the vertex.
 	cbPublisher *callback.Uploader
-	// retryStrategy
-	retryStrategy dfv1.RetryStrategy
 }
 
 type Option func(*options) error
@@ -87,14 +85,6 @@ func WithFbSinkWriter(sinkWriter sinker.SinkWriter) Option {
 func WithCallbackUploader(cp *callback.Uploader) Option {
 	return func(o *options) error {
 		o.cbPublisher = cp
-		return nil
-	}
-}
-
-// WithRetryStrategy sets the retryStrategy for the Sink
-func WithRetryStrategy(f dfv1.RetryStrategy) Option {
-	return func(o *options) error {
-		o.retryStrategy = f
 		return nil
 	}
 }

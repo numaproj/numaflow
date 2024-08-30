@@ -54,6 +54,7 @@ type DataForward struct {
 	vertexName          string
 	pipelineName        string
 	vertexReplica       int32
+	sinkRetryStrategy   dfv1.RetryStrategy
 	// idleManager manages the idle watermark status.
 	idleManager wmb.IdleManager
 	// wmbChecker checks if the idle watermark is valid.
@@ -88,11 +89,12 @@ func NewDataForward(
 		wmFetcher:           fetchWatermark,
 		wmPublisher:         publishWatermark,
 		// should we do a check here for the values not being null?
-		vertexName:    vertexInstance.Vertex.Spec.Name,
-		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
-		vertexReplica: vertexInstance.Replica,
-		idleManager:   idleManager,
-		wmbChecker:    wmb.NewWMBChecker(2), // TODO: make configurable
+		vertexName:        vertexInstance.Vertex.Spec.Name,
+		pipelineName:      vertexInstance.Vertex.Spec.PipelineName,
+		vertexReplica:     vertexInstance.Replica,
+		idleManager:       idleManager,
+		sinkRetryStrategy: vertexInstance.Vertex.Spec.Sink.RetryStrategy,
+		wmbChecker:        wmb.NewWMBChecker(2), // TODO: make configurable
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
@@ -556,5 +558,5 @@ func (df *DataForward) getBackOffConditions(isFallbackSink bool) (wait.Backoff, 
 		}, dfv1.OnFailureRetry
 	}
 	// Initial interval duration and number of retries are taken from DataForward settings.
-	return df.opts.retryStrategy.GetBackoff(), df.opts.retryStrategy.GetOnFailureRetryStrategy()
+	return df.sinkRetryStrategy.GetBackoff(), df.sinkRetryStrategy.GetOnFailureRetryStrategy()
 }
