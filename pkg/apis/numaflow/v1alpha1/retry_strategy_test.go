@@ -95,6 +95,13 @@ func TestGetOnFailureRetryStrategy(t *testing.T) {
 			},
 			expectedOnFailure: OnFailureDrop,
 		},
+		{
+			name: "incorrect strategy - use default",
+			strategy: RetryStrategy{
+				OnFailure: func() *OnFailureRetryStrategy { s := "xxxx"; return (*OnFailureRetryStrategy)(&s) }(),
+			},
+			expectedOnFailure: DefaultOnFailureRetryStrategy,
+		},
 	}
 
 	for _, tt := range tests {
