@@ -44,8 +44,12 @@ const READ_TOTAL: &str = "monovtx_read";
 const READ_BYTES_TOTAL: &str = "monovtx_read_bytes";
 const ACK_TOTAL: &str = "monovtx_ack";
 const SINK_WRITE_TOTAL: &str = "monovtx_sink_write";
+const DROPPED_TOTAL: &str = "monovtx_dropped";
+const FALLBACK_SINK_WRITE_TOTAL: &str = "monovtx_fallback_sink_write";
+
 // pending as gauge
 const SOURCE_PENDING: &str = "monovtx_pending";
+
 // processing times as timers
 const E2E_TIME: &str = "monovtx_processing_time";
 const READ_TIME: &str = "monovtx_read_time";
@@ -100,8 +104,12 @@ pub struct MonoVtxMetrics {
     pub read_bytes_total: Family<Vec<(String, String)>, Counter>,
     pub ack_total: Family<Vec<(String, String)>, Counter>,
     pub sink_write_total: Family<Vec<(String, String)>, Counter>,
+    pub dropped_total: Family<Vec<(String, String)>, Counter>,
+    pub fbsink_write_total: Family<Vec<(String, String)>, Counter>,
+
     // gauge
     pub source_pending: Family<Vec<(String, String)>, Gauge>,
+
     // timers
     pub e2e_time: Family<Vec<(String, String)>, Histogram>,
     pub read_time: Family<Vec<(String, String)>, Histogram>,
@@ -118,6 +126,8 @@ impl MonoVtxMetrics {
             read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
             ack_total: Family::<Vec<(String, String)>, Counter>::default(),
             sink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+            dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
+            fbsink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
             // gauge
             source_pending: Family::<Vec<(String, String)>, Gauge>::default(),
             // timers
@@ -160,6 +170,19 @@ impl MonoVtxMetrics {
             "A Counter to keep track of the total number of bytes read from the source",
             metrics.read_bytes_total.clone(),
         );
+
+        registry.register(
+            DROPPED_TOTAL,
+            "A Counter to keep track of the total number of messages dropped by the monovtx",
+            metrics.dropped_total.clone(),
+        );
+
+        registry.register(
+            FALLBACK_SINK_WRITE_TOTAL,
+            "A Counter to keep track of the total number of messages written to the fallback sink",
+            metrics.fbsink_write_total.clone(),
+        );
+
         // gauges
         registry.register(
             SOURCE_PENDING,
@@ -192,7 +215,6 @@ impl MonoVtxMetrics {
             "A Histogram to keep track of the total time taken to Write to the Sink, in microseconds",
             metrics.sink_time.clone(),
         );
-
         metrics
     }
 }

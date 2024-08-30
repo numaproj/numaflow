@@ -27,6 +27,9 @@ type Sink struct {
 	// initiated if the ud-sink response field sets it.
 	// +optional
 	Fallback *AbstractSink `json:"fallback,omitempty" protobuf:"bytes,2,opt,name=fallback"`
+	// RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.
+	// +optional
+	RetryStrategy RetryStrategy `json:"retryStrategy,omitempty" protobuf:"bytes,3,opt,name=retryStrategy"`
 }
 
 type AbstractSink struct {

@@ -272,6 +272,10 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	if v.UDF != nil {
 		return validateUDF(*v.UDF)
 	}
+
+	if v.Sink != nil {
+		return validateSink(*v.Sink)
+	}
 	return nil
 }
 
@@ -552,4 +556,34 @@ func buildVisitedMap(vtxName string, visited map[string]struct{}, pl *dfv1.Pipel
 		}
 	}
 
+}
+
+// validateSink initiates the validation of the sink spec for a pipeline
+func validateSink(sink dfv1.Sink) error {
+	// check the sinks retry strategy validity.
+	if ok := HasValidSinkRetryStrategy(sink); !ok {
+		return fmt.Errorf("given OnFailure strategy is fallback but fallback sink is not provided")
+	}
+	return nil
+}
+
+// HasValidSinkRetryStrategy checks if the provided RetryStrategy is valid based on the sink's configuration.
+// This validation ensures that the retry strategy is compatible with the sink's current setup
+func HasValidSinkRetryStrategy(s dfv1.Sink) bool {
+	// If the OnFailure strategy is set to fallback, but no fallback sink is provided in the Sink struct,
+	// we return an error
+	if s.RetryStrategy.OnFailure != nil && *s.RetryStrategy.OnFailure == dfv1.OnFailureFallback && !hasValidFallbackSink(&s) {
+		return false
+	}
+	// If steps are provided in the strategy they cannot be 0, as we do not allow no tries for writing
+	if s.RetryStrategy.BackOff != nil && s.RetryStrategy.BackOff.Steps != nil && *s.RetryStrategy.BackOff.Steps == 0 {
+		return false
+	}
+	// If no errors are found, the function returns true indicating the validation passed.
+	return true
+}
+
+// HasValidFallbackSink checks if the Sink vertex has a valid fallback sink configured
+func hasValidFallbackSink(s *dfv1.Sink) bool {
+	return s.Fallback != nil && s.Fallback.UDSink != nil
 }
