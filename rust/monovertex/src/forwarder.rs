@@ -228,7 +228,9 @@ impl Forwarder {
         // successfully.
         loop {
             while attempts <= config().sink_max_retry_attempts {
-                let status = self.write_to_sink_once(&mut error_map, &mut fallback_msgs, &mut messages_to_send).await;
+                let status = self
+                    .write_to_sink_once(&mut error_map, &mut fallback_msgs, &mut messages_to_send)
+                    .await;
                 match status {
                     Ok(true) => break,
                     Ok(false) => {
@@ -237,7 +239,7 @@ impl Forwarder {
                             "Retry attempt {} due to retryable error. Errors: {:?}",
                             attempts, error_map
                         );
-                    },
+                    }
                     Err(e) => Err(e)?,
                 }
             }
@@ -301,7 +303,12 @@ impl Forwarder {
 
     /// Writes to sink once and will return true if successful, else false. Please note that it
     /// mutates is incoming fields.
-    async fn write_to_sink_once(&mut self, error_map: &mut HashMap<String, i32>, fallback_msgs: &mut Vec<Message>, messages_to_send: &mut Vec<Message>) -> Result<bool> {
+    async fn write_to_sink_once(
+        &mut self,
+        error_map: &mut HashMap<String, i32>,
+        fallback_msgs: &mut Vec<Message>,
+        messages_to_send: &mut Vec<Message>,
+    ) -> Result<bool> {
         let start_time = tokio::time::Instant::now();
         match self.sink_client.sink_fn(messages_to_send.clone()).await {
             Ok(response) => {
@@ -336,17 +343,16 @@ impl Forwarder {
 
                 // if all messages are successfully written, break the loop
                 if messages_to_send.is_empty() {
-                    return Ok(true)
+                    return Ok(true);
                 }
-
 
                 sleep(tokio::time::Duration::from_millis(
                     config().sink_retry_interval_in_ms as u64,
                 ))
-                    .await;
+                .await;
 
                 // we need to retry
-                return Ok(false)
+                return Ok(false);
             }
             Err(e) => return Err(e),
         }
