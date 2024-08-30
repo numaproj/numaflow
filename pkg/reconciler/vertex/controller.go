@@ -330,7 +330,12 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		vertex.Status.MarkPodNotHealthy("ListVerticesPodsFailed", err.Error())
 		return ctrl.Result{}, fmt.Errorf("failed to get pods of a vertex: %w", err)
 	}
-	if healthy, reason, msg := reconciler.CheckVertexPodsStatus(&podList); healthy {
+	readyPods := reconciler.NumOfReadyPods(podList)
+	if readyPods > desiredReplicas { // It might happen in some corner cases, such as during rollout
+		readyPods = desiredReplicas
+	}
+	vertex.Status.ReadyReplicas = uint32(readyPods)
+	if healthy, reason, msg := reconciler.CheckPodsStatus(&podList); healthy {
 		vertex.Status.MarkPodHealthy(reason, msg)
 	} else {
 		// Do not need to explicitly requeue, since the it keeps watching the status change of the pods

@@ -27,6 +27,9 @@ spec:
     - jsonPath: .status.replicas
       name: Current
       type: string
+    - jsonPath: .status.readyReplicas
+      name: Ready
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
