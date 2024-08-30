@@ -6288,7 +6288,7 @@ The number of pods targeted by this MonoVertex with a Ready Condition.
 
 <td>
 
-<code>currentReplicas</code></br> <em> int32 </em>
+<code>currentReplicas</code></br> <em> uint32 </em>
 </td>
 
 <td>
@@ -6307,7 +6307,7 @@ indicated by currentHash.
 
 <td>
 
-<code>updatedReplicas</code></br> <em> int32 </em>
+<code>updatedReplicas</code></br> <em> uint32 </em>
 </td>
 
 <td>
@@ -6326,7 +6326,7 @@ indicated by updateHash.
 
 <td>
 
-<code>currentRevision</code></br> <em> string </em>
+<code>currentHash</code></br> <em> string </em>
 </td>
 
 <td>
@@ -6345,7 +6345,7 @@ Pods in the sequence \[0,currentReplicas).
 
 <td>
 
-<code>updateRevision</code></br> <em> string </em>
+<code>updateHash</code></br> <em> string </em>
 </td>
 
 <td>
@@ -11205,7 +11205,7 @@ The number of pods targeted by this Vertex with a Ready Condition.
 
 <td>
 
-<code>currentReplicas</code></br> <em> int32 </em>
+<code>currentReplicas</code></br> <em> uint32 </em>
 </td>
 
 <td>
@@ -11224,7 +11224,7 @@ indicated by currentHash.
 
 <td>
 
-<code>updatedReplicas</code></br> <em> int32 </em>
+<code>updatedReplicas</code></br> <em> uint32 </em>
 </td>
 
 <td>
@@ -11243,7 +11243,7 @@ indicated by updateHash.
 
 <td>
 
-<code>currentRevision</code></br> <em> string </em>
+<code>currentHash</code></br> <em> string </em>
 </td>
 
 <td>
@@ -11262,7 +11262,7 @@ in the sequence \[0,currentReplicas).
 
 <td>
 
-<code>updateRevision</code></br> <em> string </em>
+<code>updateHash</code></br> <em> string </em>
 </td>
 
 <td>

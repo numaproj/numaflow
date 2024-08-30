@@ -19273,14 +19273,14 @@
           "x-kubernetes-patch-merge-key": "type",
           "x-kubernetes-patch-strategy": "merge"
         },
+        "currentHash": {
+          "description": "If not empty, indicates the version of the MonoVertex used to generate Pods in the sequence [0,currentReplicas).",
+          "type": "string"
+        },
         "currentReplicas": {
           "description": "The number of Pods created by the controller from the MonoVertex version indicated by currentHash.",
           "type": "integer",
-          "format": "int32"
-        },
-        "currentRevision": {
-          "description": "If not empty, indicates the version of the MonoVertex used to generate Pods in the sequence [0,currentReplicas).",
-          "type": "string"
+          "format": "int64"
         },
         "lastScaledAt": {
           "description": "Time of last scaling operation.",
@@ -19316,14 +19316,14 @@
         "selector": {
           "type": "string"
         },
-        "updateRevision": {
+        "updateHash": {
           "description": "If not empty, indicates the version of the MonoVertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)",
           "type": "string"
         },
         "updatedReplicas": {
           "description": "The number of Pods created by the controller from the MonoVertex version indicated by updateHash.",
           "type": "integer",
-          "format": "int32"
+          "format": "int64"
         }
       }
     },
@@ -20543,14 +20543,14 @@
           "x-kubernetes-patch-merge-key": "type",
           "x-kubernetes-patch-strategy": "merge"
         },
+        "currentHash": {
+          "description": "If not empty, indicates the version of the Vertex used to generate Pods in the sequence [0,currentReplicas).",
+          "type": "string"
+        },
         "currentReplicas": {
           "description": "The number of Pods created by the controller from the Vertex version indicated by currentHash.",
           "type": "integer",
-          "format": "int32"
-        },
-        "currentRevision": {
-          "description": "If not empty, indicates the version of the Vertex used to generate Pods in the sequence [0,currentReplicas).",
-          "type": "string"
+          "format": "int64"
         },
         "lastScaledAt": {
           "description": "Time of last scaling operation.",
@@ -20583,14 +20583,14 @@
         "selector": {
           "type": "string"
         },
-        "updateRevision": {
+        "updateHash": {
           "description": "If not empty, indicates the version of the Vertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)",
           "type": "string"
         },
         "updatedReplicas": {
           "description": "The number of Pods created by the controller from the Vertex version indicated by updateHash.",
           "type": "integer",
-          "format": "int32"
+          "format": "int64"
         }
       }
     },

@@ -5469,11 +5469,11 @@ spec:
                   - type
                   type: object
                 type: array
+              currentHash:
+                type: string
               currentReplicas:
                 format: int32
                 type: integer
-              currentRevision:
-                type: string
               lastScaledAt:
                 format: date-time
                 type: string
@@ -5498,7 +5498,7 @@ spec:
                 type: integer
               selector:
                 type: string
-              updateRevision:
+              updateHash:
                 type: string
               updatedReplicas:
                 format: int32

@@ -967,16 +967,16 @@ message MonoVertexStatus {
   optional uint32 readyReplicas = 10;
 
   // The number of Pods created by the controller from the MonoVertex version indicated by currentHash.
-  optional int32 currentReplicas = 11;
+  optional uint32 currentReplicas = 11;
 
   // The number of Pods created by the controller from the MonoVertex version indicated by updateHash.
-  optional int32 updatedReplicas = 12;
+  optional uint32 updatedReplicas = 12;
 
   // If not empty, indicates the version of the MonoVertex used to generate Pods in the sequence [0,currentReplicas).
-  optional string currentRevision = 13;
+  optional string currentHash = 13;
 
   // If not empty, indicates the version of the MonoVertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)
-  optional string updateRevision = 14;
+  optional string updateHash = 14;
 }
 
 message NativeRedis {
@@ -1682,16 +1682,16 @@ message VertexStatus {
   optional uint32 readyReplicas = 9;
 
   // The number of Pods created by the controller from the Vertex version indicated by currentHash.
-  optional int32 currentReplicas = 11;
+  optional uint32 currentReplicas = 10;
 
   // The number of Pods created by the controller from the Vertex version indicated by updateHash.
-  optional int32 updatedReplicas = 12;
+  optional uint32 updatedReplicas = 11;
 
   // If not empty, indicates the version of the Vertex used to generate Pods in the sequence [0,currentReplicas).
-  optional string currentRevision = 13;
+  optional string currentHash = 12;
 
   // If not empty, indicates the version of the Vertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)
-  optional string updateRevision = 14;
+  optional string updateHash = 13;
 }
 
 message VertexTemplate {
