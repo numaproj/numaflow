@@ -356,8 +356,55 @@ mod tests {
             assert!(Settings::load().is_err());
             env::remove_var(ENV_MONO_VERTEX_OBJ);
         }
+
+        {
+            // Test Error Case: Retry Strategy with 0 Retry Attempts
+            let json_data = json!({
+                "metadata": {
+                    "name": "simple-mono-vertex",
+                    "namespace": "default",
+                    "creationTimestamp": null
+                },
+                "spec": {
+                    "replicas": 0,
+                    "source": {
+                        "udsource": {
+                            "container": {
+                                "image": "xxxxxxx",
+                                "resources": {}
+                            }
+                        }
+                    },
+                    "sink": {
+                        "udsink": {
+                            "container": {
+                                "image": "xxxxxx",
+                                "resources": {}
+                            }
+                        },
+                        "retryStrategy": {
+                            "backoff": {
+                                "interval": "1s",
+                                "steps": 0
+                            },
+                            "onFailure": "retry"
+                        },
+                    },
+                    "limits": {
+                        "readBatchSize": 500,
+                        "readTimeout": "1s"
+                    },
+                }
+            });
+            let json_str = json_data.to_string();
+            let encoded_json = BASE64_STANDARD.encode(json_str);
+            env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
+
+            // Execute and verify
+            assert!(Settings::load().is_err());
+            env::remove_var(ENV_MONO_VERTEX_OBJ);
+        }
         // General cleanup
         env::remove_var(ENV_GRPC_MAX_MESSAGE_SIZE);
     }
 }
-

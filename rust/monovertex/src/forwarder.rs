@@ -244,46 +244,31 @@ impl Forwarder {
                 }
             }
 
-            // If after the retries we still have messages to process
-            if !messages_to_send.is_empty() {
-                // check what is the failure strategy in the config
-                let strategy = config().sink_retry_on_fail_strategy.clone();
-                match strategy.as_str() {
-                    "retry" => {
-                        // reset the attempts and error_map
-                        attempts = 0;
-                        error_map.clear();
-                        continue;
-                    }
-                    "drop" => {
-                        // log that we are dropping the messages as requested
-                        warn!(
-                            "Dropping messages after {} attempts. Errors: {:?}",
-                            attempts, error_map
-                        );
-                        // update the metrics
-                        forward_metrics()
-                            .dropped_total
-                            .get_or_create(&self.common_labels)
-                            .inc_by(messages_to_send.len() as u64);
-                    }
-                    "fallback" => {
-                        fallback_msgs.extend(messages_to_send);
-                    }
-                    _ => {
-                        return Err(Error::SinkError(format!(
-                            "Invalid sink retry on fail strategy: {}",
-                            strategy
-                        )));
-                    }
+            // If after the retries we still have messages to process, handle the post retry failures
+            let need_retry = self.handle_sink_post_retry(
+                &mut attempts,
+                &mut error_map,
+                &mut fallback_msgs,
+                &mut messages_to_send,
+            );
+            match need_retry {
+                // if we are done with the messages, break the loop
+                Ok(false) => break,
+                // if we need to retry, reset the attempts and error_map
+                Ok(true) => {
+                    warn!(
+                        "Retry attempt {} due to retryable error. Errors: {:?}",
+                        attempts, error_map
+                    );
+                    attempts = 0;
+                    error_map.clear();
                 }
+                Err(e) => Err(e)?,
             }
-            break;
         }
 
-        let fallback_msgs_count = fallback_msgs.len() as u64;
         // If there are fallback messages, write them to the fallback sink
-        if fallback_msgs_count > 0 {
+        if !fallback_msgs.is_empty() {
             self.handle_fallback_messages(fallback_msgs).await?;
         }
 
@@ -299,6 +284,56 @@ impl Forwarder {
             .get_or_create(&self.common_labels)
             .inc_by(msg_count);
         Ok(())
+    }
+
+    /// Handles the post retry failures based on the configured strategy,
+    /// returns true if we need to retry, else false.
+    fn handle_sink_post_retry(
+        &mut self,
+        attempts: &mut u16,
+        error_map: &mut HashMap<String, i32>,
+        fallback_msgs: &mut Vec<Message>,
+        messages_to_send: &mut Vec<Message>,
+    ) -> Result<bool> {
+        // if we are done with the messages, break the loop
+        if messages_to_send.is_empty() {
+            return Ok(false);
+        }
+        // check what is the failure strategy in the config
+        let strategy = config().sink_retry_on_fail_strategy.clone();
+        match strategy.as_str() {
+            // if we need to retry, return true
+            "retry" => {
+                return Ok(true);
+            }
+            // if we need to drop the messages, log and return false
+            "drop" => {
+                // log that we are dropping the messages as requested
+                warn!(
+                    "Dropping messages after {} attempts. Errors: {:?}",
+                    attempts, error_map
+                );
+                // update the metrics
+                forward_metrics()
+                    .dropped_total
+                    .get_or_create(&self.common_labels)
+                    .inc_by(messages_to_send.len() as u64);
+            }
+            // if we need to move the messages to the fallback, return false
+            "fallback" => {
+                // move the messages to the fallback messages
+                fallback_msgs.append(messages_to_send);
+            }
+            // if the strategy is invalid, return an error
+            _ => {
+                return Err(Error::SinkError(format!(
+                    "Invalid sink retry on fail strategy: {}",
+                    strategy
+                )));
+            }
+        }
+        // if we are done with the messages, break the loop
+        Ok(false)
     }
 
     /// Writes to sink once and will return true if successful, else false. Please note that it
