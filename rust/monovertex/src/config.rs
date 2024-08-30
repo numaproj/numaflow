@@ -365,7 +365,6 @@ mod tests {
         }
 
         // General cleanup
-        env::remove_var(ENV_LOG_LEVEL);
         env::remove_var(ENV_GRPC_MAX_MESSAGE_SIZE);
     }
 }
