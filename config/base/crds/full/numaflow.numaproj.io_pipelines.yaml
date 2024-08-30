@@ -7579,7 +7579,6 @@ spec:
                                   default: 1ms
                                   type: string
                                 steps:
-                                  default: 0
                                   format: int32
                                   type: integer
                               type: object

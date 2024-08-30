@@ -17,8 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"fmt"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -138,21 +136,4 @@ func (s Sink) getFallbackUDSinkContainer(mainContainerReq getContainerReq) corev
 // IsAnySinkSpecified returns true if any sink is specified.
 func (a *AbstractSink) IsAnySinkSpecified() bool {
 	return a.Log != nil || a.Kafka != nil || a.Blackhole != nil || a.UDSink != nil
-}
-
-// hasValidFallbackSink checks if the Sink vertex has a valid fallback sink configured
-func (s *Sink) hasValidFallbackSink() bool {
-	return s.Fallback != nil && s.Fallback.UDSink != nil
-}
-
-// HasValidSinkRetryStrategy checks if the provided RetryStrategy is valid based on the sink's configuration.
-// This validation ensures that the retry strategy is compatible with the sink's current setup
-func (s Sink) HasValidSinkRetryStrategy() error {
-	// If the OnFailure strategy is set to fallback, but no fallback sink is provided in the Sink struct,
-	// we return an error
-	if s.RetryStrategy.OnFailure != nil && *s.RetryStrategy.OnFailure == OnFailureFallback && !s.hasValidFallbackSink() {
-		return fmt.Errorf("given OnFailure strategy is fallback but fallback sink is not provided")
-	}
-	// If no errors are found, the function returns nil indicating the validation passed.
-	return nil
 }

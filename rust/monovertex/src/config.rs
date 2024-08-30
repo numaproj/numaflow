@@ -144,15 +144,16 @@ impl Settings {
                 .expect("sink should not be empty")
                 .retry_strategy
             {
-                // Backoff settings extracted directly without cloning using references when possible
-                if let Some(sink_backoff) = &retry_strategy.backoff {
+                if let Some(sink_backoff) = retry_strategy.clone().backoff {
                     // Set the max retry attempts and retry interval using direct reference
                     settings.sink_retry_interval_in_ms = sink_backoff
+                        .clone()
                         .interval
                         .map(|x| std::time::Duration::from(x).as_millis() as u32)
                         .unwrap_or(DEFAULT_SINK_RETRY_INTERVAL_IN_MS);
 
                     settings.sink_max_retry_attempts = sink_backoff
+                        .clone()
                         .steps
                         .map(|x| x as u16)
                         .unwrap_or(DEFAULT_MAX_SINK_RETRY_ATTEMPTS);

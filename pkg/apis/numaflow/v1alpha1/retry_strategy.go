@@ -50,7 +50,6 @@ type Backoff struct {
 	Interval *metav1.Duration `json:"interval,omitempty" protobuf:"bytes,1,opt,name=interval"`
 	// Steps defines the number of times to retry after a failure occurs.
 	// +optional
-	// +kubebuilder:default=0
 	Steps *uint32 `json:"steps,omitempty" protobuf:"bytes,2,opt,name=steps"`
 	// TODO(Retry): Enable after we add support for exponential backoff
 	//// +optional
@@ -89,14 +88,15 @@ func (r RetryStrategy) GetBackoff() wait.Backoff {
 // GetOnFailureRetryStrategy retrieves the currently set strategy for handling failures upon retrying.
 // This method uses a default strategy which can be overridden by a custom strategy defined in RetryStrategy.
 func (r RetryStrategy) GetOnFailureRetryStrategy() OnFailureRetryStrategy {
-	// Initialize the on-failure strategy with a default value.
-	onFailure := DefaultOnFailureRetryStrategy
-
-	// If a custom on-failure behavior is specified, it overrides the default strategy.
-	if r.OnFailure != nil {
-		onFailure = *r.OnFailure // Dereference the pointer to obtain the actual strategy value.
+	// If the OnFailure is not defined initialize with the Default value
+	if r.OnFailure == nil {
+		return DefaultOnFailureRetryStrategy
 	}
-
-	// Return the effective on-failure strategy, which may be default or custom.
-	return onFailure
+	switch *r.OnFailure {
+	case OnFailureRetry, OnFailureFallback, OnFailureDrop:
+		// If a custom on-failure behavior is specified
+		return *r.OnFailure
+	default:
+		return DefaultOnFailureRetryStrategy
+	}
 }

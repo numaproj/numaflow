@@ -218,7 +218,6 @@ message Backoff {
 
   // Steps defines the number of times to retry after a failure occurs.
   // +optional
-  // +kubebuilder:default=0
   optional uint32 steps = 2;
 }
 

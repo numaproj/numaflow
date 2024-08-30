@@ -1,3 +1,12 @@
+use std::collections::HashMap;
+
+use chrono::Utc;
+use tokio::task::JoinSet;
+use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
+use tracing::log::warn;
+use tracing::{debug, info};
+
 use crate::config::config;
 use crate::error::{Error, Result};
 use crate::message::{Message, Offset};
@@ -6,13 +15,6 @@ use crate::metrics::forward_metrics;
 use crate::sink::{proto, SinkClient};
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
-use chrono::Utc;
-use std::collections::HashMap;
-use tokio::task::JoinSet;
-use tokio::time::sleep;
-use tokio_util::sync::CancellationToken;
-use tracing::log::warn;
-use tracing::{debug, info};
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
@@ -459,17 +461,17 @@ impl Forwarder {
 mod tests {
     use std::collections::HashSet;
 
+    use chrono::Utc;
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source, sourcetransform};
+    use tokio::sync::mpsc::Sender;
+    use tokio_util::sync::CancellationToken;
+
     use crate::error::Result;
     use crate::forwarder::ForwarderBuilder;
     use crate::sink::{SinkClient, SinkConfig};
     use crate::source::{SourceClient, SourceConfig};
     use crate::transformer::{TransformerClient, TransformerConfig};
-    use chrono::Utc;
-    use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{sink, source, sourcetransform};
-    use tokio::sync::mpsc::Sender;
-    use tokio::task::JoinHandle;
-    use tokio_util::sync::CancellationToken;
 
     struct SimpleSource {
         yet_to_be_acked: std::sync::RwLock<HashSet<String>>,

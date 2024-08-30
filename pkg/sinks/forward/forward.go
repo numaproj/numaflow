@@ -552,30 +552,19 @@ func errorArrayToMap(errs []error) map[string]int64 {
 	return result
 }
 
-// getBackOffConditions configures the retry backoff strategy based on whether infinite retries are requested.
-func (df *DataForward) getBackOffConditions(infinite bool) (wait.Backoff, dfv1.OnFailureRetryStrategy) {
-	// If we want an infinite retry we will keep retrying post exhaustion till it succeeds
-	if infinite {
-		return df.getInfiniteBackOffConditions(), dfv1.OnFailureRetry
+// getBackOffConditions configures the retry backoff strategy based on whether its a fallbackSink or primary sink.
+func (df *DataForward) getBackOffConditions(isFallbackSink bool) (wait.Backoff, dfv1.OnFailureRetryStrategy) {
+	// If we want for isFallbackSink we will return an infinite retry which will keep retrying post exhaustion till it succeeds
+	if isFallbackSink {
+		return wait.Backoff{
+			Duration: dfv1.DefaultRetryInterval,
+			// Always account for the first try
+			Steps: dfv1.DefaultRetrySteps + 1,
+		}, dfv1.OnFailureRetry
 	}
-	return df.getSpecBackOffConditions(), df.opts.retryStrategy.GetOnFailureRetryStrategy()
-}
-
-// getSpecBackOffConditions retrieves the standard backoff conditions from the configuration options.
-func (df *DataForward) getSpecBackOffConditions() wait.Backoff {
 	// Initial interval duration and number of retries are taken from DataForward settings.
 	backoff := df.opts.retryStrategy.GetBackoff()
 	// Adding a step for the first try
 	backoff.Steps = backoff.Steps + 1
-	return backoff
-}
-
-// getInfiniteBackOffConditions defines backoff conditions for scenarios where retries should be infinite.
-func (df *DataForward) getInfiniteBackOffConditions() wait.Backoff {
-	// Apply default steps and interval for backoff which are predetermined for infinite retry scenarios.
-	return wait.Backoff{
-		Duration: dfv1.DefaultRetryInterval,
-		// Always account for the first try
-		Steps: dfv1.DefaultRetrySteps + 1,
-	}
+	return backoff, df.opts.retryStrategy.GetOnFailureRetryStrategy()
 }
