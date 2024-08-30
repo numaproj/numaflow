@@ -468,6 +468,7 @@ mod tests {
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
     use tokio::sync::mpsc::Sender;
+    use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
     struct SimpleSource {
@@ -743,94 +744,94 @@ mod tests {
         }
     }
 
-    // #[tokio::test]
-    // async fn test_forwarder_sink_error() {
-    //     // Start the source server
-    //     let (source_shutdown_tx, source_shutdown_rx) = tokio::sync::oneshot::channel();
-    //     let tmp_dir = tempfile::TempDir::new().unwrap();
-    //     let source_sock_file = tmp_dir.path().join("source.sock");
-    //     let server_info_file = tmp_dir.path().join("source-server-info");
-    //
-    //     let server_info = server_info_file.clone();
-    //     let source_socket = source_sock_file.clone();
-    //     let source_server_handle = tokio::spawn(async move {
-    //         source::Server::new(SimpleSource::new())
-    //             .with_socket_file(source_socket)
-    //             .with_server_info_file(server_info)
-    //             .start_with_shutdown(source_shutdown_rx)
-    //             .await
-    //             .unwrap();
-    //     });
-    //     let source_config = SourceConfig {
-    //         socket_path: source_sock_file.to_str().unwrap().to_string(),
-    //         server_info_file: server_info_file.to_str().unwrap().to_string(),
-    //         max_message_size: 4 * 1024 * 1024,
-    //     };
-    //
-    //     // Start the sink server
-    //     let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
-    //     let sink_tmp_dir = tempfile::TempDir::new().unwrap();
-    //     let sink_sock_file = sink_tmp_dir.path().join("sink.sock");
-    //     let server_info_file = sink_tmp_dir.path().join("sink-server-info");
-    //
-    //     let server_info = server_info_file.clone();
-    //     let sink_socket = sink_sock_file.clone();
-    //     let sink_server_handle = tokio::spawn(async move {
-    //         sink::Server::new(ErrorSink {})
-    //             .with_socket_file(sink_socket)
-    //             .with_server_info_file(server_info)
-    //             .start_with_shutdown(sink_shutdown_rx)
-    //             .await
-    //             .unwrap();
-    //     });
-    //     let sink_config = SinkConfig {
-    //         socket_path: sink_sock_file.to_str().unwrap().to_string(),
-    //         server_info_file: server_info_file.to_str().unwrap().to_string(),
-    //         max_message_size: 4 * 1024 * 1024,
-    //     };
-    //
-    //     // Wait for the servers to start
-    //     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    //
-    //     let cln_token = CancellationToken::new();
-    //
-    //     let source_client = SourceClient::connect(source_config)
-    //         .await
-    //         .expect("failed to connect to source server");
-    //
-    //     let sink_client = SinkClient::connect(sink_config)
-    //         .await
-    //         .expect("failed to connect to sink server");
-    //
-    //     let mut forwarder =
-    //         ForwarderBuilder::new(source_client, sink_client, cln_token.clone()).build();
-    //
-    //     let forwarder_handle = tokio::spawn(async move {
-    //         forwarder.start().await?;
-    //         Ok(())
-    //     });
-    //
-    //     // Set a timeout for the forwarder
-    //     let timeout_duration = tokio::time::Duration::from_secs(1);
-    //     let result = tokio::time::timeout(timeout_duration, forwarder_handle).await;
-    //     let result: Result<()> = result.expect("forwarder_handle timed out").unwrap();
-    //     assert!(result.is_err());
-    //
-    //     // stop the servers
-    //     source_shutdown_tx
-    //         .send(())
-    //         .expect("failed to send shutdown signal");
-    //     source_server_handle
-    //         .await
-    //         .expect("failed to join source server task");
-    //
-    //     sink_shutdown_tx
-    //         .send(())
-    //         .expect("failed to send shutdown signal");
-    //     sink_server_handle
-    //         .await
-    //         .expect("failed to join sink server task");
-    // }
+    #[tokio::test]
+    async fn test_forwarder_sink_error() {
+        // Start the source server
+        let (source_shutdown_tx, source_shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let source_sock_file = tmp_dir.path().join("source.sock");
+        let server_info_file = tmp_dir.path().join("source-server-info");
+
+        let server_info = server_info_file.clone();
+        let source_socket = source_sock_file.clone();
+        let source_server_handle = tokio::spawn(async move {
+            source::Server::new(SimpleSource::new())
+                .with_socket_file(source_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(source_shutdown_rx)
+                .await
+                .unwrap();
+        });
+        let source_config = SourceConfig {
+            socket_path: source_sock_file.to_str().unwrap().to_string(),
+            server_info_file: server_info_file.to_str().unwrap().to_string(),
+            max_message_size: 4 * 1024 * 1024,
+        };
+
+        // Start the sink server
+        let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
+        let sink_tmp_dir = tempfile::TempDir::new().unwrap();
+        let sink_sock_file = sink_tmp_dir.path().join("sink.sock");
+        let server_info_file = sink_tmp_dir.path().join("sink-server-info");
+
+        let server_info = server_info_file.clone();
+        let sink_socket = sink_sock_file.clone();
+        let sink_server_handle = tokio::spawn(async move {
+            sink::Server::new(ErrorSink {})
+                .with_socket_file(sink_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(sink_shutdown_rx)
+                .await
+                .unwrap();
+        });
+        let sink_config = SinkConfig {
+            socket_path: sink_sock_file.to_str().unwrap().to_string(),
+            server_info_file: server_info_file.to_str().unwrap().to_string(),
+            max_message_size: 4 * 1024 * 1024,
+        };
+
+        // Wait for the servers to start
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        let cln_token = CancellationToken::new();
+
+        let source_client = SourceClient::connect(source_config)
+            .await
+            .expect("failed to connect to source server");
+
+        let sink_client = SinkClient::connect(sink_config)
+            .await
+            .expect("failed to connect to sink server");
+
+        let mut forwarder =
+            ForwarderBuilder::new(source_client, sink_client, cln_token.clone()).build();
+
+        let forwarder_handle = tokio::spawn(async move {
+            forwarder.start().await?;
+            Result::<()>::Ok(())
+        });
+
+        // Set a timeout for the forwarder
+        let timeout_duration = tokio::time::Duration::from_secs(1);
+        // The future should not complete as we should be retrying
+        let result = tokio::time::timeout(timeout_duration, forwarder_handle).await;
+        assert!(result.is_err());
+
+        // stop the servers
+        source_shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        source_server_handle
+            .await
+            .expect("failed to join source server task");
+
+        sink_shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        sink_server_handle
+            .await
+            .expect("failed to join sink server task");
+    }
 
     // Sink that returns status fallback
     struct FallbackSender {}

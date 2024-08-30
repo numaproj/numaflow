@@ -485,7 +485,7 @@ func (df *DataForward) handlePostRetryFailures(messagesToTry *[]isb.Message, fai
 				metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
 				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 				metrics.LabelPartitionName:      sinkWriter.GetName(),
-				metrics.LabelReason:             "Dropping after retry exhausted in the Sink",
+				metrics.LabelReason:             "retries exhausted in the Sink",
 			}).Add(float64(len(*messagesToTry)))
 		}
 	}
