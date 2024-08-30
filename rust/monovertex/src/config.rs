@@ -132,7 +132,7 @@ impl Settings {
             settings.is_fallback_enabled = mono_vertex_obj
                 .spec
                 .sink
-                .clone()
+                .as_deref()
                 .ok_or(Error::ConfigError("Sink not found".to_string()))?
                 .fallback
                 .is_some();
@@ -140,7 +140,6 @@ impl Settings {
             if let Some(retry_strategy) = mono_vertex_obj
                 .spec
                 .sink
-                .clone()
                 .expect("sink should not be empty")
                 .retry_strategy
             {
