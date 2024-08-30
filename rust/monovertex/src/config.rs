@@ -145,7 +145,6 @@ mod tests {
         // Set up environment variables
         unsafe {
             env::set_var(ENV_MONO_VERTEX_OBJ, "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLW1vbm8tdmVydGV4IiwibmFtZXNwYWNlIjoiZGVmYXVsdCIsImNyZWF0aW9uVGltZXN0YW1wIjpudWxsfSwic3BlYyI6eyJyZXBsaWNhcyI6MCwic291cmNlIjp7InRyYW5zZm9ybWVyIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6InF1YXkuaW8vbnVtYWlvL251bWFmbG93LXJzL21hcHQtZXZlbnQtdGltZS1maWx0ZXI6c3RhYmxlIiwicmVzb3VyY2VzIjp7fX0sImJ1aWx0aW4iOm51bGx9LCJ1ZHNvdXJjZSI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJkb2NrZXIuaW50dWl0LmNvbS9wZXJzb25hbC95aGwwMS9zaW1wbGUtc291cmNlOnN0YWJsZSIsInJlc291cmNlcyI6e319fX0sInNpbmsiOnsidWRzaW5rIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImRvY2tlci5pbnR1aXQuY29tL3BlcnNvbmFsL3lobDAxL2JsYWNraG9sZS1zaW5rOnN0YWJsZSIsInJlc291cmNlcyI6e319fX0sImxpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMifSwic2NhbGUiOnt9fSwic3RhdHVzIjp7InJlcGxpY2FzIjowLCJsYXN0VXBkYXRlZCI6bnVsbCwibGFzdFNjYWxlZEF0IjpudWxsfX0=");
-            env::set_var(ENV_LOG_LEVEL, "debug");
             env::set_var(ENV_GRPC_MAX_MESSAGE_SIZE, "128000000");
         };
 
@@ -156,13 +155,11 @@ mod tests {
         assert_eq!(settings.mono_vertex_name, "simple-mono-vertex");
         assert_eq!(settings.batch_size, 500);
         assert_eq!(settings.timeout_in_ms, 1000);
-        assert_eq!(settings.log_level, "debug");
         assert_eq!(settings.grpc_max_message_size, 128000000);
 
         // Clean up environment variables
         unsafe {
             env::remove_var(ENV_MONO_VERTEX_OBJ);
-            env::remove_var(ENV_LOG_LEVEL);
             env::remove_var(ENV_GRPC_MAX_MESSAGE_SIZE);
         };
     }
