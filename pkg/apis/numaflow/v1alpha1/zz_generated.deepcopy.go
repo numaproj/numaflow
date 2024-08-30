@@ -2315,11 +2315,7 @@ func (in *Sink) DeepCopyInto(out *Sink) {
 		*out = new(AbstractSink)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.RetryStrategy != nil {
-		in, out := &in.RetryStrategy, &out.RetryStrategy
-		*out = new(RetryStrategy)
-		(*in).DeepCopyInto(*out)
-	}
+	in.RetryStrategy.DeepCopyInto(&out.RetryStrategy)
 	return
 }
 

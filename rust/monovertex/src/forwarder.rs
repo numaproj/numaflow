@@ -1,4 +1,4 @@
-use crate::config::{config, DEFAULT_MAX_SINK_RETRY_ATTEMPTS, DEFAULT_SINK_RETRY_INTERVAL_IN_MS};
+use crate::config::config;
 use crate::error::{Error, Result};
 use crate::message::{Message, Offset};
 use crate::metrics;
@@ -333,7 +333,15 @@ impl Forwarder {
         let mut messages_to_send = fallback_msgs;
         let fb_msg_count = messages_to_send.len() as u64;
 
-        while attempts <= DEFAULT_MAX_SINK_RETRY_ATTEMPTS {
+        let default_retry = config()
+            .sink_default_retry_strategy
+            .clone()
+            .backoff
+            .unwrap();
+        let max_attempts = default_retry.steps.unwrap();
+        let sleep_interval = default_retry.interval.unwrap();
+
+        while attempts <= max_attempts {
             let start_time = tokio::time::Instant::now();
             match fallback_client.sink_fn(messages_to_send.clone()).await {
                 Ok(fb_response) => {
@@ -391,10 +399,7 @@ impl Forwarder {
                         "Retry attempt {} due to retryable error. Errors: {:?}",
                         attempts, fallback_error_map
                     );
-                    sleep(tokio::time::Duration::from_millis(
-                        DEFAULT_SINK_RETRY_INTERVAL_IN_MS as u64,
-                    ))
-                    .await;
+                    sleep(tokio::time::Duration::from(sleep_interval)).await;
                 }
                 Err(e) => return Err(e),
             }

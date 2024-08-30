@@ -272,6 +272,10 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	if v.UDF != nil {
 		return validateUDF(*v.UDF)
 	}
+
+	if v.Sink != nil {
+		return validateSink(*v.Sink)
+	}
 	return nil
 }
 
@@ -552,4 +556,10 @@ func buildVisitedMap(vtxName string, visited map[string]struct{}, pl *dfv1.Pipel
 		}
 	}
 
+}
+
+// validateSink initiates the validation of the sink spec for a pipeline
+func validateSink(sink dfv1.Sink) error {
+	// check the sinks retry strategy validity.
+	return sink.HasValidSinkRetryStrategy()
 }

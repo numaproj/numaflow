@@ -5,7 +5,7 @@ use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use tracing::level_filters::LevelFilter;
 
-use numaflow_models::models::MonoVertex;
+use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
 
 use crate::error::Error;
 
@@ -19,8 +19,8 @@ const DEFAULT_LAG_CHECK_INTERVAL_IN_SECS: u16 = 5;
 const DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS: u16 = 3;
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
-pub const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX - 1;
-pub const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
+const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX - 1;
+const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
 const DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY: &str = "retry";
 
 pub fn config() -> &'static Settings {
@@ -48,10 +48,21 @@ pub struct Settings {
     pub sink_max_retry_attempts: u16,
     pub sink_retry_interval_in_ms: u32,
     pub sink_retry_on_fail_strategy: String,
+    pub sink_default_retry_strategy: RetryStrategy,
 }
 
 impl Default for Settings {
     fn default() -> Self {
+        // Create a default retry strategy from defined constants
+        let default_retry_strategy = RetryStrategy {
+            backoff: Option::from(Box::from(Backoff {
+                interval: Option::from(kube::core::Duration::from(
+                    std::time::Duration::from_millis(DEFAULT_SINK_RETRY_INTERVAL_IN_MS as u64),
+                )),
+                steps: Option::from(DEFAULT_MAX_SINK_RETRY_ATTEMPTS as i64),
+            })),
+            on_failure: Option::from(DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY.to_string()),
+        };
         Self {
             mono_vertex_name: "default".to_string(),
             replica: 0,
@@ -67,6 +78,7 @@ impl Default for Settings {
             sink_max_retry_attempts: DEFAULT_MAX_SINK_RETRY_ATTEMPTS,
             sink_retry_interval_in_ms: DEFAULT_SINK_RETRY_INTERVAL_IN_MS,
             sink_retry_on_fail_strategy: DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY.to_string(),
+            sink_default_retry_strategy: default_retry_strategy,
         }
     }
 }
@@ -151,6 +163,17 @@ impl Settings {
                     .on_failure
                     .clone()
                     .unwrap_or_else(|| DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY.to_string());
+
+                // check if the sink retry strategy is set to fallback and there is no fallback sink configured
+                // then we should return an error
+                if settings.sink_retry_on_fail_strategy == "fallback"
+                    && !settings.is_fallback_enabled
+                {
+                    return Err(Error::ConfigError(
+                        "Retry Strategy given as fallback but Fallback sink not configured"
+                            .to_string(),
+                    ));
+                }
             }
         }
 

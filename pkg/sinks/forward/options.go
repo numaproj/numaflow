@@ -38,7 +38,7 @@ type options struct {
 	// cbPublisher is the callback publisher for the vertex.
 	cbPublisher *callback.Uploader
 	// retryStrategy
-	retryStrategy *dfv1.RetryStrategy
+	retryStrategy dfv1.RetryStrategy
 }
 
 type Option func(*options) error
@@ -48,7 +48,6 @@ func DefaultOptions() *options {
 		readBatchSize:   dfv1.DefaultReadBatchSize,
 		sinkConcurrency: dfv1.DefaultReadBatchSize,
 		logger:          logging.NewLogger(),
-		retryStrategy:   dfv1.GetDefaultSinkRetryStrategy(),
 	}
 }
 
@@ -93,7 +92,7 @@ func WithCallbackUploader(cp *callback.Uploader) Option {
 }
 
 // WithRetryStrategy sets the retryStrategy for the Sink
-func WithRetryStrategy(f *dfv1.RetryStrategy) Option {
+func WithRetryStrategy(f dfv1.RetryStrategy) Option {
 	return func(o *options) error {
 		o.retryStrategy = f
 		return nil
