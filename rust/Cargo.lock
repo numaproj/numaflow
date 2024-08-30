@@ -1595,6 +1595,7 @@ dependencies = [
  "serving",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

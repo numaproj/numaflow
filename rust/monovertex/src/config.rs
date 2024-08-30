@@ -3,7 +3,6 @@ use std::sync::OnceLock;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use tracing::level_filters::LevelFilter;
 
 use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
 
@@ -14,7 +13,6 @@ const ENV_GRPC_MAX_MESSAGE_SIZE: &str = "NUMAFLOW_GRPC_MAX_MESSAGE_SIZE";
 const ENV_POD_REPLICA: &str = "NUMAFLOW_REPLICA";
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_METRICS_PORT: u16 = 2469;
-const ENV_LOG_LEVEL: &str = "NUMAFLOW_DEBUG";
 const DEFAULT_LAG_CHECK_INTERVAL_IN_SECS: u16 = 5;
 const DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS: u16 = 3;
 const DEFAULT_BATCH_SIZE: u64 = 500;
@@ -39,7 +37,6 @@ pub struct Settings {
     pub batch_size: u64,
     pub timeout_in_ms: u32,
     pub metrics_server_listen_port: u16,
-    pub log_level: String,
     pub grpc_max_message_size: usize,
     pub is_transformer_enabled: bool,
     pub is_fallback_enabled: bool,
@@ -69,7 +66,6 @@ impl Default for Settings {
             batch_size: DEFAULT_BATCH_SIZE,
             timeout_in_ms: DEFAULT_TIMEOUT_IN_MS,
             metrics_server_listen_port: DEFAULT_METRICS_PORT,
-            log_level: LevelFilter::INFO.to_string(),
             grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
             is_transformer_enabled: false,
             is_fallback_enabled: false,
@@ -183,9 +179,6 @@ impl Settings {
                 }
             }
         }
-
-        settings.log_level =
-            env::var(ENV_LOG_LEVEL).unwrap_or_else(|_| LevelFilter::INFO.to_string());
 
         settings.grpc_max_message_size = env::var(ENV_GRPC_MAX_MESSAGE_SIZE)
             .unwrap_or_else(|_| DEFAULT_GRPC_MAX_MESSAGE_SIZE.to_string())
@@ -363,8 +356,8 @@ mod tests {
             assert!(Settings::load().is_err());
             env::remove_var(ENV_MONO_VERTEX_OBJ);
         }
-
         // General cleanup
         env::remove_var(ENV_GRPC_MAX_MESSAGE_SIZE);
     }
 }
+
