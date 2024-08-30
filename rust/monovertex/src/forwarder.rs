@@ -106,7 +106,7 @@ impl Forwarder {
             }
 
             forward_metrics()
-                .monovtx_processing_time
+                .e2e_processing_time
                 .get_or_create(&self.common_labels)
                 .observe(start_time.elapsed().as_micros() as f64);
         }
@@ -135,7 +135,7 @@ impl Forwarder {
 
         let msg_count = messages.len() as u64;
         forward_metrics()
-            .monovtx_read_total
+            .read_total
             .get_or_create(&self.common_labels)
             .inc_by(msg_count);
 
@@ -149,7 +149,7 @@ impl Forwarder {
         );
 
         forward_metrics()
-            .monovtx_read_bytes_total
+            .read_bytes_total
             .get_or_create(&self.common_labels)
             .inc_by(bytes_count);
 
@@ -310,7 +310,7 @@ impl Forwarder {
         // update the metric for number of messages written to the primary sink
         // we increment fallback sink count in a separate metric
         forward_metrics()
-            .monovtx_sink_write_total
+            .sink_write_total
             .get_or_create(&self.common_labels)
             .inc_by(msg_count - fallback_msgs_count);
         Ok(())
@@ -425,7 +425,7 @@ impl Forwarder {
         self.source_client.ack_fn(offsets).await?;
         debug!("Ack latency - {}ms", start_time.elapsed().as_millis());
         forward_metrics()
-            .monovtx_ack_total
+            .ack_total
             .get_or_create(&self.common_labels)
             .inc_by(n as u64);
         Ok(())
