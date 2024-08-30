@@ -293,7 +293,7 @@ impl Forwarder {
                         );
                         // update the metrics
                         forward_metrics()
-                            .monovtx_dropped_total
+                            .dropped_total
                             .get_or_create(&self.common_labels)
                             .inc_by(messages_to_send.len() as u64);
                     }
@@ -323,7 +323,7 @@ impl Forwarder {
             .sink_time
             .get_or_create(&self.common_labels)
             .observe(start_time_e2e.elapsed().as_micros() as f64);
-      
+
         forward_metrics()
             .sink_write_total
             .get_or_create(&self.common_labels)
@@ -427,7 +427,7 @@ impl Forwarder {
         }
         // increment the metric for the fallback sink write
         forward_metrics()
-            .monovtx_fbsink_write_total
+            .fbsink_write_total
             .get_or_create(&self.common_labels)
             .inc_by(fb_msg_count);
         Ok(())

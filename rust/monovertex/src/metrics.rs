@@ -44,8 +44,8 @@ const READ_TOTAL: &str = "monovtx_read";
 const READ_BYTES_TOTAL: &str = "monovtx_read_bytes";
 const ACK_TOTAL: &str = "monovtx_ack";
 const SINK_WRITE_TOTAL: &str = "monovtx_sink_write";
-const MONOVTX_DROPPED: &str = "monovtx_dropped";
-const MONOVTX_FALLBACK_SINK_WRITE_TOTAL: &str = "monovtx_fallback_sink_write";
+const DROPPED_TOTAL: &str = "monovtx_dropped";
+const FALLBACK_SINK_WRITE_TOTAL: &str = "monovtx_fallback_sink_write";
 
 // pending as gauge
 const SOURCE_PENDING: &str = "monovtx_pending";
@@ -56,7 +56,6 @@ const READ_TIME: &str = "monovtx_read_time";
 const TRANSFORM_TIME: &str = "monovtx_transformer_time";
 const ACK_TIME: &str = "monovtx_ack_time";
 const SINK_TIME: &str = "monovtx_sink_time";
-
 
 #[derive(Clone)]
 pub(crate) struct MetricsState {
@@ -105,8 +104,9 @@ pub struct MonoVtxMetrics {
     pub read_bytes_total: Family<Vec<(String, String)>, Counter>,
     pub ack_total: Family<Vec<(String, String)>, Counter>,
     pub sink_write_total: Family<Vec<(String, String)>, Counter>,
-    pub monovtx_dropped_total: Family<Vec<(String, String)>, Counter>,
-    pub monovtx_fbsink_write_total: Family<Vec<(String, String)>, Counter>,
+    pub dropped_total: Family<Vec<(String, String)>, Counter>,
+    pub fbsink_write_total: Family<Vec<(String, String)>, Counter>,
+
     // gauge
     pub source_pending: Family<Vec<(String, String)>, Gauge>,
 
@@ -126,8 +126,8 @@ impl MonoVtxMetrics {
             read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
             ack_total: Family::<Vec<(String, String)>, Counter>::default(),
             sink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
-            monovtx_dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
-            monovtx_fbsink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+            dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
+            fbsink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
             // gauge
             source_pending: Family::<Vec<(String, String)>, Gauge>::default(),
             // timers
@@ -145,7 +145,7 @@ impl MonoVtxMetrics {
             }),
             sink_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
-            }), 
+            }),
         };
 
         let mut registry = global_registry().registry.lock();
@@ -170,19 +170,19 @@ impl MonoVtxMetrics {
             "A Counter to keep track of the total number of bytes read from the source",
             metrics.read_bytes_total.clone(),
         );
-      
+
         registry.register(
-            MONOVTX_DROPPED,
+            DROPPED_TOTAL,
             "A Counter to keep track of the total number of messages dropped by the monovtx",
-            metrics.monovtx_dropped_total.clone(),
-          
-        
-        registry.register(
-            MONOVTX_FALLBACK_SINK_WRITE_TOTAL,
-            "A Counter to keep track of the total number of messages written to the fallback sink",
-            metrics.monovtx_fbsink_write_total.clone(),
+            metrics.dropped_total.clone(),
         );
-        
+
+        registry.register(
+            FALLBACK_SINK_WRITE_TOTAL,
+            "A Counter to keep track of the total number of messages written to the fallback sink",
+            metrics.fbsink_write_total.clone(),
+        );
+
         // gauges
         registry.register(
             SOURCE_PENDING,
