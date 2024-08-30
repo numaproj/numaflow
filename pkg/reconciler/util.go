@@ -30,13 +30,13 @@ import (
 // which should be considered as unhealthy
 var unhealthyWaitingStatus = []string{"CrashLoopBackOff", "ImagePullBackOff"}
 
-// CheckVertexPodsStatus checks the status by iterating over pods objects
-func CheckVertexPodsStatus(vertexPods *corev1.PodList) (healthy bool, reason string, message string) {
+// CheckPodsStatus checks the status by iterating over pods objects
+func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message string) {
 	// TODO: Need to revisit later.
-	if len(vertexPods.Items) == 0 {
+	if len(pods.Items) == 0 {
 		return true, "NoPodsFound", "No Pods found"
 	} else {
-		for _, pod := range vertexPods.Items {
+		for _, pod := range pods.Items {
 			if podHealthy, msg := isPodHealthy(&pod); !podHealthy {
 				message = fmt.Sprintf("Pod %s is unhealthy", pod.Name)
 				reason = "Pod" + msg
@@ -45,7 +45,7 @@ func CheckVertexPodsStatus(vertexPods *corev1.PodList) (healthy bool, reason str
 			}
 		}
 	}
-	return true, "Running", "All vertex pods are healthy"
+	return true, "Running", "All pods are healthy"
 }
 
 func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
@@ -58,6 +58,23 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
 		}
 	}
 	return true, ""
+}
+
+func NumOfReadyPods(pods corev1.PodList) int {
+	result := 0
+	for _, pod := range pods.Items {
+		ready := true
+		for _, s := range pod.Status.ContainerStatuses {
+			if !s.Ready {
+				ready = false
+				break
+			}
+		}
+		if ready {
+			result++
+		}
+	}
+	return result
 }
 
 // CheckVertexStatus will calculate the status of the vertices and return the status and reason

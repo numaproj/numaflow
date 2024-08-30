@@ -19263,9 +19263,6 @@
     },
     "io.numaproj.numaflow.v1alpha1.MonoVertexStatus": {
       "type": "object",
-      "required": [
-        "replicas"
-      ],
       "properties": {
         "conditions": {
           "description": "Conditions are the latest available observations of a resource's current state.",
@@ -19277,6 +19274,7 @@
           "x-kubernetes-patch-strategy": "merge"
         },
         "lastScaledAt": {
+          "description": "Time of last scaling operation.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
         },
         "lastUpdated": {
@@ -19286,16 +19284,23 @@
           "type": "string"
         },
         "observedGeneration": {
+          "description": "The generation observed by the MonoVertex controller.",
           "type": "integer",
           "format": "int64"
         },
         "phase": {
           "type": "string"
         },
+        "readyReplicas": {
+          "description": "The number of pods targeted by this MonoVertex with a Ready Condition.",
+          "type": "integer",
+          "format": "int64"
+        },
         "reason": {
           "type": "string"
         },
         "replicas": {
+          "description": "Total number of non-terminated pods targeted by this MonoVertex (their labels match the selector).",
           "type": "integer",
           "format": "int64"
         },
@@ -19641,6 +19646,7 @@
           "type": "string"
         },
         "observedGeneration": {
+          "description": "The generation observed by the Pipeline controller.",
           "type": "integer",
           "format": "int64"
         },
@@ -20509,10 +20515,6 @@
     },
     "io.numaproj.numaflow.v1alpha1.VertexStatus": {
       "type": "object",
-      "required": [
-        "phase",
-        "replicas"
-      ],
       "properties": {
         "conditions": {
           "description": "Conditions are the latest available observations of a resource's current state.",
@@ -20524,22 +20526,30 @@
           "x-kubernetes-patch-strategy": "merge"
         },
         "lastScaledAt": {
+          "description": "Time of last scaling operation.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
         },
         "message": {
           "type": "string"
         },
         "observedGeneration": {
+          "description": "The generation observed by the Vertex controller.",
           "type": "integer",
           "format": "int64"
         },
         "phase": {
           "type": "string"
         },
+        "readyReplicas": {
+          "description": "The number of pods targeted by this Vertex with a Ready Condition.",
+          "type": "integer",
+          "format": "int64"
+        },
         "reason": {
           "type": "string"
         },
         "replicas": {
+          "description": "Total number of non-terminated pods targeted by this Vertex (their labels match the selector).",
           "type": "integer",
           "format": "int64"
         },

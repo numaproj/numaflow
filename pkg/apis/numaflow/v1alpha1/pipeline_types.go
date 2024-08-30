@@ -611,17 +611,28 @@ type PipelineLimits struct {
 }
 
 type PipelineStatus struct {
-	Status             `json:",inline" protobuf:"bytes,1,opt,name=status"`
-	Phase              PipelinePhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=PipelinePhase"`
-	Message            string        `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
-	LastUpdated        metav1.Time   `json:"lastUpdated,omitempty" protobuf:"bytes,4,opt,name=lastUpdated"`
-	VertexCount        *uint32       `json:"vertexCount,omitempty" protobuf:"varint,5,opt,name=vertexCount"`
-	SourceCount        *uint32       `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
-	SinkCount          *uint32       `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
-	UDFCount           *uint32       `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
-	MapUDFCount        *uint32       `json:"mapUDFCount,omitempty" protobuf:"varint,9,opt,name=mapUDFCount"`
-	ReduceUDFCount     *uint32       `json:"reduceUDFCount,omitempty" protobuf:"varint,10,opt,name=reduceUDFCount"`
-	ObservedGeneration int64         `json:"observedGeneration,omitempty" protobuf:"varint,11,opt,name=observedGeneration"`
+	Status `json:",inline" protobuf:"bytes,1,opt,name=status"`
+	// +optional
+	Phase PipelinePhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=PipelinePhase"`
+	// +optional
+	Message string `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
+	// +optional
+	LastUpdated metav1.Time `json:"lastUpdated,omitempty" protobuf:"bytes,4,opt,name=lastUpdated"`
+	// +optional
+	VertexCount *uint32 `json:"vertexCount,omitempty" protobuf:"varint,5,opt,name=vertexCount"`
+	// +optional
+	SourceCount *uint32 `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
+	// +optional
+	SinkCount *uint32 `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
+	// +optional
+	UDFCount *uint32 `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
+	// +optional
+	MapUDFCount *uint32 `json:"mapUDFCount,omitempty" protobuf:"varint,9,opt,name=mapUDFCount"`
+	// +optional
+	ReduceUDFCount *uint32 `json:"reduceUDFCount,omitempty" protobuf:"varint,10,opt,name=reduceUDFCount"`
+	// The generation observed by the Pipeline controller.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,11,opt,name=observedGeneration"`
 }
 
 // SetVertexCounts sets the counts of vertices.
