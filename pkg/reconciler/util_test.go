@@ -36,8 +36,8 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 				}},
 			}},
 		}
-		done, reason, message := CheckVertexPodsStatus(&pods)
-		assert.Equal(t, "All vertex pods are healthy", message)
+		done, reason, message := CheckPodsStatus(&pods)
+		assert.Equal(t, "All pods are healthy", message)
 		assert.Equal(t, "Running", reason)
 		assert.True(t, done)
 	})
@@ -52,7 +52,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 				},
 			},
 		}
-		done, reason, message := CheckVertexPodsStatus(&pods)
+		done, reason, message := CheckPodsStatus(&pods)
 		assert.Equal(t, "Pod test-pod is unhealthy", message)
 		assert.Equal(t, "PodCrashLoopBackOff", reason)
 		assert.False(t, done)
@@ -62,7 +62,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 		pods := corev1.PodList{
 			Items: []corev1.Pod{},
 		}
-		done, reason, message := CheckVertexPodsStatus(&pods)
+		done, reason, message := CheckPodsStatus(&pods)
 		assert.Equal(t, "No Pods found", message)
 		assert.Equal(t, "NoPodsFound", reason)
 		assert.True(t, done)
@@ -253,4 +253,78 @@ func TestGetStatefulSetStatus(t *testing.T) {
 		assert.False(t, status)
 		assert.Equal(t, "Waiting for statefulset spec update to be observed...", msg)
 	})
+}
+
+func TestNumOfReadyPods(t *testing.T) {
+	pods := corev1.PodList{
+		Items: []corev1.Pod{
+			{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Ready: true,
+						},
+						{
+							Ready: true,
+						},
+					},
+				},
+			},
+			{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Ready: false,
+						},
+						{
+							Ready: true,
+						},
+					},
+				},
+			},
+			{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Ready: true,
+						},
+						{
+							Ready: false,
+						},
+					},
+				},
+			},
+			{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Ready: true,
+						},
+						{
+							Ready: true,
+						},
+						{
+							Ready: true,
+						},
+					},
+				},
+			},
+			{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Ready: false,
+						},
+						{
+							Ready: false,
+						},
+						{
+							Ready: false,
+						},
+					},
+				},
+			},
+		},
+	}
+	assert.Equal(t, 2, NumOfReadyPods(pods))
 }

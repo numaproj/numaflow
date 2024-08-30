@@ -3344,9 +3344,10 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref common.ReferenceCall
 					},
 					"replicas": {
 						SchemaProps: spec.SchemaProps{
-							Default: 0,
-							Type:    []string{"integer"},
-							Format:  "int64",
+							Description: "Total number of non-terminated pods targeted by this MonoVertex (their labels match the selector).",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 					"selector": {
@@ -3374,17 +3375,25 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref common.ReferenceCall
 					},
 					"lastScaledAt": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Description: "Time of last scaling operation.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
 					"observedGeneration": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
+							Description: "The generation observed by the MonoVertex controller.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"readyReplicas": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The number of pods targeted by this MonoVertex with a Ready Condition.",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 				},
-				Required: []string{"replicas"},
 			},
 		},
 		Dependencies: []string{
@@ -4060,8 +4069,9 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineStatus(ref common.ReferenceCallba
 					},
 					"observedGeneration": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
+							Description: "The generation observed by the Pipeline controller.",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 				},
@@ -5651,9 +5661,10 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexStatus(ref common.ReferenceCallback
 					},
 					"replicas": {
 						SchemaProps: spec.SchemaProps{
-							Default: 0,
-							Type:    []string{"integer"},
-							Format:  "int64",
+							Description: "Total number of non-terminated pods targeted by this Vertex (their labels match the selector).",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 					"selector": {
@@ -5676,17 +5687,25 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexStatus(ref common.ReferenceCallback
 					},
 					"lastScaledAt": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Description: "Time of last scaling operation.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
 						},
 					},
 					"observedGeneration": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
+							Description: "The generation observed by the Vertex controller.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"readyReplicas": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The number of pods targeted by this Vertex with a Ready Condition.",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 				},
-				Required: []string{"phase", "replicas"},
 			},
 		},
 		Dependencies: []string{
