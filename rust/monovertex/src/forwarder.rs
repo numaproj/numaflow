@@ -1,12 +1,5 @@
 use std::collections::HashMap;
 
-use chrono::Utc;
-use tokio::task::JoinSet;
-use tokio::time::sleep;
-use tokio_util::sync::CancellationToken;
-use tracing::log::warn;
-use tracing::{debug, info};
-
 use crate::config::config;
 use crate::error::{Error, Result};
 use crate::message::{Message, Offset};
@@ -15,6 +8,12 @@ use crate::metrics::forward_metrics;
 use crate::sink::{proto, SinkClient};
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
+use chrono::Utc;
+use tokio::task::JoinSet;
+use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
+use tracing::log::warn;
+use tracing::{debug, info};
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
@@ -227,7 +226,7 @@ impl Forwarder {
         // only breaks out of this loop based on the retry strategy unless all the messages have been written to sink
         // successfully.
         loop {
-            while attempts <= config().sink_max_retry_attempts {
+            while attempts < config().sink_max_retry_attempts {
                 let status = self
                     .write_to_sink_once(&mut error_map, &mut fallback_msgs, &mut messages_to_send)
                     .await;
@@ -256,10 +255,6 @@ impl Forwarder {
                 Ok(false) => break,
                 // if we need to retry, reset the attempts and error_map
                 Ok(true) => {
-                    warn!(
-                        "Retry attempt {} due to retryable error. Errors: {:?}",
-                        attempts, error_map
-                    );
                     attempts = 0;
                     error_map.clear();
                 }
@@ -304,6 +299,10 @@ impl Forwarder {
         match strategy.as_str() {
             // if we need to retry, return true
             "retry" => {
+                warn!(
+                    "Using onFailure Retry, Retry attempts {} completed",
+                    attempts
+                );
                 return Ok(true);
             }
             // if we need to drop the messages, log and return false
@@ -321,6 +320,11 @@ impl Forwarder {
             }
             // if we need to move the messages to the fallback, return false
             "fallback" => {
+                // log that we are moving the messages to the fallback as requested
+                warn!(
+                    "Moving messages to fallback after {} attempts. Errors: {:?}",
+                    attempts, error_map
+                );
                 // move the messages to the fallback messages
                 fallback_msgs.append(messages_to_send);
             }
@@ -418,7 +422,7 @@ impl Forwarder {
         let max_attempts = default_retry.steps.unwrap();
         let sleep_interval = default_retry.interval.unwrap();
 
-        while attempts <= max_attempts {
+        while attempts < max_attempts {
             let start_time = tokio::time::Instant::now();
             match fallback_client.sink_fn(messages_to_send.clone()).await {
                 Ok(fb_response) => {
