@@ -89,16 +89,19 @@ func NewDataForward(
 		wmFetcher:           fetchWatermark,
 		wmPublisher:         publishWatermark,
 		// should we do a check here for the values not being null?
-		vertexName:        vertexInstance.Vertex.Spec.Name,
-		pipelineName:      vertexInstance.Vertex.Spec.PipelineName,
-		vertexReplica:     vertexInstance.Replica,
-		idleManager:       idleManager,
-		sinkRetryStrategy: vertexInstance.Vertex.Spec.Sink.RetryStrategy,
-		wmbChecker:        wmb.NewWMBChecker(2), // TODO: make configurable
+		vertexName:    vertexInstance.Vertex.Spec.Name,
+		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
+		vertexReplica: vertexInstance.Replica,
+		idleManager:   idleManager,
+		wmbChecker:    wmb.NewWMBChecker(2), // TODO: make configurable
 		Shutdown: Shutdown{
 			rwlock: new(sync.RWMutex),
 		},
 		opts: *dOpts,
+	}
+	// add the sink retry strategy to the forward
+	if vertexInstance.Vertex.Spec.Sink != nil {
+		df.sinkRetryStrategy = vertexInstance.Vertex.Spec.Sink.RetryStrategy
 	}
 
 	// Add logger from parent ctx to child context.
