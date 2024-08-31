@@ -730,6 +730,14 @@ type VertexStatus struct {
 	// The number of pods targeted by this Vertex with a Ready Condition.
 	// +optional
 	ReadyReplicas uint32 `json:"readyReplicas,omitempty" protobuf:"varint,9,opt,name=readyReplicas"`
+	// The number of Pods created by the controller from the Vertex version indicated by currentHash.
+	CurrentReplicas uint32 `json:"currentReplicas,omitempty" protobuf:"varint,10,opt,name=currentReplicas"`
+	// The number of Pods created by the controller from the Vertex version indicated by updateHash.
+	UpdatedReplicas uint32 `json:"updatedReplicas,omitempty" protobuf:"varint,11,opt,name=updatedReplicas"`
+	// If not empty, indicates the version of the Vertex used to generate Pods in the sequence [0,currentReplicas).
+	CurrentHash string `json:"currentHash,omitempty" protobuf:"bytes,12,opt,name=currentHash"`
+	// If not empty, indicates the version of the Vertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)
+	UpdateHash string `json:"updateHash,omitempty" protobuf:"bytes,13,opt,name=updateHash"`
 }
 
 func (vs *VertexStatus) MarkPhase(phase VertexPhase, reason, message string) {
