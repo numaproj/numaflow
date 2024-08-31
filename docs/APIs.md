@@ -6372,6 +6372,82 @@ The number of pods targeted by this MonoVertex with a Ready Condition.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>currentReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+The number of Pods created by the controller from the MonoVertex version
+indicated by currentHash.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>updatedReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+The number of Pods created by the controller from the MonoVertex version
+indicated by updateHash.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>currentHash</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+If not empty, indicates the version of the MonoVertex used to generate
+Pods in the sequence \[0,currentReplicas).
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>updateHash</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+If not empty, indicates the version of the MonoVertx used to generate
+Pods in the sequence \[replicas-updatedReplicas,replicas)
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -11337,6 +11413,82 @@ The generation observed by the Vertex controller.
 <p>
 
 The number of pods targeted by this Vertex with a Ready Condition.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>currentReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+The number of Pods created by the controller from the Vertex version
+indicated by currentHash.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>updatedReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+The number of Pods created by the controller from the Vertex version
+indicated by updateHash.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>currentHash</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+If not empty, indicates the version of the Vertex used to generate Pods
+in the sequence \[0,currentReplicas).
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>updateHash</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+If not empty, indicates the version of the Vertx used to generate Pods
+in the sequence \[replicas-updatedReplicas,replicas)
 </p>
 
 </td>

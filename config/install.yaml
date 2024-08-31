@@ -8193,6 +8193,11 @@ spec:
                   - type
                   type: object
                 type: array
+              currentHash:
+                type: string
+              currentReplicas:
+                format: int32
+                type: integer
               lastScaledAt:
                 format: date-time
                 type: string
@@ -8223,6 +8228,11 @@ spec:
                 type: integer
               selector:
                 type: string
+              updateHash:
+                type: string
+              updatedReplicas:
+                format: int32
+                type: integer
             type: object
         required:
         - spec
@@ -23599,6 +23609,11 @@ spec:
                   - type
                   type: object
                 type: array
+              currentHash:
+                type: string
+              currentReplicas:
+                format: int32
+                type: integer
               lastScaledAt:
                 format: date-time
                 type: string
@@ -23623,6 +23638,11 @@ spec:
                 type: integer
               selector:
                 type: string
+              updateHash:
+                type: string
+              updatedReplicas:
+                format: int32
+                type: integer
             type: object
         required:
         - spec
