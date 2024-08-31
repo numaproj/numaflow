@@ -17812,6 +17812,21 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.Backoff": {
+      "description": "Backoff defines parameters used to systematically configure the retry strategy.",
+      "type": "object",
+      "properties": {
+        "interval": {
+          "description": "Interval sets the delay to wait before retry, after a failure occurs.",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
+        "steps": {
+          "description": "Steps defines the number of times to try writing to a sink including retries",
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.BasicAuth": {
       "description": "BasicAuth represents the basic authentication approach which contains a user name and a password.",
       "type": "object",
@@ -19756,6 +19771,20 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.RetryStrategy": {
+      "description": "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures. It includes a BackOff strategy to manage the timing of retries and defines the action to take upon failure.",
+      "type": "object",
+      "properties": {
+        "backoff": {
+          "description": "BackOff specifies the parameters for the backoff strategy, controlling how delays between retries should increase.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Backoff"
+        },
+        "onFailure": {
+          "description": "OnFailure specifies the action to take when a retry fails. The default action is to retry.",
+          "type": "string"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.SASL": {
       "type": "object",
       "required": [
@@ -20068,6 +20097,10 @@
         "log": {
           "description": "Log sink is used to write the data to the log.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
+        },
+        "retryStrategy": {
+          "description": "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RetryStrategy"
         },
         "udsink": {
           "description": "UDSink sink is used to write the data to the user-defined sink.",

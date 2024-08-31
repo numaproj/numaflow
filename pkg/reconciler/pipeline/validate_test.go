@@ -1056,3 +1056,125 @@ func Test_validateIdleSource(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), `invalid idle source watermark config, threshold should be greater than or equal to incrementBy`)
 }
+
+// TestValidateSink tests the validateSink function with different sink configurations.
+func TestValidateSink(t *testing.T) {
+	onFailFallback := dfv1.OnFailureFallback
+	tests := []struct {
+		name          string
+		sink          dfv1.Sink
+		expectedError bool
+	}{
+		{
+			name: "Valid configuration without needing fallback",
+			sink: dfv1.Sink{
+				RetryStrategy: dfv1.RetryStrategy{OnFailure: nil},
+			},
+			expectedError: false,
+		},
+		{
+			name: "Valid configuration with valid fallback",
+			sink: dfv1.Sink{
+				RetryStrategy: dfv1.RetryStrategy{OnFailure: &onFailFallback},
+				// represents a valid fallback sink
+				Fallback: &dfv1.AbstractSink{
+					UDSink: &dfv1.UDSink{},
+				},
+			},
+			expectedError: false,
+		},
+		{
+			name: "Valid configuration with invalid fallback - no UDSink",
+			sink: dfv1.Sink{
+				RetryStrategy: dfv1.RetryStrategy{OnFailure: &onFailFallback},
+				Fallback:      &dfv1.AbstractSink{}, // represents a valid fallback sink
+			},
+			expectedError: true,
+		},
+		{
+			name: "Invalid configuration, fallback needed but not provided",
+			sink: dfv1.Sink{
+				RetryStrategy: dfv1.RetryStrategy{OnFailure: &onFailFallback},
+				Fallback:      nil,
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Run the validation function
+			err := validateSink(tt.sink)
+			// Check if an error was expected or not
+			if (err != nil) != tt.expectedError {
+				t.Errorf("%s: validateSink() error = %v, wantErr %v", tt.name, err, tt.expectedError)
+			}
+		})
+	}
+}
+
+func TestIsValidSinkRetryStrategy(t *testing.T) {
+	zeroSteps := uint32(0)
+	tests := []struct {
+		name     string
+		sink     dfv1.Sink
+		strategy dfv1.RetryStrategy
+		wantErr  bool
+	}{
+		{
+			name: "valid strategy with fallback configured",
+			sink: dfv1.Sink{Fallback: &dfv1.AbstractSink{
+				UDSink: &dfv1.UDSink{},
+			}},
+			strategy: dfv1.RetryStrategy{
+				OnFailure: func() *dfv1.OnFailureRetryStrategy { str := dfv1.OnFailureFallback; return &str }(),
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid valid strategy with fallback not configured properly",
+			sink: dfv1.Sink{Fallback: &dfv1.AbstractSink{}},
+			strategy: dfv1.RetryStrategy{
+				OnFailure: func() *dfv1.OnFailureRetryStrategy { str := dfv1.OnFailureFallback; return &str }(),
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid strategy with no fallback configured",
+			sink: dfv1.Sink{},
+			strategy: dfv1.RetryStrategy{
+				OnFailure: func() *dfv1.OnFailureRetryStrategy { str := dfv1.OnFailureFallback; return &str }(),
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid strategy with drop and no fallback needed",
+			sink: dfv1.Sink{},
+			strategy: dfv1.RetryStrategy{
+				OnFailure: func() *dfv1.OnFailureRetryStrategy { str := dfv1.OnFailureDrop; return &str }(),
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid strategy with 0 steps",
+			sink: dfv1.Sink{},
+			strategy: dfv1.RetryStrategy{
+				BackOff: &dfv1.Backoff{
+					Steps: &zeroSteps,
+				},
+				OnFailure: func() *dfv1.OnFailureRetryStrategy { str := dfv1.OnFailureDrop; return &str }(),
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.sink.RetryStrategy = tt.strategy
+			ok := HasValidSinkRetryStrategy(tt.sink)
+			if (!ok) != tt.wantErr {
+				t.Errorf("isValidSinkRetryStrategy() got = %v, want %v", ok, tt.wantErr)
+			}
+		})
+	}
+}

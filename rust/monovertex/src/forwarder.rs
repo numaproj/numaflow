@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::config::config;
 use crate::error::{Error, Result};
 use crate::message::{Message, Offset};
@@ -7,7 +9,6 @@ use crate::sink::{proto, SinkClient};
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
 use chrono::Utc;
-use std::collections::HashMap;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
@@ -222,67 +223,43 @@ impl Forwarder {
         // we will overwrite this vec with failed messages and will keep retrying.
         let mut messages_to_send = messages;
 
-        while attempts <= config().sink_max_retry_attempts {
-            let start_time = tokio::time::Instant::now();
-            match self.sink_client.sink_fn(messages_to_send.clone()).await {
-                Ok(response) => {
-                    debug!(
-                        attempts = attempts,
-                        "Sink latency - {}ms",
-                        start_time.elapsed().as_millis()
-                    );
-                    attempts += 1;
-
-                    // create a map of id to result, since there is no strict requirement
-                    // for the udsink to return the results in the same order as the requests
-                    let result_map: HashMap<_, _> = response
-                        .results
-                        .iter()
-                        .map(|result| (result.id.clone(), result))
-                        .collect();
-
-                    error_map.clear();
-                    // drain all the messages that were successfully written
-                    // and keep only the failed messages to send again
-                    // construct the error map for the failed messages
-                    messages_to_send.retain(|msg| {
-                        if let Some(result) = result_map.get(&msg.id) {
-                            return if result.status == proto::Status::Success as i32 {
-                                false
-                            } else if result.status == proto::Status::Fallback as i32 {
-                                fallback_msgs.push(msg.clone()); // add to fallback messages
-                                false
-                            } else {
-                                *error_map.entry(result.err_msg.clone()).or_insert(0) += 1;
-                                true
-                            };
-                        }
-                        false
-                    });
-
-                    // if all messages are successfully written, break the loop
-                    if messages_to_send.is_empty() {
-                        break;
-                    }
-
-                    warn!(
-                        "Retry attempt {} due to retryable error. Errors: {:?}",
-                        attempts, error_map
-                    );
-                    sleep(tokio::time::Duration::from_millis(
-                        config().sink_retry_interval_in_ms as u64,
-                    ))
+        // only breaks out of this loop based on the retry strategy unless all the messages have been written to sink
+        // successfully.
+        loop {
+            while attempts < config().sink_max_retry_attempts {
+                let status = self
+                    .write_to_sink_once(&mut error_map, &mut fallback_msgs, &mut messages_to_send)
                     .await;
+                match status {
+                    Ok(true) => break,
+                    Ok(false) => {
+                        attempts += 1;
+                        warn!(
+                            "Retry attempt {} due to retryable error. Errors: {:?}",
+                            attempts, error_map
+                        );
+                    }
+                    Err(e) => Err(e)?,
                 }
-                Err(e) => return Err(e),
             }
-        }
 
-        if !messages_to_send.is_empty() {
-            return Err(Error::SinkError(format!(
-                "Failed to sink messages after {} attempts. Errors: {:?}",
-                attempts, error_map
-            )));
+            // If after the retries we still have messages to process, handle the post retry failures
+            let need_retry = self.handle_sink_post_retry(
+                &mut attempts,
+                &mut error_map,
+                &mut fallback_msgs,
+                &mut messages_to_send,
+            );
+            match need_retry {
+                // if we are done with the messages, break the loop
+                Ok(false) => break,
+                // if we need to retry, reset the attempts and error_map
+                Ok(true) => {
+                    attempts = 0;
+                    error_map.clear();
+                }
+                Err(e) => Err(e)?,
+            }
         }
 
         // If there are fallback messages, write them to the fallback sink
@@ -294,11 +271,130 @@ impl Forwarder {
             .sink_time
             .get_or_create(&self.common_labels)
             .observe(start_time_e2e.elapsed().as_micros() as f64);
+
+        // update the metric for number of messages written to the sink
+        // this included primary and fallback sink
         forward_metrics()
             .sink_write_total
             .get_or_create(&self.common_labels)
             .inc_by(msg_count);
         Ok(())
+    }
+
+    /// Handles the post retry failures based on the configured strategy,
+    /// returns true if we need to retry, else false.
+    fn handle_sink_post_retry(
+        &mut self,
+        attempts: &mut u16,
+        error_map: &mut HashMap<String, i32>,
+        fallback_msgs: &mut Vec<Message>,
+        messages_to_send: &mut Vec<Message>,
+    ) -> Result<bool> {
+        // if we are done with the messages, break the loop
+        if messages_to_send.is_empty() {
+            return Ok(false);
+        }
+        // check what is the failure strategy in the config
+        let strategy = config().sink_retry_on_fail_strategy.clone();
+        match strategy.as_str() {
+            // if we need to retry, return true
+            "retry" => {
+                warn!(
+                    "Using onFailure Retry, Retry attempts {} completed",
+                    attempts
+                );
+                return Ok(true);
+            }
+            // if we need to drop the messages, log and return false
+            "drop" => {
+                // log that we are dropping the messages as requested
+                warn!(
+                    "Dropping messages after {} attempts. Errors: {:?}",
+                    attempts, error_map
+                );
+                // update the metrics
+                forward_metrics()
+                    .dropped_total
+                    .get_or_create(&self.common_labels)
+                    .inc_by(messages_to_send.len() as u64);
+            }
+            // if we need to move the messages to the fallback, return false
+            "fallback" => {
+                // log that we are moving the messages to the fallback as requested
+                warn!(
+                    "Moving messages to fallback after {} attempts. Errors: {:?}",
+                    attempts, error_map
+                );
+                // move the messages to the fallback messages
+                fallback_msgs.append(messages_to_send);
+            }
+            // if the strategy is invalid, return an error
+            _ => {
+                return Err(Error::SinkError(format!(
+                    "Invalid sink retry on fail strategy: {}",
+                    strategy
+                )));
+            }
+        }
+        // if we are done with the messages, break the loop
+        Ok(false)
+    }
+
+    /// Writes to sink once and will return true if successful, else false. Please note that it
+    /// mutates is incoming fields.
+    async fn write_to_sink_once(
+        &mut self,
+        error_map: &mut HashMap<String, i32>,
+        fallback_msgs: &mut Vec<Message>,
+        messages_to_send: &mut Vec<Message>,
+    ) -> Result<bool> {
+        let start_time = tokio::time::Instant::now();
+        match self.sink_client.sink_fn(messages_to_send.clone()).await {
+            Ok(response) => {
+                debug!("Sink latency - {}ms", start_time.elapsed().as_millis());
+
+                // create a map of id to result, since there is no strict requirement
+                // for the udsink to return the results in the same order as the requests
+                let result_map: HashMap<_, _> = response
+                    .results
+                    .iter()
+                    .map(|result| (result.id.clone(), result))
+                    .collect();
+
+                error_map.clear();
+                // drain all the messages that were successfully written
+                // and keep only the failed messages to send again
+                // construct the error map for the failed messages
+                messages_to_send.retain(|msg| {
+                    if let Some(result) = result_map.get(&msg.id) {
+                        return if result.status == proto::Status::Success as i32 {
+                            false
+                        } else if result.status == proto::Status::Fallback as i32 {
+                            fallback_msgs.push(msg.clone()); // add to fallback messages
+                            false
+                        } else {
+                            *error_map.entry(result.err_msg.clone()).or_insert(0) += 1;
+                            true
+                        };
+                    }
+                    false
+                });
+
+                // if all messages are successfully written, break the loop
+                if messages_to_send.is_empty() {
+                    return Ok(true);
+                }
+
+                sleep(tokio::time::Duration::from_millis(
+                    config().sink_retry_interval_in_ms as u64,
+                ))
+                .await;
+
+                // we need to retry
+                return Ok(false);
+            }
+            Err(e) => return Err(e),
+        }
     }
 
     // Writes the fallback messages to the fallback sink
@@ -316,8 +412,17 @@ impl Forwarder {
         // start with the original set of message to be sent.
         // we will overwrite this vec with failed messages and will keep retrying.
         let mut messages_to_send = fallback_msgs;
+        let fb_msg_count = messages_to_send.len() as u64;
 
-        while attempts <= config().sink_max_retry_attempts {
+        let default_retry = config()
+            .sink_default_retry_strategy
+            .clone()
+            .backoff
+            .unwrap();
+        let max_attempts = default_retry.steps.unwrap();
+        let sleep_interval = default_retry.interval.unwrap();
+
+        while attempts < max_attempts {
             let start_time = tokio::time::Instant::now();
             match fallback_client.sink_fn(messages_to_send.clone()).await {
                 Ok(fb_response) => {
@@ -375,22 +480,22 @@ impl Forwarder {
                         "Retry attempt {} due to retryable error. Errors: {:?}",
                         attempts, fallback_error_map
                     );
-                    sleep(tokio::time::Duration::from_millis(
-                        config().sink_retry_interval_in_ms as u64,
-                    ))
-                    .await;
+                    sleep(tokio::time::Duration::from(sleep_interval)).await;
                 }
                 Err(e) => return Err(e),
             }
         }
-
         if !messages_to_send.is_empty() {
             return Err(Error::SinkError(format!(
                 "Failed to write messages to fallback sink after {} attempts. Errors: {:?}",
                 attempts, fallback_error_map
             )));
         }
-
+        // increment the metric for the fallback sink write
+        forward_metrics()
+            .fbsink_write_total
+            .get_or_create(&self.common_labels)
+            .inc_by(fb_msg_count);
         Ok(())
     }
 
@@ -420,16 +525,17 @@ impl Forwarder {
 mod tests {
     use std::collections::HashSet;
 
-    use crate::error::Result;
-    use crate::forwarder::ForwarderBuilder;
-    use crate::sink::{SinkClient, SinkConfig};
-    use crate::source::{SourceClient, SourceConfig};
-    use crate::transformer::{TransformerClient, TransformerConfig};
     use chrono::Utc;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
+
+    use crate::error::Result;
+    use crate::forwarder::ForwarderBuilder;
+    use crate::sink::{SinkClient, SinkConfig};
+    use crate::source::{SourceClient, SourceConfig};
+    use crate::transformer::{TransformerClient, TransformerConfig};
 
     struct SimpleSource {
         yet_to_be_acked: std::sync::RwLock<HashSet<String>>,
@@ -768,13 +874,13 @@ mod tests {
 
         let forwarder_handle = tokio::spawn(async move {
             forwarder.start().await?;
-            Ok(())
+            Result::<()>::Ok(())
         });
 
         // Set a timeout for the forwarder
         let timeout_duration = tokio::time::Duration::from_secs(1);
+        // The future should not complete as we should be retrying
         let result = tokio::time::timeout(timeout_duration, forwarder_handle).await;
-        let result: Result<()> = result.expect("forwarder_handle timed out").unwrap();
         assert!(result.is_err());
 
         // stop the servers
