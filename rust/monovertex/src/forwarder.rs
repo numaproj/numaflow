@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::config::config;
+use crate::config::{config, OnFailureStrategy};
 use crate::error::{Error, Result};
 use crate::message::{Message, Offset};
 use crate::metrics;
@@ -296,9 +296,9 @@ impl Forwarder {
         }
         // check what is the failure strategy in the config
         let strategy = config().sink_retry_on_fail_strategy.clone();
-        match strategy.as_str() {
+        match strategy {
             // if we need to retry, return true
-            "retry" => {
+            OnFailureStrategy::Retry => {
                 warn!(
                     "Using onFailure Retry, Retry attempts {} completed",
                     attempts
@@ -306,7 +306,7 @@ impl Forwarder {
                 return Ok(true);
             }
             // if we need to drop the messages, log and return false
-            "drop" => {
+            OnFailureStrategy::Drop => {
                 // log that we are dropping the messages as requested
                 warn!(
                     "Dropping messages after {} attempts. Errors: {:?}",
@@ -319,7 +319,7 @@ impl Forwarder {
                     .inc_by(messages_to_send.len() as u64);
             }
             // if we need to move the messages to the fallback, return false
-            "fallback" => {
+            OnFailureStrategy::Fallback => {
                 // log that we are moving the messages to the fallback as requested
                 warn!(
                     "Moving messages to fallback after {} attempts. Errors: {:?}",
@@ -327,13 +327,6 @@ impl Forwarder {
                 );
                 // move the messages to the fallback messages
                 fallback_msgs.append(messages_to_send);
-            }
-            // if the strategy is invalid, return an error
-            _ => {
-                return Err(Error::SinkError(format!(
-                    "Invalid sink retry on fail strategy: {}",
-                    strategy
-                )));
             }
         }
         // if we are done with the messages, break the loop
