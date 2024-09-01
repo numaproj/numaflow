@@ -37,13 +37,13 @@ impl OnFailureStrategy {
     ///
     /// # Returns
     /// An option containing the corresponding enum variant if successful,
-    /// or None if the input does not match known variants.
+    /// or DefaultStrategy if the input does not match known variants.
     fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "retry" => Some(OnFailureStrategy::Retry),
             "fallback" => Some(OnFailureStrategy::Fallback),
             "drop" => Some(OnFailureStrategy::Drop),
-            _ => Option::from(DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY),
+            _ => Some(DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY),
         }
     }
 
