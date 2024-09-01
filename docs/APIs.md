@@ -5791,6 +5791,27 @@ Template for the daemon service deployment.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>updateStrategy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy"> UpdateStrategy
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The strategy to use to replace existing pods with new ones.
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -6153,6 +6174,27 @@ List of customized sidecar containers belonging to the pod.
 <p>
 
 Template for the daemon service deployment.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>updateStrategy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy"> UpdateStrategy
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The strategy to use to replace existing pods with new ones.
 </p>
 
 </td>
@@ -8388,6 +8430,81 @@ OnFailureRetryStrategy </a> </em>
 
 OnFailure specifies the action to take when a retry fails. The default
 action is to retry.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RollingUpdateStrategy">
+
+RollingUpdateStrategy
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy">UpdateStrategy</a>)
+</p>
+
+<p>
+
+<p>
+
+RollingUpdateStrategy is used to communicate parameter for
+RollingUpdateStrategyType.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>maxUnavailable</code></br> <em>
+k8s.io/apimachinery/pkg/util/intstr.IntOrString </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The maximum number of pods that can be unavailable during the update.
+Value can be an absolute number (ex: 5) or a percentage of desired pods
+(ex: 10%). Absolute number is calculated from percentage by rounding
+down. Defaults to 25%. Example: when this is set to 30%, the old pods
+can be scaled down to 70% of desired pods immediately when the rolling
+update starts. Once new pods are ready, old pods can be scaled down
+further, followed by scaling up the new pods, ensuring that the total
+number of pods available at all times during the update is at least 70%
+of desired pods.
 </p>
 
 </td>
@@ -10638,6 +10755,120 @@ Description
 </tbody>
 
 </table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.UpdateStrategy">
+
+UpdateStrategy
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>)
+</p>
+
+<p>
+
+<p>
+
+UpdateStrategy indicates the strategy that the controller will use to
+perform updates for Vertex or MonoVertex.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>type</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategyType">
+UpdateStrategyType </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Type indicates the type of the StatefulSetUpdateStrategy. Default is
+RollingUpdate.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>rollingUpdate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RollingUpdateStrategy">
+RollingUpdateStrategy </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+RollingUpdate is used to communicate parameters when Type is
+RollingUpdateStrategy.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.UpdateStrategyType">
+
+UpdateStrategyType (<code>string</code> alias)
+</p>
+
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy">UpdateStrategy</a>)
+</p>
+
+<p>
+
+<p>
+
+UpdateStrategyType is a string enumeration type that enumerates all
+possible update strategies.
+</p>
+
+</p>
 
 <h3 id="numaflow.numaproj.io/v1alpha1.Vertex">
 

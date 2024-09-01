@@ -19266,6 +19266,10 @@
             "$ref": "#/definitions/io.k8s.api.core.v1.Toleration"
           }
         },
+        "updateStrategy": {
+          "description": "The strategy to use to replace existing pods with new ones.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UpdateStrategy"
+        },
         "volumes": {
           "type": "array",
           "items": {
@@ -19785,6 +19789,16 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.RollingUpdateStrategy": {
+      "description": "RollingUpdateStrategy is used to communicate parameter for RollingUpdateStrategyType.",
+      "type": "object",
+      "properties": {
+        "maxUnavailable": {
+          "description": "The maximum number of pods that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). Absolute number is calculated from percentage by rounding down. Defaults to 25%. Example: when this is set to 30%, the old pods can be scaled down to 70% of desired pods immediately when the rolling update starts. Once new pods are ready, old pods can be scaled down further, followed by scaling up the new pods, ensuring that the total number of pods available at all times during the update is at least 70% of desired pods.",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.util.intstr.IntOrString"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.SASL": {
       "type": "object",
       "required": [
@@ -20297,6 +20311,23 @@
         },
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.UpdateStrategy": {
+      "description": "UpdateStrategy indicates the strategy that the controller will use to perform updates for Vertex or MonoVertex.",
+      "type": "object",
+      "properties": {
+        "rollingUpdate": {
+          "description": "RollingUpdate is used to communicate parameters when Type is RollingUpdateStrategy.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RollingUpdateStrategy"
+        },
+        "type": {
+          "description": "Type indicates the type of the StatefulSetUpdateStrategy. Default is RollingUpdate.\n\nPossible enum values:\n - `\"RollingUpdate\"`",
+          "type": "string",
+          "enum": [
+            "RollingUpdate"
+          ]
         }
       }
     },

@@ -408,6 +408,10 @@ type MonoVertexSpec struct {
 	// Template for the daemon service deployment.
 	// +optional
 	DaemonTemplate *DaemonTemplate `json:"daemonTemplate,omitempty" protobuf:"bytes,11,opt,name=daemonTemplate"`
+	// The strategy to use to replace existing pods with new ones.
+	// +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
+	// +optional
+	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty" protobuf:"bytes,12,opt,name=updateStrategy"`
 }
 
 func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {

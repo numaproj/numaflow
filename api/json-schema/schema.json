@@ -19270,6 +19270,10 @@
           },
           "type": "array"
         },
+        "updateStrategy": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UpdateStrategy",
+          "description": "The strategy to use to replace existing pods with new ones."
+        },
         "volumes": {
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.Volume"
@@ -19799,6 +19803,16 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.RollingUpdateStrategy": {
+      "description": "RollingUpdateStrategy is used to communicate parameter for RollingUpdateStrategyType.",
+      "properties": {
+        "maxUnavailable": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.util.intstr.IntOrString",
+          "description": "The maximum number of pods that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). Absolute number is calculated from percentage by rounding down. Defaults to 25%. Example: when this is set to 30%, the old pods can be scaled down to 70% of desired pods immediately when the rolling update starts. Once new pods are ready, old pods can be scaled down further, followed by scaling up the new pods, ensuring that the total number of pods available at all times during the update is at least 70% of desired pods."
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.SASL": {
       "properties": {
         "gssapi": {
@@ -20310,6 +20324,23 @@
         },
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
+        }
+      },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.UpdateStrategy": {
+      "description": "UpdateStrategy indicates the strategy that the controller will use to perform updates for Vertex or MonoVertex.",
+      "properties": {
+        "rollingUpdate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RollingUpdateStrategy",
+          "description": "RollingUpdate is used to communicate parameters when Type is RollingUpdateStrategy."
+        },
+        "type": {
+          "description": "Type indicates the type of the StatefulSetUpdateStrategy. Default is RollingUpdate.\n\nPossible enum values:\n - `\"RollingUpdate\"`",
+          "enum": [
+            "RollingUpdate"
+          ],
+          "type": "string"
         }
       },
       "type": "object"
