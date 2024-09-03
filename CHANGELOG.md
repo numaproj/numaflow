@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.3.1 (2024-09-02)
+
+ * [a42d0063](https://github.com/numaproj/numaflow/commit/a42d0063caf53d6f4c01c2fb2f6f6f6f74a8f987) Update manifests to v1.3.1
+ * [6993e75f](https://github.com/numaproj/numaflow/commit/6993e75f546f2ffc6db1ecbb0fc579a5d6048754) feat: allow configurable retryStrategy (#2010)
+ * [6c973698](https://github.com/numaproj/numaflow/commit/6c973698762488915df719161ec4a70a130b4bea) chore(deps): bump webpack from 5.93.0 to 5.94.0 in /ui (#2018)
+ * [cd54e86f](https://github.com/numaproj/numaflow/commit/cd54e86f7d42641182531df3823baecece0ee57c) fix: add latency metrics for mvtx (#2013)
+ * [c6530d37](https://github.com/numaproj/numaflow/commit/c6530d37efce9a1a7ffd153cde104180b2c0b287) feat: introduce `readyReplicas` for Vertex and MonoVertex (#2014)
+ * [13c13e5f](https://github.com/numaproj/numaflow/commit/13c13e5f1a36957b11219cac49ad8e872bd290be) feat: enable resourceClaims for vertex and monovtx (#2009)
+ * [1040a022](https://github.com/numaproj/numaflow/commit/1040a0223ad54ce619e6b33eeb5b99bf341d807d) fix: log format with config load error (#2000)
+ * [8d2a4b21](https://github.com/numaproj/numaflow/commit/8d2a4b21fe18085ed12303a604019dc88fca4665) feat: more flexible scaling with `replicasPerScaleUp` and `replicasPerScaleDown` (#2003)
+ * [9e54b2cd](https://github.com/numaproj/numaflow/commit/9e54b2cdaa75f9679dac2f37a0a7df88a39b481f) chore(deps): bump micromatch from 4.0.7 to 4.0.8 in /ui (#2002)
+ * [d841421f](https://github.com/numaproj/numaflow/commit/d841421f7d09da448cae10a45fa91a3bf9013d5c) fix: e2e testing isbsvc deletion timeout issue (#1997)
+ * [991bfb70](https://github.com/numaproj/numaflow/commit/991bfb701195ed2c6bfbc01f2ce8af99bfc5d763) fix: test coverage generation for Rust code (#1993)
+ * [a39746c1](https://github.com/numaproj/numaflow/commit/a39746c118791a37725f41241da4b3a9a03fa5a5) fix: do not pass scale info to MonoVertex (#1990)
+ * [0dcd9284](https://github.com/numaproj/numaflow/commit/0dcd9284d6a46869d81281a7e267a59b51282148) fix: adding not available for negative processing rates (#1983)
+ * [c49fdb9a](https://github.com/numaproj/numaflow/commit/c49fdb9af350b37aed7ef9b5b3d491cd85fe14a0) fix: minor perf improvements of mvtx fallback sink (#1967)
+ * [24239fc1](https://github.com/numaproj/numaflow/commit/24239fc1cc5a834621904cc12186b9d4dd51f950) fix: remove coloring in logs (#1975)
+ * [26b0d1db](https://github.com/numaproj/numaflow/commit/26b0d1dbdba51da944604cbae11029727ee3b26e) doc: update roadmap (#1970)
+
+### Contributors
+
+ * Derek Wang
+ * Keran Yang
+ * Sidhant Kohli
+ * Sreekanth
+ * Vedant Gupta
+ * Vigith Maurice
+ * dependabot[bot]
+ * xdevxy
+
 ## v1.3.0 (2024-08-19)
 
  * [4de121c2](https://github.com/numaproj/numaflow/commit/4de121c2c3b436ac51fba97c8ce5153afc5364c9) Update manifests to v1.3.0
