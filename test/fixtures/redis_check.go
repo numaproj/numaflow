@@ -100,6 +100,9 @@ func runChecks(ctx context.Context, performChecks CheckFunc) bool {
 	ticker := time.NewTicker(retryInterval)
 	defer ticker.Stop()
 
+	if performChecks() {
+		return true
+	}
 	for {
 		select {
 		case <-ctx.Done():

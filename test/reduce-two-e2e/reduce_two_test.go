@@ -83,7 +83,7 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 	// There should be no other values.
 	w.Expect().RedisSinkContains(pipelineName+"-sink", "102")
 	w.Expect().RedisSinkNotContains(pipelineName+"-sink", "99")
-	w.Expect().RedisSinkNotContains(pipelineName+"sink", "105")
+	w.Expect().RedisSinkNotContains(pipelineName+"-sink", "105")
 	done <- struct{}{}
 }
 
