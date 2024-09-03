@@ -7,3 +7,4 @@ Please add your company name and initial use case (optional) below.
 3. [Atlan](https://atlan.com/) - Numaflow powers real time notifications, stream processing ecosystem at Atlan.
 4. [Valegachain Analytics](https://www.valegachain.com/) Numaflow is used to extract, transform, and load cryptocurrency blocks and mempool transactions in data lakes, as well as for activity alerts.
 5. [Lockheed Martin](https://lockheedmartin.com/) Perform ELT processing on high and low volume data streams of sensor data as recieved from IOT type systems.
+6. [Seekr](https://www.seekr.com/) Numaflow coordinates multiple ML pipelines to rate and extract information from the pipeline input.
