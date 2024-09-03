@@ -3432,13 +3432,6 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref common.ReferenceCall
 							Format:      "int64",
 						},
 					},
-					"currentReplicas": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The number of Pods created by the controller from the MonoVertex version indicated by currentHash.",
-							Type:        []string{"integer"},
-							Format:      "int64",
-						},
-					},
 					"updatedReplicas": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The number of Pods created by the controller from the MonoVertex version indicated by updateHash.",
@@ -3446,16 +3439,23 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref common.ReferenceCall
 							Format:      "int64",
 						},
 					},
+					"updatedReadyReplicas": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The number of ready Pods created by the controller from the MonoVertex version indicated by updateHash.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 					"currentHash": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If not empty, indicates the version of the MonoVertex used to generate Pods in the sequence [0,currentReplicas).",
+							Description: "If not empty, indicates the current version of the MonoVertex used to generate Pods.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"updateHash": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If not empty, indicates the version of the MonoVertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)",
+							Description: "If not empty, indicates the updated version of the MonoVertex used to generate Pods.",
 							Type:        []string{"string"},
 							Format:      "",
 						},

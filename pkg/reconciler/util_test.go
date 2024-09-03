@@ -324,6 +324,22 @@ func TestNumOfReadyPods(t *testing.T) {
 					},
 				},
 			},
+			{
+				Status: corev1.PodStatus{
+					Phase: corev1.PodFailed,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Ready: true,
+						},
+						{
+							Ready: true,
+						},
+						{
+							Ready: true,
+						},
+					},
+				},
+			},
 		},
 	}
 	assert.Equal(t, 2, NumOfReadyPods(pods))

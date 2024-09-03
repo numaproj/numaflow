@@ -18,7 +18,6 @@ package v1alpha1
 
 import (
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/ptr"
 )
 
 // UpdateStrategy indicates the strategy that the
@@ -43,15 +42,10 @@ func (us UpdateStrategy) GetUpdateStrategyType() UpdateStrategyType {
 }
 
 func (us UpdateStrategy) GetRollingUpdateStrategy() RollingUpdateStrategy {
-	rus := RollingUpdateStrategy{
-		MaxUnavailable: ptr.To[intstr.IntOrString](intstr.FromString("25%")), // Default value is 25%.
+	if us.RollingUpdate == nil {
+		return RollingUpdateStrategy{}
 	}
-	if ru := us.RollingUpdate; ru != nil {
-		if ru.MaxUnavailable != nil {
-			rus.MaxUnavailable = ru.MaxUnavailable
-		}
-	}
-	return rus
+	return *us.RollingUpdate
 }
 
 // UpdateStrategyType is a string enumeration type that enumerates
@@ -76,4 +70,11 @@ type RollingUpdateStrategy struct {
 	// least 70% of desired pods.
 	// +optional
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty" protobuf:"bytes,1,opt,name=maxUnavailable"`
+}
+
+func (rus RollingUpdateStrategy) GetMaxUnavailable() intstr.IntOrString {
+	if rus.MaxUnavailable == nil {
+		return intstr.FromString("25%") // Default value is 25%.
+	}
+	return *rus.MaxUnavailable
 }

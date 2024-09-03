@@ -6418,25 +6418,6 @@ The number of pods targeted by this MonoVertex with a Ready Condition.
 
 <td>
 
-<code>currentReplicas</code></br> <em> uint32 </em>
-</td>
-
-<td>
-
-<p>
-
-The number of Pods created by the controller from the MonoVertex version
-indicated by currentHash.
-</p>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
 <code>updatedReplicas</code></br> <em> uint32 </em>
 </td>
 
@@ -6456,6 +6437,25 @@ indicated by updateHash.
 
 <td>
 
+<code>updatedReadyReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+The number of ready Pods created by the controller from the MonoVertex
+version indicated by updateHash.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>currentHash</code></br> <em> string </em>
 </td>
 
@@ -6463,8 +6463,8 @@ indicated by updateHash.
 
 <p>
 
-If not empty, indicates the version of the MonoVertex used to generate
-Pods in the sequence \[0,currentReplicas).
+If not empty, indicates the current version of the MonoVertex used to
+generate Pods.
 </p>
 
 </td>
@@ -6482,8 +6482,8 @@ Pods in the sequence \[0,currentReplicas).
 
 <p>
 
-If not empty, indicates the version of the MonoVertx used to generate
-Pods in the sequence \[replicas-updatedReplicas,replicas)
+If not empty, indicates the updated version of the MonoVertex used to
+generate Pods.
 </p>
 
 </td>

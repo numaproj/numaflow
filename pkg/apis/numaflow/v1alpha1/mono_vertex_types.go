@@ -71,11 +71,26 @@ type MonoVertex struct {
 	Status MonoVertexStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
-func (mv MonoVertex) GetReplicas() int {
+func (mv MonoVertex) getReplicas() int {
 	if mv.Spec.Replicas == nil {
 		return 1
 	}
 	return int(*mv.Spec.Replicas)
+}
+
+func (mv MonoVertex) CalculateReplicas() int {
+	desiredReplicas := mv.getReplicas()
+	// Don't allow replicas to be out of the range of min and max when auto scaling is enabled
+	if s := mv.Spec.Scale; !s.Disabled {
+		max := int(s.GetMaxReplicas())
+		min := int(s.GetMinReplicas())
+		if desiredReplicas < min {
+			desiredReplicas = min
+		} else if desiredReplicas > max {
+			desiredReplicas = max
+		}
+	}
+	return desiredReplicas
 }
 
 func (mv MonoVertex) GetHeadlessServiceName() string {
@@ -491,13 +506,13 @@ type MonoVertexStatus struct {
 	// The number of pods targeted by this MonoVertex with a Ready Condition.
 	// +optional
 	ReadyReplicas uint32 `json:"readyReplicas,omitempty" protobuf:"varint,10,opt,name=readyReplicas"`
-	// The number of Pods created by the controller from the MonoVertex version indicated by currentHash.
-	CurrentReplicas uint32 `json:"currentReplicas,omitempty" protobuf:"varint,11,opt,name=currentReplicas"`
 	// The number of Pods created by the controller from the MonoVertex version indicated by updateHash.
-	UpdatedReplicas uint32 `json:"updatedReplicas,omitempty" protobuf:"varint,12,opt,name=updatedReplicas"`
-	// If not empty, indicates the version of the MonoVertex used to generate Pods in the sequence [0,currentReplicas).
+	UpdatedReplicas uint32 `json:"updatedReplicas,omitempty" protobuf:"varint,11,opt,name=updatedReplicas"`
+	// The number of ready Pods created by the controller from the MonoVertex version indicated by updateHash.
+	UpdatedReadyReplicas uint32 `json:"updatedReadyReplicas,omitempty" protobuf:"varint,12,opt,name=updatedReadyReplicas"`
+	// If not empty, indicates the current version of the MonoVertex used to generate Pods.
 	CurrentHash string `json:"currentHash,omitempty" protobuf:"bytes,13,opt,name=currentHash"`
-	// If not empty, indicates the version of the MonoVertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)
+	// If not empty, indicates the updated version of the MonoVertex used to generate Pods.
 	UpdateHash string `json:"updateHash,omitempty" protobuf:"bytes,14,opt,name=updateHash"`
 }
 

@@ -8212,9 +8212,6 @@ spec:
                 type: array
               currentHash:
                 type: string
-              currentReplicas:
-                format: int32
-                type: integer
               lastScaledAt:
                 format: date-time
                 type: string
@@ -8247,6 +8244,9 @@ spec:
                 type: string
               updateHash:
                 type: string
+              updatedReadyReplicas:
+                format: int32
+                type: integer
               updatedReplicas:
                 format: int32
                 type: integer

@@ -19293,13 +19293,8 @@
           "x-kubernetes-patch-strategy": "merge"
         },
         "currentHash": {
-          "description": "If not empty, indicates the version of the MonoVertex used to generate Pods in the sequence [0,currentReplicas).",
+          "description": "If not empty, indicates the current version of the MonoVertex used to generate Pods.",
           "type": "string"
-        },
-        "currentReplicas": {
-          "description": "The number of Pods created by the controller from the MonoVertex version indicated by currentHash.",
-          "type": "integer",
-          "format": "int64"
         },
         "lastScaledAt": {
           "description": "Time of last scaling operation.",
@@ -19336,8 +19331,13 @@
           "type": "string"
         },
         "updateHash": {
-          "description": "If not empty, indicates the version of the MonoVertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)",
+          "description": "If not empty, indicates the updated version of the MonoVertex used to generate Pods.",
           "type": "string"
+        },
+        "updatedReadyReplicas": {
+          "description": "The number of ready Pods created by the controller from the MonoVertex version indicated by updateHash.",
+          "type": "integer",
+          "format": "int64"
         },
         "updatedReplicas": {
           "description": "The number of Pods created by the controller from the MonoVertex version indicated by updateHash.",

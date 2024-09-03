@@ -21,7 +21,7 @@ limitations under the License.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RollingUpdateStrategy {
     #[serde(rename = "maxUnavailable", skip_serializing_if = "Option::is_none")]
-    pub max_unavailable: Option<crate::models::IoPeriodK8sPeriodApimachineryPeriodPkgPeriodUtilPeriodIntstrPeriodIntOrString>,
+    pub max_unavailable: Option<k8s_openapi::apimachinery::pkg::util::intstr::IntOrString>,
 }
 
 impl RollingUpdateStrategy {

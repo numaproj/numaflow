@@ -21,12 +21,9 @@ pub struct MonoVertexStatus {
     /// Conditions are the latest available observations of a resource's current state.
     #[serde(rename = "conditions", skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Vec<k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition>>,
-    /// If not empty, indicates the version of the MonoVertex used to generate Pods in the sequence [0,currentReplicas).
+    /// If not empty, indicates the current version of the MonoVertex used to generate Pods.
     #[serde(rename = "currentHash", skip_serializing_if = "Option::is_none")]
     pub current_hash: Option<String>,
-    /// The number of Pods created by the controller from the MonoVertex version indicated by currentHash.
-    #[serde(rename = "currentReplicas", skip_serializing_if = "Option::is_none")]
-    pub current_replicas: Option<i64>,
     #[serde(rename = "lastScaledAt", skip_serializing_if = "Option::is_none")]
     pub last_scaled_at: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Time>,
     #[serde(rename = "lastUpdated", skip_serializing_if = "Option::is_none")]
@@ -48,9 +45,15 @@ pub struct MonoVertexStatus {
     pub replicas: Option<i64>,
     #[serde(rename = "selector", skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
-    /// If not empty, indicates the version of the MonoVertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)
+    /// If not empty, indicates the updated version of the MonoVertex used to generate Pods.
     #[serde(rename = "updateHash", skip_serializing_if = "Option::is_none")]
     pub update_hash: Option<String>,
+    /// The number of ready Pods created by the controller from the MonoVertex version indicated by updateHash.
+    #[serde(
+        rename = "updatedReadyReplicas",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub updated_ready_replicas: Option<i64>,
     /// The number of Pods created by the controller from the MonoVertex version indicated by updateHash.
     #[serde(rename = "updatedReplicas", skip_serializing_if = "Option::is_none")]
     pub updated_replicas: Option<i64>,
@@ -61,7 +64,6 @@ impl MonoVertexStatus {
         MonoVertexStatus {
             conditions: None,
             current_hash: None,
-            current_replicas: None,
             last_scaled_at: None,
             last_updated: None,
             message: None,
@@ -72,6 +74,7 @@ impl MonoVertexStatus {
             replicas: None,
             selector: None,
             update_hash: None,
+            updated_ready_replicas: None,
             updated_replicas: None,
         }
     }

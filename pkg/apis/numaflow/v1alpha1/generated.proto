@@ -984,16 +984,16 @@ message MonoVertexStatus {
   // +optional
   optional uint32 readyReplicas = 10;
 
-  // The number of Pods created by the controller from the MonoVertex version indicated by currentHash.
-  optional uint32 currentReplicas = 11;
-
   // The number of Pods created by the controller from the MonoVertex version indicated by updateHash.
-  optional uint32 updatedReplicas = 12;
+  optional uint32 updatedReplicas = 11;
 
-  // If not empty, indicates the version of the MonoVertex used to generate Pods in the sequence [0,currentReplicas).
+  // The number of ready Pods created by the controller from the MonoVertex version indicated by updateHash.
+  optional uint32 updatedReadyReplicas = 12;
+
+  // If not empty, indicates the current version of the MonoVertex used to generate Pods.
   optional string currentHash = 13;
 
-  // If not empty, indicates the version of the MonoVertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)
+  // If not empty, indicates the updated version of the MonoVertex used to generate Pods.
   optional string updateHash = 14;
 }
 
