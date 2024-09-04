@@ -1219,7 +1219,7 @@ message PipelineStatus {
   // +optional
   optional int64 observedGeneration = 11;
 
-  // Field to indicate if a pipeline drain successfully occurred or timed out
+  // Field to indicate if a pipeline drain successfully occurred, or it timed out.
   // Set to true when the Pipeline is in Paused state, and after it has successfully been drained.
   // defaults to false
   // +optional

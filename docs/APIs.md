@@ -7953,8 +7953,8 @@ The generation observed by the Pipeline controller.
 <em>(Optional)</em>
 <p>
 
-Field to indicate if a pipeline drain successfully occurred or timed out
-Set to true when the Pipeline is in Paused state, and after it has
+Field to indicate if a pipeline drain successfully occurred, or it timed
+out. Set to true when the Pipeline is in Paused state, and after it has
 successfully been drained. defaults to false
 </p>
 
