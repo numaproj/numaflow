@@ -220,7 +220,6 @@ func Test_reconcileEvents(t *testing.T) {
 		_, err = r.reconcile(ctx, testObj)
 		assert.Error(t, err)
 		events := getEvents(t, r)
-		assert.Contains(t, events, "Normal UpdatePipelinePhase Updated pipeline phase from Paused to Running")
 		assert.Contains(t, events, "Warning ReconcilePipelineFailed Failed to reconcile pipeline: the length of the pipeline name plus the vertex name is over the max limit. (very-very-very-loooooooooooooooooooooooooooooooooooong-input), [must be no more than 63 characters]")
 	})
 

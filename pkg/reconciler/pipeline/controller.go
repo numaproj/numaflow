@@ -151,7 +151,6 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
 		return result, err
 	}
-
 	// check for changes related to pause/resume lifecycle
 	if oldPhase := pl.Status.Phase; pl.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
 		oldPhase == dfv1.PipelinePhasePaused || oldPhase == dfv1.PipelinePhasePausing {
@@ -169,10 +168,8 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		if requeue {
 			return ctrl.Result{RequeueAfter: dfv1.DefaultRequeueAfter}, nil
 		}
-		return ctrl.Result{}, nil
 	}
-
-	return result, err
+	return result, nil
 }
 
 // reconcileNonLifecycleChanges do the jobs not related to pipeline lifecycle changes.
@@ -808,11 +805,13 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 			}
 		}
 	}
-
 	_, err := r.scaleUpAllVertices(ctx, pl)
 	if err != nil {
 		return false, err
 	}
+	// mark the drained field as false to refresh the drained status as this will be a new lifecycle from running
+	pl.Status.MarkDrainedFalse()
+
 	pl.Status.MarkPhaseRunning()
 	return false, nil
 }
@@ -857,11 +856,15 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		return false, err
 	}
 
-	// if drain is completed or we have exceed pause deadline, mark pl as paused and scale down
+	// if drain is completed, or we have exceeded the pause deadline, mark pl as paused and scale down
 	if time.Now().After(pauseTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetPauseGracePeriodSeconds())*time.Second)) || drainCompleted {
 		_, err := r.scaleDownAllVertices(ctx, pl)
 		if err != nil {
 			return true, err
+		}
+		// if the drain completed succesfully, then set the Drained field to true
+		if drainCompleted {
+			pl.Status.MarkDrainedTrue()
 		}
 		pl.Status.MarkPhasePaused()
 		return false, nil

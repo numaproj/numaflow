@@ -19668,6 +19668,10 @@
           "x-kubernetes-patch-merge-key": "type",
           "x-kubernetes-patch-strategy": "merge"
         },
+        "drained": {
+          "description": "Field to indicate if a pipeline drain successfully occurred or timed out Set to true when the Pipeline is in Paused state, and after it has successfully been drained. defaults to false",
+          "type": "boolean"
+        },
         "lastUpdated": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
         },
