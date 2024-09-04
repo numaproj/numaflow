@@ -145,6 +145,14 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 	pl.Status.SetObservedGeneration(pl.Generation)
 
+	// Regular pipeline change
+	result, err := r.reconcileNonLifecycleChanges(ctx, pl)
+	if err != nil {
+		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
+		return result, err
+	}
+
+	// check for changes related to pause/resume lifecycle
 	if oldPhase := pl.Status.Phase; pl.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
 		oldPhase == dfv1.PipelinePhasePaused || oldPhase == dfv1.PipelinePhasePausing {
 		requeue, err := r.updateDesiredState(ctx, pl)
@@ -162,13 +170,6 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			return ctrl.Result{RequeueAfter: dfv1.DefaultRequeueAfter}, nil
 		}
 		return ctrl.Result{}, nil
-
-	}
-
-	// Regular pipeline change
-	result, err := r.reconcileNonLifecycleChanges(ctx, pl)
-	if err != nil {
-		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
 	}
 
 	return result, err
@@ -599,7 +600,8 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		copyVertexTemplate(pl, vCopy)
 		copyVertexLimits(pl, vCopy)
 		replicas := int32(1)
-		if pl.Status.Phase == dfv1.PipelinePhasePaused {
+		// If the desired phase is pause or we are in the middle of pausing we should not start any vertex replicas
+		if pl.Status.Phase == dfv1.PipelinePhasePaused || pl.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused {
 			replicas = int32(0)
 		} else if v.IsReduceUDF() {
 			partitions := pl.NumOfPartitions(v.Name)
