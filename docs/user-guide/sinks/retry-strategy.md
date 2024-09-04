@@ -23,6 +23,8 @@ sink:
 ```
 
 - BackOff - Defines the timing for retries, including the interval and the maximum attempts.
+  - duration: the time interval to wait before retry attempts
+  - steps: the number of times to try the sink write operation
 - OnFailure - Specifies the action to be undertaken if number of retries are exhausted
   - retry: continue with the retry logic again
   - fallback: write the leftover messages to a [fallback](https://numaflow.numaproj.io/user-guide/sinks/fallback/) sink
