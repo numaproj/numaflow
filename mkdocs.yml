@@ -66,6 +66,7 @@ nav:
           - user-guide/sinks/blackhole.md
           - User-defined Sinks: "user-guide/sinks/user-defined-sinks.md"
           - Fallback Sink: "user-guide/sinks/fallback.md"
+          - Retry Strategy: "user-guide/sinks/retry-strategy.md"
       - User-defined Functions:
           - Overview: "user-guide/user-defined-functions/user-defined-functions.md"
           - Map:
