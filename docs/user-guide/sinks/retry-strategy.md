@@ -9,31 +9,32 @@ unexpected issues efficiently.
 ### Struct Explanation
 
 
-`retryStrategy` is optional, and can be added to the Sink spec configurations where retry logic is necessary. 
+`retryStrategy` is optional, and can be added to the Sink spec configurations where retry logic is necessary.
+
+
 
 ```yaml
 sink:
   retryStrategy:
       # Optional
       backoff:
-        duration: 1s # Optional, defaults 1ms
+        duration: 1s # Optional
         steps: 3 # Optional, number of retries (including the 1st try)
-      # Optional, defaults to retry, in that case
+      # Optional
       onFailure: retry|fallback|drop 
 ```
+Note: If no custom fields are defined for retryStrategy then the **default** values are used.
 
-- BackOff - Defines the timing for retries, including the interval and the maximum attempts.
-  - duration: the time interval to wait before retry attempts
-  - steps: the number of times to try the sink write operation
-- OnFailure - Specifies the action to be undertaken if number of retries are exhausted
+- `BackOff` - Defines the timing for retries, including the interval and the maximum attempts.
+  - `duration`: the time interval to wait before retry attempts
+    - Default: _1ms_
+  - `steps`: the limit on the number of times to try the sink write operation including retries
+    - Default: _Infinite_
+- `OnFailure` - Specifies the action to be undertaken if number of retries are exhausted
   - retry: continue with the retry logic again
   - fallback: write the leftover messages to a [fallback](https://numaflow.numaproj.io/user-guide/sinks/fallback/) sink
   - drop: any messages left to be processed are dropped
-
-Note: If no custom fields are defined for retryStrategy then the default values are used.
-- `duration` - 1ms
-- `steps` - Infinite
-- `onFailure` - retry
+    - Default: _retry_
 
 
 ### Constraints
@@ -60,7 +61,7 @@ Note: If no custom fields are defined for retryStrategy then the default values 
         container:
           image: my-fallback-sink
 ```
-#### Explanation
+### Explanation
 
 - Normal Operation: Data is processed by the primary sink container specified by `UDSink`. 
 The system retries up to 10 times for a batch write operation to succeed with an interval of 500 milliseconds between each retry.
