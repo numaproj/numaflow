@@ -13,7 +13,7 @@
     
     
       
-        <title>Log Sink - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Retry Strategy - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#log-sink" class="md-skip">
+        <a href="#retry-strategy" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Log Sink
+              Retry Strategy
             
           </span>
         </div>
@@ -848,21 +848,11 @@
               
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../log/" class="md-nav__link">
         Log Sink
       </a>
-      
     </li>
   
 
@@ -914,11 +904,86 @@
               
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../retry-strategy/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Retry Strategy
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         Retry Strategy
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    Overview
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#struct-explanation" class="md-nav__link">
+    Struct Explanation
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#constraints" class="md-nav__link">
+    Constraints
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    Example
+  </a>
+  
+    <nav class="md-nav" aria-label="Example">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#explanation" class="md-nav__link">
+    Explanation
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2220,6 +2285,55 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    Overview
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#struct-explanation" class="md-nav__link">
+    Struct Explanation
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#constraints" class="md-nav__link">
+    Constraints
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    Example
+  </a>
+  
+    <nav class="md-nav" aria-label="Example">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#explanation" class="md-nav__link">
+    Explanation
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2230,20 +2344,71 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/sinks/log.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/sinks/retry-strategy.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="log-sink">Log Sink<a class="headerlink" href="#log-sink" title="Permanent link">&para;</a></h1>
-<p>A <code>Log</code> sink is very useful for debugging, it prints all the received messages to <code>stdout</code>.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">output</span>
-<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<h1 id="retry-strategy">Retry Strategy<a class="headerlink" href="#retry-strategy" title="Permanent link">&para;</a></h1>
+<h3 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h3>
+<p>The <code>RetryStrategy</code> is used to configure the behavior for a sink after encountering failures during a write operation. 
+This structure allows the user to specify how Numaflow should respond to different fail-over scenarios for Sinks, ensuring that the writing can be resilient and handle 
+unexpected issues efficiently.</p>
+<h3 id="struct-explanation">Struct Explanation<a class="headerlink" href="#struct-explanation" title="Permanent link">&para;</a></h3>
+<p><code>retryStrategy</code> is optional, and can be added to the Sink spec configurations where retry logic is necessary.</p>
+<p><div class="highlight"><pre><span></span><code><span class="nt">sink</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">retryStrategy</span><span class="p">:</span>
+<span class="w">      </span><span class="c1"># Optional</span>
+<span class="w">      </span><span class="nt">backoff</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">duration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1s</span><span class="w"> </span><span class="c1"># Optional</span>
+<span class="w">        </span><span class="nt">steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w"> </span><span class="c1"># Optional, number of retries (including the 1st try)</span>
+<span class="w">      </span><span class="c1"># Optional</span>
+<span class="w">      </span><span class="nt">onFailure</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">retry|fallback|drop</span><span class="w"> </span>
 </code></pre></div>
+Note: If no custom fields are defined for retryStrategy then the <strong>default</strong> values are used.</p>
+<ul>
+<li><code>BackOff</code> - Defines the timing for retries, including the interval and the maximum attempts.</li>
+<li><code>duration</code>: the time interval to wait before retry attempts<ul>
+<li>Default: <em>1ms</em></li>
+</ul>
+</li>
+<li><code>steps</code>: the limit on the number of times to try the sink write operation including retries<ul>
+<li>Default: <em>Infinite</em></li>
+</ul>
+</li>
+<li><code>OnFailure</code> - Specifies the action to be undertaken if number of retries are exhausted</li>
+<li>retry: continue with the retry logic again</li>
+<li>fallback: write the leftover messages to a <a href="https://numaflow.numaproj.io/user-guide/sinks/fallback/">fallback</a> sink</li>
+<li>drop: any messages left to be processed are dropped<ul>
+<li>Default: <em>retry</em></li>
+</ul>
+</li>
+</ul>
+<h3 id="constraints">Constraints<a class="headerlink" href="#constraints" title="Permanent link">&para;</a></h3>
+<p>1) If the <code>onFailure</code> is defined as fallback, then there should be a fallback sink specified in the spec.</p>
+<p>2) The steps defined should always be <code>&gt; 0</code></p>
+<h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">retryStrategy</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">backoff</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;500ms&quot;</span>
+<span class="w">        </span><span class="nt">steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<span class="w">      </span><span class="nt">onFailure</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;fallback&quot;</span>
+<span class="w">    </span><span class="nt">udsink</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink-image</span>
+<span class="w">    </span><span class="nt">fallback</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">udsink</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-fallback-sink</span>
+</code></pre></div>
+<h3 id="explanation">Explanation<a class="headerlink" href="#explanation" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Normal Operation: Data is processed by the primary sink container specified by <code>UDSink</code>. 
+The system retries up to 10 times for a batch write operation to succeed with an interval of 500 milliseconds between each retry.</li>
+<li>After Maximum Retries: If all retries fail, data is then routed to a fallback sink instead.</li>
+</ul>
 
               
             </article>
@@ -2264,7 +2429,7 @@
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../kafka/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Kafka Sink" rel="prev">
+        <a href="../fallback/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Fallback Sink" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -2273,20 +2438,20 @@
               <span class="md-footer__direction">
                 Previous
               </span>
-              Kafka Sink
+              Fallback Sink
             </div>
           </div>
         </a>
       
       
         
-        <a href="../blackhole/" class="md-footer__link md-footer__link--next" aria-label="Next: Blackhole Sink" rel="next">
+        <a href="../../user-defined-functions/user-defined-functions/" class="md-footer__link md-footer__link--next" aria-label="Next: Overview" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Blackhole Sink
+              Overview
             </div>
           </div>
           <div class="md-footer__button md-icon">
