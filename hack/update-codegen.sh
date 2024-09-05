@@ -17,15 +17,13 @@ cd "${FAKE_REPOPATH}"
 
 CODEGEN_PKG=${CODEGEN_PKG:-$(cd "${FAKE_REPOPATH}"; ls -d -1 ./vendor/k8s.io/code-generator 2>/dev/null || echo ../code-generator)}
 
-chmod +x ${CODEGEN_PKG}/*.sh
-
 subheader "running codegen"
-bash -x ${CODEGEN_PKG}/generate-groups.sh "deepcopy" \
+bash -x ${CODEGEN_PKG}/kube_codegen.sh "deepcopy" \
   github.com/numaproj/numaflow/pkg/client github.com/numaproj/numaflow/pkg/apis \
   "numaflow:v1alpha1" \
   --go-header-file hack/boilerplate/boilerplate.go.txt
 
-bash -x ${CODEGEN_PKG}/generate-groups.sh "client,informer,lister" \
+bash -x ${CODEGEN_PKG}/kube_codegen.sh "client,informer,lister" \
   github.com/numaproj/numaflow/pkg/client github.com/numaproj/numaflow/pkg/apis \
   "numaflow:v1alpha1" \
   --plural-exceptions="Vertex:Vertices,MonoVertex:MonoVertices" \
