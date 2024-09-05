@@ -21,7 +21,7 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
-    - jsonPath: .spec.replicas
+    - jsonPath: .status.desiredReplicas
       name: Desired
       type: string
     - jsonPath: .status.replicas
@@ -5568,6 +5568,9 @@ spec:
                 type: array
               currentHash:
                 type: string
+              desiredReplicas:
+                format: int32
+                type: integer
               lastScaledAt:
                 format: date-time
                 type: string

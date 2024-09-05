@@ -6301,6 +6301,25 @@ labels match the selector).
 
 <td>
 
+<code>desiredReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The number of desired replicas.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>selector</code></br> <em> string </em>
 </td>
 

@@ -24,6 +24,9 @@ pub struct MonoVertexStatus {
     /// If not empty, indicates the current version of the MonoVertex used to generate Pods.
     #[serde(rename = "currentHash", skip_serializing_if = "Option::is_none")]
     pub current_hash: Option<String>,
+    /// The number of desired replicas.
+    #[serde(rename = "desiredReplicas", skip_serializing_if = "Option::is_none")]
+    pub desired_replicas: Option<i64>,
     #[serde(rename = "lastScaledAt", skip_serializing_if = "Option::is_none")]
     pub last_scaled_at: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Time>,
     #[serde(rename = "lastUpdated", skip_serializing_if = "Option::is_none")]
@@ -64,6 +67,7 @@ impl MonoVertexStatus {
         MonoVertexStatus {
             conditions: None,
             current_hash: None,
+            desired_replicas: None,
             last_scaled_at: None,
             last_updated: None,
             message: None,

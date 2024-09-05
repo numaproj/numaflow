@@ -19296,6 +19296,11 @@
           "description": "If not empty, indicates the current version of the MonoVertex used to generate Pods.",
           "type": "string"
         },
+        "desiredReplicas": {
+          "description": "The number of desired replicas.",
+          "type": "integer",
+          "format": "int64"
+        },
         "lastScaledAt": {
           "description": "Time of last scaling operation.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"

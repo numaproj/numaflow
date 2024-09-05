@@ -54,7 +54,7 @@ const (
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
+// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.status.desiredReplicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.readyReplicas`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
@@ -489,31 +489,34 @@ type MonoVertexStatus struct {
 	// Total number of non-terminated pods targeted by this MonoVertex (their labels match the selector).
 	// +optional
 	Replicas uint32 `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
+	// The number of desired replicas.
 	// +optional
-	Selector string `json:"selector,omitempty" protobuf:"bytes,4,opt,name=selector"`
+	DesiredReplicas uint32 `json:"desiredReplicas" protobuf:"varint,4,opt,name=desiredReplicas"`
 	// +optional
-	Reason string `json:"reason,omitempty" protobuf:"bytes,5,opt,name=reason"`
+	Selector string `json:"selector,omitempty" protobuf:"bytes,5,opt,name=selector"`
 	// +optional
-	Message string `json:"message,omitempty" protobuf:"bytes,6,opt,name=message"`
+	Reason string `json:"reason,omitempty" protobuf:"bytes,6,opt,name=reason"`
 	// +optional
-	LastUpdated metav1.Time `json:"lastUpdated,omitempty" protobuf:"bytes,7,opt,name=lastUpdated"`
+	Message string `json:"message,omitempty" protobuf:"bytes,7,opt,name=message"`
+	// +optional
+	LastUpdated metav1.Time `json:"lastUpdated,omitempty" protobuf:"bytes,8,opt,name=lastUpdated"`
 	// Time of last scaling operation.
 	// +optional
-	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,8,opt,name=lastScaledAt"`
+	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,9,opt,name=lastScaledAt"`
 	// The generation observed by the MonoVertex controller.
 	// +optional
-	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,9,opt,name=observedGeneration"`
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,10,opt,name=observedGeneration"`
 	// The number of pods targeted by this MonoVertex with a Ready Condition.
 	// +optional
-	ReadyReplicas uint32 `json:"readyReplicas,omitempty" protobuf:"varint,10,opt,name=readyReplicas"`
+	ReadyReplicas uint32 `json:"readyReplicas,omitempty" protobuf:"varint,11,opt,name=readyReplicas"`
 	// The number of Pods created by the controller from the MonoVertex version indicated by updateHash.
-	UpdatedReplicas uint32 `json:"updatedReplicas,omitempty" protobuf:"varint,11,opt,name=updatedReplicas"`
+	UpdatedReplicas uint32 `json:"updatedReplicas,omitempty" protobuf:"varint,12,opt,name=updatedReplicas"`
 	// The number of ready Pods created by the controller from the MonoVertex version indicated by updateHash.
-	UpdatedReadyReplicas uint32 `json:"updatedReadyReplicas,omitempty" protobuf:"varint,12,opt,name=updatedReadyReplicas"`
+	UpdatedReadyReplicas uint32 `json:"updatedReadyReplicas,omitempty" protobuf:"varint,13,opt,name=updatedReadyReplicas"`
 	// If not empty, indicates the current version of the MonoVertex used to generate Pods.
-	CurrentHash string `json:"currentHash,omitempty" protobuf:"bytes,13,opt,name=currentHash"`
+	CurrentHash string `json:"currentHash,omitempty" protobuf:"bytes,14,opt,name=currentHash"`
 	// If not empty, indicates the updated version of the MonoVertex used to generate Pods.
-	UpdateHash string `json:"updateHash,omitempty" protobuf:"bytes,14,opt,name=updateHash"`
+	UpdateHash string `json:"updateHash,omitempty" protobuf:"bytes,15,opt,name=updateHash"`
 }
 
 // SetObservedGeneration sets the Status ObservedGeneration

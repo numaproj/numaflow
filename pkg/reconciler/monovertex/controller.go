@@ -161,6 +161,7 @@ func (mr *monoVertexReconciler) orchestrateFixedResources(ctx context.Context, m
 func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *dfv1.MonoVertex) error {
 	log := logging.FromContext(ctx)
 	desiredReplicas := monoVtx.CalculateReplicas()
+	monoVtx.Status.DesiredReplicas = uint32(desiredReplicas)
 
 	// Set metrics
 	defer func() {

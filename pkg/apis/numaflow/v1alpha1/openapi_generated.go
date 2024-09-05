@@ -3389,6 +3389,14 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref common.ReferenceCall
 							Format:      "int64",
 						},
 					},
+					"desiredReplicas": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The number of desired replicas.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 					"selector": {
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"string"},
