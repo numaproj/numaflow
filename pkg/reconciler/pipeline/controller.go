@@ -144,16 +144,17 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	}()
 
 	pl.Status.SetObservedGeneration(pl.Generation)
-
 	// Regular pipeline change
+	// This should be happening in call cases to ensure a clean initialization regardless of the lifecycle phase
+	// Eg: even for a pipeline started with desiredPhase = Pause, we should still create the resources for the pipeline
 	result, err := r.reconcileNonLifecycleChanges(ctx, pl)
 	if err != nil {
 		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
 		return result, err
 	}
-	// check for changes related to pause/resume lifecycle
-	if oldPhase := pl.Status.Phase; pl.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
-		oldPhase == dfv1.PipelinePhasePaused || oldPhase == dfv1.PipelinePhasePausing {
+	// check if any changes related to pause/resume lifecycle for the pipeline
+	if isLifecycleChange(pl) {
+		oldPhase := pl.Status.Phase
 		requeue, err := r.updateDesiredState(ctx, pl)
 		if err != nil {
 			logMsg := fmt.Sprintf("Updated desired pipeline phase failed: %v", zap.Error(err))
@@ -168,8 +169,25 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		if requeue {
 			return ctrl.Result{RequeueAfter: dfv1.DefaultRequeueAfter}, nil
 		}
+		return ctrl.Result{}, nil
 	}
 	return result, nil
+}
+
+// isLifecycleChange determines whether there has been a change requested in the lifecycle
+// of a Pipeline object, specifically relating to the paused and pausing states.
+func isLifecycleChange(pl *dfv1.Pipeline) bool {
+	// Extract the current phase from the status of the pipeline.
+	// Check if the desired phase of the pipeline is 'Paused', or if the current phase of the
+	// pipeline is either 'Paused' or 'Pausing'. This indicates a transition into or out of
+	// a paused state which is a lifecycle phase change
+	if oldPhase := pl.Status.Phase; pl.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
+		oldPhase == dfv1.PipelinePhasePaused || oldPhase == dfv1.PipelinePhasePausing {
+		return true
+	}
+
+	// If none of the conditions are met, return false
+	return false
 }
 
 // reconcileNonLifecycleChanges do the jobs not related to pipeline lifecycle changes.
@@ -343,7 +361,12 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	}
 
 	pl.Status.MarkDeployed()
-	pl.Status.SetPhase(pl.Spec.Lifecycle.GetDesiredPhase(), "")
+	// If the pipeline has a lifecycle change, then do not update the phase as
+	// this should happen only after the required configs for the lifecycle changes
+	// have been applied.
+	if !isLifecycleChange(pl) {
+		pl.Status.SetPhase(pl.Spec.Lifecycle.GetDesiredPhase(), "")
+	}
 	if err := r.checkChildrenResourceStatus(ctx, pl); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to check pipeline children resource status, %w", err)
 	}
@@ -598,7 +621,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		copyVertexLimits(pl, vCopy)
 		replicas := int32(1)
 		// If the desired phase is pause or we are in the middle of pausing we should not start any vertex replicas
-		if pl.Status.Phase == dfv1.PipelinePhasePaused || pl.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused {
+		if isLifecycleChange(pl) {
 			replicas = int32(0)
 		} else if v.IsReduceUDF() {
 			partitions := pl.NumOfPartitions(v.Name)
@@ -793,7 +816,6 @@ func (r *pipelineReconciler) updateDesiredState(ctx context.Context, pl *dfv1.Pi
 }
 
 func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
-
 	// reset pause timestamp
 	if pl.GetAnnotations()[dfv1.KeyPauseTimestamp] != "" {
 		err := r.client.Patch(ctx, pl, client.RawPatch(types.JSONPatchType, []byte(dfv1.RemovePauseTimestampPatch)))
@@ -809,15 +831,14 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 	if err != nil {
 		return false, err
 	}
-	// mark the drained field as false to refresh the drained status as this will be a new lifecycle from running
-	pl.Status.MarkDrainedFalse()
-
+	// mark the drained field as false to refresh the drained status as this will
+	// be a new lifecycle from running
+	pl.Status.MarkDrainedOnPauseFalse()
 	pl.Status.MarkPhaseRunning()
 	return false, nil
 }
 
 func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
-
 	// check that annotations / pause timestamp annotation exist
 	if pl.GetAnnotations() == nil || pl.GetAnnotations()[dfv1.KeyPauseTimestamp] == "" {
 		pl.SetAnnotations(map[string]string{dfv1.KeyPauseTimestamp: time.Now().Format(time.RFC3339)})
@@ -862,9 +883,9 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		if err != nil {
 			return true, err
 		}
-		// if the drain completed succesfully, then set the Drained field to true
+		// if the drain completed succesfully, then set the DrainedOnPause field to true
 		if drainCompleted {
-			pl.Status.MarkDrainedTrue()
+			pl.Status.MarkDrainedOnPauseTrue()
 		}
 		pl.Status.MarkPhasePaused()
 		return false, nil

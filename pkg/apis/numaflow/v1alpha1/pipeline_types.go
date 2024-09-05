@@ -636,8 +636,8 @@ type PipelineStatus struct {
 	// Field to indicate if a pipeline drain successfully occurred, or it timed out.
 	// Set to true when the Pipeline is in Paused state, and after it has successfully been drained.
 	// defaults to false
-	// +optional
-	Drained bool `json:"drained,omitempty" protobuf:"bytes,12,opt,name=drained"`
+	// +kubebuilder:default=false
+	DrainedOnPause bool `json:"drainedOnPause,omitempty" protobuf:"bytes,12,opt,name=drainedOnPause"`
 }
 
 // SetVertexCounts sets the counts of vertices.
@@ -769,14 +769,14 @@ func (pls *PipelineStatus) SetObservedGeneration(value int64) {
 	pls.ObservedGeneration = value
 }
 
-// MarkDrainedTrue sets the Drained field to true
-func (pls *PipelineStatus) MarkDrainedTrue() {
-	pls.Drained = true
+// MarkDrainedOnPauseTrue sets the DrainedOnPause field to true
+func (pls *PipelineStatus) MarkDrainedOnPauseTrue() {
+	pls.DrainedOnPause = true
 }
 
-// MarkDrainedFalse sets the Drained field to false
-func (pls *PipelineStatus) MarkDrainedFalse() {
-	pls.Drained = false
+// MarkDrainedOnPauseFalse sets the DrainedOnPause field to false
+func (pls *PipelineStatus) MarkDrainedOnPauseFalse() {
+	pls.DrainedOnPause = false
 }
 
 // IsHealthy indicates whether the pipeline is in healthy status

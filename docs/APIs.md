@@ -7945,12 +7945,11 @@ The generation observed by the Pipeline controller.
 
 <td>
 
-<code>drained</code></br> <em> bool </em>
+<code>drainedOnPause</code></br> <em> bool </em>
 </td>
 
 <td>
 
-<em>(Optional)</em>
 <p>
 
 Field to indicate if a pipeline drain successfully occurred, or it timed

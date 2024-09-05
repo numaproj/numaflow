@@ -18074,7 +18074,8 @@ spec:
                   - type
                   type: object
                 type: array
-              drained:
+              drainedOnPause:
+                default: false
                 type: boolean
               lastUpdated:
                 format: date-time

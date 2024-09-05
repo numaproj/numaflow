@@ -4132,7 +4132,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineStatus(ref common.ReferenceCallba
 							Format:      "int64",
 						},
 					},
-					"drained": {
+					"drainedOnPause": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Field to indicate if a pipeline drain successfully occurred, or it timed out. Set to true when the Pipeline is in Paused state, and after it has successfully been drained. defaults to false",
 							Type:        []string{"boolean"},
