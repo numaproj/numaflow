@@ -247,12 +247,13 @@ impl Forwarder {
         }
 
         // If after the retries we still have messages to process, handle the post retry failures
-        let need_retry = self.handle_sink_post_retry(
+        let need_retry = handle_sink_post_retry(
             &mut attempts,
             &mut error_map,
             &mut fallback_msgs,
             &mut messages_to_send,
             strategy,
+            self.common_labels.clone(),
         );
 
         // if we need to retry, return with error as we have exhausted the retries
@@ -281,57 +282,6 @@ impl Forwarder {
             .get_or_create(&self.common_labels)
             .inc_by(msg_count);
         Ok(())
-    }
-
-    /// Handles the post retry failures based on the configured strategy,
-    /// returns true if we need to retry, else false.
-    fn handle_sink_post_retry(
-        &mut self,
-        attempts: &mut u16,
-        error_map: &mut HashMap<String, i32>,
-        fallback_msgs: &mut Vec<Message>,
-        messages_to_send: &mut Vec<Message>,
-        strategy: OnFailureStrategy,
-    ) -> Result<bool> {
-        // if we are done with the messages, break the loop
-        if messages_to_send.is_empty() {
-            return Ok(false);
-        }
-        match strategy {
-            // if we need to retry, return true
-            OnFailureStrategy::Retry => {
-                warn!(
-                    "Using onFailure Retry, Retry attempts {} completed",
-                    attempts
-                );
-                return Ok(true);
-            }
-            // if we need to drop the messages, log and return false
-            OnFailureStrategy::Drop => {
-                // log that we are dropping the messages as requested
-                warn!(
-                    "Dropping messages after {} attempts. Errors: {:?}",
-                    attempts, error_map
-                );
-                // update the metrics
-                forward_metrics()
-                    .dropped_total
-                    .get_or_create(&self.common_labels)
-                    .inc_by(messages_to_send.len() as u64);
-            }
-            // if we need to move the messages to the fallback, return false
-            OnFailureStrategy::Fallback => {
-                // log that we are moving the messages to the fallback as requested
-                warn!(
-                    "Moving messages to fallback after {} attempts. Errors: {:?}",
-                    attempts, error_map
-                );
-                // move the messages to the fallback messages
-                fallback_msgs.append(messages_to_send);
-            }
-        }
-        // if we are done with the messages, break the loop
-        Ok(false)
     }
 
     /// Writes to sink once and will return true if successful, else false. Please note that it
@@ -513,6 +463,57 @@ impl Forwarder {
             .inc_by(n as u64);
         Ok(())
     }
+}
+
+/// Handles the post retry failures based on the configured strategy,
+/// returns true if we need to retry, else false.
+fn handle_sink_post_retry(
+    attempts: &mut u16,
+    error_map: &mut HashMap<String, i32>,
+    fallback_msgs: &mut Vec<Message>,
+    messages_to_send: &mut Vec<Message>,
+    strategy: OnFailureStrategy,
+    common_labels: Vec<(String, String)>,
+) -> Result<bool> {
+    // if we are done with the messages, break the loop
+    if messages_to_send.is_empty() {
+        return Ok(false);
+    }
+    match strategy {
+        // if we need to retry, return true
+        OnFailureStrategy::Retry => {
+            warn!(
+                "Using onFailure Retry, Retry attempts {} completed",
+                attempts
+            );
+            return Ok(true);
+        }
+        // if we need to drop the messages, log and return false
+        OnFailureStrategy::Drop => {
+            // log that we are dropping the messages as requested
+            warn!(
+                "Dropping messages after {} attempts. Errors: {:?}",
+                attempts, error_map
+            );
+            // update the metrics
+            forward_metrics()
+                .dropped_total
+                .get_or_create(&common_labels)
+                .inc_by(messages_to_send.len() as u64);
+        }
+        // if we need to move the messages to the fallback, return false
+        OnFailureStrategy::Fallback => {
+            // log that we are moving the messages to the fallback as requested
+            warn!(
+                "Moving messages to fallback after {} attempts. Errors: {:?}",
+                attempts, error_map
+            );
+            // move the messages to the fallback messages
+            fallback_msgs.append(messages_to_send);
+        }
+    }
+    // if we are done with the messages, break the loop
+    Ok(false)
 }
 
 #[cfg(test)]
@@ -1037,5 +1038,116 @@ mod tests {
         fb_sink_server_handle
             .await
             .expect("failed to join fb sink server task");
+    }
+}
+
+#[cfg(test)]
+mod tests_retry {
+    use super::*;
+
+    impl Message {
+        // dummy method to test the retry logic
+        pub(crate) fn dummy() -> Self {
+            Self {
+                keys: vec![],
+                value: vec![],
+                offset: Offset {
+                    offset: "".to_string(),
+                    partition_id: 0,
+                },
+                event_time: Utc::now(),
+                id: "".to_string(),
+                headers: HashMap::new(),
+            }
+        }
+    }
+
+    #[test]
+    fn test_handle_sink_post_retry_empty_messages() {
+        let mut attempts = 0;
+        let mut error_map = HashMap::new();
+        let mut fallback_msgs = vec![];
+        let mut messages_to_send = vec![];
+        let common_labels = vec![];
+
+        let result = handle_sink_post_retry(
+            &mut attempts,
+            &mut error_map,
+            &mut fallback_msgs,
+            &mut messages_to_send,
+            OnFailureStrategy::Retry,
+            common_labels,
+        )
+        .unwrap();
+        assert_eq!(result, false);
+    }
+
+    #[test]
+    fn test_handle_sink_post_retry_retry() {
+        let mut attempts = 0;
+        let mut error_map = HashMap::new();
+        let mut fallback_msgs = vec![];
+        let mut messages_to_send = vec![Message::dummy()];
+
+        let result = handle_sink_post_retry(
+            &mut attempts,
+            &mut error_map,
+            &mut fallback_msgs,
+            &mut messages_to_send,
+            OnFailureStrategy::Retry,
+            vec![],
+        )
+        .unwrap();
+        assert_eq!(result, true);
+    }
+
+    #[test]
+    fn test_handle_sink_post_retry_drop() {
+        let mut attempts = 0;
+        let mut error_map = HashMap::new();
+        let mut fallback_msgs = vec![];
+        let mut messages_to_send = vec![Message::dummy()];
+
+        // check the metric before the drop
+        let val = forward_metrics().dropped_total.get_or_create(&vec![]).get();
+        assert_eq!(val, 0);
+        let result = handle_sink_post_retry(
+            &mut attempts,
+            &mut error_map,
+            &mut fallback_msgs,
+            &mut messages_to_send,
+            OnFailureStrategy::Drop,
+            vec![],
+        )
+        .unwrap();
+        assert_eq!(result, false);
+        // check if the metric is updated
+        let val = forward_metrics().dropped_total.get_or_create(&vec![]).get();
+        assert_eq!(val, 1)
+    }
+
+    #[test]
+    fn test_handle_sink_post_retry_fallback() {
+        let mut attempts = 0;
+        let mut error_map = HashMap::new();
+        let mut fallback_msgs = vec![];
+        let mut messages_to_send = vec![Message::dummy()];
+
+        // check if the fallback messages are updated
+        assert_eq!(fallback_msgs.len(), 0);
+
+        let result = handle_sink_post_retry(
+            &mut attempts,
+            &mut error_map,
+            &mut fallback_msgs,
+            &mut messages_to_send,
+            OnFailureStrategy::Fallback,
+            vec![],
+        )
+        .unwrap();
+        assert_eq!(result, false);
+        assert!(messages_to_send.is_empty());
+        // check if the fallback messages are updated
+        assert_eq!(fallback_msgs.len(), 1);
     }
 }
