@@ -260,6 +260,7 @@ func TestNumOfReadyPods(t *testing.T) {
 		Items: []corev1.Pod{
 			{
 				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
 					ContainerStatuses: []corev1.ContainerStatus{
 						{
 							Ready: true,
@@ -272,6 +273,7 @@ func TestNumOfReadyPods(t *testing.T) {
 			},
 			{
 				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
 					ContainerStatuses: []corev1.ContainerStatus{
 						{
 							Ready: false,
@@ -284,6 +286,7 @@ func TestNumOfReadyPods(t *testing.T) {
 			},
 			{
 				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
 					ContainerStatuses: []corev1.ContainerStatus{
 						{
 							Ready: true,
@@ -296,6 +299,7 @@ func TestNumOfReadyPods(t *testing.T) {
 			},
 			{
 				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
 					ContainerStatuses: []corev1.ContainerStatus{
 						{
 							Ready: true,
@@ -311,6 +315,7 @@ func TestNumOfReadyPods(t *testing.T) {
 			},
 			{
 				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
 					ContainerStatuses: []corev1.ContainerStatus{
 						{
 							Ready: false,
