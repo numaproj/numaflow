@@ -1,5 +1,12 @@
 use std::collections::HashMap;
 
+use chrono::Utc;
+use tokio::task::JoinSet;
+use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
+use tracing::log::warn;
+use tracing::{debug, info};
+
 use crate::config::{config, OnFailureStrategy};
 use crate::error::{Error, Result};
 use crate::message::{Message, Offset};
@@ -8,12 +15,6 @@ use crate::metrics::forward_metrics;
 use crate::sink::{proto, SinkClient};
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
-use chrono::Utc;
-use tokio::task::JoinSet;
-use tokio::time::sleep;
-use tokio_util::sync::CancellationToken;
-use tracing::log::warn;
-use tracing::{debug, info};
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
@@ -223,43 +224,43 @@ impl Forwarder {
         // we will overwrite this vec with failed messages and will keep retrying.
         let mut messages_to_send = messages;
 
+        // check what is the failure strategy in the config
+        let strategy = config().sink_retry_on_fail_strategy.clone();
+
         // only breaks out of this loop based on the retry strategy unless all the messages have been written to sink
         // successfully.
-        loop {
-            while attempts < config().sink_max_retry_attempts {
-                let status = self
-                    .write_to_sink_once(&mut error_map, &mut fallback_msgs, &mut messages_to_send)
-                    .await;
-                match status {
-                    Ok(true) => break,
-                    Ok(false) => {
-                        attempts += 1;
-                        warn!(
-                            "Retry attempt {} due to retryable error. Errors: {:?}",
-                            attempts, error_map
-                        );
-                    }
-                    Err(e) => Err(e)?,
-                }
-            }
-
-            // If after the retries we still have messages to process, handle the post retry failures
-            let need_retry = self.handle_sink_post_retry(
-                &mut attempts,
-                &mut error_map,
-                &mut fallback_msgs,
-                &mut messages_to_send,
-            );
-            match need_retry {
-                // if we are done with the messages, break the loop
-                Ok(false) => break,
-                // if we need to retry, reset the attempts and error_map
-                Ok(true) => {
-                    attempts = 0;
-                    error_map.clear();
+        while attempts < config().sink_max_retry_attempts || strategy == OnFailureStrategy::Retry {
+            let status = self
+                .write_to_sink_once(&mut error_map, &mut fallback_msgs, &mut messages_to_send)
+                .await;
+            match status {
+                Ok(true) => break,
+                Ok(false) => {
+                    attempts += 1;
+                    warn!(
+                        "Retry attempt {} due to retryable error. Errors: {:?}",
+                        attempts, error_map
+                    );
                 }
                 Err(e) => Err(e)?,
             }
+        }
+
+        // If after the retries we still have messages to process, handle the post retry failures
+        let need_retry = self.handle_sink_post_retry(
+            &mut attempts,
+            &mut error_map,
+            &mut fallback_msgs,
+            &mut messages_to_send,
+            strategy,
+        );
+
+        // if we need to retry, return with error as we have exhausted the retries
+        if need_retry? {
+            return Err(Error::SinkError(format!(
+                "Failed to write messages to sink after {} attempts. Errors: {:?}",
+                attempts, error_map
+            )));
         }
 
         // If there are fallback messages, write them to the fallback sink
@@ -267,6 +268,7 @@ impl Forwarder {
             self.handle_fallback_messages(fallback_msgs).await?;
         }
 
+        // update the metric for the end to end time taken to write to the sink
         forward_metrics()
             .sink_time
             .get_or_create(&self.common_labels)
@@ -289,13 +291,12 @@ impl Forwarder {
         error_map: &mut HashMap<String, i32>,
         fallback_msgs: &mut Vec<Message>,
         messages_to_send: &mut Vec<Message>,
+        strategy: OnFailureStrategy,
     ) -> Result<bool> {
         // if we are done with the messages, break the loop
         if messages_to_send.is_empty() {
             return Ok(false);
         }
-        // check what is the failure strategy in the config
-        let strategy = config().sink_retry_on_fail_strategy.clone();
         match strategy {
             // if we need to retry, return true
             OnFailureStrategy::Retry => {
