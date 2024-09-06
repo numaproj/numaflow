@@ -188,12 +188,12 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 		}
 		monoVtx.Status.Replicas = uint32(desiredReplicas)
 	}
-
 	updatedReplicas := int(monoVtx.Status.UpdatedReplicas)
 	if updatedReplicas > desiredReplicas {
 		updatedReplicas = desiredReplicas
 		monoVtx.Status.UpdatedReplicas = uint32(updatedReplicas)
 	}
+
 	if updatedReplicas > 0 {
 		// Make sure [0 - updatedReplicas] with hash are in place
 		if err := mr.orchestratePodsFromTo(ctx, monoVtx, *podSpec, 0, updatedReplicas, hash); err != nil {
@@ -235,9 +235,6 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 		if updatedReplicas == desiredReplicas {
 			return nil
 		}
-		if updatedReplicas > desiredReplicas { // Someone might have manually scaled the replicas, clean up
-			return mr.cleanUpPodsFromTo(ctx, monoVtx, desiredReplicas, updatedReplicas)
-		}
 
 		// Create more pods
 		if monoVtx.Spec.UpdateStrategy.GetUpdateStrategyType() != dfv1.RollingUpdateStrategyType {
@@ -245,7 +242,7 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 			return nil
 		}
 
-		// Get the to be updated replicas based on the max unavailable configuration
+		// Calculate the to be updated replicas based on the max unavailable configuration
 		maxUnavailConf := monoVtx.Spec.UpdateStrategy.GetRollingUpdateStrategy().GetMaxUnavailable()
 		toBeUpdated, err := intstr.GetScaledValueFromIntOrPercent(&maxUnavailConf, desiredReplicas-updatedReplicas, true)
 		if err != nil { // This should never happen since we have validated the configuration
@@ -254,6 +251,7 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 		if updatedReplicas+toBeUpdated > desiredReplicas {
 			toBeUpdated = desiredReplicas - updatedReplicas
 		}
+
 		// Create pods [updatedReplicas, updatedReplicas+toBeUpdated), and clean up any pods in that range that has a different hash
 		if err := mr.orchestratePodsFromTo(ctx, monoVtx, *podSpec, updatedReplicas, updatedReplicas+toBeUpdated, monoVtx.Status.UpdateHash); err != nil {
 			return fmt.Errorf("failed to orchestrate pods [%v, %v)]: %w", updatedReplicas, updatedReplicas+toBeUpdated, err)
