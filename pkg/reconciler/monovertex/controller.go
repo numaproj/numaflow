@@ -232,7 +232,7 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 		monoVtx.Status.UpdatedReplicas = uint32(desiredReplicas)
 		monoVtx.Status.CurrentHash = monoVtx.Status.UpdateHash
 	} else { // Update scenario
-		if updatedReplicas == desiredReplicas {
+		if updatedReplicas >= desiredReplicas {
 			return nil
 		}
 
