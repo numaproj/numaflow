@@ -339,6 +339,15 @@ func Test_PipelineMarkPhases(t *testing.T) {
 	assert.Equal(t, PipelinePhaseRunning, s.Phase)
 }
 
+func Test_PipelineMarkDrained(t *testing.T) {
+	s := PipelineStatus{}
+	assert.Equal(t, false, s.DrainedOnPause)
+	s.MarkDrainedOnPauseTrue()
+	assert.Equal(t, true, s.DrainedOnPause)
+	s.MarkDrainedOnPauseFalse()
+	assert.Equal(t, false, s.DrainedOnPause)
+}
+
 func Test_GetDownstreamEdges(t *testing.T) {
 	pl := Pipeline{
 		ObjectMeta: metav1.ObjectMeta{
