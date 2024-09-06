@@ -244,13 +244,14 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 
 		// Calculate the to be updated replicas based on the max unavailable configuration
 		maxUnavailConf := monoVtx.Spec.UpdateStrategy.GetRollingUpdateStrategy().GetMaxUnavailable()
-		toBeUpdated, err := intstr.GetScaledValueFromIntOrPercent(&maxUnavailConf, desiredReplicas-updatedReplicas, true)
+		toBeUpdated, err := intstr.GetScaledValueFromIntOrPercent(&maxUnavailConf, desiredReplicas, true)
 		if err != nil { // This should never happen since we have validated the configuration
 			return fmt.Errorf("invalid max unavailable configuration in rollingUpdate: %w", err)
 		}
 		if updatedReplicas+toBeUpdated > desiredReplicas {
 			toBeUpdated = desiredReplicas - updatedReplicas
 		}
+		log.Infof("Rolling update %d replicas\n", toBeUpdated)
 
 		// Create pods [updatedReplicas, updatedReplicas+toBeUpdated), and clean up any pods in that range that has a different hash
 		if err := mr.orchestratePodsFromTo(ctx, monoVtx, *podSpec, updatedReplicas, updatedReplicas+toBeUpdated, monoVtx.Status.UpdateHash); err != nil {
