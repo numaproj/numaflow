@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -8,6 +9,12 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
+use prometheus_client::encoding::text::encode;
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::gauge::Gauge;
+use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
+use prometheus_client::registry::Registry;
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::Mutex;
@@ -20,12 +27,6 @@ use crate::error::Error;
 use crate::sink::SinkClient;
 use crate::source::SourceClient;
 use crate::transformer::TransformerClient;
-use prometheus_client::encoding::text::encode;
-use prometheus_client::metrics::counter::Counter;
-use prometheus_client::metrics::family::Family;
-use prometheus_client::metrics::gauge::Gauge;
-use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
-use prometheus_client::registry::Registry;
 
 // Define the labels for the metrics
 // Note: Please keep consistent with the definitions in MonoVertex daemon
@@ -483,6 +484,11 @@ async fn expose_pending_metrics(
 ) {
     let mut ticker = time::interval(refresh_interval);
     let lookback_seconds_map = vec![("1m", 60), ("default", 120), ("5m", 300), ("15m", 900)];
+
+    // store the pending info in a sorted way for deterministic display
+    // string concat is more efficient?
+    let mut pending_info: BTreeMap<&str, i64> = BTreeMap::new();
+
     loop {
         ticker.tick().await;
         for (label, seconds) in &lookback_seconds_map {
@@ -490,12 +496,17 @@ async fn expose_pending_metrics(
             if pending != -1 {
                 let mut metric_labels = forward_metrics_labels().clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
+                pending_info.insert(label, pending);
                 forward_metrics()
                     .source_pending
                     .get_or_create(&metric_labels)
                     .set(pending);
-                info!("Pending messages ({}): {}", label, pending);
             }
+        }
+        // skip for those the pending is not implemented
+        if !pending_info.is_empty() {
+            info!("Pending messages {:?}", pending_info);
+            pending_info.clear();
         }
     }
 }
