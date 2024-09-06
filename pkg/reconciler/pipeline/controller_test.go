@@ -220,7 +220,6 @@ func Test_reconcileEvents(t *testing.T) {
 		_, err = r.reconcile(ctx, testObj)
 		assert.Error(t, err)
 		events := getEvents(t, r)
-		assert.Contains(t, events, "Normal UpdatePipelinePhase Updated pipeline phase from Paused to Running")
 		assert.Contains(t, events, "Warning ReconcilePipelineFailed Failed to reconcile pipeline: the length of the pipeline name plus the vertex name is over the max limit. (very-very-very-loooooooooooooooooooooooooooooooooooong-input), [must be no more than 63 characters]")
 	})
 
@@ -944,4 +943,73 @@ func Test_checkChildrenResourceStatus(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestIsLifecycleChange(t *testing.T) {
+	tests := []struct {
+		name           string
+		currentPhase   dfv1.PipelinePhase
+		desiredPhase   dfv1.PipelinePhase
+		expectedResult bool
+	}{
+		{
+			name:           "Change to paused from another state",
+			currentPhase:   dfv1.PipelinePhaseRunning,
+			desiredPhase:   dfv1.PipelinePhasePaused,
+			expectedResult: true,
+		},
+		{
+			name:           "when already in paused",
+			currentPhase:   dfv1.PipelinePhasePaused,
+			desiredPhase:   dfv1.PipelinePhasePaused,
+			expectedResult: true,
+		},
+		{
+			name:           "Change out of paused",
+			currentPhase:   dfv1.PipelinePhasePaused,
+			desiredPhase:   dfv1.PipelinePhaseRunning,
+			expectedResult: true,
+		},
+		{
+			name:           "Change from another state to pausing",
+			currentPhase:   dfv1.PipelinePhaseRunning,
+			desiredPhase:   dfv1.PipelinePhasePausing,
+			expectedResult: false,
+		},
+		{
+			name:           "Change from pausing to running",
+			currentPhase:   dfv1.PipelinePhasePausing,
+			desiredPhase:   dfv1.PipelinePhaseRunning,
+			expectedResult: true,
+		},
+		{
+			name:           "No lifecycle change",
+			currentPhase:   dfv1.PipelinePhaseRunning,
+			desiredPhase:   dfv1.PipelinePhaseRunning,
+			expectedResult: false,
+		},
+		{
+			name:           "No lifecycle change - updated phase",
+			currentPhase:   dfv1.PipelinePhaseRunning,
+			desiredPhase:   dfv1.PipelinePhaseDeleting,
+			expectedResult: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			pl := &dfv1.Pipeline{
+				Spec: dfv1.PipelineSpec{
+					Lifecycle: dfv1.Lifecycle{
+						DesiredPhase: test.desiredPhase,
+					},
+				},
+				Status: dfv1.PipelineStatus{
+					Phase: test.currentPhase,
+				},
+			}
+			result := isLifecycleChange(pl)
+			assert.Equal(t, test.expectedResult, result)
+		})
+	}
 }
