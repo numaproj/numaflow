@@ -63,18 +63,23 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
 func NumOfReadyPods(pods corev1.PodList) int {
 	result := 0
 	for _, pod := range pods.Items {
-		ready := true
-		for _, s := range pod.Status.ContainerStatuses {
-			if !s.Ready {
-				ready = false
-				break
-			}
-		}
-		if ready {
+		if IsPodReady(pod) {
 			result++
 		}
 	}
 	return result
+}
+
+func IsPodReady(pod corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+	for _, c := range pod.Status.ContainerStatuses {
+		if !c.Ready {
+			return false
+		}
+	}
+	return true
 }
 
 // CheckVertexStatus will calculate the status of the vertices and return the status and reason

@@ -145,7 +145,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 	pl.Status.SetObservedGeneration(pl.Generation)
 	// Regular pipeline change
-	// This should be happening in call cases to ensure a clean initialization regardless of the lifecycle phase
+	// This should be happening in all cases to ensure a clean initialization regardless of the lifecycle phase
 	// Eg: even for a pipeline started with desiredPhase = Pause, we should still create the resources for the pipeline
 	result, err := r.reconcileNonLifecycleChanges(ctx, pl)
 	if err != nil {

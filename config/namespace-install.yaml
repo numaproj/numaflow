@@ -2665,7 +2665,7 @@ spec:
     - jsonPath: .status.phase
       name: Phase
       type: string
-    - jsonPath: .spec.replicas
+    - jsonPath: .status.desiredReplicas
       name: Desired
       type: string
     - jsonPath: .status.replicas
@@ -7434,6 +7434,23 @@ spec:
                       type: string
                   type: object
                 type: array
+              updateStrategy:
+                default:
+                  rollingUpdate:
+                    maxUnavailable: 25%
+                  type: RollingUpdate
+                properties:
+                  rollingUpdate:
+                    properties:
+                      maxUnavailable:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        x-kubernetes-int-or-string: true
+                    type: object
+                  type:
+                    type: string
+                type: object
               volumes:
                 items:
                   properties:
@@ -8195,7 +8212,7 @@ spec:
                 type: array
               currentHash:
                 type: string
-              currentReplicas:
+              desiredReplicas:
                 format: int32
                 type: integer
               lastScaledAt:
@@ -8230,6 +8247,9 @@ spec:
                 type: string
               updateHash:
                 type: string
+              updatedReadyReplicas:
+                format: int32
+                type: integer
               updatedReplicas:
                 format: int32
                 type: integer
