@@ -233,11 +233,11 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 	min := monoVtx.Spec.Scale.GetMinReplicas()
 	if desired > max {
 		desired = max
-		log.Infof("Calculated desired replica number %d of MonoVertex %q is greater than max, using max %d.", monoVtxName, desired, max)
+		log.Infof("Calculated desired replica number %d of MonoVertex %q is greater than max, using max %d.", desired, monoVtxName, max)
 	}
 	if desired < min {
 		desired = min
-		log.Infof("Calculated desired replica number %d of MonoVertex %q is smaller than min, using min %d.", monoVtxName, desired, min)
+		log.Infof("Calculated desired replica number %d of MonoVertex %q is smaller than min, using min %d.", desired, monoVtxName, min)
 	}
 	current := int32(monoVtx.Status.Replicas)
 	if current > max || current < min { // Someone might have manually scaled up/down the MonoVertex

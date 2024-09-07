@@ -143,15 +143,25 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		}
 	}()
 
+	pl.Status.InitConditions()
 	pl.Status.SetObservedGeneration(pl.Generation)
-	// Regular pipeline change
-	// This should be happening in all cases to ensure a clean initialization regardless of the lifecycle phase
-	// Eg: even for a pipeline started with desiredPhase = Pause, we should still create the resources for the pipeline
-	result, err := r.reconcileNonLifecycleChanges(ctx, pl)
-	if err != nil {
+	// Orchestrate pipeline sub resources.
+	// This should be happening in all cases to ensure a clean initialization regardless of the lifecycle phase.
+	// Eg: even for a pipeline started with desiredPhase = Pause, we should still create the resources for the pipeline.
+	if err := r.reconcileFixedResources(ctx, pl); err != nil {
 		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
-		return result, err
+		return ctrl.Result{}, err
 	}
+	// If the pipeline has a lifecycle change, then do not update the phase as
+	// this should happen only after the required configs for the lifecycle changes
+	// have been applied.
+	if !isLifecycleChange(pl) {
+		pl.Status.SetPhase(pl.Spec.Lifecycle.GetDesiredPhase(), "")
+	}
+	if err := r.checkChildrenResourceStatus(ctx, pl); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to check pipeline children resource status, %w", err)
+	}
+
 	// check if any changes related to pause/resume lifecycle for the pipeline
 	if isLifecycleChange(pl) {
 		oldPhase := pl.Status.Phase
@@ -171,7 +181,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		}
 		return ctrl.Result{}, nil
 	}
-	return result, nil
+	return ctrl.Result{}, nil
 }
 
 // isLifecycleChange determines whether there has been a change requested in the lifecycle
@@ -190,17 +200,16 @@ func isLifecycleChange(pl *dfv1.Pipeline) bool {
 	return false
 }
 
-// reconcileNonLifecycleChanges do the jobs not related to pipeline lifecycle changes.
-func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, pl *dfv1.Pipeline) (ctrl.Result, error) {
+// reconcileFixedResources do the jobs of creating fixed resources such as daemon service, vertex objects, and ISB management jobs, etc
+func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *dfv1.Pipeline) error {
 	log := logging.FromContext(ctx)
 	if !controllerutil.ContainsFinalizer(pl, finalizerName) {
 		controllerutil.AddFinalizer(pl, finalizerName)
 	}
-	pl.Status.InitConditions()
 	if err := ValidatePipeline(pl); err != nil {
 		log.Errorw("Validation failed", zap.Error(err))
 		pl.Status.MarkNotConfigured("InvalidSpec", err.Error())
-		return ctrl.Result{}, err
+		return err
 	}
 	pl.Status.SetVertexCounts(pl.Spec.Vertices)
 	pl.Status.MarkConfigured()
@@ -215,16 +224,16 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		if apierrors.IsNotFound(err) {
 			pl.Status.MarkDeployFailed("ISBSvcNotFound", "ISB Service not found.")
 			log.Errorw("ISB Service not found", zap.String("isbsvc", isbSvcName), zap.Error(err))
-			return ctrl.Result{}, fmt.Errorf("isbsvc %s not found", isbSvcName)
+			return fmt.Errorf("isbsvc %s not found", isbSvcName)
 		}
 		pl.Status.MarkDeployFailed("GetISBSvcFailed", err.Error())
 		log.Errorw("Failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
-		return ctrl.Result{}, err
+		return err
 	}
 	if !isbSvc.Status.IsHealthy() {
 		pl.Status.MarkDeployFailed("ISBSvcNotHealthy", "ISB Service not healthy.")
 		log.Errorw("ISB Service is not in healthy status", zap.String("isbsvc", isbSvcName), zap.Error(err))
-		return ctrl.Result{}, fmt.Errorf("isbsvc not healthy")
+		return fmt.Errorf("isbsvc not healthy")
 	}
 
 	// Create or update the Side Inputs Manager deployments
@@ -232,14 +241,14 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		log.Errorw("Failed to create or update Side Inputs Manager deployments", zap.Error(err))
 		pl.Status.MarkDeployFailed("CreateOrUpdateSIMDeploymentsFailed", err.Error())
 		r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateOrUpdateSIMDeploymentsFailed", "Failed to create or update Side Inputs Manager deployments: %w", err.Error())
-		return ctrl.Result{}, err
+		return err
 	}
 
 	existingObjs, err := r.findExistingVertices(ctx, pl)
 	if err != nil {
 		log.Errorw("Failed to find existing vertices", zap.Error(err))
 		pl.Status.MarkDeployFailed("ListVerticesFailed", err.Error())
-		return ctrl.Result{}, err
+		return err
 	}
 	oldBuffers := make(map[string]string)
 	newBuffers := make(map[string]string)
@@ -279,7 +288,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 				} else {
 					pl.Status.MarkDeployFailed("CreateVertexFailed", err.Error())
 					r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateVertexFailed", "Failed to create vertex: %w", err.Error())
-					return ctrl.Result{}, fmt.Errorf("failed to create vertex, err: %w", err)
+					return fmt.Errorf("failed to create vertex, err: %w", err)
 				}
 			}
 			log.Infow("Created vertex successfully", zap.String("vertex", vertexName))
@@ -291,7 +300,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 				if err := r.client.Update(ctx, &oldObj); err != nil {
 					pl.Status.MarkDeployFailed("UpdateVertexFailed", err.Error())
 					r.recorder.Eventf(pl, corev1.EventTypeWarning, "UpdateVertexFailed", "Failed to update vertex: %w", err.Error())
-					return ctrl.Result{}, fmt.Errorf("failed to update vertex, err: %w", err)
+					return fmt.Errorf("failed to update vertex, err: %w", err)
 				}
 				log.Infow("Updated vertex successfully", zap.String("vertex", vertexName))
 				r.recorder.Eventf(pl, corev1.EventTypeNormal, "UpdateVertexSuccess", "Updated vertex %s successfully", vertexName)
@@ -303,7 +312,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		if err := r.client.Delete(ctx, &v); err != nil {
 			pl.Status.MarkDeployFailed("DeleteStaleVertexFailed", err.Error())
 			r.recorder.Eventf(pl, corev1.EventTypeWarning, "DeleteStaleVertexFailed", "Failed to delete vertex: %w", err.Error())
-			return ctrl.Result{}, fmt.Errorf("failed to delete vertex, err: %w", err)
+			return fmt.Errorf("failed to delete vertex, err: %w", err)
 		}
 		log.Infow("Deleted stale vertex successfully", zap.String("vertex", v.Name))
 		r.recorder.Eventf(pl, corev1.EventTypeNormal, "DeleteStaleVertexSuccess", "Deleted stale vertex %s successfully", v.Name)
@@ -328,7 +337,7 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "cre")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			pl.Status.MarkDeployFailed("CreateISBSvcCreatingJobFailed", err.Error())
-			return ctrl.Result{}, fmt.Errorf("failed to create ISB Svc creating job, err: %w", err)
+			return fmt.Errorf("failed to create ISB Svc creating job, err: %w", err)
 		}
 		log.Infow("Created a job successfully for ISB Svc creating", zap.Any("buffers", bfs), zap.Any("buckets", bks), zap.Any("servingStreams", pl.GetServingSourceStreamNames()))
 	}
@@ -346,31 +355,22 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "del")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
 			pl.Status.MarkDeployFailed("CreateISBSvcDeletingJobFailed", err.Error())
-			return ctrl.Result{}, fmt.Errorf("failed to create ISB Svc deleting job, err: %w", err)
+			return fmt.Errorf("failed to create ISB Svc deleting job, err: %w", err)
 		}
 		log.Infow("Created ISB Svc deleting job successfully", zap.Any("buffers", bfs), zap.Any("buckets", bks))
 	}
 
 	// Daemon service
 	if err := r.createOrUpdateDaemonService(ctx, pl); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 	// Daemon deployment
 	if err := r.createOrUpdateDaemonDeployment(ctx, pl, isbSvc.Status.Config); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 
 	pl.Status.MarkDeployed()
-	// If the pipeline has a lifecycle change, then do not update the phase as
-	// this should happen only after the required configs for the lifecycle changes
-	// have been applied.
-	if !isLifecycleChange(pl) {
-		pl.Status.SetPhase(pl.Spec.Lifecycle.GetDesiredPhase(), "")
-	}
-	if err := r.checkChildrenResourceStatus(ctx, pl); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to check pipeline children resource status, %w", err)
-	}
-	return ctrl.Result{}, nil
+	return nil
 }
 
 func (r *pipelineReconciler) createOrUpdateDaemonService(ctx context.Context, pl *dfv1.Pipeline) error {
