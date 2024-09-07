@@ -278,7 +278,7 @@ func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClie
 		if err != nil {
 			return fmt.Errorf("error getting monovertex pod list: %w", err)
 		}
-		ok := len(podList.Items) > 0 && len(podList.Items) == monoVertex.GetReplicas() // pod number should equal to desired replicas
+		ok := len(podList.Items) > 0 && len(podList.Items) == monoVertex.CalculateReplicas() // pod number should equal to desired replicas
 		for _, p := range podList.Items {
 			ok = ok && p.Status.Phase == corev1.PodRunning
 		}

@@ -79,6 +79,8 @@ pub struct MonoVertexSpec {
     /// If specified, the pod's tolerations.
     #[serde(rename = "tolerations", skip_serializing_if = "Option::is_none")]
     pub tolerations: Option<Vec<k8s_openapi::api::core::v1::Toleration>>,
+    #[serde(rename = "updateStrategy", skip_serializing_if = "Option::is_none")]
+    pub update_strategy: Option<Box<crate::models::UpdateStrategy>>,
     #[serde(rename = "volumes", skip_serializing_if = "Option::is_none")]
     pub volumes: Option<Vec<k8s_openapi::api::core::v1::Volume>>,
 }
@@ -109,6 +111,7 @@ impl MonoVertexSpec {
             sink: None,
             source: None,
             tolerations: None,
+            update_strategy: None,
             volumes: None,
         }
     }

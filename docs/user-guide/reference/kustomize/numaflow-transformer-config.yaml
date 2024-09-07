@@ -435,6 +435,7 @@ varReference:
   - path: spec/source/udsource/container/command
     kind: MonoVertex
   - path: spec/source/udsource/container/env/value
+    kind: MonoVertex
   - path: spec/sink/udsink/container/args
     kind: MonoVertex
   - path: spec/sink/udsink/container/command
