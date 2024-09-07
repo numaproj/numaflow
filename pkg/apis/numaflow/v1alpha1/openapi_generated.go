@@ -93,6 +93,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisConfig":                      schema_pkg_apis_numaflow_v1alpha1_RedisConfig(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSettings":                    schema_pkg_apis_numaflow_v1alpha1_RedisSettings(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy":                    schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RollingUpdateStrategy":            schema_pkg_apis_numaflow_v1alpha1_RollingUpdateStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL":                             schema_pkg_apis_numaflow_v1alpha1_SASL(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain":                        schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale":                            schema_pkg_apis_numaflow_v1alpha1_Scale(ref),
@@ -114,6 +115,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink":                           schema_pkg_apis_numaflow_v1alpha1_UDSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource":                         schema_pkg_apis_numaflow_v1alpha1_UDSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer":                    schema_pkg_apis_numaflow_v1alpha1_UDTransformer(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy":                   schema_pkg_apis_numaflow_v1alpha1_UpdateStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Vertex":                           schema_pkg_apis_numaflow_v1alpha1_Vertex(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexInstance":                   schema_pkg_apis_numaflow_v1alpha1_VertexInstance(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits":                     schema_pkg_apis_numaflow_v1alpha1_VertexLimits(ref),
@@ -3332,11 +3334,18 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref common.ReferenceCallba
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate"),
 						},
 					},
+					"updateStrategy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The strategy to use to replace existing pods with new ones.",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
 	}
 }
 
@@ -3375,6 +3384,14 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref common.ReferenceCall
 					"replicas": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Total number of non-terminated pods targeted by this MonoVertex (their labels match the selector).",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"desiredReplicas": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The number of desired replicas.",
 							Default:     0,
 							Type:        []string{"integer"},
 							Format:      "int64",
@@ -3423,13 +3440,6 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref common.ReferenceCall
 							Format:      "int64",
 						},
 					},
-					"currentReplicas": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The number of Pods created by the controller from the MonoVertex version indicated by currentHash.",
-							Type:        []string{"integer"},
-							Format:      "int64",
-						},
-					},
 					"updatedReplicas": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The number of Pods created by the controller from the MonoVertex version indicated by updateHash.",
@@ -3437,16 +3447,23 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref common.ReferenceCall
 							Format:      "int64",
 						},
 					},
+					"updatedReadyReplicas": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The number of ready Pods created by the controller from the MonoVertex version indicated by updateHash.",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
 					"currentHash": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If not empty, indicates the version of the MonoVertex used to generate Pods in the sequence [0,currentReplicas).",
+							Description: "If not empty, indicates the current version of the MonoVertex used to generate Pods.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"updateHash": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If not empty, indicates the version of the MonoVertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)",
+							Description: "If not empty, indicates the updated version of the MonoVertex used to generate Pods.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4292,6 +4309,27 @@ func schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref common.ReferenceCallbac
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Backoff"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_RollingUpdateStrategy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "RollingUpdateStrategy is used to communicate parameter for RollingUpdateStrategyType.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"maxUnavailable": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The maximum number of pods that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). Absolute number is calculated from percentage by rounding down. Defaults to 25%. Example: when this is set to 30%, the old pods can be scaled down to 70% of desired pods immediately when the rolling update starts. Once new pods are ready, old pods can be scaled down further, followed by scaling up the new pods, ensuring that the total number of pods available at all times during the update is at least 70% of desired pods.",
+							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
 	}
 }
 
@@ -5229,6 +5267,35 @@ func schema_pkg_apis_numaflow_v1alpha1_UDTransformer(ref common.ReferenceCallbac
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Transformer"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_UpdateStrategy(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "UpdateStrategy indicates the strategy that the controller will use to perform updates for Vertex or MonoVertex.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Type indicates the type of the StatefulSetUpdateStrategy. Default is RollingUpdate.\n\nPossible enum values:\n - `\"RollingUpdate\"`",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"RollingUpdate"},
+						},
+					},
+					"rollingUpdate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "RollingUpdate is used to communicate parameters when Type is RollingUpdateStrategy.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RollingUpdateStrategy"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RollingUpdateStrategy"},
 	}
 }
 

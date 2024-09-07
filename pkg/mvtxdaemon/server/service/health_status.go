@@ -132,20 +132,18 @@ func (hc *HealthChecker) setCurrentHealth(status *dataHealthResponse) {
 // Else we consider the data criticality as healthy.
 //
 // TODO(MonoVertex): Add the logic to determine the warning state based on more conditions.
-func (hc *HealthChecker) getMonoVertexDataCriticality(ctx context.Context, mvtxMetrics *mvtxdaemon.MonoVertexMetrics) (*monoVtxState, error) {
+func (hc *HealthChecker) getMonoVertexDataCriticality(_ context.Context, mvtxMetrics *mvtxdaemon.MonoVertexMetrics) (*monoVtxState, error) {
 	// Get the desired replicas for the MonoVertex based on the metrics
 	desiredReplicas, err := hc.getDesiredReplica(mvtxMetrics)
 	if err != nil {
 		return nil, err
 	}
-	// Get the current state of the MonoVertex replicas
-	currentReplicas := hc.monoVertex.GetReplicas()
 	maxReplicas := int(hc.monoVertex.Spec.Scale.GetMaxReplicas())
 	// default status is healthy
 	status := v1alpha1.MonoVertexStatusHealthy
-	// If the current replicas are equal to the max replicas, and the desired replicas are more than the max replicas,
+	// If the desired replicas are more than the max replicas,
 	// the data criticality is Critical.
-	if currentReplicas == maxReplicas && desiredReplicas > maxReplicas {
+	if desiredReplicas > maxReplicas {
 		status = v1alpha1.MonoVertexStatusCritical
 	}
 	return newMonoVtxState(mvtxMetrics.MonoVertex, status), nil
