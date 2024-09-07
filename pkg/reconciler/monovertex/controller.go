@@ -251,7 +251,7 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 		if updatedReplicas+toBeUpdated > desiredReplicas {
 			toBeUpdated = desiredReplicas - updatedReplicas
 		}
-		log.Infof("Rolling update %d replicas\n", toBeUpdated)
+		log.Infof("Rolling update %d replicas, [%d, %d)\n", toBeUpdated, updatedReplicas, updatedReplicas+toBeUpdated)
 
 		// Create pods [updatedReplicas, updatedReplicas+toBeUpdated), and clean up any pods in that range that has a different hash
 		if err := mr.orchestratePodsFromTo(ctx, monoVtx, *podSpec, updatedReplicas, updatedReplicas+toBeUpdated, monoVtx.Status.UpdateHash); err != nil {

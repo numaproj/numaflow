@@ -306,6 +306,7 @@ func (mv MonoVertex) simpleCopy() MonoVertex {
 	if m.Spec.Limits.ReadTimeout == nil {
 		m.Spec.Limits.ReadTimeout = &metav1.Duration{Duration: DefaultReadTimeout}
 	}
+	m.Spec.UpdateStrategy = UpdateStrategy{}
 	// TODO: lifecycle
 	// mvVtxCopy.Spec.Lifecycle = Lifecycle{}
 	return m
