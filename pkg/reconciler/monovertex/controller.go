@@ -110,6 +110,7 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 		}
 	}()
 
+	monoVtx.Status.InitializeConditions()
 	monoVtx.Status.SetObservedGeneration(monoVtx.Generation)
 	if monoVtx.Scalable() {
 		mr.scaler.StartWatching(mVtxKey)
@@ -251,7 +252,7 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 		if updatedReplicas+toBeUpdated > desiredReplicas {
 			toBeUpdated = desiredReplicas - updatedReplicas
 		}
-		log.Infof("Rolling update %d replicas, [%d, %d)\n", toBeUpdated, updatedReplicas, updatedReplicas+toBeUpdated)
+		log.Infof("Rolling update %d replicas, [%d, %d)", toBeUpdated, updatedReplicas, updatedReplicas+toBeUpdated)
 
 		// Create pods [updatedReplicas, updatedReplicas+toBeUpdated), and clean up any pods in that range that has a different hash
 		if err := mr.orchestratePodsFromTo(ctx, monoVtx, *podSpec, updatedReplicas, updatedReplicas+toBeUpdated, monoVtx.Status.UpdateHash); err != nil {
@@ -310,7 +311,7 @@ func (mr *monoVertexReconciler) cleanUpPodsFromTo(ctx context.Context, monoVtx *
 		if err := mr.client.Delete(ctx, &pod); err != nil {
 			return fmt.Errorf("failed to delete pod %s: %w", pod.Name, err)
 		}
-		log.Infof("Deleted MonoVertx pod %s\n", pod.Name)
+		log.Infof("Deleted MonoVertx pod %q", pod.Name)
 		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "DeletePodSuccess", "Succeeded to delete a mono vertex pod %s", pod.Name)
 	}
 	return nil

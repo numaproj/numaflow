@@ -154,6 +154,18 @@ func init() {
 	_ = batchv1.AddToScheme(scheme.Scheme)
 }
 
+func fakeReconciler(t *testing.T, cl client.WithWatch) *pipelineReconciler {
+	t.Helper()
+	return &pipelineReconciler{
+		client:   cl,
+		scheme:   scheme.Scheme,
+		config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+		image:    testFlowImage,
+		logger:   zaptest.NewLogger(t).Sugar(),
+		recorder: record.NewFakeRecorder(64),
+	}
+}
+
 func Test_NewReconciler(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	r := NewReconciler(cl, scheme.Scheme, reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig), testFlowImage, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
@@ -162,23 +174,17 @@ func Test_NewReconciler(t *testing.T) {
 }
 
 func Test_reconcile(t *testing.T) {
+	ctx := context.TODO()
+
 	t.Run("test reconcile", func(t *testing.T) {
-		cl := fake.NewClientBuilder().Build()
-		ctx := context.TODO()
 		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
+		cl := fake.NewClientBuilder().Build()
 		err := cl.Create(ctx, testIsbSvc)
 		assert.Nil(t, err)
-		r := &pipelineReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
-			image:    testFlowImage,
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
 		testObj := testPipeline.DeepCopy()
+		r := fakeReconciler(t, cl)
 		_, err = r.reconcile(ctx, testObj)
 		assert.NoError(t, err)
 		vertices := &dfv1.VertexList{}
@@ -191,27 +197,50 @@ func Test_reconcile(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(jobs.Items))
 	})
-}
 
-func Test_reconcileEvents(t *testing.T) {
-
-	fakeConfig := reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig)
-	t.Run("test reconcile - invalid name", func(t *testing.T) {
-		cl := fake.NewClientBuilder().Build()
-		ctx := context.TODO()
+	t.Run("test reconcile deleting", func(t *testing.T) {
 		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
+		cl := fake.NewClientBuilder().Build()
 		err := cl.Create(ctx, testIsbSvc)
 		assert.Nil(t, err)
-		r := &pipelineReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   fakeConfig,
-			image:    testFlowImage,
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		testObj := testPipeline.DeepCopy()
+		testObj.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+		r := fakeReconciler(t, cl)
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+	})
+
+	t.Run("test reconcile - no isbsvc", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		_, err := r.reconcile(ctx, testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not found")
+	})
+
+	t.Run("test reconcile - isbsvc unhealthy", func(t *testing.T) {
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		cl := fake.NewClientBuilder().Build()
+		_ = cl.Create(ctx, testIsbSvc)
+		testObj := testPipeline.DeepCopy()
+		r := fakeReconciler(t, cl)
+		_, err := r.reconcile(ctx, testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not healthy")
+	})
+
+	t.Run("test reconcile - invalid name", func(t *testing.T) {
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
 		testObj := testPipeline.DeepCopy()
 		testObj.Status.Phase = "Paused"
 		_, err = r.reconcile(ctx, testObj)
@@ -224,22 +253,14 @@ func Test_reconcileEvents(t *testing.T) {
 	})
 
 	t.Run("test reconcile - duplicate vertex", func(t *testing.T) {
-		cl := fake.NewClientBuilder().Build()
-		ctx := context.TODO()
 		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
+		cl := fake.NewClientBuilder().Build()
 		err := cl.Create(ctx, testIsbSvc)
 		assert.Nil(t, err)
-		r := &pipelineReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   fakeConfig,
-			image:    testFlowImage,
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
 		testObj := testPipeline.DeepCopy()
+		r := fakeReconciler(t, cl)
 		_, err = r.reconcile(ctx, testObj)
 		assert.NoError(t, err)
 		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "input", Source: &dfv1.Source{}})
@@ -279,14 +300,7 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)
 		assert.Nil(t, err)
-		r := &pipelineReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
-			image:    testFlowImage,
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices[0].Scale.Min = ptr.To[int32](3)
 		_, err = r.reconcile(ctx, testObj)
@@ -316,14 +330,7 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)
 		assert.Nil(t, err)
-		r := &pipelineReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
-			image:    testFlowImage,
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testReducePipeline.DeepCopy()
 		_, err = r.reconcile(ctx, testObj)
 		assert.NoError(t, err)
@@ -566,14 +573,7 @@ func Test_cleanupBuffers(t *testing.T) {
 func TestCreateOrUpdateDaemon(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	ctx := context.TODO()
-	r := &pipelineReconciler{
-		client:   cl,
-		scheme:   scheme.Scheme,
-		config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
-		image:    testFlowImage,
-		logger:   zaptest.NewLogger(t).Sugar(),
-		recorder: record.NewFakeRecorder(64),
-	}
+	r := fakeReconciler(t, cl)
 
 	t.Run("test create or update service", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
@@ -601,14 +601,7 @@ func TestCreateOrUpdateDaemon(t *testing.T) {
 func Test_createOrUpdateSIMDeployments(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	ctx := context.TODO()
-	r := &pipelineReconciler{
-		client:   cl,
-		scheme:   scheme.Scheme,
-		config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
-		image:    testFlowImage,
-		logger:   zaptest.NewLogger(t).Sugar(),
-		recorder: record.NewFakeRecorder(64),
-	}
+	r := fakeReconciler(t, cl)
 
 	t.Run("no side inputs", func(t *testing.T) {
 		err := r.createOrUpdateSIMDeployments(ctx, testPipeline, fakeIsbSvcConfig)
@@ -920,14 +913,7 @@ func Test_checkChildrenResourceStatus(t *testing.T) {
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)
 		assert.Nil(t, err)
-		r := &pipelineReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
-			image:    testFlowImage,
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testPipelineWithSideinput.DeepCopy()
 		_, err = r.reconcile(ctx, testObj)
 		assert.NoError(t, err)
