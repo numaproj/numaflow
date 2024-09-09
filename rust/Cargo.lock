@@ -1274,62 +1274,13 @@ dependencies = [
 
 [[package]]
 name = "kube"
-version = "0.93.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0365920075af1a2d23619c1ca801c492f2400157de42627f041a061716e76416"
-dependencies = [
- "k8s-openapi",
- "kube-client 0.93.1",
- "kube-core 0.93.1",
-]
-
-[[package]]
-name = "kube"
 version = "0.94.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65b8611df85a1a2eed6f47bd8bcca4e2b3dc14fbf83658efd01423ca9a13b72a"
 dependencies = [
  "k8s-openapi",
- "kube-client 0.94.0",
- "kube-core 0.94.0",
-]
-
-[[package]]
-name = "kube-client"
-version = "0.93.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d81336eb3a5b10a40c97a5a97ad66622e92bad942ce05ee789edd730aa4f8603"
-dependencies = [
- "base64 0.22.1",
- "bytes",
- "chrono",
- "either",
- "futures",
- "home",
- "http 1.1.0",
- "http-body 1.0.1",
- "http-body-util",
- "hyper 1.4.1",
- "hyper-http-proxy",
- "hyper-rustls 0.27.2",
- "hyper-timeout",
- "hyper-util",
- "jsonpath-rust",
- "k8s-openapi",
- "kube-core 0.93.1",
- "pem",
- "rustls 0.23.12",
- "rustls-pemfile 2.1.3",
- "secrecy",
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror",
- "tokio",
- "tokio-util",
- "tower",
- "tower-http",
- "tracing",
+ "kube-client",
+ "kube-core",
 ]
 
 [[package]]
@@ -1354,7 +1305,7 @@ dependencies = [
  "hyper-util",
  "jsonpath-rust",
  "k8s-openapi",
- "kube-core 0.94.0",
+ "kube-core",
  "pem",
  "rustls 0.23.12",
  "rustls-pemfile 2.1.3",
@@ -1368,21 +1319,6 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
-]
-
-[[package]]
-name = "kube-core"
-version = "0.93.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cce373a74d787d439063cdefab0f3672860bd7bac01a38e39019177e764a0fe6"
-dependencies = [
- "chrono",
- "form_urlencoded",
- "http 1.1.0",
- "k8s-openapi",
- "serde",
- "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -1538,7 +1474,7 @@ dependencies = [
  "bytes",
  "chrono",
  "hyper-util",
- "kube 0.93.1",
+ "kube",
  "numaflow 0.1.0 (git+https://github.com/numaproj/numaflow-rs.git?branch=main)",
  "numaflow-models",
  "once_cell",
@@ -1690,7 +1626,7 @@ name = "numaflow-models"
 version = "0.0.0-pre"
 dependencies = [
  "k8s-openapi",
- "kube 0.94.0",
+ "kube",
  "reqwest",
  "serde",
  "serde_derive",
