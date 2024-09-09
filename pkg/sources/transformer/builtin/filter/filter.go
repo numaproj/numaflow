@@ -32,12 +32,12 @@ type filter struct {
 }
 
 func New(args map[string]string) (sourcetransformer.SourceTransformFunc, error) {
-	expr, existing := args["expression"]
+	exp, existing := args["expression"]
 	if !existing {
 		return nil, fmt.Errorf(`missing "expression"`)
 	}
 	f := filter{
-		expression: expr,
+		expression: exp,
 	}
 
 	return func(ctx context.Context, keys []string, datum sourcetransformer.Datum) sourcetransformer.Messages {
