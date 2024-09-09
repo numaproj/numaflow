@@ -1,6 +1,6 @@
 # Sidecar Containers
 
-Additional "[sidecar](https://kubernetes.io/docs/concepts/workloads/pods/#how-pods-manage-multiple-containers)" containers can be provided for `udf` and `sink` vertices. `source` vertices do not currently support sidecars.
+Additional "[sidecar](https://kubernetes.io/docs/concepts/workloads/pods/#how-pods-manage-multiple-containers)" containers can be provided for `source`, `udf` and `sink` vertices.
 
 The following example shows how to add a sidecar container to a `udf` vertex.
 
@@ -15,7 +15,12 @@ spec:
       sidecars:
         - name: my-sidecar
           image: busybox:latest
-          command: ["/bin/sh", "-c", "echo \"my-sidecar is running!\" && tail -f /dev/null"]
+          command:
+            [
+              "/bin/sh",
+              "-c",
+              'echo "my-sidecar is running!" && tail -f /dev/null',
+            ]
       udf:
         container:
           image: my-function:latest
@@ -42,14 +47,24 @@ spec:
       sidecars:
         - name: my-sidecar
           image: alpine:latest
-          command: ["/bin/sh", "-c", "apk add socat && socat UNIX-LISTEN:/path/to/my-sidecar-mount-path/my.sock - && tail -f /dev/null"]
+          command:
+            [
+              "/bin/sh",
+              "-c",
+              "apk add socat && socat UNIX-LISTEN:/path/to/my-sidecar-mount-path/my.sock - && tail -f /dev/null",
+            ]
           volumeMounts:
             - mountPath: /path/to/my-sidecar-mount-path
               name: my-udf-volume
       udf:
         container:
           image: alpine:latest
-          command: ["/bin/sh", "-c", "apk add socat && echo \"hello\" | socat UNIX-CONNECT:/path/to/my-udf-mount-path/my.sock,forever - && tail -f /dev/null"]
+          command:
+            [
+              "/bin/sh",
+              "-c",
+              'apk add socat && echo "hello" | socat UNIX-CONNECT:/path/to/my-udf-mount-path/my.sock,forever - && tail -f /dev/null',
+            ]
           volumeMounts:
             - mountPath: /path/to/my-udf-mount-path
               name: my-udf-volume

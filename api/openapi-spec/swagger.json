@@ -17793,6 +17793,10 @@
         "udf": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDF"
         },
+        "updateStrategy": {
+          "description": "The strategy to use to replace existing pods with new ones.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UpdateStrategy"
+        },
         "volumes": {
           "type": "array",
           "items": {
@@ -20590,6 +20594,10 @@
         "udf": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDF"
         },
+        "updateStrategy": {
+          "description": "The strategy to use to replace existing pods with new ones.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UpdateStrategy"
+        },
         "volumes": {
           "type": "array",
           "items": {
@@ -20617,11 +20625,11 @@
           "x-kubernetes-patch-strategy": "merge"
         },
         "currentHash": {
-          "description": "If not empty, indicates the version of the Vertex used to generate Pods in the sequence [0,currentReplicas).",
+          "description": "If not empty, indicates the current version of the Vertex used to generate Pods.",
           "type": "string"
         },
-        "currentReplicas": {
-          "description": "The number of Pods created by the controller from the Vertex version indicated by currentHash.",
+        "desiredReplicas": {
+          "description": "The number of desired replicas.",
           "type": "integer",
           "format": "int64"
         },
@@ -20657,8 +20665,13 @@
           "type": "string"
         },
         "updateHash": {
-          "description": "If not empty, indicates the version of the Vertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)",
+          "description": "If not empty, indicates the updated version of the Vertex used to generate Pods.",
           "type": "string"
+        },
+        "updatedReadyReplicas": {
+          "description": "The number of ready Pods created by the controller from the Vertex version indicated by updateHash.",
+          "type": "integer",
+          "format": "int64"
         },
         "updatedReplicas": {
           "description": "The number of Pods created by the controller from the Vertex version indicated by updateHash.",
