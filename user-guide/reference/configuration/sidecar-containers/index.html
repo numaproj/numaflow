@@ -1570,6 +1570,20 @@
 
             
           
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../update-strategy/" class="md-nav__link">
+        Update Strategy
+      </a>
+    </li>
+  
+
+            
+          
         </ul>
       </nav>
     </li>
@@ -2239,7 +2253,7 @@
 
 
 <h1 id="sidecar-containers">Sidecar Containers<a class="headerlink" href="#sidecar-containers" title="Permanent link">&para;</a></h1>
-<p>Additional "<a href="https://kubernetes.io/docs/concepts/workloads/pods/#how-pods-manage-multiple-containers">sidecar</a>" containers can be provided for <code>udf</code> and <code>sink</code> vertices. <code>source</code> vertices do not currently support sidecars.</p>
+<p>Additional "<a href="https://kubernetes.io/docs/concepts/workloads/pods/#how-pods-manage-multiple-containers">sidecar</a>" containers can be provided for <code>source</code>, <code>udf</code> and <code>sink</code> vertices.</p>
 <p>The following example shows how to add a sidecar container to a <code>udf</code> vertex.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
@@ -2251,7 +2265,12 @@
 <span class="w">      </span><span class="nt">sidecars</span><span class="p">:</span>
 <span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sidecar</span>
 <span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">busybox:latest</span>
-<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;echo</span><span class="nv"> </span><span class="s">\&quot;my-sidecar</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">running!\&quot;</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">tail</span><span class="nv"> </span><span class="s">-f</span><span class="nv"> </span><span class="s">/dev/null&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">          </span><span class="nt">command</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">[</span>
+<span class="w">              </span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span>
+<span class="w">              </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span>
+<span class="w">              </span><span class="s">&#39;echo</span><span class="nv"> </span><span class="s">&quot;my-sidecar</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">running!&quot;</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">tail</span><span class="nv"> </span><span class="s">-f</span><span class="nv"> </span><span class="s">/dev/null&#39;</span><span class="p p-Indicator">,</span>
+<span class="w">            </span><span class="p p-Indicator">]</span>
 <span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">container</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-function:latest</span>
@@ -2274,14 +2293,24 @@ gRPC over Unix Domain Socket. The following example shows how that could be acco
 <span class="w">      </span><span class="nt">sidecars</span><span class="p">:</span>
 <span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sidecar</span>
 <span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alpine:latest</span>
-<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;apk</span><span class="nv"> </span><span class="s">add</span><span class="nv"> </span><span class="s">socat</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">socat</span><span class="nv"> </span><span class="s">UNIX-LISTEN:/path/to/my-sidecar-mount-path/my.sock</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">tail</span><span class="nv"> </span><span class="s">-f</span><span class="nv"> </span><span class="s">/dev/null&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">          </span><span class="nt">command</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">[</span>
+<span class="w">              </span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span>
+<span class="w">              </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span>
+<span class="w">              </span><span class="s">&quot;apk</span><span class="nv"> </span><span class="s">add</span><span class="nv"> </span><span class="s">socat</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">socat</span><span class="nv"> </span><span class="s">UNIX-LISTEN:/path/to/my-sidecar-mount-path/my.sock</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">tail</span><span class="nv"> </span><span class="s">-f</span><span class="nv"> </span><span class="s">/dev/null&quot;</span><span class="p p-Indicator">,</span>
+<span class="w">            </span><span class="p p-Indicator">]</span>
 <span class="w">          </span><span class="nt">volumeMounts</span><span class="p">:</span>
 <span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/my-sidecar-mount-path</span>
 <span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-volume</span>
 <span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">container</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alpine:latest</span>
-<span class="w">          </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;apk</span><span class="nv"> </span><span class="s">add</span><span class="nv"> </span><span class="s">socat</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">echo</span><span class="nv"> </span><span class="s">\&quot;hello\&quot;</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">socat</span><span class="nv"> </span><span class="s">UNIX-CONNECT:/path/to/my-udf-mount-path/my.sock,forever</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">tail</span><span class="nv"> </span><span class="s">-f</span><span class="nv"> </span><span class="s">/dev/null&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">          </span><span class="nt">command</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">[</span>
+<span class="w">              </span><span class="s">&quot;/bin/sh&quot;</span><span class="p p-Indicator">,</span>
+<span class="w">              </span><span class="s">&quot;-c&quot;</span><span class="p p-Indicator">,</span>
+<span class="w">              </span><span class="s">&#39;apk</span><span class="nv"> </span><span class="s">add</span><span class="nv"> </span><span class="s">socat</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">echo</span><span class="nv"> </span><span class="s">&quot;hello&quot;</span><span class="nv"> </span><span class="s">|</span><span class="nv"> </span><span class="s">socat</span><span class="nv"> </span><span class="s">UNIX-CONNECT:/path/to/my-udf-mount-path/my.sock,forever</span><span class="nv"> </span><span class="s">-</span><span class="nv"> </span><span class="s">&amp;&amp;</span><span class="nv"> </span><span class="s">tail</span><span class="nv"> </span><span class="s">-f</span><span class="nv"> </span><span class="s">/dev/null&#39;</span><span class="p p-Indicator">,</span>
+<span class="w">            </span><span class="p p-Indicator">]</span>
 <span class="w">          </span><span class="nt">volumeMounts</span><span class="p">:</span>
 <span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/path/to/my-udf-mount-path</span>
 <span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf-volume</span>
