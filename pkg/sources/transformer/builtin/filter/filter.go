@@ -32,17 +32,17 @@ type filter struct {
 }
 
 func New(args map[string]string) (sourcetransformer.SourceTransformFunc, error) {
-	expr, existing := args["expression"]
+	exp, existing := args["expression"]
 	if !existing {
 		return nil, fmt.Errorf(`missing "expression"`)
 	}
 	f := filter{
-		expression: expr,
+		expression: exp,
 	}
 
 	return func(ctx context.Context, keys []string, datum sourcetransformer.Datum) sourcetransformer.Messages {
 		log := logging.FromContext(ctx)
-		resultMsg, err := f.apply(datum.EventTime(), datum.Value())
+		resultMsg, err := f.apply(datum.EventTime(), datum.Value(), keys)
 		if err != nil {
 			log.Errorf("Filter map function apply got an error: %v", err)
 		}
@@ -50,13 +50,13 @@ func New(args map[string]string) (sourcetransformer.SourceTransformFunc, error) 
 	}, nil
 }
 
-func (f filter) apply(et time.Time, msg []byte) (sourcetransformer.Message, error) {
+func (f filter) apply(et time.Time, msg []byte, keys []string) (sourcetransformer.Message, error) {
 	result, err := expr.EvalBool(f.expression, msg)
 	if err != nil {
 		return sourcetransformer.MessageToDrop(et), err
 	}
 	if result {
-		return sourcetransformer.NewMessage(msg, et), nil
+		return sourcetransformer.NewMessage(msg, et).WithKeys(keys), nil
 	}
 	return sourcetransformer.MessageToDrop(et), nil
 }

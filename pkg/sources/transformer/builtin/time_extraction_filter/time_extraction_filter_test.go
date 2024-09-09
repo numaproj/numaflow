@@ -21,8 +21,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow-go/pkg/sourcetransformer"
 	"github.com/stretchr/testify/assert"
 )
+
+var _keys = []string{"test-key"}
 
 type testDatum struct {
 	value     []byte
@@ -66,7 +69,6 @@ var (
 )
 
 func TestFilterEventTime(t *testing.T) {
-
 	t.Run("Missing both expressions, return error", func(t *testing.T) {
 		_, err := New(map[string]string{})
 		assert.Error(t, err)
@@ -89,14 +91,16 @@ func TestFilterEventTime(t *testing.T) {
 		handle, err := New(map[string]string{"filterExpr": "int(json(payload).item[1].id) == 2", "eventTimeExpr": "json(payload).item[1].time", "eventTimeFormat": time.RFC3339})
 		assert.NoError(t, err)
 
-		result := handle(context.Background(), []string{"test-key"}, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(testJsonMsg),
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
 
-		// check that messsage has not changed
+		// check that message has not changed
 		assert.Equal(t, testJsonMsg, string(result.Items()[0].Value()))
+		// check that keys have not changed
+		assert.Equal(t, _keys, result.Items()[0].Keys())
 
 		// check that event time has changed
 		time.Local, _ = time.LoadLocation("UTC")
@@ -108,13 +112,13 @@ func TestFilterEventTime(t *testing.T) {
 		handle, err := New(map[string]string{"filterExpr": "int(json(payload).item[1].id) == 3", "eventTimeExpr": "json(payload).item[1].time", "eventTimeFormat": time.RFC3339})
 		assert.NoError(t, err)
 
-		result := handle(context.Background(), []string{"test-key"}, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(testJsonMsg),
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
 
-		assert.Equal(t, "", string(result.Items()[0].Value()))
+		assert.Equal(t, sourcetransformer.MessageToDrop(time.Time{}), result.Items()[0])
 	})
 
 	t.Run("Valid JSON expression for filter, incorrect format to eventTime", func(t *testing.T) {
@@ -122,14 +126,17 @@ func TestFilterEventTime(t *testing.T) {
 		assert.NoError(t, err)
 
 		testInputEventTime := time.Date(2022, 1, 4, 2, 3, 4, 5, time.UTC)
-		result := handle(context.Background(), []string{"test-key"}, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(testJsonMsg),
 			eventTime: testInputEventTime,
 			watermark: time.Time{},
 		})
 
+		// check that message event time has not changed
 		assert.Equal(t, testInputEventTime, result.Items()[0].EventTime())
+		// check that message has not changed
 		assert.Equal(t, testJsonMsg, string(result.Items()[0].Value()))
+		// check that keys have not been added
+		assert.Equal(t, _keys, result.Items()[0].Keys())
 	})
-
 }
