@@ -62,6 +62,4 @@ generate:
 		--type-mappings IntOrString="k8s_openapi::apimachinery::pkg::util::intstr::IntOrString" \
 		--generate-alias-as-model
 
-	cargo add kube@0.94.0
-	cargo add k8s-openapi@0.22.0 --features v1_29
 	cargo fmt
