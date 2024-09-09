@@ -145,13 +145,28 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 	pl.Status.InitConditions()
 	pl.Status.SetObservedGeneration(pl.Generation)
+
+	if !controllerutil.ContainsFinalizer(pl, finalizerName) {
+		controllerutil.AddFinalizer(pl, finalizerName)
+	}
+	if err := ValidatePipeline(pl); err != nil {
+		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ValidatePipelineFailed", "Invalid pipeline: %s", err.Error())
+		pl.Status.MarkNotConfigured("InvalidSpec", err.Error())
+		return ctrl.Result{}, err
+	}
+	pl.Status.SetVertexCounts(pl.Spec.Vertices)
+	pl.Status.MarkConfigured()
+
 	// Orchestrate pipeline sub resources.
 	// This should be happening in all cases to ensure a clean initialization regardless of the lifecycle phase.
 	// Eg: even for a pipeline started with desiredPhase = Pause, we should still create the resources for the pipeline.
 	if err := r.reconcileFixedResources(ctx, pl); err != nil {
-		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
+		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcileFixedResourcesFailed", "Failed to reconcile pipeline sub resources: %s", err.Error())
+		pl.Status.MarkDeployFailed("ReconcileFixedResourcesFailed", err.Error())
 		return ctrl.Result{}, err
 	}
+	pl.Status.MarkDeployed()
+
 	// If the pipeline has a lifecycle change, then do not update the phase as
 	// this should happen only after the required configs for the lifecycle changes
 	// have been applied.
@@ -203,17 +218,6 @@ func isLifecycleChange(pl *dfv1.Pipeline) bool {
 // reconcileFixedResources do the jobs of creating fixed resources such as daemon service, vertex objects, and ISB management jobs, etc
 func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *dfv1.Pipeline) error {
 	log := logging.FromContext(ctx)
-	if !controllerutil.ContainsFinalizer(pl, finalizerName) {
-		controllerutil.AddFinalizer(pl, finalizerName)
-	}
-	if err := ValidatePipeline(pl); err != nil {
-		log.Errorw("Validation failed", zap.Error(err))
-		pl.Status.MarkNotConfigured("InvalidSpec", err.Error())
-		return err
-	}
-	pl.Status.SetVertexCounts(pl.Spec.Vertices)
-	pl.Status.MarkConfigured()
-
 	isbSvc := &dfv1.InterStepBufferService{}
 	isbSvcName := dfv1.DefaultISBSvcName
 	if len(pl.Spec.InterStepBufferServiceName) > 0 {
@@ -222,16 +226,13 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 	err := r.client.Get(ctx, types.NamespacedName{Namespace: pl.Namespace, Name: isbSvcName}, isbSvc)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			pl.Status.MarkDeployFailed("ISBSvcNotFound", "ISB Service not found.")
 			log.Errorw("ISB Service not found", zap.String("isbsvc", isbSvcName), zap.Error(err))
 			return fmt.Errorf("isbsvc %s not found", isbSvcName)
 		}
-		pl.Status.MarkDeployFailed("GetISBSvcFailed", err.Error())
 		log.Errorw("Failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
 		return err
 	}
 	if !isbSvc.Status.IsHealthy() {
-		pl.Status.MarkDeployFailed("ISBSvcNotHealthy", "ISB Service not healthy.")
 		log.Errorw("ISB Service is not in healthy status", zap.String("isbsvc", isbSvcName), zap.Error(err))
 		return fmt.Errorf("isbsvc not healthy")
 	}
@@ -239,16 +240,13 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 	// Create or update the Side Inputs Manager deployments
 	if err := r.createOrUpdateSIMDeployments(ctx, pl, isbSvc.Status.Config); err != nil {
 		log.Errorw("Failed to create or update Side Inputs Manager deployments", zap.Error(err))
-		pl.Status.MarkDeployFailed("CreateOrUpdateSIMDeploymentsFailed", err.Error())
 		r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateOrUpdateSIMDeploymentsFailed", "Failed to create or update Side Inputs Manager deployments: %w", err.Error())
-		return err
+		return fmt.Errorf("failed to create or update SIM deployments: %w", err)
 	}
 
 	existingObjs, err := r.findExistingVertices(ctx, pl)
 	if err != nil {
-		log.Errorw("Failed to find existing vertices", zap.Error(err))
-		pl.Status.MarkDeployFailed("ListVerticesFailed", err.Error())
-		return err
+		return fmt.Errorf("failed to find existing vertices: %w", err)
 	}
 	oldBuffers := make(map[string]string)
 	newBuffers := make(map[string]string)
@@ -286,7 +284,6 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 				if apierrors.IsAlreadyExists(err) { // probably somebody else already created it
 					continue
 				} else {
-					pl.Status.MarkDeployFailed("CreateVertexFailed", err.Error())
 					r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateVertexFailed", "Failed to create vertex: %w", err.Error())
 					return fmt.Errorf("failed to create vertex, err: %w", err)
 				}
@@ -298,7 +295,6 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 				oldObj.Spec = newObj.Spec
 				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
 				if err := r.client.Update(ctx, &oldObj); err != nil {
-					pl.Status.MarkDeployFailed("UpdateVertexFailed", err.Error())
 					r.recorder.Eventf(pl, corev1.EventTypeWarning, "UpdateVertexFailed", "Failed to update vertex: %w", err.Error())
 					return fmt.Errorf("failed to update vertex, err: %w", err)
 				}
@@ -310,7 +306,6 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 	}
 	for _, v := range existingObjs {
 		if err := r.client.Delete(ctx, &v); err != nil {
-			pl.Status.MarkDeployFailed("DeleteStaleVertexFailed", err.Error())
 			r.recorder.Eventf(pl, corev1.EventTypeWarning, "DeleteStaleVertexFailed", "Failed to delete vertex: %w", err.Error())
 			return fmt.Errorf("failed to delete vertex, err: %w", err)
 		}
@@ -336,10 +331,11 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 		args = append(args, fmt.Sprintf("--serving-source-streams=%s", strings.Join(pl.GetServingSourceStreamNames(), ",")))
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "cre")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
-			pl.Status.MarkDeployFailed("CreateISBSvcCreatingJobFailed", err.Error())
-			return fmt.Errorf("failed to create ISB Svc creating job, err: %w", err)
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateJobForISBCeationFailed", "Failed to create a Job: %w", err.Error())
+			return fmt.Errorf("failed to create ISB creating job, err: %w", err)
 		}
-		log.Infow("Created a job successfully for ISB Svc creating", zap.Any("buffers", bfs), zap.Any("buckets", bks), zap.Any("servingStreams", pl.GetServingSourceStreamNames()))
+		log.Infow("Created a job successfully for ISB creating", zap.Any("buffers", bfs), zap.Any("buckets", bks), zap.Any("servingStreams", pl.GetServingSourceStreamNames()))
+		r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateJobForISBCeationSuccessful", "Create ISB creation job successfully")
 	}
 
 	if len(oldBuffers) > 0 || len(oldBuckets) > 0 {
@@ -354,10 +350,11 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "del")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
-			pl.Status.MarkDeployFailed("CreateISBSvcDeletingJobFailed", err.Error())
-			return fmt.Errorf("failed to create ISB Svc deleting job, err: %w", err)
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateJobForISBDeletionFailed", "Failed to create a Job: %w", err.Error())
+			return fmt.Errorf("failed to create ISB deleting job, err: %w", err)
 		}
 		log.Infow("Created ISB Svc deleting job successfully", zap.Any("buffers", bfs), zap.Any("buckets", bks))
+		r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateJobForISBDeletionSuccessful", "Create ISB deletion job successfully")
 	}
 
 	// Daemon service
@@ -369,7 +366,6 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 		return err
 	}
 
-	pl.Status.MarkDeployed()
 	return nil
 }
 

@@ -19,6 +19,7 @@ package pipeline
 import (
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/util/intstr"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -256,6 +257,13 @@ func validateVertex(v dfv1.AbstractVertex) error {
 			return fmt.Errorf("vertex %q: partitions should not > 1 for source vertices", v.Name)
 		}
 	}
+	// Validate the update strategy.
+	maxUvail := v.UpdateStrategy.GetRollingUpdateStrategy().GetMaxUnavailable()
+	_, err := intstr.GetScaledValueFromIntOrPercent(&maxUvail, 1, true) // maxUnavailable should be an interger or a percentage in string
+	if err != nil {
+		return fmt.Errorf("vertex %q: invalid maxUnavailable: %v", v.Name, err)
+	}
+
 	for _, ic := range v.InitContainers {
 		if isReservedContainerName(ic.Name) {
 			return fmt.Errorf("vertex %q: init container name %q is reserved for containers created by numaflow", v.Name, ic.Name)

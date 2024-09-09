@@ -95,6 +95,8 @@ pub struct AbstractVertex {
     pub tolerations: Option<Vec<k8s_openapi::api::core::v1::Toleration>>,
     #[serde(rename = "udf", skip_serializing_if = "Option::is_none")]
     pub udf: Option<Box<crate::models::Udf>>,
+    #[serde(rename = "updateStrategy", skip_serializing_if = "Option::is_none")]
+    pub update_strategy: Option<Box<crate::models::UpdateStrategy>>,
     #[serde(rename = "volumes", skip_serializing_if = "Option::is_none")]
     pub volumes: Option<Vec<k8s_openapi::api::core::v1::Volume>>,
 }
@@ -129,6 +131,7 @@ impl AbstractVertex {
             source: None,
             tolerations: None,
             udf: None,
+            update_strategy: None,
             volumes: None,
         }
     }

@@ -201,6 +201,11 @@ message AbstractVertex {
   // Container template for the side inputs watcher container.
   // +optional
   optional ContainerTemplate sideInputsContainerTemplate = 15;
+
+  // The strategy to use to replace existing pods with new ones.
+  // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
+  // +optional
+  optional UpdateStrategy updateStrategy = 16;
 }
 
 message Authorization {
@@ -1642,7 +1647,7 @@ message UpdateStrategy {
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
+// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.status.desiredReplicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.readyReplicas`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
@@ -1732,38 +1737,42 @@ message VertexStatus {
   // +optional
   optional uint32 replicas = 3;
 
+  // The number of desired replicas.
   // +optional
-  optional string selector = 4;
+  optional uint32 desiredReplicas = 4;
 
   // +optional
-  optional string reason = 5;
+  optional string selector = 5;
 
   // +optional
-  optional string message = 6;
+  optional string reason = 6;
+
+  // +optional
+  optional string message = 7;
 
   // Time of last scaling operation.
   // +optional
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 7;
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 8;
 
   // The generation observed by the Vertex controller.
   // +optional
-  optional int64 observedGeneration = 8;
+  optional int64 observedGeneration = 9;
 
   // The number of pods targeted by this Vertex with a Ready Condition.
   // +optional
-  optional uint32 readyReplicas = 9;
-
-  // The number of Pods created by the controller from the Vertex version indicated by currentHash.
-  optional uint32 currentReplicas = 10;
+  optional uint32 readyReplicas = 10;
 
   // The number of Pods created by the controller from the Vertex version indicated by updateHash.
   optional uint32 updatedReplicas = 11;
 
-  // If not empty, indicates the version of the Vertex used to generate Pods in the sequence [0,currentReplicas).
-  optional string currentHash = 12;
+  // The number of ready Pods created by the controller from the Vertex version indicated by updateHash.
+  optional uint32 updatedReadyReplicas = 12;
 
-  // If not empty, indicates the version of the Vertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)
-  optional string updateHash = 13;
+  // If not empty, indicates the current version of the Vertex used to generate Pods.
+  optional string currentHash = 13;
+
+  // If not empty, indicates the updated version of the Vertex used to generate Pods.
+  optional string updateHash = 14;
 }
 
 message VertexTemplate {

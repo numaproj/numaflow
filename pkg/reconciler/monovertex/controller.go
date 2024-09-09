@@ -118,6 +118,7 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 
 	if err := mr.orchestrateFixedResources(ctx, monoVtx); err != nil {
 		monoVtx.Status.MarkDeployFailed("OrchestrateFixedResourcesFailed", err.Error())
+		mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "OrchestrateFixedResourcesFailed", "OrchestrateFixedResourcesFailed: %s", err.Error())
 		return ctrl.Result{}, err
 	}
 
@@ -125,6 +126,7 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 
 	if err := mr.orchestratePods(ctx, monoVtx); err != nil {
 		monoVtx.Status.MarkDeployFailed("OrchestratePodsFailed", err.Error())
+		mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "OrchestratePodsFailed", "OrchestratePodsFailed: %s", err.Error())
 		return ctrl.Result{}, err
 	}
 
@@ -399,8 +401,8 @@ func (mr *monoVertexReconciler) createOrUpdateMonoVtxServices(ctx context.Contex
 			if existingSvc.GetAnnotations()[dfv1.KeyHash] != svcHash {
 				if err := mr.client.Delete(ctx, &existingSvc); err != nil {
 					if !apierrors.IsNotFound(err) {
-						mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "DelSvcFailed", err.Error(), "Failed to delete existing mono vertex service", zap.String("service", existingSvc.Name), zap.Error(err))
-						return err
+						mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "DelSvcFailed", "Failed to delete existing mono vertex service %s: %s", existingSvc.Name, err.Error())
+						return fmt.Errorf("failed to delete existing mono vertex service %s: %w", existingSvc.Name, err)
 					}
 				} else {
 					log.Infow("Deleted a stale mono vertex service to recreate", zap.String("service", existingSvc.Name))
@@ -417,8 +419,8 @@ func (mr *monoVertexReconciler) createOrUpdateMonoVtxServices(ctx context.Contex
 				if apierrors.IsAlreadyExists(err) {
 					continue
 				}
-				mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "CreateSvcFailed", err.Error(), "Failed to create a mono vertex service", zap.String("service", s.Name), zap.Error(err))
-				return err
+				mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "CreateSvcFailed", "Failed to create a mono vertex service %s: %s", s.Name, err.Error())
+				return fmt.Errorf("failed to create a mono vertex service %s: %w", s.Name, err)
 			} else {
 				log.Infow("Succeeded to create a mono vertex service", zap.String("service", s.Name))
 				mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "CreateSvcSuccess", "Succeeded to create mono vertex service %s", s.Name)
@@ -428,8 +430,8 @@ func (mr *monoVertexReconciler) createOrUpdateMonoVtxServices(ctx context.Contex
 	for _, v := range existingSvcs { // clean up stale services
 		if err := mr.client.Delete(ctx, &v); err != nil {
 			if !apierrors.IsNotFound(err) {
-				mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "DelSvcFailed", err.Error(), "Failed to delete mono vertex service not in use", zap.String("service", v.Name), zap.Error(err))
-				return err
+				mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "DelSvcFailed", "Failed to delete mono vertex service %s: %s", v.Name, err.Error())
+				return fmt.Errorf("failed to delete mono vertex service %s: %w", v.Name, err)
 			}
 		} else {
 			log.Infow("Deleted a stale mono vertx service", zap.String("service", v.Name))
@@ -463,20 +465,19 @@ func (mr *monoVertexReconciler) createOrUpdateDaemonService(ctx context.Context,
 		if apierrors.IsNotFound(err) {
 			needToCreatDaemonSvc = true
 		} else {
-			mr.markDeploymentFailedAndLogEvent(monoVtx, false, log, "FindDaemonSvcFailed", err.Error(), "Failed to find existing mono vtx daemon service", zap.String("service", svc.Name), zap.Error(err))
-			return err
+			return fmt.Errorf("failed to find existing mono vertex daemon service: %w", err)
 		}
 	} else if existingSvc.GetAnnotations()[dfv1.KeyHash] != svcHash {
 		if err := mr.client.Delete(ctx, existingSvc); err != nil && !apierrors.IsNotFound(err) {
-			mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "DelDaemonSvcFailed", err.Error(), "Failed to delete existing mono vtx daemon service", zap.String("service", existingSvc.Name), zap.Error(err))
-			return err
+			mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "DelDaemonSvcFailed", "Failed to delete existing mono vertex daemon service %s: %s", existingSvc.Name, err.Error())
+			return fmt.Errorf("failed to delete existing mono vertex daemon service %s: %w", existingSvc.Name, err)
 		}
 		needToCreatDaemonSvc = true
 	}
 	if needToCreatDaemonSvc {
 		if err := mr.client.Create(ctx, svc); err != nil {
-			mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "CreateDaemonSvcFailed", err.Error(), "Failed to create mono vtx daemon service", zap.String("service", svc.Name), zap.Error(err))
-			return err
+			mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "CreateDaemonSvcFailed", "Failed to create a mono vertex daemon service %s: %s", svc.Name, err.Error())
+			return fmt.Errorf("failed to create a mono vertex daemon service %s: %w", svc.Name, err)
 		}
 		log.Infow("Succeeded to create a mono vertex daemon service", zap.String("service", svc.Name))
 		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "CreateMonoVtxDaemonSvcSuccess", "Succeeded to create a mono vertex daemon service %s", svc.Name)
@@ -496,8 +497,7 @@ func (mr *monoVertexReconciler) createOrUpdateDaemonDeployment(ctx context.Conte
 	}
 	deploy, err := monoVtx.GetDaemonDeploymentObj(req)
 	if err != nil {
-		mr.markDeploymentFailedAndLogEvent(monoVtx, false, log, "BuildDaemonDeployFailed", err.Error(), "Failed to build mono verex daemon deployment spec", zap.Error(err))
-		return err
+		return fmt.Errorf("failed to build mono vertex daemon deployment spec: %w", err)
 	}
 	deployHash := sharedutil.MustHash(deploy.Spec)
 	deploy.Annotations = map[string]string{dfv1.KeyHash: deployHash}
@@ -505,8 +505,7 @@ func (mr *monoVertexReconciler) createOrUpdateDaemonDeployment(ctx context.Conte
 	needToCreate := false
 	if err := mr.client.Get(ctx, types.NamespacedName{Namespace: monoVtx.Namespace, Name: deploy.Name}, existingDeploy); err != nil {
 		if !apierrors.IsNotFound(err) {
-			mr.markDeploymentFailedAndLogEvent(monoVtx, false, log, "FindDaemonDeployFailed", err.Error(), "Failed to find existing mono vertex daemon deployment", zap.String("deployment", deploy.Name), zap.Error(err))
-			return err
+			return fmt.Errorf("failed to find existing mono vertex daemon deployment: %w", err)
 		} else {
 			needToCreate = true
 		}
@@ -514,16 +513,16 @@ func (mr *monoVertexReconciler) createOrUpdateDaemonDeployment(ctx context.Conte
 		if existingDeploy.GetAnnotations()[dfv1.KeyHash] != deployHash {
 			// Delete and recreate, to avoid updating immutable fields problem.
 			if err := mr.client.Delete(ctx, existingDeploy); err != nil {
-				mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "DeleteOldDaemonDeployFailed", err.Error(), "Failed to delete the outdated daemon deployment", zap.String("deployment", existingDeploy.Name), zap.Error(err))
-				return err
+				mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "DeleteOldDaemonDeployFailed", "Failed to delete the outdated daemon deployment %s: %s", existingDeploy.Name, err.Error())
+				return fmt.Errorf("failed to delete the outdated daemon deployment %s: %w", existingDeploy.Name, err)
 			}
 			needToCreate = true
 		}
 	}
 	if needToCreate {
 		if err := mr.client.Create(ctx, deploy); err != nil && !apierrors.IsAlreadyExists(err) {
-			mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "CreateDaemonDeployFailed", err.Error(), "Failed to create a mono vertex daemon deployment", zap.String("deployment", deploy.Name), zap.Error(err))
-			return err
+			mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "CreateDaemonDeployFailed", "Failed to create a mono vertex daemon deployment %s: %s", deploy.Name, err.Error())
+			return fmt.Errorf("failed to create a mono vertex daemon deployment %s: %w", deploy.Name, err)
 		}
 		log.Infow("Succeeded to create/recreate a mono vertex daemon deployment", zap.String("deployment", deploy.Name))
 		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "CreateDaemonDeploySuccess", "Succeeded to create/recreate a mono vertex daemon deployment %s", deploy.Name)
@@ -546,15 +545,6 @@ func (mr *monoVertexReconciler) buildPodSpec(monoVtx *dfv1.MonoVertex) (*corev1.
 	podSpec.Volumes = append(podSpec.Volumes, vols...)
 	podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, volMounts...)
 	return podSpec, nil
-}
-
-// Helper function for warning event types
-func (mr *monoVertexReconciler) markDeploymentFailedAndLogEvent(monoVtx *dfv1.MonoVertex, recordEvent bool, log *zap.SugaredLogger, reason, message, logMsg string, logWith ...interface{}) {
-	log.Errorw(logMsg, logWith)
-	monoVtx.Status.MarkDeployFailed(reason, message)
-	if recordEvent {
-		mr.recorder.Event(monoVtx, corev1.EventTypeWarning, reason, message)
-	}
 }
 
 // checkChildrenResourceStatus checks the status of the children resources of the mono vertex

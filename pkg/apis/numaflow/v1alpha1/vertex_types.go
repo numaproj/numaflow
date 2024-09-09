@@ -37,6 +37,8 @@ const (
 	VertexPhaseRunning VertexPhase = "Running"
 	VertexPhaseFailed  VertexPhase = "Failed"
 
+	// VertexConditionDeployed has the status True when the vertex related sub resources are deployed.
+	VertexConditionDeployed ConditionType = "Deployed"
 	// VertexConditionPodsHealthy has the status True when all the vertex pods are healthy.
 	VertexConditionPodsHealthy ConditionType = "PodsHealthy"
 )
@@ -58,7 +60,7 @@ const NumaflowRustBinary = "/bin/numaflow-rs"
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
+// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.status.desiredReplicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.readyReplicas`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
@@ -608,6 +610,10 @@ type AbstractVertex struct {
 	// Container template for the side inputs watcher container.
 	// +optional
 	SideInputsContainerTemplate *ContainerTemplate `json:"sideInputsContainerTemplate,omitempty" protobuf:"bytes,15,opt,name=sideInputsContainerTemplate"`
+	// The strategy to use to replace existing pods with new ones.
+	// +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
+	// +optional
+	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty" protobuf:"bytes,16,opt,name=updateStrategy"`
 }
 
 func (av AbstractVertex) GetVertexType() VertexType {
@@ -715,29 +721,32 @@ type VertexStatus struct {
 	// Total number of non-terminated pods targeted by this Vertex (their labels match the selector).
 	// +optional
 	Replicas uint32 `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
+	// The number of desired replicas.
 	// +optional
-	Selector string `json:"selector,omitempty" protobuf:"bytes,4,opt,name=selector"`
+	DesiredReplicas uint32 `json:"desiredReplicas" protobuf:"varint,4,opt,name=desiredReplicas"`
 	// +optional
-	Reason string `json:"reason,omitempty" protobuf:"bytes,5,opt,name=reason"`
+	Selector string `json:"selector,omitempty" protobuf:"bytes,5,opt,name=selector"`
 	// +optional
-	Message string `json:"message,omitempty" protobuf:"bytes,6,opt,name=message"`
+	Reason string `json:"reason,omitempty" protobuf:"bytes,6,opt,name=reason"`
+	// +optional
+	Message string `json:"message,omitempty" protobuf:"bytes,7,opt,name=message"`
 	// Time of last scaling operation.
 	// +optional
-	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,7,opt,name=lastScaledAt"`
+	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,8,opt,name=lastScaledAt"`
 	// The generation observed by the Vertex controller.
 	// +optional
-	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,8,opt,name=observedGeneration"`
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,9,opt,name=observedGeneration"`
 	// The number of pods targeted by this Vertex with a Ready Condition.
 	// +optional
-	ReadyReplicas uint32 `json:"readyReplicas,omitempty" protobuf:"varint,9,opt,name=readyReplicas"`
-	// The number of Pods created by the controller from the Vertex version indicated by currentHash.
-	CurrentReplicas uint32 `json:"currentReplicas,omitempty" protobuf:"varint,10,opt,name=currentReplicas"`
+	ReadyReplicas uint32 `json:"readyReplicas,omitempty" protobuf:"varint,10,opt,name=readyReplicas"`
 	// The number of Pods created by the controller from the Vertex version indicated by updateHash.
 	UpdatedReplicas uint32 `json:"updatedReplicas,omitempty" protobuf:"varint,11,opt,name=updatedReplicas"`
-	// If not empty, indicates the version of the Vertex used to generate Pods in the sequence [0,currentReplicas).
-	CurrentHash string `json:"currentHash,omitempty" protobuf:"bytes,12,opt,name=currentHash"`
-	// If not empty, indicates the version of the Vertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)
-	UpdateHash string `json:"updateHash,omitempty" protobuf:"bytes,13,opt,name=updateHash"`
+	// The number of ready Pods created by the controller from the Vertex version indicated by updateHash.
+	UpdatedReadyReplicas uint32 `json:"updatedReadyReplicas,omitempty" protobuf:"varint,12,opt,name=updatedReadyReplicas"`
+	// If not empty, indicates the current version of the Vertex used to generate Pods.
+	CurrentHash string `json:"currentHash,omitempty" protobuf:"bytes,13,opt,name=currentHash"`
+	// If not empty, indicates the updated version of the Vertex used to generate Pods.
+	UpdateHash string `json:"updateHash,omitempty" protobuf:"bytes,14,opt,name=updateHash"`
 }
 
 func (vs *VertexStatus) MarkPhase(phase VertexPhase, reason, message string) {
@@ -756,6 +765,17 @@ func (vs *VertexStatus) MarkPhaseRunning() {
 	vs.MarkPhase(VertexPhaseRunning, "", "")
 }
 
+// MarkDeployed set the Vertex has it's sub resources deployed.
+func (vs *VertexStatus) MarkDeployed() {
+	vs.MarkTrue(VertexConditionDeployed)
+}
+
+// MarkDeployFailed set the Vertex deployment failed
+func (vs *VertexStatus) MarkDeployFailed(reason, message string) {
+	vs.MarkFalse(VertexConditionDeployed, reason, message)
+	vs.MarkPhaseFailed(reason, message)
+}
+
 // MarkPodNotHealthy marks the pod not healthy with the given reason and message.
 func (vs *VertexStatus) MarkPodNotHealthy(reason, message string) {
 	vs.MarkFalse(VertexConditionPodsHealthy, reason, message)
@@ -770,7 +790,7 @@ func (vs *VertexStatus) MarkPodHealthy(reason, message string) {
 
 // InitConditions sets conditions to Unknown state.
 func (vs *VertexStatus) InitConditions() {
-	vs.InitializeConditions(VertexConditionPodsHealthy)
+	vs.InitializeConditions(VertexConditionDeployed, VertexConditionPodsHealthy)
 }
 
 // IsHealthy indicates whether the vertex is healthy or not

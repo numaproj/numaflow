@@ -93,17 +93,18 @@ nav:
           - user-guide/reference/join-vertex.md
           - user-guide/reference/multi-partition.md
           - user-guide/reference/side-inputs.md
-          - Configuration:              
-            - user-guide/reference/configuration/pod-specifications.md
-            - user-guide/reference/configuration/container-resources.md
-            - user-guide/reference/configuration/volumes.md
-            - user-guide/reference/configuration/environment-variables.md
-            - user-guide/reference/configuration/labels-and-annotations.md
-            - user-guide/reference/configuration/init-containers.md
-            - user-guide/reference/configuration/sidecar-containers.md
-            - user-guide/reference/configuration/pipeline-customization.md
-            - user-guide/reference/configuration/istio.md
-            - user-guide/reference/configuration/max-message-size.md
+          - Configuration:
+              - user-guide/reference/configuration/pod-specifications.md
+              - user-guide/reference/configuration/container-resources.md
+              - user-guide/reference/configuration/volumes.md
+              - user-guide/reference/configuration/environment-variables.md
+              - user-guide/reference/configuration/labels-and-annotations.md
+              - user-guide/reference/configuration/init-containers.md
+              - user-guide/reference/configuration/sidecar-containers.md
+              - user-guide/reference/configuration/pipeline-customization.md
+              - user-guide/reference/configuration/istio.md
+              - user-guide/reference/configuration/max-message-size.md
+              - user-guide/reference/configuration/update-strategy.md
           - user-guide/reference/kustomize/kustomize.md
           - APIs.md
       - Use Cases:
@@ -116,15 +117,15 @@ nav:
       - Configuration:
           - Controller Configuration: "operations/controller-configmap.md"
           - UI Server:
-            - Access Path: "operations/ui/ui-access-path.md"
-            - Authentication:
-              - Overview: "operations/ui/authn/authentication.md"
-              - SSO with Dex: "operations/ui/authn/dex.md"
-              - Local Users: "operations/ui/authn/local-users.md"
-            - Authorization: "operations/ui/authz/rbac.md"
+              - Access Path: "operations/ui/ui-access-path.md"
+              - Authentication:
+                  - Overview: "operations/ui/authn/authentication.md"
+                  - SSO with Dex: "operations/ui/authn/dex.md"
+                  - Local Users: "operations/ui/authn/local-users.md"
+              - Authorization: "operations/ui/authz/rbac.md"
           - operations/metrics/metrics.md
           - operations/grafana.md
-      - Security: operations/security.md          
+      - Security: operations/security.md
   - Contributor Guide:
       - development/development.md
       - Specifications:

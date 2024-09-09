@@ -9037,6 +9037,23 @@ spec:
                           - window
                           type: object
                       type: object
+                    updateStrategy:
+                      default:
+                        rollingUpdate:
+                          maxUnavailable: 25%
+                        type: RollingUpdate
+                      properties:
+                        rollingUpdate:
+                          properties:
+                            maxUnavailable:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              x-kubernetes-int-or-string: true
+                          type: object
+                        type:
+                          type: string
+                      type: object
                     volumes:
                       items:
                         properties:

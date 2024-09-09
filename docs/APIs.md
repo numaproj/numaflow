@@ -840,6 +840,27 @@ Container template for the side inputs watcher container.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>updateStrategy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy"> UpdateStrategy
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The strategy to use to replace existing pods with new ones.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -10804,6 +10825,7 @@ UpdateStrategy
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>)
 </p>
 
@@ -11593,6 +11615,25 @@ labels match the selector).
 
 <td>
 
+<code>desiredReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The number of desired replicas.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>selector</code></br> <em> string </em>
 </td>
 
@@ -11694,25 +11735,6 @@ The number of pods targeted by this Vertex with a Ready Condition.
 
 <td>
 
-<code>currentReplicas</code></br> <em> uint32 </em>
-</td>
-
-<td>
-
-<p>
-
-The number of Pods created by the controller from the Vertex version
-indicated by currentHash.
-</p>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
 <code>updatedReplicas</code></br> <em> uint32 </em>
 </td>
 
@@ -11732,6 +11754,25 @@ indicated by updateHash.
 
 <td>
 
+<code>updatedReadyReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+The number of ready Pods created by the controller from the Vertex
+version indicated by updateHash.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>currentHash</code></br> <em> string </em>
 </td>
 
@@ -11739,8 +11780,8 @@ indicated by updateHash.
 
 <p>
 
-If not empty, indicates the version of the Vertex used to generate Pods
-in the sequence \[0,currentReplicas).
+If not empty, indicates the current version of the Vertex used to
+generate Pods.
 </p>
 
 </td>
@@ -11758,8 +11799,8 @@ in the sequence \[0,currentReplicas).
 
 <p>
 
-If not empty, indicates the version of the Vertx used to generate Pods
-in the sequence \[replicas-updatedReplicas,replicas)
+If not empty, indicates the updated version of the Vertex used to
+generate Pods.
 </p>
 
 </td>

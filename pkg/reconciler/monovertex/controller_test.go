@@ -20,20 +20,25 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"go.uber.org/zap/zaptest"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/numaproj/numaflow/pkg/reconciler/monovertex/scaling"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -98,17 +103,62 @@ func Test_NewReconciler(t *testing.T) {
 	assert.True(t, ok)
 }
 
-func Test_BuildPodSpec(t *testing.T) {
-	fakeConfig := reconciler.FakeGlobalConfig(t, nil)
-	cl := fake.NewClientBuilder().Build()
-	r := &monoVertexReconciler{
+func fakeReconciler(t *testing.T, cl client.WithWatch) *monoVertexReconciler {
+	t.Helper()
+	return &monoVertexReconciler{
 		client:   cl,
 		scheme:   scheme.Scheme,
-		config:   fakeConfig,
+		config:   reconciler.FakeGlobalConfig(t, nil),
 		image:    testFlowImage,
 		logger:   zaptest.NewLogger(t).Sugar(),
 		recorder: record.NewFakeRecorder(64),
+		scaler:   scaling.NewScaler(cl),
 	}
+}
+
+func TestReconcile(t *testing.T) {
+	t.Run("test not found", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		req := ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "not-exist",
+				Namespace: testNamespace,
+			},
+		}
+		_, err := r.Reconcile(context.TODO(), req)
+		// Return nil when not found
+		assert.NoError(t, err)
+	})
+
+	t.Run("test found", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		err := cl.Create(context.TODO(), testObj)
+		assert.NoError(t, err)
+		o := &dfv1.MonoVertex{}
+		err = cl.Get(context.TODO(), types.NamespacedName{
+			Namespace: testObj.Namespace,
+			Name:      testObj.Name,
+		}, o)
+		assert.NoError(t, err)
+		assert.Equal(t, testObj.Name, o.Name)
+		req := ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      testObj.Name,
+				Namespace: testObj.Namespace,
+			},
+		}
+		_, err = r.Reconcile(context.TODO(), req)
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "not found")
+	})
+}
+
+func Test_BuildPodSpec(t *testing.T) {
+	cl := fake.NewClientBuilder().Build()
+	r := fakeReconciler(t, cl)
 	t.Run("test has everything", func(t *testing.T) {
 		testObj := testMonoVtx.DeepCopy()
 		spec, err := r.buildPodSpec(testObj)
@@ -137,16 +187,8 @@ func Test_BuildPodSpec(t *testing.T) {
 }
 
 func Test_createOrUpdateDaemonDeployment(t *testing.T) {
-	fakeConfig := reconciler.FakeGlobalConfig(t, nil)
 	cl := fake.NewClientBuilder().Build()
-	r := &monoVertexReconciler{
-		client:   cl,
-		scheme:   scheme.Scheme,
-		config:   fakeConfig,
-		image:    testFlowImage,
-		logger:   zaptest.NewLogger(t).Sugar(),
-		recorder: record.NewFakeRecorder(64),
-	}
+	r := fakeReconciler(t, cl)
 
 	t.Run("test everything from scratch for daemon deployment", func(t *testing.T) {
 		testObj := testMonoVtx.DeepCopy()
@@ -163,16 +205,8 @@ func Test_createOrUpdateDaemonDeployment(t *testing.T) {
 }
 
 func Test_createOrUpdateDaemonService(t *testing.T) {
-	fakeConfig := reconciler.FakeGlobalConfig(t, nil)
 	cl := fake.NewClientBuilder().Build()
-	r := &monoVertexReconciler{
-		client:   cl,
-		scheme:   scheme.Scheme,
-		config:   fakeConfig,
-		image:    testFlowImage,
-		logger:   zaptest.NewLogger(t).Sugar(),
-		recorder: record.NewFakeRecorder(64),
-	}
+	r := fakeReconciler(t, cl)
 
 	t.Run("test everything from scratch for daemon service", func(t *testing.T) {
 		testObj := testMonoVtx.DeepCopy()
@@ -189,16 +223,8 @@ func Test_createOrUpdateDaemonService(t *testing.T) {
 }
 
 func Test_createOrUpdateMonoVtxServices(t *testing.T) {
-	fakeConfig := reconciler.FakeGlobalConfig(t, nil)
 	cl := fake.NewClientBuilder().Build()
-	r := &monoVertexReconciler{
-		client:   cl,
-		scheme:   scheme.Scheme,
-		config:   fakeConfig,
-		image:    testFlowImage,
-		logger:   zaptest.NewLogger(t).Sugar(),
-		recorder: record.NewFakeRecorder(64),
-	}
+	r := fakeReconciler(t, cl)
 
 	t.Run("test everything from scratch for monovtx service", func(t *testing.T) {
 		testObj := testMonoVtx.DeepCopy()
@@ -218,17 +244,10 @@ func Test_createOrUpdateMonoVtxServices(t *testing.T) {
 }
 
 func Test_orchestratePods(t *testing.T) {
-	fakeConfig := reconciler.FakeGlobalConfig(t, nil)
-	cl := fake.NewClientBuilder().Build()
-	r := &monoVertexReconciler{
-		client:   cl,
-		scheme:   scheme.Scheme,
-		config:   fakeConfig,
-		image:    testFlowImage,
-		logger:   zaptest.NewLogger(t).Sugar(),
-		recorder: record.NewFakeRecorder(64),
-	}
+
 	t.Run("test orchestratePodsFromTo and cleanUpPodsFromTo", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
 		testObj := testMonoVtx.DeepCopy()
 		hash := "test-hasssssh"
 		podSpec, err := r.buildPodSpec(testObj)
@@ -250,6 +269,8 @@ func Test_orchestratePods(t *testing.T) {
 	})
 
 	t.Run("test orchestratePods", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
 		testObj := testMonoVtx.DeepCopy()
 		err := r.orchestratePods(context.TODO(), testObj)
 		assert.NoError(t, err)
@@ -263,16 +284,8 @@ func Test_orchestratePods(t *testing.T) {
 }
 
 func Test_orchestrateFixedResources(t *testing.T) {
-	fakeConfig := reconciler.FakeGlobalConfig(t, nil)
 	cl := fake.NewClientBuilder().Build()
-	r := &monoVertexReconciler{
-		client:   cl,
-		scheme:   scheme.Scheme,
-		config:   fakeConfig,
-		image:    testFlowImage,
-		logger:   zaptest.NewLogger(t).Sugar(),
-		recorder: record.NewFakeRecorder(64),
-	}
+	r := fakeReconciler(t, cl)
 	testObj := testMonoVtx.DeepCopy()
 	err := r.orchestrateFixedResources(context.TODO(), testObj)
 	assert.NoError(t, err)
@@ -294,23 +307,87 @@ func Test_orchestrateFixedResources(t *testing.T) {
 }
 
 func Test_reconcile(t *testing.T) {
-	fakeConfig := reconciler.FakeGlobalConfig(t, nil)
-	cl := fake.NewClientBuilder().Build()
-	r := &monoVertexReconciler{
-		client:   cl,
-		scheme:   scheme.Scheme,
-		config:   fakeConfig,
-		image:    testFlowImage,
-		logger:   zaptest.NewLogger(t).Sugar(),
-		recorder: record.NewFakeRecorder(64),
-		scaler:   scaling.NewScaler(cl),
-	}
-	testObj := testMonoVtx.DeepCopy()
-	_, err := r.reconcile(context.TODO(), testObj)
-	assert.NoError(t, err)
-	var daemonDeployment appv1.Deployment
-	err = r.client.Get(context.TODO(), client.ObjectKey{Namespace: testObj.GetNamespace(), Name: testObj.GetDaemonDeploymentName()},
-		&daemonDeployment)
-	assert.NoError(t, err)
-	assert.Equal(t, testObj.GetDaemonDeploymentName(), daemonDeployment.Name)
+
+	t.Run("test deletion", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		testObj.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+		_, err := r.reconcile(context.TODO(), testObj)
+		assert.NoError(t, err)
+	})
+
+	t.Run("test okay", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		_, err := r.reconcile(context.TODO(), testObj)
+		assert.NoError(t, err)
+		var daemonDeployment appv1.Deployment
+		err = r.client.Get(context.TODO(), client.ObjectKey{Namespace: testObj.GetNamespace(), Name: testObj.GetDaemonDeploymentName()},
+			&daemonDeployment)
+		assert.NoError(t, err)
+		assert.Equal(t, testObj.GetDaemonDeploymentName(), daemonDeployment.Name)
+	})
+
+	t.Run("test reconcile rolling update", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Replicas = ptr.To[int32](3)
+		_, err := r.reconcile(context.TODO(), testObj)
+		assert.NoError(t, err)
+		pods := &corev1.PodList{}
+		selector, _ := labels.Parse(dfv1.KeyComponent + "=" + dfv1.ComponentMonoVertex + "," + dfv1.KeyMonoVertexName + "=" + testObj.Name)
+		err = r.client.List(context.TODO(), pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 3, len(pods.Items))
+
+		podSpec, _ := r.buildPodSpec(testObj)
+		hash := sharedutil.MustHash(podSpec)
+		testObj.Status.Replicas = 3
+		testObj.Status.ReadyReplicas = 3
+		testObj.Status.UpdateHash = hash
+		testObj.Status.CurrentHash = hash
+
+		// Reduce desired replicas
+		testObj.Spec.Replicas = ptr.To[int32](2)
+		_, err = r.reconcile(context.TODO(), testObj)
+		assert.NoError(t, err)
+		err = r.client.List(context.TODO(), pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 2, len(pods.Items))
+		assert.Equal(t, uint32(2), testObj.Status.Replicas)
+		assert.Equal(t, uint32(2), testObj.Status.UpdatedReplicas)
+
+		// updatedReplicas > desiredReplicas
+		testObj.Status.UpdatedReplicas = 3
+		_, err = r.reconcile(context.TODO(), testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, uint32(2), testObj.Status.UpdatedReplicas)
+
+		// Clean up
+		testObj.Spec.Replicas = ptr.To[int32](0)
+		testObj.Spec.Scale.Min = ptr.To[int32](0)
+		_, err = r.reconcile(context.TODO(), testObj)
+		assert.NoError(t, err)
+		err = r.client.List(context.TODO(), pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(pods.Items))
+
+		// rolling update
+		testObj.Spec.Replicas = ptr.To[int32](20)
+		testObj.Status.UpdatedReplicas = 20
+		testObj.Status.UpdatedReadyReplicas = 20
+		testObj.Status.Replicas = 20
+		testObj.Status.CurrentHash = "123456"
+		testObj.Status.UpdateHash = "123456"
+		_, err = r.reconcile(context.TODO(), testObj)
+		assert.NoError(t, err)
+		err = r.client.List(context.TODO(), pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 5, len(pods.Items))
+		assert.Equal(t, uint32(20), testObj.Status.Replicas)
+		assert.Equal(t, uint32(5), testObj.Status.UpdatedReplicas)
+	})
 }

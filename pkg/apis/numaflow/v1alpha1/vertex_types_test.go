@@ -565,10 +565,37 @@ func Test_VertexMarkPodHealthy(t *testing.T) {
 	}
 }
 
+func Test_VertexMarkDeployed(t *testing.T) {
+	s := VertexStatus{}
+	s.MarkDeployed()
+	for _, c := range s.Conditions {
+		if c.Type == string(VertexConditionDeployed) {
+			assert.Equal(t, metav1.ConditionTrue, c.Status)
+			assert.Equal(t, "Successful", c.Reason)
+			assert.Equal(t, "Successful", c.Message)
+		}
+	}
+}
+
+func Test_VertexMarkDeployFailed(t *testing.T) {
+	s := VertexStatus{}
+	s.MarkDeployFailed("reason", "message")
+	assert.Equal(t, VertexPhaseFailed, s.Phase)
+	assert.Equal(t, "reason", s.Reason)
+	assert.Equal(t, "message", s.Message)
+	for _, c := range s.Conditions {
+		if c.Type == string(VertexConditionDeployed) {
+			assert.Equal(t, metav1.ConditionFalse, c.Status)
+			assert.Equal(t, "reason", c.Reason)
+			assert.Equal(t, "message", c.Message)
+		}
+	}
+}
+
 func Test_VertexInitConditions(t *testing.T) {
 	v := VertexStatus{}
 	v.InitConditions()
-	assert.Equal(t, 1, len(v.Conditions))
+	assert.Equal(t, 2, len(v.Conditions))
 	for _, c := range v.Conditions {
 		assert.Equal(t, metav1.ConditionUnknown, c.Status)
 	}
