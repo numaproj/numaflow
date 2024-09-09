@@ -39,6 +39,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 const (
@@ -676,10 +677,84 @@ func Test_reconcile(t *testing.T) {
 		assert.Equal(t, 3, len(pods.Items[0].Spec.Containers))
 		assert.Equal(t, 2, len(pods.Items[0].Spec.InitContainers))
 	})
+
+	t.Run("test reconcile rolling update", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		testPl := testPipeline.DeepCopy()
+		err = cl.Create(ctx, testPl)
+		assert.Nil(t, err)
+		r := fakeReconciler(t, cl)
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.UDF = &dfv1.UDF{
+			Builtin: &dfv1.Function{
+				Name: "cat",
+			},
+		}
+		testObj.Spec.Replicas = ptr.To[int32](3)
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		pods := &corev1.PodList{}
+		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + testPipelineName + "," + dfv1.KeyVertexName + "=" + testVertexSpecName)
+		err = r.client.List(ctx, pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 3, len(pods.Items))
+
+		tmpSpec, _ := r.buildPodSpec(testObj, testPl, testIsbSvc.Status.Config, 0)
+		hash := sharedutil.MustHash(tmpSpec)
+		testObj.Status.Replicas = 3
+		testObj.Status.ReadyReplicas = 3
+		testObj.Status.UpdateHash = hash
+		testObj.Status.CurrentHash = hash
+
+		// Reduce desired replicas
+		testObj.Spec.Replicas = ptr.To[int32](2)
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		err = r.client.List(ctx, pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 2, len(pods.Items))
+		assert.Equal(t, uint32(2), testObj.Status.Replicas)
+		assert.Equal(t, uint32(2), testObj.Status.UpdatedReplicas)
+
+		// updatedReplicas > desiredReplicas
+		testObj.Status.UpdatedReplicas = 3
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, uint32(2), testObj.Status.UpdatedReplicas)
+
+		// Clean up
+		testObj.Spec.Replicas = ptr.To[int32](0)
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		err = r.client.List(ctx, pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(pods.Items))
+
+		// rolling update
+		testObj.Spec.Replicas = ptr.To[int32](20)
+		testObj.Status.UpdatedReplicas = 20
+		testObj.Status.UpdatedReadyReplicas = 20
+		testObj.Status.Replicas = 20
+		testObj.Status.CurrentHash = "123456"
+		testObj.Status.UpdateHash = "123456"
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		err = r.client.List(ctx, pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 5, len(pods.Items))
+		assert.Equal(t, uint32(20), testObj.Status.Replicas)
+		assert.Equal(t, uint32(5), testObj.Status.UpdatedReplicas)
+	})
 }
 
 func Test_reconcileEvents(t *testing.T) {
-	t.Run("test reconcile - isbsvc doesn't exist", func(t *testing.T) {
+	t.Run("test reconcile - events", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
 		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
