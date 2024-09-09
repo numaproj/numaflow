@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
@@ -640,6 +641,46 @@ func TestValidateVertex(t *testing.T) {
 		err := validateVertex(v)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "can not be 0")
+	})
+
+	t.Run("rollingUpdateStrategy - invalid maxUnavailable", func(t *testing.T) {
+		v := dfv1.AbstractVertex{
+			Name: "my-vertex",
+			UpdateStrategy: dfv1.UpdateStrategy{
+				RollingUpdate: &dfv1.RollingUpdateStrategy{
+					MaxUnavailable: ptr.To[intstr.IntOrString](intstr.FromString("10")),
+				},
+			},
+		}
+		err := validateVertex(v)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "string is not a percentage")
+	})
+
+	t.Run("rollingUpdateStrategy - good percentage maxUnavailable", func(t *testing.T) {
+		v := dfv1.AbstractVertex{
+			Name: "my-vertex",
+			UpdateStrategy: dfv1.UpdateStrategy{
+				RollingUpdate: &dfv1.RollingUpdateStrategy{
+					MaxUnavailable: ptr.To[intstr.IntOrString](intstr.FromString("10%")),
+				},
+			},
+		}
+		err := validateVertex(v)
+		assert.NoError(t, err)
+	})
+
+	t.Run("rollingUpdateStrategy - good integer maxUnavailable", func(t *testing.T) {
+		v := dfv1.AbstractVertex{
+			Name: "my-vertex",
+			UpdateStrategy: dfv1.UpdateStrategy{
+				RollingUpdate: &dfv1.RollingUpdateStrategy{
+					MaxUnavailable: ptr.To[intstr.IntOrString](intstr.FromInt(3)),
+				},
+			},
+		}
+		err := validateVertex(v)
+		assert.NoError(t, err)
 	})
 
 	t.Run("good init container", func(t *testing.T) {

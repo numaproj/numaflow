@@ -1,65 +1,20 @@
 [package]
-name = "{{{packageName}}}"
-version = "{{#lambdaVersion}}{{{packageVersion}}}{{/lambdaVersion}}"
-{{#infoEmail}}
-authors = ["{{{.}}}"]
-{{/infoEmail}}
-{{^infoEmail}}
+name = "numaflow-models"
+version = "0.0.0-pre"
 authors = ["The Numaproj Authors"]
-{{/infoEmail}}
-{{#appDescription}}
 description = "Numaflow models"
-{{/appDescription}}
 license = "Apache-2.0 license"
 edition = "2021"
-{{#publishRustRegistry}}
-publish = ["{{.}}"]
-{{/publishRustRegistry}}
-{{#repositoryUrl}}
-repository = "{{.}}"
-{{/repositoryUrl}}
-{{#documentationUrl}}
-documentation = "{{.}}"
-{{/documentationUrl}}
-{{#homePageUrl}}
-homepage = "{{.}}
-{{/homePageUrl}}
 
 [dependencies]
+k8s-openapi = { version = "0.22.0", features = ["v1_29"] }
+kube = "0.94.0"
 serde = "^1.0"
 serde_derive = "^1.0"
-{{#serdeWith}}
-serde_with = "^2.0"
-{{/serdeWith}}
 serde_json = "^1.0"
 url = "^2.2"
 uuid = { version = "^1.0", features = ["serde", "v4"] }
-{{#hyper}}
-hyper = { version = "~0.14", features = ["full"] }
-hyper-tls = "~0.5"
-http = "~0.2"
-base64 = "~0.7.0"
-futures = "^0.3"
-{{/hyper}}
-{{#withAWSV4Signature}}
-aws-sigv4 = "0.3.0"
-http = "0.2.5"
-secrecy = "0.8.0"
-{{/withAWSV4Signature}}
-{{#reqwest}}
-{{^supportAsync}}
-[dependencies.reqwest]
-version = "^0.11"
-default-features = false
-features = ["json", "blocking", "multipart", "rustls-tls"]
-{{/supportAsync}}
-{{#supportAsync}}
-{{#supportMiddleware}}
-reqwest-middleware = "0.2.0"
-{{/supportMiddleware}}
 [dependencies.reqwest]
 version = "^0.11"
 default-features = false
 features = ["json", "multipart", "rustls-tls"]
-{{/supportAsync}}
-{{/reqwest}}
