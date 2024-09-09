@@ -30,9 +30,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -171,6 +173,46 @@ func Test_NewReconciler(t *testing.T) {
 	r := NewReconciler(cl, scheme.Scheme, reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig), testFlowImage, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 	_, ok := r.(*pipelineReconciler)
 	assert.True(t, ok)
+}
+
+func TestReconcile(t *testing.T) {
+	t.Run("test not found", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		req := ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "not-exist",
+				Namespace: testNamespace,
+			},
+		}
+		_, err := r.Reconcile(context.TODO(), req)
+		// Return nil when not found
+		assert.NoError(t, err)
+	})
+
+	t.Run("test found", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testPipeline.DeepCopy()
+		err := cl.Create(context.TODO(), testObj)
+		assert.NoError(t, err)
+		o := &dfv1.Pipeline{}
+		err = cl.Get(context.TODO(), types.NamespacedName{
+			Namespace: testObj.Namespace,
+			Name:      testObj.Name,
+		}, o)
+		assert.NoError(t, err)
+		assert.Equal(t, testObj.Name, o.Name)
+		req := ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      testObj.Name,
+				Namespace: testObj.Namespace,
+			},
+		}
+		_, err = r.Reconcile(context.TODO(), req)
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "not found")
+	})
 }
 
 func Test_reconcile(t *testing.T) {
