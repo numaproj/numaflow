@@ -63,5 +63,5 @@ generate:
 		--generate-alias-as-model
 
 	cargo add kube@0.94.0
-	cargo add k8s-openapi --features v1_29
+	cargo add k8s-openapi@0.22.0 --features v1_29
 	cargo fmt
