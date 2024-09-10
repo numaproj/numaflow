@@ -55,7 +55,8 @@ func Test_desiredReplicasSinglePartition(t *testing.T) {
 			},
 		},
 		Status: dfv1.VertexStatus{
-			Replicas: uint32(2),
+			Replicas:      uint32(2),
+			ReadyReplicas: uint32(2),
 		},
 	}
 	assert.Equal(t, int32(1), s.desiredReplicas(context.TODO(), src, []float64{0}, []int64{0}, []int64{10000}, []int64{5000}))
@@ -75,7 +76,8 @@ func Test_desiredReplicasSinglePartition(t *testing.T) {
 			},
 		},
 		Status: dfv1.VertexStatus{
-			Replicas: uint32(2),
+			Replicas:      uint32(2),
+			ReadyReplicas: uint32(2),
 		},
 	}
 	assert.Equal(t, int32(1), s.desiredReplicas(context.TODO(), udf, []float64{0}, []int64{0}, []int64{10000}, []int64{5000}))
@@ -99,7 +101,8 @@ func Test_desiredReplicasMultiplePartitions(t *testing.T) {
 			},
 		},
 		Status: dfv1.VertexStatus{
-			Replicas: uint32(2),
+			Replicas:      uint32(2),
+			ReadyReplicas: uint32(2),
 		},
 	}
 
