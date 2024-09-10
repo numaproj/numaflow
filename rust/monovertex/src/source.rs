@@ -1,8 +1,11 @@
 use crate::error::Error::SourceError;
 use crate::error::Result;
 use crate::message::{Message, Offset};
-use crate::proto;
-use crate::source::proto::AckResponse;
+use crate::sourcepb;
+use crate::sourcepb::source_client::SourceClient;
+use crate::sourcepb::{
+    ack_request, read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
+};
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use tokio::sync::mpsc;
@@ -16,16 +19,13 @@ pub(crate) const SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-serv
 /// SourceClient is a client to interact with the source server.
 #[derive(Debug)]
 pub(crate) struct SourceReader {
-    read_tx: mpsc::Sender<proto::ReadRequest>,
-    resp_stream: Streaming<proto::ReadResponse>,
-    ack_tx: mpsc::Sender<proto::AckRequest>,
-    client: proto::source_client::SourceClient<Channel>,
+    read_tx: mpsc::Sender<ReadRequest>,
+    resp_stream: Streaming<ReadResponse>,
+    ack_tx: mpsc::Sender<AckRequest>,
 }
 
 impl SourceReader {
-    pub(crate) async fn new(
-        mut client: proto::source_client::SourceClient<Channel>,
-    ) -> Result<Self> {
+    pub(crate) async fn new(mut client: SourceClient<Channel>) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(500);
 
         let resp_stream = client
@@ -39,7 +39,6 @@ impl SourceReader {
             .await?;
 
         Ok(Self {
-            client,
             read_tx,
             resp_stream,
             ack_tx,
@@ -51,8 +50,8 @@ impl SourceReader {
         num_records: u64,
         timeout_in_ms: u32,
     ) -> Result<Vec<Message>> {
-        let request = proto::ReadRequest {
-            request: Some(proto::read_request::Request {
+        let request = ReadRequest {
+            request: Some(read_request::Request {
                 num_records,
                 timeout_in_ms,
             }),
@@ -82,9 +81,9 @@ impl SourceReader {
 
     pub(crate) async fn ack_fn(&mut self, offsets: Vec<Offset>) -> Result<AckResponse> {
         for offset in offsets {
-            let request = proto::AckRequest {
-                request: Some(proto::ack_request::Request {
-                    offset: Some(proto::Offset {
+            let request = AckRequest {
+                request: Some(ack_request::Request {
+                    offset: Some(sourcepb::Offset {
                         offset: BASE64_STANDARD
                             .decode(offset.offset)
                             .expect("we control the encoding, so this should never fail"),
@@ -104,11 +103,10 @@ impl SourceReader {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
-    use std::error::Error;
 
-    use crate::proto::source_client::SourceClient;
     use crate::shared::create_rpc_channel;
     use crate::source::SourceReader;
+    use crate::sourcepb::source_client::SourceClient;
     use chrono::Utc;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -172,7 +170,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn source_operations() -> Result<(), Box<dyn Error>> {
+    async fn source_operations() {
         // start the server
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
@@ -186,16 +184,19 @@ mod tests {
                 .with_socket_file(server_socket)
                 .with_server_info_file(server_info)
                 .start_with_shutdown(shutdown_rx)
-                .await?;
-            Ok(())
+                .await
+                .unwrap()
         });
 
         // wait for the server to start
         // TODO: flaky
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let mut source_client =
-            SourceReader::new(SourceClient::new(create_rpc_channel(sock_file).await?)).await?;
+        let mut source_client = SourceReader::new(SourceClient::new(
+            create_rpc_channel(sock_file).await.unwrap(),
+        ))
+        .await
+        .unwrap();
 
         let messages = source_client.read_fn(5, 1000).await.unwrap();
         assert_eq!(messages.len(), 5);
@@ -209,7 +210,6 @@ mod tests {
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
-        server_handle.await.expect("failed to join server task")?;
-        Ok(())
+        server_handle.await.expect("failed to join server task");
     }
 }

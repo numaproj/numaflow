@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::message::Message;
-use crate::proto;
-use crate::proto::sink_client::SinkClient;
+use crate::sinkpb::sink_client::SinkClient;
+use crate::sinkpb::{SinkRequest, SinkResponse};
 use tonic::transport::Channel;
 
 pub(crate) const SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";
@@ -21,7 +21,7 @@ impl SinkWriter {
         Ok(Self { client })
     }
 
-    pub(crate) async fn sink_fn(&mut self, messages: Vec<Message>) -> Result<proto::SinkResponse> {
+    pub(crate) async fn sink_fn(&mut self, messages: Vec<Message>) -> Result<SinkResponse> {
         // create a channel with at least size
         let (tx, rx) = tokio::sync::mpsc::channel(if messages.is_empty() {
             1
@@ -29,7 +29,7 @@ impl SinkWriter {
             messages.len()
         });
 
-        let requests: Vec<proto::SinkRequest> =
+        let requests: Vec<SinkRequest> =
             messages.into_iter().map(|message| message.into()).collect();
 
         tokio::spawn(async move {

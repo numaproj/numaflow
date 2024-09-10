@@ -18,7 +18,9 @@ use tracing::{debug, error, info};
 
 use crate::config::config;
 use crate::error::Error;
-use crate::proto;
+use crate::sinkpb::sink_client::SinkClient;
+use crate::sourcepb::source_client::SourceClient;
+use crate::sourcetransformpb::source_transform_client::SourceTransformClient;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
@@ -60,10 +62,10 @@ const SINK_TIME: &str = "monovtx_sink_time";
 
 #[derive(Clone)]
 pub(crate) struct MetricsState {
-    pub source_client: proto::source_client::SourceClient<Channel>,
-    pub sink_client: proto::sink_client::SinkClient<Channel>,
-    pub transformer_client: Option<proto::source_transform_client::SourceTransformClient<Channel>>,
-    pub fb_sink_client: Option<proto::sink_client::SinkClient<Channel>>,
+    pub source_client: SourceClient<Channel>,
+    pub sink_client: SinkClient<Channel>,
+    pub transformer_client: Option<SourceTransformClient<Channel>>,
+    pub fb_sink_client: Option<SinkClient<Channel>>,
 }
 
 /// The global register of all metrics.
@@ -359,7 +361,7 @@ struct TimestampedPending {
 /// and exposing the metrics. It maintains a list of pending stats and ensures that
 /// only the most recent entries are kept.
 pub(crate) struct LagReader {
-    source_client: proto::source_client::SourceClient<Channel>,
+    source_client: SourceClient<Channel>,
     lag_checking_interval: Duration,
     refresh_interval: Duration,
     buildup_handle: Option<JoinHandle<()>>,
@@ -369,13 +371,13 @@ pub(crate) struct LagReader {
 
 /// LagReaderBuilder is used to build a `LagReader` instance.
 pub(crate) struct LagReaderBuilder {
-    source_client: proto::source_client::SourceClient<Channel>,
+    source_client: SourceClient<Channel>,
     lag_checking_interval: Option<Duration>,
     refresh_interval: Option<Duration>,
 }
 
 impl LagReaderBuilder {
-    pub(crate) fn new(source_client: proto::source_client::SourceClient<Channel>) -> Self {
+    pub(crate) fn new(source_client: SourceClient<Channel>) -> Self {
         Self {
             source_client,
             lag_checking_interval: None,
@@ -448,7 +450,7 @@ impl Drop for LagReader {
 
 /// Periodically checks the pending messages from the source client and build the pending stats.
 async fn build_pending_info(
-    mut source_client: proto::source_client::SourceClient<Channel>,
+    mut source_client: SourceClient<Channel>,
     lag_checking_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
@@ -477,9 +479,7 @@ async fn build_pending_info(
     }
 }
 
-async fn fetch_pending(
-    source_client: &mut proto::source_client::SourceClient<Channel>,
-) -> crate::error::Result<i64> {
+async fn fetch_pending(source_client: &mut SourceClient<Channel>) -> crate::error::Result<i64> {
     let request = Request::new(());
     let response = source_client
         .pending_fn(request)

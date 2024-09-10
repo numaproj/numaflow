@@ -1,16 +1,14 @@
-pub(crate) use self::error::Result;
 use crate::config::config;
-pub(crate) use crate::error::Error;
 use crate::forwarder::ForwarderBuilder;
 use crate::metrics::{start_metrics_https_server, LagReaderBuilder, MetricsState};
-use crate::proto::sink_client::SinkClient;
-use crate::proto::source_client::SourceClient;
-use crate::proto::source_transform_client::SourceTransformClient;
 use crate::shared::create_rpc_channel;
 use crate::sink::{
     SinkWriter, FB_SINK_SERVER_INFO_FILE, FB_SINK_SOCKET, SINK_SERVER_INFO_FILE, SINK_SOCKET,
 };
+use crate::sinkpb::sink_client::SinkClient;
 use crate::source::{SourceReader, SOURCE_SERVER_INFO_FILE, SOURCE_SOCKET};
+use crate::sourcepb::source_client::SourceClient;
+use crate::sourcetransformpb::source_transform_client::SourceTransformClient;
 use crate::transformer::{SourceTransformer, TRANSFORMER_SERVER_INFO_FILE, TRANSFORMER_SOCKET};
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -21,6 +19,10 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{error, info, warn};
+
+pub(crate) use self::error::Result;
+
+pub(crate) use crate::error::Error;
 
 /// SourcerSinker orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
@@ -44,9 +46,15 @@ pub(crate) mod message;
 
 pub(crate) mod shared;
 
-pub(crate) mod proto {
+pub(crate) mod sourcepb {
     tonic::include_proto!("source.v1");
+}
+
+pub(crate) mod sinkpb {
     tonic::include_proto!("sink.v1");
+}
+
+pub(crate) mod sourcetransformpb {
     tonic::include_proto!("sourcetransformer.v1");
 }
 
@@ -126,9 +134,9 @@ pub async fn init(cln_token: CancellationToken) -> Result<()> {
         .max_encoding_message_size(config().grpc_max_message_size)
         .max_encoding_message_size(config().grpc_max_message_size);
 
-    let mut sink_writer = SinkWriter::new(sink_grpc_client.clone()).await?;
+    let sink_writer = SinkWriter::new(sink_grpc_client.clone()).await?;
 
-    let (mut transformer_grpc_client, mut transformer) = if config().is_transformer_enabled {
+    let (mut transformer_grpc_client, transformer) = if config().is_transformer_enabled {
         server_info::check_for_server_compatibility(
             TRANSFORMER_SERVER_INFO_FILE,
             cln_token.clone(),
@@ -144,14 +152,14 @@ pub async fn init(cln_token: CancellationToken) -> Result<()> {
                 .max_encoding_message_size(config().grpc_max_message_size);
 
         (
-            Some(transformer_grpc_client),
-            Some(SourceTransformer::new(transformer_grpc_client.clone()).await?),
+            Some(transformer_grpc_client.clone()),
+            Some(SourceTransformer::new(transformer_grpc_client).await?),
         )
     } else {
         (None, None)
     };
 
-    let (mut fb_sink_grpc_client, mut fallback_writer) = if config().is_fallback_enabled {
+    let (mut fb_sink_grpc_client, fallback_writer) = if config().is_fallback_enabled {
         server_info::check_for_server_compatibility(FB_SINK_SERVER_INFO_FILE, cln_token.clone())
             .await
             .map_err(|e| {
@@ -163,8 +171,8 @@ pub async fn init(cln_token: CancellationToken) -> Result<()> {
             .max_encoding_message_size(config().grpc_max_message_size);
 
         (
-            Some(fb_sink_grpc_client),
-            Some(SinkWriter::new(fb_sink_grpc_client.clone()).await?),
+            Some(fb_sink_grpc_client.clone()),
+            Some(SinkWriter::new(fb_sink_grpc_client).await?),
         )
     } else {
         (None, None)
@@ -282,6 +290,7 @@ async fn wait_until_ready(
 mod tests {
     use std::env;
 
+    use crate::init;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source};
     use tokio::sync::mpsc::Sender;
@@ -331,11 +340,6 @@ mod tests {
                 .await
                 .unwrap();
         });
-        let source_config = SourceConfig {
-            socket_path: src_sock_file.to_str().unwrap().to_string(),
-            server_info_file: src_info_file.to_str().unwrap().to_string(),
-            max_message_size: 100,
-        };
 
         let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
@@ -352,11 +356,6 @@ mod tests {
                 .await
                 .unwrap();
         });
-        let sink_config = SinkConfig {
-            socket_path: sink_sock_file.to_str().unwrap().to_string(),
-            server_info_file: sink_server_info.to_str().unwrap().to_string(),
-            max_message_size: 100,
-        };
 
         // wait for the servers to start
         // FIXME: we need to have a better way, this is flaky
@@ -371,8 +370,7 @@ mod tests {
 
         let forwarder_cln_token = cln_token.clone();
         let forwarder_handle = tokio::spawn(async move {
-            let result =
-                super::init(source_config, sink_config, None, None, forwarder_cln_token).await;
+            let result = init(forwarder_cln_token).await;
             assert!(result.is_ok());
         });
 

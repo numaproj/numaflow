@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use crate::config::{config, OnFailureStrategy};
 use crate::error::{Error, Result};
 use crate::message::{Message, Offset};
+use crate::metrics;
 use crate::metrics::forward_metrics;
 use crate::sink::SinkWriter;
+use crate::sinkpb::Status::{Failure, Fallback, Success};
 use crate::source::SourceReader;
 use crate::transformer::SourceTransformer;
-use crate::{metrics, proto};
 use chrono::Utc;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
@@ -360,9 +361,9 @@ impl Forwarder {
                 // construct the error map for the failed messages
                 messages_to_send.retain(|msg| {
                     if let Some(result) = result_map.get(&msg.id) {
-                        return if result.status == proto::Status::Success as i32 {
+                        return if result.status == Success as i32 {
                             false
-                        } else if result.status == proto::Status::Fallback as i32 {
+                        } else if result.status == Fallback as i32 {
                             fallback_msgs.push(msg.clone()); // add to fallback messages
                             false
                         } else {
@@ -440,12 +441,12 @@ impl Forwarder {
                     // construct the error map for the failed messages
                     messages_to_send.retain(|msg| {
                         if let Some(result) = result_map.get(&msg.id) {
-                            if result.status == proto::Status::Failure as i32 {
+                            if result.status == Failure as i32 {
                                 *fallback_error_map
                                     .entry(result.err_msg.clone())
                                     .or_insert(0) += 1;
                                 true
-                            } else if result.status == proto::Status::Fallback as i32 {
+                            } else if result.status == Fallback as i32 {
                                 contains_fallback_status = true;
                                 false
                             } else {
@@ -526,12 +527,12 @@ mod tests {
 
     use crate::error::Result;
     use crate::forwarder::ForwarderBuilder;
-    use crate::proto::sink_client::SinkClient;
-    use crate::proto::source_client::SourceClient;
-    use crate::proto::source_transform_client::SourceTransformClient;
     use crate::shared::create_rpc_channel;
     use crate::sink::SinkWriter;
+    use crate::sinkpb::sink_client::SinkClient;
     use crate::source::SourceReader;
+    use crate::sourcepb::source_client::SourceClient;
+    use crate::sourcetransformpb::source_transform_client::SourceTransformClient;
     use crate::transformer::SourceTransformer;
 
     struct SimpleSource {

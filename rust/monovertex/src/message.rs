@@ -5,9 +5,10 @@ use base64::Engine;
 use chrono::{DateTime, Utc};
 
 use crate::error::Error;
-use crate::proto;
-use crate::proto::{read_response, SourceTransformRequest};
 use crate::shared::{prost_timestamp_from_utc, utc_from_timestamp};
+use crate::sinkpb::SinkRequest;
+use crate::sourcepb::read_response;
+use crate::sourcetransformpb::SourceTransformRequest;
 
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone)]
@@ -73,7 +74,7 @@ impl TryFrom<read_response::Result> for Message {
 }
 
 /// Convert [`Message`] to [`proto::SinkRequest`]
-impl From<Message> for proto::SinkRequest {
+impl From<Message> for SinkRequest {
     fn from(message: Message) -> Self {
         Self {
             keys: message.keys,

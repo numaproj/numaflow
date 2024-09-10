@@ -1,13 +1,11 @@
 use crate::error::Result;
 use crate::message::Message;
-use crate::proto;
 use crate::shared::utc_from_timestamp;
-use crate::transformer::proto::SourceTransformRequest;
+use crate::sourcetransformpb::source_transform_client::SourceTransformClient;
+use crate::sourcetransformpb::SourceTransformRequest;
 use tonic::transport::Channel;
 
 const DROP: &str = "U+005C__DROP__";
-const RECONNECT_INTERVAL: u64 = 1000;
-const MAX_RECONNECT_ATTEMPTS: usize = 5;
 pub(crate) const TRANSFORMER_SOCKET: &str = "/var/run/numaflow/sourcetransform.sock";
 pub(crate) const TRANSFORMER_SERVER_INFO_FILE: &str =
     "/var/run/numaflow/sourcetransformer-server-info";
@@ -15,13 +13,11 @@ pub(crate) const TRANSFORMER_SERVER_INFO_FILE: &str =
 /// TransformerClient is a client to interact with the transformer server.
 #[derive(Clone)]
 pub struct SourceTransformer {
-    client: proto::source_transform_client::SourceTransformClient<Channel>,
+    client: SourceTransformClient<Channel>,
 }
 
 impl SourceTransformer {
-    pub(crate) async fn new(
-        client: proto::source_transform_client::SourceTransformClient<Channel>,
-    ) -> Result<Self> {
+    pub(crate) async fn new(client: SourceTransformClient<Channel>) -> Result<Self> {
         Ok(Self { client })
     }
 
@@ -64,8 +60,8 @@ impl SourceTransformer {
 mod tests {
     use std::error::Error;
 
-    use crate::proto::source_transform_client::SourceTransformClient;
     use crate::shared::create_rpc_channel;
+    use crate::sourcetransformpb::source_transform_client::SourceTransformClient;
     use crate::transformer::SourceTransformer;
     use numaflow::sourcetransform;
     use tempfile::TempDir;
