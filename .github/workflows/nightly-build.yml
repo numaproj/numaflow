@@ -136,13 +136,13 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: numaflow-rs-linux-amd64
-          path: dist/numaflow-rs-linux-amd64
+          path: dist/
 
       - name: Download Rust arm64 binaries
         uses: actions/download-artifact@v3
         with:
           name: numaflow-rs-linux-arm64
-          path: dist/numaflow-rs-linux-arm64
+          path: dist/
 
       - name: Registry Login
         uses: docker/login-action@v2
