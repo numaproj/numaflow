@@ -5,10 +5,9 @@ use base64::Engine;
 use chrono::{DateTime, Utc};
 
 use crate::error::Error;
+use crate::proto;
+use crate::proto::{read_response, SourceTransformRequest};
 use crate::shared::{prost_timestamp_from_utc, utc_from_timestamp};
-use crate::sink::proto;
-use crate::source::proto::read_response;
-use crate::transformer::proto::SourceTransformRequest;
 
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone)]

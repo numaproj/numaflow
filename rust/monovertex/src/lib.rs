@@ -3,15 +3,23 @@ use crate::config::config;
 pub(crate) use crate::error::Error;
 use crate::forwarder::ForwarderBuilder;
 use crate::metrics::{start_metrics_https_server, LagReaderBuilder, MetricsState};
-use crate::sink::{SinkClient, SinkConfig};
-use crate::source::{SourceClient, SourceConfig};
-use crate::transformer::{TransformerClient, TransformerConfig};
+use crate::proto::sink_client::SinkClient;
+use crate::proto::source_client::SourceClient;
+use crate::proto::source_transform_client::SourceTransformClient;
+use crate::shared::create_rpc_channel;
+use crate::sink::{
+    SinkWriter, FB_SINK_SERVER_INFO_FILE, FB_SINK_SOCKET, SINK_SERVER_INFO_FILE, SINK_SOCKET,
+};
+use crate::source::{SourceReader, SOURCE_SERVER_INFO_FILE, SOURCE_SOCKET};
+use crate::transformer::{SourceTransformer, TRANSFORMER_SERVER_INFO_FILE, TRANSFORMER_SOCKET};
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
+use tonic::Request;
 use tracing::{error, info, warn};
 
 /// SourcerSinker orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
@@ -36,38 +44,17 @@ pub(crate) mod message;
 
 pub(crate) mod shared;
 
+pub(crate) mod proto {
+    tonic::include_proto!("source.v1");
+    tonic::include_proto!("sink.v1");
+    tonic::include_proto!("sourcetransformer.v1");
+}
+
 mod server_info;
 
 mod metrics;
 
-pub async fn mono_vertex() {
-    // Initialize the source, sink and transformer configurations
-    // We are using the default configurations for now.
-    let source_config = SourceConfig {
-        max_message_size: config().grpc_max_message_size,
-        ..Default::default()
-    };
-
-    let sink_config = SinkConfig {
-        max_message_size: config().grpc_max_message_size,
-        ..Default::default()
-    };
-
-    let transformer_config = if config().is_transformer_enabled {
-        Some(TransformerConfig {
-            max_message_size: config().grpc_max_message_size,
-            ..Default::default()
-        })
-    } else {
-        None
-    };
-
-    let fb_sink_config = if config().is_fallback_enabled {
-        Some(SinkConfig::fallback_default())
-    } else {
-        None
-    };
-
+pub async fn mono_vertex() -> Result<()> {
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
 
@@ -79,15 +66,7 @@ pub async fn mono_vertex() {
     });
 
     // Run the forwarder with cancellation token.
-    if let Err(e) = init(
-        source_config,
-        sink_config,
-        transformer_config,
-        fb_sink_config,
-        cln_token,
-    )
-    .await
-    {
+    if let Err(e) = init(cln_token).await {
         error!("Application error: {:?}", e);
 
         // abort the signal handler task since we have an error and we are shutting down
@@ -97,6 +76,7 @@ pub async fn mono_vertex() {
     }
 
     info!("Gracefully Exiting...");
+    Ok(())
 }
 
 async fn shutdown_signal() {
@@ -121,62 +101,81 @@ async fn shutdown_signal() {
     }
 }
 
-/// forwards a chunk of data from the source to the sink via an optional transformer.
-/// It takes an optional custom_shutdown_rx for shutting down the forwarder, useful for testing.
-pub async fn init(
-    source_config: SourceConfig,
-    sink_config: SinkConfig,
-    transformer_config: Option<TransformerConfig>,
-    fb_sink_config: Option<SinkConfig>,
-    cln_token: CancellationToken,
-) -> Result<()> {
-    server_info::check_for_server_compatibility(&source_config.server_info_file, cln_token.clone())
+pub async fn init(cln_token: CancellationToken) -> Result<()> {
+    server_info::check_for_server_compatibility(SOURCE_SERVER_INFO_FILE, cln_token.clone())
         .await
         .map_err(|e| {
             warn!("Error waiting for source server info file: {:?}", e);
             Error::ForwarderError("Error waiting for server info file".to_string())
         })?;
-    let mut source_client = SourceClient::connect(source_config).await?;
 
-    server_info::check_for_server_compatibility(&sink_config.server_info_file, cln_token.clone())
+    let mut source_grpc_client = SourceClient::new(create_rpc_channel(SOURCE_SOCKET.into()).await?)
+        .max_encoding_message_size(config().grpc_max_message_size)
+        .max_encoding_message_size(config().grpc_max_message_size);
+
+    let source_reader = SourceReader::new(source_grpc_client.clone()).await?;
+
+    server_info::check_for_server_compatibility(SINK_SERVER_INFO_FILE, cln_token.clone())
         .await
         .map_err(|e| {
-            warn!("Error waiting for sink server info file: {:?}", e);
+            error!("Error waiting for sink server info file: {:?}", e);
             Error::ForwarderError("Error waiting for server info file".to_string())
         })?;
 
-    let mut sink_client = SinkClient::connect(sink_config).await?;
+    let mut sink_grpc_client = SinkClient::new(create_rpc_channel(SINK_SOCKET.into()).await?)
+        .max_encoding_message_size(config().grpc_max_message_size)
+        .max_encoding_message_size(config().grpc_max_message_size);
 
-    let mut transformer_client = if let Some(config) = transformer_config {
-        server_info::check_for_server_compatibility(&config.server_info_file, cln_token.clone())
-            .await
-            .map_err(|e| {
-                warn!("Error waiting for transformer server info file: {:?}", e);
-                Error::ForwarderError("Error waiting for server info file".to_string())
-            })?;
-        Some(TransformerClient::connect(config).await?)
+    let mut sink_writer = SinkWriter::new(sink_grpc_client.clone()).await?;
+
+    let (mut transformer_grpc_client, mut transformer) = if config().is_transformer_enabled {
+        server_info::check_for_server_compatibility(
+            TRANSFORMER_SERVER_INFO_FILE,
+            cln_token.clone(),
+        )
+        .await
+        .map_err(|e| {
+            error!("Error waiting for transformer server info file: {:?}", e);
+            Error::ForwarderError("Error waiting for server info file".to_string())
+        })?;
+        let transformer_grpc_client =
+            SourceTransformClient::new(create_rpc_channel(TRANSFORMER_SOCKET.into()).await?)
+                .max_encoding_message_size(config().grpc_max_message_size)
+                .max_encoding_message_size(config().grpc_max_message_size);
+
+        (
+            Some(transformer_grpc_client),
+            Some(SourceTransformer::new(transformer_grpc_client.clone()).await?),
+        )
     } else {
-        None
+        (None, None)
     };
 
-    let mut fb_sink_client = if let Some(config) = fb_sink_config {
-        server_info::check_for_server_compatibility(&config.server_info_file, cln_token.clone())
+    let (mut fb_sink_grpc_client, mut fallback_writer) = if config().is_fallback_enabled {
+        server_info::check_for_server_compatibility(FB_SINK_SERVER_INFO_FILE, cln_token.clone())
             .await
             .map_err(|e| {
                 warn!("Error waiting for fallback sink server info file: {:?}", e);
                 Error::ForwarderError("Error waiting for server info file".to_string())
             })?;
-        Some(SinkClient::connect(config).await?)
+        let fb_sink_grpc_client = SinkClient::new(create_rpc_channel(FB_SINK_SOCKET.into()).await?)
+            .max_encoding_message_size(config().grpc_max_message_size)
+            .max_encoding_message_size(config().grpc_max_message_size);
+
+        (
+            Some(fb_sink_grpc_client),
+            Some(SinkWriter::new(fb_sink_grpc_client.clone()).await?),
+        )
     } else {
-        None
+        (None, None)
     };
 
     // readiness check for all the ud containers
     wait_until_ready(
-        &mut source_client,
-        &mut sink_client,
-        &mut transformer_client,
-        &mut fb_sink_client,
+        &mut source_grpc_client,
+        &mut sink_grpc_client,
+        &mut transformer_grpc_client,
+        &mut fb_sink_grpc_client,
     )
     .await?;
 
@@ -189,11 +188,12 @@ pub async fn init(
     // This should be running throughout the lifetime of the application, hence the handle is not
     // joined.
     let metrics_state = MetricsState {
-        source_client: source_client.clone(),
-        sink_client: sink_client.clone(),
-        transformer_client: transformer_client.clone(),
-        fb_sink_client: fb_sink_client.clone(),
+        source_client: source_grpc_client.clone(),
+        sink_client: sink_grpc_client.clone(),
+        transformer_client: transformer_grpc_client.clone(),
+        fb_sink_client: fb_sink_grpc_client.clone(),
     };
+
     tokio::spawn(async move {
         if let Err(e) = start_metrics_https_server(metrics_addr, metrics_state).await {
             error!("Metrics server error: {:?}", e);
@@ -201,7 +201,7 @@ pub async fn init(
     });
 
     // start the lag reader to publish lag metrics
-    let mut lag_reader = LagReaderBuilder::new(source_client.clone())
+    let mut lag_reader = LagReaderBuilder::new(source_grpc_client.clone())
         .lag_checking_interval(Duration::from_secs(
             config().lag_check_interval_in_secs.into(),
         ))
@@ -212,14 +212,14 @@ pub async fn init(
     lag_reader.start().await;
 
     // build the forwarder
-    let mut forwarder_builder = ForwarderBuilder::new(source_client, sink_client, cln_token);
+    let mut forwarder_builder = ForwarderBuilder::new(source_reader, sink_writer, cln_token);
     // add transformer if exists
-    if let Some(transformer_client) = transformer_client {
-        forwarder_builder = forwarder_builder.transformer_client(transformer_client);
+    if let Some(transformer) = transformer {
+        forwarder_builder = forwarder_builder.source_transformer(transformer);
     }
     // add fallback sink if exists
-    if let Some(fb_sink_client) = fb_sink_client {
-        forwarder_builder = forwarder_builder.fb_sink_client(fb_sink_client);
+    if let Some(fallback_writer) = fallback_writer {
+        forwarder_builder = forwarder_builder.fallback_sink_writer(fallback_writer);
     }
     // build the final forwarder
     let mut forwarder = forwarder_builder.build();
@@ -232,24 +232,24 @@ pub async fn init(
 }
 
 async fn wait_until_ready(
-    source_client: &mut SourceClient,
-    sink_client: &mut SinkClient,
-    transformer_client: &mut Option<TransformerClient>,
-    fb_sink_client: &mut Option<SinkClient>,
+    source_client: &mut SourceClient<Channel>,
+    sink_client: &mut SinkClient<Channel>,
+    transformer_client: &mut Option<SourceTransformClient<Channel>>,
+    fb_sink_client: &mut Option<SinkClient<Channel>>,
 ) -> Result<()> {
     loop {
-        let source_ready = source_client.is_ready().await;
+        let source_ready = source_client.is_ready(Request::new(())).await.is_ok();
         if !source_ready {
             info!("UDSource is not ready, waiting...");
         }
 
-        let sink_ready = sink_client.is_ready().await;
+        let sink_ready = sink_client.is_ready(Request::new(())).await.is_ok();
         if !sink_ready {
             info!("UDSink is not ready, waiting...");
         }
 
         let transformer_ready = if let Some(client) = transformer_client {
-            let ready = client.is_ready().await;
+            let ready = client.is_ready(Request::new(())).await.is_ok();
             if !ready {
                 info!("UDTransformer is not ready, waiting...");
             }
@@ -259,7 +259,7 @@ async fn wait_until_ready(
         };
 
         let fb_sink_ready = if let Some(client) = fb_sink_client {
-            let ready = client.is_ready().await;
+            let ready = client.is_ready(Request::new(())).await.is_ok();
             if !ready {
                 info!("Fallback Sink is not ready, waiting...");
             }
@@ -286,9 +286,6 @@ mod tests {
     use numaflow::{sink, source};
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
-
-    use crate::sink::SinkConfig;
-    use crate::source::SourceConfig;
 
     struct SimpleSource;
     #[tonic::async_trait]

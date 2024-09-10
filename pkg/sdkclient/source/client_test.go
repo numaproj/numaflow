@@ -19,9 +19,7 @@ package source
 import (
 	"context"
 	"fmt"
-	"io"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 
@@ -61,11 +59,7 @@ func TestIsReady(t *testing.T) {
 	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&sourcepb.ReadyResponse{Ready: true}, nil)
 	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&sourcepb.ReadyResponse{Ready: false}, fmt.Errorf("mock connection refused"))
 
-	testClient, err := NewFromClient(mockClient)
-	assert.NoError(t, err)
-	reflect.DeepEqual(testClient, &client{
-		grpcClt: mockClient,
-	})
+	testClient := client{grpcClt: mockClient}
 
 	ready, err := testClient.IsReady(ctx, &emptypb.Empty{})
 	assert.True(t, ready)
@@ -100,16 +94,28 @@ func TestReadFn(t *testing.T) {
 	for i := 0; i < numRecords; i++ {
 		mockStreamClient.EXPECT().Recv().Return(expectedResp, nil)
 	}
-	mockStreamClient.EXPECT().Recv().Return(expectedResp, io.EOF)
+
+	eotResponse := &sourcepb.ReadResponse{
+		Status: &sourcepb.ReadResponse_Status{
+			Eot:  true,
+			Code: 0,
+		},
+	}
+	mockStreamClient.EXPECT().Recv().Return(eotResponse, nil)
 
 	mockStreamClient.EXPECT().CloseSend().Return(nil).AnyTimes()
-	mockClient.EXPECT().ReadFn(gomock.Any(), gomock.Any()).Return(mockStreamClient, nil)
 
-	testClient, err := NewFromClient(mockClient)
-	assert.NoError(t, err)
-	assert.True(t, reflect.DeepEqual(testClient, &client{
-		grpcClt: mockClient,
-	}))
+	request := &sourcepb.ReadRequest{
+		Request: &sourcepb.ReadRequest_Request{
+			NumRecords: uint64(numRecords),
+		},
+	}
+	mockStreamClient.EXPECT().Send(request).Return(nil)
+
+	testClient := &client{
+		grpcClt:    mockClient,
+		readStream: mockStreamClient,
+	}
 
 	responseCh := make(chan *sourcepb.ReadResponse)
 
@@ -127,18 +133,12 @@ func TestReadFn(t *testing.T) {
 		}
 	}()
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		err = testClient.ReadFn(ctx, &sourcepb.ReadRequest{
-			Request: &sourcepb.ReadRequest_Request{
-				NumRecords: uint64(numRecords),
-			},
-		}, responseCh)
-		assert.NoError(t, err)
-	}()
-	wg.Wait()
+	err := testClient.ReadFn(ctx, &sourcepb.ReadRequest{
+		Request: &sourcepb.ReadRequest_Request{
+			NumRecords: uint64(numRecords),
+		},
+	}, responseCh)
+	assert.NoError(t, err)
 	close(responseCh)
 }
 
@@ -150,14 +150,15 @@ func TestAckFn(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockClient := sourcemock.NewMockSourceClient(ctrl)
-	mockClient.EXPECT().AckFn(gomock.Any(), gomock.Any()).Return(&sourcepb.AckResponse{}, nil)
-	mockClient.EXPECT().AckFn(gomock.Any(), gomock.Any()).Return(&sourcepb.AckResponse{}, fmt.Errorf("mock connection refused"))
 
-	testClient, err := NewFromClient(mockClient)
-	assert.NoError(t, err)
-	reflect.DeepEqual(testClient, &client{
-		grpcClt: mockClient,
-	})
+	mockStream := sourcemock.NewMockSource_AckFnClient(ctrl)
+	mockStream.EXPECT().Send(gomock.Any()).Return(nil)
+	mockStream.EXPECT().Send(gomock.Any()).Return(fmt.Errorf("mock connection refused"))
+
+	testClient := client{
+		grpcClt:   mockClient,
+		ackStream: mockStream,
+	}
 
 	ack, err := testClient.AckFn(ctx, &sourcepb.AckRequest{})
 	assert.NoError(t, err)
@@ -165,7 +166,6 @@ func TestAckFn(t *testing.T) {
 
 	ack, err = testClient.AckFn(ctx, &sourcepb.AckRequest{})
 	assert.EqualError(t, err, "mock connection refused")
-	assert.Equal(t, &sourcepb.AckResponse{}, ack)
 }
 
 func TestPendingFn(t *testing.T) {
@@ -183,11 +183,9 @@ func TestPendingFn(t *testing.T) {
 	}, nil)
 	mockClient.EXPECT().PendingFn(gomock.Any(), gomock.Any()).Return(&sourcepb.PendingResponse{}, fmt.Errorf("mock connection refused"))
 
-	testClient, err := NewFromClient(mockClient)
-	assert.NoError(t, err)
-	reflect.DeepEqual(testClient, &client{
+	testClient := client{
 		grpcClt: mockClient,
-	})
+	}
 
 	pending, err := testClient.PendingFn(ctx, &emptypb.Empty{})
 	assert.NoError(t, err)

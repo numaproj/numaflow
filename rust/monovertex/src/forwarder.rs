@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use crate::config::{config, OnFailureStrategy};
 use crate::error::{Error, Result};
 use crate::message::{Message, Offset};
-use crate::metrics;
 use crate::metrics::forward_metrics;
-use crate::sink::{proto, SinkClient};
-use crate::source::SourceClient;
-use crate::transformer::TransformerClient;
+use crate::sink::SinkWriter;
+use crate::source::SourceReader;
+use crate::transformer::SourceTransformer;
+use crate::{metrics, proto};
 use chrono::Utc;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
@@ -19,48 +19,48 @@ use tracing::{debug, info};
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
 /// back to the source.
 pub(crate) struct Forwarder {
-    source_client: SourceClient,
-    sink_client: SinkClient,
-    transformer_client: Option<TransformerClient>,
-    fallback_client: Option<SinkClient>,
+    source_reader: SourceReader,
+    sink_writer: SinkWriter,
+    source_transformer: Option<SourceTransformer>,
+    fb_sink_writer: Option<SinkWriter>,
     cln_token: CancellationToken,
     common_labels: Vec<(String, String)>,
 }
 
 /// ForwarderBuilder is used to build a Forwarder instance with optional fields.
 pub(crate) struct ForwarderBuilder {
-    source_client: SourceClient,
-    sink_client: SinkClient,
+    source_reader: SourceReader,
+    sink_writer: SinkWriter,
     cln_token: CancellationToken,
-    transformer_client: Option<TransformerClient>,
-    fb_sink_client: Option<SinkClient>,
+    source_transformer: Option<SourceTransformer>,
+    fb_sink_writer: Option<SinkWriter>,
 }
 
 impl ForwarderBuilder {
     /// Create a new builder with mandatory fields
     pub(crate) fn new(
-        source_client: SourceClient,
-        sink_client: SinkClient,
+        source_client: SourceReader,
+        sink_client: SinkWriter,
         cln_token: CancellationToken,
     ) -> Self {
         Self {
-            source_client,
-            sink_client,
+            source_reader: source_client,
+            sink_writer: sink_client,
             cln_token,
-            transformer_client: None,
-            fb_sink_client: None,
+            source_transformer: None,
+            fb_sink_writer: None,
         }
     }
 
     /// Set the optional transformer client
-    pub(crate) fn transformer_client(mut self, transformer_client: TransformerClient) -> Self {
-        self.transformer_client = Some(transformer_client);
+    pub(crate) fn source_transformer(mut self, transformer_client: SourceTransformer) -> Self {
+        self.source_transformer = Some(transformer_client);
         self
     }
 
     /// Set the optional fallback client
-    pub(crate) fn fb_sink_client(mut self, fallback_client: SinkClient) -> Self {
-        self.fb_sink_client = Some(fallback_client);
+    pub(crate) fn fallback_sink_writer(mut self, fallback_client: SinkWriter) -> Self {
+        self.fb_sink_writer = Some(fallback_client);
         self
     }
 
@@ -69,10 +69,10 @@ impl ForwarderBuilder {
     pub(crate) fn build(self) -> Forwarder {
         let common_labels = metrics::forward_metrics_labels().clone();
         Forwarder {
-            source_client: self.source_client,
-            sink_client: self.sink_client,
-            transformer_client: self.transformer_client,
-            fallback_client: self.fb_sink_client,
+            source_reader: self.source_reader,
+            sink_writer: self.sink_writer,
+            source_transformer: self.source_transformer,
+            fb_sink_writer: self.fb_sink_writer,
             cln_token: self.cln_token,
             common_labels,
         }
@@ -120,7 +120,7 @@ impl Forwarder {
     async fn read_and_process_messages(&mut self) -> Result<usize> {
         let start_time = tokio::time::Instant::now();
         let messages = self
-            .source_client
+            .source_reader
             .read_fn(config().batch_size, config().timeout_in_ms)
             .await?;
         debug!(
@@ -173,7 +173,7 @@ impl Forwarder {
     // Applies transformation to the messages if transformer is present
     // we concurrently apply transformation to all the messages.
     async fn apply_transformer(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
-        let Some(transformer_client) = &self.transformer_client else {
+        let Some(transformer_client) = &self.source_transformer else {
             // return early if there is no transformer
             return Ok(messages);
         };
@@ -342,7 +342,7 @@ impl Forwarder {
         messages_to_send: &mut Vec<Message>,
     ) -> Result<bool> {
         let start_time = tokio::time::Instant::now();
-        match self.sink_client.sink_fn(messages_to_send.clone()).await {
+        match self.sink_writer.sink_fn(messages_to_send.clone()).await {
             Ok(response) => {
                 debug!("Sink latency - {}ms", start_time.elapsed().as_millis());
 
@@ -384,22 +384,22 @@ impl Forwarder {
                 .await;
 
                 // we need to retry
-                return Ok(false);
+                Ok(false)
             }
-            Err(e) => return Err(e),
+            Err(e) => Err(e),
         }
     }
 
     // Writes the fallback messages to the fallback sink
     async fn handle_fallback_messages(&mut self, fallback_msgs: Vec<Message>) -> Result<()> {
-        if self.fallback_client.is_none() {
+        if self.fb_sink_writer.is_none() {
             return Err(Error::SinkError(
                 "Response contains fallback messages but no fallback sink is configured"
                     .to_string(),
             ));
         }
 
-        let fallback_client = self.fallback_client.as_mut().unwrap();
+        let fallback_client = self.fb_sink_writer.as_mut().unwrap();
         let mut attempts = 0;
         let mut fallback_error_map = HashMap::new();
         // start with the original set of message to be sent.
@@ -497,7 +497,7 @@ impl Forwarder {
         let n = offsets.len();
         let start_time = tokio::time::Instant::now();
 
-        self.source_client.ack_fn(offsets).await?;
+        self.source_reader.ack_fn(offsets).await?;
 
         debug!("Ack latency - {}ms", start_time.elapsed().as_millis());
 
@@ -526,9 +526,13 @@ mod tests {
 
     use crate::error::Result;
     use crate::forwarder::ForwarderBuilder;
-    use crate::sink::{SinkClient, SinkConfig};
-    use crate::source::{SourceClient, SourceConfig};
-    use crate::transformer::{TransformerClient, TransformerConfig};
+    use crate::proto::sink_client::SinkClient;
+    use crate::proto::source_client::SourceClient;
+    use crate::proto::source_transform_client::SourceTransformClient;
+    use crate::shared::create_rpc_channel;
+    use crate::sink::SinkWriter;
+    use crate::source::SourceReader;
+    use crate::transformer::SourceTransformer;
 
     struct SimpleSource {
         yet_to_be_acked: std::sync::RwLock<HashSet<String>>,
@@ -672,11 +676,6 @@ mod tests {
                 .await
                 .unwrap();
         });
-        let source_config = SourceConfig {
-            socket_path: source_sock_file.to_str().unwrap().to_string(),
-            server_info_file: server_info_file.to_str().unwrap().to_string(),
-            max_message_size: 4 * 1024 * 1024,
-        };
 
         // Start the sink server
         let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
@@ -694,11 +693,6 @@ mod tests {
                 .await
                 .unwrap();
         });
-        let sink_config = SinkConfig {
-            socket_path: sink_sock_file.to_str().unwrap().to_string(),
-            server_info_file: server_info_file.to_str().unwrap().to_string(),
-            max_message_size: 4 * 1024 * 1024,
-        };
 
         // Start the transformer server
         let (transformer_shutdown_tx, transformer_shutdown_rx) = tokio::sync::oneshot::channel();
@@ -716,31 +710,32 @@ mod tests {
                 .await
                 .unwrap();
         });
-        let transformer_config = TransformerConfig {
-            socket_path: transformer_sock_file.to_str().unwrap().to_string(),
-            server_info_file: server_info_file.to_str().unwrap().to_string(),
-            max_message_size: 4 * 1024 * 1024,
-        };
 
         // Wait for the servers to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let cln_token = CancellationToken::new();
 
-        let source_client = SourceClient::connect(source_config)
-            .await
-            .expect("failed to connect to source server");
+        let source_client = SourceReader::new(SourceClient::new(
+            create_rpc_channel(source_sock_file).await.unwrap(),
+        ))
+        .await
+        .expect("failed to connect to source server");
 
-        let sink_client = SinkClient::connect(sink_config)
-            .await
-            .expect("failed to connect to sink server");
+        let sink_client = SinkWriter::new(SinkClient::new(
+            create_rpc_channel(sink_sock_file).await.unwrap(),
+        ))
+        .await
+        .expect("failed to connect to sink server");
 
-        let transformer_client = TransformerClient::connect(transformer_config)
-            .await
-            .expect("failed to connect to transformer server");
+        let transformer_client = SourceTransformer::new(SourceTransformClient::new(
+            create_rpc_channel(transformer_sock_file).await.unwrap(),
+        ))
+        .await
+        .expect("failed to connect to transformer server");
 
         let mut forwarder = ForwarderBuilder::new(source_client, sink_client, cln_token.clone())
-            .transformer_client(transformer_client)
+            .source_transformer(transformer_client)
             .build();
 
         let forwarder_handle = tokio::spawn(async move {
@@ -821,11 +816,6 @@ mod tests {
                 .await
                 .unwrap();
         });
-        let source_config = SourceConfig {
-            socket_path: source_sock_file.to_str().unwrap().to_string(),
-            server_info_file: server_info_file.to_str().unwrap().to_string(),
-            max_message_size: 4 * 1024 * 1024,
-        };
 
         // Start the sink server
         let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
@@ -843,24 +833,23 @@ mod tests {
                 .await
                 .unwrap();
         });
-        let sink_config = SinkConfig {
-            socket_path: sink_sock_file.to_str().unwrap().to_string(),
-            server_info_file: server_info_file.to_str().unwrap().to_string(),
-            max_message_size: 4 * 1024 * 1024,
-        };
 
         // Wait for the servers to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let cln_token = CancellationToken::new();
 
-        let source_client = SourceClient::connect(source_config)
-            .await
-            .expect("failed to connect to source server");
+        let source_client = SourceReader::new(SourceClient::new(
+            create_rpc_channel(source_sock_file).await.unwrap(),
+        ))
+        .await
+        .expect("failed to connect to source server");
 
-        let sink_client = SinkClient::connect(sink_config)
-            .await
-            .expect("failed to connect to sink server");
+        let sink_client = SinkWriter::new(SinkClient::new(
+            create_rpc_channel(sink_sock_file).await.unwrap(),
+        ))
+        .await
+        .expect("failed to connect to sink server");
 
         let mut forwarder =
             ForwarderBuilder::new(source_client, sink_client, cln_token.clone()).build();
@@ -929,11 +918,6 @@ mod tests {
                 .await
                 .unwrap();
         });
-        let source_config = SourceConfig {
-            socket_path: source_sock_file.to_str().unwrap().to_string(),
-            server_info_file: server_info_file.to_str().unwrap().to_string(),
-            max_message_size: 4 * 1024 * 1024,
-        };
 
         // Start the primary sink server (which returns status fallback)
         let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
@@ -951,11 +935,6 @@ mod tests {
                 .await
                 .unwrap();
         });
-        let sink_config = SinkConfig {
-            socket_path: sink_sock_file.to_str().unwrap().to_string(),
-            server_info_file: server_info_file.to_str().unwrap().to_string(),
-            max_message_size: 4 * 1024 * 1024,
-        };
 
         // Start the fb sink server
         let (fb_sink_shutdown_tx, fb_sink_shutdown_rx) = tokio::sync::oneshot::channel();
@@ -973,31 +952,32 @@ mod tests {
                 .await
                 .unwrap();
         });
-        let fb_sink_config = SinkConfig {
-            socket_path: fb_sink_sock_file.to_str().unwrap().to_string(),
-            server_info_file: server_info_file.to_str().unwrap().to_string(),
-            max_message_size: 4 * 1024 * 1024,
-        };
 
         // Wait for the servers to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let cln_token = CancellationToken::new();
 
-        let source_client = SourceClient::connect(source_config)
-            .await
-            .expect("failed to connect to source server");
+        let source_client = SourceReader::new(SourceClient::new(
+            create_rpc_channel(source_sock_file).await.unwrap(),
+        ))
+        .await
+        .expect("failed to connect to source server");
 
-        let sink_client = SinkClient::connect(sink_config)
-            .await
-            .expect("failed to connect to sink server");
+        let sink_client = SinkWriter::new(SinkClient::new(
+            create_rpc_channel(sink_sock_file).await.unwrap(),
+        ))
+        .await
+        .expect("failed to connect to sink server");
 
-        let fb_sink_client = SinkClient::connect(fb_sink_config)
-            .await
-            .expect("failed to connect to fb sink server");
+        let fb_sink_client = SinkWriter::new(SinkClient::new(
+            create_rpc_channel(fb_sink_sock_file).await.unwrap(),
+        ))
+        .await
+        .expect("failed to connect to fb sink server");
 
         let mut forwarder = ForwarderBuilder::new(source_client, sink_client, cln_token.clone())
-            .fb_sink_client(fb_sink_client)
+            .fallback_sink_writer(fb_sink_client)
             .build();
 
         let forwarder_handle = tokio::spawn(async move {

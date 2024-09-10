@@ -17,15 +17,15 @@ use tracing::{debug, error, info};
 
 use crate::config::config;
 use crate::error::Error;
-use crate::sink::SinkClient;
-use crate::source::SourceClient;
-use crate::transformer::TransformerClient;
+use crate::proto;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
 use prometheus_client::registry::Registry;
+use tonic::transport::Channel;
+use tonic::Request;
 
 // Define the labels for the metrics
 // Note: Please keep consistent with the definitions in MonoVertex daemon
@@ -59,10 +59,10 @@ const SINK_TIME: &str = "monovtx_sink_time";
 
 #[derive(Clone)]
 pub(crate) struct MetricsState {
-    pub source_client: SourceClient,
-    pub sink_client: SinkClient,
-    pub transformer_client: Option<TransformerClient>,
-    pub fb_sink_client: Option<SinkClient>,
+    pub source_client: proto::source_client::SourceClient<Channel>,
+    pub sink_client: proto::sink_client::SinkClient<Channel>,
+    pub transformer_client: Option<proto::source_transform_client::SourceTransformClient<Channel>>,
+    pub fb_sink_client: Option<proto::sink_client::SinkClient<Channel>>,
 }
 
 /// The global register of all metrics.
@@ -323,22 +323,22 @@ async fn livez() -> impl IntoResponse {
 }
 
 async fn sidecar_livez(State(mut state): State<MetricsState>) -> impl IntoResponse {
-    if !state.source_client.is_ready().await {
+    if !state.source_client.is_ready(Request::new(())).await.is_ok() {
         error!("Source client is not available");
         return StatusCode::SERVICE_UNAVAILABLE;
     }
-    if !state.sink_client.is_ready().await {
+    if !state.sink_client.is_ready(Request::new(())).await.is_ok() {
         error!("Sink client is not available");
         return StatusCode::SERVICE_UNAVAILABLE;
     }
     if let Some(mut transformer_client) = state.transformer_client {
-        if !transformer_client.is_ready().await {
+        if !transformer_client.is_ready(Request::new(())).await.is_ok() {
             error!("Transformer client is not available");
             return StatusCode::SERVICE_UNAVAILABLE;
         }
     }
     if let Some(mut fb_sink_client) = state.fb_sink_client {
-        if !fb_sink_client.is_ready().await {
+        if !fb_sink_client.is_ready(Request::new(())).await.is_ok() {
             error!("Fallback sink client is not available");
             return StatusCode::SERVICE_UNAVAILABLE;
         }
@@ -358,7 +358,7 @@ struct TimestampedPending {
 /// and exposing the metrics. It maintains a list of pending stats and ensures that
 /// only the most recent entries are kept.
 pub(crate) struct LagReader {
-    source_client: SourceClient,
+    source_client: proto::source_client::SourceClient<Channel>,
     lag_checking_interval: Duration,
     refresh_interval: Duration,
     buildup_handle: Option<JoinHandle<()>>,
@@ -368,13 +368,13 @@ pub(crate) struct LagReader {
 
 /// LagReaderBuilder is used to build a `LagReader` instance.
 pub(crate) struct LagReaderBuilder {
-    source_client: SourceClient,
+    source_client: proto::source_client::SourceClient<Channel>,
     lag_checking_interval: Option<Duration>,
     refresh_interval: Option<Duration>,
 }
 
 impl LagReaderBuilder {
-    pub(crate) fn new(source_client: SourceClient) -> Self {
+    pub(crate) fn new(source_client: proto::source_client::SourceClient<Channel>) -> Self {
         Self {
             source_client,
             lag_checking_interval: None,
@@ -447,14 +447,14 @@ impl Drop for LagReader {
 
 /// Periodically checks the pending messages from the source client and build the pending stats.
 async fn build_pending_info(
-    mut source_client: SourceClient,
+    mut source_client: proto::source_client::SourceClient<Channel>,
     lag_checking_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
     let mut ticker = time::interval(lag_checking_interval);
     loop {
         ticker.tick().await;
-        match source_client.pending_fn().await {
+        match fetch_pending(&mut source_client).await {
             Ok(pending) => {
                 if pending != -1 {
                     let mut stats = pending_stats.lock().await;
@@ -474,6 +474,19 @@ async fn build_pending_info(
             }
         }
     }
+}
+
+async fn fetch_pending(
+    source_client: &mut proto::source_client::SourceClient<Channel>,
+) -> crate::error::Result<i64> {
+    let request = Request::new(());
+    let response = source_client
+        .pending_fn(request)
+        .await?
+        .into_inner()
+        .result
+        .map_or(-1, |r| r.count); // default to -1(unavailable)
+    Ok(response)
 }
 
 // Periodically exposes the pending metrics by calculating the average pending messages over different intervals.

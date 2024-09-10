@@ -26,6 +26,7 @@ import (
 
 	reducepb "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1"
 	"github.com/numaproj/numaflow-go/pkg/info"
+
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	grpcutil "github.com/numaproj/numaflow/pkg/sdkclient/grpc"

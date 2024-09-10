@@ -1,61 +1,27 @@
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::message::Message;
-use crate::shared::{connect_with_uds, utc_from_timestamp};
+use crate::proto;
+use crate::shared::utc_from_timestamp;
 use crate::transformer::proto::SourceTransformRequest;
-use backoff::retry::Retry;
-use backoff::strategy::fixed;
 use tonic::transport::Channel;
-use tonic::Request;
-
-pub mod proto {
-    tonic::include_proto!("sourcetransformer.v1");
-}
 
 const DROP: &str = "U+005C__DROP__";
 const RECONNECT_INTERVAL: u64 = 1000;
 const MAX_RECONNECT_ATTEMPTS: usize = 5;
-const TRANSFORMER_SOCKET: &str = "/var/run/numaflow/sourcetransform.sock";
-const TRANSFORMER_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcetransformer-server-info";
-
-/// TransformerConfig is the configuration for the transformer server.
-#[derive(Debug, Clone)]
-pub struct TransformerConfig {
-    pub socket_path: String,
-    pub server_info_file: String,
-    pub max_message_size: usize,
-}
-
-impl Default for TransformerConfig {
-    fn default() -> Self {
-        TransformerConfig {
-            socket_path: TRANSFORMER_SOCKET.to_string(),
-            server_info_file: TRANSFORMER_SERVER_INFO_FILE.to_string(),
-            max_message_size: 64 * 1024 * 1024, // 64 MB
-        }
-    }
-}
+pub(crate) const TRANSFORMER_SOCKET: &str = "/var/run/numaflow/sourcetransform.sock";
+pub(crate) const TRANSFORMER_SERVER_INFO_FILE: &str =
+    "/var/run/numaflow/sourcetransformer-server-info";
 
 /// TransformerClient is a client to interact with the transformer server.
 #[derive(Clone)]
-pub struct TransformerClient {
+pub struct SourceTransformer {
     client: proto::source_transform_client::SourceTransformClient<Channel>,
 }
 
-impl TransformerClient {
-    pub(crate) async fn connect(config: TransformerConfig) -> Result<Self> {
-        let interval =
-            fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
-
-        let channel = Retry::retry(
-            interval,
-            || async { connect_with_uds(config.socket_path.clone().into()).await },
-            |_: &Error| true,
-        )
-        .await?;
-
-        let client = proto::source_transform_client::SourceTransformClient::new(channel)
-            .max_decoding_message_size(config.max_message_size)
-            .max_encoding_message_size(config.max_message_size);
+impl SourceTransformer {
+    pub(crate) async fn new(
+        client: proto::source_transform_client::SourceTransformClient<Channel>,
+    ) -> Result<Self> {
         Ok(Self { client })
     }
 
@@ -92,20 +58,17 @@ impl TransformerClient {
 
         Ok(Some(messages))
     }
-
-    pub(crate) async fn is_ready(&mut self) -> bool {
-        self.client.is_ready(Request::new(())).await.is_ok()
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::error::Error;
 
+    use crate::proto::source_transform_client::SourceTransformClient;
+    use crate::shared::create_rpc_channel;
+    use crate::transformer::SourceTransformer;
     use numaflow::sourcetransform;
     use tempfile::TempDir;
-
-    use crate::transformer::{TransformerClient, TransformerConfig};
 
     struct NowCat;
 
@@ -143,11 +106,9 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let mut client = TransformerClient::connect(TransformerConfig {
-            socket_path: sock_file.to_str().unwrap().to_string(),
-            server_info_file: server_info_file.to_str().unwrap().to_string(),
-            max_message_size: 4 * 1024 * 1024,
-        })
+        let mut client = SourceTransformer::new(SourceTransformClient::new(
+            create_rpc_channel(sock_file).await?,
+        ))
         .await?;
 
         let message = crate::message::Message {
@@ -161,9 +122,6 @@ mod tests {
             id: "".to_string(),
             headers: Default::default(),
         };
-
-        let resp = client.is_ready().await;
-        assert!(resp);
 
         let resp = client.transform_fn(message).await?;
         assert!(resp.is_some());
@@ -212,11 +170,9 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let mut client = TransformerClient::connect(TransformerConfig {
-            socket_path: sock_file.to_str().unwrap().to_string(),
-            server_info_file: server_info_file.to_str().unwrap().to_string(),
-            max_message_size: 4 * 1024 * 1024,
-        })
+        let mut client = SourceTransformer::new(SourceTransformClient::new(
+            create_rpc_channel(sock_file).await?,
+        ))
         .await?;
 
         let message = crate::message::Message {
@@ -230,9 +186,6 @@ mod tests {
             id: "".to_string(),
             headers: Default::default(),
         };
-
-        let resp = client.is_ready().await;
-        assert!(resp);
 
         let resp = client.transform_fn(message).await?;
         assert!(resp.is_none());

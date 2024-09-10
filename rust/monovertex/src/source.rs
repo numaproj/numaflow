@@ -1,63 +1,49 @@
-use crate::error::{Error, Result};
+use crate::error::Error::SourceError;
+use crate::error::Result;
 use crate::message::{Message, Offset};
-use crate::shared::connect_with_uds;
-use backoff::retry::Retry;
-use backoff::strategy::fixed;
+use crate::proto;
+use crate::source::proto::AckResponse;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use tokio_stream::StreamExt;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
-use tonic::Request;
+use tonic::{Request, Streaming};
 
-pub mod proto {
-    tonic::include_proto!("source.v1");
-}
-const RECONNECT_INTERVAL: u64 = 1000;
-const MAX_RECONNECT_ATTEMPTS: usize = 5;
-const SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
-const SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
-
-/// SourceConfig is the configuration for the source server.
-#[derive(Debug, Clone)]
-pub struct SourceConfig {
-    pub socket_path: String,
-    pub server_info_file: String,
-    pub max_message_size: usize,
-}
-
-impl Default for SourceConfig {
-    fn default() -> Self {
-        SourceConfig {
-            socket_path: SOURCE_SOCKET.to_string(),
-            server_info_file: SOURCE_SERVER_INFO_FILE.to_string(),
-            max_message_size: 64 * 1024 * 1024, // 64 MB
-        }
-    }
-}
+pub(crate) const SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
+pub(crate) const SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
 /// SourceClient is a client to interact with the source server.
-#[derive(Debug, Clone)]
-pub(crate) struct SourceClient {
+#[derive(Debug)]
+pub(crate) struct SourceReader {
+    read_tx: mpsc::Sender<proto::ReadRequest>,
+    resp_stream: Streaming<proto::ReadResponse>,
+    ack_tx: mpsc::Sender<proto::AckRequest>,
     client: proto::source_client::SourceClient<Channel>,
 }
 
-impl SourceClient {
-    pub(crate) async fn connect(config: SourceConfig) -> Result<Self> {
-        let interval =
-            fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
+impl SourceReader {
+    pub(crate) async fn new(
+        mut client: proto::source_client::SourceClient<Channel>,
+    ) -> Result<Self> {
+        let (read_tx, read_rx) = mpsc::channel(500);
 
-        let channel = Retry::retry(
-            interval,
-            || async { connect_with_uds(config.socket_path.clone().into()).await },
-            |_: &Error| true,
-        )
-        .await?;
+        let resp_stream = client
+            .read_fn(Request::new(ReceiverStream::new(read_rx)))
+            .await?
+            .into_inner();
 
-        let client = proto::source_client::SourceClient::new(channel)
-            .max_encoding_message_size(config.max_message_size)
-            .max_decoding_message_size(config.max_message_size);
+        let (ack_tx, ack_rx) = mpsc::channel(500);
+        let _ = client
+            .ack_fn(Request::new(ReceiverStream::new(ack_rx)))
+            .await?;
 
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            read_tx,
+            resp_stream,
+            ack_tx,
+        })
     }
 
     pub(crate) async fn read_fn(
@@ -65,20 +51,28 @@ impl SourceClient {
         num_records: u64,
         timeout_in_ms: u32,
     ) -> Result<Vec<Message>> {
-        let request = Request::new(proto::ReadRequest {
+        let request = proto::ReadRequest {
             request: Some(proto::read_request::Request {
                 num_records,
                 timeout_in_ms,
             }),
-        });
+        };
 
-        let mut stream = self.client.read_fn(request).await?.into_inner();
+        self.read_tx
+            .send(request)
+            .await
+            .map_err(|e| SourceError(e.to_string()))?;
+
         let mut messages = Vec::with_capacity(num_records as usize);
 
-        while let Some(response) = stream.next().await {
-            let result = response?
+        while let Some(response) = self.resp_stream.message().await? {
+            if response.status.as_ref().map_or(false, |status| status.eot) {
+                break;
+            }
+
+            let result = response
                 .result
-                .ok_or_else(|| Error::SourceError("Empty message".to_string()))?;
+                .ok_or_else(|| SourceError("Empty message".to_string()))?;
 
             messages.push(result.try_into()?);
         }
@@ -86,46 +80,24 @@ impl SourceClient {
         Ok(messages)
     }
 
-    pub(crate) async fn ack_fn(&mut self, offsets: Vec<Offset>) -> Result<proto::AckResponse> {
-        let offsets = offsets
-            .into_iter()
-            .map(|offset| proto::Offset {
-                offset: BASE64_STANDARD
-                    .decode(offset.offset)
-                    .expect("we control the encoding, so this should never fail"),
-                partition_id: offset.partition_id,
-            })
-            .collect();
-
-        let request = Request::new(proto::AckRequest {
-            request: Some(proto::ack_request::Request { offsets }),
-        });
-
-        Ok(self.client.ack_fn(request).await?.into_inner())
-    }
-
-    pub(crate) async fn pending_fn(&mut self) -> Result<i64> {
-        let request = Request::new(());
-        let response = self
-            .client
-            .pending_fn(request)
-            .await?
-            .into_inner()
-            .result
-            .map_or(-1, |r| r.count); // default to -1(unavailable)
-        Ok(response)
-    }
-
-    #[allow(dead_code)]
-    // TODO: remove dead_code
-    pub(crate) async fn partitions_fn(&mut self) -> Result<Vec<i32>> {
-        let request = Request::new(());
-        let response = self.client.partitions_fn(request).await?.into_inner();
-        Ok(response.result.map_or(vec![], |r| r.partitions))
-    }
-
-    pub(crate) async fn is_ready(&mut self) -> bool {
-        self.client.is_ready(Request::new(())).await.is_ok()
+    pub(crate) async fn ack_fn(&mut self, offsets: Vec<Offset>) -> Result<AckResponse> {
+        for offset in offsets {
+            let request = proto::AckRequest {
+                request: Some(proto::ack_request::Request {
+                    offset: Some(proto::Offset {
+                        offset: BASE64_STANDARD
+                            .decode(offset.offset)
+                            .expect("we control the encoding, so this should never fail"),
+                        partition_id: offset.partition_id,
+                    }),
+                }),
+            };
+            self.ack_tx
+                .send(request)
+                .await
+                .map_err(|e| SourceError(e.to_string()))?;
+        }
+        Ok(AckResponse::default())
     }
 }
 
@@ -134,12 +106,13 @@ mod tests {
     use std::collections::HashSet;
     use std::error::Error;
 
+    use crate::proto::source_client::SourceClient;
+    use crate::shared::create_rpc_channel;
+    use crate::source::SourceReader;
     use chrono::Utc;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use tokio::sync::mpsc::Sender;
-
-    use crate::source::{SourceClient, SourceConfig};
 
     struct SimpleSource {
         num: usize,
@@ -213,24 +186,16 @@ mod tests {
                 .with_socket_file(server_socket)
                 .with_server_info_file(server_info)
                 .start_with_shutdown(shutdown_rx)
-                .await
-                .unwrap();
+                .await?;
+            Ok(())
         });
 
         // wait for the server to start
         // TODO: flaky
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let mut source_client = SourceClient::connect(SourceConfig {
-            socket_path: sock_file.to_str().unwrap().to_string(),
-            server_info_file: server_info_file.to_str().unwrap().to_string(),
-            max_message_size: 4 * 1024 * 1024,
-        })
-        .await
-        .expect("failed to connect to source server");
-
-        let response = source_client.is_ready().await;
-        assert!(response);
+        let mut source_client =
+            SourceReader::new(SourceClient::new(create_rpc_channel(sock_file).await?)).await?;
 
         let messages = source_client.read_fn(5, 1000).await.unwrap();
         assert_eq!(messages.len(), 5);
@@ -241,16 +206,10 @@ mod tests {
             .unwrap();
         assert!(response.result.unwrap().success.is_some());
 
-        let pending = source_client.pending_fn().await.unwrap();
-        assert_eq!(pending, 0);
-
-        let partitions = source_client.partitions_fn().await.unwrap();
-        assert_eq!(partitions, vec![2]);
-
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
-        server_handle.await.expect("failed to join server task");
+        server_handle.await.expect("failed to join server task")?;
         Ok(())
     }
 }
