@@ -144,6 +144,9 @@ jobs:
           name: numaflow-rs-linux-arm64
           path: dist/numaflow-rs-linux-arm64
 
+      - name: List files
+        run: ls -lR dist/
+
       - name: Registry Login
         uses: docker/login-action@v2
         with:
