@@ -17793,6 +17793,10 @@
         "udf": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDF"
         },
+        "updateStrategy": {
+          "description": "The strategy to use to replace existing pods with new ones.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UpdateStrategy"
+        },
         "volumes": {
           "type": "array",
           "items": {
@@ -19266,6 +19270,10 @@
             "$ref": "#/definitions/io.k8s.api.core.v1.Toleration"
           }
         },
+        "updateStrategy": {
+          "description": "The strategy to use to replace existing pods with new ones.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UpdateStrategy"
+        },
         "volumes": {
           "type": "array",
           "items": {
@@ -19289,11 +19297,11 @@
           "x-kubernetes-patch-strategy": "merge"
         },
         "currentHash": {
-          "description": "If not empty, indicates the version of the MonoVertex used to generate Pods in the sequence [0,currentReplicas).",
+          "description": "If not empty, indicates the current version of the MonoVertex used to generate Pods.",
           "type": "string"
         },
-        "currentReplicas": {
-          "description": "The number of Pods created by the controller from the MonoVertex version indicated by currentHash.",
+        "desiredReplicas": {
+          "description": "The number of desired replicas.",
           "type": "integer",
           "format": "int64"
         },
@@ -19332,8 +19340,13 @@
           "type": "string"
         },
         "updateHash": {
-          "description": "If not empty, indicates the version of the MonoVertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)",
+          "description": "If not empty, indicates the updated version of the MonoVertex used to generate Pods.",
           "type": "string"
+        },
+        "updatedReadyReplicas": {
+          "description": "The number of ready Pods created by the controller from the MonoVertex version indicated by updateHash.",
+          "type": "integer",
+          "format": "int64"
         },
         "updatedReplicas": {
           "description": "The number of Pods created by the controller from the MonoVertex version indicated by updateHash.",
@@ -19668,6 +19681,10 @@
           "x-kubernetes-patch-merge-key": "type",
           "x-kubernetes-patch-strategy": "merge"
         },
+        "drainedOnPause": {
+          "description": "Field to indicate if a pipeline drain successfully occurred, only meaningful when the pipeline is paused. True means it has been successfully drained.",
+          "type": "boolean"
+        },
         "lastUpdated": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
         },
@@ -19782,6 +19799,16 @@
         "onFailure": {
           "description": "OnFailure specifies the action to take when a retry fails. The default action is to retry.",
           "type": "string"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.RollingUpdateStrategy": {
+      "description": "RollingUpdateStrategy is used to communicate parameter for RollingUpdateStrategyType.",
+      "type": "object",
+      "properties": {
+        "maxUnavailable": {
+          "description": "The maximum number of pods that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%). Absolute number is calculated from percentage by rounding down. Defaults to 25%. Example: when this is set to 30%, the old pods can be scaled down to 70% of desired pods immediately when the rolling update starts. Once new pods are ready, old pods can be scaled down further, followed by scaling up the new pods, ensuring that the total number of pods available at all times during the update is at least 70% of desired pods.",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.util.intstr.IntOrString"
         }
       }
     },
@@ -20300,6 +20327,23 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.UpdateStrategy": {
+      "description": "UpdateStrategy indicates the strategy that the controller will use to perform updates for Vertex or MonoVertex.",
+      "type": "object",
+      "properties": {
+        "rollingUpdate": {
+          "description": "RollingUpdate is used to communicate parameters when Type is RollingUpdateStrategy.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RollingUpdateStrategy"
+        },
+        "type": {
+          "description": "Type indicates the type of the StatefulSetUpdateStrategy. Default is RollingUpdate.\n\nPossible enum values:\n - `\"RollingUpdate\"`",
+          "type": "string",
+          "enum": [
+            "RollingUpdate"
+          ]
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.Vertex": {
       "type": "object",
       "required": [
@@ -20550,6 +20594,10 @@
         "udf": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDF"
         },
+        "updateStrategy": {
+          "description": "The strategy to use to replace existing pods with new ones.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UpdateStrategy"
+        },
         "volumes": {
           "type": "array",
           "items": {
@@ -20577,11 +20625,11 @@
           "x-kubernetes-patch-strategy": "merge"
         },
         "currentHash": {
-          "description": "If not empty, indicates the version of the Vertex used to generate Pods in the sequence [0,currentReplicas).",
+          "description": "If not empty, indicates the current version of the Vertex used to generate Pods.",
           "type": "string"
         },
-        "currentReplicas": {
-          "description": "The number of Pods created by the controller from the Vertex version indicated by currentHash.",
+        "desiredReplicas": {
+          "description": "The number of desired replicas.",
           "type": "integer",
           "format": "int64"
         },
@@ -20617,8 +20665,13 @@
           "type": "string"
         },
         "updateHash": {
-          "description": "If not empty, indicates the version of the Vertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)",
+          "description": "If not empty, indicates the updated version of the Vertex used to generate Pods.",
           "type": "string"
+        },
+        "updatedReadyReplicas": {
+          "description": "The number of ready Pods created by the controller from the Vertex version indicated by updateHash.",
+          "type": "integer",
+          "format": "int64"
         },
         "updatedReplicas": {
           "description": "The number of Pods created by the controller from the Vertex version indicated by updateHash.",

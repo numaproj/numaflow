@@ -302,11 +302,11 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	min := vertex.Spec.Scale.GetMinReplicas()
 	if desired > max {
 		desired = max
-		log.Infof("Calculated desired replica number %d of vertex %q is greater than max, using max %d.", vertex.Name, desired, max)
+		log.Infof("Calculated desired replica number %d of vertex %q is greater than max, using max %d.", desired, vertex.Name, max)
 	}
 	if desired < min {
 		desired = min
-		log.Infof("Calculated desired replica number %d of vertex %q is smaller than min, using min %d.", vertex.Name, desired, min)
+		log.Infof("Calculated desired replica number %d of vertex %q is smaller than min, using min %d.", desired, vertex.Name, min)
 	}
 	if current > max || current < min { // Someone might have manually scaled up/down the vertex
 		return s.patchVertexReplicas(ctx, vertex, desired)
@@ -328,14 +328,14 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		directPressure, downstreamPressure := s.hasBackPressure(*pl, *vertex)
 		if directPressure {
 			if current > min && current > 1 { // Scale down but not to 0
-				log.Infof("Vertex %s has direct back pressure from connected vertices, decreasing one replica.", key)
+				log.Infof("Vertex %q has direct back pressure from connected vertices, decreasing one replica.", key)
 				return s.patchVertexReplicas(ctx, vertex, current-1)
 			} else {
-				log.Infof("Vertex %s has direct back pressure from connected vertices, skip scaling.", key)
+				log.Infof("Vertex %q has direct back pressure from connected vertices, skip scaling.", key)
 				return nil
 			}
 		} else if downstreamPressure {
-			log.Infof("Vertex %s has back pressure in downstream vertices, skip scaling.", key)
+			log.Infof("Vertex %q has back pressure in downstream vertices, skip scaling.", key)
 			return nil
 		}
 		maxAllowedUp := int32(vertex.Spec.Scale.GetReplicasPerScaleUp())

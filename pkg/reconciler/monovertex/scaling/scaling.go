@@ -157,6 +157,10 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		s.StopWatching(key) // Remove it in case it's watched.
 		return nil
 	}
+	if monoVtx.Status.UpdateHash != monoVtx.Status.CurrentHash && monoVtx.Status.UpdateHash != "" {
+		log.Info("MonoVertex is updating, skip scaling.")
+		return nil
+	}
 	secondsSinceLastScale := time.Since(monoVtx.Status.LastScaledAt.Time).Seconds()
 	scaleDownCooldown := float64(monoVtx.Spec.Scale.GetScaleDownCooldownSeconds())
 	scaleUpCooldown := float64(monoVtx.Spec.Scale.GetScaleUpCooldownSeconds())
@@ -174,7 +178,7 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 	// 	log.Info("MonoVertex is pausing, skip scaling.")
 	// 	return nil
 	// }
-	if int(monoVtx.Status.Replicas) != monoVtx.GetReplicas() {
+	if int(monoVtx.Status.Replicas) != monoVtx.CalculateReplicas() {
 		log.Infof("MonoVertex %s might be under processing, replicas mismatch, skip scaling.", monoVtx.Name)
 		return nil
 	}
@@ -229,13 +233,13 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 	min := monoVtx.Spec.Scale.GetMinReplicas()
 	if desired > max {
 		desired = max
-		log.Infof("Calculated desired replica number %d of MonoVertex %q is greater than max, using max %d.", monoVtxName, desired, max)
+		log.Infof("Calculated desired replica number %d of MonoVertex %q is greater than max, using max %d.", desired, monoVtxName, max)
 	}
 	if desired < min {
 		desired = min
-		log.Infof("Calculated desired replica number %d of MonoVertex %q is smaller than min, using min %d.", monoVtxName, desired, min)
+		log.Infof("Calculated desired replica number %d of MonoVertex %q is smaller than min, using min %d.", desired, monoVtxName, min)
 	}
-	current := int32(monoVtx.GetReplicas())
+	current := int32(monoVtx.Status.Replicas)
 	if current > max || current < min { // Someone might have manually scaled up/down the MonoVertex
 		return s.patchMonoVertexReplicas(ctx, monoVtx, desired)
 	}

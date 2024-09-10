@@ -54,7 +54,7 @@ const (
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
+// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.status.desiredReplicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.readyReplicas`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
@@ -71,11 +71,26 @@ type MonoVertex struct {
 	Status MonoVertexStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
-func (mv MonoVertex) GetReplicas() int {
+func (mv MonoVertex) getReplicas() int {
 	if mv.Spec.Replicas == nil {
 		return 1
 	}
 	return int(*mv.Spec.Replicas)
+}
+
+func (mv MonoVertex) CalculateReplicas() int {
+	desiredReplicas := mv.getReplicas()
+	// Don't allow replicas to be out of the range of min and max when auto scaling is enabled
+	if s := mv.Spec.Scale; !s.Disabled {
+		max := int(s.GetMaxReplicas())
+		min := int(s.GetMinReplicas())
+		if desiredReplicas < min {
+			desiredReplicas = min
+		} else if desiredReplicas > max {
+			desiredReplicas = max
+		}
+	}
+	return desiredReplicas
 }
 
 func (mv MonoVertex) GetHeadlessServiceName() string {
@@ -291,6 +306,7 @@ func (mv MonoVertex) simpleCopy() MonoVertex {
 	if m.Spec.Limits.ReadTimeout == nil {
 		m.Spec.Limits.ReadTimeout = &metav1.Duration{Duration: DefaultReadTimeout}
 	}
+	m.Spec.UpdateStrategy = UpdateStrategy{}
 	// TODO: lifecycle
 	// mvVtxCopy.Spec.Lifecycle = Lifecycle{}
 	return m
@@ -408,6 +424,10 @@ type MonoVertexSpec struct {
 	// Template for the daemon service deployment.
 	// +optional
 	DaemonTemplate *DaemonTemplate `json:"daemonTemplate,omitempty" protobuf:"bytes,11,opt,name=daemonTemplate"`
+	// The strategy to use to replace existing pods with new ones.
+	// +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
+	// +optional
+	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty" protobuf:"bytes,12,opt,name=updateStrategy"`
 }
 
 func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
@@ -470,31 +490,34 @@ type MonoVertexStatus struct {
 	// Total number of non-terminated pods targeted by this MonoVertex (their labels match the selector).
 	// +optional
 	Replicas uint32 `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
+	// The number of desired replicas.
 	// +optional
-	Selector string `json:"selector,omitempty" protobuf:"bytes,4,opt,name=selector"`
+	DesiredReplicas uint32 `json:"desiredReplicas" protobuf:"varint,4,opt,name=desiredReplicas"`
 	// +optional
-	Reason string `json:"reason,omitempty" protobuf:"bytes,5,opt,name=reason"`
+	Selector string `json:"selector,omitempty" protobuf:"bytes,5,opt,name=selector"`
 	// +optional
-	Message string `json:"message,omitempty" protobuf:"bytes,6,opt,name=message"`
+	Reason string `json:"reason,omitempty" protobuf:"bytes,6,opt,name=reason"`
 	// +optional
-	LastUpdated metav1.Time `json:"lastUpdated,omitempty" protobuf:"bytes,7,opt,name=lastUpdated"`
+	Message string `json:"message,omitempty" protobuf:"bytes,7,opt,name=message"`
+	// +optional
+	LastUpdated metav1.Time `json:"lastUpdated,omitempty" protobuf:"bytes,8,opt,name=lastUpdated"`
 	// Time of last scaling operation.
 	// +optional
-	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,8,opt,name=lastScaledAt"`
+	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,9,opt,name=lastScaledAt"`
 	// The generation observed by the MonoVertex controller.
 	// +optional
-	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,9,opt,name=observedGeneration"`
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,10,opt,name=observedGeneration"`
 	// The number of pods targeted by this MonoVertex with a Ready Condition.
 	// +optional
-	ReadyReplicas uint32 `json:"readyReplicas,omitempty" protobuf:"varint,10,opt,name=readyReplicas"`
-	// The number of Pods created by the controller from the MonoVertex version indicated by currentHash.
-	CurrentReplicas uint32 `json:"currentReplicas,omitempty" protobuf:"varint,11,opt,name=currentReplicas"`
+	ReadyReplicas uint32 `json:"readyReplicas,omitempty" protobuf:"varint,11,opt,name=readyReplicas"`
 	// The number of Pods created by the controller from the MonoVertex version indicated by updateHash.
 	UpdatedReplicas uint32 `json:"updatedReplicas,omitempty" protobuf:"varint,12,opt,name=updatedReplicas"`
-	// If not empty, indicates the version of the MonoVertex used to generate Pods in the sequence [0,currentReplicas).
-	CurrentHash string `json:"currentHash,omitempty" protobuf:"bytes,13,opt,name=currentHash"`
-	// If not empty, indicates the version of the MonoVertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)
-	UpdateHash string `json:"updateHash,omitempty" protobuf:"bytes,14,opt,name=updateHash"`
+	// The number of ready Pods created by the controller from the MonoVertex version indicated by updateHash.
+	UpdatedReadyReplicas uint32 `json:"updatedReadyReplicas,omitempty" protobuf:"varint,13,opt,name=updatedReadyReplicas"`
+	// If not empty, indicates the current version of the MonoVertex used to generate Pods.
+	CurrentHash string `json:"currentHash,omitempty" protobuf:"bytes,14,opt,name=currentHash"`
+	// If not empty, indicates the updated version of the MonoVertex used to generate Pods.
+	UpdateHash string `json:"updateHash,omitempty" protobuf:"bytes,15,opt,name=updateHash"`
 }
 
 // SetObservedGeneration sets the Status ObservedGeneration

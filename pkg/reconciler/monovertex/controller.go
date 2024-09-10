@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -109,40 +110,26 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 		}
 	}()
 
+	monoVtx.Status.InitializeConditions()
 	monoVtx.Status.SetObservedGeneration(monoVtx.Generation)
 	if monoVtx.Scalable() {
 		mr.scaler.StartWatching(mVtxKey)
 	}
+
+	if err := mr.orchestrateFixedResources(ctx, monoVtx); err != nil {
+		monoVtx.Status.MarkDeployFailed("OrchestrateFixedResourcesFailed", err.Error())
+		mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "OrchestrateFixedResourcesFailed", "OrchestrateFixedResourcesFailed: %s", err.Error())
+		return ctrl.Result{}, err
+	}
+
 	// TODO: handle lifecycle changes
 
-	// Regular mono vertex change
-	result, err := mr.reconcileNonLifecycleChanges(ctx, monoVtx)
-	if err != nil {
-		mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "ReconcileMonoVertexFailed", "Failed to reconcile a mono vertex: %v", err.Error())
-	}
-	return result, err
-}
-
-func (mr *monoVertexReconciler) reconcileNonLifecycleChanges(ctx context.Context, monoVtx *dfv1.MonoVertex) (ctrl.Result, error) {
-	// Create or update mono vtx services
-	if err := mr.createOrUpdateMonoVtxServices(ctx, monoVtx); err != nil {
+	if err := mr.orchestratePods(ctx, monoVtx); err != nil {
+		monoVtx.Status.MarkDeployFailed("OrchestratePodsFailed", err.Error())
+		mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "OrchestratePodsFailed", "OrchestratePodsFailed: %s", err.Error())
 		return ctrl.Result{}, err
 	}
 
-	// Mono vtx daemon service
-	if err := mr.createOrUpdateDaemonService(ctx, monoVtx); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Mono vtx daemon deployment
-	if err := mr.createOrUpdateDaemonDeployment(ctx, monoVtx); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Create pods
-	if err := mr.reconcilePods(ctx, monoVtx); err != nil {
-		return ctrl.Result{}, err
-	}
 	monoVtx.Status.MarkDeployed()
 
 	// Mark it running before checking the status of the pods
@@ -155,42 +142,197 @@ func (mr *monoVertexReconciler) reconcileNonLifecycleChanges(ctx context.Context
 	return ctrl.Result{}, nil
 }
 
-func (mr *monoVertexReconciler) reconcilePods(ctx context.Context, monoVtx *dfv1.MonoVertex) error {
-	desiredReplicas := monoVtx.GetReplicas()
-	// Don't allow replicas to be out of the range of min and max when auto scaling is enabled
-	if s := monoVtx.Spec.Scale; !s.Disabled {
-		max := int(s.GetMaxReplicas())
-		min := int(s.GetMinReplicas())
-		if desiredReplicas < min {
-			desiredReplicas = min
-		} else if desiredReplicas > max {
-			desiredReplicas = max
-		}
+// orchestrateFixedResources orchestrates fixed resources such as daemon service related objects for a mono vertex.
+func (mr *monoVertexReconciler) orchestrateFixedResources(ctx context.Context, monoVtx *dfv1.MonoVertex) error {
+	// Create or update mono vtx services
+	if err := mr.createOrUpdateMonoVtxServices(ctx, monoVtx); err != nil {
+		return fmt.Errorf("failed to orchestrate mono vtx services: %w", err)
 	}
+
+	// Mono vtx daemon service
+	if err := mr.createOrUpdateDaemonService(ctx, monoVtx); err != nil {
+		return fmt.Errorf("failed to orchestrate mono vtx daemon service: %w", err)
+	}
+
+	// Mono vtx daemon deployment
+	if err := mr.createOrUpdateDaemonDeployment(ctx, monoVtx); err != nil {
+		return fmt.Errorf("failed to orchestrate mono vtx daemon deployment: %w", err)
+	}
+	return nil
+}
+
+func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *dfv1.MonoVertex) error {
+	log := logging.FromContext(ctx)
+	desiredReplicas := monoVtx.CalculateReplicas()
+	monoVtx.Status.DesiredReplicas = uint32(desiredReplicas)
+
 	// Set metrics
 	defer func() {
 		reconciler.MonoVertexDesiredReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(desiredReplicas))
 		reconciler.MonoVertexCurrentReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(monoVtx.Status.Replicas))
 	}()
 
-	log := logging.FromContext(ctx)
-	existingPods, err := mr.findExistingPods(ctx, monoVtx)
+	podSpec, err := mr.buildPodSpec(monoVtx)
 	if err != nil {
-		mr.markDeploymentFailedAndLogEvent(monoVtx, false, log, "FindExistingPodFailed", err.Error(), "Failed to find existing mono vertex pods", zap.Error(err))
-		return err
+		return fmt.Errorf("failed to generate mono vertex pod spec: %w", err)
 	}
-	for replica := 0; replica < desiredReplicas; replica++ {
-		podSpec, err := mr.buildPodSpec(monoVtx)
-		if err != nil {
-			mr.markDeploymentFailedAndLogEvent(monoVtx, false, log, "PodSpecGenFailed", err.Error(), "Failed to generate mono vertex pod spec", zap.Error(err))
-			return err
+
+	hash := sharedutil.MustHash(podSpec)
+	if monoVtx.Status.UpdateHash != hash { // New spec, or still processing last update, while new update is coming
+		monoVtx.Status.UpdateHash = hash
+		monoVtx.Status.UpdatedReplicas = 0
+		monoVtx.Status.UpdatedReadyReplicas = 0
+	}
+
+	// Manually or automatically scaled down
+	if currentReplicas := int(monoVtx.Status.Replicas); currentReplicas > desiredReplicas {
+		if err := mr.cleanUpPodsFromTo(ctx, monoVtx, desiredReplicas, currentReplicas); err != nil {
+			return fmt.Errorf("failed to clean up mono vertex pods [%v, %v): %w", desiredReplicas, currentReplicas, err)
 		}
-		hash := sharedutil.MustHash(podSpec)
+		monoVtx.Status.Replicas = uint32(desiredReplicas)
+	}
+	updatedReplicas := int(monoVtx.Status.UpdatedReplicas)
+	if updatedReplicas > desiredReplicas {
+		updatedReplicas = desiredReplicas
+		monoVtx.Status.UpdatedReplicas = uint32(updatedReplicas)
+	}
+
+	if updatedReplicas > 0 {
+		// Make sure [0 - updatedReplicas] with hash are in place
+		if err := mr.orchestratePodsFromTo(ctx, monoVtx, *podSpec, 0, updatedReplicas, hash); err != nil {
+			return fmt.Errorf("failed to orchestrate mono vertex pods [0, %v): %w", updatedReplicas, err)
+		}
+		// Wait for the updated pods to be ready before moving on
+		if monoVtx.Status.UpdatedReadyReplicas != monoVtx.Status.UpdatedReplicas {
+			updatedReadyReplicas := 0
+			existingPods, err := mr.findExistingPods(ctx, monoVtx, 0, updatedReplicas)
+			if err != nil {
+				return fmt.Errorf("failed to get pods of a mono vertex: %w", err)
+			}
+			for _, pod := range existingPods {
+				if pod.GetAnnotations()[dfv1.KeyHash] == monoVtx.Status.UpdateHash {
+					if reconciler.IsPodReady(pod) {
+						updatedReadyReplicas++
+					}
+				}
+			}
+			monoVtx.Status.UpdatedReadyReplicas = uint32(updatedReadyReplicas)
+			if updatedReadyReplicas < updatedReplicas {
+				return nil
+			}
+		}
+	}
+
+	if monoVtx.Status.UpdateHash == monoVtx.Status.CurrentHash ||
+		monoVtx.Status.CurrentHash == "" {
+		// 1. Regular scaling operation 2. First time
+		// create (desiredReplicas-updatedReplicas) pods directly
+		if desiredReplicas > updatedReplicas {
+			if err := mr.orchestratePodsFromTo(ctx, monoVtx, *podSpec, updatedReplicas, desiredReplicas, hash); err != nil {
+				return fmt.Errorf("failed to orchestrate mono vertex pods [%v, %v): %w", updatedReplicas, desiredReplicas, err)
+			}
+		}
+		monoVtx.Status.UpdatedReplicas = uint32(desiredReplicas)
+		monoVtx.Status.CurrentHash = monoVtx.Status.UpdateHash
+	} else { // Update scenario
+		if updatedReplicas >= desiredReplicas {
+			return nil
+		}
+
+		// Create more pods
+		if monoVtx.Spec.UpdateStrategy.GetUpdateStrategyType() != dfv1.RollingUpdateStrategyType {
+			// Revisit later, we only support rolling update for now
+			return nil
+		}
+
+		// Calculate the to be updated replicas based on the max unavailable configuration
+		maxUnavailConf := monoVtx.Spec.UpdateStrategy.GetRollingUpdateStrategy().GetMaxUnavailable()
+		toBeUpdated, err := intstr.GetScaledValueFromIntOrPercent(&maxUnavailConf, desiredReplicas, true)
+		if err != nil { // This should never happen since we have validated the configuration
+			return fmt.Errorf("invalid max unavailable configuration in rollingUpdate: %w", err)
+		}
+		if updatedReplicas+toBeUpdated > desiredReplicas {
+			toBeUpdated = desiredReplicas - updatedReplicas
+		}
+		log.Infof("Rolling update %d replicas, [%d, %d)", toBeUpdated, updatedReplicas, updatedReplicas+toBeUpdated)
+
+		// Create pods [updatedReplicas, updatedReplicas+toBeUpdated), and clean up any pods in that range that has a different hash
+		if err := mr.orchestratePodsFromTo(ctx, monoVtx, *podSpec, updatedReplicas, updatedReplicas+toBeUpdated, monoVtx.Status.UpdateHash); err != nil {
+			return fmt.Errorf("failed to orchestrate pods [%v, %v)]: %w", updatedReplicas, updatedReplicas+toBeUpdated, err)
+		}
+		monoVtx.Status.UpdatedReplicas = uint32(updatedReplicas + toBeUpdated)
+		if monoVtx.Status.UpdatedReplicas == uint32(desiredReplicas) {
+			monoVtx.Status.CurrentHash = monoVtx.Status.UpdateHash
+		}
+	}
+
+	currentReplicas := int(monoVtx.Status.Replicas)
+	if currentReplicas != desiredReplicas {
+		log.Infow("MonoVertex replicas changed", "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
+		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "ReplicasScaled", "Replicas changed from %d to %d", currentReplicas, desiredReplicas)
+		monoVtx.Status.Replicas = uint32(desiredReplicas)
+		monoVtx.Status.LastScaledAt = metav1.Time{Time: time.Now()}
+	}
+	if monoVtx.Status.Selector == "" {
+		selector, _ := labels.Parse(dfv1.KeyComponent + "=" + dfv1.ComponentMonoVertex + "," + dfv1.KeyMonoVertexName + "=" + monoVtx.Name)
+		monoVtx.Status.Selector = selector.String()
+	}
+
+	return nil
+}
+
+func (mr *monoVertexReconciler) findExistingPods(ctx context.Context, monoVtx *dfv1.MonoVertex, fromReplica, toReplica int) (map[string]corev1.Pod, error) {
+	pods := &corev1.PodList{}
+	selector, _ := labels.Parse(dfv1.KeyComponent + "=" + dfv1.ComponentMonoVertex + "," + dfv1.KeyMonoVertexName + "=" + monoVtx.Name)
+	if err := mr.client.List(ctx, pods, &client.ListOptions{Namespace: monoVtx.Namespace, LabelSelector: selector}); err != nil {
+		return nil, fmt.Errorf("failed to list mono vertex pods: %w", err)
+	}
+	result := make(map[string]corev1.Pod)
+	for _, pod := range pods.Items {
+		if !pod.DeletionTimestamp.IsZero() {
+			// Ignore pods being deleted
+			continue
+		}
+		replicaStr := pod.GetAnnotations()[dfv1.KeyReplica]
+		replica, _ := strconv.Atoi(replicaStr)
+		if replica >= fromReplica && replica < toReplica {
+			result[pod.Name] = pod
+		}
+	}
+	return result, nil
+}
+
+func (mr *monoVertexReconciler) cleanUpPodsFromTo(ctx context.Context, monoVtx *dfv1.MonoVertex, fromReplica, toReplica int) error {
+	log := logging.FromContext(ctx)
+	existingPods, err := mr.findExistingPods(ctx, monoVtx, fromReplica, toReplica)
+	if err != nil {
+		return fmt.Errorf("failed to find existing pods: %w", err)
+	}
+
+	for _, pod := range existingPods {
+		if err := mr.client.Delete(ctx, &pod); err != nil {
+			return fmt.Errorf("failed to delete pod %s: %w", pod.Name, err)
+		}
+		log.Infof("Deleted MonoVertx pod %q", pod.Name)
+		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "DeletePodSuccess", "Succeeded to delete a mono vertex pod %s", pod.Name)
+	}
+	return nil
+}
+
+// orchestratePodsFromTo orchestrates pods [fromReplica, toReplica], and clean up any pods in that range that has a different hash
+func (mr *monoVertexReconciler) orchestratePodsFromTo(ctx context.Context, monoVtx *dfv1.MonoVertex, podSpec corev1.PodSpec, fromReplica, toReplica int, newHash string) error {
+	log := logging.FromContext(ctx)
+	existingPods, err := mr.findExistingPods(ctx, monoVtx, fromReplica, toReplica)
+	if err != nil {
+		return fmt.Errorf("failed to find existing pods: %w", err)
+	}
+	// Create pods [fromReplica, toReplica)
+	for replica := fromReplica; replica < toReplica; replica++ {
 		podNamePrefix := fmt.Sprintf("%s-mv-%d-", monoVtx.Name, replica)
 		needToCreate := true
 		for existingPodName, existingPod := range existingPods {
 			if strings.HasPrefix(existingPodName, podNamePrefix) {
-				if existingPod.GetAnnotations()[dfv1.KeyHash] == hash && existingPod.Status.Phase != corev1.PodFailed {
+				if existingPod.GetAnnotations()[dfv1.KeyHash] == newHash && existingPod.Status.Phase != corev1.PodFailed {
 					needToCreate = false
 					delete(existingPods, existingPodName)
 				}
@@ -213,7 +355,7 @@ func (mr *monoVertexReconciler) reconcilePods(ctx context.Context, monoVtx *dfv1
 			podLabels[dfv1.KeyComponent] = dfv1.ComponentMonoVertex
 			podLabels[dfv1.KeyAppName] = monoVtx.Name
 			podLabels[dfv1.KeyMonoVertexName] = monoVtx.Name
-			annotations[dfv1.KeyHash] = hash
+			annotations[dfv1.KeyHash] = newHash
 			annotations[dfv1.KeyReplica] = strconv.Itoa(replica)
 			// Defaults to udf
 			annotations[dfv1.KeyDefaultContainer] = dfv1.CtrMain
@@ -225,12 +367,11 @@ func (mr *monoVertexReconciler) reconcilePods(ctx context.Context, monoVtx *dfv1
 					Annotations:     annotations,
 					OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(monoVtx.GetObjectMeta(), dfv1.MonoVertexGroupVersionKind)},
 				},
-				Spec: *podSpec,
+				Spec: podSpec,
 			}
 			pod.Spec.Hostname = fmt.Sprintf("%s-mv-%d", monoVtx.Name, replica)
 			if err := mr.client.Create(ctx, pod); err != nil {
-				mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "CreatePodFailed", err.Error(), "Failed to created a mono vertex pod", zap.Error(err))
-				return err
+				return fmt.Errorf("failed to create a mono vertex pod: %w", err)
 			}
 			log.Infow("Succeeded to create a mono vertex pod", zap.String("pod", pod.Name))
 			mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "CreatePodSuccess", "Succeeded to create a mono vertex pod %s", pod.Name)
@@ -238,21 +379,9 @@ func (mr *monoVertexReconciler) reconcilePods(ctx context.Context, monoVtx *dfv1
 	}
 	for _, v := range existingPods {
 		if err := mr.client.Delete(ctx, &v); err != nil && !apierrors.IsNotFound(err) {
-			mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "DelPodFailed", err.Error(), "Failed to delete a mono vertex pod", zap.Error(err))
-			return err
+			return fmt.Errorf("failed to delete pod %s: %w", v.Name, err)
 		}
 	}
-
-	currentReplicas := int(monoVtx.Status.Replicas)
-	if currentReplicas != desiredReplicas || monoVtx.Status.Selector == "" {
-		log.Infow("MonoVertex replicas changed", "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
-		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "ReplicasScaled", "Replicas changed from %d to %d", currentReplicas, desiredReplicas)
-		monoVtx.Status.Replicas = uint32(desiredReplicas)
-		monoVtx.Status.LastScaledAt = metav1.Time{Time: time.Now()}
-	}
-	selector, _ := labels.Parse(dfv1.KeyComponent + "=" + dfv1.ComponentMonoVertex + "," + dfv1.KeyMonoVertexName + "=" + monoVtx.Name)
-	monoVtx.Status.Selector = selector.String()
-
 	return nil
 }
 
@@ -272,8 +401,8 @@ func (mr *monoVertexReconciler) createOrUpdateMonoVtxServices(ctx context.Contex
 			if existingSvc.GetAnnotations()[dfv1.KeyHash] != svcHash {
 				if err := mr.client.Delete(ctx, &existingSvc); err != nil {
 					if !apierrors.IsNotFound(err) {
-						mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "DelSvcFailed", err.Error(), "Failed to delete existing mono vertex service", zap.String("service", existingSvc.Name), zap.Error(err))
-						return err
+						mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "DelSvcFailed", "Failed to delete existing mono vertex service %s: %s", existingSvc.Name, err.Error())
+						return fmt.Errorf("failed to delete existing mono vertex service %s: %w", existingSvc.Name, err)
 					}
 				} else {
 					log.Infow("Deleted a stale mono vertex service to recreate", zap.String("service", existingSvc.Name))
@@ -290,8 +419,8 @@ func (mr *monoVertexReconciler) createOrUpdateMonoVtxServices(ctx context.Contex
 				if apierrors.IsAlreadyExists(err) {
 					continue
 				}
-				mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "CreateSvcFailed", err.Error(), "Failed to create a mono vertex service", zap.String("service", s.Name), zap.Error(err))
-				return err
+				mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "CreateSvcFailed", "Failed to create a mono vertex service %s: %s", s.Name, err.Error())
+				return fmt.Errorf("failed to create a mono vertex service %s: %w", s.Name, err)
 			} else {
 				log.Infow("Succeeded to create a mono vertex service", zap.String("service", s.Name))
 				mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "CreateSvcSuccess", "Succeeded to create mono vertex service %s", s.Name)
@@ -301,8 +430,8 @@ func (mr *monoVertexReconciler) createOrUpdateMonoVtxServices(ctx context.Contex
 	for _, v := range existingSvcs { // clean up stale services
 		if err := mr.client.Delete(ctx, &v); err != nil {
 			if !apierrors.IsNotFound(err) {
-				mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "DelSvcFailed", err.Error(), "Failed to delete mono vertex service not in use", zap.String("service", v.Name), zap.Error(err))
-				return err
+				mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "DelSvcFailed", "Failed to delete mono vertex service %s: %s", v.Name, err.Error())
+				return fmt.Errorf("failed to delete mono vertex service %s: %w", v.Name, err)
 			}
 		} else {
 			log.Infow("Deleted a stale mono vertx service", zap.String("service", v.Name))
@@ -336,20 +465,19 @@ func (mr *monoVertexReconciler) createOrUpdateDaemonService(ctx context.Context,
 		if apierrors.IsNotFound(err) {
 			needToCreatDaemonSvc = true
 		} else {
-			mr.markDeploymentFailedAndLogEvent(monoVtx, false, log, "FindDaemonSvcFailed", err.Error(), "Failed to find existing mono vtx daemon service", zap.String("service", svc.Name), zap.Error(err))
-			return err
+			return fmt.Errorf("failed to find existing mono vertex daemon service: %w", err)
 		}
 	} else if existingSvc.GetAnnotations()[dfv1.KeyHash] != svcHash {
 		if err := mr.client.Delete(ctx, existingSvc); err != nil && !apierrors.IsNotFound(err) {
-			mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "DelDaemonSvcFailed", err.Error(), "Failed to delete existing mono vtx daemon service", zap.String("service", existingSvc.Name), zap.Error(err))
-			return err
+			mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "DelDaemonSvcFailed", "Failed to delete existing mono vertex daemon service %s: %s", existingSvc.Name, err.Error())
+			return fmt.Errorf("failed to delete existing mono vertex daemon service %s: %w", existingSvc.Name, err)
 		}
 		needToCreatDaemonSvc = true
 	}
 	if needToCreatDaemonSvc {
 		if err := mr.client.Create(ctx, svc); err != nil {
-			mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "CreateDaemonSvcFailed", err.Error(), "Failed to create mono vtx daemon service", zap.String("service", svc.Name), zap.Error(err))
-			return err
+			mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "CreateDaemonSvcFailed", "Failed to create a mono vertex daemon service %s: %s", svc.Name, err.Error())
+			return fmt.Errorf("failed to create a mono vertex daemon service %s: %w", svc.Name, err)
 		}
 		log.Infow("Succeeded to create a mono vertex daemon service", zap.String("service", svc.Name))
 		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "CreateMonoVtxDaemonSvcSuccess", "Succeeded to create a mono vertex daemon service %s", svc.Name)
@@ -369,8 +497,7 @@ func (mr *monoVertexReconciler) createOrUpdateDaemonDeployment(ctx context.Conte
 	}
 	deploy, err := monoVtx.GetDaemonDeploymentObj(req)
 	if err != nil {
-		mr.markDeploymentFailedAndLogEvent(monoVtx, false, log, "BuildDaemonDeployFailed", err.Error(), "Failed to build mono verex daemon deployment spec", zap.Error(err))
-		return err
+		return fmt.Errorf("failed to build mono vertex daemon deployment spec: %w", err)
 	}
 	deployHash := sharedutil.MustHash(deploy.Spec)
 	deploy.Annotations = map[string]string{dfv1.KeyHash: deployHash}
@@ -378,8 +505,7 @@ func (mr *monoVertexReconciler) createOrUpdateDaemonDeployment(ctx context.Conte
 	needToCreate := false
 	if err := mr.client.Get(ctx, types.NamespacedName{Namespace: monoVtx.Namespace, Name: deploy.Name}, existingDeploy); err != nil {
 		if !apierrors.IsNotFound(err) {
-			mr.markDeploymentFailedAndLogEvent(monoVtx, false, log, "FindDaemonDeployFailed", err.Error(), "Failed to find existing mono vertex daemon deployment", zap.String("deployment", deploy.Name), zap.Error(err))
-			return err
+			return fmt.Errorf("failed to find existing mono vertex daemon deployment: %w", err)
 		} else {
 			needToCreate = true
 		}
@@ -387,38 +513,21 @@ func (mr *monoVertexReconciler) createOrUpdateDaemonDeployment(ctx context.Conte
 		if existingDeploy.GetAnnotations()[dfv1.KeyHash] != deployHash {
 			// Delete and recreate, to avoid updating immutable fields problem.
 			if err := mr.client.Delete(ctx, existingDeploy); err != nil {
-				mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "DeleteOldDaemonDeployFailed", err.Error(), "Failed to delete the outdated daemon deployment", zap.String("deployment", existingDeploy.Name), zap.Error(err))
-				return err
+				mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "DeleteOldDaemonDeployFailed", "Failed to delete the outdated daemon deployment %s: %s", existingDeploy.Name, err.Error())
+				return fmt.Errorf("failed to delete the outdated daemon deployment %s: %w", existingDeploy.Name, err)
 			}
 			needToCreate = true
 		}
 	}
 	if needToCreate {
 		if err := mr.client.Create(ctx, deploy); err != nil && !apierrors.IsAlreadyExists(err) {
-			mr.markDeploymentFailedAndLogEvent(monoVtx, true, log, "CreateDaemonDeployFailed", err.Error(), "Failed to create a mono vertex daemon deployment", zap.String("deployment", deploy.Name), zap.Error(err))
-			return err
+			mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "CreateDaemonDeployFailed", "Failed to create a mono vertex daemon deployment %s: %s", deploy.Name, err.Error())
+			return fmt.Errorf("failed to create a mono vertex daemon deployment %s: %w", deploy.Name, err)
 		}
 		log.Infow("Succeeded to create/recreate a mono vertex daemon deployment", zap.String("deployment", deploy.Name))
 		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "CreateDaemonDeploySuccess", "Succeeded to create/recreate a mono vertex daemon deployment %s", deploy.Name)
 	}
 	return nil
-}
-
-func (mr *monoVertexReconciler) findExistingPods(ctx context.Context, monoVtx *dfv1.MonoVertex) (map[string]corev1.Pod, error) {
-	pods := &corev1.PodList{}
-	selector, _ := labels.Parse(dfv1.KeyComponent + "=" + dfv1.ComponentMonoVertex + "," + dfv1.KeyMonoVertexName + "=" + monoVtx.Name)
-	if err := mr.client.List(ctx, pods, &client.ListOptions{Namespace: monoVtx.Namespace, LabelSelector: selector}); err != nil {
-		return nil, fmt.Errorf("failed to list mono vertex pods: %w", err)
-	}
-	result := make(map[string]corev1.Pod)
-	for _, v := range pods.Items {
-		if !v.DeletionTimestamp.IsZero() {
-			// Ignore pods being deleted
-			continue
-		}
-		result[v.Name] = v
-	}
-	return result, nil
 }
 
 func (mr *monoVertexReconciler) buildPodSpec(monoVtx *dfv1.MonoVertex) (*corev1.PodSpec, error) {
@@ -436,15 +545,6 @@ func (mr *monoVertexReconciler) buildPodSpec(monoVtx *dfv1.MonoVertex) (*corev1.
 	podSpec.Volumes = append(podSpec.Volumes, vols...)
 	podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, volMounts...)
 	return podSpec, nil
-}
-
-// Helper function for warning event types
-func (mr *monoVertexReconciler) markDeploymentFailedAndLogEvent(monoVtx *dfv1.MonoVertex, recordEvent bool, log *zap.SugaredLogger, reason, message, logMsg string, logWith ...interface{}) {
-	log.Errorw(logMsg, logWith)
-	monoVtx.Status.MarkDeployFailed(reason, message)
-	if recordEvent {
-		mr.recorder.Event(monoVtx, corev1.EventTypeWarning, reason, message)
-	}
 }
 
 // checkChildrenResourceStatus checks the status of the children resources of the mono vertex
@@ -482,7 +582,7 @@ func (mr *monoVertexReconciler) checkChildrenResourceStatus(ctx context.Context,
 	var podList corev1.PodList
 	if err := mr.client.List(ctx, &podList, &client.ListOptions{Namespace: monoVtx.GetNamespace(), LabelSelector: selector}); err != nil {
 		monoVtx.Status.MarkPodNotHealthy("ListMonoVerticesPodsFailed", err.Error())
-		return fmt.Errorf("failed to get pods of a vertex: %w", err)
+		return fmt.Errorf("failed to get pods of a mono vertex: %w", err)
 	}
 	readyPods := reconciler.NumOfReadyPods(podList)
 	if readyPods > int(monoVtx.Status.Replicas) { // It might happen in some corner cases, such as during rollout

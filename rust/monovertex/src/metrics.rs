@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -496,6 +497,11 @@ async fn expose_pending_metrics(
 ) {
     let mut ticker = time::interval(refresh_interval);
     let lookback_seconds_map = vec![("1m", 60), ("default", 120), ("5m", 300), ("15m", 900)];
+
+    // store the pending info in a sorted way for deterministic display
+    // string concat is more efficient?
+    let mut pending_info: BTreeMap<&str, i64> = BTreeMap::new();
+
     loop {
         ticker.tick().await;
         for (label, seconds) in &lookback_seconds_map {
@@ -503,12 +509,17 @@ async fn expose_pending_metrics(
             if pending != -1 {
                 let mut metric_labels = forward_metrics_labels().clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
+                pending_info.insert(label, pending);
                 forward_metrics()
                     .source_pending
                     .get_or_create(&metric_labels)
                     .set(pending);
-                info!("Pending messages ({}): {}", label, pending);
             }
+        }
+        // skip for those the pending is not implemented
+        if !pending_info.is_empty() {
+            info!("Pending messages {:?}", pending_info);
+            pending_info.clear();
         }
     }
 }

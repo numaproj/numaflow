@@ -26,6 +26,7 @@ import "k8s.io/apimachinery/pkg/api/resource/generated.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
+import "k8s.io/apimachinery/pkg/util/intstr/generated.proto";
 
 // Package-wide variables from generator "generated".
 option go_package = "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1";
@@ -200,6 +201,11 @@ message AbstractVertex {
   // Container template for the side inputs watcher container.
   // +optional
   optional ContainerTemplate sideInputsContainerTemplate = 15;
+
+  // The strategy to use to replace existing pods with new ones.
+  // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
+  // +optional
+  optional UpdateStrategy updateStrategy = 16;
 }
 
 message Authorization {
@@ -864,7 +870,7 @@ message Metadata {
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
+// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.status.desiredReplicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.readyReplicas`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
@@ -942,6 +948,11 @@ message MonoVertexSpec {
   // Template for the daemon service deployment.
   // +optional
   optional DaemonTemplate daemonTemplate = 11;
+
+  // The strategy to use to replace existing pods with new ones.
+  // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
+  // +optional
+  optional UpdateStrategy updateStrategy = 12;
 }
 
 message MonoVertexStatus {
@@ -954,41 +965,45 @@ message MonoVertexStatus {
   // +optional
   optional uint32 replicas = 3;
 
+  // The number of desired replicas.
   // +optional
-  optional string selector = 4;
+  optional uint32 desiredReplicas = 4;
 
   // +optional
-  optional string reason = 5;
+  optional string selector = 5;
 
   // +optional
-  optional string message = 6;
+  optional string reason = 6;
 
   // +optional
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastUpdated = 7;
+  optional string message = 7;
+
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastUpdated = 8;
 
   // Time of last scaling operation.
   // +optional
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 8;
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 9;
 
   // The generation observed by the MonoVertex controller.
   // +optional
-  optional int64 observedGeneration = 9;
+  optional int64 observedGeneration = 10;
 
   // The number of pods targeted by this MonoVertex with a Ready Condition.
   // +optional
-  optional uint32 readyReplicas = 10;
-
-  // The number of Pods created by the controller from the MonoVertex version indicated by currentHash.
-  optional uint32 currentReplicas = 11;
+  optional uint32 readyReplicas = 11;
 
   // The number of Pods created by the controller from the MonoVertex version indicated by updateHash.
   optional uint32 updatedReplicas = 12;
 
-  // If not empty, indicates the version of the MonoVertex used to generate Pods in the sequence [0,currentReplicas).
-  optional string currentHash = 13;
+  // The number of ready Pods created by the controller from the MonoVertex version indicated by updateHash.
+  optional uint32 updatedReadyReplicas = 13;
 
-  // If not empty, indicates the version of the MonoVertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)
-  optional string updateHash = 14;
+  // If not empty, indicates the current version of the MonoVertex used to generate Pods.
+  optional string currentHash = 14;
+
+  // If not empty, indicates the updated version of the MonoVertex used to generate Pods.
+  optional string updateHash = 15;
 }
 
 message NativeRedis {
@@ -1218,6 +1233,11 @@ message PipelineStatus {
   // The generation observed by the Pipeline controller.
   // +optional
   optional int64 observedGeneration = 11;
+
+  // Field to indicate if a pipeline drain successfully occurred, only meaningful when the pipeline is paused.
+  // True means it has been successfully drained.
+  // +optional
+  optional bool drainedOnPause = 12;
 }
 
 message RedisBufferService {
@@ -1283,6 +1303,21 @@ message RetryStrategy {
   // +optional
   // +kubebuilder:default="retry"
   optional string onFailure = 2;
+}
+
+// RollingUpdateStrategy is used to communicate parameter for RollingUpdateStrategyType.
+message RollingUpdateStrategy {
+  // The maximum number of pods that can be unavailable during the update.
+  // Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%).
+  // Absolute number is calculated from percentage by rounding down.
+  // Defaults to 25%.
+  // Example: when this is set to 30%, the old pods can be scaled down to 70% of desired pods
+  // immediately when the rolling update starts. Once new pods are ready, old pods
+  // can be scaled down further, followed by scaling up the new pods, ensuring
+  // that the total number of pods available at all times during the update is at
+  // least 70% of desired pods.
+  // +optional
+  optional k8s.io.apimachinery.pkg.util.intstr.IntOrString maxUnavailable = 1;
 }
 
 message SASL {
@@ -1593,13 +1628,26 @@ message UDTransformer {
   optional Transformer builtin = 2;
 }
 
+// UpdateStrategy indicates the strategy that the
+// controller will use to perform updates for Vertex or MonoVertex.
+message UpdateStrategy {
+  // Type indicates the type of the StatefulSetUpdateStrategy.
+  // Default is RollingUpdate.
+  // +optional
+  optional string type = 1;
+
+  // RollingUpdate is used to communicate parameters when Type is RollingUpdateStrategy.
+  // +optional
+  optional RollingUpdateStrategy rollingUpdate = 2;
+}
+
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=vtx
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
+// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.status.desiredReplicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.readyReplicas`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
@@ -1689,38 +1737,42 @@ message VertexStatus {
   // +optional
   optional uint32 replicas = 3;
 
+  // The number of desired replicas.
   // +optional
-  optional string selector = 4;
+  optional uint32 desiredReplicas = 4;
 
   // +optional
-  optional string reason = 5;
+  optional string selector = 5;
 
   // +optional
-  optional string message = 6;
+  optional string reason = 6;
+
+  // +optional
+  optional string message = 7;
 
   // Time of last scaling operation.
   // +optional
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 7;
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 8;
 
   // The generation observed by the Vertex controller.
   // +optional
-  optional int64 observedGeneration = 8;
+  optional int64 observedGeneration = 9;
 
   // The number of pods targeted by this Vertex with a Ready Condition.
   // +optional
-  optional uint32 readyReplicas = 9;
-
-  // The number of Pods created by the controller from the Vertex version indicated by currentHash.
-  optional uint32 currentReplicas = 10;
+  optional uint32 readyReplicas = 10;
 
   // The number of Pods created by the controller from the Vertex version indicated by updateHash.
   optional uint32 updatedReplicas = 11;
 
-  // If not empty, indicates the version of the Vertex used to generate Pods in the sequence [0,currentReplicas).
-  optional string currentHash = 12;
+  // The number of ready Pods created by the controller from the Vertex version indicated by updateHash.
+  optional uint32 updatedReadyReplicas = 12;
 
-  // If not empty, indicates the version of the Vertx used to generate Pods in the sequence [replicas-updatedReplicas,replicas)
-  optional string updateHash = 13;
+  // If not empty, indicates the current version of the Vertex used to generate Pods.
+  optional string currentHash = 13;
+
+  // If not empty, indicates the updated version of the Vertex used to generate Pods.
+  optional string updateHash = 14;
 }
 
 message VertexTemplate {

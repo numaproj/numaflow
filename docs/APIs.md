@@ -840,6 +840,27 @@ Container template for the side inputs watcher container.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>updateStrategy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy"> UpdateStrategy
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The strategy to use to replace existing pods with new ones.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -5791,6 +5812,27 @@ Template for the daemon service deployment.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>updateStrategy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy"> UpdateStrategy
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The strategy to use to replace existing pods with new ones.
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -6159,6 +6201,27 @@ Template for the daemon service deployment.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>updateStrategy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy"> UpdateStrategy
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The strategy to use to replace existing pods with new ones.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -6249,6 +6312,25 @@ MonoVertexPhase </a> </em>
 
 Total number of non-terminated pods targeted by this MonoVertex (their
 labels match the selector).
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>desiredReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The number of desired replicas.
 </p>
 
 </td>
@@ -6376,25 +6458,6 @@ The number of pods targeted by this MonoVertex with a Ready Condition.
 
 <td>
 
-<code>currentReplicas</code></br> <em> uint32 </em>
-</td>
-
-<td>
-
-<p>
-
-The number of Pods created by the controller from the MonoVertex version
-indicated by currentHash.
-</p>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
 <code>updatedReplicas</code></br> <em> uint32 </em>
 </td>
 
@@ -6414,6 +6477,25 @@ indicated by updateHash.
 
 <td>
 
+<code>updatedReadyReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+The number of ready Pods created by the controller from the MonoVertex
+version indicated by updateHash.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>currentHash</code></br> <em> string </em>
 </td>
 
@@ -6421,8 +6503,8 @@ indicated by updateHash.
 
 <p>
 
-If not empty, indicates the version of the MonoVertex used to generate
-Pods in the sequence \[0,currentReplicas).
+If not empty, indicates the current version of the MonoVertex used to
+generate Pods.
 </p>
 
 </td>
@@ -6440,8 +6522,8 @@ Pods in the sequence \[0,currentReplicas).
 
 <p>
 
-If not empty, indicates the version of the MonoVertx used to generate
-Pods in the sequence \[replicas-updatedReplicas,replicas)
+If not empty, indicates the updated version of the MonoVertex used to
+generate Pods.
 </p>
 
 </td>
@@ -7941,6 +8023,27 @@ The generation observed by the Pipeline controller.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>drainedOnPause</code></br> <em> bool </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Field to indicate if a pipeline drain successfully occurred, only
+meaningful when the pipeline is paused. True means it has been
+successfully drained.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -8388,6 +8491,81 @@ OnFailureRetryStrategy </a> </em>
 
 OnFailure specifies the action to take when a retry fails. The default
 action is to retry.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RollingUpdateStrategy">
+
+RollingUpdateStrategy
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy">UpdateStrategy</a>)
+</p>
+
+<p>
+
+<p>
+
+RollingUpdateStrategy is used to communicate parameter for
+RollingUpdateStrategyType.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>maxUnavailable</code></br> <em>
+k8s.io/apimachinery/pkg/util/intstr.IntOrString </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The maximum number of pods that can be unavailable during the update.
+Value can be an absolute number (ex: 5) or a percentage of desired pods
+(ex: 10%). Absolute number is calculated from percentage by rounding
+down. Defaults to 25%. Example: when this is set to 30%, the old pods
+can be scaled down to 70% of desired pods immediately when the rolling
+update starts. Once new pods are ready, old pods can be scaled down
+further, followed by scaling up the new pods, ensuring that the total
+number of pods available at all times during the update is at least 70%
+of desired pods.
 </p>
 
 </td>
@@ -10639,6 +10817,121 @@ Description
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.UpdateStrategy">
+
+UpdateStrategy
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>)
+</p>
+
+<p>
+
+<p>
+
+UpdateStrategy indicates the strategy that the controller will use to
+perform updates for Vertex or MonoVertex.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>type</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategyType">
+UpdateStrategyType </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Type indicates the type of the StatefulSetUpdateStrategy. Default is
+RollingUpdate.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>rollingUpdate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RollingUpdateStrategy">
+RollingUpdateStrategy </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+RollingUpdate is used to communicate parameters when Type is
+RollingUpdateStrategy.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.UpdateStrategyType">
+
+UpdateStrategyType (<code>string</code> alias)
+</p>
+
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy">UpdateStrategy</a>)
+</p>
+
+<p>
+
+<p>
+
+UpdateStrategyType is a string enumeration type that enumerates all
+possible update strategies.
+</p>
+
+</p>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.Vertex">
 
 Vertex
@@ -11322,6 +11615,25 @@ labels match the selector).
 
 <td>
 
+<code>desiredReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The number of desired replicas.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>selector</code></br> <em> string </em>
 </td>
 
@@ -11423,25 +11735,6 @@ The number of pods targeted by this Vertex with a Ready Condition.
 
 <td>
 
-<code>currentReplicas</code></br> <em> uint32 </em>
-</td>
-
-<td>
-
-<p>
-
-The number of Pods created by the controller from the Vertex version
-indicated by currentHash.
-</p>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
 <code>updatedReplicas</code></br> <em> uint32 </em>
 </td>
 
@@ -11461,6 +11754,25 @@ indicated by updateHash.
 
 <td>
 
+<code>updatedReadyReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+The number of ready Pods created by the controller from the Vertex
+version indicated by updateHash.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>currentHash</code></br> <em> string </em>
 </td>
 
@@ -11468,8 +11780,8 @@ indicated by updateHash.
 
 <p>
 
-If not empty, indicates the version of the Vertex used to generate Pods
-in the sequence \[0,currentReplicas).
+If not empty, indicates the current version of the Vertex used to
+generate Pods.
 </p>
 
 </td>
@@ -11487,8 +11799,8 @@ in the sequence \[0,currentReplicas).
 
 <p>
 
-If not empty, indicates the version of the Vertx used to generate Pods
-in the sequence \[replicas-updatedReplicas,replicas)
+If not empty, indicates the updated version of the Vertex used to
+generate Pods.
 </p>
 
 </td>

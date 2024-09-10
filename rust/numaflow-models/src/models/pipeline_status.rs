@@ -21,6 +21,9 @@ pub struct PipelineStatus {
     /// Conditions are the latest available observations of a resource's current state.
     #[serde(rename = "conditions", skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Vec<k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition>>,
+    /// Field to indicate if a pipeline drain successfully occurred, only meaningful when the pipeline is paused. True means it has been successfully drained.
+    #[serde(rename = "drainedOnPause", skip_serializing_if = "Option::is_none")]
+    pub drained_on_pause: Option<bool>,
     #[serde(rename = "lastUpdated", skip_serializing_if = "Option::is_none")]
     pub last_updated: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Time>,
     #[serde(rename = "mapUDFCount", skip_serializing_if = "Option::is_none")]
@@ -48,6 +51,7 @@ impl PipelineStatus {
     pub fn new() -> PipelineStatus {
         PipelineStatus {
             conditions: None,
+            drained_on_pause: None,
             last_updated: None,
             map_udf_count: None,
             message: None,
