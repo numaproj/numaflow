@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::message::Message;
-use crate::sinkpb::sink_client::SinkClient;
-use crate::sinkpb::{SinkRequest, SinkResponse};
+use crate::sink_pb::sink_client::SinkClient;
+use crate::sink_pb::{SinkRequest, SinkResponse};
 use tonic::transport::Channel;
 
 pub(crate) const SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";

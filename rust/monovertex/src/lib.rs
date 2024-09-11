@@ -5,10 +5,10 @@ use crate::shared::create_rpc_channel;
 use crate::sink::{
     SinkWriter, FB_SINK_SERVER_INFO_FILE, FB_SINK_SOCKET, SINK_SERVER_INFO_FILE, SINK_SOCKET,
 };
-use crate::sinkpb::sink_client::SinkClient;
+use crate::sink_pb::sink_client::SinkClient;
 use crate::source::{SourceReader, SOURCE_SERVER_INFO_FILE, SOURCE_SOCKET};
-use crate::sourcepb::source_client::SourceClient;
-use crate::sourcetransformpb::source_transform_client::SourceTransformClient;
+use crate::source_pb::source_client::SourceClient;
+use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
 use crate::transformer::{SourceTransformer, TRANSFORMER_SERVER_INFO_FILE, TRANSFORMER_SOCKET};
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -46,15 +46,15 @@ pub(crate) mod message;
 
 pub(crate) mod shared;
 
-pub(crate) mod sourcepb {
+pub(crate) mod source_pb {
     tonic::include_proto!("source.v1");
 }
 
-pub(crate) mod sinkpb {
+pub(crate) mod sink_pb {
     tonic::include_proto!("sink.v1");
 }
 
-pub(crate) mod sourcetransformpb {
+pub(crate) mod sourcetransform_pb {
     tonic::include_proto!("sourcetransformer.v1");
 }
 
@@ -74,7 +74,7 @@ pub async fn mono_vertex() -> Result<()> {
     });
 
     // Run the forwarder with cancellation token.
-    if let Err(e) = init(cln_token).await {
+    if let Err(e) = start_forwarder(cln_token).await {
         error!("Application error: {:?}", e);
 
         // abort the signal handler task since we have an error and we are shutting down
@@ -109,7 +109,7 @@ async fn shutdown_signal() {
     }
 }
 
-pub async fn init(cln_token: CancellationToken) -> Result<()> {
+pub async fn start_forwarder(cln_token: CancellationToken) -> Result<()> {
     server_info::check_for_server_compatibility(SOURCE_SERVER_INFO_FILE, cln_token.clone())
         .await
         .map_err(|e| {
@@ -187,11 +187,6 @@ pub async fn init(cln_token: CancellationToken) -> Result<()> {
     )
     .await?;
 
-    // Start the metrics server, which server the prometheus metrics.
-    let metrics_addr: SocketAddr = format!("0.0.0.0:{}", &config().metrics_server_listen_port)
-        .parse()
-        .expect("Invalid address");
-
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
     // joined.
@@ -203,6 +198,11 @@ pub async fn init(cln_token: CancellationToken) -> Result<()> {
     };
 
     tokio::spawn(async move {
+        // Start the metrics server, which server the prometheus metrics.
+        let metrics_addr: SocketAddr = format!("0.0.0.0:{}", &config().metrics_server_listen_port)
+            .parse()
+            .expect("Invalid address");
+
         if let Err(e) = start_metrics_https_server(metrics_addr, metrics_state).await {
             error!("Metrics server error: {:?}", e);
         }
@@ -290,7 +290,7 @@ async fn wait_until_ready(
 mod tests {
     use std::env;
 
-    use crate::init;
+    use crate::start_forwarder;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source};
     use tokio::sync::mpsc::Sender;
@@ -375,7 +375,7 @@ mod tests {
             token_clone.cancel();
         });
 
-        let result = init(cln_token.clone()).await;
+        let result = start_forwarder(cln_token.clone()).await;
         assert!(result.is_err());
 
         // stop the source and sink servers

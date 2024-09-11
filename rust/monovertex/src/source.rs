@@ -1,18 +1,19 @@
 use crate::error::Error::SourceError;
 use crate::error::Result;
 use crate::message::{Message, Offset};
-use crate::sourcepb;
-use crate::sourcepb::source_client::SourceClient;
-use crate::sourcepb::{
+use crate::source_pb;
+use crate::source_pb::source_client::SourceClient;
+use crate::source_pb::{
     ack_request, read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
 };
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
-use tracing::info;
+use tracing::{debug, info, warn};
 
 pub(crate) const SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
 pub(crate) const SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
@@ -23,40 +24,50 @@ pub(crate) struct SourceReader {
     read_tx: mpsc::Sender<ReadRequest>,
     resp_stream: Streaming<ReadResponse>,
     ack_tx: mpsc::Sender<AckRequest>,
+    ack_handle: JoinHandle<()>,
+}
+
+impl Drop for SourceReader {
+    fn drop(&mut self) {
+        // in a happy path scenario, the ack task would have already been finished.
+        if !self.ack_handle.is_finished() {
+            warn!("aborting ack task");
+            self.ack_handle.abort();
+        }
+    }
 }
 
 impl SourceReader {
     pub(crate) async fn new(mut client: SourceClient<Channel>) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(500);
 
-        info!("Creating server stream");
         let resp_stream = client
             .read_fn(Request::new(ReceiverStream::new(read_rx)))
             .await?
             .into_inner();
-        info!("Created server stream");
+        debug!("Created server stream");
 
         let (ack_tx, ack_rx) = mpsc::channel(500);
 
-        info!("Creating ack stream");
         let mut ack_client = client.clone();
-
-        tokio::spawn(async move {
+        // FIXME: we need to keep the handle for abort
+        let ack_handle = tokio::spawn(async move {
             let ack_response = ack_client
                 .ack_fn(Request::new(ReceiverStream::new(ack_rx)))
                 .await
-                .unwrap();
-            info!("Created ack stream {:?}", ack_response);
+                .expect("ack should not have failed");
+            info!("Closing ack stream {:?}", ack_response);
         });
 
         Ok(Self {
             read_tx,
             resp_stream,
             ack_tx,
+            ack_handle,
         })
     }
 
-    pub(crate) async fn read_fn(
+    pub(crate) async fn read(
         &mut self,
         num_records: u64,
         timeout_in_ms: u32,
@@ -90,11 +101,11 @@ impl SourceReader {
         Ok(messages)
     }
 
-    pub(crate) async fn ack_fn(&mut self, offsets: Vec<Offset>) -> Result<AckResponse> {
+    pub(crate) async fn ack(&mut self, offsets: Vec<Offset>) -> Result<AckResponse> {
         for offset in offsets {
             let request = AckRequest {
                 request: Some(ack_request::Request {
-                    offset: Some(sourcepb::Offset {
+                    offset: Some(source_pb::Offset {
                         offset: BASE64_STANDARD
                             .decode(offset.offset)
                             .expect("we control the encoding, so this should never fail"),
@@ -117,7 +128,7 @@ mod tests {
 
     use crate::shared::create_rpc_channel;
     use crate::source::SourceReader;
-    use crate::sourcepb::source_client::SourceClient;
+    use crate::source_pb::source_client::SourceClient;
     use chrono::Utc;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -209,11 +220,11 @@ mod tests {
         .await
         .unwrap();
 
-        let messages = source_client.read_fn(5, 1000).await.unwrap();
+        let messages = source_client.read(5, 1000).await.unwrap();
         assert_eq!(messages.len(), 5);
 
         let response = source_client
-            .ack_fn(messages.iter().map(|m| m.offset.clone()).collect())
+            .ack(messages.iter().map(|m| m.offset.clone()).collect())
             .await
             .unwrap();
         assert!(response.result.unwrap().success.is_some());

@@ -1,8 +1,8 @@
 use crate::error::Result;
 use crate::message::Message;
 use crate::shared::utc_from_timestamp;
-use crate::sourcetransformpb::source_transform_client::SourceTransformClient;
-use crate::sourcetransformpb::SourceTransformRequest;
+use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
+use crate::sourcetransform_pb::SourceTransformRequest;
 use tonic::transport::Channel;
 
 const DROP: &str = "U+005C__DROP__";
@@ -61,7 +61,7 @@ mod tests {
     use std::error::Error;
 
     use crate::shared::create_rpc_channel;
-    use crate::sourcetransformpb::source_transform_client::SourceTransformClient;
+    use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
     use crate::transformer::SourceTransformer;
     use numaflow::sourcetransform;
     use tempfile::TempDir;

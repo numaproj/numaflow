@@ -6,9 +6,9 @@ use chrono::{DateTime, Utc};
 
 use crate::error::Error;
 use crate::shared::{prost_timestamp_from_utc, utc_from_timestamp};
-use crate::sinkpb::SinkRequest;
-use crate::sourcepb::read_response;
-use crate::sourcetransformpb::SourceTransformRequest;
+use crate::sink_pb::SinkRequest;
+use crate::source_pb::read_response;
+use crate::sourcetransform_pb::SourceTransformRequest;
 
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone)]

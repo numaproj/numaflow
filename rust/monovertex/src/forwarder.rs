@@ -6,7 +6,7 @@ use crate::message::{Message, Offset};
 use crate::metrics;
 use crate::metrics::forward_metrics;
 use crate::sink::SinkWriter;
-use crate::sinkpb::Status::{Failure, Fallback, Success};
+use crate::sink_pb::Status::{Failure, Fallback, Success};
 use crate::source::SourceReader;
 use crate::transformer::SourceTransformer;
 use chrono::Utc;
@@ -122,7 +122,7 @@ impl Forwarder {
         let start_time = tokio::time::Instant::now();
         let messages = self
             .source_reader
-            .read_fn(config().batch_size, config().timeout_in_ms)
+            .read(config().batch_size, config().timeout_in_ms)
             .await?;
         debug!(
             "Read batch size: {} and latency - {}ms",
@@ -498,7 +498,7 @@ impl Forwarder {
         let n = offsets.len();
         let start_time = tokio::time::Instant::now();
 
-        self.source_reader.ack_fn(offsets).await?;
+        self.source_reader.ack(offsets).await?;
 
         debug!("Ack latency - {}ms", start_time.elapsed().as_millis());
 
@@ -528,10 +528,10 @@ mod tests {
     use crate::forwarder::ForwarderBuilder;
     use crate::shared::create_rpc_channel;
     use crate::sink::SinkWriter;
-    use crate::sinkpb::sink_client::SinkClient;
+    use crate::sink_pb::sink_client::SinkClient;
     use crate::source::SourceReader;
-    use crate::sourcepb::source_client::SourceClient;
-    use crate::sourcetransformpb::source_transform_client::SourceTransformClient;
+    use crate::source_pb::source_client::SourceClient;
+    use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
     use crate::transformer::SourceTransformer;
 
     struct SimpleSource {

@@ -18,9 +18,9 @@ use tracing::{debug, error, info};
 
 use crate::config::config;
 use crate::error::Error;
-use crate::sinkpb::sink_client::SinkClient;
-use crate::sourcepb::source_client::SourceClient;
-use crate::sourcetransformpb::source_transform_client::SourceTransformClient;
+use crate::sink_pb::sink_client::SinkClient;
+use crate::source_pb::source_client::SourceClient;
+use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
