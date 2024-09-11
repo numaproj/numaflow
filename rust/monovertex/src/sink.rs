@@ -10,8 +10,8 @@ pub(crate) const FB_SINK_SOCKET: &str = "/var/run/numaflow/fb-sink.sock";
 pub(crate) const SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/sinker-server-info";
 pub(crate) const FB_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/fb-sinker-server-info";
 
+/// SinkWriter writes messages to a sink.
 #[derive(Clone)]
-/// SinkClient is a client to interact with the sink server.
 pub struct SinkWriter {
     client: SinkClient<Channel>,
 }

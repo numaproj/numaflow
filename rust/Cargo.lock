@@ -1475,6 +1475,7 @@ dependencies = [
  "chrono",
  "hyper-util",
  "kube",
+ "log",
  "numaflow 0.1.0 (git+https://github.com/numaproj/numaflow-rs.git?branch=main)",
  "numaflow-models",
  "once_cell",

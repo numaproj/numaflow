@@ -12,11 +12,12 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
+use tracing::info;
 
 pub(crate) const SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
 pub(crate) const SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
-/// SourceClient is a client to interact with the source server.
+/// SourceReader reads messages from a source and acks them.
 #[derive(Debug)]
 pub(crate) struct SourceReader {
     read_tx: mpsc::Sender<ReadRequest>,
@@ -28,15 +29,25 @@ impl SourceReader {
     pub(crate) async fn new(mut client: SourceClient<Channel>) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(500);
 
+        info!("Creating server stream");
         let resp_stream = client
             .read_fn(Request::new(ReceiverStream::new(read_rx)))
             .await?
             .into_inner();
+        info!("Created server stream");
 
         let (ack_tx, ack_rx) = mpsc::channel(500);
-        let _ = client
-            .ack_fn(Request::new(ReceiverStream::new(ack_rx)))
-            .await?;
+
+        info!("Creating ack stream");
+        let mut ack_client = client.clone();
+
+        tokio::spawn(async move {
+            let ack_response = ack_client
+                .ack_fn(Request::new(ReceiverStream::new(ack_rx)))
+                .await
+                .unwrap();
+            info!("Created ack stream {:?}", ack_response);
+        });
 
         Ok(Self {
             read_tx,

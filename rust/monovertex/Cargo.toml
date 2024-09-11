@@ -34,6 +34,7 @@ backoff = { path = "../backoff" }
 parking_lot = "0.12.3"
 prometheus-client = "0.22.3"
 kube = "0.94.0"
+log = "0.4.22"
 
 [dev-dependencies]
 tempfile = "3.11.0"
