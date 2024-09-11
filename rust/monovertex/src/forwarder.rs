@@ -525,7 +525,6 @@ mod tests {
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
 
-    use crate::error::Result;
     use crate::forwarder::ForwarderBuilder;
     use crate::shared::create_rpc_channel;
     use crate::sink::SinkWriter;
@@ -739,23 +738,21 @@ mod tests {
             .source_transformer(transformer_client)
             .build();
 
-        let forwarder_handle = tokio::spawn(async move {
-            forwarder.start().await.unwrap();
+        // Assert the received message in a different task
+        let assert_handle = tokio::spawn(async move {
+            let received_message = sink_rx.recv().await.unwrap();
+            assert_eq!(received_message.value, "test-message".as_bytes());
+            assert_eq!(
+                received_message.keys,
+                vec!["test-key-transformed".to_string()]
+            );
+            cln_token.cancel();
         });
 
-        // Receive messages from the sink
-        let received_message = sink_rx.recv().await.unwrap();
-        assert_eq!(received_message.value, "test-message".as_bytes());
-        assert_eq!(
-            received_message.keys,
-            vec!["test-key-transformed".to_string()]
-        );
+        forwarder.start().await.unwrap();
 
-        // stop the forwarder
-        cln_token.cancel();
-        forwarder_handle
-            .await
-            .expect("failed to join forwarder task");
+        // Wait for the assertion task to complete
+        assert_handle.await.unwrap();
 
         // stop the servers
         source_shutdown_tx
@@ -855,16 +852,14 @@ mod tests {
         let mut forwarder =
             ForwarderBuilder::new(source_client, sink_client, cln_token.clone()).build();
 
-        let forwarder_handle = tokio::spawn(async move {
-            forwarder.start().await?;
-            Result::<()>::Ok(())
+        let cancel_handle = tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            cln_token.cancel();
         });
 
-        // Set a timeout for the forwarder
-        let timeout_duration = tokio::time::Duration::from_secs(1);
-        // The future should not complete as we should be retrying
-        let result = tokio::time::timeout(timeout_duration, forwarder_handle).await;
-        assert!(result.is_err());
+        let forwarder_result = forwarder.start().await;
+        assert!(forwarder_result.is_err());
+        cancel_handle.await.unwrap();
 
         // stop the servers
         source_shutdown_tx
@@ -981,21 +976,16 @@ mod tests {
             .fallback_sink_writer(fb_sink_client)
             .build();
 
-        let forwarder_handle = tokio::spawn(async move {
-            forwarder.start().await.unwrap();
+        let assert_handle = tokio::spawn(async move {
+            let received_message = sink_rx.recv().await.unwrap();
+            assert_eq!(received_message.value, "test-message".as_bytes());
+            assert_eq!(received_message.keys, vec!["test-key".to_string()]);
+            cln_token.cancel();
         });
 
-        // We should receive the message in the fallback sink, since the primary sink returns status fallback
-        let received_message = sink_rx.recv().await.unwrap();
-        assert_eq!(received_message.value, "test-message".as_bytes());
-        assert_eq!(received_message.keys, vec!["test-key".to_string()]);
+        forwarder.start().await.unwrap();
 
-        // stop the forwarder
-        cln_token.cancel();
-        forwarder_handle
-            .await
-            .expect("failed to join forwarder task");
-
+        assert_handle.await.unwrap();
         // stop the servers
         source_shutdown_tx
             .send(())

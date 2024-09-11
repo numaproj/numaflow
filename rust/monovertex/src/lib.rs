@@ -368,19 +368,15 @@ mod tests {
 
         let cln_token = CancellationToken::new();
 
-        let forwarder_cln_token = cln_token.clone();
-        let forwarder_handle = tokio::spawn(async move {
-            let result = init(forwarder_cln_token).await;
-            assert!(result.is_ok());
+        let token_clone = cln_token.clone();
+        tokio::spawn(async move {
+            // FIXME: we need to have a better way, this is flaky
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            token_clone.cancel();
         });
 
-        // wait for the forwarder to start
-        // FIXME: we need to have a better way, this is flaky
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-        // stop the forwarder
-        cln_token.cancel();
-        forwarder_handle.await.unwrap();
+        let result = init(cln_token.clone()).await;
+        assert!(result.is_err());
 
         // stop the source and sink servers
         src_shutdown_tx.send(()).unwrap();

@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 axum = "0.7.5"
 axum-server = { version = "0.7.1", features = ["tls-rustls"] }
-tonic = "0.12.1"
+tonic = "0.12.2"
 bytes = "1.7.1"
 thiserror = "1.0.63"
 tokio = { version = "1.39.3", features = ["full"] }
