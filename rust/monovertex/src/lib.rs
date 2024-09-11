@@ -1,28 +1,27 @@
-use crate::config::config;
-use crate::forwarder::ForwarderBuilder;
-use crate::metrics::{start_metrics_https_server, LagReaderBuilder, MetricsState};
-use crate::shared::create_rpc_channel;
-use crate::sink::{
-    SinkWriter, FB_SINK_SERVER_INFO_FILE, FB_SINK_SOCKET, SINK_SERVER_INFO_FILE, SINK_SOCKET,
-};
-use crate::sink_pb::sink_client::SinkClient;
-use crate::source::{SourceReader, SOURCE_SERVER_INFO_FILE, SOURCE_SOCKET};
-use crate::source_pb::source_client::SourceClient;
-use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
-use crate::transformer::{SourceTransformer, TRANSFORMER_SERVER_INFO_FILE, TRANSFORMER_SOCKET};
 use std::net::SocketAddr;
 use std::time::Duration;
+
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::Request;
-use tracing::{error, info, warn};
+use tracing::{error, info};
+
+use crate::config::config;
+pub(crate) use crate::error::Error;
+use crate::forwarder::ForwarderBuilder;
+use crate::metrics::{start_metrics_https_server, LagReaderBuilder, MetricsState};
+use crate::shared::create_rpc_channel;
+use crate::sink::{SinkWriter, FB_SINK_SOCKET, SINK_SOCKET};
+use crate::sink_pb::sink_client::SinkClient;
+use crate::source::{SourceReader, SOURCE_SOCKET};
+use crate::source_pb::source_client::SourceClient;
+use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
+use crate::transformer::{SourceTransformer, TRANSFORMER_SOCKET};
 
 pub(crate) use self::error::Result;
-
-pub(crate) use crate::error::Error;
 
 /// SourcerSinker orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
@@ -46,6 +45,10 @@ pub(crate) mod message;
 
 pub(crate) mod shared;
 
+mod metrics;
+mod server_info;
+mod startup;
+
 pub(crate) mod source_pb {
     tonic::include_proto!("source.v1");
 }
@@ -57,10 +60,6 @@ pub(crate) mod sink_pb {
 pub(crate) mod sourcetransform_pb {
     tonic::include_proto!("sourcetransformer.v1");
 }
-
-mod server_info;
-
-mod metrics;
 
 pub async fn mono_vertex() -> Result<()> {
     let cln_token = CancellationToken::new();
@@ -110,25 +109,14 @@ async fn shutdown_signal() {
 }
 
 pub async fn start_forwarder(cln_token: CancellationToken) -> Result<()> {
-    server_info::check_for_server_compatibility(SOURCE_SERVER_INFO_FILE, cln_token.clone())
-        .await
-        .map_err(|e| {
-            warn!("Error waiting for source server info file: {:?}", e);
-            Error::ForwarderError("Error waiting for server info file".to_string())
-        })?;
+    // make sure that we have compatibility with the server
+    startup::check_compatibility(&cln_token).await?;
 
     let mut source_grpc_client = SourceClient::new(create_rpc_channel(SOURCE_SOCKET.into()).await?)
         .max_encoding_message_size(config().grpc_max_message_size)
         .max_encoding_message_size(config().grpc_max_message_size);
 
     let source_reader = SourceReader::new(source_grpc_client.clone()).await?;
-
-    server_info::check_for_server_compatibility(SINK_SERVER_INFO_FILE, cln_token.clone())
-        .await
-        .map_err(|e| {
-            error!("Error waiting for sink server info file: {:?}", e);
-            Error::ForwarderError("Error waiting for server info file".to_string())
-        })?;
 
     let mut sink_grpc_client = SinkClient::new(create_rpc_channel(SINK_SOCKET.into()).await?)
         .max_encoding_message_size(config().grpc_max_message_size)
@@ -137,15 +125,6 @@ pub async fn start_forwarder(cln_token: CancellationToken) -> Result<()> {
     let sink_writer = SinkWriter::new(sink_grpc_client.clone()).await?;
 
     let (mut transformer_grpc_client, transformer) = if config().is_transformer_enabled {
-        server_info::check_for_server_compatibility(
-            TRANSFORMER_SERVER_INFO_FILE,
-            cln_token.clone(),
-        )
-        .await
-        .map_err(|e| {
-            error!("Error waiting for transformer server info file: {:?}", e);
-            Error::ForwarderError("Error waiting for server info file".to_string())
-        })?;
         let transformer_grpc_client =
             SourceTransformClient::new(create_rpc_channel(TRANSFORMER_SOCKET.into()).await?)
                 .max_encoding_message_size(config().grpc_max_message_size)
@@ -160,12 +139,6 @@ pub async fn start_forwarder(cln_token: CancellationToken) -> Result<()> {
     };
 
     let (mut fb_sink_grpc_client, fallback_writer) = if config().is_fallback_enabled {
-        server_info::check_for_server_compatibility(FB_SINK_SERVER_INFO_FILE, cln_token.clone())
-            .await
-            .map_err(|e| {
-                warn!("Error waiting for fallback sink server info file: {:?}", e);
-                Error::ForwarderError("Error waiting for server info file".to_string())
-            })?;
         let fb_sink_grpc_client = SinkClient::new(create_rpc_channel(FB_SINK_SOCKET.into()).await?)
             .max_encoding_message_size(config().grpc_max_message_size)
             .max_encoding_message_size(config().grpc_max_message_size);
@@ -290,11 +263,12 @@ async fn wait_until_ready(
 mod tests {
     use std::env;
 
-    use crate::start_forwarder;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source};
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
+
+    use crate::start_forwarder;
 
     struct SimpleSource;
     #[tonic::async_trait]
