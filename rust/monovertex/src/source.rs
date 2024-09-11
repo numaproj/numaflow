@@ -50,7 +50,7 @@ impl SourceReader {
         let (ack_tx, ack_rx) = mpsc::channel(500);
 
         let mut ack_client = client.clone();
-        // FIXME: we need to keep the handle for abort
+        // spawn a task to handle acks.
         let ack_handle = tokio::spawn(async move {
             let ack_response = ack_client
                 .ack_fn(Request::new(ReceiverStream::new(ack_rx)))

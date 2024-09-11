@@ -170,6 +170,7 @@ pub async fn start_forwarder(cln_token: CancellationToken) -> Result<()> {
         fb_sink_client: fb_sink_grpc_client.clone(),
     };
 
+    // FIXME: track the join handle
     tokio::spawn(async move {
         // Start the metrics server, which server the prometheus metrics.
         let metrics_addr: SocketAddr = format!("0.0.0.0:{}", &config().metrics_server_listen_port)
