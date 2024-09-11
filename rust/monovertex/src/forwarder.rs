@@ -87,6 +87,7 @@ impl Forwarder {
     pub(crate) async fn start(&mut self) -> Result<()> {
         let mut processed_msgs_count: usize = 0;
         let mut last_forwarded_at = std::time::Instant::now();
+        info!("Forwarder has started");
         loop {
             let start_time = tokio::time::Instant::now();
             if self.cln_token.is_cancelled() {

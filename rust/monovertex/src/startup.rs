@@ -1,13 +1,23 @@
 use crate::config::config;
 use crate::error::Error;
+use crate::metrics::{LagReaderBuilder, MetricsState, start_metrics_https_server};
 use crate::sink::{FB_SINK_SERVER_INFO_FILE, SINK_SERVER_INFO_FILE};
 use crate::source::SOURCE_SERVER_INFO_FILE;
+use crate::source_pb::source_client::SourceClient;
 use crate::transformer::TRANSFORMER_SERVER_INFO_FILE;
 use crate::{error, server_info};
+use std::net::SocketAddr;
+use std::time::Duration;
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
+use tonic::transport::Channel;
+use tracing::{info, warn};
+use tonic::Request;
+use tokio::time::sleep;
+use crate::sink_pb::sink_client::SinkClient;
+use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
 
-pub async fn check_compatibility(cln_token: &CancellationToken) -> error::Result<()> {
+pub(crate) async fn check_compatibility(cln_token: &CancellationToken) -> error::Result<()> {
     server_info::check_for_server_compatibility(SOURCE_SERVER_INFO_FILE, cln_token.clone())
         .await
         .map_err(|e| {
@@ -42,5 +52,77 @@ pub async fn check_compatibility(cln_token: &CancellationToken) -> error::Result
                 Error::ForwarderError("Error waiting for server info file".to_string())
             })?;
     }
+    Ok(())
+}
+
+pub(crate) async fn start_metrics_server(metrics_state: MetricsState) -> JoinHandle<()> {
+    tokio::spawn(async {
+        // Start the metrics server, which server the prometheus metrics.
+        let metrics_addr: SocketAddr = format!("0.0.0.0:{}", &config().metrics_server_listen_port)
+            .parse()
+            .expect("Invalid address");
+
+        if let Err(e) = start_metrics_https_server(metrics_addr, metrics_state).await {
+            error!("Metrics server error: {:?}", e);
+        }
+    })
+}
+
+pub(crate) async fn start_lag_reader(lag_reader_grpc_client: SourceClient<Channel>) {
+    let mut lag_reader = LagReaderBuilder::new(lag_reader_grpc_client)
+        .lag_checking_interval(Duration::from_secs(
+            config().lag_check_interval_in_secs.into(),
+        ))
+        .refresh_interval(Duration::from_secs(
+            config().lag_refresh_interval_in_secs.into(),
+        ))
+        .build();
+    lag_reader.start().await;
+}
+
+pub(crate) async fn wait_until_ready(
+    source_client: &mut SourceClient<Channel>,
+    sink_client: &mut SinkClient<Channel>,
+    transformer_client: &mut Option<SourceTransformClient<Channel>>,
+    fb_sink_client: &mut Option<SinkClient<Channel>>,
+) -> error::Result<()> {
+    loop {
+        let source_ready = source_client.is_ready(Request::new(())).await.is_ok();
+        if !source_ready {
+            info!("UDSource is not ready, waiting...");
+        }
+
+        let sink_ready = sink_client.is_ready(Request::new(())).await.is_ok();
+        if !sink_ready {
+            info!("UDSink is not ready, waiting...");
+        }
+
+        let transformer_ready = if let Some(client) = transformer_client {
+            let ready = client.is_ready(Request::new(())).await.is_ok();
+            if !ready {
+                info!("UDTransformer is not ready, waiting...");
+            }
+            ready
+        } else {
+            true
+        };
+
+        let fb_sink_ready = if let Some(client) = fb_sink_client {
+            let ready = client.is_ready(Request::new(())).await.is_ok();
+            if !ready {
+                info!("Fallback Sink is not ready, waiting...");
+            }
+            ready
+        } else {
+            true
+        };
+
+        if source_ready && sink_ready && transformer_ready && fb_sink_ready {
+            break;
+        }
+
+        sleep(Duration::from_secs(1)).await;
+    }
+
     Ok(())
 }
