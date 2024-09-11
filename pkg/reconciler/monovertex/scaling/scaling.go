@@ -183,16 +183,6 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		return nil
 	}
 
-	var err error
-	daemonClient, _ := s.mvtxDaemonClientsCache.Get(monoVtx.GetDaemonServiceURL())
-	if daemonClient == nil {
-		daemonClient, err = mvtxdaemonclient.NewGRPCClient(monoVtx.GetDaemonServiceURL())
-		if err != nil {
-			return fmt.Errorf("failed to get daemon service client for MonoVertex %s, %w", monoVtx.Name, err)
-		}
-		s.mvtxDaemonClientsCache.Add(monoVtx.GetDaemonServiceURL(), daemonClient)
-	}
-
 	if monoVtx.Status.Replicas == 0 { // Was scaled to 0
 		// Periodically wake them up from 0 replicas to 1, to peek for the incoming messages
 		if secondsSinceLastScale >= float64(monoVtx.Spec.Scale.GetZeroReplicaSleepSeconds()) {
@@ -202,6 +192,22 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 			log.Infof("MonoVertex %q has slept %v seconds, hasn't reached zeroReplicaSleepSeconds (%v seconds), skip scaling.", monoVtx.Name, secondsSinceLastScale, monoVtx.Spec.Scale.GetZeroReplicaSleepSeconds())
 			return nil
 		}
+	}
+
+	// There's no ready pods, skip scaling
+	if monoVtx.Status.ReadyReplicas == 0 {
+		log.Infof("MonoVertex has no ready replicas, skip scaling.")
+		return nil
+	}
+
+	var err error
+	daemonClient, _ := s.mvtxDaemonClientsCache.Get(monoVtx.GetDaemonServiceURL())
+	if daemonClient == nil {
+		daemonClient, err = mvtxdaemonclient.NewGRPCClient(monoVtx.GetDaemonServiceURL())
+		if err != nil {
+			return fmt.Errorf("failed to get daemon service client for MonoVertex %s, %w", monoVtx.Name, err)
+		}
+		s.mvtxDaemonClientsCache.Add(monoVtx.GetDaemonServiceURL(), daemonClient)
 	}
 
 	vMetrics, err := daemonClient.GetMonoVertexMetrics(ctx)
@@ -282,7 +288,7 @@ func (s *Scaler) desiredReplicas(_ context.Context, monoVtx *dfv1.MonoVertex, pr
 	var desired int32
 	// We calculate the time of finishing processing the pending messages,
 	// and then we know how many replicas are needed to get them done in target seconds.
-	desired = int32(math.Round(((float64(pending) / processingRate) / float64(monoVtx.Spec.Scale.GetTargetProcessingSeconds())) * float64(monoVtx.Status.Replicas)))
+	desired = int32(math.Round(((float64(pending) / processingRate) / float64(monoVtx.Spec.Scale.GetTargetProcessingSeconds())) * float64(monoVtx.Status.ReadyReplicas)))
 
 	// we only scale down to zero when the pending and rate are both zero.
 	if desired == 0 {

@@ -170,16 +170,20 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		s.StopWatching(key) // Remove it in case it's watched.
 		return nil
 	}
+	if vertex.Status.Phase != dfv1.VertexPhaseRunning {
+		log.Infof("Vertex not in Running phase, skip scaling.")
+		return nil
+	}
+	if vertex.Status.UpdateHash != vertex.Status.CurrentHash && vertex.Status.UpdateHash != "" {
+		log.Info("Vertex is updating, skip scaling.")
+		return nil
+	}
 	secondsSinceLastScale := time.Since(vertex.Status.LastScaledAt.Time).Seconds()
 	scaleDownCooldown := float64(vertex.Spec.Scale.GetScaleDownCooldownSeconds())
 	scaleUpCooldown := float64(vertex.Spec.Scale.GetScaleUpCooldownSeconds())
 	if secondsSinceLastScale < scaleDownCooldown && secondsSinceLastScale < scaleUpCooldown {
 		// Skip scaling without needing further calculation
 		log.Infof("Cooldown period, skip scaling.")
-		return nil
-	}
-	if vertex.Status.Phase != dfv1.VertexPhaseRunning {
-		log.Infof("Vertex not in Running phase, skip scaling.")
 		return nil
 	}
 	pl := &dfv1.Pipeline{}
@@ -246,6 +250,12 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		}
 	}
 
+	// Vertex pods are not ready yet.
+	if vertex.Status.ReadyReplicas == 0 {
+		log.Infof("Vertex %q  has no ready replicas, skip scaling.", vertex.Name)
+		return nil
+	}
+
 	vMetrics, err := daemonClient.GetVertexMetrics(ctx, pl.Name, vertex.Spec.Name)
 	if err != nil {
 		return fmt.Errorf("failed to get metrics of vertex key %q, %w", key, err)
@@ -289,7 +299,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	}
 
 	var desired int32
-	current := int32(vertex.GetReplicas())
+	current := int32(vertex.Status.Replicas)
 	// if both totalRate and totalPending are 0, we scale down to 0
 	// since pending contains the pending acks, we can scale down to 0.
 	if totalPending == 0 && totalRate == 0 {
@@ -370,7 +380,7 @@ func (s *Scaler) desiredReplicas(_ context.Context, vertex *dfv1.Vertex, partiti
 		if vertex.IsASource() {
 			// For sources, we calculate the time of finishing processing the pending messages,
 			// and then we know how many replicas are needed to get them done in target seconds.
-			desired = int32(math.Round(((float64(pending) / rate) / float64(vertex.Spec.Scale.GetTargetProcessingSeconds())) * float64(vertex.Status.Replicas)))
+			desired = int32(math.Round(((float64(pending) / rate) / float64(vertex.Spec.Scale.GetTargetProcessingSeconds())) * float64(vertex.Status.ReadyReplicas)))
 		} else {
 			// For UDF and sinks, we calculate the available buffer length, and consider it is the contribution of current replicas,
 			// then we figure out how many replicas are needed to keep the available buffer length at target level.
@@ -378,7 +388,7 @@ func (s *Scaler) desiredReplicas(_ context.Context, vertex *dfv1.Vertex, partiti
 				// Simply return current replica number + max allowed if the pending messages are more than available buffer length
 				desired = int32(vertex.Status.Replicas) + int32(vertex.Spec.Scale.GetReplicasPerScaleUp())
 			} else {
-				singleReplicaContribution := float64(partitionBufferLengths[i]-pending) / float64(vertex.Status.Replicas)
+				singleReplicaContribution := float64(partitionBufferLengths[i]-pending) / float64(vertex.Status.ReadyReplicas)
 				desired = int32(math.Round(float64(partitionAvailableBufferLengths[i]) / singleReplicaContribution))
 			}
 		}
