@@ -26,16 +26,16 @@ pub(crate) use self::error::Result;
 mod error;
 pub(crate) use crate::error::Error;
 
-mod source;
-mod sink;
-mod transformer;
-mod forwarder;
 mod config;
+mod forwarder;
 mod message;
-mod shared;
 mod metrics;
 mod server_info;
+mod shared;
+mod sink;
+mod source;
 mod startup;
+mod transformer;
 
 pub(crate) mod source_pb {
     tonic::include_proto!("source.v1");
@@ -150,10 +150,11 @@ async fn start_forwarder(cln_token: CancellationToken) -> Result<()> {
 
     // start the metrics server
     // FIXME: what to do with the handle
-    let _ = startup::start_metrics_server(metrics_state);
+    startup::start_metrics_server(metrics_state).await;
 
     // start the lag reader to publish lag metrics
-    startup::start_lag_reader(source_grpc_client.clone()).await;
+    let mut lag_reader = startup::create_lag_reader(source_grpc_client.clone()).await;
+    lag_reader.start().await;
 
     // build the forwarder
     let source_reader = SourceReader::new(source_grpc_client.clone()).await?;
@@ -198,7 +199,7 @@ mod tests {
     impl source::Sourcer for SimpleSource {
         async fn read(&self, _: SourceReadRequest, _: Sender<Message>) {}
 
-        async fn ack(&self, _: Vec<Offset>) {}
+        async fn ack(&self, _: Offset) {}
 
         async fn pending(&self) -> usize {
             0

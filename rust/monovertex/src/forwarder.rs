@@ -523,6 +523,7 @@ mod tests {
     use chrono::Utc;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
+    use tokio::sync::mpsc;
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
 
@@ -575,13 +576,11 @@ mod tests {
                 .extend(message_offsets)
         }
 
-        async fn ack(&self, offsets: Vec<Offset>) {
-            for offset in offsets {
-                self.yet_to_be_acked
-                    .write()
-                    .unwrap()
-                    .remove(&String::from_utf8(offset.offset).unwrap());
-            }
+        async fn ack(&self, offset: Offset) {
+            self.yet_to_be_acked
+                .write()
+                .unwrap()
+                .remove(&String::from_utf8(offset.offset).unwrap());
         }
 
         async fn pending(&self) -> usize {
@@ -659,7 +658,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_forwarder_source_sink() {
-        let (sink_tx, mut sink_rx) = tokio::sync::mpsc::channel(10);
+        let (sink_tx, mut sink_rx) = mpsc::channel(10);
 
         // Start the source server
         let (source_shutdown_tx, source_shutdown_rx) = tokio::sync::oneshot::channel();
@@ -755,6 +754,7 @@ mod tests {
         // Wait for the assertion task to complete
         assert_handle.await.unwrap();
 
+        drop(forwarder);
         // stop the servers
         source_shutdown_tx
             .send(())
@@ -863,6 +863,7 @@ mod tests {
         cancel_handle.await.unwrap();
 
         // stop the servers
+        drop(forwarder);
         source_shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
@@ -872,7 +873,7 @@ mod tests {
 
         sink_shutdown_tx
             .send(())
-            .expect("failed to send shutdown signal");
+            .expect("failed to send sink shutdown signal");
         sink_server_handle
             .await
             .expect("failed to join sink server task");
@@ -987,6 +988,8 @@ mod tests {
         forwarder.start().await.unwrap();
 
         assert_handle.await.unwrap();
+
+        drop(forwarder);
         // stop the servers
         source_shutdown_tx
             .send(())

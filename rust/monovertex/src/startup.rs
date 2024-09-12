@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use crate::config::config;
 use crate::error::Error;
-use crate::metrics::{start_metrics_https_server, LagReaderBuilder, MetricsState};
+use crate::metrics::{start_metrics_https_server, LagReader, LagReaderBuilder, MetricsState};
 use crate::sink::{FB_SINK_SERVER_INFO_FILE, SINK_SERVER_INFO_FILE};
 use crate::sink_pb::sink_client::SinkClient;
 use crate::source::SOURCE_SERVER_INFO_FILE;
@@ -70,16 +70,15 @@ pub(crate) async fn start_metrics_server(metrics_state: MetricsState) -> JoinHan
     })
 }
 
-pub(crate) async fn start_lag_reader(lag_reader_grpc_client: SourceClient<Channel>) {
-    let mut lag_reader = LagReaderBuilder::new(lag_reader_grpc_client)
+pub(crate) async fn create_lag_reader(lag_reader_grpc_client: SourceClient<Channel>) -> LagReader {
+    LagReaderBuilder::new(lag_reader_grpc_client)
         .lag_checking_interval(Duration::from_secs(
             config().lag_check_interval_in_secs.into(),
         ))
         .refresh_interval(Duration::from_secs(
             config().lag_refresh_interval_in_secs.into(),
         ))
-        .build();
-    lag_reader.start().await;
+        .build()
 }
 
 pub(crate) async fn wait_until_ready(

@@ -4,7 +4,7 @@ use crate::message::{Message, Offset};
 use crate::source_pb;
 use crate::source_pb::source_client::SourceClient;
 use crate::source_pb::{
-    ack_request, read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
+    ack_request, ack_response, read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
 };
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
@@ -118,7 +118,9 @@ impl SourceReader {
                 .await
                 .map_err(|e| SourceError(e.to_string()))?;
         }
-        Ok(AckResponse::default())
+        Ok(AckResponse {
+            result: Some(ack_response::Result { success: Some(()) }),
+        })
     }
 }
 
@@ -173,13 +175,11 @@ mod tests {
             self.yet_to_ack.write().unwrap().extend(message_offsets)
         }
 
-        async fn ack(&self, offsets: Vec<Offset>) {
-            for offset in offsets {
-                self.yet_to_ack
-                    .write()
-                    .unwrap()
-                    .remove(&String::from_utf8(offset.offset).unwrap());
-            }
+        async fn ack(&self, offset: Offset) {
+            self.yet_to_ack
+                .write()
+                .unwrap()
+                .remove(&String::from_utf8(offset.offset).unwrap());
         }
 
         async fn pending(&self) -> usize {
@@ -229,6 +229,7 @@ mod tests {
             .unwrap();
         assert!(response.result.unwrap().success.is_some());
 
+        drop(source_client);
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");

@@ -326,22 +326,27 @@ async fn livez() -> impl IntoResponse {
 }
 
 async fn sidecar_livez(State(mut state): State<MetricsState>) -> impl IntoResponse {
-    if !state.source_client.is_ready(Request::new(())).await.is_ok() {
+    if state
+        .source_client
+        .is_ready(Request::new(()))
+        .await
+        .is_err()
+    {
         error!("Source client is not available");
         return StatusCode::SERVICE_UNAVAILABLE;
     }
-    if !state.sink_client.is_ready(Request::new(())).await.is_ok() {
+    if state.sink_client.is_ready(Request::new(())).await.is_err() {
         error!("Sink client is not available");
         return StatusCode::SERVICE_UNAVAILABLE;
     }
     if let Some(mut transformer_client) = state.transformer_client {
-        if !transformer_client.is_ready(Request::new(())).await.is_ok() {
+        if transformer_client.is_ready(Request::new(())).await.is_err() {
             error!("Transformer client is not available");
             return StatusCode::SERVICE_UNAVAILABLE;
         }
     }
     if let Some(mut fb_sink_client) = state.fb_sink_client {
-        if !fb_sink_client.is_ready(Request::new(())).await.is_ok() {
+        if fb_sink_client.is_ready(Request::new(())).await.is_err() {
             error!("Fallback sink client is not available");
             return StatusCode::SERVICE_UNAVAILABLE;
         }

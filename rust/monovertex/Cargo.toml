@@ -13,7 +13,7 @@ tokio = { version = "1.39.3", features = ["full"] }
 tracing = "0.1.40"
 tokio-util = "0.7.11"
 tokio-stream = "0.1.15"
-prost = "0.13.1"
+prost = "0.13.2"
 prost-types = "0.13.1"
 chrono = "0.4.31"
 base64 = "0.22.1"
@@ -38,7 +38,7 @@ log = "0.4.22"
 
 [dev-dependencies]
 tempfile = "3.11.0"
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", branch = "main" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", branch = "source-streaming" }
 
 [build-dependencies]
 tonic-build = "0.12.1"
