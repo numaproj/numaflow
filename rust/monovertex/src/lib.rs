@@ -4,7 +4,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::config::config;
-pub(crate) use crate::error::Error;
+
 use crate::forwarder::ForwarderBuilder;
 use crate::metrics::MetricsState;
 use crate::shared::create_rpc_channel;
@@ -23,22 +23,16 @@ pub(crate) use self::error::Result;
 /// - Invokes the SourceTransformer concurrently
 /// - Calls the Sinker to write the batch to the Sink
 /// - Send Acknowledgement back to the Source
-pub mod error;
+mod error;
+pub(crate) use crate::error::Error;
 
-pub(crate) mod source;
-
-pub(crate) mod sink;
-
-pub(crate) mod transformer;
-
-pub(crate) mod forwarder;
-
-pub(crate) mod config;
-
-pub(crate) mod message;
-
-pub(crate) mod shared;
-
+mod source;
+mod sink;
+mod transformer;
+mod forwarder;
+mod config;
+mod message;
+mod shared;
 mod metrics;
 mod server_info;
 mod startup;

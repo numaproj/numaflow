@@ -34,7 +34,7 @@ pub(crate) struct ServerInfo {
 
 /// check_for_server_compatibility waits until the server info file is ready and check whether the
 /// server is compatible with Numaflow.
-pub async fn check_for_server_compatibility(
+pub(crate) async fn check_for_server_compatibility(
     file_path: &str,
     cln_token: CancellationToken,
 ) -> error::Result<()> {
