@@ -8,9 +8,9 @@ pub(crate) use crate::error::Error;
 use crate::forwarder::ForwarderBuilder;
 use crate::metrics::MetricsState;
 use crate::shared::create_rpc_channel;
-use crate::sink::{FB_SINK_SOCKET, SINK_SOCKET, SinkWriter};
+use crate::sink::{SinkWriter, FB_SINK_SOCKET, SINK_SOCKET};
 use crate::sink_pb::sink_client::SinkClient;
-use crate::source::{SOURCE_SOCKET, SourceReader};
+use crate::source::{SourceReader, SOURCE_SOCKET};
 use crate::source_pb::source_client::SourceClient;
 use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
 use crate::transformer::{SourceTransformer, TRANSFORMER_SOCKET};
@@ -102,7 +102,7 @@ async fn shutdown_signal() {
     }
 }
 
-pub async fn start_forwarder(cln_token: CancellationToken) -> Result<()> {
+async fn start_forwarder(cln_token: CancellationToken) -> Result<()> {
     // make sure that we have compatibility with the server
     startup::check_compatibility(&cln_token).await?;
 
@@ -120,8 +120,7 @@ pub async fn start_forwarder(cln_token: CancellationToken) -> Result<()> {
                 .max_encoding_message_size(config().grpc_max_message_size)
                 .max_encoding_message_size(config().grpc_max_message_size);
 
-            Some(transformer_grpc_client.clone())
-
+        Some(transformer_grpc_client.clone())
     } else {
         None
     };
@@ -131,11 +130,9 @@ pub async fn start_forwarder(cln_token: CancellationToken) -> Result<()> {
             .max_encoding_message_size(config().grpc_max_message_size)
             .max_encoding_message_size(config().grpc_max_message_size);
 
-
-            Some(fb_sink_grpc_client.clone())
-
+        Some(fb_sink_grpc_client.clone())
     } else {
-         None
+        None
     };
 
     // readiness check for all the ud containers
@@ -172,7 +169,7 @@ pub async fn start_forwarder(cln_token: CancellationToken) -> Result<()> {
 
     // add transformer if exists
     if let Some(transformer_grpc_client) = transformer_grpc_client {
-         let transformer = SourceTransformer::new(transformer_grpc_client).await?;
+        let transformer = SourceTransformer::new(transformer_grpc_client).await?;
         forwarder_builder = forwarder_builder.source_transformer(transformer);
     }
 

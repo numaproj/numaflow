@@ -1,21 +1,23 @@
-use crate::config::config;
-use crate::error::Error;
-use crate::metrics::{LagReaderBuilder, MetricsState, start_metrics_https_server};
-use crate::sink::{FB_SINK_SERVER_INFO_FILE, SINK_SERVER_INFO_FILE};
-use crate::source::SOURCE_SERVER_INFO_FILE;
-use crate::source_pb::source_client::SourceClient;
-use crate::transformer::TRANSFORMER_SERVER_INFO_FILE;
-use crate::{error, server_info};
 use std::net::SocketAddr;
 use std::time::Duration;
+
+use crate::config::config;
+use crate::error::Error;
+use crate::metrics::{start_metrics_https_server, LagReaderBuilder, MetricsState};
+use crate::sink::{FB_SINK_SERVER_INFO_FILE, SINK_SERVER_INFO_FILE};
+use crate::sink_pb::sink_client::SinkClient;
+use crate::source::SOURCE_SERVER_INFO_FILE;
+use crate::source_pb::source_client::SourceClient;
+use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
+use crate::transformer::TRANSFORMER_SERVER_INFO_FILE;
+use crate::{error, server_info};
+
 use tokio::task::JoinHandle;
+use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
-use tracing::{info, warn};
 use tonic::Request;
-use tokio::time::sleep;
-use crate::sink_pb::sink_client::SinkClient;
-use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
+use tracing::{info, warn};
 
 pub(crate) async fn check_compatibility(cln_token: &CancellationToken) -> error::Result<()> {
     server_info::check_for_server_compatibility(SOURCE_SERVER_INFO_FILE, cln_token.clone())
