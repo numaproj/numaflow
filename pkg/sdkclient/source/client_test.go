@@ -164,7 +164,7 @@ func TestAckFn(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, &sourcepb.AckResponse{}, ack)
 
-	ack, err = testClient.AckFn(ctx, &sourcepb.AckRequest{})
+	_, err = testClient.AckFn(ctx, &sourcepb.AckRequest{})
 	assert.EqualError(t, err, "mock connection refused")
 }
 

@@ -30,7 +30,6 @@ import (
 	"go.uber.org/goleak"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -39,22 +38,6 @@ import (
 
 func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
-}
-
-type rpcMsg struct {
-	msg proto.Message
-}
-
-func (r *rpcMsg) Matches(msg interface{}) bool {
-	m, ok := msg.(proto.Message)
-	if !ok {
-		return false
-	}
-	return proto.Equal(m, r.msg)
-}
-
-func (r *rpcMsg) String() string {
-	return fmt.Sprintf("is %s", r.msg)
 }
 
 func NewMockUDSgRPCBasedUDSource(ctx context.Context, mockClient *sourcemock.MockSourceClient) *GRPCBasedUDSource {

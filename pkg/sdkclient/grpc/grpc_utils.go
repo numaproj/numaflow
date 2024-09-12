@@ -59,7 +59,7 @@ func ConnectToServer(udsSockAddr string, serverInfo *info.ServerInfo, maxMessage
 		sockAddr = getUdsSockAddr(udsSockAddr)
 		log.Println("UDS Client:", sockAddr)
 
-		conn, err = grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		conn, err = grpc.NewClient(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMessageSize), grpc.MaxCallSendMsgSize(maxMessageSize)))
 	}
 
