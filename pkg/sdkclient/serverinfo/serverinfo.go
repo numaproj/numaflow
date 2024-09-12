@@ -41,16 +41,8 @@ const (
 	MapModeMetadata = "MAP_MODE"
 )
 
-type MapMode string
-
-const (
-	UnaryMap  MapMode = "unary-map"
-	StreamMap MapMode = "stream-map"
-	BatchMap  MapMode = "batch-map"
-)
-
 // SDKServerInfo wait for the server to start and return the server info.
-func SDKServerInfo(inputOptions ...Option) (*info.ServerInfo, error) {
+func SDKServerInfo(inputOptions ...Option) (*ServerInfo, error) {
 	var opts = DefaultOptions()
 
 	for _, inputOption := range inputOptions {
@@ -68,7 +60,7 @@ func SDKServerInfo(inputOptions ...Option) (*info.ServerInfo, error) {
 }
 
 // waitForServerInfo waits until the server info is ready. It returns an error if the server info is not ready within the given timeout
-func waitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo, error) {
+func waitForServerInfo(timeout time.Duration, filePath string) (*ServerInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -81,9 +73,17 @@ func waitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 		return nil, fmt.Errorf("failed to read server info: %w", err)
 	}
 
-	sdkVersion := serverInfo.Version
-	minNumaflowVersion := serverInfo.MinimumNumaflowVersion
-	sdkLanguage := serverInfo.Language
+	res := &ServerInfo{
+		Protocol:               Protocol(serverInfo.Protocol),
+		Language:               Language(serverInfo.Language),
+		MinimumNumaflowVersion: serverInfo.MinimumNumaflowVersion,
+		Version:                serverInfo.Version,
+		Metadata:               serverInfo.Metadata,
+	}
+
+	sdkVersion := res.Version
+	minNumaflowVersion := res.MinimumNumaflowVersion
+	sdkLanguage := res.Language
 	numaflowVersion := numaflow.GetVersion().Version
 
 	// If MinimumNumaflowVersion is empty, skip the numaflow compatibility check as there was an
@@ -110,7 +110,7 @@ func waitForServerInfo(timeout time.Duration, filePath string) (*info.ServerInfo
 		}
 	}
 
-	return serverInfo, nil
+	return res, nil
 }
 
 func checkConstraint(version *semver.Version, constraint string) error {
@@ -144,10 +144,10 @@ func checkNumaflowCompatibility(numaflowVersion string, minNumaflowVersion strin
 }
 
 // checkSDKCompatibility checks if the current SDK version is compatible with the numaflow version
-func checkSDKCompatibility(sdkVersion string, sdkLanguage info.Language, minSupportedSDKVersions sdkConstraints) error {
+func checkSDKCompatibility(sdkVersion string, sdkLanguage Language, minSupportedSDKVersions sdkConstraints) error {
 	if sdkRequiredVersion, ok := minSupportedSDKVersions[sdkLanguage]; ok {
 		sdkConstraint := fmt.Sprintf(">= %s", sdkRequiredVersion)
-		if sdkLanguage == info.Python {
+		if sdkLanguage == Python {
 			// Python pre-releases/releases follow PEP440 specification which requires a different library for parsing
 			sdkVersionPEP440, err := pep440.Parse(sdkVersion)
 			if err != nil {

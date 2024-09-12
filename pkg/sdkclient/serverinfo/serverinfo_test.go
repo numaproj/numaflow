@@ -19,15 +19,13 @@ package serverinfo
 import (
 	"testing"
 
-	"github.com/numaproj/numaflow-go/pkg/info"
-
 	"github.com/stretchr/testify/assert"
 )
 
 var testMinimumSupportedSDKVersions = sdkConstraints{
-	info.Go:     "0.6.0-0",
-	info.Python: "0.6.0a",
-	info.Java:   "0.6.0-0",
+	Go:     "0.6.0-0",
+	Python: "0.6.0a",
+	Java:   "0.6.0-0",
 }
 
 func TestCheckNumaflowCompatibility(t *testing.T) {
@@ -77,7 +75,7 @@ func TestCheckSDKCompatibility(t *testing.T) {
 	tests := []struct {
 		name                        string
 		sdkVersion                  string
-		sdkLanguage                 info.Language
+		sdkLanguage                 Language
 		minimumSupportedSDKVersions sdkConstraints
 		shouldErr                   bool
 		errMessage                  string
@@ -85,7 +83,7 @@ func TestCheckSDKCompatibility(t *testing.T) {
 		{
 			name:                        "Test with incompatible Python version",
 			sdkVersion:                  "v0.5.3a1",
-			sdkLanguage:                 info.Python,
+			sdkLanguage:                 Python,
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   true,
 			errMessage:                  "SDK version 0.5.3a1 must be upgraded to at least 0.6.0a, in order to work with current numaflow version",
@@ -93,14 +91,14 @@ func TestCheckSDKCompatibility(t *testing.T) {
 		{
 			name:                        "Test with compatible Python version",
 			sdkVersion:                  "v0.6.0a2",
-			sdkLanguage:                 info.Python,
+			sdkLanguage:                 Python,
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   false,
 		},
 		{
 			name:                        "Test with incompatible Java version",
 			sdkVersion:                  "v0.4.3",
-			sdkLanguage:                 info.Java,
+			sdkLanguage:                 Java,
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   true,
 			errMessage:                  "SDK version 0.4.3 must be upgraded to at least 0.6.0-0, in order to work with current numaflow version",
@@ -108,7 +106,7 @@ func TestCheckSDKCompatibility(t *testing.T) {
 		{
 			name:                        "Test with compatible Go version",
 			sdkVersion:                  "v0.6.0-rc2",
-			sdkLanguage:                 info.Go,
+			sdkLanguage:                 Go,
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   false,
 		},
