@@ -47,11 +47,15 @@ const (
 	BatchMap  MapMode = "batch-map"
 )
 
-// MapModeKey is the key used in the server info metadata map to indicate which map mode is enabled.
-const MapModeKey = "MAP_MODE"
-
-// MinimumNumaflowVersion specifies the minimum Numaflow version required by the current SDK version
-const MinimumNumaflowVersion = "1.3.0-rc1"
+// Metadata keys used in the server info file
+const (
+	// MultiProcKey is the field used to indicate that MultiProc map mode is enabled
+	// The value contains the number of servers spawned.
+	MultiProcKey = "MULTIPROC"
+	// MapModeKey field is used to indicate which map mode is enabled
+	// If none is set, we consider the unary map as default
+	MapModeKey = "MAP_MODE"
+)
 
 // ServerInfo is the information about the server
 type ServerInfo struct {

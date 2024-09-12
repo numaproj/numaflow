@@ -31,16 +31,6 @@ import (
 	"github.com/numaproj/numaflow"
 )
 
-// Metadata keys used in the server info file
-const (
-	// MultiProcMetadata is the field used to indicate that MultiProc map mode is enabled
-	// The value contains the number of servers spawned.
-	MultiProcMetadata = "MULTIPROC"
-	// MapModeMetadata field is used to indicate which map mode is enabled
-	// If none is set, we consider unary map as default
-	MapModeMetadata = "MAP_MODE"
-)
-
 // SDKServerInfo wait for the server to start and return the server info.
 func SDKServerInfo(inputOptions ...Option) (*ServerInfo, error) {
 	var opts = DefaultOptions()
