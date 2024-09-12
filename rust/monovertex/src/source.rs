@@ -88,6 +88,7 @@ impl SourceReader {
 
         while let Some(response) = self.resp_stream.message().await? {
             if response.status.as_ref().map_or(false, |status| status.eot) {
+                println!("breaking");
                 break;
             }
 
@@ -97,7 +98,7 @@ impl SourceReader {
 
             messages.push(result.try_into()?);
         }
-
+        println!("messages {:?}", messages);
         Ok(messages)
     }
 
@@ -229,6 +230,8 @@ mod tests {
             .unwrap();
         assert!(response.result.unwrap().success.is_some());
 
+        // we need to drop the client, because if there are any in-flight requests
+        // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
         drop(source_client);
         shutdown_tx
             .send(())
