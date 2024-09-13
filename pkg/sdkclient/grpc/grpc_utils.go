@@ -25,17 +25,17 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	resolver "github.com/numaproj/numaflow/pkg/sdkclient/grpc_resolver"
-	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
+	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 )
 
 // ConnectToServer connects to the server with the given socket address based on the server info protocol.
-func ConnectToServer(udsSockAddr string, serverInfo *sdkserverinfo.ServerInfo, maxMessageSize int) (*grpc.ClientConn, error) {
+func ConnectToServer(udsSockAddr string, serverInfo *serverinfo.ServerInfo, maxMessageSize int) (*grpc.ClientConn, error) {
 	var conn *grpc.ClientConn
 	var err error
 	var sockAddr string
 
 	// Check if Multiproc server mode is enabled
-	if multiProcServer, ok := serverInfo.Metadata[sdkserverinfo.MultiProcKey]; ok {
+	if multiProcServer, ok := serverInfo.Metadata[serverinfo.MultiProcKey]; ok {
 		// Extract the server ports from the server info file
 		numServers, _ := strconv.Atoi(multiProcServer)
 		// In Multiprocessing server mode we have multiple servers forks
