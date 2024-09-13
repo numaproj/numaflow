@@ -49,7 +49,7 @@ func ConnectToServer(udsSockAddr string, serverInfo *info.ServerInfo, maxMessage
 			return nil, fmt.Errorf("failed to start Multiproc Client: %w", err)
 		}
 
-		conn, err = grpc.Dial(
+		conn, err = grpc.NewClient(
 			fmt.Sprintf("%s:///%s", resolver.CustScheme, resolver.CustServiceName),
 			grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),

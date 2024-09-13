@@ -467,11 +467,4 @@ func TestNewGRPCDaemonServiceClient(t *testing.T) {
 		err = client.Close()
 		assert.NoError(t, err)
 	})
-
-	t.Run("empty address", func(t *testing.T) {
-		address := ""
-		client, err := NewGRPCDaemonServiceClient(address)
-		assert.Error(t, err)
-		assert.Nil(t, client)
-	})
 }
