@@ -37,7 +37,6 @@ type client struct {
 	grpcClt    sourcepb.SourceClient
 	readStream sourcepb.Source_ReadFnClient
 	ackStream  sourcepb.Source_AckFnClient
-	datumCh    chan *sourcepb.ReadResponse
 }
 
 var _ Client = (*client)(nil)
