@@ -244,6 +244,7 @@ impl Forwarder {
                     Err(e) => Err(e)?,
                 }
 
+                // if we are shutting down, stop the retry
                 if self.cln_token.is_cancelled() {
                     return Err(Error::SinkError(
                         "Cancellation token triggered during retry".to_string(),
