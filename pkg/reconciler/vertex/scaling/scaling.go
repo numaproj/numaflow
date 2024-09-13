@@ -19,7 +19,6 @@ package scaling
 import (
 	"container/list"
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -30,7 +29,6 @@ import (
 	"go.uber.org/zap"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -499,12 +497,8 @@ loop:
 func (s *Scaler) patchVertexReplicas(ctx context.Context, vertex *dfv1.Vertex, desiredReplicas int32) error {
 	log := logging.FromContext(ctx)
 	origin := vertex.Spec.Replicas
-	vertex.Spec.Replicas = ptr.To[int32](desiredReplicas)
-	body, err := json.Marshal(vertex)
-	if err != nil {
-		return fmt.Errorf("failed to marshal vertex object to json, %w", err)
-	}
-	if err := s.client.Patch(ctx, vertex, client.RawPatch(types.MergePatchType, body)); err != nil && !apierrors.IsNotFound(err) {
+	patchJson := fmt.Sprintf(`{"spec":{"replicas":%d}}`, desiredReplicas)
+	if err := s.client.Patch(ctx, vertex, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("failed to patch vertex replicas, %w", err)
 	}
 	log.Infow("Auto scaling - vertex replicas changed.", zap.Int32p("from", origin), zap.Int32("to", desiredReplicas), zap.String("namespace", vertex.Namespace), zap.String("pipeline", vertex.Spec.PipelineName), zap.String("vertex", vertex.Spec.Name))

@@ -202,42 +202,28 @@ func TestReconcileJetStream(t *testing.T) {
 func TestNeedsUpdate(t *testing.T) {
 	t.Run("needs redis update", func(t *testing.T) {
 		testIsbs := nativeRedisIsbs.DeepCopy()
-		cl := fake.NewClientBuilder().Build()
-		r := &interStepBufferServiceReconciler{
-			client: cl,
-			scheme: scheme.Scheme,
-			config: reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
-			logger: zaptest.NewLogger(t).Sugar(),
-		}
-		assert.False(t, r.needsUpdate(nativeRedisIsbs, testIsbs))
+		assert.False(t, needsToPatchFinalizers(nativeRedisIsbs, testIsbs))
 		controllerutil.AddFinalizer(testIsbs, finalizerName)
 		assert.True(t, contains(testIsbs.Finalizers, finalizerName))
-		assert.True(t, r.needsUpdate(nativeRedisIsbs, testIsbs))
+		assert.True(t, needsToPatchFinalizers(nativeRedisIsbs, testIsbs))
 		controllerutil.RemoveFinalizer(testIsbs, finalizerName)
 		assert.False(t, contains(testIsbs.Finalizers, finalizerName))
-		assert.False(t, r.needsUpdate(nativeRedisIsbs, testIsbs))
+		assert.False(t, needsToPatchFinalizers(nativeRedisIsbs, testIsbs))
 		testIsbs.Status.MarkConfigured()
-		assert.False(t, r.needsUpdate(nativeRedisIsbs, testIsbs))
+		assert.False(t, needsToPatchFinalizers(nativeRedisIsbs, testIsbs))
 	})
 
 	t.Run("needs jetstream update", func(t *testing.T) {
 		testIsbs := jetStreamIsbs.DeepCopy()
-		cl := fake.NewClientBuilder().Build()
-		r := &interStepBufferServiceReconciler{
-			client: cl,
-			scheme: scheme.Scheme,
-			config: reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
-			logger: zaptest.NewLogger(t).Sugar(),
-		}
-		assert.False(t, r.needsUpdate(nativeRedisIsbs, testIsbs))
+		assert.False(t, needsToPatchFinalizers(nativeRedisIsbs, testIsbs))
 		controllerutil.AddFinalizer(testIsbs, finalizerName)
 		assert.True(t, contains(testIsbs.Finalizers, finalizerName))
-		assert.True(t, r.needsUpdate(nativeRedisIsbs, testIsbs))
+		assert.True(t, needsToPatchFinalizers(nativeRedisIsbs, testIsbs))
 		controllerutil.RemoveFinalizer(testIsbs, finalizerName)
 		assert.False(t, contains(testIsbs.Finalizers, finalizerName))
-		assert.False(t, r.needsUpdate(nativeRedisIsbs, testIsbs))
+		assert.False(t, needsToPatchFinalizers(nativeRedisIsbs, testIsbs))
 		testIsbs.Status.MarkConfigured()
-		assert.False(t, r.needsUpdate(nativeRedisIsbs, testIsbs))
+		assert.False(t, needsToPatchFinalizers(nativeRedisIsbs, testIsbs))
 	})
 }
 

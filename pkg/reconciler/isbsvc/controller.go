@@ -18,17 +18,20 @@ package isbsvc
 
 import (
 	"context"
+	"strings"
 
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/yaml"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
@@ -58,7 +61,7 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 	isbSvc := &dfv1.InterStepBufferService{}
 	if err := r.client.Get(ctx, req.NamespacedName, isbSvc); err != nil {
 		if apierrors.IsNotFound(err) {
-			return reconcile.Result{}, nil
+			return ctrl.Result{}, nil
 		}
 		r.logger.Errorw("Unable to get ISB Service", zap.Any("request", req), zap.Error(err))
 		return ctrl.Result{}, err
@@ -69,14 +72,15 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 	if reconcileErr != nil {
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
 	}
-	if r.needsUpdate(isbSvc, isbSvcCopy) {
-		// Update with a DeepCopy because .Status will be cleaned up.
-		if err := r.client.Update(ctx, isbSvcCopy.DeepCopy()); err != nil {
-			return reconcile.Result{}, err
+	if needsToPatchFinalizers(isbSvc, isbSvcCopy) {
+		patchYaml := "metadata:\n  finalizers: [" + strings.Join(isbSvcCopy.Finalizers, ",") + "]"
+		patchJson, _ := yaml.YAMLToJSON([]byte(patchYaml))
+		if err := r.client.Patch(ctx, isbSvc, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 	if err := r.client.Status().Update(ctx, isbSvcCopy); err != nil {
-		return reconcile.Result{}, err
+		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, reconcileErr
 }
@@ -122,13 +126,14 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 	return installer.Install(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder)
 }
 
-func (r *interStepBufferServiceReconciler) needsUpdate(old, new *dfv1.InterStepBufferService) bool {
-	if old == nil {
-		return true
+func needsToPatchFinalizers(old, new *dfv1.InterStepBufferService) bool {
+	if old == nil { // This is a weird scenario, nothing we can do. Theoretically it will never happen.
+		return false
 	}
 	if !equality.Semantic.DeepEqual(old.Finalizers, new.Finalizers) {
 		return true
 	}
+
 	return false
 }
 
