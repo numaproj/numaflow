@@ -243,6 +243,12 @@ impl Forwarder {
                     }
                     Err(e) => Err(e)?,
                 }
+
+                if self.cln_token.is_cancelled() {
+                    return Err(Error::SinkError(
+                        "Cancellation token triggered during retry".to_string(),
+                    ));
+                }
             }
 
             // If after the retries we still have messages to process, handle the post retry failures
@@ -798,7 +804,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // FIXME
     async fn test_forwarder_sink_error() {
         // Start the source server
         let (source_shutdown_tx, source_shutdown_rx) = tokio::sync::oneshot::channel();

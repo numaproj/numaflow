@@ -88,7 +88,6 @@ impl SourceReader {
 
         while let Some(response) = self.resp_stream.message().await? {
             if response.status.as_ref().map_or(false, |status| status.eot) {
-                println!("breaking");
                 break;
             }
 
@@ -98,7 +97,6 @@ impl SourceReader {
 
             messages.push(result.try_into()?);
         }
-        println!("messages {:?}", messages);
         Ok(messages)
     }
 
