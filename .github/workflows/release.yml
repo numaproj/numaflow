@@ -39,7 +39,7 @@ jobs:
           path: dist
 
   build-rust-amd64:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ./rust
@@ -62,7 +62,7 @@ jobs:
           path: rust/numaflow-rs-linux-amd64
 
   build-rust-arm64:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ./rust
@@ -90,7 +90,7 @@ jobs:
   build-push-linux-multi:
     name: Build & push linux/amd64 and linux/arm64
     needs: [ build-go-binaries, build-rust-amd64, build-rust-arm64]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     if: github.repository == 'numaproj/numaflow'
     strategy:
       matrix:
