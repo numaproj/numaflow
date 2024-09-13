@@ -5720,8 +5720,8 @@ MonoVertexLimits </a> </em>
 <em>(Optional)</em>
 <p>
 
-Limits define the limitations such as buffer read batch size for all the
-vertices of a pipeline, will override pipeline level settings
+Limits define the limitations such as read batch size for the mono
+vertex.
 </p>
 
 </td>
@@ -6109,8 +6109,8 @@ MonoVertexLimits </a> </em>
 <em>(Optional)</em>
 <p>
 
-Limits define the limitations such as buffer read batch size for all the
-vertices of a pipeline, will override pipeline level settings
+Limits define the limitations such as read batch size for the mono
+vertex.
 </p>
 
 </td>
