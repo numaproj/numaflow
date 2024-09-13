@@ -41,7 +41,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	w := s.Given().Pipeline("@testdata/simple-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
+	//defer w.DeletePipelineAndWait()
 	pipelineName := "simple-pipeline"
 
 	w.Expect().
@@ -146,6 +146,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 		assert.Fail(s.T(), "timed out waiting for rate to be calculated")
 	}
 	timer.Stop()
+	time.Sleep(300 * time.Second)
 }
 
 func (s *FunctionalSuite) TestUDFFiltering() {

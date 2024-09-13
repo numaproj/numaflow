@@ -9,7 +9,7 @@ on:
 jobs:
   ui:
     name: UI
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
       - name: Checkout code
@@ -131,7 +131,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       GOPATH: /home/runner/go
@@ -184,7 +184,7 @@ jobs:
 
   e2e-tests:
     name: E2E Tests
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     needs: [ build-rust-amd64 ]
     timeout-minutes: 20
     strategy:

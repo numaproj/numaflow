@@ -16,17 +16,9 @@ limitations under the License.
 
 package sdkclient
 
-import (
-	"time"
-
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-)
-
 type Options struct {
 	udsSockAddr    string
 	maxMessageSize int
-	readBatchSize  int
-	readTimeout    time.Duration
 }
 
 // UdsSockAddr returns the UDS sock addr.
@@ -39,23 +31,11 @@ func (o *Options) MaxMessageSize() int {
 	return o.maxMessageSize
 }
 
-// ReadBatchSize returns the read batch size.
-func (o *Options) ReadBatchSize() int {
-	return o.readBatchSize
-}
-
-// ReadTimeout returns the read timeout.
-func (o *Options) ReadTimeout() time.Duration {
-	return o.readTimeout
-}
-
 // DefaultOptions returns the default options.
 func DefaultOptions(address string) *Options {
 	return &Options{
 		maxMessageSize: DefaultGRPCMaxMessageSize,
 		udsSockAddr:    address,
-		readBatchSize:  v1alpha1.DefaultReadBatchSize,
-		readTimeout:    v1alpha1.DefaultReadTimeout,
 	}
 }
 
@@ -73,19 +53,5 @@ func WithUdsSockAddr(addr string) Option {
 func WithMaxMessageSize(size int) Option {
 	return func(opts *Options) {
 		opts.maxMessageSize = size
-	}
-}
-
-// WithReadBatchSize sets the read batch size.
-func WithReadBatchSize(size int) Option {
-	return func(opts *Options) {
-		opts.readBatchSize = size
-	}
-}
-
-// WithReadTimeout sets the read timeout.
-func WithReadTimeout(timeout time.Duration) Option {
-	return func(opts *Options) {
-		opts.readTimeout = timeout
 	}
 }
