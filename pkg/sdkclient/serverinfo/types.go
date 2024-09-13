@@ -22,6 +22,7 @@ const (
 	Go     Language = "go"
 	Python Language = "python"
 	Java   Language = "java"
+	Rust   Language = "rust"
 )
 
 type sdkConstraints map[Language]string
@@ -30,6 +31,7 @@ var minimumSupportedSDKVersions = sdkConstraints{
 	Go:     "0.8.0",
 	Python: "0.8.0",
 	Java:   "0.8.0",
+	Rust:   "0.1.0",
 }
 
 type Protocol string

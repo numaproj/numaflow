@@ -135,6 +135,7 @@ func Test_CheckSDKCompatibility(t *testing.T) {
 		Go:     "0.6.0-0",
 		Python: "0.6.0a",
 		Java:   "0.6.0-0",
+		Rust:   "0.1.0",
 	}
 	tests := []struct {
 		name                        string
@@ -171,6 +172,21 @@ func Test_CheckSDKCompatibility(t *testing.T) {
 			name:                        "Test with compatible Go version",
 			sdkVersion:                  "v0.6.0-rc2",
 			sdkLanguage:                 Go,
+			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
+			shouldErr:                   false,
+		},
+		{
+			name:                        "Test with incompatible Rust version",
+			sdkVersion:                  "v0.0.3",
+			sdkLanguage:                 Rust,
+			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
+			shouldErr:                   true,
+			errMessage:                  "SDK version 0.0.3 must be upgraded to at least 0.1.0, in order to work with current numaflow version",
+		},
+		{
+			name:                        "Test with compatible Rust version",
+			sdkVersion:                  "v0.1.1",
+			sdkLanguage:                 Rust,
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   false,
 		},
