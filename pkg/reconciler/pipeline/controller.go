@@ -295,9 +295,9 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 			r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateVertexSuccess", "Created vertex %s successfully", vertexName)
 		} else {
 			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] { // need to update
-				originReplicas := oldObj.Spec.Replicas
+				originalReplicas := oldObj.Spec.Replicas
 				oldObj.Spec = newObj.Spec
-				oldObj.Spec.Replicas = originReplicas
+				oldObj.Spec.Replicas = originalReplicas
 				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
 				if err := r.client.Update(ctx, &oldObj); err != nil {
 					r.recorder.Eventf(pl, corev1.EventTypeWarning, "UpdateVertexFailed", "Failed to update vertex: %w", err.Error())
