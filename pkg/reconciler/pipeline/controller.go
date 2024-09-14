@@ -18,7 +18,6 @@ package pipeline
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -40,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/yaml"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
@@ -51,6 +51,8 @@ import (
 
 const (
 	finalizerName = dfv1.ControllerPipeline
+
+	pauseTimestampPath = `/metadata/annotations/numaflow.numaproj.io~1pause-timestamp`
 )
 
 // pipelineReconciler reconciles a pipeline object.
@@ -85,9 +87,10 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
 	}
 	plCopy.Status.LastUpdated = metav1.Now()
-	if needsUpdate(pl, plCopy) {
-		// Update with a DeepCopy because .Status will be cleaned up.
-		if err := r.client.Update(ctx, plCopy.DeepCopy()); err != nil {
+	if !equality.Semantic.DeepEqual(pl.Finalizers, plCopy.Finalizers) {
+		patchYaml := "metadata:\n  finalizers: [" + strings.Join(plCopy.Finalizers, ",") + "]"
+		patchJson, _ := yaml.YAMLToJSON([]byte(patchYaml))
+		if err := r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil {
 			return result, err
 		}
 	}
@@ -292,7 +295,9 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 			r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateVertexSuccess", "Created vertex %s successfully", vertexName)
 		} else {
 			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] { // need to update
+				originalReplicas := oldObj.Spec.Replicas
 				oldObj.Spec = newObj.Spec
+				oldObj.Spec.Replicas = originalReplicas
 				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
 				if err := r.client.Update(ctx, &oldObj); err != nil {
 					r.recorder.Eventf(pl, corev1.EventTypeWarning, "UpdateVertexFailed", "Failed to update vertex: %w", err.Error())
@@ -588,17 +593,6 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 	return nil
 }
 
-func needsUpdate(old, new *dfv1.Pipeline) bool {
-	if old == nil {
-		return true
-	}
-	if !equality.Semantic.DeepEqual(old.Finalizers, new.Finalizers) {
-		return true
-	}
-
-	return false
-}
-
 func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 	result := make(map[string]dfv1.Vertex)
 	for _, v := range pl.Spec.Vertices {
@@ -814,7 +808,7 @@ func (r *pipelineReconciler) updateDesiredState(ctx context.Context, pl *dfv1.Pi
 func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
 	// reset pause timestamp
 	if pl.GetAnnotations()[dfv1.KeyPauseTimestamp] != "" {
-		err := r.client.Patch(ctx, pl, client.RawPatch(types.JSONPatchType, []byte(dfv1.RemovePauseTimestampPatch)))
+		err := r.client.Patch(ctx, pl, client.RawPatch(types.JSONPatchType, []byte(`[{"op": "remove", "path": "`+pauseTimestampPath+`"}]`)))
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return false, nil // skip pipeline if it can't be found
@@ -837,13 +831,8 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
 	// check that annotations / pause timestamp annotation exist
 	if pl.GetAnnotations() == nil || pl.GetAnnotations()[dfv1.KeyPauseTimestamp] == "" {
-		pl.SetAnnotations(map[string]string{dfv1.KeyPauseTimestamp: time.Now().Format(time.RFC3339)})
-		body, err := json.Marshal(pl)
-		if err != nil {
-			return false, err
-		}
-		err = r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, body))
-		if err != nil && !apierrors.IsNotFound(err) {
+		patchJson := `[{"op": "add", "path": "` + pauseTimestampPath + `", "value": "` + time.Now().Format(time.RFC3339) + `"}]`
+		if err := r.client.Patch(ctx, pl, client.RawPatch(types.JSONPatchType, []byte(patchJson))); err != nil && !apierrors.IsNotFound(err) {
 			return true, err
 		}
 	}
@@ -924,12 +913,8 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 					}
 				}
 			}
-			vertex.Spec.Replicas = ptr.To[int32](scaleTo)
-			body, err := json.Marshal(vertex)
-			if err != nil {
-				return false, err
-			}
-			err = r.client.Patch(ctx, &vertex, client.RawPatch(types.MergePatchType, body))
+			patchJson := fmt.Sprintf(`{"spec":{"replicas":%d}}`, scaleTo)
+			err = r.client.Patch(ctx, &vertex, client.RawPatch(types.MergePatchType, []byte(patchJson)))
 			if err != nil && !apierrors.IsNotFound(err) {
 				return false, err
 			}

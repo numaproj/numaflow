@@ -41,8 +41,6 @@ const (
 	KeyPauseTimestamp   = "numaflow.numaproj.io/pause-timestamp"
 	KeyDefaultContainer = "kubectl.kubernetes.io/default-container"
 
-	RemovePauseTimestampPatch = `[{"op": "remove", "path": "/metadata/annotations/numaflow.numaproj.io~1pause-timestamp"}]`
-
 	// ID key in the header of sources like http
 	KeyMetaID          = "X-Numaflow-Id"
 	KeyMetaEventTime   = "X-Numaflow-Event-Time"
