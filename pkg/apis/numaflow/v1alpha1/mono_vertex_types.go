@@ -408,7 +408,7 @@ type MonoVertexSpec struct {
 	// +patchStrategy=merge
 	// +patchMergeKey=name
 	Volumes []corev1.Volume `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,6,rep,name=volumes"`
-	// Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings
+	// Limits define the limitations such as read batch size for the mono vertex.
 	// +optional
 	Limits *MonoVertexLimits `json:"limits,omitempty" protobuf:"bytes,7,opt,name=limits"`
 	// Settings for autoscaling
