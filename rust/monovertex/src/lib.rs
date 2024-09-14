@@ -134,7 +134,7 @@ pub async fn init(
         .await
         .map_err(|e| {
             warn!("Error waiting for source server info file: {:?}", e);
-            Error::ForwarderError("Error waiting for server info file".to_string())
+            Error::ForwarderError(format!("Error waiting for source server info file: {}", e))
         })?;
     let mut source_client = SourceClient::connect(source_config).await?;
 
@@ -142,7 +142,7 @@ pub async fn init(
         .await
         .map_err(|e| {
             warn!("Error waiting for sink server info file: {:?}", e);
-            Error::ForwarderError("Error waiting for server info file".to_string())
+            Error::ForwarderError(format!("Error waiting for sink server info file: {}", e))
         })?;
 
     let mut sink_client = SinkClient::connect(sink_config).await?;
@@ -152,7 +152,7 @@ pub async fn init(
             .await
             .map_err(|e| {
                 warn!("Error waiting for transformer server info file: {:?}", e);
-                Error::ForwarderError("Error waiting for server info file".to_string())
+                Error::ForwarderError(format!("Error waiting for transformer server info file: {}", e))
             })?;
         Some(TransformerClient::connect(config).await?)
     } else {
@@ -164,7 +164,7 @@ pub async fn init(
             .await
             .map_err(|e| {
                 warn!("Error waiting for fallback sink server info file: {:?}", e);
-                Error::ForwarderError("Error waiting for server info file".to_string())
+                Error::ForwarderError(format!("Error waiting for fallback sink server info file: {}", e))
             })?;
         Some(SinkClient::connect(config).await?)
     } else {

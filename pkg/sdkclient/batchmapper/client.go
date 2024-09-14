@@ -21,15 +21,14 @@ import (
 	"errors"
 	"io"
 
+	batchmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/batchmap/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
-
-	batchmappb "github.com/numaproj/numaflow-go/pkg/apis/proto/batchmap/v1"
-	"github.com/numaproj/numaflow-go/pkg/info"
 
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	grpcutil "github.com/numaproj/numaflow/pkg/sdkclient/grpc"
+	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -39,7 +38,7 @@ type client struct {
 }
 
 // New creates a new client object.
-func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
+func New(serverInfo *serverinfo.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.BatchMapAddr)
 
 	for _, inputOption := range inputOptions {
