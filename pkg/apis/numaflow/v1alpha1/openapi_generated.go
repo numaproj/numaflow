@@ -3296,7 +3296,7 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref common.ReferenceCallba
 					},
 					"limits": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings",
+							Description: "Limits define the limitations such as read batch size for the mono vertex.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexLimits"),
 						},
 					},

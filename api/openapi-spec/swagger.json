@@ -19198,7 +19198,7 @@
           }
         },
         "limits": {
-          "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings",
+          "description": "Limits define the limitations such as read batch size for the mono vertex.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexLimits"
         },
         "metadata": {

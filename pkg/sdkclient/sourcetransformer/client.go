@@ -23,10 +23,11 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	transformpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1"
-	"github.com/numaproj/numaflow-go/pkg/info"
+
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	grpcutil "github.com/numaproj/numaflow/pkg/sdkclient/grpc"
+	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -36,7 +37,7 @@ type client struct {
 }
 
 // New creates a new client object.
-func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
+func New(serverInfo *serverinfo.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SourceTransformerAddr)
 
 	for _, inputOption := range inputOptions {

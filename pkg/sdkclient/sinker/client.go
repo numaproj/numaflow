@@ -20,13 +20,13 @@ import (
 	"context"
 	"fmt"
 
+	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	sinkpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sink/v1"
-	"github.com/numaproj/numaflow-go/pkg/info"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	grpcutil "github.com/numaproj/numaflow/pkg/sdkclient/grpc"
+	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -37,7 +37,7 @@ type client struct {
 
 var _ Client = (*client)(nil)
 
-func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
+func New(serverInfo *serverinfo.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SinkAddr)
 
 	for _, inputOption := range inputOptions {

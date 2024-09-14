@@ -32,7 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
+	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sinker"
 	"github.com/numaproj/numaflow/pkg/shared/callback"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
@@ -150,7 +150,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if udSink := u.VertexInstance.Vertex.Spec.Sink.UDSink; udSink != nil {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.SinkServerInfoFile))
+		serverInfo, err := serverinfo.SDKServerInfo(serverinfo.WithServerInfoFilePath(sdkclient.SinkServerInfoFile))
 		if err != nil {
 			return err
 		}
@@ -179,7 +179,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 
 	if u.VertexInstance.Vertex.HasFallbackUDSink() {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.FbSinkServerInfoFile))
+		serverInfo, err := serverinfo.SDKServerInfo(serverinfo.WithServerInfoFilePath(sdkclient.FbSinkServerInfoFile))
 		if err != nil {
 			return err
 		}

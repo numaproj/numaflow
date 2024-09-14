@@ -21,14 +21,14 @@ import (
 	"fmt"
 	"io"
 
+	mapstreampb "github.com/numaproj/numaflow-go/pkg/apis/proto/mapstream/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	mapstreampb "github.com/numaproj/numaflow-go/pkg/apis/proto/mapstream/v1"
-	"github.com/numaproj/numaflow-go/pkg/info"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	sdkerror "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	grpcutil "github.com/numaproj/numaflow/pkg/sdkclient/grpc"
+	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -38,7 +38,7 @@ type client struct {
 }
 
 // New creates a new client object.
-func New(serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
+func New(serverInfo *serverinfo.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.MapStreamAddr)
 
 	for _, inputOption := range inputOptions {

@@ -34,7 +34,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
+	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
 	"github.com/numaproj/numaflow/pkg/shared/callback"
@@ -196,7 +196,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	var udsGRPCClient *udsource.GRPCBasedUDSource
 	if sp.VertexInstance.Vertex.IsUDSource() {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.SourceServerInfoFile))
+		serverInfo, err := serverinfo.SDKServerInfo(serverinfo.WithServerInfoFilePath(sdkclient.SourceServerInfoFile))
 		if err != nil {
 			return err
 		}
@@ -235,7 +235,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.SourceTransformerServerInfoFile))
+		serverInfo, err := serverinfo.SDKServerInfo(serverinfo.WithServerInfoFilePath(sdkclient.SourceTransformerServerInfoFile))
 		if err != nil {
 			return err
 		}

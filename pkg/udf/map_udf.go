@@ -33,7 +33,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient/batchmapper"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
-	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
+	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	"github.com/numaproj/numaflow/pkg/shared/callback"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -138,16 +138,16 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 
 	// Wait for map server info to be ready, we use the same info file for all the map modes
-	serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.MapServerInfoFile))
+	serverInfo, err := serverinfo.SDKServerInfo(serverinfo.WithServerInfoFilePath(sdkclient.MapServerInfoFile))
 	if err != nil {
 		return err
 	}
 
 	// Read the server info file to read which map mode is enabled
 	// Based on the value set, we will create the corresponding handler and clients
-	mapMode, ok := serverInfo.Metadata[sdkserverinfo.MapModeMetadata]
+	mapMode, ok := serverInfo.Metadata[serverinfo.MapModeKey]
 
-	if ok && (sdkserverinfo.MapMode(mapMode) == sdkserverinfo.StreamMap) {
+	if ok && (serverinfo.MapMode(mapMode) == serverinfo.StreamMap) {
 		log.Info("Map mode enabled: Stream Map")
 		// Map Stream mode
 		enableMapUdfStream = true
@@ -170,9 +170,9 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}()
 		opts = append(opts, forward.WithUDFStreamingMap(mapStreamHandler))
 
-	} else if ok && (sdkserverinfo.MapMode(mapMode) == sdkserverinfo.BatchMap) {
+	} else if ok && (serverinfo.MapMode(mapMode) == serverinfo.BatchMap) {
 		log.Info("Map mode enabled: Batch Map")
-		// if Batch Map mode is enabled create the client and handler for that accordingly
+		// if Batch Map mode is enabled, create the client and handler for that accordingly
 		enableBatchMapUdf = true
 
 		// create the client and handler for batch map interface

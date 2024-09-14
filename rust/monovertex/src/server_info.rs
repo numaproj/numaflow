@@ -256,11 +256,12 @@ mod version {
     // MINIMUM_SUPPORTED_SDK_VERSIONS is a HashMap with SDK language as key and minimum supported version as value
     static MINIMUM_SUPPORTED_SDK_VERSIONS: Lazy<SdkConstraints> = Lazy::new(|| {
         // TODO: populate this from a static file and make it part of the release process
+        // the value of the map matches `minimumSupportedSDKVersions` in pkg/sdkclient/serverinfo/types.go
         let mut m = HashMap::new();
-        m.insert("go".to_string(), "0.7.0-rc2".to_string());
-        m.insert("python".to_string(), "0.7.0a1".to_string());
-        m.insert("java".to_string(), "0.7.2-0".to_string());
-        m.insert("rust".to_string(), "0.0.1".to_string());
+        m.insert("go".to_string(), "0.8.0".to_string());
+        m.insert("python".to_string(), "0.8.0".to_string());
+        m.insert("java".to_string(), "0.8.0".to_string());
+        m.insert("rust".to_string(), "0.1.0".to_string());
         m
     });
 
@@ -402,6 +403,7 @@ mod tests {
         constraints.insert("python".to_string(), "1.2.0".to_string());
         constraints.insert("java".to_string(), "2.0.0".to_string());
         constraints.insert("go".to_string(), "0.10.0".to_string());
+        constraints.insert("rust".to_string(), "0.1.0".to_string());
         constraints
     }
 
@@ -469,6 +471,30 @@ mod tests {
     async fn test_sdk_compatibility_go_invalid() {
         let sdk_version = "0.9.0";
         let sdk_language = "go";
+
+        let min_supported_sdk_versions = create_sdk_constraints();
+        let result =
+            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_sdk_compatibility_rust_valid() {
+        let sdk_version = "v0.1.0";
+        let sdk_language = "rust";
+
+        let min_supported_sdk_versions = create_sdk_constraints();
+        let result =
+            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_sdk_compatibility_rust_invalid() {
+        let sdk_version = "0.0.9";
+        let sdk_language = "rust";
 
         let min_supported_sdk_versions = create_sdk_constraints();
         let result =
