@@ -37,7 +37,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
@@ -554,16 +553,6 @@ func Test_buildISBBatchJob(t *testing.T) {
 		assert.Contains(t, j.Spec.Template.Spec.Tolerations, toleration)
 		assert.Equal(t, j.Spec.Template.Spec.PriorityClassName, "my-priority-class-name")
 	})
-}
-
-func Test_needsUpdate(t *testing.T) {
-	testObj := testPipeline.DeepCopy()
-	assert.False(t, needsToPatchFinalizers(nil, testObj))
-	assert.False(t, needsToPatchFinalizers(testPipeline, testObj))
-	controllerutil.AddFinalizer(testObj, finalizerName)
-	assert.True(t, needsToPatchFinalizers(testPipeline, testObj))
-	testobj1 := testObj.DeepCopy()
-	assert.False(t, needsToPatchFinalizers(testObj, testobj1))
 }
 
 func Test_cleanupBuffers(t *testing.T) {

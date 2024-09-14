@@ -72,7 +72,7 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 	if reconcileErr != nil {
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
 	}
-	if needsToPatchFinalizers(isbSvc, isbSvcCopy) {
+	if !equality.Semantic.DeepEqual(isbSvc.Finalizers, isbSvcCopy.Finalizers) {
 		patchYaml := "metadata:\n  finalizers: [" + strings.Join(isbSvcCopy.Finalizers, ",") + "]"
 		patchJson, _ := yaml.YAMLToJSON([]byte(patchYaml))
 		if err := r.client.Patch(ctx, isbSvc, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil {
@@ -124,17 +124,6 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 		isbSvc.Status.MarkConfigured()
 	}
 	return installer.Install(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder)
-}
-
-func needsToPatchFinalizers(old, new *dfv1.InterStepBufferService) bool {
-	if old == nil { // This is a weird scenario, nothing we can do. Theoretically it will never happen.
-		return false
-	}
-	if !equality.Semantic.DeepEqual(old.Finalizers, new.Finalizers) {
-		return true
-	}
-
-	return false
 }
 
 func needsFinalizer(isbSvc *dfv1.InterStepBufferService) bool {
