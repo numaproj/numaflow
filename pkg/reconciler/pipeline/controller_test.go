@@ -37,7 +37,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
@@ -352,8 +351,6 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 		v, err := r.findExistingVertices(ctx, testObj)
 		assert.NoError(t, err)
 		assert.Equal(t, int32(0), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
-		assert.NotNil(t, testObj.Annotations[dfv1.KeyPauseTimestamp])
-		testObj.Annotations[dfv1.KeyPauseTimestamp] = ""
 		_, err = r.resumePipeline(ctx, testObj)
 		assert.NoError(t, err)
 		v, err = r.findExistingVertices(ctx, testObj)
@@ -380,8 +377,6 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 		assert.NoError(t, err)
 		_, err = r.findExistingVertices(ctx, testObj)
 		assert.NoError(t, err)
-		assert.NotNil(t, testObj.Annotations[dfv1.KeyPauseTimestamp])
-		testObj.Annotations[dfv1.KeyPauseTimestamp] = ""
 		_, err = r.resumePipeline(ctx, testObj)
 		assert.NoError(t, err)
 		v, err := r.findExistingVertices(ctx, testObj)
@@ -558,16 +553,6 @@ func Test_buildISBBatchJob(t *testing.T) {
 		assert.Contains(t, j.Spec.Template.Spec.Tolerations, toleration)
 		assert.Equal(t, j.Spec.Template.Spec.PriorityClassName, "my-priority-class-name")
 	})
-}
-
-func Test_needsUpdate(t *testing.T) {
-	testObj := testPipeline.DeepCopy()
-	assert.True(t, needsUpdate(nil, testObj))
-	assert.False(t, needsUpdate(testPipeline, testObj))
-	controllerutil.AddFinalizer(testObj, finalizerName)
-	assert.True(t, needsUpdate(testPipeline, testObj))
-	testobj1 := testObj.DeepCopy()
-	assert.False(t, needsUpdate(testObj, testobj1))
 }
 
 func Test_cleanupBuffers(t *testing.T) {

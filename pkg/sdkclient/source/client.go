@@ -21,14 +21,13 @@ import (
 	"errors"
 	"fmt"
 
+	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
-	"github.com/numaproj/numaflow-go/pkg/info"
-
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	grpcutil "github.com/numaproj/numaflow/pkg/sdkclient/grpc"
+	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -41,7 +40,7 @@ type client struct {
 
 var _ Client = (*client)(nil)
 
-func New(ctx context.Context, serverInfo *info.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
+func New(ctx context.Context, serverInfo *serverinfo.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SourceAddr)
 
 	for _, inputOption := range inputOptions {
@@ -89,7 +88,7 @@ func NewFromClient(ctx context.Context, srcClient sourcepb.SourceClient, inputOp
 }
 
 // CloseConn closes the grpc client connection.
-func (c *client) CloseConn(ctx context.Context) error {
+func (c *client) CloseConn(context.Context) error {
 	err := c.readStream.CloseSend()
 	if err != nil {
 		return err
@@ -110,7 +109,7 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 	return resp.GetReady(), nil
 }
 
-func (c *client) ReadFn(ctx context.Context, req *sourcepb.ReadRequest, datumCh chan<- *sourcepb.ReadResponse) error {
+func (c *client) ReadFn(_ context.Context, req *sourcepb.ReadRequest, datumCh chan<- *sourcepb.ReadResponse) error {
 	err := c.readStream.Send(req)
 	if err != nil {
 		return fmt.Errorf("failed to send read request: %v", err)
@@ -134,7 +133,7 @@ func (c *client) ReadFn(ctx context.Context, req *sourcepb.ReadRequest, datumCh 
 }
 
 // AckFn acknowledges the data from the source.
-func (c *client) AckFn(ctx context.Context, req *sourcepb.AckRequest) (*sourcepb.AckResponse, error) {
+func (c *client) AckFn(_ context.Context, req *sourcepb.AckRequest) (*sourcepb.AckResponse, error) {
 	err := c.ackStream.Send(req)
 	if err != nil {
 		return nil, err

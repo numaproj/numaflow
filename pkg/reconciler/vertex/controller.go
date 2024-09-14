@@ -259,6 +259,8 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 		vertex.Status.CurrentHash = vertex.Status.UpdateHash
 	} else { // Update scenario
 		if updatedReplicas >= desiredReplicas {
+			vertex.Status.UpdatedReplicas = uint32(desiredReplicas)
+			vertex.Status.CurrentHash = vertex.Status.UpdateHash
 			return nil
 		}
 
