@@ -186,7 +186,7 @@ jobs:
 
   e2e-tests:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [ build-rust-amd64 ]
     timeout-minutes: 20
     strategy:
