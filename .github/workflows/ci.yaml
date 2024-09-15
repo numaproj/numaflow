@@ -30,7 +30,7 @@ jobs:
         run: git diff --exit-code
   codegen:
     name: Codegen
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout code
@@ -59,7 +59,7 @@ jobs:
 
   unit-tests:
     name: Unit Tests
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
       redis:
@@ -113,8 +113,8 @@ jobs:
         with:
           tool: grcov
 
-      - name: Install Protobuf Compiler
-        run: sudo apt-get install -y protobuf-compiler
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
 
       - name: Test Rust
         working-directory: ./rust
@@ -150,7 +150,7 @@ jobs:
       - run: git diff --exit-code
 
   build-rust-amd64:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     defaults:
       run:
         working-directory: ./rust
@@ -167,8 +167,8 @@ jobs:
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.5
-      - name: Install dependencies
-        run: sudo apt-get install -y protobuf-compiler
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
       - name: Rename binary
