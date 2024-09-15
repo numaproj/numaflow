@@ -169,6 +169,8 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.5
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
+      - name: Print Protoc version
+        run: protoc --version
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
       - name: Rename binary
@@ -184,7 +186,7 @@ jobs:
 
   e2e-tests:
     name: E2E Tests
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     needs: [ build-rust-amd64 ]
     timeout-minutes: 20
     strategy:
