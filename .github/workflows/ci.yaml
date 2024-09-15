@@ -150,7 +150,7 @@ jobs:
       - run: git diff --exit-code
 
   build-rust-amd64:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ./rust
@@ -167,8 +167,8 @@ jobs:
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.5
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
+      - name: Install dependencies
+        run: sudo apt-get install -y protobuf-compiler
       - name: Print Protoc version
         run: protoc --version
       - name: Build binary

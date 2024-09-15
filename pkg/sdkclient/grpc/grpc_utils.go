@@ -63,7 +63,7 @@ func ConnectToServer(udsSockAddr string, serverInfo *serverinfo.ServerInfo, maxM
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute grpc.Dial(%q): %w", sockAddr, err)
+		return nil, fmt.Errorf("failed to execute grpc.NewClient(%q): %w", sockAddr, err)
 	}
 
 	return conn, nil
