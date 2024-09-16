@@ -5,16 +5,20 @@ metadata:
 spec:
   vertices:
     - name: in
+      scale:
+        min: 1
       source:
         udsource:
           container:
             # A simple user-defined source for e2e testing
             # See https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/source/simple
-            image: quay.io/numaio/numaflow-java/source-simple-source:stable
-            imagePullPolicy: Always
+            image: quay.io/yhl25/numaflow-java/source-simple-source:stable
+            imagePullPolicy: IfNotPresent
       limits:
         readBatchSize: 500
     - name: out
+      scale:
+        min: 1
       sink:
         log: {}
   edges:

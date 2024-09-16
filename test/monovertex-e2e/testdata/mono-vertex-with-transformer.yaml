@@ -3,10 +3,12 @@ kind: MonoVertex
 metadata:
   name: transformer-mono-vertex
 spec:
+  scale:
+    min: 1
   source:
     udsource:
       container:
-        image:  quay.io/numaio/numaflow-go/source-simple-source:stable
+        image:  quay.io/yhl25/numaflow-go/source-simple-source:stable
         imagePullPolicy: Always
     transformer:
       container:

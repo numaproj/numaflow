@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
 	"google.golang.org/grpc"
@@ -28,6 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	grpcutil "github.com/numaproj/numaflow/pkg/sdkclient/grpc"
 	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 // client contains the grpc connection and the grpc client.
@@ -42,7 +44,7 @@ var _ Client = (*client)(nil)
 
 func New(ctx context.Context, serverInfo *serverinfo.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SourceAddr)
-
+	var logger = logging.FromContext(ctx)
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
 	}
@@ -57,14 +59,31 @@ func New(ctx context.Context, serverInfo *serverinfo.ServerInfo, inputOptions ..
 	c.conn = conn
 	c.grpcClt = sourcepb.NewSourceClient(conn)
 
+	// wait until the server is ready
+waitUntilReady:
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("failed to connect to the server: %v", ctx.Err())
+		default:
+			ready, _ := c.IsReady(ctx, &emptypb.Empty{})
+			if ready {
+				break waitUntilReady
+			} else {
+				logger.Warnw("source client is not ready")
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}
+
 	c.readStream, err = c.grpcClt.ReadFn(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create read stream: %v", err)
 	}
 
 	c.ackStream, err = c.grpcClt.AckFn(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create ack stream: %v", err)
 	}
 
 	return c, nil

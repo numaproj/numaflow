@@ -45,21 +45,18 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	pipelineName := "simple-pipeline"
 
 	w.Expect().
-		VertexPodsRunning().DaemonPodsRunning()
+		VertexPodsRunning().DaemonPodsRunning().
+		VertexPodLogContains("input", LogSourceVertexStarted).
+		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("output", SinkVertexStarted).
+		DaemonPodLogContains(pipelineName, LogDaemonStarted).
+		VertexPodLogContains("output", `"Data":.*,"Createdts":.*`)
 
 	defer w.VertexPodPortForward("input", 8001, dfv1.VertexMetricsPort).
 		VertexPodPortForward("p1", 8002, dfv1.VertexMetricsPort).
 		VertexPodPortForward("output", 8003, dfv1.VertexMetricsPort).
 		DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
 		TerminateAllPodPortForwards()
-
-	w.StreamVertexPodLogs("input", "numa").
-		StreamVertexPodLogs("p1", "numa").
-		StreamVertexPodLogs("output", "numa").
-		StreamISBLogs().
-		StreamControllerLogs()
-
-	defer w.TerminateAllPodLogs()
 
 	// Check vertex pod metrics endpoints
 	HTTPExpect(s.T(), "https://localhost:8001").GET("/metrics").
