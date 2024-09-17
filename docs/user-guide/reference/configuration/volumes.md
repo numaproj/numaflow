@@ -47,3 +47,28 @@ spec:
               - mountPath: /path/to/my-sink-config
                 name: my-udsink-config
 ```
+
+### PVC Example
+
+Example to show how to attach a Persistent Volume Claim (PVC) to a container.
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: my-pipeline
+spec:
+  vertices:
+    - name: my-source
+      volumes:
+        - name: mypd
+          persistentVolumeClaim:
+            claimName: myclaim
+      source:
+        udsource:
+          container:
+            image: my-source:latest
+            volumeMounts:
+              - mountPath: /path/to/my-source-config
+                name: mypd
+```
