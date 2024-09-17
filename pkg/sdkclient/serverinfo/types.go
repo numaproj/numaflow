@@ -74,19 +74,21 @@ var minimumSupportedSDKVersions = sdkConstraints{
 	Rust: "0.1.0-z",
 }
 
-// getRealMinimumVersion returns the real minimum supported version for the given version.
-// it's used to help log the correct minimum supported version in the error message.
-// it translates the version we used in the sdkConstraints map to the real minimum supported version.
-// e.g., if the given version is "0.8.0rc100", the real minimum supported version is "0.8.0".
-// if the given version is "0.8.0-z", the real minimum supported version is "0.8.0".
-// if the given version is "0.8.0-rc1", the real minimum supported version is "0.8.0-rc1".
-func getRealMinimumVersion(ver string) string {
+// humanReadable returns the human-readable minimum supported version.
+// it's used for logging purposes.
+// it translates the version we used in the constraints to the real minimum supported version.
+// e.g., if the given version is "0.8.0rc100", human-readable version is "0.8.0".
+// if the given version is "0.8.0-z", "0.8.0".
+// if "0.8.0-rc1", "0.8.0-rc1".
+func humanReadable(ver string) string {
 	if ver == "" {
 		return ""
 	}
+	// semver
 	if strings.HasSuffix(ver, "-z") {
 		return ver[:len(ver)-2]
 	}
+	// PEP 440
 	if strings.HasSuffix(ver, "rc100") {
 		return ver[:len(ver)-5]
 	}

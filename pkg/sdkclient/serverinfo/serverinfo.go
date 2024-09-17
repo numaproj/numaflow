@@ -170,7 +170,7 @@ func checkNumaflowCompatibility(numaflowVersion string, minNumaflowVersion strin
 	numaflowConstraint := fmt.Sprintf(">= %s", minNumaflowVersion)
 	if err = checkConstraint(numaflowVersionSemVer, numaflowConstraint); err != nil {
 		return fmt.Errorf("numaflow version %s must be upgraded to at least %s, in order to work with current SDK version: %w",
-			numaflowVersionSemVer.String(), getRealMinimumVersion(minNumaflowVersion), err)
+			numaflowVersionSemVer.String(), humanReadable(minNumaflowVersion), err)
 	}
 	return nil
 }
@@ -193,7 +193,7 @@ func checkSDKCompatibility(sdkVersion string, sdkLanguage Language, minSupported
 
 			if !c.Check(sdkVersionPEP440) {
 				return fmt.Errorf("SDK version %s must be upgraded to at least %s, in order to work with current numaflow version: %w",
-					sdkVersionPEP440.String(), getRealMinimumVersion(sdkRequiredVersion), err)
+					sdkVersionPEP440.String(), humanReadable(sdkRequiredVersion), err)
 			}
 		} else {
 			sdkVersionSemVer, err := semver.NewVersion(sdkVersion)
@@ -203,7 +203,7 @@ func checkSDKCompatibility(sdkVersion string, sdkLanguage Language, minSupported
 
 			if err := checkConstraint(sdkVersionSemVer, sdkConstraint); err != nil {
 				return fmt.Errorf("SDK version %s must be upgraded to at least %s, in order to work with current numaflow version: %w",
-					sdkVersionSemVer.String(), getRealMinimumVersion(sdkRequiredVersion), err)
+					sdkVersionSemVer.String(), humanReadable(sdkRequiredVersion), err)
 			}
 		}
 	}
