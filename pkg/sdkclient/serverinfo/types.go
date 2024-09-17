@@ -68,7 +68,7 @@ var minimumSupportedSDKVersions = sdkConstraints{
 	Go: "0.8.0-z",
 	// meaning the minimum supported java SDK version is 0.8.0
 	Java: "0.8.0-z",
-	// meaning the minimum supported rust SDK version is 0.8.0
+	// meaning the minimum supported rust SDK version is 0.1.0
 	Rust: "0.1.0-z",
 }
 
