@@ -102,6 +102,14 @@ func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) core
 		}
 	}
 	container := c.build()
+
+	var initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold int32 = 30, 60, 30, 5
+	if x := s.UDTransformer.Container; x != nil {
+		initialDelaySeconds = GetProbeInitialDelaySecondsOr(x.LivenessProbe, initialDelaySeconds)
+		periodSeconds = GetProbePeriodSecondsOr(x.LivenessProbe, periodSeconds)
+		timeoutSeconds = GetProbeTimeoutSecondsOr(x.LivenessProbe, timeoutSeconds)
+		failureThreshold = GetProbeFailureThresholdOr(x.LivenessProbe, failureThreshold)
+	}
 	container.LivenessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -110,9 +118,10 @@ func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) core
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 30,
-		PeriodSeconds:       60,
-		TimeoutSeconds:      30,
+		InitialDelaySeconds: initialDelaySeconds,
+		PeriodSeconds:       periodSeconds,
+		TimeoutSeconds:      timeoutSeconds,
+		FailureThreshold:    failureThreshold,
 	}
 	return container
 }
@@ -139,6 +148,14 @@ func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Co
 		}
 	}
 	container := c.build()
+
+	var initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold int32 = 30, 60, 30, 5
+	if x := s.UDSource.Container; x != nil {
+		initialDelaySeconds = GetProbeInitialDelaySecondsOr(x.LivenessProbe, initialDelaySeconds)
+		periodSeconds = GetProbePeriodSecondsOr(x.LivenessProbe, periodSeconds)
+		timeoutSeconds = GetProbeTimeoutSecondsOr(x.LivenessProbe, timeoutSeconds)
+		failureThreshold = GetProbeFailureThresholdOr(x.LivenessProbe, failureThreshold)
+	}
 	container.LivenessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -147,9 +164,10 @@ func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Co
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 30,
-		PeriodSeconds:       60,
-		TimeoutSeconds:      30,
+		InitialDelaySeconds: initialDelaySeconds,
+		PeriodSeconds:       periodSeconds,
+		TimeoutSeconds:      timeoutSeconds,
+		FailureThreshold:    failureThreshold,
 	}
 	return container
 }

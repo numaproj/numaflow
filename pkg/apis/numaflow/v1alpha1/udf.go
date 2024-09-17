@@ -98,6 +98,14 @@ func (in UDF) getUDFContainer(mainContainerReq getContainerReq) corev1.Container
 	}
 	c = c.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerFunction})
 	container := c.build()
+
+	var initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold int32 = 30, 60, 30, 5
+	if x := in.Container; x != nil {
+		initialDelaySeconds = GetProbeInitialDelaySecondsOr(x.LivenessProbe, initialDelaySeconds)
+		periodSeconds = GetProbePeriodSecondsOr(x.LivenessProbe, periodSeconds)
+		timeoutSeconds = GetProbeTimeoutSecondsOr(x.LivenessProbe, timeoutSeconds)
+		failureThreshold = GetProbeFailureThresholdOr(x.LivenessProbe, failureThreshold)
+	}
 	container.LivenessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -106,9 +114,10 @@ func (in UDF) getUDFContainer(mainContainerReq getContainerReq) corev1.Container
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 30,
-		PeriodSeconds:       60,
-		TimeoutSeconds:      30,
+		InitialDelaySeconds: initialDelaySeconds,
+		PeriodSeconds:       periodSeconds,
+		TimeoutSeconds:      timeoutSeconds,
+		FailureThreshold:    failureThreshold,
 	}
 	return container
 }

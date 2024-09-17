@@ -92,9 +92,10 @@ func (s Sink) getUDSinkContainer(mainContainerReq getContainerReq) corev1.Contai
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 30,
-		PeriodSeconds:       60,
-		TimeoutSeconds:      30,
+		InitialDelaySeconds: GetProbeInitialDelaySecondsOr(x.LivenessProbe, 30),
+		PeriodSeconds:       GetProbePeriodSecondsOr(x.LivenessProbe, 60),
+		TimeoutSeconds:      GetProbeTimeoutSecondsOr(x.LivenessProbe, 30),
+		FailureThreshold:    GetProbeFailureThresholdOr(x.LivenessProbe, 5),
 	}
 	return container
 }
@@ -126,9 +127,10 @@ func (s Sink) getFallbackUDSinkContainer(mainContainerReq getContainerReq) corev
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 30,
-		PeriodSeconds:       60,
-		TimeoutSeconds:      30,
+		InitialDelaySeconds: GetProbeInitialDelaySecondsOr(x.LivenessProbe, 30),
+		PeriodSeconds:       GetProbePeriodSecondsOr(x.LivenessProbe, 60),
+		TimeoutSeconds:      GetProbeTimeoutSecondsOr(x.LivenessProbe, 30),
+		FailureThreshold:    GetProbeFailureThresholdOr(x.LivenessProbe, 5),
 	}
 	return container
 }

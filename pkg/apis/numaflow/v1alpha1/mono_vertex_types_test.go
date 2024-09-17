@@ -34,6 +34,20 @@ var (
 			Namespace: "default",
 		},
 		Spec: MonoVertexSpec{
+			ContainerTemplate: &ContainerTemplate{
+				ReadinessProbe: &Probe{
+					InitialDelaySeconds: ptr.To[int32](24),
+					PeriodSeconds:       ptr.To[int32](25),
+					FailureThreshold:    ptr.To[int32](2),
+					TimeoutSeconds:      ptr.To[int32](21),
+				},
+				LivenessProbe: &Probe{
+					InitialDelaySeconds: ptr.To[int32](14),
+					PeriodSeconds:       ptr.To[int32](15),
+					FailureThreshold:    ptr.To[int32](1),
+					TimeoutSeconds:      ptr.To[int32](11),
+				},
+			},
 			Scale: Scale{
 				Min: ptr.To[int32](2),
 				Max: ptr.To[int32](4),
@@ -195,6 +209,16 @@ func TestMonoVertexGetPodSpec(t *testing.T) {
 		}
 		assert.Contains(t, envNames, "ENV_VAR_NAME")
 		assert.Contains(t, envNames, EnvMonoVertexObject)
+		assert.NotNil(t, podSpec.Containers[0].ReadinessProbe)
+		assert.Equal(t, int32(24), podSpec.Containers[0].ReadinessProbe.InitialDelaySeconds)
+		assert.Equal(t, int32(25), podSpec.Containers[0].ReadinessProbe.PeriodSeconds)
+		assert.Equal(t, int32(2), podSpec.Containers[0].ReadinessProbe.FailureThreshold)
+		assert.Equal(t, int32(21), podSpec.Containers[0].ReadinessProbe.TimeoutSeconds)
+		assert.NotNil(t, podSpec.Containers[0].LivenessProbe)
+		assert.Equal(t, int32(14), podSpec.Containers[0].LivenessProbe.InitialDelaySeconds)
+		assert.Equal(t, int32(15), podSpec.Containers[0].LivenessProbe.PeriodSeconds)
+		assert.Equal(t, int32(1), podSpec.Containers[0].LivenessProbe.FailureThreshold)
+		assert.Equal(t, int32(11), podSpec.Containers[0].LivenessProbe.TimeoutSeconds)
 	})
 }
 

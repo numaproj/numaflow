@@ -286,6 +286,20 @@ func TestGetPodSpec(t *testing.T) {
 	t.Run("test sink", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Sink = &Sink{}
+		testObj.Spec.ContainerTemplate = &ContainerTemplate{
+			ReadinessProbe: &Probe{
+				InitialDelaySeconds: ptr.To[int32](24),
+				PeriodSeconds:       ptr.To[int32](25),
+				FailureThreshold:    ptr.To[int32](2),
+				TimeoutSeconds:      ptr.To[int32](21),
+			},
+			LivenessProbe: &Probe{
+				InitialDelaySeconds: ptr.To[int32](14),
+				PeriodSeconds:       ptr.To[int32](15),
+				FailureThreshold:    ptr.To[int32](2),
+				TimeoutSeconds:      ptr.To[int32](11),
+			},
+		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(s.Containers))
@@ -294,10 +308,20 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[0].ImagePullPolicy)
 		assert.NotNil(t, s.Containers[0].ReadinessProbe)
 		assert.NotNil(t, s.Containers[0].ReadinessProbe.HTTPGet)
+		assert.Equal(t, "/readyz", s.Containers[0].ReadinessProbe.HTTPGet.Path)
+		assert.Equal(t, int32(24), s.Containers[0].ReadinessProbe.InitialDelaySeconds)
+		assert.Equal(t, int32(25), s.Containers[0].ReadinessProbe.PeriodSeconds)
+		assert.Equal(t, int32(2), s.Containers[0].ReadinessProbe.FailureThreshold)
+		assert.Equal(t, int32(21), s.Containers[0].ReadinessProbe.TimeoutSeconds)
 		assert.Equal(t, corev1.URISchemeHTTPS, s.Containers[0].ReadinessProbe.HTTPGet.Scheme)
 		assert.Equal(t, VertexMetricsPort, s.Containers[0].ReadinessProbe.HTTPGet.Port.IntValue())
 		assert.NotNil(t, s.Containers[0].LivenessProbe)
 		assert.NotNil(t, s.Containers[0].LivenessProbe.HTTPGet)
+		assert.Equal(t, "/livez", s.Containers[0].LivenessProbe.HTTPGet.Path)
+		assert.Equal(t, int32(14), s.Containers[0].LivenessProbe.InitialDelaySeconds)
+		assert.Equal(t, int32(15), s.Containers[0].LivenessProbe.PeriodSeconds)
+		assert.Equal(t, int32(2), s.Containers[0].LivenessProbe.FailureThreshold)
+		assert.Equal(t, int32(11), s.Containers[0].LivenessProbe.TimeoutSeconds)
 		assert.Equal(t, corev1.URISchemeHTTPS, s.Containers[0].LivenessProbe.HTTPGet.Scheme)
 		assert.Equal(t, VertexMetricsPort, s.Containers[0].LivenessProbe.HTTPGet.Port.IntValue())
 		assert.Equal(t, 1, len(s.Containers[0].Ports))
