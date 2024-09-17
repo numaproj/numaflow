@@ -16,6 +16,8 @@ limitations under the License.
 
 package serverinfo
 
+import "strings"
+
 type Language string
 
 const (
@@ -70,6 +72,25 @@ var minimumSupportedSDKVersions = sdkConstraints{
 	Java: "0.8.0-z",
 	// meaning the minimum supported rust SDK version is 0.1.0
 	Rust: "0.1.0-z",
+}
+
+// getRealMinimumVersion returns the real minimum supported version for the given version.
+// it's used to help log the correct minimum supported version in the error message.
+// it translates the version we used in the sdkConstraints map to the real minimum supported version.
+// e.g., if the given version is "0.8.0rc100", the real minimum supported version is "0.8.0".
+// if the given version is "0.8.0-z", the real minimum supported version is "0.8.0".
+// if the given version is "0.8.0-rc1", the real minimum supported version is "0.8.0-rc1".
+func getRealMinimumVersion(ver string) string {
+	if ver == "" {
+		return ""
+	}
+	if strings.HasSuffix(ver, "-z") {
+		return ver[:len(ver)-2]
+	}
+	if strings.HasSuffix(ver, "rc100") {
+		return ver[:len(ver)-5]
+	}
+	return ver
 }
 
 type Protocol string

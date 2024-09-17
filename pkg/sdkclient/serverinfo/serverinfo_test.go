@@ -101,7 +101,7 @@ func Test_CheckNumaflowCompatibility(t *testing.T) {
 			numaflowVersion:    "v1.1.6",
 			minNumaflowVersion: "1.1.7-z",
 			shouldErr:          true,
-			errMessage:         "numaflow version 1.1.6 must be upgraded to at least 1.1.7-z, in order to work with current SDK version",
+			errMessage:         "numaflow version 1.1.6 must be upgraded to at least 1.1.7, in order to work with current SDK version",
 		},
 		{
 			name:               "Test with compatible numaflow version - min is a stable version 1.1.6",
@@ -114,7 +114,7 @@ func Test_CheckNumaflowCompatibility(t *testing.T) {
 			numaflowVersion:    "v1.1.7-rc1",
 			minNumaflowVersion: "1.1.7-z",
 			shouldErr:          true,
-			errMessage:         "numaflow version 1.1.7-rc1 must be upgraded to at least 1.1.7-z, in order to work with current SDK version",
+			errMessage:         "numaflow version 1.1.7-rc1 must be upgraded to at least 1.1.7, in order to work with current SDK version",
 		},
 		{
 			name:               "Test with compatible numaflow version - min is a stable version 1.1.6, numaflow version is a pre-release version",
@@ -190,7 +190,7 @@ func Test_CheckSDKCompatibility(t *testing.T) {
 			sdkLanguage:                 Python,
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   true,
-			errMessage:                  "SDK version 0.5.3a1 must be upgraded to at least 0.6.0rc100, in order to work with current numaflow version",
+			errMessage:                  "SDK version 0.5.3a1 must be upgraded to at least 0.6.0, in order to work with current numaflow version",
 		},
 		{
 			name:                        "python pre-release version is compatible with minimum supported version",
@@ -212,7 +212,7 @@ func Test_CheckSDKCompatibility(t *testing.T) {
 			sdkLanguage:                 Python,
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   true,
-			errMessage:                  "SDK version 0.5.3 must be upgraded to at least 0.6.0rc100, in order to work with current numaflow version",
+			errMessage:                  "SDK version 0.5.3 must be upgraded to at least 0.6.0, in order to work with current numaflow version",
 		},
 		{
 			name:                        "python release version is compatible with minimum supported version",
@@ -247,7 +247,7 @@ func Test_CheckSDKCompatibility(t *testing.T) {
 			sdkLanguage:                 Rust,
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   true,
-			errMessage:                  "SDK version 0.0.3 must be upgraded to at least 0.1.0-z, in order to work with current numaflow version",
+			errMessage:                  "SDK version 0.0.3 must be upgraded to at least 0.1.0, in order to work with current numaflow version",
 		},
 		{
 			name:                        "java rc release version is lower than minimum supported version",
@@ -255,7 +255,7 @@ func Test_CheckSDKCompatibility(t *testing.T) {
 			sdkLanguage:                 Java,
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   true,
-			errMessage:                  "SDK version 0.6.0-rc1 must be upgraded to at least 0.6.0-z, in order to work with current numaflow version",
+			errMessage:                  "SDK version 0.6.0-rc1 must be upgraded to at least 0.6.0, in order to work with current numaflow version",
 		},
 		{
 			name:                        "golang pre-release version is lower than minimum supported version",
@@ -263,7 +263,7 @@ func Test_CheckSDKCompatibility(t *testing.T) {
 			sdkLanguage:                 Go,
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   true,
-			errMessage:                  "SDK version 0.6.0-0.20240913163521-4910018031a7 must be upgraded to at least 0.6.0-z, in order to work with current numaflow version",
+			errMessage:                  "SDK version 0.6.0-0.20240913163521-4910018031a7 must be upgraded to at least 0.6.0, in order to work with current numaflow version",
 		},
 	}
 	for _, tt := range tests {
