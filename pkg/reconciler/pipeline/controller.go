@@ -610,7 +610,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		copyVertexTemplate(pl, vCopy)
 		copyVertexLimits(pl, vCopy)
 		replicas := int32(1)
-		// If the desired phase is pause or we are in the middle of pausing we should not start any vertex replicas
+		// If the desired phase is paused or we are in the middle of pausing we should not start any vertex replicas
 		if isLifecycleChange(pl) {
 			replicas = int32(0)
 		} else if v.IsReduceUDF() {
@@ -952,7 +952,7 @@ func (r *pipelineReconciler) checkChildrenResourceStatus(ctx context.Context, pi
 	defer func() {
 		for _, c := range pipeline.Status.Conditions {
 			if c.Status != metav1.ConditionTrue {
-				pipeline.Status.SetPhase(pipeline.Spec.Lifecycle.GetDesiredPhase(), "Degraded: "+c.Message)
+				pipeline.Status.Message = "Degraded: " + c.Message
 				return
 			}
 		}
