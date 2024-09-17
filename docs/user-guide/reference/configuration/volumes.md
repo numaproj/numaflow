@@ -48,7 +48,7 @@ spec:
                 name: my-udsink-config
 ```
 
-### PVC Example
+## PVC Example
 
 Example to show how to attach a Persistent Volume Claim (PVC) to a container.
 
