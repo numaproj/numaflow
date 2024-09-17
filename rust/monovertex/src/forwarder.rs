@@ -124,12 +124,17 @@ impl Forwarder {
         let messages = self
             .source_reader
             .read(config().batch_size, config().timeout_in_ms)
-            .await?;
+            .await
+            .map_err(|e| {
+                Error::ForwarderError(format!("Failed to read messages from source {:?}", e))
+            })?;
+
         debug!(
             "Read batch size: {} and latency - {}ms",
             messages.len(),
             start_time.elapsed().as_millis()
         );
+
         forward_metrics()
             .read_time
             .get_or_create(&self.common_labels)
@@ -161,13 +166,27 @@ impl Forwarder {
             .inc_by(bytes_count);
 
         // Apply transformation if transformer is present
-        let transformed_messages = self.apply_transformer(messages).await?;
+        let transformed_messages = self.apply_transformer(messages).await.map_err(|e| {
+            Error::ForwarderError(format!(
+                "Failed to apply transformation to messages {:?}",
+                e
+            ))
+        })?;
 
         // Write the messages to the sink
-        self.write_to_sink(transformed_messages).await?;
+        self.write_to_sink(transformed_messages)
+            .await
+            .map_err(|e| {
+                Error::ForwarderError(format!("Failed to write messages to sink {:?}", e))
+            })?;
 
         // Acknowledge the messages back to the source
-        self.acknowledge_messages(offsets).await?;
+        self.acknowledge_messages(offsets).await.map_err(|e| {
+            Error::ForwarderError(format!(
+                "Failed to acknowledge messages back to source {:?}",
+                e
+            ))
+        })?;
 
         Ok(msg_count as usize)
     }

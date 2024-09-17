@@ -30,6 +30,14 @@ service Source {
 }
 
 /*
+ * Handshake message between client and server to indicate the start of transmission.
+ */
+message Handshake {
+  // Required field indicating the start of transmission.
+  bool sot = 1;
+}
+
+/*
  * ReadRequest is the request for reading datum stream from user defined source.
  */
 message ReadRequest {
@@ -43,6 +51,7 @@ message ReadRequest {
   }
   // Required field indicating the request.
   Request request = 1;
+  optional Handshake handshake = 2;
 }
 
 /*
@@ -82,14 +91,14 @@ message ReadResponse {
     // End of transmission flag.
     bool eot = 1;
     Code code = 2;
-    Error error = 3;
+    optional Error error = 3;
     optional string msg = 4;
   }
   // Required field holding the result.
   Result result = 1;
   // Status of the response. Holds the end of transmission flag and the status code.
-  //
   Status status = 2;
+  optional Handshake handshake = 3;
 }
 
 /*

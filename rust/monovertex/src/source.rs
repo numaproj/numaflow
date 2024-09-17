@@ -8,12 +8,13 @@ use crate::source_pb::{
 };
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use std::thread::sleep;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 pub(crate) const SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
 pub(crate) const SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
@@ -29,6 +30,9 @@ pub(crate) struct SourceReader {
 
 impl Drop for SourceReader {
     fn drop(&mut self) {
+        // wait for the ack task to flush all the acks.
+        // TODO: hacky way to wait for the ack task to finish. We should have a better way to handle this.
+        sleep(std::time::Duration::from_secs(5));
         // in a happy path scenario, the ack task would have already been finished.
         if !self.ack_handle.is_finished() {
             warn!("aborting ack task");
@@ -40,17 +44,36 @@ impl Drop for SourceReader {
 impl SourceReader {
     pub(crate) async fn new(mut client: SourceClient<Channel>) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(500);
-
-        let resp_stream = client
-            .read_fn(Request::new(ReceiverStream::new(read_rx)))
-            .await?
-            .into_inner();
-        debug!("Created server stream");
-
         let (ack_tx, ack_rx) = mpsc::channel(500);
 
-        let mut ack_client = client.clone();
+        let read_stream = ReceiverStream::new(read_rx);
+
+        // do a handshake with the server before we start sending read requests
+        let handshake_request = ReadRequest {
+            request: None,
+            handshake: Some(source_pb::Handshake { sot: true }),
+        };
+        read_tx
+            .send(handshake_request)
+            .await
+            .map_err(|e| SourceError(format!("failed to send handshake request: {}", e)))?;
+
+        let mut resp_stream = client
+            .read_fn(Request::new(read_stream))
+            .await?
+            .into_inner();
+
+        // first response from the server will be the handshake response. We need to check if the
+        // server has accepted the handshake.
+        let handshake_response = resp_stream.message().await?.ok_or(SourceError(
+            "failed to receive handshake response".to_string(),
+        ))?;
+        if handshake_response.handshake.map_or(true, |h| !h.sot) {
+            return Err(SourceError("invalid handshake response".to_string()));
+        }
+
         // spawn a task to handle acks.
+        let mut ack_client = client.clone();
         let ack_handle = tokio::spawn(async move {
             let ack_response = ack_client
                 .ack_fn(Request::new(ReceiverStream::new(ack_rx)))
@@ -77,6 +100,7 @@ impl SourceReader {
                 num_records,
                 timeout_in_ms,
             }),
+            handshake: None,
         };
 
         self.read_tx

@@ -86,6 +86,25 @@ waitUntilReady:
 		return nil, fmt.Errorf("failed to create ack stream: %v", err)
 	}
 
+	// Send handshake request
+	handshakeRequest := &sourcepb.ReadRequest{
+		Handshake: &sourcepb.Handshake{
+			Sot: true,
+		},
+	}
+	if err := c.readStream.Send(handshakeRequest); err != nil {
+		return nil, fmt.Errorf("failed to send handshake request: %v", err)
+	}
+
+	// Wait for handshake response
+	handshakeResponse, err := c.readStream.Recv()
+	if err != nil {
+		return nil, fmt.Errorf("failed to receive handshake response: %v", err)
+	}
+	if handshakeResponse.GetHandshake() == nil || !handshakeResponse.GetHandshake().GetSot() {
+		return nil, fmt.Errorf("invalid handshake response")
+	}
+
 	return c, nil
 }
 

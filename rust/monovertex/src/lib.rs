@@ -131,6 +131,7 @@ async fn start_forwarder(cln_token: CancellationToken) -> Result<()> {
 
     // readiness check for all the ud containers
     startup::wait_until_ready(
+        cln_token.clone(),
         &mut source_grpc_client,
         &mut sink_grpc_client,
         &mut transformer_grpc_client,

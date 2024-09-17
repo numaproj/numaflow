@@ -82,12 +82,18 @@ pub(crate) async fn create_lag_reader(lag_reader_grpc_client: SourceClient<Chann
 }
 
 pub(crate) async fn wait_until_ready(
+    cln_token: CancellationToken,
     source_client: &mut SourceClient<Channel>,
     sink_client: &mut SinkClient<Channel>,
     transformer_client: &mut Option<SourceTransformClient<Channel>>,
     fb_sink_client: &mut Option<SinkClient<Channel>>,
 ) -> error::Result<()> {
     loop {
+        if cln_token.is_cancelled() {
+            return Err(Error::ForwarderError(
+                "Cancellation token is cancelled".to_string(),
+            ));
+        }
         let source_ready = source_client.is_ready(Request::new(())).await.is_ok();
         if !source_ready {
             info!("UDSource is not ready, waiting...");
