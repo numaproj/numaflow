@@ -65,7 +65,7 @@ spec:
             failureThreshold: 5
 ```
 
-The customization for `numa` container is also available with a [Vertex Template](./pipeline-customization#vertices) defined in `spec.templates.vertex`, which is going to be applied to all the vertices of a pipeline.
+The customization for `numa` container is also available with a [Vertex Template](./pipeline-customization.md#vertices) defined in `spec.templates.vertex`, which is going to be applied to all the vertices of a pipeline.
 
 A `MonoVertex` example is as below.
 
