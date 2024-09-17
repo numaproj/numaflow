@@ -31,8 +31,8 @@ pub(crate) struct SourceReader {
 impl Drop for SourceReader {
     fn drop(&mut self) {
         // wait for the ack task to flush all the acks.
-        // TODO: hacky way to wait for the ack task to finish. We should have a better way to handle this.
-        sleep(std::time::Duration::from_secs(5));
+        // FIXME: hacky way to wait for the ack task to finish. We should have a better way to handle this.
+        sleep(std::time::Duration::from_secs(30));
         // in a happy path scenario, the ack task would have already been finished.
         if !self.ack_handle.is_finished() {
             warn!("aborting ack task");
