@@ -80,39 +80,34 @@ pub async fn check_for_server_compatibility(
 /// Checks if the given version meets the specified constraint.
 fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
     let binding = version.to_string();
+    // extract the major.minor.patch version
     let mmp_version = binding.split('-').next().unwrap();
-    println!("constraint: {}", constraint);
-    println!("mmp_version: {}", mmp_version);
-    println!("version: {}", version);
 
-    // TODO - if both rc, but not same mmp, compare the mmp version
-
-    // DONE - if constraint ends with -z,
-    // it means the minimum required version is a stable version, e.g. 0.8.0
-    // update the constraint to be >=0.8.0 and check if the version satisfies the constraint
-
-    // if a version is 0.8.0-rc1, it should not satisfy the constraint >=0.8.0
-    // if a version is 0.8.0 or 0.9.0, it should satisfy the constraint >=0.8.0
-    // if a version is 0.9.0-rc1, it should satisfy the constraint >=0.8.0
     if constraint.ends_with("-z") {
+        // the minimum supported version is a stable version
         let stable_version = constraint.trim_end_matches("-z").trim_start_matches(">=");
         let stable_constraint = format!(">={}", stable_version);
-        println!("stable_constraint: {}", stable_constraint);
-        // if the version is not prefixed with the stable_version,
-        // it's another mmp release, we trim to get that mmp version
         if !version.to_string().starts_with(stable_version) {
-            println!("comparing mmp_version: {} with the stable constraint: {}", mmp_version, stable_constraint);
+            // if the version is prefixed with a different mmp version,
+            // rust semver lib doesn't handle the comparison the same as golang.
+            // e.g., rust semver doesn't treat 0.9.0-rc* as larger than 0.8.0.
+            // this is because to rust semver, both are smaller than 0.9.0.
+            // so we need to handle this case manually by only comparing the mmp version.
+            // TODO - remove this once rust semver handles pre-release comparison the same as golang.
+            // https://github.com/dtolnay/semver/issues/323
             return check_constraint(&Version::parse(mmp_version).unwrap(), &stable_constraint);
         }
         return check_constraint(version, &stable_constraint);
     } else if constraint.contains("-") {
-        // if the constraint is not a stable version,
-        // we need
-        // to handle the case when the version to compare is also a pre-release version
-        // and it's mmp is different from the constraint's mmp
+        // the minimum supported version is a pre-release version.
         let stable_version = trim_after_dash(constraint.trim_start_matches(">="));
         let stable_constraint = format!(">={}", stable_version);
         if !version.to_string().starts_with(stable_version) {
+            // if the version is prefixed with a different mmp version,
+            // rust semver lib doesn't handle the comparison the same as golang.
+            // e.g., rust semver doesn't treat 0.9.0-rc* as larger than 0.8.0-rc*.
+            // TODO - remove this once rust semver handles pre-release comparison the same as golang.
+            // https://github.com/dtolnay/semver/issues/323
             return check_constraint(&Version::parse(mmp_version).unwrap(), &stable_constraint);
         }
     }
@@ -151,8 +146,11 @@ fn check_numaflow_compatibility(
         return Err(Error::ServerInfoError("invalid version".to_string()));
     }
 
+    // Strip the 'v' prefix if present.
+    let numaflow_version_stripped = numaflow_version.trim_start_matches('v');
+
     // Parse the provided numaflow version as a semantic version
-    let numaflow_version_semver = Version::parse(numaflow_version)
+    let numaflow_version_semver = Version::parse(numaflow_version_stripped)
         .map_err(|e| Error::ServerInfoError(format!("Error parsing Numaflow version: {}", e)))?;
 
     // Create a version constraint based on the minimum numaflow version
@@ -756,9 +754,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_numaflow_compatibility_valid() {
-        let numaflow_version = "1.4.0";
-        let min_numaflow_version = "1.3.0";
+    async fn test_numaflow_compatibility_min_stable_version_stable_valid() {
+        let numaflow_version = "v1.1.7";
+        let min_numaflow_version = "1.1.6-z";
 
         let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
 
@@ -766,15 +764,81 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_numaflow_compatibility_invalid() {
-        let numaflow_version = "1.2.0";
-        let min_numaflow_version = "1.3.0";
+    async fn test_numaflow_compatibility_min_stable_version_stable_invalid() {
+        let numaflow_version = "v1.1.6";
+        let min_numaflow_version = "1.1.7-z";
 
         let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains(
-            "numaflow version 1.2.0 must be upgraded to at least 1.3.0, in order to work with current SDK version"));
+            "numaflow version 1.1.6 must be upgraded to at least 1.1.7, in order to work with current SDK version"));
+    }
+
+    #[tokio::test]
+    async fn test_numaflow_compatibility_min_stable_version_pre_release_valid() {
+        let numaflow_version = "1.1.7-rc1";
+        let min_numaflow_version = "1.1.6-z";
+
+        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_numaflow_compatibility_min_stable_version_pre_release_invalid() {
+        let numaflow_version = "v1.1.6-rc1";
+        let min_numaflow_version = "1.1.6-z";
+
+        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains(
+            "numaflow version 1.1.6-rc1 must be upgraded to at least 1.1.6, in order to work with current SDK version"));
+    }
+
+    #[tokio::test]
+    async fn test_numaflow_compatibility_min_rc_version_stable_invalid() {
+        let numaflow_version = "v1.1.6";
+        let min_numaflow_version = "1.1.7-rc1";
+
+        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains(
+            "numaflow version 1.1.6 must be upgraded to at least 1.1.7-rc1, in order to work with current SDK version"));
+    }
+
+    #[tokio::test]
+    async fn test_numaflow_compatibility_min_rc_version_stable_valid() {
+        let numaflow_version = "1.1.7";
+        let min_numaflow_version = "1.1.6-rc1";
+
+        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_numaflow_compatibility_min_rc_version_pre_release_valid() {
+        let numaflow_version = "1.1.7-rc3";
+        let min_numaflow_version = "1.1.7-rc2";
+
+        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_numaflow_compatibility_min_rc_version_pre_release_invalid() {
+        let numaflow_version = "v1.1.6-rc1";
+        let min_numaflow_version = "1.1.6-rc2";
+
+        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains(
+            "numaflow version 1.1.6-rc1 must be upgraded to at least 1.1.6-rc2, in order to work with current SDK version"));
     }
 
     #[tokio::test]
