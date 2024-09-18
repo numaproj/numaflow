@@ -99,7 +99,7 @@ func (in UDF) getUDFContainer(mainContainerReq getContainerReq) corev1.Container
 	c = c.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerFunction})
 	container := c.build()
 
-	var initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold int32 = 30, 60, 30, 5
+	var initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold int32 = UDContainerLivezInitialDelaySeconds, UDContainerLivezPeriodSeconds, UDContainerLivezTimeoutSeconds, UDContainerLivezFailureThreshold
 	if x := in.Container; x != nil {
 		initialDelaySeconds = GetProbeInitialDelaySecondsOr(x.LivenessProbe, initialDelaySeconds)
 		periodSeconds = GetProbePeriodSecondsOr(x.LivenessProbe, periodSeconds)

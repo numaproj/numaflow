@@ -92,10 +92,10 @@ func (s Sink) getUDSinkContainer(mainContainerReq getContainerReq) corev1.Contai
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: GetProbeInitialDelaySecondsOr(x.LivenessProbe, 30),
-		PeriodSeconds:       GetProbePeriodSecondsOr(x.LivenessProbe, 60),
-		TimeoutSeconds:      GetProbeTimeoutSecondsOr(x.LivenessProbe, 30),
-		FailureThreshold:    GetProbeFailureThresholdOr(x.LivenessProbe, 5),
+		InitialDelaySeconds: GetProbeInitialDelaySecondsOr(x.LivenessProbe, UDContainerLivezInitialDelaySeconds),
+		PeriodSeconds:       GetProbePeriodSecondsOr(x.LivenessProbe, UDContainerLivezPeriodSeconds),
+		TimeoutSeconds:      GetProbeTimeoutSecondsOr(x.LivenessProbe, UDContainerLivezTimeoutSeconds),
+		FailureThreshold:    GetProbeFailureThresholdOr(x.LivenessProbe, UDContainerLivezFailureThreshold),
 	}
 	return container
 }
@@ -127,10 +127,10 @@ func (s Sink) getFallbackUDSinkContainer(mainContainerReq getContainerReq) corev
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: GetProbeInitialDelaySecondsOr(x.LivenessProbe, 30),
-		PeriodSeconds:       GetProbePeriodSecondsOr(x.LivenessProbe, 60),
-		TimeoutSeconds:      GetProbeTimeoutSecondsOr(x.LivenessProbe, 30),
-		FailureThreshold:    GetProbeFailureThresholdOr(x.LivenessProbe, 5),
+		InitialDelaySeconds: GetProbeInitialDelaySecondsOr(x.LivenessProbe, UDContainerLivezInitialDelaySeconds),
+		PeriodSeconds:       GetProbePeriodSecondsOr(x.LivenessProbe, UDContainerLivezPeriodSeconds),
+		TimeoutSeconds:      GetProbeTimeoutSecondsOr(x.LivenessProbe, UDContainerLivezTimeoutSeconds),
+		FailureThreshold:    GetProbeFailureThresholdOr(x.LivenessProbe, UDContainerLivezFailureThreshold),
 	}
 	return container
 }

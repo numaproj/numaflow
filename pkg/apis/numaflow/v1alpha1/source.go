@@ -103,7 +103,7 @@ func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) core
 	}
 	container := c.build()
 
-	var initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold int32 = 30, 60, 30, 5
+	var initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold int32 = UDContainerLivezInitialDelaySeconds, UDContainerLivezPeriodSeconds, UDContainerLivezTimeoutSeconds, UDContainerLivezFailureThreshold
 	if x := s.UDTransformer.Container; x != nil {
 		initialDelaySeconds = GetProbeInitialDelaySecondsOr(x.LivenessProbe, initialDelaySeconds)
 		periodSeconds = GetProbePeriodSecondsOr(x.LivenessProbe, periodSeconds)
@@ -149,7 +149,7 @@ func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Co
 	}
 	container := c.build()
 
-	var initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold int32 = 30, 60, 30, 5
+	var initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold int32 = UDContainerLivezInitialDelaySeconds, UDContainerLivezPeriodSeconds, UDContainerLivezTimeoutSeconds, UDContainerLivezFailureThreshold
 	if x := s.UDSource.Container; x != nil {
 		initialDelaySeconds = GetProbeInitialDelaySecondsOr(x.LivenessProbe, initialDelaySeconds)
 		periodSeconds = GetProbePeriodSecondsOr(x.LivenessProbe, periodSeconds)
