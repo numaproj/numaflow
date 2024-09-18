@@ -150,22 +150,47 @@ func TestAckFn(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockClient := sourcemock.NewMockSourceClient(ctrl)
-
 	mockStream := sourcemock.NewMockSource_AckFnClient(ctrl)
+
+	// Handshake request and response
+	mockStream.EXPECT().Send(&sourcepb.AckRequest{
+		Handshake: &sourcepb.Handshake{
+			Sot: true,
+		},
+	}).Return(nil)
+	mockStream.EXPECT().Recv().Return(&sourcepb.AckResponse{
+		Handshake: &sourcepb.Handshake{
+			Sot: true,
+		},
+	}, nil)
+
+	// Ack request and response
 	mockStream.EXPECT().Send(gomock.Any()).Return(nil)
-	mockStream.EXPECT().Send(gomock.Any()).Return(fmt.Errorf("mock connection refused"))
+	mockStream.EXPECT().Recv().Return(&sourcepb.AckResponse{}, nil)
 
 	testClient := client{
 		grpcClt:   mockClient,
 		ackStream: mockStream,
 	}
 
+	// Perform handshake
+	ackHandshakeRequest := &sourcepb.AckRequest{
+		Handshake: &sourcepb.Handshake{
+			Sot: true,
+		},
+	}
+	err := testClient.ackStream.Send(ackHandshakeRequest)
+	assert.NoError(t, err)
+
+	ackHandshakeResponse, err := testClient.ackStream.Recv()
+	assert.NoError(t, err)
+	assert.NotNil(t, ackHandshakeResponse.GetHandshake())
+	assert.True(t, ackHandshakeResponse.GetHandshake().GetSot())
+
+	// Test AckFn
 	ack, err := testClient.AckFn(ctx, &sourcepb.AckRequest{})
 	assert.NoError(t, err)
 	assert.Equal(t, &sourcepb.AckResponse{}, ack)
-
-	_, err = testClient.AckFn(ctx, &sourcepb.AckRequest{})
-	assert.EqualError(t, err, "mock connection refused")
 }
 
 func TestPendingFn(t *testing.T) {

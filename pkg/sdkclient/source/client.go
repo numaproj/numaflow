@@ -86,23 +86,42 @@ waitUntilReady:
 		return nil, fmt.Errorf("failed to create ack stream: %v", err)
 	}
 
-	// Send handshake request
-	handshakeRequest := &sourcepb.ReadRequest{
+	// Send handshake request for read stream
+	readHandshakeRequest := &sourcepb.ReadRequest{
 		Handshake: &sourcepb.Handshake{
 			Sot: true,
 		},
 	}
-	if err := c.readStream.Send(handshakeRequest); err != nil {
-		return nil, fmt.Errorf("failed to send handshake request: %v", err)
+	if err := c.readStream.Send(readHandshakeRequest); err != nil {
+		return nil, fmt.Errorf("failed to send read handshake request: %v", err)
 	}
 
-	// Wait for handshake response
-	handshakeResponse, err := c.readStream.Recv()
+	// Wait for handshake response for read stream
+	readHandshakeResponse, err := c.readStream.Recv()
 	if err != nil {
-		return nil, fmt.Errorf("failed to receive handshake response: %v", err)
+		return nil, fmt.Errorf("failed to receive read handshake response: %v", err)
 	}
-	if handshakeResponse.GetHandshake() == nil || !handshakeResponse.GetHandshake().GetSot() {
-		return nil, fmt.Errorf("invalid handshake response")
+	if readHandshakeResponse.GetHandshake() == nil || !readHandshakeResponse.GetHandshake().GetSot() {
+		return nil, fmt.Errorf("invalid read handshake response")
+	}
+
+	// Send handshake request for ack stream
+	ackHandshakeRequest := &sourcepb.AckRequest{
+		Handshake: &sourcepb.Handshake{
+			Sot: true,
+		},
+	}
+	if err := c.ackStream.Send(ackHandshakeRequest); err != nil {
+		return nil, fmt.Errorf("failed to send ack handshake request: %v", err)
+	}
+
+	// Wait for handshake response for ack stream
+	ackHandshakeResponse, err := c.ackStream.Recv()
+	if err != nil {
+		return nil, fmt.Errorf("failed to receive ack handshake response: %v", err)
+	}
+	if ackHandshakeResponse.GetHandshake() == nil || !ackHandshakeResponse.GetHandshake().GetSot() {
+		return nil, fmt.Errorf("invalid ack handshake response")
 	}
 
 	return c, nil
@@ -172,11 +191,19 @@ func (c *client) ReadFn(_ context.Context, req *sourcepb.ReadRequest, datumCh ch
 
 // AckFn acknowledges the data from the source.
 func (c *client) AckFn(_ context.Context, req *sourcepb.AckRequest) (*sourcepb.AckResponse, error) {
+	// Send the ack request
 	err := c.ackStream.Send(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to send ack request: %v", err)
 	}
-	return &sourcepb.AckResponse{}, nil
+
+	// Wait for the ack response
+	resp, err := c.ackStream.Recv()
+	if err != nil {
+		return nil, fmt.Errorf("failed to receive ack response: %v", err)
+	}
+
+	return resp, nil
 }
 
 // PendingFn returns the number of pending data from the source.

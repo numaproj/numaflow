@@ -17,7 +17,7 @@ service Source {
   // The caller (numa) expects the AckFn to be successful, and it does not expect any errors.
   // If there are some irrecoverable errors when the callee (UDSource) is processing the AckFn request,
   // then it is best to crash because there are no other retry mechanisms possible.
-  rpc AckFn(stream AckRequest) returns (AckResponse);
+  rpc AckFn(stream AckRequest) returns (stream AckResponse);
 
   // PendingFn returns the number of pending records at the user defined source.
   rpc PendingFn(google.protobuf.Empty) returns (PendingResponse);
@@ -112,6 +112,7 @@ message AckRequest {
   }
   // Required field holding the request. The list will be ordered and will have the same order as the original Read response.
   Request request = 1;
+  optional Handshake handshake = 2;
 }
 
 /*
@@ -131,6 +132,7 @@ message AckResponse {
   }
   // Required field holding the result.
   Result result = 1;
+  optional Handshake handshake = 2;
 }
 
 /*

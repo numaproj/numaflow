@@ -288,6 +288,7 @@ func Test_gRPCBasedUDSource_ApplyAckWithMockClient(t *testing.T) {
 
 		mockAckClient.EXPECT().Send(req1).Return(nil).Times(1)
 		mockAckClient.EXPECT().Send(req2).Return(nil).Times(1)
+		mockAckClient.EXPECT().Recv().Return(&sourcepb.AckResponse{}, nil).Times(2)
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -340,6 +341,6 @@ func Test_gRPCBasedUDSource_ApplyAckWithMockClient(t *testing.T) {
 			NewUserDefinedSourceOffset(offset1),
 			NewUserDefinedSourceOffset(offset2),
 		})
-		assert.ErrorIs(t, err, status.New(codes.DeadlineExceeded, "mock test err").Err())
+		assert.Equal(t, err.Error(), fmt.Sprintf("failed to send ack request: %s", status.New(codes.DeadlineExceeded, "mock test err").Err()))
 	})
 }
