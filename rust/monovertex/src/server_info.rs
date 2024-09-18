@@ -85,7 +85,9 @@ fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
     println!("mmp_version: {}", mmp_version);
     println!("version: {}", version);
 
-    // TODO - if constraint ends with -z,
+    // TODO - if both rc, but not same mmp, compare the mmp version
+
+    // DONE - if constraint ends with -z,
     // it means the minimum required version is a stable version, e.g. 0.8.0
     // update the constraint to be >=0.8.0 and check if the version satisfies the constraint
 
@@ -103,6 +105,16 @@ fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
             return check_constraint(&Version::parse(mmp_version).unwrap(), &stable_constraint);
         }
         return check_constraint(version, &stable_constraint);
+    } else if constraint.contains("-") {
+        // if the constraint is not a stable version,
+        // we need
+        // to handle the case when the version to compare is also a pre-release version
+        // and it's mmp is different from the constraint's mmp
+        let stable_version = trim_after_dash(constraint.trim_start_matches(">="));
+        let stable_constraint = format!(">={}", stable_version);
+        if !version.to_string().starts_with(stable_version) {
+            return check_constraint(&Version::parse(mmp_version).unwrap(), &stable_constraint);
+        }
     }
 
     // Parse the given constraint as a semantic version requirement
@@ -119,6 +131,14 @@ fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
     }
 
     Ok(())
+}
+
+fn trim_after_dash(input: &str) -> &str {
+    if let Some(pos) = input.find('-') {
+        &input[..pos]
+    } else {
+        input
+    }
 }
 
 /// Checks if the current numaflow version is compatible with the given minimum numaflow version.
@@ -445,8 +465,8 @@ mod tests {
         Ok(())
     }
 
-    // Helper function to create a SdkConstraints struct
-    fn create_sdk_constraints() -> SdkConstraints {
+    // Helper function to create a SdkConstraints struct with minimum supported SDK versions all being stable releases
+    fn create_sdk_constraints_stable_versions() -> SdkConstraints {
         let mut constraints = HashMap::new();
         constraints.insert("python".to_string(), "1.2.0rc100".to_string());
         constraints.insert("java".to_string(), "2.0.0-z".to_string());
@@ -455,12 +475,22 @@ mod tests {
         constraints
     }
 
+    // Helper function to create a SdkConstraints struct with minimum supported SDK versions all being pre-releases
+    fn create_sdk_constraints_pre_release_versions() -> SdkConstraints {
+        let mut constraints = HashMap::new();
+        constraints.insert("python".to_string(), "1.2.0b2".to_string());
+        constraints.insert("java".to_string(), "2.0.0-rc2".to_string());
+        constraints.insert("go".to_string(), "0.10.0-rc2".to_string());
+        constraints.insert("rust".to_string(), "0.1.0-rc3".to_string());
+        constraints
+    }
+
     #[tokio::test]
-    async fn test_sdk_compatibility_python_stable_release_valid() {
+    async fn test_sdk_compatibility_min_stable_python_stable_release_valid() {
         let sdk_version = "1.3.0";
         let sdk_language = "python";
 
-        let min_supported_sdk_versions = create_sdk_constraints();
+        let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
@@ -468,11 +498,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_python_stable_release_invalid() {
+    async fn test_sdk_compatibility_min_stable_python_stable_release_invalid() {
         let sdk_version = "1.1.0";
         let sdk_language = "python";
 
-        let min_supported_sdk_versions = create_sdk_constraints();
+        let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
@@ -483,11 +513,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_python_pre_release_valid() {
+    async fn test_sdk_compatibility_min_stable_python_pre_release_valid() {
         let sdk_version = "v1.3.0a1";
         let sdk_language = "python";
 
-        let min_supported_sdk_versions = create_sdk_constraints();
+        let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
@@ -495,11 +525,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_python_pre_release_invalid() {
+    async fn test_sdk_compatibility_min_stable_python_pre_release_invalid() {
         let sdk_version = "1.1.0a1";
         let sdk_language = "python";
 
-        let min_supported_sdk_versions = create_sdk_constraints();
+        let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
@@ -510,11 +540,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_java_stable_release_valid() {
+    async fn test_sdk_compatibility_min_stable_java_stable_release_valid() {
         let sdk_version = "v2.1.0";
         let sdk_language = "java";
 
-        let min_supported_sdk_versions = create_sdk_constraints();
+        let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
@@ -522,11 +552,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_java_rc_release_invalid() {
+    async fn test_sdk_compatibility_min_stable_java_rc_release_invalid() {
         let sdk_version = "2.0.0-rc1";
         let sdk_language = "java";
 
-        let min_supported_sdk_versions = create_sdk_constraints();
+        let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
@@ -537,11 +567,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_go_rc_release_valid() {
+    async fn test_sdk_compatibility_min_stable_go_rc_release_valid() {
         let sdk_version = "0.11.0-rc2";
         let sdk_language = "go";
 
-        let min_supported_sdk_versions = create_sdk_constraints();
+        let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
@@ -549,11 +579,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_go_pre_release_invalid() {
+    async fn test_sdk_compatibility_min_stable_go_pre_release_invalid() {
         let sdk_version = "0.10.0-0.20240913163521-4910018031a7";
         let sdk_language = "go";
 
-        let min_supported_sdk_versions = create_sdk_constraints();
+        let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
@@ -564,11 +594,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_rust_pre_release_valid() {
+    async fn test_sdk_compatibility_min_stable_rust_pre_release_valid() {
         let sdk_version = "v0.1.1-0.20240913163521-4910018031a7";
         let sdk_language = "rust";
 
-        let min_supported_sdk_versions = create_sdk_constraints();
+        let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
@@ -576,11 +606,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_rust_stable_release_invalid() {
+    async fn test_sdk_compatibility_min_stable_rust_stable_release_invalid() {
         let sdk_version = "0.0.9";
         let sdk_language = "rust";
 
-        let min_supported_sdk_versions = create_sdk_constraints();
+        let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
@@ -588,6 +618,141 @@ mod tests {
         assert!(
             result.unwrap_err().to_string().contains(
             "ServerInfoError Error - SDK version 0.0.9 must be upgraded to at least 0.1.0, in order to work with the current numaflow version"));
+    }
+
+    #[tokio::test]
+    async fn test_sdk_compatibility_min_pre_release_python_stable_release_valid() {
+        let sdk_version = "1.3.0";
+        let sdk_language = "python";
+
+        let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
+        let result =
+            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_sdk_compatibility_min_pre_release_python_stable_release_invalid() {
+        let sdk_version = "1.1.0";
+        let sdk_language = "python";
+
+        let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
+        let result =
+            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains(
+                "SDK version 1.1.0 must be upgraded to at least 1.2.0b2, in order to work with the current numaflow version"));
+    }
+
+    #[tokio::test]
+    async fn test_sdk_compatibility_min_pre_release_python_pre_release_valid() {
+        let sdk_version = "v1.3.0a1";
+        let sdk_language = "python";
+
+        let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
+        let result =
+            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_sdk_compatibility_min_pre_release_python_pre_release_invalid() {
+        let sdk_version = "1.2.0a1";
+        let sdk_language = "python";
+
+        let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
+        let result =
+            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains(
+                "SDK version 1.2.0a1 must be upgraded to at least 1.2.0b2, in order to work with the current numaflow version"));
+    }
+
+    #[tokio::test]
+    async fn test_sdk_compatibility_min_pre_release_java_stable_release_valid() {
+        let sdk_version = "v2.1.0";
+        let sdk_language = "java";
+
+        let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
+        let result =
+            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_sdk_compatibility_min_pre_release_java_rc_release_invalid() {
+        let sdk_version = "2.0.0-rc1";
+        let sdk_language = "java";
+
+        let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
+        let result =
+            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains(
+                "SDK version 2.0.0-rc1 must be upgraded to at least 2.0.0-rc2, in order to work with the current numaflow version"));
+    }
+
+    #[tokio::test]
+    async fn test_sdk_compatibility_min_pre_release_go_rc_release_valid() {
+        let sdk_version = "0.11.0-rc2";
+        let sdk_language = "go";
+
+        let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
+        let result =
+            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_sdk_compatibility_min_pre_release_go_pre_release_invalid() {
+        let sdk_version = "0.10.0-0.20240913163521-4910018031a7";
+        let sdk_language = "go";
+
+        let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
+        let result =
+            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains(
+                "SDK version 0.10.0-0.20240913163521-4910018031a7 must be upgraded to at least 0.10.0-rc2, in order to work with the current numaflow version"));
+    }
+
+    #[tokio::test]
+    async fn test_sdk_compatibility_min_pre_release_rust_pre_release_valid() {
+        let sdk_version = "v0.1.1-0.20240913163521-4910018031a7";
+        let sdk_language = "rust";
+
+        let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
+        let result =
+            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_sdk_compatibility_min_pre_release_rust_stable_release_invalid() {
+        let sdk_version = "0.0.9";
+        let sdk_language = "rust";
+
+        let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
+        let result =
+            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains(
+                "ServerInfoError Error - SDK version 0.0.9 must be upgraded to at least 0.1.0-rc3, in order to work with the current numaflow version"));
     }
 
     #[tokio::test]

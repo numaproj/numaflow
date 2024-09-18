@@ -169,7 +169,8 @@ func Test_CheckNumaflowCompatibility(t *testing.T) {
 	}
 }
 
-func Test_CheckSDKCompatibility(t *testing.T) {
+// this test suite is to test SDK compatibility check when all the minimum-supported versions are stable releases
+func Test_CheckSDKCompatibility_MinimumBeingStableReleases(t *testing.T) {
 	var testMinimumSupportedSDKVersions = sdkConstraints{
 		Python: "0.6.0rc100",
 		Go:     "0.6.0-z",
@@ -257,6 +258,110 @@ func Test_CheckSDKCompatibility(t *testing.T) {
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   true,
 			errMessage:                  "SDK version 0.6.0-0.20240913163521-4910018031a7 must be upgraded to at least 0.6.0, in order to work with current numaflow version",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkSDKCompatibility(tt.sdkVersion, tt.sdkLanguage, tt.minimumSupportedSDKVersions)
+			if tt.shouldErr {
+				assert.Error(t, err, "Expected error")
+				assert.Contains(t, err.Error(), tt.errMessage)
+			} else {
+				assert.NoError(t, err, "Expected no error")
+			}
+		})
+	}
+}
+
+// this test suite is to test SDK compatibility check when all the minimum-supported versions are pre-releases
+func Test_CheckSDKCompatibility_MinimumBeingPreReleases(t *testing.T) {
+	var testMinimumSupportedSDKVersions = sdkConstraints{
+		Python: "0.6.0b1",
+		Go:     "0.6.0-rc2",
+		Java:   "0.6.0-rc2",
+		Rust:   "0.1.0-rc3",
+	}
+	tests := []struct {
+		name                        string
+		sdkVersion                  string
+		sdkLanguage                 Language
+		minimumSupportedSDKVersions sdkConstraints
+		shouldErr                   bool
+		errMessage                  string
+	}{
+		{
+			name:                        "python pre-release version is lower than minimum supported version",
+			sdkVersion:                  "v0.5.3a1",
+			sdkLanguage:                 Python,
+			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
+			shouldErr:                   true,
+			errMessage:                  "SDK version 0.5.3a1 must be upgraded to at least 0.6.0b1, in order to work with current numaflow version",
+		},
+		{
+			name:                        "python pre-release version is compatible with minimum supported version",
+			sdkVersion:                  "v0.6.3a1",
+			sdkLanguage:                 Python,
+			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
+			shouldErr:                   false,
+		},
+		{
+			name:                        "python stable release version is compatible with minimum supported version",
+			sdkVersion:                  "v0.6.0",
+			sdkLanguage:                 Python,
+			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
+			shouldErr:                   false,
+		},
+		{
+			name:                        "python stable release version is lower than minimum supported version",
+			sdkVersion:                  "v0.5.3",
+			sdkLanguage:                 Python,
+			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
+			shouldErr:                   true,
+			errMessage:                  "SDK version 0.5.3 must be upgraded to at least 0.6.0b1, in order to work with current numaflow version",
+		},
+		{
+			name:                        "java release version is compatible with minimum supported version",
+			sdkVersion:                  "v0.7.3",
+			sdkLanguage:                 Java,
+			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
+			shouldErr:                   false,
+		},
+		{
+			name:                        "golang rc release version is compatible with minimum supported version",
+			sdkVersion:                  "v0.6.2-rc2",
+			sdkLanguage:                 Go,
+			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
+			shouldErr:                   false,
+		}, {
+			name:                        "rust pre-release version is compatible with minimum supported version",
+			sdkVersion:                  "v0.1.2-0.20240913163521-4910018031a7",
+			sdkLanguage:                 Rust,
+			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
+			shouldErr:                   false,
+		},
+		{
+			name:                        "rust release version is lower than minimum supported version",
+			sdkVersion:                  "v0.0.3",
+			sdkLanguage:                 Rust,
+			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
+			shouldErr:                   true,
+			errMessage:                  "SDK version 0.0.3 must be upgraded to at least 0.1.0-rc3, in order to work with current numaflow version",
+		},
+		{
+			name:                        "java rc release version is lower than minimum supported version",
+			sdkVersion:                  "v0.6.0-rc1",
+			sdkLanguage:                 Java,
+			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
+			shouldErr:                   true,
+			errMessage:                  "SDK version 0.6.0-rc1 must be upgraded to at least 0.6.0-rc2, in order to work with current numaflow version",
+		},
+		{
+			name:                        "golang pre-release version is lower than minimum supported version",
+			sdkVersion:                  "v0.6.0-0.20240913163521-4910018031a7",
+			sdkLanguage:                 Go,
+			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
+			shouldErr:                   true,
+			errMessage:                  "SDK version 0.6.0-0.20240913163521-4910018031a7 must be upgraded to at least 0.6.0-rc2, in order to work with current numaflow version",
 		},
 	}
 	for _, tt := range tests {
