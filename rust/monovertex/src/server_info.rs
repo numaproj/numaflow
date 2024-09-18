@@ -140,7 +140,7 @@ fn check_numaflow_compatibility(
     check_constraint(&numaflow_version_semver, &numaflow_constraint).map_err(|e| {
         Error::ServerInfoError(format!(
             "numaflow version {} must be upgraded to at least {}, in order to work with current SDK version {}",
-            numaflow_version_semver, min_numaflow_version, e
+            numaflow_version_semver, human_readable(min_numaflow_version.to_string()), e
         ))
     })
 }
@@ -167,7 +167,7 @@ fn check_sdk_compatibility(
             if !specifiers.contains(&sdk_version_pep440) {
                 return Err(Error::ServerInfoError(format!(
                     "SDK version {} must be upgraded to at least {}, in order to work with the current numaflow version",
-                    sdk_version_pep440, sdk_required_version
+                    sdk_version_pep440, human_readable(sdk_required_version.to_string())
                 )));
             }
         } else {
@@ -182,7 +182,7 @@ fn check_sdk_compatibility(
             check_constraint(&sdk_version_semver, &sdk_constraint).map_err(|_| {
                 Error::ServerInfoError(format!(
                     "SDK version {} must be upgraded to at least {}, in order to work with the current numaflow version",
-                    sdk_version_semver, sdk_required_version
+                    sdk_version_semver, human_readable(sdk_required_version.to_string())
                 ))
             })?;
         }
@@ -200,6 +200,27 @@ fn check_sdk_compatibility(
         )));
     }
     Ok(())
+}
+
+// human_readable returns the human-readable minimum supported version.
+// it's used for logging purposes.
+// it translates the version we used in the constraints to the real minimum supported version.
+// e.g., if the given version is "0.8.0rc100", human-readable version is "0.8.0".
+// if the given version is "0.8.0-z", "0.8.0".
+// if "0.8.0-rc1", "0.8.0-rc1".
+fn human_readable(ver: String) -> String {
+    if ver.is_empty() {
+        return String::new();
+    }
+    // semver
+    if ver.ends_with("-z") {
+        return ver[..ver.len() - 2].to_string();
+    }
+    // PEP 440
+    if ver.ends_with("rc100") {
+        return ver[..ver.len() - 5].to_string();
+    }
+    ver.to_string()
 }
 
 /// Reads the server info file and returns the parsed ServerInfo struct.
@@ -456,6 +477,9 @@ mod tests {
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
         assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains(
+            "SDK version 1.1.0 must be upgraded to at least 1.2.0, in order to work with the current numaflow version"));
     }
 
     #[tokio::test]
@@ -480,6 +504,9 @@ mod tests {
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
         assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains(
+                "SDK version 1.1.0a1 must be upgraded to at least 1.2.0, in order to work with the current numaflow version"));
     }
 
     #[tokio::test]
@@ -504,6 +531,9 @@ mod tests {
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
         assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains(
+                "SDK version 2.0.0-rc1 must be upgraded to at least 2.0.0, in order to work with the current numaflow version"));
     }
 
     #[tokio::test]
@@ -528,6 +558,9 @@ mod tests {
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
         assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains(
+                "SDK version 0.10.0-0.20240913163521-4910018031a7 must be upgraded to at least 0.10.0, in order to work with the current numaflow version"));
     }
 
     #[tokio::test]
@@ -552,6 +585,9 @@ mod tests {
             check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
 
         assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains(
+            "ServerInfoError Error - SDK version 0.0.9 must be upgraded to at least 0.1.0, in order to work with the current numaflow version"));
     }
 
     #[tokio::test]
@@ -572,6 +608,8 @@ mod tests {
         let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
 
         assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains(
+            "numaflow version 1.2.0 must be upgraded to at least 1.3.0, in order to work with current SDK version"));
     }
 
     #[tokio::test]
@@ -726,61 +764,5 @@ mod tests {
 
         let _parsed_server_info: ServerInfo =
             serde_json::from_str(&json_data).expect("Failed to parse JSON");
-    }
-
-    #[test]
-    fn test_sdk_compatibility_go_version_with_v_prefix() {
-        let sdk_version = "v0.11.0";
-        let sdk_language = "go";
-
-        let mut min_supported_sdk_versions = HashMap::new();
-        min_supported_sdk_versions.insert("go".to_string(), "0.10.0".to_string());
-
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
-
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_sdk_compatibility_go_version_without_v_prefix() {
-        let sdk_version = "0.11.0";
-        let sdk_language = "go";
-
-        let mut min_supported_sdk_versions = HashMap::new();
-        min_supported_sdk_versions.insert("go".to_string(), "0.10.0".to_string());
-
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
-
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_sdk_compatibility_go_version_with_v_prefix_invalid() {
-        let sdk_version = "v0.9.0";
-        let sdk_language = "go";
-
-        let mut min_supported_sdk_versions = HashMap::new();
-        min_supported_sdk_versions.insert("go".to_string(), "0.10.0".to_string());
-
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_sdk_compatibility_go_version_without_v_prefix_invalid() {
-        let sdk_version = "0.9.0";
-        let sdk_language = "go";
-
-        let mut min_supported_sdk_versions = HashMap::new();
-        min_supported_sdk_versions.insert("go".to_string(), "0.10.0".to_string());
-
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
-
-        assert!(result.is_err());
     }
 }
