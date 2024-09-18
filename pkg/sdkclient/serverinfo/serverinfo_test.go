@@ -200,26 +200,19 @@ func Test_CheckSDKCompatibility(t *testing.T) {
 			shouldErr:                   false,
 		},
 		{
-			name:                        "python release version is compatible with minimum supported version",
+			name:                        "python stable release version is compatible with minimum supported version",
 			sdkVersion:                  "v0.6.0",
 			sdkLanguage:                 Python,
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   false,
 		},
 		{
-			name:                        "python pre-release version is lower than minimum supported version",
+			name:                        "python stable release version is lower than minimum supported version",
 			sdkVersion:                  "v0.5.3",
 			sdkLanguage:                 Python,
 			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
 			shouldErr:                   true,
 			errMessage:                  "SDK version 0.5.3 must be upgraded to at least 0.6.0, in order to work with current numaflow version",
-		},
-		{
-			name:                        "python release version is compatible with minimum supported version",
-			sdkVersion:                  "v0.6.0",
-			sdkLanguage:                 Python,
-			minimumSupportedSDKVersions: testMinimumSupportedSDKVersions,
-			shouldErr:                   false,
 		},
 		{
 			name:                        "java release version is compatible with minimum supported version",

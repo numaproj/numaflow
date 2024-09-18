@@ -79,6 +79,32 @@ pub async fn check_for_server_compatibility(
 
 /// Checks if the given version meets the specified constraint.
 fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
+    let binding = version.to_string();
+    let mmp_version = binding.split('-').next().unwrap();
+    println!("constraint: {}", constraint);
+    println!("mmp_version: {}", mmp_version);
+    println!("version: {}", version);
+
+    // TODO - if constraint ends with -z,
+    // it means the minimum required version is a stable version, e.g. 0.8.0
+    // update the constraint to be >=0.8.0 and check if the version satisfies the constraint
+
+    // if a version is 0.8.0-rc1, it should not satisfy the constraint >=0.8.0
+    // if a version is 0.8.0 or 0.9.0, it should satisfy the constraint >=0.8.0
+    // if a version is 0.9.0-rc1, it should satisfy the constraint >=0.8.0
+    if constraint.ends_with("-z") {
+        let stable_version = constraint.trim_end_matches("-z").trim_start_matches(">=");
+        let stable_constraint = format!(">={}", stable_version);
+        println!("stable_constraint: {}", stable_constraint);
+        // if the version is not prefixed with the stable_version,
+        // it's another mmp release, we trim to get that mmp version
+        if !version.to_string().starts_with(stable_version) {
+            println!("comparing mmp_version: {} with the stable constraint: {}", mmp_version, stable_constraint);
+            return check_constraint(&Version::parse(mmp_version).unwrap(), &stable_constraint);
+        }
+        return check_constraint(version, &stable_constraint);
+    }
+
     // Parse the given constraint as a semantic version requirement
     let version_req = VersionReq::parse(constraint).map_err(|e| {
         Error::ServerInfoError(format!(
@@ -257,11 +283,12 @@ mod version {
     static MINIMUM_SUPPORTED_SDK_VERSIONS: Lazy<SdkConstraints> = Lazy::new(|| {
         // TODO: populate this from a static file and make it part of the release process
         // the value of the map matches `minimumSupportedSDKVersions` in pkg/sdkclient/serverinfo/types.go
+        // please follow the instruction there to update the value
         let mut m = HashMap::new();
-        m.insert("go".to_string(), "0.8.0".to_string());
-        m.insert("python".to_string(), "0.8.0".to_string());
-        m.insert("java".to_string(), "0.8.0".to_string());
-        m.insert("rust".to_string(), "0.1.0".to_string());
+        m.insert("go".to_string(), "0.8.0-z".to_string());
+        m.insert("python".to_string(), "0.8.0rc100".to_string());
+        m.insert("java".to_string(), "0.8.0-z".to_string());
+        m.insert("rust".to_string(), "0.1.0-z".to_string());
         m
     });
 
@@ -398,18 +425,18 @@ mod tests {
     }
 
     // Helper function to create a SdkConstraints struct
-    fn create_sdk_constraints() -> version::SdkConstraints {
+    fn create_sdk_constraints() -> SdkConstraints {
         let mut constraints = HashMap::new();
-        constraints.insert("python".to_string(), "1.2.0".to_string());
-        constraints.insert("java".to_string(), "2.0.0".to_string());
-        constraints.insert("go".to_string(), "0.10.0".to_string());
-        constraints.insert("rust".to_string(), "0.1.0".to_string());
+        constraints.insert("python".to_string(), "1.2.0rc100".to_string());
+        constraints.insert("java".to_string(), "2.0.0-z".to_string());
+        constraints.insert("go".to_string(), "0.10.0-z".to_string());
+        constraints.insert("rust".to_string(), "0.1.0-z".to_string());
         constraints
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_python_valid() {
-        let sdk_version = "v1.3.0";
+    async fn test_sdk_compatibility_python_stable_release_valid() {
+        let sdk_version = "1.3.0";
         let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints();
@@ -420,7 +447,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_python_invalid() {
+    async fn test_sdk_compatibility_python_stable_release_invalid() {
         let sdk_version = "1.1.0";
         let sdk_language = "python";
 
@@ -432,7 +459,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_java_valid() {
+    async fn test_sdk_compatibility_python_pre_release_valid() {
+        let sdk_version = "v1.3.0a1";
+        let sdk_language = "python";
+
+        let min_supported_sdk_versions = create_sdk_constraints();
+        let result =
+            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_sdk_compatibility_python_pre_release_invalid() {
+        let sdk_version = "1.1.0a1";
+        let sdk_language = "python";
+
+        let min_supported_sdk_versions = create_sdk_constraints();
+        let result =
+            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_sdk_compatibility_java_stable_release_valid() {
         let sdk_version = "v2.1.0";
         let sdk_language = "java";
 
@@ -444,8 +495,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_java_invalid() {
-        let sdk_version = "1.5.0";
+    async fn test_sdk_compatibility_java_rc_release_invalid() {
+        let sdk_version = "2.0.0-rc1";
         let sdk_language = "java";
 
         let min_supported_sdk_versions = create_sdk_constraints();
@@ -456,8 +507,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_go_valid() {
-        let sdk_version = "0.11.0";
+    async fn test_sdk_compatibility_go_rc_release_valid() {
+        let sdk_version = "0.11.0-rc2";
         let sdk_language = "go";
 
         let min_supported_sdk_versions = create_sdk_constraints();
@@ -468,8 +519,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_go_invalid() {
-        let sdk_version = "0.9.0";
+    async fn test_sdk_compatibility_go_pre_release_invalid() {
+        let sdk_version = "0.10.0-0.20240913163521-4910018031a7";
         let sdk_language = "go";
 
         let min_supported_sdk_versions = create_sdk_constraints();
@@ -480,8 +531,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_rust_valid() {
-        let sdk_version = "v0.1.0";
+    async fn test_sdk_compatibility_rust_pre_release_valid() {
+        let sdk_version = "v0.1.1-0.20240913163521-4910018031a7";
         let sdk_language = "rust";
 
         let min_supported_sdk_versions = create_sdk_constraints();
@@ -492,7 +543,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_sdk_compatibility_rust_invalid() {
+    async fn test_sdk_compatibility_rust_stable_release_invalid() {
         let sdk_version = "0.0.9";
         let sdk_language = "rust";
 
@@ -591,7 +642,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_server_info_success() {
         // Create a temporary directory
-        let dir = tempfile::tempdir().unwrap();
+        let dir = tempdir().unwrap();
         let file_path = dir.path().join("server_info.txt");
 
         let cln_token = CancellationToken::new();
@@ -632,7 +683,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_server_info_retry_limit() {
         // Create a temporary directory
-        let dir = tempfile::tempdir().unwrap();
+        let dir = tempdir().unwrap();
         let file_path = dir.path().join("server_info.txt");
 
         // Write a partial test file not ending with END marker

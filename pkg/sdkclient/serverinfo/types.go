@@ -33,6 +33,8 @@ type sdkConstraints map[Language]string
 minimumSupportedSDKVersions is the minimum supported version of each SDK for the current numaflow version.
 It is used to check if the SDK is compatible with the current numaflow version.
 
+NOTE: when updating it, please also update MINIMUM_SUPPORTED_SDK_VERSIONS for mono vertex at rust/monovertex/server_info.rs
+
 Python SDK versioning follows PEP 440 (https://www.python.org/dev/peps/pep-0440/).
 The other SDKs follow the semver versioning scheme (https://semver.org/).
 
