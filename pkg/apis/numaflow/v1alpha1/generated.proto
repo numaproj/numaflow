@@ -887,6 +887,23 @@ message MonoVertex {
   optional MonoVertexStatus status = 3;
 }
 
+message MonoVertexLifecycle {
+  // TODO(MonoVtx-Pause): Do we want to add delete grace period also?
+  // // DeleteGracePeriodSeconds used to delete a MonoVertex gracefully
+  // // +kubebuilder:default=30
+  // // +optional
+  // DeleteGracePeriodSeconds *int32 `json:"deleteGracePeriodSeconds,omitempty" protobuf:"varint,1,opt,name=deleteGracePeriodSeconds"`
+  // DesiredPhase used to bring the pipeline from current phase to desired phase
+  // +kubebuilder:default=Running
+  // +optional
+  optional string desiredPhase = 1;
+
+  // PauseGracePeriodSeconds used to pause pipeline gracefully
+  // +kubebuilder:default=30
+  // +optional
+  optional int32 pauseGracePeriodSeconds = 2;
+}
+
 message MonoVertexLimits {
   // Read batch size from the source.
   // +kubebuilder:default=500
@@ -953,6 +970,11 @@ message MonoVertexSpec {
   // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
   // +optional
   optional UpdateStrategy updateStrategy = 12;
+
+  // Lifecycle defines the Lifecycle properties of a MonoVertex
+  // +kubebuilder:default={"desiredPhase": Running, "pauseGracePeriodSeconds": 30}
+  // +optional
+  optional MonoVertexLifecycle lifecycle = 13;
 }
 
 message MonoVertexStatus {

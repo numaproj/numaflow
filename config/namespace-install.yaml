@@ -4835,6 +4835,26 @@ spec:
                   - name
                   type: object
                 type: array
+              lifecycle:
+                default:
+                  desiredPhase: Running
+                  pauseGracePeriodSeconds: 30
+                properties:
+                  desiredPhase:
+                    default: Running
+                    enum:
+                    - ""
+                    - Running
+                    - Failed
+                    - Pausing
+                    - Paused
+                    - Deleting
+                    type: string
+                  pauseGracePeriodSeconds:
+                    default: 30
+                    format: int32
+                    type: integer
+                type: object
               limits:
                 properties:
                   readBatchSize:

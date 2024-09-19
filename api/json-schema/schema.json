@@ -19120,6 +19120,20 @@
       ],
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.MonoVertexLifecycle": {
+      "properties": {
+        "desiredPhase": {
+          "description": "// DeleteGracePeriodSeconds used to delete a MonoVertex gracefully // +kubebuilder:default=30 // +optional DeleteGracePeriodSeconds *int32 `json:\"deleteGracePeriodSeconds,omitempty\" protobuf:\"varint,1,opt,name=deleteGracePeriodSeconds\"` DesiredPhase used to bring the pipeline from current phase to desired phase",
+          "type": "string"
+        },
+        "pauseGracePeriodSeconds": {
+          "description": "PauseGracePeriodSeconds used to pause pipeline gracefully",
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.MonoVertexLimits": {
       "properties": {
         "readBatchSize": {
@@ -19200,6 +19214,10 @@
             "$ref": "#/definitions/io.k8s.api.core.v1.Container"
           },
           "type": "array"
+        },
+        "lifecycle": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexLifecycle",
+          "description": "Lifecycle defines the Lifecycle properties of a MonoVertex"
         },
         "limits": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexLimits",

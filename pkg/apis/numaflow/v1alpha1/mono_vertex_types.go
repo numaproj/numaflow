@@ -38,6 +38,8 @@ const (
 	MonoVertexPhaseUnknown MonoVertexPhase = ""
 	MonoVertexPhaseRunning MonoVertexPhase = "Running"
 	MonoVertexPhaseFailed  MonoVertexPhase = "Failed"
+	MonoVertexPhasePausing MonoVertexPhase = "Pausing"
+	MonoVertexPhasePaused  MonoVertexPhase = "Paused"
 
 	// MonoVertexConditionDeployed has the status True when the MonoVertex
 	// has its sub resources created and deployed.
@@ -46,6 +48,8 @@ const (
 	MonoVertexConditionDaemonHealthy ConditionType = "DaemonHealthy"
 	// MonoVertexPodsHealthy has the status True when the pods of the mono vertex are healthy
 	MonoVertexPodsHealthy ConditionType = "PodsHealthy"
+
+	DefaultMonoVertexPauseTimeout = 30
 )
 
 // +genclient
@@ -308,7 +312,7 @@ func (mv MonoVertex) simpleCopy() MonoVertex {
 	}
 	m.Spec.UpdateStrategy = UpdateStrategy{}
 	// TODO: lifecycle
-	// mvVtxCopy.Spec.Lifecycle = Lifecycle{}
+	m.Spec.Lifecycle = MonoVertexLifecycle{}
 	return m
 }
 
@@ -428,6 +432,10 @@ type MonoVertexSpec struct {
 	// +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
 	// +optional
 	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty" protobuf:"bytes,12,opt,name=updateStrategy"`
+	// Lifecycle defines the Lifecycle properties of a MonoVertex
+	// +kubebuilder:default={"desiredPhase": Running, "pauseGracePeriodSeconds": 30}
+	// +optional
+	Lifecycle MonoVertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,13,opt,name=lifecycle"`
 }
 
 func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
@@ -581,6 +589,16 @@ func (mvs *MonoVertexStatus) MarkPhaseRunning() {
 	mvs.MarkPhase(MonoVertexPhaseRunning, "", "")
 }
 
+// MarkPhasePausing sets the MonoVertex to pausing.
+func (mvs *MonoVertexStatus) MarkPhasePausing() {
+	mvs.MarkPhase(MonoVertexPhasePausing, "", "Pausing in progress")
+}
+
+// MarkPhasePaused set the Pipeline has been paused.
+func (mvs *MonoVertexStatus) MarkPhasePaused() {
+	mvs.MarkPhase(MonoVertexPhasePaused, "", "MonoVertex paused")
+}
+
 // IsHealthy indicates whether the MonoVertex is in healthy status
 // It returns false if any issues exists
 // True indicates that the MonoVertex is healthy
@@ -606,4 +624,44 @@ type MonoVertexList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []MonoVertex `json:"items" protobuf:"bytes,2,rep,name=items"`
+}
+
+type MonoVertexLifecycle struct {
+	// TODO(MonoVtx-Pause): Do we want to add delete grace period also?
+	//// DeleteGracePeriodSeconds used to delete a MonoVertex gracefully
+	//// +kubebuilder:default=30
+	//// +optional
+	//DeleteGracePeriodSeconds *int32 `json:"deleteGracePeriodSeconds,omitempty" protobuf:"varint,1,opt,name=deleteGracePeriodSeconds"`
+	// DesiredPhase used to bring the pipeline from current phase to desired phase
+	// +kubebuilder:default=Running
+	// +optional
+	DesiredPhase MonoVertexPhase `json:"desiredPhase,omitempty" protobuf:"bytes,1,opt,name=desiredPhase"`
+	// PauseGracePeriodSeconds used to pause pipeline gracefully
+	// +kubebuilder:default=30
+	// +optional
+	PauseGracePeriodSeconds *int32 `json:"pauseGracePeriodSeconds,omitempty" protobuf:"varint,2,opt,name=pauseGracePeriodSeconds"`
+}
+
+//// GetDeleteGracePeriodSeconds returns the value DeleteGracePeriodSeconds.
+//func (lc MonoVertexLifecycle) GetDeleteGracePeriodSeconds() int32 {
+//	if lc.DeleteGracePeriodSeconds != nil {
+//		return *lc.DeleteGracePeriodSeconds
+//	}
+//	return 30
+//}
+
+// GetDesiredPhase is used to fetch the desired lifecyle phase for a MonoVertex
+func (lc MonoVertexLifecycle) GetDesiredPhase() MonoVertexPhase {
+	if string(lc.DesiredPhase) != "" {
+		return lc.DesiredPhase
+	}
+	return MonoVertexPhaseRunning
+}
+
+// return PauseGracePeriodSeconds if set
+func (lc MonoVertexLifecycle) GetPauseGracePeriodSeconds() int32 {
+	if lc.PauseGracePeriodSeconds != nil {
+		return *lc.PauseGracePeriodSeconds
+	}
+	return DefaultMonoVertexPauseTimeout
 }

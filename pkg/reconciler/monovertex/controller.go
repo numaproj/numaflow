@@ -45,6 +45,10 @@ import (
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
+const (
+	pauseTimestampPath = `/metadata/annotations/numaflow.numaproj.io~1pause-timestamp`
+)
+
 // monoVertexReconciler reconciles a MonoVertex object.
 type monoVertexReconciler struct {
 	client client.Client
@@ -115,14 +119,17 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 	if monoVtx.Scalable() {
 		mr.scaler.StartWatching(mVtxKey)
 	}
+	// TODO(Pause-MonoVtx): Set this to 0 while building the spec
+	//if isLifecycleChange(monoVtx) {
+	//	replica := int32(0)
+	//	monoVtx.Spec.Replicas = &replica
+	//}
 
 	if err := mr.orchestrateFixedResources(ctx, monoVtx); err != nil {
 		monoVtx.Status.MarkDeployFailed("OrchestrateFixedResourcesFailed", err.Error())
 		mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "OrchestrateFixedResourcesFailed", "OrchestrateFixedResourcesFailed: %s", err.Error())
 		return ctrl.Result{}, err
 	}
-
-	// TODO: handle lifecycle changes
 
 	if err := mr.orchestratePods(ctx, monoVtx); err != nil {
 		monoVtx.Status.MarkDeployFailed("OrchestratePodsFailed", err.Error())
@@ -132,14 +139,113 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 
 	monoVtx.Status.MarkDeployed()
 
-	// Mark it running before checking the status of the pods
-	monoVtx.Status.MarkPhaseRunning()
+	// If the MonoVertex has a lifecycle change, then do not update the phase as
+	// this should happen only after the required configs for the lifecycle changes
+	// have been applied.
+	if !isLifecycleChange(monoVtx) {
+		monoVtx.Status.MarkPhase(monoVtx.Spec.Lifecycle.GetDesiredPhase(), "", "")
+	}
 
 	// Check children resource status
 	if err := mr.checkChildrenResourceStatus(ctx, monoVtx); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to check mono vertex children resource status, %w", err)
 	}
+
+	if isLifecycleChange(monoVtx) {
+		currentPhase := monoVtx.Status.Phase
+		needRequeue, err := mr.updateLifecycleDesiredState(ctx, monoVtx)
+		if err != nil {
+			logMsg := fmt.Sprintf("Updated desired MonoVertex phase failed: %v", zap.Error(err))
+			log.Error(logMsg)
+			mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "ReconcileMonoVertexFailed", logMsg)
+			return ctrl.Result{}, err
+		}
+		if monoVtx.Status.Phase != currentPhase {
+			log.Infow("Updated MonoVertex phase", zap.String("originalPhase", string(currentPhase)), zap.String("currentPhase", string(monoVtx.Status.Phase)))
+			mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "UpdateMonoVertexPhase", "Updated MonoVertex phase from %s to %s", string(currentPhase), string(monoVtx.Status.Phase))
+		}
+		if needRequeue {
+			return ctrl.Result{RequeueAfter: dfv1.DefaultRequeueAfter}, nil
+		}
+	}
 	return ctrl.Result{}, nil
+}
+
+func (mr *monoVertexReconciler) updateLifecycleDesiredState(ctx context.Context, mvtx *dfv1.MonoVertex) (bool, error) {
+	switch mvtx.Spec.Lifecycle.GetDesiredPhase() {
+	case dfv1.MonoVertexPhasePaused:
+		return mr.pauseMonoVertex(ctx, mvtx)
+	case dfv1.MonoVertexPhaseRunning, dfv1.MonoVertexPhaseUnknown:
+		return mr.resumeMonoVertex(ctx, mvtx)
+	default:
+		return false, fmt.Errorf("invalid desired phase")
+	}
+}
+
+func (mr *monoVertexReconciler) resumeMonoVertex(ctx context.Context, mvtx *dfv1.MonoVertex) (bool, error) {
+	// reset pause timestamp
+	if mvtx.GetAnnotations()[dfv1.KeyPauseTimestamp] != "" {
+		err := mr.client.Patch(ctx, mvtx, client.RawPatch(types.JSONPatchType, []byte(`[{"op": "remove", "path": "`+pauseTimestampPath+`"}]`)))
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return false, nil // skip MonoVertex if it can't be found
+			} else {
+				return true, err // otherwise requeue resume
+			}
+		}
+	}
+	_, err := mr.scaleUpMonoVertex(ctx, mvtx)
+	if err != nil {
+		return false, err
+	}
+	mvtx.Status.MarkPhaseRunning()
+	return false, nil
+}
+
+func (mr *monoVertexReconciler) pauseMonoVertex(ctx context.Context, mvtx *dfv1.MonoVertex) (bool, error) {
+	// check that annotations / pause timestamp annotation exist
+	if mvtx.GetAnnotations() == nil || mvtx.GetAnnotations()[dfv1.KeyPauseTimestamp] == "" {
+		patchJson := `[{"op": "add", "path": "` + pauseTimestampPath + `", "value": "` + time.Now().Format(time.RFC3339) + `"}]`
+		if err := mr.client.Patch(ctx, mvtx, client.RawPatch(types.JSONPatchType, []byte(patchJson))); err != nil && !apierrors.IsNotFound(err) {
+			return true, err
+		}
+	}
+
+	mvtx.Status.MarkPhasePausing()
+	updated, err := mr.scaleDownMonoVertex(ctx, mvtx)
+	if err != nil || updated {
+		// If there's an error, or scaling down happens, requeue the request
+		// This is to give some time to process the new messages, otherwise check IsDrained directly may get incorrect information
+		return updated, err
+	}
+
+	//daemonClient, err := daemonclient.NewGRPCDaemonServiceClient(mvtx.GetDaemonServiceURL())
+	//if err != nil {
+	//	return true, err
+	//}
+	//defer func() {
+	//	_ = daemonClient.Close()
+	//}()
+	//drainCompleted, err := daemonClient.IsDrained(ctx, mvtx.Name)
+	//if err != nil {
+	//	return true, err
+	//}
+
+	pauseTimestamp, err := time.Parse(time.RFC3339, mvtx.GetAnnotations()[dfv1.KeyPauseTimestamp])
+	if err != nil {
+		return false, err
+	}
+
+	// if drain is completed, or we have exceeded the pause deadline, mark mvtx as paused and scale down
+	if time.Now().After(pauseTimestamp.Add(time.Duration(mvtx.Spec.Lifecycle.GetPauseGracePeriodSeconds()) * time.Second)) {
+		//// if the drain completed succesfully, then set the DrainedOnPause field to true
+		//if drainCompleted {
+		//	mvtx.Status.MarkDrainedOnPauseTrue()
+		//}
+		mvtx.Status.MarkPhasePaused()
+		return false, nil
+	}
+	return true, nil
 }
 
 // orchestrateFixedResources orchestrates fixed resources such as daemon service related objects for a mono vertex.
@@ -599,4 +705,42 @@ func (mr *monoVertexReconciler) checkChildrenResourceStatus(ctx context.Context,
 	}
 
 	return nil
+}
+
+// isLifecycleChange determines whether there has been a change requested in the lifecycle
+// of a MonoVertex object, specifically relating to the paused and pausing states.
+func isLifecycleChange(mvtx *dfv1.MonoVertex) bool {
+	// Extract the current phase from the status of the MonoVertex.
+	// Check if the desired phase of the MonoVertex is 'Paused', or if the current phase of the
+	// MonoVertex is either 'Paused' or 'Pausing'. This indicates a transition into or out of
+	// a paused state which is a lifecycle phase change
+	if oldPhase := mvtx.Status.Phase; mvtx.Spec.Lifecycle.GetDesiredPhase() == dfv1.MonoVertexPhasePaused ||
+		oldPhase == dfv1.MonoVertexPhasePaused || oldPhase == dfv1.MonoVertexPhasePausing {
+		return true
+	}
+
+	// If none of the conditions are met, return false
+	return false
+}
+
+func (mr *monoVertexReconciler) scaleDownMonoVertex(ctx context.Context, mvtx *dfv1.MonoVertex) (bool, error) {
+	return mr.scaleVertex(ctx, mvtx, 0)
+}
+
+func (mr *monoVertexReconciler) scaleUpMonoVertex(ctx context.Context, mvtx *dfv1.MonoVertex) (bool, error) {
+	return mr.scaleVertex(ctx, mvtx, mvtx.Spec.Scale.GetMinReplicas())
+}
+
+func (mr *monoVertexReconciler) scaleVertex(ctx context.Context, mvtx *dfv1.MonoVertex, desired int32) (bool, error) {
+	if origin := *mvtx.Spec.Replicas; origin != desired {
+		patchJson := fmt.Sprintf(`{"spec":{"replicas":%d}}`, desired)
+		err := mr.client.Patch(ctx, mvtx, client.RawPatch(types.MergePatchType, []byte(patchJson)))
+		if err != nil && !apierrors.IsNotFound(err) {
+			return false, err
+		}
+		mr.logger.Infow("Scaled MonoVertex", zap.Int32("from", origin), zap.Int32("to", desired), zap.String("MonoVertex", mvtx.Name))
+		mr.recorder.Eventf(mvtx, corev1.EventTypeNormal, "ScalingMonoVertex", "Scaled MonoVertex %s from %d to %d replicas", mvtx.Name, origin, desired)
+		return true, nil
+	}
+	return false, nil
 }
