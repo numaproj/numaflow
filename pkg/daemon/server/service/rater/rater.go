@@ -225,7 +225,7 @@ func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	resp, err := r.httpClient.Get(url)
 	if err != nil {
-		r.log.Warnf("[vertex name %s, pod name %s]: failed reading the metrics endpoint, %v", vertexName, podName, err.Error())
+		r.log.Warnf("[vertex name %s, pod name %s]: failed reading the metrics endpoint, the pod might have been scaled down: %v", vertexName, podName, err.Error())
 		return nil
 	}
 	defer resp.Body.Close()

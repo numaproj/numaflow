@@ -161,7 +161,7 @@ func (r *Rater) getPodReadCounts(podName string) *PodReadCount {
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, headlessServiceName, r.monoVertex.Namespace, v1alpha1.MonoVertexMetricsPort)
 	resp, err := r.httpClient.Get(url)
 	if err != nil {
-		r.log.Warnf("[Pod name %s]: failed reading the metrics endpoint, %v", podName, err.Error())
+		r.log.Warnf("[Pod name %s]: failed reading the metrics endpoint, the pod might have been scaled down: %v", podName, err.Error())
 		return nil
 	}
 	defer resp.Body.Close()
