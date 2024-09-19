@@ -56,8 +56,8 @@ Below are the typical formats of the versioning scheme:
 There are two cases to consider when updating the map:
 
 1. The minimum supported version is a pre-release version.
-In this case, directly put the exact pre-release version in the map.E.g.,
-if the minimum supported version for java is "0.8.0-rc1", then put "0.8.0-rc1" for java.
+In this case, directly put the exact pre-release version in the map.
+E.g., if the minimum supported version is "0.8.0-rc1", then put "0.8.0-rc1" for java, go, rust.
 "0.8.0b1", "0.8.0b1" for python.
 2. The minimum supported version is a stable version.
 In this case, put (almost) the largest available pre-release version of the stable version in the map.
