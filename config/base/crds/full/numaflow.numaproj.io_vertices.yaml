@@ -532,6 +532,42 @@ spec:
                     type: array
                   imagePullPolicy:
                     type: string
+                  livenessProbe:
+                    properties:
+                      failureThreshold:
+                        format: int32
+                        type: integer
+                      initialDelaySeconds:
+                        format: int32
+                        type: integer
+                      periodSeconds:
+                        format: int32
+                        type: integer
+                      successThreshold:
+                        format: int32
+                        type: integer
+                      timeoutSeconds:
+                        format: int32
+                        type: integer
+                    type: object
+                  readinessProbe:
+                    properties:
+                      failureThreshold:
+                        format: int32
+                        type: integer
+                      initialDelaySeconds:
+                        format: int32
+                        type: integer
+                      periodSeconds:
+                        format: int32
+                        type: integer
+                      successThreshold:
+                        format: int32
+                        type: integer
+                      timeoutSeconds:
+                        format: int32
+                        type: integer
+                    type: object
                   resources:
                     properties:
                       claims:
@@ -816,6 +852,42 @@ spec:
                     type: array
                   imagePullPolicy:
                     type: string
+                  livenessProbe:
+                    properties:
+                      failureThreshold:
+                        format: int32
+                        type: integer
+                      initialDelaySeconds:
+                        format: int32
+                        type: integer
+                      periodSeconds:
+                        format: int32
+                        type: integer
+                      successThreshold:
+                        format: int32
+                        type: integer
+                      timeoutSeconds:
+                        format: int32
+                        type: integer
+                    type: object
+                  readinessProbe:
+                    properties:
+                      failureThreshold:
+                        format: int32
+                        type: integer
+                      initialDelaySeconds:
+                        format: int32
+                        type: integer
+                      periodSeconds:
+                        format: int32
+                        type: integer
+                      successThreshold:
+                        format: int32
+                        type: integer
+                      timeoutSeconds:
+                        format: int32
+                        type: integer
+                    type: object
                   resources:
                     properties:
                       claims:
@@ -1797,6 +1869,42 @@ spec:
                     type: array
                   imagePullPolicy:
                     type: string
+                  livenessProbe:
+                    properties:
+                      failureThreshold:
+                        format: int32
+                        type: integer
+                      initialDelaySeconds:
+                        format: int32
+                        type: integer
+                      periodSeconds:
+                        format: int32
+                        type: integer
+                      successThreshold:
+                        format: int32
+                        type: integer
+                      timeoutSeconds:
+                        format: int32
+                        type: integer
+                    type: object
+                  readinessProbe:
+                    properties:
+                      failureThreshold:
+                        format: int32
+                        type: integer
+                      initialDelaySeconds:
+                        format: int32
+                        type: integer
+                      periodSeconds:
+                        format: int32
+                        type: integer
+                      successThreshold:
+                        format: int32
+                        type: integer
+                      timeoutSeconds:
+                        format: int32
+                        type: integer
+                    type: object
                   resources:
                     properties:
                       claims:
@@ -2833,6 +2941,42 @@ spec:
                                 type: string
                               imagePullPolicy:
                                 type: string
+                              livenessProbe:
+                                properties:
+                                  failureThreshold:
+                                    format: int32
+                                    type: integer
+                                  initialDelaySeconds:
+                                    format: int32
+                                    type: integer
+                                  periodSeconds:
+                                    format: int32
+                                    type: integer
+                                  successThreshold:
+                                    format: int32
+                                    type: integer
+                                  timeoutSeconds:
+                                    format: int32
+                                    type: integer
+                                type: object
+                              readinessProbe:
+                                properties:
+                                  failureThreshold:
+                                    format: int32
+                                    type: integer
+                                  initialDelaySeconds:
+                                    format: int32
+                                    type: integer
+                                  periodSeconds:
+                                    format: int32
+                                    type: integer
+                                  successThreshold:
+                                    format: int32
+                                    type: integer
+                                  timeoutSeconds:
+                                    format: int32
+                                    type: integer
+                                type: object
                               resources:
                                 properties:
                                   claims:
@@ -3270,6 +3414,42 @@ spec:
                             type: string
                           imagePullPolicy:
                             type: string
+                          livenessProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
+                          readinessProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
                           resources:
                             properties:
                               claims:
@@ -3989,6 +4169,42 @@ spec:
                             type: string
                           imagePullPolicy:
                             type: string
+                          livenessProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
+                          readinessProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
                           resources:
                             properties:
                               claims:
@@ -4200,6 +4416,42 @@ spec:
                             type: string
                           imagePullPolicy:
                             type: string
+                          livenessProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
+                          readinessProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
                           resources:
                             properties:
                               claims:
@@ -4525,6 +4777,42 @@ spec:
                         type: string
                       imagePullPolicy:
                         type: string
+                      livenessProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
+                      readinessProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
                       resources:
                         properties:
                           claims:

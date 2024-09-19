@@ -38,4 +38,8 @@ type Container struct {
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty" protobuf:"bytes,8,opt,name=securityContext"`
 	// +optional
 	ImagePullPolicy *corev1.PullPolicy `json:"imagePullPolicy,omitempty" protobuf:"bytes,9,opt,name=imagePullPolicy,casttype=PullPolicy"`
+	// +optional
+	ReadinessProbe *Probe `json:"readinessProbe,omitempty" protobuf:"bytes,10,opt,name=readinessProbe"`
+	// +optional
+	LivenessProbe *Probe `json:"livenessProbe,omitempty" protobuf:"bytes,11,opt,name=livenessProbe"`
 }

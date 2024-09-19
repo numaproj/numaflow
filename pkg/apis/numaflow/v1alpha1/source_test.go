@@ -23,12 +23,36 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 )
 
 var testImagePullPolicy = corev1.PullNever
 
 func TestSource_getContainers(t *testing.T) {
 	x := Source{
+		UDSource: &UDSource{
+			Container: &Container{
+				Image:        "my-image-s",
+				VolumeMounts: []corev1.VolumeMount{{Name: "my-vm"}},
+				Command:      []string{"my-cmd-s"},
+				Args:         []string{"my-arg-s"},
+				Env:          []corev1.EnvVar{{Name: "my-envvar-s"}},
+				EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
+				}}},
+				Resources: corev1.ResourceRequirements{
+					Requests: map[corev1.ResourceName]resource.Quantity{
+						"cpu": resource.MustParse("2"),
+					},
+				},
+				LivenessProbe: &Probe{
+					InitialDelaySeconds: ptr.To[int32](10),
+					TimeoutSeconds:      ptr.To[int32](15),
+					PeriodSeconds:       ptr.To[int32](14),
+					FailureThreshold:    ptr.To[int32](5),
+				},
+			},
+		},
 		UDTransformer: &UDTransformer{
 			Container: &Container{
 				Image:        "my-image",
@@ -44,6 +68,12 @@ func TestSource_getContainers(t *testing.T) {
 						"cpu": resource.MustParse("2"),
 					},
 				},
+				LivenessProbe: &Probe{
+					InitialDelaySeconds: ptr.To[int32](20),
+					TimeoutSeconds:      ptr.To[int32](25),
+					PeriodSeconds:       ptr.To[int32](24),
+					FailureThreshold:    ptr.To[int32](5),
+				},
 			},
 		},
 	}
@@ -51,8 +81,33 @@ func TestSource_getContainers(t *testing.T) {
 		image: "main-image",
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, 2, len(c))
+	assert.Equal(t, 3, len(c))
 	assert.Equal(t, "main-image", c[0].Image)
+
+	assert.Equal(t, x.UDSource.Container.Image, c[2].Image)
+	assert.Contains(t, c[2].VolumeMounts, c[2].VolumeMounts[0])
+	assert.Equal(t, x.UDSource.Container.Command, c[2].Command)
+	assert.Equal(t, x.UDSource.Container.Args, c[2].Args)
+	envsUDSource := map[string]string{}
+	for _, e := range c[2].Env {
+		envsUDSource[e.Name] = e.Value
+	}
+	assert.Equal(t, envsUDSource[EnvUDContainerType], UDContainerSource)
+	assert.Equal(t, x.UDSource.Container.EnvFrom, c[2].EnvFrom)
+	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, c[2].Resources)
+	assert.Equal(t, c[0].ImagePullPolicy, c[2].ImagePullPolicy)
+	assert.NotNil(t, c[1].LivenessProbe)
+	assert.Equal(t, int32(10), c[2].LivenessProbe.InitialDelaySeconds)
+	assert.Equal(t, int32(15), c[2].LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(14), c[2].LivenessProbe.PeriodSeconds)
+	assert.Equal(t, int32(5), c[2].LivenessProbe.FailureThreshold)
+	x.UDSource.Container.ImagePullPolicy = &testImagePullPolicy
+	c, _ = x.getContainers(getContainerReq{
+		image:           "main-image",
+		imagePullPolicy: corev1.PullAlways,
+	})
+	assert.Equal(t, testImagePullPolicy, c[2].ImagePullPolicy)
+
 	assert.Equal(t, x.UDTransformer.Container.Image, c[1].Image)
 	assert.Contains(t, c[1].VolumeMounts, c[1].VolumeMounts[0])
 	assert.Equal(t, x.UDTransformer.Container.Command, c[1].Command)
@@ -65,6 +120,11 @@ func TestSource_getContainers(t *testing.T) {
 	assert.Equal(t, x.UDTransformer.Container.EnvFrom, c[1].EnvFrom)
 	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, c[1].Resources)
 	assert.Equal(t, c[0].ImagePullPolicy, c[1].ImagePullPolicy)
+	assert.NotNil(t, c[1].LivenessProbe)
+	assert.Equal(t, int32(20), c[1].LivenessProbe.InitialDelaySeconds)
+	assert.Equal(t, int32(25), c[1].LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(24), c[1].LivenessProbe.PeriodSeconds)
+	assert.Equal(t, int32(5), c[1].LivenessProbe.FailureThreshold)
 	x.UDTransformer.Container.ImagePullPolicy = &testImagePullPolicy
 	c, _ = x.getContainers(getContainerReq{
 		image:           "main-image",

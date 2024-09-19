@@ -310,13 +310,25 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowp
 		}
 		ok = ok && len(podList.Items) > 0 && len(podList.Items) == vertexList.Items[0].GetReplicas() // pod number should equal to desired replicas
 		for _, p := range podList.Items {
-			ok = ok && p.Status.Phase == corev1.PodRunning
+			ok = ok && isPodReady(p)
 		}
 		if ok {
 			return nil
 		}
 		time.Sleep(2 * time.Second)
 	}
+}
+
+func isPodReady(pod corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+	for _, c := range pod.Status.ContainerStatuses {
+		if !c.Ready {
+			return false
+		}
+	}
+	return true
 }
 
 func WaitForVertexPodScalingTo(kubeClient kubernetes.Interface, vertexClient flowpkg.VertexInterface, namespace, pipelineName, vertexName string, timeout time.Duration, size int) error {

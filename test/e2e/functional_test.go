@@ -316,11 +316,11 @@ func (s *FunctionalSuite) TestFallbackSink() {
 	defer w.DeletePipelineAndWait()
 	pipelineName := "simple-fallback"
 
-	// send a message to the pipeline
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("fallback-message")))
-
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
+
+	// send a message to the pipeline
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("fallback-message")))
 
 	w.Expect().RedisSinkContains("simple-fallback-output", "fallback-message")
 }

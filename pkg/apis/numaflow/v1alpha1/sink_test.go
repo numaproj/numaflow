@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 )
 
 func Test_Sink_getContainers(t *testing.T) {
@@ -52,6 +53,12 @@ func Test_Sink_getUDSinkContainer(t *testing.T) {
 					EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
 						LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
 					}}},
+					LivenessProbe: &Probe{
+						InitialDelaySeconds: ptr.To[int32](10),
+						TimeoutSeconds:      ptr.To[int32](15),
+						PeriodSeconds:       ptr.To[int32](14),
+						FailureThreshold:    ptr.To[int32](5),
+					},
 				},
 			},
 		},
@@ -78,6 +85,10 @@ func Test_Sink_getUDSinkContainer(t *testing.T) {
 	})
 	assert.Equal(t, testImagePullPolicy, c.ImagePullPolicy)
 	assert.True(t, c.LivenessProbe != nil)
+	assert.Equal(t, int32(10), c.LivenessProbe.InitialDelaySeconds)
+	assert.Equal(t, int32(15), c.LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(14), c.LivenessProbe.PeriodSeconds)
+	assert.Equal(t, int32(5), c.LivenessProbe.FailureThreshold)
 }
 
 func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
@@ -103,6 +114,12 @@ func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
 					EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
 						LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
 					}}},
+					LivenessProbe: &Probe{
+						InitialDelaySeconds: ptr.To[int32](20),
+						TimeoutSeconds:      ptr.To[int32](25),
+						PeriodSeconds:       ptr.To[int32](24),
+						FailureThreshold:    ptr.To[int32](10),
+					},
 				},
 			},
 		},
@@ -122,6 +139,11 @@ func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
 		envs[e.Name] = e.Value
 	}
 	assert.Equal(t, envs[EnvUDContainerType], UDContainerFallbackSink)
+	assert.True(t, c.LivenessProbe != nil)
+	assert.Equal(t, int32(20), c.LivenessProbe.InitialDelaySeconds)
+	assert.Equal(t, int32(25), c.LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(24), c.LivenessProbe.PeriodSeconds)
+	assert.Equal(t, int32(10), c.LivenessProbe.FailureThreshold)
 	x.UDSink.Container.ImagePullPolicy = &testImagePullPolicy
 	c = x.getUDSinkContainer(getContainerReq{
 		image:           "main-image",

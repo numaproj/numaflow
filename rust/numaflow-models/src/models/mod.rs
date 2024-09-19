@@ -120,6 +120,8 @@ pub mod pipeline_spec;
 pub use self::pipeline_spec::PipelineSpec;
 pub mod pipeline_status;
 pub use self::pipeline_status::PipelineStatus;
+pub mod probe;
+pub use self::probe::Probe;
 pub mod redis_buffer_service;
 pub use self::redis_buffer_service::RedisBufferService;
 pub mod redis_config;

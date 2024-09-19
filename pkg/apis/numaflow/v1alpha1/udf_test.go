@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 )
 
 func TestUDF_getContainers(t *testing.T) {
@@ -39,6 +40,12 @@ func TestUDF_getContainers(t *testing.T) {
 				Requests: map[corev1.ResourceName]resource.Quantity{
 					"cpu": resource.MustParse("2"),
 				},
+			},
+			LivenessProbe: &Probe{
+				InitialDelaySeconds: ptr.To[int32](10),
+				TimeoutSeconds:      ptr.To[int32](15),
+				PeriodSeconds:       ptr.To[int32](14),
+				FailureThreshold:    ptr.To[int32](5),
 			},
 		},
 	}
@@ -68,6 +75,10 @@ func TestUDF_getContainers(t *testing.T) {
 	})
 	assert.Equal(t, testImagePullPolicy, c[1].ImagePullPolicy)
 	assert.True(t, c[1].LivenessProbe != nil)
+	assert.Equal(t, int32(10), c[1].LivenessProbe.InitialDelaySeconds)
+	assert.Equal(t, int32(15), c[1].LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(14), c[1].LivenessProbe.PeriodSeconds)
+	assert.Equal(t, int32(5), c[1].LivenessProbe.FailureThreshold)
 }
 
 func Test_getUDFContainer(t *testing.T) {

@@ -1597,6 +1597,36 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>readinessProbe</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Probe"> Probe </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>livenessProbe</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Probe"> Probe </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -1721,6 +1751,36 @@ Kubernetes core/v1.SecurityContext </a> </em>
 <code>envFrom</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envfromsource-v1-core">
 \[\]Kubernetes core/v1.EnvFromSource </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>readinessProbe</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Probe"> Probe </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>livenessProbe</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Probe"> Probe </a> </em>
 </td>
 
 <td>
@@ -8038,6 +8098,155 @@ The generation observed by the Pipeline controller.
 Field to indicate if a pipeline drain successfully occurred, only
 meaningful when the pipeline is paused. True means it has been
 successfully drained.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.Probe">
+
+Probe
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Container">Container</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">ContainerTemplate</a>)
+</p>
+
+<p>
+
+<p>
+
+Probe is used to customize the configuration for Readiness and Liveness
+probes.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>initialDelaySeconds</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Number of seconds after the container has started before liveness probes
+are initiated. More info:
+<a href="https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes">https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes</a>
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>timeoutSeconds</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Number of seconds after which the probe times out. More info:
+<a href="https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes">https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes</a>
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>periodSeconds</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+How often (in seconds) to perform the probe.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>successThreshold</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Minimum consecutive successes for the probe to be considered successful
+after having failed. Defaults to 1. Must be 1 for liveness and startup.
+Minimum value is 1.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>failureThreshold</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Minimum consecutive failures for the probe to be considered failed after
+having succeeded. Defaults to 3. Minimum value is 1.
 </p>
 
 </td>

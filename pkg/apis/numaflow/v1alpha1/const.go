@@ -265,6 +265,20 @@ const (
 	// This strategy argues for robustness in operations, aiming
 	// to minimize the chances of data loss or failed deliveries in transient failure scenarios.
 	DefaultOnFailureRetryStrategy = OnFailureRetry
+
+	// Defeault values for readiness and liveness probes
+	NumaContainerReadyzInitialDelaySeconds = 5
+	NumaContainerReadyzPeriodSeconds       = 10
+	NumaContainerReadyzTimeoutSeconds      = 30
+	NumaContainerReadyzFailureThreshold    = 6
+	NumaContainerLivezInitialDelaySeconds  = 20
+	NumaContainerLivezPeriodSeconds        = 60
+	NumaContainerLivezTimeoutSeconds       = 30
+	NumaContainerLivezFailureThreshold     = 5
+	UDContainerLivezInitialDelaySeconds    = 30
+	UDContainerLivezPeriodSeconds          = 60
+	UDContainerLivezTimeoutSeconds         = 30
+	UDContainerLivezFailureThreshold       = 5
 )
 
 var (

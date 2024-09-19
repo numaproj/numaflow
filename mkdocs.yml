@@ -101,6 +101,7 @@ nav:
               - user-guide/reference/configuration/labels-and-annotations.md
               - user-guide/reference/configuration/init-containers.md
               - user-guide/reference/configuration/sidecar-containers.md
+              - user-guide/reference/configuration/liveness-and-readiness.md
               - user-guide/reference/configuration/pipeline-customization.md
               - user-guide/reference/configuration/istio.md
               - user-guide/reference/configuration/max-message-size.md

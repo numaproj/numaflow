@@ -68,7 +68,7 @@ func Test_Single(t *testing.T) {
 	server := natstest.RunNatsServer(t)
 	defer server.Shutdown()
 
-	url := "127.0.0.1"
+	url := server.ClientURL()
 	testSubject := "test-single"
 	testQueue := "test-queue-single"
 	vi := testVertex(t, url, testSubject, testQueue, "test-host", 0)
@@ -112,9 +112,9 @@ func Test_Multiple(t *testing.T) {
 	server := natstest.RunNatsServer(t)
 	defer server.Shutdown()
 
-	url := "127.0.0.1"
 	testSubject := "test-multiple"
 	testQueue := "test-queue-multiple"
+	url := server.ClientURL()
 	v1 := testVertex(t, url, testSubject, testQueue, "test-host1", 0)
 	ns1, err := newInstance(t, v1)
 	assert.NoError(t, err)
