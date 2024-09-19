@@ -32,6 +32,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/prometheus/client_golang/api"
+	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/common/model"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1178,6 +1181,105 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 		resourceHealth.Message, dataHealth.GetMessage(), resourceHealth.Code, dataHealth.GetCode())
 
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
+}
+
+func validateMetricReqBody(data MetricSpecData) error {
+	if (data.From == "" && data.To != "") || (data.To == "" && data.From != "") {
+		return fmt.Errorf("bad request: either both from and to be set or none")
+	}
+
+	if _, ok := metricNameMap[data.MetricName]; !ok {
+		return fmt.Errorf("bad Request: requested user metric name not supported yet")
+	}
+	return nil
+}
+
+func buildMetricLabelQuery(data MetricSpecData) string {
+	query := ""
+	if data.Labels.LabelVertex != "" {
+		query += fmt.Sprintf(`,vertex="%s"`, data.Labels.LabelVertex)
+	}
+	if data.Labels.LabelMonoVertexName != "" {
+		query += fmt.Sprintf(`,mvtx_name="%s"`, data.Labels.LabelMonoVertexName)
+	}
+	if data.Labels.LabelPartitionName != "" {
+		query += fmt.Sprintf(`,partition_name="%s"`, data.Labels.LabelPartitionName)
+	}
+	if data.Labels.LabelISBService != "" {
+		query += fmt.Sprintf(`,isbsvc="%s"`, data.Labels.LabelISBService)
+	}
+	if data.Labels.LabelPlatform != "" {
+		query += fmt.Sprintf(`,platform="%s"`, data.Labels.LabelPlatform)
+	}
+	if data.Labels.LabelVertexType != "" {
+		query += fmt.Sprintf(`,vertex_type="%s"`, data.Labels.LabelVertexType)
+	}
+	if data.Labels.LabelVersion != "" {
+		query += fmt.Sprintf(`,version="%s"`, data.Labels.LabelVersion)
+	}
+	return query
+}
+
+func (h *handler) GetMetricData(c *gin.Context) {
+
+	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
+
+	var metricSpecData MetricSpecData
+	if err := bindJson(c, &metricSpecData); err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body to metric data spec, %s", err.Error()))
+		return
+	}
+	if err := validateMetricReqBody(metricSpecData); err != nil {
+		h.respondWithError(c, fmt.Sprintf("Validation check failed for metric data body, %s", err.Error()))
+		return
+	}
+
+	// build labels query
+	labelQuery := buildMetricLabelQuery(metricSpecData)
+
+	// build query
+	query := fmt.Sprintf(`rate(%s{namespace="%s",pipeline="%s"%s}[%s])`, metricNameMap[metricSpecData.MetricName].NumaMetricName, ns, pipeline, labelQuery, metricSpecData.Duration)
+
+	client, err := api.NewClient(api.Config{
+		Address: "http://my-release-kube-prometheus-prometheus.default.svc.cluster.local:9090", // Replace with your Prometheus server address
+	})
+	if err != nil {
+		errMsg := fmt.Sprintf("Error creating client: %v\n", err)
+		h.respondWithError(c, errMsg)
+		return
+	}
+	v1api := v1.NewAPI(client)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	var (
+		result   model.Value
+		warnings v1.Warnings
+	)
+	if metricSpecData.From != "" {
+		startTime, _ := time.Parse(time.RFC3339, metricSpecData.From)
+		endTime, _ := time.Parse(time.RFC3339, metricSpecData.To)
+		r := v1.Range{
+			Start: startTime,
+			End:   endTime,
+			Step:  time.Minute,
+		}
+		result, warnings, err = v1api.QueryRange(ctx, query, r)
+	} else {
+		result, warnings, err = v1api.Query(ctx, query, model.Now().Time())
+	}
+
+	if err != nil {
+		errMsg := fmt.Sprintf("error in querying Prometheus %v", err)
+		h.respondWithError(c, errMsg)
+		return
+	}
+	if len(warnings) > 0 {
+		errMsg := fmt.Sprintf("Warnings: %v\n", warnings)
+		h.respondWithError(c, errMsg)
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, result))
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
