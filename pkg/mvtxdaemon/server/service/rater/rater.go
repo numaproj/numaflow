@@ -33,7 +33,7 @@ import (
 )
 
 const CountWindow = time.Second * 10
-const MonoVtxReadMetricName = "monovtx_read_total"
+const monoVtxReadMetricName = "monovtx_read_total"
 
 // MonoVtxRatable is the interface for the Rater struct.
 type MonoVtxRatable interface {
@@ -161,7 +161,7 @@ func (r *Rater) getPodReadCounts(podName string) *PodReadCount {
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, headlessServiceName, r.monoVertex.Namespace, v1alpha1.MonoVertexMetricsPort)
 	resp, err := r.httpClient.Get(url)
 	if err != nil {
-		r.log.Errorf("[MonoVertex name %s, pod name %s]: failed reading the metrics endpoint, %v", r.monoVertex.Name, podName, err.Error())
+		r.log.Warnf("[Pod name %s]: failed reading the metrics endpoint, %v", podName, err.Error())
 		return nil
 	}
 	defer resp.Body.Close()
@@ -169,11 +169,11 @@ func (r *Rater) getPodReadCounts(podName string) *PodReadCount {
 	textParser := expfmt.TextParser{}
 	result, err := textParser.TextToMetricFamilies(resp.Body)
 	if err != nil {
-		r.log.Errorf("[MonoVertex name %s, pod name %s]:  failed parsing to prometheus metric families, %v", r.monoVertex.Name, podName, err.Error())
+		r.log.Errorf("[Pod name %s]:  failed parsing to prometheus metric families, %v", podName, err.Error())
 		return nil
 	}
 
-	if value, ok := result[MonoVtxReadMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
+	if value, ok := result[monoVtxReadMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()
 		// Each pod should be emitting only one metric with this name, so we should be able to take the first value
 		// from the results safely.
@@ -182,7 +182,7 @@ func (r *Rater) getPodReadCounts(podName string) *PodReadCount {
 		podReadCount := &PodReadCount{podName, metricsList[0].Untyped.GetValue()}
 		return podReadCount
 	} else {
-		r.log.Errorf("[MonoVertex name  %s, pod name %s]: failed getting the read total metric, the metric is not available.", r.monoVertex.Name, podName)
+		r.log.Infof("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxReadMetricName)
 		return nil
 	}
 }

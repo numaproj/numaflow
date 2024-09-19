@@ -33,6 +33,10 @@ import (
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
+const (
+	readTotalMetricName = "forwarder_data_read_total"
+)
+
 type Ratable interface {
 	Start(ctx context.Context) error
 	GetRates(vertexName, partitionName string) map[string]*wrapperspb.DoubleValue
@@ -217,13 +221,11 @@ func sleep(ctx context.Context, duration time.Duration) {
 // getPodReadCounts returns the total number of messages read by the pod
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
 func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
-	readTotalMetricName := "forwarder_data_read_total"
-
 	// scrape the read total metric from pod metric port
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	resp, err := r.httpClient.Get(url)
 	if err != nil {
-		r.log.Errorf("[vertex name %s, pod name %s]: failed reading the metrics endpoint, %v", vertexName, podName, err.Error())
+		r.log.Warnf("[vertex name %s, pod name %s]: failed reading the metrics endpoint, %v", vertexName, podName, err.Error())
 		return nil
 	}
 	defer resp.Body.Close()
@@ -255,7 +257,7 @@ func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
 		podReadCount := &PodReadCount{podName, partitionReadCount}
 		return podReadCount
 	} else {
-		r.log.Errorf("[vertex name %s, pod name %s]: failed getting the read total metric, the metric is not available.", vertexName, podName)
+		r.log.Infof("[vertex name %s, pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", vertexName, podName, readTotalMetricName)
 		return nil
 	}
 }
