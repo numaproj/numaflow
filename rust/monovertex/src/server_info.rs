@@ -77,6 +77,111 @@ pub async fn check_for_server_compatibility(
     Ok(())
 }
 
+/// Checks if the current numaflow version is compatible with the given minimum numaflow version.
+fn check_numaflow_compatibility(
+    numaflow_version: &str,
+    min_numaflow_version: &str,
+) -> error::Result<()> {
+    // Ensure that the minimum numaflow version is specified
+    if min_numaflow_version.is_empty() {
+        return Err(Error::ServerInfoError("invalid version".to_string()));
+    }
+
+    // Strip the 'v' prefix if present.
+    let numaflow_version_stripped = numaflow_version.trim_start_matches('v');
+
+    // Parse the provided numaflow version as a semantic version
+    let numaflow_version_semver = Version::parse(numaflow_version_stripped)
+        .map_err(|e| Error::ServerInfoError(format!("Error parsing Numaflow version: {}", e)))?;
+
+    // Create a version constraint based on the minimum numaflow version
+    let numaflow_constraint = format!(">={}", min_numaflow_version);
+    check_constraint(&numaflow_version_semver, &numaflow_constraint).map_err(|e| {
+        Error::ServerInfoError(format!(
+            "numaflow version {} must be upgraded to at least {}, in order to work with current SDK version {}",
+            numaflow_version_semver, human_readable(min_numaflow_version), e
+        ))
+    })
+}
+
+/// Checks if the current SDK version is compatible with the given language's minimum supported SDK version.
+fn check_sdk_compatibility(
+    sdk_version: &str,
+    sdk_language: &str,
+    min_supported_sdk_versions: &SdkConstraints,
+) -> error::Result<()> {
+    // Check if the SDK language is present in the minimum supported SDK versions
+    if let Some(sdk_required_version) = min_supported_sdk_versions.get(sdk_language) {
+        let sdk_constraint = format!(">={}", sdk_required_version);
+
+        // For Python, use Pep440 versioning
+        if sdk_language.to_lowercase() == "python" {
+            let sdk_version_pep440 = PepVersion::from_str(sdk_version)
+                .map_err(|e| Error::ServerInfoError(format!("Error parsing SDK version: {}", e)))?;
+
+            let specifiers = VersionSpecifier::from_str(&sdk_constraint).map_err(|e| {
+                Error::ServerInfoError(format!("Error parsing SDK constraint: {}", e))
+            })?;
+
+            if !specifiers.contains(&sdk_version_pep440) {
+                return Err(Error::ServerInfoError(format!(
+                    "SDK version {} must be upgraded to at least {}, in order to work with the current numaflow version",
+                    sdk_version_pep440, human_readable(sdk_required_version)
+                )));
+            }
+        } else {
+            // Strip the 'v' prefix if present for non-Python languages
+            let sdk_version_stripped = sdk_version.trim_start_matches('v');
+
+            // Parse the SDK version using semver
+            let sdk_version_semver = Version::parse(sdk_version_stripped)
+                .map_err(|e| Error::ServerInfoError(format!("Error parsing SDK version: {}", e)))?;
+
+            // Check if the SDK version satisfies the constraint
+            check_constraint(&sdk_version_semver, &sdk_constraint).map_err(|_| {
+                Error::ServerInfoError(format!(
+                    "SDK version {} must be upgraded to at least {}, in order to work with the current numaflow version",
+                    sdk_version_semver, human_readable(sdk_required_version)
+                ))
+            })?;
+        }
+    } else {
+        // Language not found in the supported SDK versions
+        warn!(
+            "SDK version constraint not found for language: {}",
+            sdk_language
+        );
+
+        // Return error indicating the language
+        return Err(Error::ServerInfoError(format!(
+            "SDK version constraint not found for language: {}",
+            sdk_language
+        )));
+    }
+    Ok(())
+}
+
+// human_readable returns the human-readable minimum supported version.
+// it's used for logging purposes.
+// it translates the version we used in the constraints to the real minimum supported version.
+// e.g., if the given version is "0.8.0rc100", human-readable version is "0.8.0".
+// if the given version is "0.8.0-z", "0.8.0".
+// if "0.8.0-rc1", "0.8.0-rc1".
+fn human_readable(ver: &str) -> String {
+    if ver.is_empty() {
+        return String::new();
+    }
+    // semver
+    if ver.ends_with("-z") {
+        return ver[..ver.len() - 2].to_string();
+    }
+    // PEP 440
+    if ver.ends_with("rc100") {
+        return ver[..ver.len() - 5].to_string();
+    }
+    ver.to_string()
+}
+
 /// Checks if the given version meets the specified constraint.
 fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
     let binding = version.to_string();
@@ -134,111 +239,6 @@ fn trim_after_dash(input: &str) -> &str {
     } else {
         input
     }
-}
-
-/// Checks if the current numaflow version is compatible with the given minimum numaflow version.
-fn check_numaflow_compatibility(
-    numaflow_version: &str,
-    min_numaflow_version: &str,
-) -> error::Result<()> {
-    // Ensure that the minimum numaflow version is specified
-    if min_numaflow_version.is_empty() {
-        return Err(Error::ServerInfoError("invalid version".to_string()));
-    }
-
-    // Strip the 'v' prefix if present.
-    let numaflow_version_stripped = numaflow_version.trim_start_matches('v');
-
-    // Parse the provided numaflow version as a semantic version
-    let numaflow_version_semver = Version::parse(numaflow_version_stripped)
-        .map_err(|e| Error::ServerInfoError(format!("Error parsing Numaflow version: {}", e)))?;
-
-    // Create a version constraint based on the minimum numaflow version
-    let numaflow_constraint = format!(">={}", min_numaflow_version);
-    check_constraint(&numaflow_version_semver, &numaflow_constraint).map_err(|e| {
-        Error::ServerInfoError(format!(
-            "numaflow version {} must be upgraded to at least {}, in order to work with current SDK version {}",
-            numaflow_version_semver, human_readable(min_numaflow_version.to_string()), e
-        ))
-    })
-}
-
-/// Checks if the current SDK version is compatible with the given language's minimum supported SDK version.
-fn check_sdk_compatibility(
-    sdk_version: &str,
-    sdk_language: &str,
-    min_supported_sdk_versions: &SdkConstraints,
-) -> error::Result<()> {
-    // Check if the SDK language is present in the minimum supported SDK versions
-    if let Some(sdk_required_version) = min_supported_sdk_versions.get(sdk_language) {
-        let sdk_constraint = format!(">={}", sdk_required_version);
-
-        // For Python, use Pep440 versioning
-        if sdk_language.to_lowercase() == "python" {
-            let sdk_version_pep440 = PepVersion::from_str(sdk_version)
-                .map_err(|e| Error::ServerInfoError(format!("Error parsing SDK version: {}", e)))?;
-
-            let specifiers = VersionSpecifier::from_str(&sdk_constraint).map_err(|e| {
-                Error::ServerInfoError(format!("Error parsing SDK constraint: {}", e))
-            })?;
-
-            if !specifiers.contains(&sdk_version_pep440) {
-                return Err(Error::ServerInfoError(format!(
-                    "SDK version {} must be upgraded to at least {}, in order to work with the current numaflow version",
-                    sdk_version_pep440, human_readable(sdk_required_version.to_string())
-                )));
-            }
-        } else {
-            // Strip the 'v' prefix if present for non-Python languages
-            let sdk_version_stripped = sdk_version.trim_start_matches('v');
-
-            // Parse the SDK version using semver
-            let sdk_version_semver = Version::parse(sdk_version_stripped)
-                .map_err(|e| Error::ServerInfoError(format!("Error parsing SDK version: {}", e)))?;
-
-            // Check if the SDK version satisfies the constraint
-            check_constraint(&sdk_version_semver, &sdk_constraint).map_err(|_| {
-                Error::ServerInfoError(format!(
-                    "SDK version {} must be upgraded to at least {}, in order to work with the current numaflow version",
-                    sdk_version_semver, human_readable(sdk_required_version.to_string())
-                ))
-            })?;
-        }
-    } else {
-        // Language not found in the supported SDK versions
-        warn!(
-            "SDK version constraint not found for language: {}",
-            sdk_language
-        );
-
-        // Return error indicating the language
-        return Err(Error::ServerInfoError(format!(
-            "SDK version constraint not found for language: {}",
-            sdk_language
-        )));
-    }
-    Ok(())
-}
-
-// human_readable returns the human-readable minimum supported version.
-// it's used for logging purposes.
-// it translates the version we used in the constraints to the real minimum supported version.
-// e.g., if the given version is "0.8.0rc100", human-readable version is "0.8.0".
-// if the given version is "0.8.0-z", "0.8.0".
-// if "0.8.0-rc1", "0.8.0-rc1".
-fn human_readable(ver: String) -> String {
-    if ver.is_empty() {
-        return String::new();
-    }
-    // semver
-    if ver.ends_with("-z") {
-        return ver[..ver.len() - 2].to_string();
-    }
-    // PEP 440
-    if ver.ends_with("rc100") {
-        return ver[..ver.len() - 5].to_string();
-    }
-    ver.to_string()
 }
 
 /// Reads the server info file and returns the parsed ServerInfo struct.
