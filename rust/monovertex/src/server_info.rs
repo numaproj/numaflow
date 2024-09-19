@@ -81,36 +81,33 @@ pub async fn check_for_server_compatibility(
 fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
     let binding = version.to_string();
     // extract the major.minor.patch version
-    let mmp_version = binding.split('-').next().unwrap();
+    let mmp_version = Version::parse(binding.split('-').next().unwrap_or_default()).map_err(|e| {
+        Error::ServerInfoError(format!("Error parsing version: {}, version string: {}", e, binding))
+    })?;
+    let mmp_ver_str_constraint = trim_after_dash(constraint.trim_start_matches(">="));
+    let mmp_ver_constraint = format!(">={}", mmp_ver_str_constraint);
 
-    if constraint.ends_with("-z") {
+    if constraint.contains("-z") {
         // the minimum supported version is a stable version
-        let stable_version = constraint.trim_end_matches("-z").trim_start_matches(">=");
-        let stable_constraint = format!(">={}", stable_version);
-        if !version.to_string().starts_with(stable_version) {
+        if !version.to_string().starts_with(mmp_ver_str_constraint) {
             // if the version is prefixed with a different mmp version,
-            // rust semver lib doesn't handle the comparison the same as golang.
+            // rust semver lib doesn't handle the comparison the same way as golang.
             // e.g., rust semver doesn't treat 0.9.0-rc* as larger than 0.8.0.
-            // this is because to rust semver, both are smaller than 0.9.0.
+            // this is because to rust semver, it only knows that both are smaller than 0.9.0.
             // so we need to handle this case manually by only comparing the mmp version.
-            // TODO - remove this once rust semver handles pre-release comparison the same as golang.
-            // https://github.com/dtolnay/semver/issues/323
-            return check_constraint(&Version::parse(mmp_version).unwrap(), &stable_constraint);
+            return check_constraint(&mmp_version, &mmp_ver_constraint);
         }
-        return check_constraint(version, &stable_constraint);
+        return check_constraint(version, &mmp_ver_constraint);
     } else if constraint.contains("-") {
-        // the minimum supported version is a pre-release version.
-        let stable_version = trim_after_dash(constraint.trim_start_matches(">="));
-        let stable_constraint = format!(">={}", stable_version);
-        if !version.to_string().starts_with(stable_version) {
-            // if the version is prefixed with a different mmp version,
-            // rust semver lib doesn't handle the comparison the same as golang.
-            // e.g., rust semver doesn't treat 0.9.0-rc* as larger than 0.8.0-rc*.
-            // TODO - remove this once rust semver handles pre-release comparison the same as golang.
-            // https://github.com/dtolnay/semver/issues/323
-            return check_constraint(&Version::parse(mmp_version).unwrap(), &stable_constraint);
+        // the minimum supported version is a pre-release version
+        if !version.to_string().starts_with(mmp_ver_str_constraint) {
+            // similar reason as above, we compare the mmp version only.
+            return check_constraint(&mmp_version, &mmp_ver_constraint);
         }
     }
+
+    // TODO - remove all the extra check above once rust semver handles pre-release comparison the same way as golang.
+    // https://github.com/dtolnay/semver/issues/323
 
     // Parse the given constraint as a semantic version requirement
     let version_req = VersionReq::parse(constraint).map_err(|e| {
@@ -751,6 +748,18 @@ mod tests {
         assert!(
             result.unwrap_err().to_string().contains(
                 "ServerInfoError Error - SDK version 0.0.9 must be upgraded to at least 0.1.0-rc3, in order to work with the current numaflow version"));
+    }
+
+    #[tokio::test]
+    async fn test_numaflow_compatibility_invalid_version_string() {
+        let numaflow_version = "v1.abc.7";
+        let min_numaflow_version = "1.1.6-z";
+
+        let result = check_numaflow_compatibility(numaflow_version, min_numaflow_version);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains(
+            "Error parsing Numaflow version: unexpected character 'a' while parsing minor version number"));
     }
 
     #[tokio::test]

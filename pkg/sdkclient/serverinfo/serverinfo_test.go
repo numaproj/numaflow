@@ -155,6 +155,19 @@ func Test_CheckNumaflowCompatibility(t *testing.T) {
 			shouldErr:          true,
 			errMessage:         "server info does not contain minimum numaflow version. Upgrade to newer SDK version",
 		},
+		{
+			name:               "Test with invalid numaflow version",
+			numaflowVersion:    "",
+			minNumaflowVersion: "1.1.7",
+			shouldErr:          true,
+			errMessage:         "error parsing numaflow version: Invalid Semantic Version",
+		},
+		{
+			name:            "Test with empty min numaflow version",
+			numaflowVersion: "1.1.7",
+			shouldErr:       true,
+			errMessage:      "server info does not contain minimum numaflow version. Upgrade to newer SDK version",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
