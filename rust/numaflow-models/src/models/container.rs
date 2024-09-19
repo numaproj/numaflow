@@ -32,6 +32,10 @@ pub struct Container {
     pub image: Option<String>,
     #[serde(rename = "imagePullPolicy", skip_serializing_if = "Option::is_none")]
     pub image_pull_policy: Option<String>,
+    #[serde(rename = "livenessProbe", skip_serializing_if = "Option::is_none")]
+    pub liveness_probe: Option<Box<crate::models::Probe>>,
+    #[serde(rename = "readinessProbe", skip_serializing_if = "Option::is_none")]
+    pub readiness_probe: Option<Box<crate::models::Probe>>,
     #[serde(rename = "resources", skip_serializing_if = "Option::is_none")]
     pub resources: Option<k8s_openapi::api::core::v1::ResourceRequirements>,
     #[serde(rename = "securityContext", skip_serializing_if = "Option::is_none")]
@@ -50,6 +54,8 @@ impl Container {
             env_from: None,
             image: None,
             image_pull_policy: None,
+            liveness_probe: None,
+            readiness_probe: None,
             resources: None,
             security_context: None,
             volume_mounts: None,
