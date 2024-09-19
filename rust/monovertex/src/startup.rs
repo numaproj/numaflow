@@ -1,15 +1,13 @@
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::config::config;
 use crate::error::Error;
 use crate::metrics::{start_metrics_https_server, LagReader, LagReaderBuilder, MetricsState};
-use crate::sink::{FB_SINK_SERVER_INFO_FILE, SINK_SERVER_INFO_FILE};
 use crate::sink_pb::sink_client::SinkClient;
-use crate::source::SOURCE_SERVER_INFO_FILE;
 use crate::source_pb::source_client::SourceClient;
 use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
-use crate::transformer::TRANSFORMER_SERVER_INFO_FILE;
 use crate::{error, server_info};
 
 use tokio::task::JoinHandle;
@@ -19,35 +17,38 @@ use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{info, warn};
 
-pub(crate) async fn check_compatibility(cln_token: &CancellationToken) -> error::Result<()> {
-    server_info::check_for_server_compatibility(SOURCE_SERVER_INFO_FILE, cln_token.clone())
+pub(crate) async fn check_compatibility(
+    cln_token: &CancellationToken,
+    source_file_path: PathBuf,
+    sink_file_path: PathBuf,
+    transformer_file_path: Option<PathBuf>,
+    fb_sink_file_path: Option<PathBuf>,
+) -> error::Result<()> {
+    server_info::check_for_server_compatibility(source_file_path, cln_token.clone())
         .await
         .map_err(|e| {
             warn!("Error waiting for source server info file: {:?}", e);
             Error::ForwarderError("Error waiting for server info file".to_string())
         })?;
 
-    server_info::check_for_server_compatibility(SINK_SERVER_INFO_FILE, cln_token.clone())
+    server_info::check_for_server_compatibility(sink_file_path, cln_token.clone())
         .await
         .map_err(|e| {
             error!("Error waiting for sink server info file: {:?}", e);
             Error::ForwarderError("Error waiting for server info file".to_string())
         })?;
 
-    if config().is_transformer_enabled {
-        server_info::check_for_server_compatibility(
-            TRANSFORMER_SERVER_INFO_FILE,
-            cln_token.clone(),
-        )
-        .await
-        .map_err(|e| {
-            error!("Error waiting for transformer server info file: {:?}", e);
-            Error::ForwarderError("Error waiting for server info file".to_string())
-        })?;
+    if let Some(transformer_path) = transformer_file_path {
+        server_info::check_for_server_compatibility(transformer_path, cln_token.clone())
+            .await
+            .map_err(|e| {
+                error!("Error waiting for transformer server info file: {:?}", e);
+                Error::ForwarderError("Error waiting for server info file".to_string())
+            })?;
     }
 
-    if config().is_fallback_enabled {
-        server_info::check_for_server_compatibility(FB_SINK_SERVER_INFO_FILE, cln_token.clone())
+    if let Some(fb_sink_path) = fb_sink_file_path {
+        server_info::check_for_server_compatibility(fb_sink_path, cln_token.clone())
             .await
             .map_err(|e| {
                 warn!("Error waiting for fallback sink server info file: {:?}", e);
@@ -132,4 +133,217 @@ pub(crate) async fn wait_until_ready(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::server_info::ServerInfo;
+    use crate::shared::create_rpc_channel;
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source, sourcetransform};
+    use std::fs::File;
+    use std::io::Write;
+    use tempfile::tempdir;
+    use tokio::sync::mpsc;
+    use tokio::sync::mpsc::Sender;
+    use tokio_util::sync::CancellationToken;
+
+    async fn write_server_info(file_path: &str, server_info: &ServerInfo) -> error::Result<()> {
+        let serialized = serde_json::to_string(server_info).unwrap();
+        let mut file = File::create(file_path).unwrap();
+        file.write_all(serialized.as_bytes()).unwrap();
+        file.write_all(b"U+005C__END__").unwrap();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_check_compatibility_success() {
+        let dir = tempdir().unwrap();
+        let source_file_path = dir.path().join("source_server_info.json");
+        let sink_file_path = dir.path().join("sink_server_info.json");
+        let transformer_file_path = dir.path().join("transformer_server_info.json");
+        let fb_sink_file_path = dir.path().join("fb_sink_server_info.json");
+
+        let server_info = ServerInfo {
+            protocol: "uds".to_string(),
+            language: "rust".to_string(),
+            minimum_numaflow_version: "0.1.0".to_string(),
+            version: "0.1.0".to_string(),
+            metadata: None,
+        };
+
+        write_server_info(source_file_path.to_str().unwrap(), &server_info)
+            .await
+            .unwrap();
+        write_server_info(sink_file_path.to_str().unwrap(), &server_info)
+            .await
+            .unwrap();
+        write_server_info(transformer_file_path.to_str().unwrap(), &server_info)
+            .await
+            .unwrap();
+        write_server_info(fb_sink_file_path.to_str().unwrap(), &server_info)
+            .await
+            .unwrap();
+
+        let cln_token = CancellationToken::new();
+        let result =
+            check_compatibility(&cln_token, source_file_path, sink_file_path, None, None).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_check_compatibility_failure() {
+        let cln_token = CancellationToken::new();
+        let dir = tempdir().unwrap();
+        let source_file_path = dir.path().join("source_server_info.json");
+        let sink_file_path = dir.path().join("sink_server_info.json");
+        let transformer_file_path = dir.path().join("transformer_server_info.json");
+        let fb_sink_file_path = dir.path().join("fb_sink_server_info.json");
+
+        // do not write server info files to simulate failure
+        // cancel the token after 100ms to simulate cancellation
+        let token = cln_token.clone();
+        let handle = tokio::spawn(async move {
+            sleep(Duration::from_millis(100)).await;
+            token.cancel();
+        });
+        let result = check_compatibility(
+            &cln_token,
+            source_file_path,
+            sink_file_path,
+            Some(transformer_file_path),
+            Some(fb_sink_file_path),
+        )
+        .await;
+
+        assert!(result.is_err());
+        handle.await.unwrap();
+    }
+
+    struct SimpleSource {}
+
+    #[tonic::async_trait]
+    impl source::Sourcer for SimpleSource {
+        async fn read(&self, _request: SourceReadRequest, _transmitter: Sender<Message>) {}
+
+        async fn ack(&self, _offset: Offset) {}
+
+        async fn pending(&self) -> usize {
+            0
+        }
+
+        async fn partitions(&self) -> Option<Vec<i32>> {
+            Some(vec![0])
+        }
+    }
+
+    struct SimpleTransformer;
+    #[tonic::async_trait]
+    impl sourcetransform::SourceTransformer for SimpleTransformer {
+        async fn transform(
+            &self,
+            _input: sourcetransform::SourceTransformRequest,
+        ) -> Vec<sourcetransform::Message> {
+            vec![]
+        }
+    }
+
+    struct InMemorySink {}
+
+    #[tonic::async_trait]
+    impl sink::Sinker for InMemorySink {
+        async fn sink(&self, mut _input: mpsc::Receiver<sink::SinkRequest>) -> Vec<sink::Response> {
+            vec![]
+        }
+    }
+
+    #[tokio::test]
+    async fn test_wait_until_ready() {
+        // Start the source server
+        let (source_shutdown_tx, source_shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let source_sock_file = tmp_dir.path().join("source.sock");
+        let server_info_file = tmp_dir.path().join("source-server-info");
+
+        let server_info = server_info_file.clone();
+        let source_socket = source_sock_file.clone();
+        let source_server_handle = tokio::spawn(async move {
+            source::Server::new(SimpleSource {})
+                .with_socket_file(source_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(source_shutdown_rx)
+                .await
+                .unwrap();
+        });
+
+        // Start the sink server
+        let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
+        let sink_tmp_dir = tempfile::TempDir::new().unwrap();
+        let sink_sock_file = sink_tmp_dir.path().join("sink.sock");
+        let server_info_file = sink_tmp_dir.path().join("sink-server-info");
+
+        let server_info = server_info_file.clone();
+        let sink_socket = sink_sock_file.clone();
+        let sink_server_handle = tokio::spawn(async move {
+            sink::Server::new(InMemorySink {})
+                .with_socket_file(sink_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(sink_shutdown_rx)
+                .await
+                .unwrap();
+        });
+
+        // Start the transformer server
+        let (transformer_shutdown_tx, transformer_shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let transformer_sock_file = tmp_dir.path().join("transformer.sock");
+        let server_info_file = tmp_dir.path().join("transformer-server-info");
+
+        let server_info = server_info_file.clone();
+        let transformer_socket = transformer_sock_file.clone();
+        let transformer_server_handle = tokio::spawn(async move {
+            sourcetransform::Server::new(SimpleTransformer {})
+                .with_socket_file(transformer_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(transformer_shutdown_rx)
+                .await
+                .unwrap();
+        });
+
+        // Wait for the servers to start
+        sleep(Duration::from_millis(100)).await;
+
+        let mut source_grpc_client =
+            SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap());
+        let mut sink_grpc_client =
+            SinkClient::new(create_rpc_channel(sink_sock_file.clone()).await.unwrap());
+        let mut transformer_grpc_client = Some(SourceTransformClient::new(
+            create_rpc_channel(transformer_sock_file.clone())
+                .await
+                .unwrap(),
+        ));
+
+        let mut fb_sink_grpc_client = None;
+
+        let cln_token = CancellationToken::new();
+        let result = wait_until_ready(
+            cln_token,
+            &mut source_grpc_client,
+            &mut sink_grpc_client,
+            &mut transformer_grpc_client,
+            &mut fb_sink_grpc_client,
+        )
+        .await;
+        assert!(result.is_ok());
+
+        source_shutdown_tx.send(()).unwrap();
+        sink_shutdown_tx.send(()).unwrap();
+        transformer_shutdown_tx.send(()).unwrap();
+
+        source_server_handle.await.unwrap();
+        sink_server_handle.await.unwrap();
+        transformer_server_handle.await.unwrap();
+    }
 }

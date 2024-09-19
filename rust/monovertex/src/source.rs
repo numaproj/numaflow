@@ -9,13 +9,11 @@ use crate::source_pb::{
 };
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use log::info;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
-
-pub(crate) const SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
-pub(crate) const SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
 /// SourceReader reads messages from a source.
 #[derive(Debug)]
@@ -134,6 +132,8 @@ impl SourceAcker {
     }
 
     pub(crate) async fn ack(&mut self, offsets: Vec<Offset>) -> Result<AckResponse> {
+        let start = std::time::Instant::now();
+        let n = offsets.len();
         for offset in offsets {
             let request = AckRequest {
                 request: Some(ack_request::Request {
@@ -150,13 +150,17 @@ impl SourceAcker {
                 .send(request)
                 .await
                 .map_err(|e| SourceError(e.to_string()))?;
+        }
 
-            // wait for the ack response for each ack request
-            self.ack_resp_stream
+        for _ in 0..n {
+            let _ = self
+                .ack_resp_stream
                 .message()
                 .await?
                 .ok_or(SourceError("failed to receive ack response".to_string()))?;
         }
+
+        info!("acked {} messages in {:?}", n, start.elapsed().as_millis());
         Ok(AckResponse {
             result: Some(ack_response::Result { success: Some(()) }),
             handshake: None,

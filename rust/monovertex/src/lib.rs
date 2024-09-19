@@ -1,19 +1,21 @@
+extern crate core;
+
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::config::config;
+use crate::config::{config, SDKConfig};
 
 use crate::forwarder::ForwarderBuilder;
 use crate::metrics::MetricsState;
 use crate::shared::create_rpc_channel;
-use crate::sink::{SinkWriter, FB_SINK_SOCKET, SINK_SOCKET};
+use crate::sink::SinkWriter;
 use crate::sink_pb::sink_client::SinkClient;
-use crate::source::{SourceAcker, SourceReader, SOURCE_SOCKET};
+use crate::source::{SourceAcker, SourceReader};
 use crate::source_pb::source_client::SourceClient;
 use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
-use crate::transformer::{SourceTransformer, TRANSFORMER_SOCKET};
+use crate::transformer::SourceTransformer;
 
 pub(crate) use self::error::Result;
 
@@ -61,7 +63,7 @@ pub async fn mono_vertex() -> Result<()> {
     });
 
     // Run the forwarder with cancellation token.
-    if let Err(e) = start_forwarder(cln_token).await {
+    if let Err(e) = start_forwarder(cln_token, config().sdk_config.clone()).await {
         error!("Application error: {:?}", e);
 
         // abort the signal handler task since we have an error and we are shutting down
@@ -96,33 +98,52 @@ async fn shutdown_signal() {
     }
 }
 
-async fn start_forwarder(cln_token: CancellationToken) -> Result<()> {
+async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) -> Result<()> {
     // make sure that we have compatibility with the server
-    startup::check_compatibility(&cln_token).await?;
+    startup::check_compatibility(
+        &cln_token,
+        sdk_config.source_server_info_path.into(),
+        sdk_config.sink_server_info_path.into(),
+        if sdk_config.is_transformer_enabled {
+            Some(sdk_config.transformer_server_info_path.into())
+        } else {
+            None
+        },
+        if sdk_config.is_fallback_enabled {
+            Some(sdk_config.fallback_server_info_path.into())
+        } else {
+            None
+        },
+    )
+    .await?;
 
-    let mut source_grpc_client = SourceClient::new(create_rpc_channel(SOURCE_SOCKET.into()).await?)
-        .max_encoding_message_size(config().grpc_max_message_size)
-        .max_encoding_message_size(config().grpc_max_message_size);
+    let mut source_grpc_client =
+        SourceClient::new(create_rpc_channel(sdk_config.source_socket_path.into()).await?)
+            .max_encoding_message_size(sdk_config.grpc_max_message_size)
+            .max_encoding_message_size(sdk_config.grpc_max_message_size);
 
-    let mut sink_grpc_client = SinkClient::new(create_rpc_channel(SINK_SOCKET.into()).await?)
-        .max_encoding_message_size(config().grpc_max_message_size)
-        .max_encoding_message_size(config().grpc_max_message_size);
+    let mut sink_grpc_client =
+        SinkClient::new(create_rpc_channel(sdk_config.sink_socket_path.into()).await?)
+            .max_encoding_message_size(sdk_config.grpc_max_message_size)
+            .max_encoding_message_size(sdk_config.grpc_max_message_size);
 
-    let mut transformer_grpc_client = if config().is_transformer_enabled {
-        let transformer_grpc_client =
-            SourceTransformClient::new(create_rpc_channel(TRANSFORMER_SOCKET.into()).await?)
-                .max_encoding_message_size(config().grpc_max_message_size)
-                .max_encoding_message_size(config().grpc_max_message_size);
+    let mut transformer_grpc_client = if sdk_config.is_transformer_enabled {
+        let transformer_grpc_client = SourceTransformClient::new(
+            create_rpc_channel(sdk_config.transformer_socket_path.into()).await?,
+        )
+        .max_encoding_message_size(sdk_config.grpc_max_message_size)
+        .max_encoding_message_size(sdk_config.grpc_max_message_size);
 
         Some(transformer_grpc_client.clone())
     } else {
         None
     };
 
-    let mut fb_sink_grpc_client = if config().is_fallback_enabled {
-        let fb_sink_grpc_client = SinkClient::new(create_rpc_channel(FB_SINK_SOCKET.into()).await?)
-            .max_encoding_message_size(config().grpc_max_message_size)
-            .max_encoding_message_size(config().grpc_max_message_size);
+    let mut fb_sink_grpc_client = if sdk_config.is_fallback_enabled {
+        let fb_sink_grpc_client =
+            SinkClient::new(create_rpc_channel(sdk_config.fallback_socket_path.into()).await?)
+                .max_encoding_message_size(sdk_config.grpc_max_message_size)
+                .max_encoding_message_size(sdk_config.grpc_max_message_size);
 
         Some(fb_sink_grpc_client.clone())
     } else {
@@ -188,14 +209,15 @@ async fn start_forwarder(cln_token: CancellationToken) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
-
+    use crate::config::SDKConfig;
+    use crate::server_info::ServerInfo;
+    use crate::{error, start_forwarder};
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source};
+    use std::fs::File;
+    use std::io::Write;
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
-
-    use crate::start_forwarder;
 
     struct SimpleSource;
     #[tonic::async_trait]
@@ -224,12 +246,32 @@ mod tests {
             vec![]
         }
     }
+
+    async fn write_server_info(file_path: &str, server_info: &ServerInfo) -> error::Result<()> {
+        let serialized = serde_json::to_string(server_info).unwrap();
+        let mut file = File::create(file_path).unwrap();
+        file.write_all(serialized.as_bytes()).unwrap();
+        file.write_all(b"U+005C__END__").unwrap();
+        Ok(())
+    }
+
     #[tokio::test]
     async fn run_forwarder() {
         let (src_shutdown_tx, src_shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let src_sock_file = tmp_dir.path().join("source.sock");
         let src_info_file = tmp_dir.path().join("source-server-info");
+        let server_info_obj = ServerInfo {
+            protocol: "uds".to_string(),
+            language: "rust".to_string(),
+            minimum_numaflow_version: "0.1.0".to_string(),
+            version: "0.1.0".to_string(),
+            metadata: None,
+        };
+
+        write_server_info(src_info_file.to_str().unwrap(), &server_info_obj)
+            .await
+            .unwrap();
 
         let server_info = src_info_file.clone();
         let server_socket = src_sock_file.clone();
@@ -247,6 +289,10 @@ mod tests {
         let sink_sock_file = tmp_dir.path().join("sink.sock");
         let sink_server_info = tmp_dir.path().join("sink-server-info");
 
+        write_server_info(sink_server_info.to_str().unwrap(), &server_info_obj)
+            .await
+            .unwrap();
+
         let server_socket = sink_sock_file.clone();
         let server_info = sink_server_info.clone();
         let sink_server_handle = tokio::spawn(async move {
@@ -262,11 +308,6 @@ mod tests {
         // FIXME: we need to have a better way, this is flaky
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        unsafe {
-            env::set_var("SOURCE_SOCKET", src_sock_file.to_str().unwrap());
-            env::set_var("SINK_SOCKET", sink_sock_file.to_str().unwrap());
-        }
-
         let cln_token = CancellationToken::new();
 
         let token_clone = cln_token.clone();
@@ -276,8 +317,17 @@ mod tests {
             token_clone.cancel();
         });
 
-        let result = start_forwarder(cln_token.clone()).await;
-        assert!(result.is_err());
+        let sdk_config = SDKConfig {
+            source_socket_path: src_sock_file.to_str().unwrap().to_string(),
+            sink_socket_path: sink_sock_file.to_str().unwrap().to_string(),
+            source_server_info_path: src_info_file.to_str().unwrap().to_string(),
+            sink_server_info_path: sink_server_info.to_str().unwrap().to_string(),
+            grpc_max_message_size: 1024,
+            ..Default::default()
+        };
+
+        let result = start_forwarder(cln_token.clone(), sdk_config).await;
+        assert!(result.is_ok());
 
         // stop the source and sink servers
         src_shutdown_tx.send(()).unwrap();

@@ -6,9 +6,6 @@ use crate::sourcetransform_pb::SourceTransformRequest;
 use tonic::transport::Channel;
 
 const DROP: &str = "U+005C__DROP__";
-pub(crate) const TRANSFORMER_SOCKET: &str = "/var/run/numaflow/sourcetransform.sock";
-pub(crate) const TRANSFORMER_SERVER_INFO_FILE: &str =
-    "/var/run/numaflow/sourcetransformer-server-info";
 
 /// TransformerClient is a client to interact with the transformer server.
 #[derive(Clone)]

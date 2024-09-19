@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -21,21 +22,21 @@ const END: &str = "U+005C__END__";
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct ServerInfo {
     #[serde(default)]
-    protocol: String,
+    pub(crate) protocol: String,
     #[serde(default)]
-    language: String,
+    pub(crate) language: String,
     #[serde(default)]
-    minimum_numaflow_version: String,
+    pub(crate) minimum_numaflow_version: String,
     #[serde(default)]
-    version: String,
+    pub(crate) version: String,
     #[serde(default)]
-    metadata: Option<HashMap<String, String>>, // Metadata is optional
+    pub(crate) metadata: Option<HashMap<String, String>>, // Metadata is optional
 }
 
 /// check_for_server_compatibility waits until the server info file is ready and check whether the
 /// server is compatible with Numaflow.
 pub(crate) async fn check_for_server_compatibility(
-    file_path: &str,
+    file_path: PathBuf,
     cln_token: CancellationToken,
 ) -> error::Result<()> {
     // Read the server info file
@@ -180,7 +181,7 @@ fn check_sdk_compatibility(
 /// The cancellation token is used to stop ready-check of server_info file in case it is missing.
 /// This cancellation token is closed via the global shutdown handler.
 async fn read_server_info(
-    file_path: &str,
+    file_path: PathBuf,
     cln_token: CancellationToken,
 ) -> error::Result<ServerInfo> {
     // Infinite loop to keep checking until the file is ready
@@ -190,14 +191,14 @@ async fn read_server_info(
         }
 
         // Check if the file exists and has content
-        if let Ok(metadata) = fs::metadata(file_path) {
+        if let Ok(metadata) = fs::metadata(file_path.as_path()) {
             if metadata.len() > 0 {
                 // Break out of the loop if the file is ready (has content)
                 break;
             }
         }
         // Log message indicating the file is not ready and sleep for 1 second before checking again
-        info!("Server info file {} is not ready, waiting...", file_path);
+        info!("Server info file {:?} is not ready, waiting...", file_path);
         sleep(Duration::from_secs(1)).await;
     }
 
@@ -206,7 +207,7 @@ async fn read_server_info(
     let contents;
     loop {
         // Attempt to read the file
-        match fs::read_to_string(file_path) {
+        match fs::read_to_string(file_path.as_path()) {
             Ok(data) => {
                 if data.ends_with(END) {
                     // If the file ends with the END marker, trim it and break out of the loop
@@ -398,7 +399,7 @@ mod tests {
     }
 
     // Helper function to create a SdkConstraints struct
-    fn create_sdk_constraints() -> version::SdkConstraints {
+    fn create_sdk_constraints() -> SdkConstraints {
         let mut constraints = HashMap::new();
         constraints.insert("python".to_string(), "1.2.0".to_string());
         constraints.insert("java".to_string(), "2.0.0".to_string());
@@ -591,7 +592,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_server_info_success() {
         // Create a temporary directory
-        let dir = tempfile::tempdir().unwrap();
+        let dir = tempdir().unwrap();
         let file_path = dir.path().join("server_info.txt");
 
         let cln_token = CancellationToken::new();
@@ -614,7 +615,7 @@ mod tests {
         let _ = write_server_info(&server_info, file_path.to_str().unwrap()).await;
 
         // Call the read_server_info function
-        let result = read_server_info(file_path.to_str().unwrap(), cln_token).await;
+        let result = read_server_info(file_path, cln_token).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
 
         let server_info = result.unwrap();
@@ -632,7 +633,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_server_info_retry_limit() {
         // Create a temporary directory
-        let dir = tempfile::tempdir().unwrap();
+        let dir = tempdir().unwrap();
         let file_path = dir.path().join("server_info.txt");
 
         // Write a partial test file not ending with END marker
@@ -643,7 +644,7 @@ mod tests {
         let _drop_guard = cln_token.clone().drop_guard();
 
         // Call the read_server_info function
-        let result = read_server_info(file_path.to_str().unwrap(), cln_token).await;
+        let result = read_server_info(file_path, cln_token).await;
         assert!(result.is_err(), "Expected Err, got {:?}", result);
 
         let error = result.unwrap_err();

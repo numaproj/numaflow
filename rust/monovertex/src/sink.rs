@@ -4,12 +4,6 @@ use crate::sink_pb::sink_client::SinkClient;
 use crate::sink_pb::{SinkRequest, SinkResponse};
 use tonic::transport::Channel;
 
-pub(crate) const SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";
-pub(crate) const FB_SINK_SOCKET: &str = "/var/run/numaflow/fb-sink.sock";
-
-pub(crate) const SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/sinker-server-info";
-pub(crate) const FB_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/fb-sinker-server-info";
-
 /// SinkWriter writes messages to a sink.
 #[derive(Clone)]
 pub struct SinkWriter {
