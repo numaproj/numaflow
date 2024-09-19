@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+option go_package = "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+package map.v1;
+
+service Map {
+  // MapFn applies a function to each map request element.
+  rpc MapFn(MapRequest) returns (MapResponse);
+
+  // IsReady is the heartbeat endpoint for gRPC.
+  rpc IsReady(google.protobuf.Empty) returns (ReadyResponse);
+}
+
+/**
+ * MapRequest represents a request element.
+ */
+message MapRequest {
+  repeated string keys = 1;
+  bytes value = 2;
+  google.protobuf.Timestamp event_time = 3;
+  google.protobuf.Timestamp watermark = 4;
+  map<string, string> headers = 5;
+}
+
+/**
+ * MapResponse represents a response element.
+ */
+message MapResponse {
+  message Result {
+    repeated string keys = 1;
+    bytes value = 2;
+    repeated string tags = 3;
+  }
+  repeated Result results = 1;
+}
+
+/**
+ * ReadyResponse is the health check result.
+ */
+message ReadyResponse {
+  bool ready = 1;
+}

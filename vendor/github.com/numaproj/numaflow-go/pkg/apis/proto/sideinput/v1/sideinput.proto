@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+option go_package = "github.com/numaproj/numaflow-go/pkg/apis/proto/sideinput/v1";
+
+import "google/protobuf/empty.proto";
+
+package sideinput.v1;
+
+// SideInput is the gRPC service for user-defined Side Inputs.
+// It is used to propagate changes in the values of the provided Side Inputs
+// which allows access to slow updated data or configuration without needing to retrieve
+// it during each message processing.
+// Through this service we should should be able to:-
+// 1) Invoke retrieval request for a single Side Input parameter, which in turn should
+//    check for updates and return its latest value.
+// 2) Provide a health check endpoint to indicate whether the service is ready to be used.
+service SideInput {
+  // RetrieveSideInput is the endpoint to retrieve the latest value of a given Side Input.
+  rpc RetrieveSideInput(google.protobuf.Empty) returns (SideInputResponse);
+
+  // IsReady is the health check endpoint to indicate whether the service is ready to be used.
+  rpc IsReady(google.protobuf.Empty) returns (ReadyResponse);
+}
+
+/**
+ * SideInputResponse represents a response to a given side input retrieval request.
+ */
+message SideInputResponse {
+  // value represents the latest value of the side input payload
+  bytes value = 1;
+  // noBroadcast indicates whether the side input value should be broadcasted to all
+  // True if value should not be broadcasted
+  // False if value should be broadcasted
+  bool no_broadcast = 2;
+}
+
+/**
+ * ReadyResponse is the health check result.
+ */
+message ReadyResponse {
+  bool ready = 1;
+}

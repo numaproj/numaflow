@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+option go_package = "github.com/numaproj/numaflow-go/pkg/apis/proto/batchmap/v1";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+package batchmap.v1;
+
+service BatchMap {
+  // IsReady is the heartbeat endpoint for gRPC.
+  rpc IsReady(google.protobuf.Empty) returns (ReadyResponse);
+
+  // BatchMapFn is a bi-directional streaming rpc which applies a
+  // map function on each BatchMapRequest element of the stream and then streams
+  // back BatchMapResponse elements.
+  rpc BatchMapFn(stream BatchMapRequest) returns (stream BatchMapResponse);
+}
+
+/**
+ * BatchMapRequest represents a request element.
+ */
+message BatchMapRequest {
+  repeated string keys = 1;
+  bytes value = 2;
+  google.protobuf.Timestamp event_time = 3;
+  google.protobuf.Timestamp watermark = 4;
+  map<string, string> headers = 5;
+  // This ID is used uniquely identify a map request
+  string id = 6;
+}
+
+/**
+ * BatchMapResponse represents a response element.
+ */
+message BatchMapResponse {
+  message Result {
+    repeated string keys = 1;
+    bytes value = 2;
+    repeated string tags = 3;
+  }
+  repeated Result results = 1;
+  // This ID is used to refer the responses to the request it corresponds to.
+  string id = 2;
+}
+
+/**
+ * ReadyResponse is the health check result.
+ */
+message ReadyResponse {
+  bool ready = 1;
+}

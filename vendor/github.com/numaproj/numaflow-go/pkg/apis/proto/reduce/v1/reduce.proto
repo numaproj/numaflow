@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+option go_package = "github.com/numaproj/numaflow-go/pkg/apis/proto/reduce/v1";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+
+package reduce.v1;
+
+service Reduce {
+  // ReduceFn applies a reduce function to a request stream.
+  rpc ReduceFn(stream ReduceRequest) returns (stream ReduceResponse);
+
+  // IsReady is the heartbeat endpoint for gRPC.
+  rpc IsReady(google.protobuf.Empty) returns (ReadyResponse);
+}
+
+/**
+ * ReduceRequest represents a request element.
+ */
+message ReduceRequest {
+  // WindowOperation represents a window operation.
+  // For Aligned windows, OPEN, APPEND and CLOSE events are sent.
+  message WindowOperation {
+    enum Event {
+      OPEN = 0;
+      CLOSE = 1;
+      APPEND = 4;
+    }
+
+    Event event = 1;
+    repeated Window windows = 2;
+  }
+
+  // Payload represents a payload element.
+  message Payload {
+    repeated string keys = 1;
+    bytes value = 2;
+    google.protobuf.Timestamp event_time = 3;
+    google.protobuf.Timestamp watermark = 4;
+    map<string, string> headers = 5;
+  }
+
+  Payload payload = 1;
+  WindowOperation operation = 2;
+}
+
+// Window represents a window.
+// Since the client doesn't track keys, window doesn't have a keys field.
+message Window {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string slot = 3;
+}
+
+/**
+ * ReduceResponse represents a response element.
+ */
+message ReduceResponse {
+  // Result represents a result element. It contains the result of the reduce function.
+  message Result {
+    repeated string keys = 1;
+    bytes value = 2;
+    repeated string tags = 3;
+  }
+
+  Result result = 1;
+
+  // window represents a window to which the result belongs.
+  Window window = 2;
+
+  // EOF represents the end of the response for a window.
+  bool EOF = 3;
+}
+
+/**
+ * ReadyResponse is the health check result.
+ */
+message ReadyResponse {
+  bool ready = 1;
+}

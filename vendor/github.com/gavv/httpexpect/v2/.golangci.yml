@@ -1,0 +1,26 @@
+linters:
+  enable:
+    - govet
+    - revive
+    - staticcheck
+    - exhaustive
+    - exportloopref
+    - lll
+    - misspell
+    - dupword
+  disable:
+    - gosimple
+    - unused
+
+linters-settings:
+  lll:
+    line-length: 90
+
+issues:
+  exclude-rules:
+    - text: error-strings
+      linters:
+        - revive
+    - text: indent-error-flow
+      linters:
+        - revive

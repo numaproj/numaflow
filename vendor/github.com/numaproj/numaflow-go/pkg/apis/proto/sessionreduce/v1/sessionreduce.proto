@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+option go_package = "github.com/numaproj/numaflow-go/pkg/apis/proto/reducestream/v1";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+
+package sessionreduce.v1;
+
+service SessionReduce {
+  // SessionReduceFn applies a reduce function to a request stream.
+  rpc SessionReduceFn(stream SessionReduceRequest) returns (stream SessionReduceResponse);
+
+  // IsReady is the heartbeat endpoint for gRPC.
+  rpc IsReady(google.protobuf.Empty) returns (ReadyResponse);
+}
+
+// KeyedWindow represents a window with keys.
+// since the client track the keys, we use keyed window.
+message KeyedWindow {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string slot = 3;
+  repeated string keys = 4;
+}
+
+/**
+ * SessionReduceRequest represents a request element.
+ */
+message SessionReduceRequest {
+  // WindowOperation represents a window operation.
+  // For Aligned window values can be one of OPEN, CLOSE, EXPAND, MERGE and APPEND.
+  message WindowOperation {
+    enum Event {
+      OPEN = 0;
+      CLOSE = 1;
+      EXPAND = 2;
+      MERGE = 3;
+      APPEND = 4;
+    }
+
+    Event event = 1;
+    repeated KeyedWindow keyedWindows = 2;
+  }
+
+  // Payload represents a payload element.
+  message Payload {
+    repeated string keys = 1;
+    bytes value = 2;
+    google.protobuf.Timestamp event_time = 3;
+    google.protobuf.Timestamp watermark = 4;
+    map<string, string> headers = 5;
+  }
+
+  Payload payload = 1;
+  WindowOperation operation = 2;
+}
+
+/**
+ * SessionReduceResponse represents a response element.
+ */
+message SessionReduceResponse {
+  // Result represents a result element. It contains the result of the reduce function.
+  message Result {
+    repeated string keys = 1;
+    bytes value = 2;
+    repeated string tags = 3;
+  }
+
+  Result result = 1;
+
+  // keyedWindow represents a window to which the result belongs.
+  KeyedWindow keyedWindow = 2;
+
+  // EOF represents the end of the response for a window.
+  bool EOF = 3;
+}
+
+/**
+ * ReadyResponse is the health check result.
+ */
+message ReadyResponse {
+  bool ready = 1;
+}
