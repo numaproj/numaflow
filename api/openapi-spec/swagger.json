@@ -17944,6 +17944,12 @@
         "imagePullPolicy": {
           "type": "string"
         },
+        "livenessProbe": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Probe"
+        },
+        "readinessProbe": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Probe"
+        },
         "resources": {
           "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         },
@@ -17976,6 +17982,12 @@
         },
         "imagePullPolicy": {
           "type": "string"
+        },
+        "livenessProbe": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Probe"
+        },
+        "readinessProbe": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Probe"
         },
         "resources": {
           "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
@@ -19722,6 +19734,37 @@
         "vertexCount": {
           "type": "integer",
           "format": "int64"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.Probe": {
+      "description": "Probe is used to customize the configuration for Readiness and Liveness probes.",
+      "type": "object",
+      "properties": {
+        "failureThreshold": {
+          "description": "Minimum consecutive failures for the probe to be considered failed after having succeeded. Defaults to 3. Minimum value is 1.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "initialDelaySeconds": {
+          "description": "Number of seconds after the container has started before liveness probes are initiated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes",
+          "type": "integer",
+          "format": "int32"
+        },
+        "periodSeconds": {
+          "description": "How often (in seconds) to perform the probe.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "successThreshold": {
+          "description": "Minimum consecutive successes for the probe to be considered successful after having failed. Defaults to 1. Must be 1 for liveness and startup. Minimum value is 1.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "timeoutSeconds": {
+          "description": "Number of seconds after which the probe times out. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes",
+          "type": "integer",
+          "format": "int32"
         }
       }
     },

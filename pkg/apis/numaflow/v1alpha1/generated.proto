@@ -304,6 +304,12 @@ message Container {
 
   // +optional
   optional string imagePullPolicy = 9;
+
+  // +optional
+  optional Probe readinessProbe = 10;
+
+  // +optional
+  optional Probe livenessProbe = 11;
 }
 
 // ContainerTemplate defines customized spec for a container
@@ -322,6 +328,12 @@ message ContainerTemplate {
 
   // +optional
   repeated k8s.io.api.core.v1.EnvFromSource envFrom = 5;
+
+  // +optional
+  optional Probe readinessProbe = 6;
+
+  // +optional
+  optional Probe livenessProbe = 7;
 }
 
 message DaemonTemplate {
@@ -1238,6 +1250,33 @@ message PipelineStatus {
   // True means it has been successfully drained.
   // +optional
   optional bool drainedOnPause = 12;
+}
+
+// Probe is used to customize the configuration for Readiness and Liveness probes.
+message Probe {
+  // Number of seconds after the container has started before liveness probes are initiated.
+  // More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
+  // +optional
+  optional int32 initialDelaySeconds = 1;
+
+  // Number of seconds after which the probe times out.
+  // More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
+  // +optional
+  optional int32 timeoutSeconds = 2;
+
+  // How often (in seconds) to perform the probe.
+  // +optional
+  optional int32 periodSeconds = 3;
+
+  // Minimum consecutive successes for the probe to be considered successful after having failed.
+  // Defaults to 1. Must be 1 for liveness and startup. Minimum value is 1.
+  // +optional
+  optional int32 successThreshold = 4;
+
+  // Minimum consecutive failures for the probe to be considered failed after having succeeded.
+  // Defaults to 3. Minimum value is 1.
+  // +optional
+  optional int32 failureThreshold = 5;
 }
 
 message RedisBufferService {
