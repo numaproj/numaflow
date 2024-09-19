@@ -87,19 +87,22 @@ fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
     let mmp_ver_str_constraint = trim_after_dash(constraint.trim_start_matches(">="));
     let mmp_ver_constraint = format!(">={}", mmp_ver_str_constraint);
 
+    // "-z" is used to indicate the minimum supported version is a stable version
+    // the reason why we choose the letter z is that it can represent the largest pre-release version.
+    // e.g., 0.8.0-z means the minimum supported version is 0.8.0.
     if constraint.contains("-z") {
-        // the minimum supported version is a stable version
         if !version.to_string().starts_with(mmp_ver_str_constraint) {
             // if the version is prefixed with a different mmp version,
-            // rust semver lib doesn't handle the comparison the same way as golang.
+            // rust semver lib can't figure out the correct order.
+            // to work around, we compare the mmp version only.
             // e.g., rust semver doesn't treat 0.9.0-rc* as larger than 0.8.0.
-            // this is because to rust semver, it only knows that both are smaller than 0.9.0.
-            // so we need to handle this case manually by only comparing the mmp version.
+            // to work around, instead of comparing 0.9.0-rc* with 0.8.0,
+            // we compare 0.9.0 with 0.8.0.
             return check_constraint(&mmp_version, &mmp_ver_constraint);
         }
         return check_constraint(version, &mmp_ver_constraint);
     } else if constraint.contains("-") {
-        // the minimum supported version is a pre-release version
+        // if the constraint doesn't contain "-z", but contains "-", it's a pre-release version.
         if !version.to_string().starts_with(mmp_ver_str_constraint) {
             // similar reason as above, we compare the mmp version only.
             return check_constraint(&mmp_version, &mmp_ver_constraint);

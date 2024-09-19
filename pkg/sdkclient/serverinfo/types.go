@@ -61,7 +61,11 @@ E.g., if the minimum supported version is "0.8.0-rc1", then put "0.8.0-rc1" for 
 "0.8.0b1", "0.8.0b1" for python.
 2. The minimum supported version is a stable version.
 In this case, put (almost) the largest available pre-release version of the stable version in the map.
+This is because the go semver library considers pre-releases to be invalid if the constraint range does not include pre-releases.
+Therefore, we have to put a pre-release version of the stable version in the map and choose the largest one.
+For python, we use "rc100" as the largest pre-release version. For go, rust, we use "-z" as the largest pre-release version.
 E.g., if the minimum supported version is "0.8.0", then put "0.8.0-z" for java, go, rust, "0.8.0rc100" for python.
+A constraint ">=0.8.0-z" will match any pre-release version of 0.8.0, including "0.8.0-rc1", "0.8.0-rc2", etc.
 
 More details about version comparison can be found in the PEP 440 and semver documentation.
 */
