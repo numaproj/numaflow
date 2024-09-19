@@ -33,10 +33,6 @@ import (
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
-const (
-	readTotalMetricName = "forwarder_data_read_total"
-)
-
 type Ratable interface {
 	Start(ctx context.Context) error
 	GetRates(vertexName, partitionName string) map[string]*wrapperspb.DoubleValue
@@ -221,6 +217,7 @@ func sleep(ctx context.Context, duration time.Duration) {
 // getPodReadCounts returns the total number of messages read by the pod
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
 func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
+	readTotalMetricName := "forwarder_data_read_total"
 	// scrape the read total metric from pod metric port
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	resp, err := r.httpClient.Get(url)
