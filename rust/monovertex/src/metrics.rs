@@ -557,3 +557,163 @@ async fn calculate_pending(
 }
 
 // TODO add tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::metrics::MetricsState;
+    use crate::shared::create_rpc_channel;
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source, sourcetransform};
+    use std::net::SocketAddr;
+    use tokio::sync::mpsc::Sender;
+
+    struct SimpleSource;
+    #[tonic::async_trait]
+    impl source::Sourcer for SimpleSource {
+        async fn read(&self, _: SourceReadRequest, _: Sender<Message>) {}
+
+        async fn ack(&self, _: Offset) {}
+
+        async fn pending(&self) -> usize {
+            0
+        }
+
+        async fn partitions(&self) -> Option<Vec<i32>> {
+            None
+        }
+    }
+
+    struct SimpleSink;
+
+    #[tonic::async_trait]
+    impl sink::Sinker for SimpleSink {
+        async fn sink(
+            &self,
+            _input: tokio::sync::mpsc::Receiver<sink::SinkRequest>,
+        ) -> Vec<sink::Response> {
+            vec![]
+        }
+    }
+
+    struct NowCat;
+
+    #[tonic::async_trait]
+    impl sourcetransform::SourceTransformer for NowCat {
+        async fn transform(
+            &self,
+            _input: sourcetransform::SourceTransformRequest,
+        ) -> Vec<sourcetransform::Message> {
+            vec![]
+        }
+    }
+
+    #[tokio::test]
+    async fn test_start_metrics_https_server() {
+        let (src_shutdown_tx, src_shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let src_sock_file = tmp_dir.path().join("source.sock");
+        let src_info_file = tmp_dir.path().join("source-server-info");
+
+        let server_info = src_info_file.clone();
+        let server_socket = src_sock_file.clone();
+        let src_server_handle = tokio::spawn(async move {
+            source::Server::new(SimpleSource)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(src_shutdown_rx)
+                .await
+                .unwrap();
+        });
+
+        let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
+        let (fb_sink_shutdown_tx, fb_sink_shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sink_sock_file = tmp_dir.path().join("sink.sock");
+        let sink_server_info = tmp_dir.path().join("sink-server-info");
+        let fb_sink_sock_file = tmp_dir.path().join("fallback-sink.sock");
+        let fb_sink_server_info = tmp_dir.path().join("fallback-sink-server-info");
+
+        let server_socket = sink_sock_file.clone();
+        let server_info = sink_server_info.clone();
+        let sink_server_handle = tokio::spawn(async move {
+            sink::Server::new(SimpleSink)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(sink_shutdown_rx)
+                .await
+                .unwrap();
+        });
+        let fb_server_socket = fb_sink_sock_file.clone();
+        let fb_server_info = fb_sink_server_info.clone();
+        let fb_sink_server_handle = tokio::spawn(async move {
+            sink::Server::new(SimpleSink)
+                .with_socket_file(fb_server_socket)
+                .with_server_info_file(fb_server_info)
+                .start_with_shutdown(fb_sink_shutdown_rx)
+                .await
+                .unwrap();
+        });
+
+        // start the transformer server
+        let (transformer_shutdown_tx, transformer_shutdown_rx) = tokio::sync::oneshot::channel();
+        let sock_file = tmp_dir.path().join("sourcetransform.sock");
+        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let transformer_handle = tokio::spawn(async move {
+            sourcetransform::Server::new(NowCat)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(transformer_shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the servers to start
+        // FIXME: we need to have a better way, this is flaky
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        let metrics_state = MetricsState {
+            source_client: SourceClient::new(create_rpc_channel(src_sock_file).await.unwrap()),
+            sink_client: SinkClient::new(create_rpc_channel(sink_sock_file).await.unwrap()),
+            transformer_client: Some(SourceTransformClient::new(
+                create_rpc_channel(sock_file).await.unwrap(),
+            )),
+            fb_sink_client: Some(SinkClient::new(
+                create_rpc_channel(fb_sink_sock_file).await.unwrap(),
+            )),
+        };
+
+        let addr: SocketAddr = "127.0.0.1:9091".parse().unwrap();
+        let metrics_state_clone = metrics_state.clone();
+        let server_handle = tokio::spawn(async move {
+            start_metrics_https_server(addr, metrics_state_clone)
+                .await
+                .unwrap();
+        });
+
+        // invoke the sidecar-livez endpoint
+        let response = sidecar_livez(State(metrics_state)).await;
+        assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
+
+        // invoke the livez endpoint
+        let response = livez().await;
+        assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
+
+        // invoke the metrics endpoint
+        let response = metrics_handler().await;
+        assert_eq!(response.into_response().status(), StatusCode::OK);
+
+        // Stop the servers
+        server_handle.abort();
+        src_shutdown_tx.send(()).unwrap();
+        sink_shutdown_tx.send(()).unwrap();
+        fb_sink_shutdown_tx.send(()).unwrap();
+        transformer_shutdown_tx.send(()).unwrap();
+        src_server_handle.await.unwrap();
+        sink_server_handle.await.unwrap();
+        fb_sink_server_handle.await.unwrap();
+        transformer_handle.await.unwrap();
+    }
+}

@@ -174,7 +174,7 @@ func (c *client) ReadFn(_ context.Context, req *sourcepb.ReadRequest, datumCh ch
 
 	for {
 		resp, err := c.readStream.Recv()
-		// we don't need an EOF check because we never close the stream.
+		// we don't need an EOF check because we only close the stream during shutdown.
 		if errors.Is(err, context.Canceled) {
 			break
 		}
@@ -190,15 +190,18 @@ func (c *client) ReadFn(_ context.Context, req *sourcepb.ReadRequest, datumCh ch
 }
 
 // AckFn acknowledges the data from the source.
-func (c *client) AckFn(_ context.Context, req *sourcepb.AckRequest) (*sourcepb.AckResponse, error) {
+func (c *client) AckFn(_ context.Context, reqs []*sourcepb.AckRequest) (*sourcepb.AckResponse, error) {
 	// Send the ack request
-	err := c.ackStream.Send(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send ack request: %v", err)
+	for _, req := range reqs {
+		err := c.ackStream.Send(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to send ack request: %v", err)
+		}
 	}
 
 	// Wait for the ack response
 	resp, err := c.ackStream.Recv()
+	// we don't need an EOF check because we only close the stream during shutdown.
 	if err != nil {
 		return nil, fmt.Errorf("failed to receive ack response: %v", err)
 	}

@@ -188,7 +188,7 @@ func TestAckFn(t *testing.T) {
 	assert.True(t, ackHandshakeResponse.GetHandshake().GetSot())
 
 	// Test AckFn
-	ack, err := testClient.AckFn(ctx, &sourcepb.AckRequest{})
+	ack, err := testClient.AckFn(ctx, []*sourcepb.AckRequest{{}})
 	assert.NoError(t, err)
 	assert.Equal(t, &sourcepb.AckResponse{}, ack)
 }

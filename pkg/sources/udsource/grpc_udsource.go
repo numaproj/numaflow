@@ -170,22 +170,23 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 }
 
 // ApplyAckFn acknowledges messages in the source.
-// TODO should we make this accept a single offset?
 func (u *GRPCBasedUDSource) ApplyAckFn(ctx context.Context, offsets []isb.Offset) error {
 	rOffsets := make([]*sourcepb.Offset, len(offsets))
 	for i, offset := range offsets {
 		rOffsets[i] = ConvertToUserDefinedSourceOffset(offset)
 	}
+	ackRequests := make([]*sourcepb.AckRequest, len(rOffsets))
 	for _, offset := range rOffsets {
 		var r = &sourcepb.AckRequest{
 			Request: &sourcepb.AckRequest_Request{
 				Offset: offset,
 			},
 		}
-		_, err := u.client.AckFn(ctx, r)
-		if err != nil {
-			return err
-		}
+		ackRequests = append(ackRequests, r)
+	}
+	_, err := u.client.AckFn(ctx, ackRequests)
+	if err != nil {
+		return err
 	}
 	return nil
 }
