@@ -88,7 +88,6 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	plCopy.Status.LastUpdated = metav1.Now()
 	if !equality.Semantic.DeepEqual(pl.Finalizers, plCopy.Finalizers) {
-		log.Debug("patching finalizer in")
 		patchYaml := "metadata:\n  finalizers: [" + strings.Join(plCopy.Finalizers, ",") + "]"
 		patchJson, _ := yaml.YAMLToJSON([]byte(patchYaml))
 		if err := r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil {
@@ -915,10 +914,8 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 				}
 			}
 			patchJson := fmt.Sprintf(`{"spec":{"replicas":%d}}`, scaleTo)
-			log.Infof("deletethis: patchJson=%q", patchJson)
 			err = r.client.Patch(ctx, &vertex, client.RawPatch(types.MergePatchType, []byte(patchJson)))
 			if err != nil && !apierrors.IsNotFound(err) {
-				log.Infof("deletethis: patching failed, error=%q", err)
 				return false, err
 			}
 			log.Infow("Scaled vertex", zap.Int32("from", origin), zap.Int32("to", scaleTo), zap.String("vertex", vertex.Name))
