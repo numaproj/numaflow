@@ -14,8 +14,6 @@ spec:
       limits:
         readBatchSize: 500
       scale:
-        # set it as two pods to be different from the sink such that we can use this pipeline
-        # to test processing rate is consistent across vertices when they have different replica counts.
         min: 1
     - name: out
       sink:

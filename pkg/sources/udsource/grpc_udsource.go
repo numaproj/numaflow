@@ -185,10 +185,7 @@ func (u *GRPCBasedUDSource) ApplyAckFn(ctx context.Context, offsets []isb.Offset
 		ackRequests[i] = r
 	}
 	_, err := u.client.AckFn(ctx, ackRequests)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // ApplyPartitionFn returns the partitions associated with the source.
