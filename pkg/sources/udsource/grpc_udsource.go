@@ -176,13 +176,13 @@ func (u *GRPCBasedUDSource) ApplyAckFn(ctx context.Context, offsets []isb.Offset
 		rOffsets[i] = ConvertToUserDefinedSourceOffset(offset)
 	}
 	ackRequests := make([]*sourcepb.AckRequest, len(rOffsets))
-	for _, offset := range rOffsets {
+	for i, offset := range rOffsets {
 		var r = &sourcepb.AckRequest{
 			Request: &sourcepb.AckRequest_Request{
 				Offset: offset,
 			},
 		}
-		ackRequests = append(ackRequests, r)
+		ackRequests[i] = r
 	}
 	_, err := u.client.AckFn(ctx, ackRequests)
 	if err != nil {

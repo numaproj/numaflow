@@ -190,7 +190,7 @@ func TestAckFn(t *testing.T) {
 	// Test AckFn
 	ack, err := testClient.AckFn(ctx, []*sourcepb.AckRequest{{}})
 	assert.NoError(t, err)
-	assert.Equal(t, &sourcepb.AckResponse{}, ack)
+	assert.Equal(t, []*sourcepb.AckResponse{{}}, ack)
 }
 
 func TestPendingFn(t *testing.T) {
