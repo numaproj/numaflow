@@ -345,6 +345,18 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 		volumeMounts:    volumeMounts,
 	})
 
+	var readyzInitDeploy, readyzPeriodSeconds, readyzTimeoutSeconds, readyzFailureThreshold int32 = NumaContainerReadyzInitialDelaySeconds, NumaContainerReadyzPeriodSeconds, NumaContainerReadyzTimeoutSeconds, NumaContainerReadyzFailureThreshold
+	var liveZInitDeploy, liveZPeriodSeconds, liveZTimeoutSeconds, liveZFailureThreshold int32 = NumaContainerLivezInitialDelaySeconds, NumaContainerLivezPeriodSeconds, NumaContainerLivezTimeoutSeconds, NumaContainerLivezFailureThreshold
+	if x := mv.Spec.ContainerTemplate; x != nil {
+		readyzInitDeploy = GetProbeInitialDelaySecondsOr(x.ReadinessProbe, readyzInitDeploy)
+		readyzPeriodSeconds = GetProbePeriodSecondsOr(x.ReadinessProbe, readyzPeriodSeconds)
+		readyzTimeoutSeconds = GetProbeTimeoutSecondsOr(x.ReadinessProbe, readyzTimeoutSeconds)
+		readyzFailureThreshold = GetProbeFailureThresholdOr(x.ReadinessProbe, readyzFailureThreshold)
+		liveZInitDeploy = GetProbeInitialDelaySecondsOr(x.LivenessProbe, liveZInitDeploy)
+		liveZPeriodSeconds = GetProbePeriodSecondsOr(x.LivenessProbe, liveZPeriodSeconds)
+		liveZTimeoutSeconds = GetProbeTimeoutSecondsOr(x.LivenessProbe, liveZTimeoutSeconds)
+		liveZFailureThreshold = GetProbeFailureThresholdOr(x.LivenessProbe, liveZFailureThreshold)
+	}
 	containers[0].ReadinessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -353,9 +365,10 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 3,
-		PeriodSeconds:       3,
-		TimeoutSeconds:      1,
+		InitialDelaySeconds: readyzInitDeploy,
+		PeriodSeconds:       readyzPeriodSeconds,
+		TimeoutSeconds:      readyzTimeoutSeconds,
+		FailureThreshold:    readyzFailureThreshold,
 	}
 	containers[0].LivenessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
@@ -365,9 +378,10 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 20,
-		PeriodSeconds:       60,
-		TimeoutSeconds:      30,
+		InitialDelaySeconds: liveZInitDeploy,
+		PeriodSeconds:       liveZPeriodSeconds,
+		TimeoutSeconds:      liveZTimeoutSeconds,
+		FailureThreshold:    liveZFailureThreshold,
 	}
 	containers[0].Ports = []corev1.ContainerPort{
 		{Name: MonoVertexMetricsPortName, ContainerPort: MonoVertexMetricsPort},
