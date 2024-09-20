@@ -7,9 +7,10 @@ package source.v1;
 
 service Source {
   // Read returns a stream of datum responses.
-  // The size of the returned ReadResponse is less than or equal to the num_records specified in each ReadRequest.
-  // If the request timeout is reached on the server side, the returned ReadResponse will contain all the datum that have been read (which could be an empty list).
+  // The size of the returned responses is less than or equal to the num_records specified in each ReadRequest.
+  // If the request timeout is reached on the server side, the returned responses will contain all the datum that have been read (which could be an empty list).
   // The server will continue to read and respond to subsequent ReadRequests until the client closes the stream.
+  // Once it has sent all the datum, the server will send a ReadResponse with the end of transmission flag set to true.
   rpc ReadFn(stream ReadRequest) returns (stream ReadResponse);
 
   // AckFn acknowledges a stream of datum offsets.
@@ -17,6 +18,7 @@ service Source {
   // The caller (numa) expects the AckFn to be successful, and it does not expect any errors.
   // If there are some irrecoverable errors when the callee (UDSource) is processing the AckFn request,
   // then it is best to crash because there are no other retry mechanisms possible.
+  // Clients sends n requests and expects n responses.
   rpc AckFn(stream AckRequest) returns (stream AckResponse);
 
   // PendingFn returns the number of pending records at the user defined source.
@@ -98,6 +100,7 @@ message ReadResponse {
   Result result = 1;
   // Status of the response. Holds the end of transmission flag and the status code.
   Status status = 2;
+  // Handshake message between client and server to indicate the start of transmission.
   optional Handshake handshake = 3;
 }
 
@@ -132,6 +135,7 @@ message AckResponse {
   }
   // Required field holding the result.
   Result result = 1;
+  // Handshake message between client and server to indicate the start of transmission.
   optional Handshake handshake = 2;
 }
 
