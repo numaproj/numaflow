@@ -38,6 +38,7 @@ const (
 	MonoVertexPhaseUnknown MonoVertexPhase = ""
 	MonoVertexPhaseRunning MonoVertexPhase = "Running"
 	MonoVertexPhaseFailed  MonoVertexPhase = "Failed"
+	MonoVertexPhasePaused  MonoVertexPhase = "Paused"
 
 	// MonoVertexConditionDeployed has the status True when the MonoVertex
 	// has its sub resources created and deployed.
@@ -80,6 +81,10 @@ func (mv MonoVertex) getReplicas() int {
 
 func (mv MonoVertex) CalculateReplicas() int {
 	desiredReplicas := mv.getReplicas()
+	// If we are pausing the MonoVertex or in a paused state then we should have the desired replicas as 0
+	if mv.Spec.Lifecycle.GetDesiredPhase() == MonoVertexPhasePaused || mv.Status.Phase == MonoVertexPhasePaused {
+		return 0
+	}
 	// Don't allow replicas to be out of the range of min and max when auto scaling is enabled
 	if s := mv.Spec.Scale; !s.Disabled {
 		max := int(s.GetMaxReplicas())
@@ -308,7 +313,7 @@ func (mv MonoVertex) simpleCopy() MonoVertex {
 	}
 	m.Spec.UpdateStrategy = UpdateStrategy{}
 	// TODO: lifecycle
-	// mvVtxCopy.Spec.Lifecycle = Lifecycle{}
+	m.Spec.Lifecycle = MonoVertexLifecycle{}
 	return m
 }
 
@@ -442,6 +447,10 @@ type MonoVertexSpec struct {
 	// +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
 	// +optional
 	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty" protobuf:"bytes,12,opt,name=updateStrategy"`
+	// Lifecycle defines the Lifecycle properties of a MonoVertex
+	// +kubebuilder:default={"desiredPhase": Running}
+	// +optional
+	Lifecycle MonoVertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,13,opt,name=lifecycle"`
 }
 
 func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
@@ -595,6 +604,11 @@ func (mvs *MonoVertexStatus) MarkPhaseRunning() {
 	mvs.MarkPhase(MonoVertexPhaseRunning, "", "")
 }
 
+// MarkPhasePaused set the Pipeline has been paused.
+func (mvs *MonoVertexStatus) MarkPhasePaused() {
+	mvs.MarkPhase(MonoVertexPhasePaused, "", "MonoVertex paused")
+}
+
 // IsHealthy indicates whether the MonoVertex is in healthy status
 // It returns false if any issues exists
 // True indicates that the MonoVertex is healthy
@@ -620,4 +634,19 @@ type MonoVertexList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []MonoVertex `json:"items" protobuf:"bytes,2,rep,name=items"`
+}
+
+type MonoVertexLifecycle struct {
+	// DesiredPhase used to bring the pipeline from current phase to desired phase
+	// +kubebuilder:default=Running
+	// +optional
+	DesiredPhase MonoVertexPhase `json:"desiredPhase,omitempty" protobuf:"bytes,1,opt,name=desiredPhase"`
+}
+
+// GetDesiredPhase is used to fetch the desired lifecyle phase for a MonoVertex
+func (lc MonoVertexLifecycle) GetDesiredPhase() MonoVertexPhase {
+	if string(lc.DesiredPhase) != "" {
+		return lc.DesiredPhase
+	}
+	return MonoVertexPhaseRunning
 }

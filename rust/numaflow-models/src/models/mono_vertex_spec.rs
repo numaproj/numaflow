@@ -41,6 +41,8 @@ pub struct MonoVertexSpec {
     /// List of customized init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
     #[serde(rename = "initContainers", skip_serializing_if = "Option::is_none")]
     pub init_containers: Option<Vec<k8s_openapi::api::core::v1::Container>>,
+    #[serde(rename = "lifecycle", skip_serializing_if = "Option::is_none")]
+    pub lifecycle: Option<Box<crate::models::MonoVertexLifecycle>>,
     #[serde(rename = "limits", skip_serializing_if = "Option::is_none")]
     pub limits: Option<Box<crate::models::MonoVertexLimits>>,
     #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
@@ -96,6 +98,7 @@ impl MonoVertexSpec {
             dns_policy: None,
             image_pull_secrets: None,
             init_containers: None,
+            lifecycle: None,
             limits: None,
             metadata: None,
             node_selector: None,

@@ -122,8 +122,6 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 		return ctrl.Result{}, err
 	}
 
-	// TODO: handle lifecycle changes
-
 	if err := mr.orchestratePods(ctx, monoVtx); err != nil {
 		monoVtx.Status.MarkDeployFailed("OrchestratePodsFailed", err.Error())
 		mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "OrchestratePodsFailed", "OrchestratePodsFailed: %s", err.Error())
@@ -132,14 +130,81 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 
 	monoVtx.Status.MarkDeployed()
 
-	// Mark it running before checking the status of the pods
-	monoVtx.Status.MarkPhaseRunning()
+	// If the MonoVertex has a lifecycle change, then do not update the phase as
+	// this should happen only after the required configs for the lifecycle changes
+	// have been applied.
+	if !isLifecycleChange(monoVtx) {
+		monoVtx.Status.MarkPhase(monoVtx.Spec.Lifecycle.GetDesiredPhase(), "", "")
+	}
 
 	// Check children resource status
 	if err := mr.checkChildrenResourceStatus(ctx, monoVtx); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to check mono vertex children resource status, %w", err)
 	}
+
+	// check if any changes related to pause/resume lifecycle for the pipeline
+	if isLifecycleChange(monoVtx) {
+		currentPhase := monoVtx.Status.Phase
+		needRequeue, err := mr.updateLifecycleDesiredState(ctx, monoVtx)
+		if err != nil {
+			logMsg := fmt.Sprintf("Updated desired MonoVertex phase failed: %v", zap.Error(err))
+			log.Error(logMsg)
+			mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "ReconcileMonoVertexFailed", logMsg)
+			return ctrl.Result{}, err
+		}
+		if monoVtx.Status.Phase != currentPhase {
+			log.Infow("Updated MonoVertex phase", zap.String("originalPhase", string(currentPhase)), zap.String("currentPhase", string(monoVtx.Status.Phase)))
+			mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "UpdateMonoVertexPhase", "Updated MonoVertex phase from %s to %s", string(currentPhase), string(monoVtx.Status.Phase))
+		}
+		if needRequeue {
+			return ctrl.Result{RequeueAfter: dfv1.DefaultRequeueAfter}, nil
+		}
+	}
 	return ctrl.Result{}, nil
+}
+
+// updateLifecycleDesiredState evaluates the desired state of the MonoVertex's lifecycle
+// and updates its state accordingly. It handles transitions between paused and running states.
+func (mr *monoVertexReconciler) updateLifecycleDesiredState(ctx context.Context, mvtx *dfv1.MonoVertex) (bool, error) {
+	switch mvtx.Spec.Lifecycle.GetDesiredPhase() {
+	case dfv1.MonoVertexPhasePaused:
+		// // Check if the desired phase is paused then pause the MonoVertex
+		return mr.pauseMonoVertex(ctx, mvtx)
+	case dfv1.MonoVertexPhaseRunning, dfv1.MonoVertexPhaseUnknown:
+		// Call to resume the MonoVertex
+		return mr.resumeMonoVertex(ctx, mvtx)
+	default:
+		// Any other phases are considered invalid
+		return false, fmt.Errorf("invalid desired phase")
+	}
+}
+
+// resumeMonoVertex resumes the MonoVertex from a paused state.
+func (mr *monoVertexReconciler) resumeMonoVertex(ctx context.Context, mvtx *dfv1.MonoVertex) (bool, error) {
+	// Attempt to scale up the MonoVertex to its minimum replicas.
+	_, err := mr.scaleUpMonoVertex(ctx, mvtx)
+	if err != nil {
+		// If an error occurs, return true and the error. Indicating to requeue.
+		return true, err
+	}
+	// Mark the status of the MonoVertex as running
+	mvtx.Status.MarkPhaseRunning()
+	// Return false indicating no further updates are needed.
+	return false, nil
+}
+
+// pauseMonoVertex pauses the MonoVertex, scaling it down to zero replicas as part of the process.
+func (mr *monoVertexReconciler) pauseMonoVertex(ctx context.Context, mvtx *dfv1.MonoVertex) (bool, error) {
+	// Attempt to scale down the MonoVertex to zero replicas.
+	updated, err := mr.scaleDownMonoVertex(ctx, mvtx)
+	if err != nil || updated {
+		// If there's an error or the scaling action has occurred, indicate to requeue the request.
+		return updated, err
+	}
+	// If successful, Mark the status of the MonoVertex as paused
+	mvtx.Status.MarkPhasePaused()
+	// Return false indicating no further updates are needed.
+	return false, nil
 }
 
 // orchestrateFixedResources orchestrates fixed resources such as daemon service related objects for a mono vertex.
@@ -599,4 +664,57 @@ func (mr *monoVertexReconciler) checkChildrenResourceStatus(ctx context.Context,
 	}
 
 	return nil
+}
+
+// isLifecycleChange determines whether there has been a change requested in the lifecycle
+// of a MonoVertex object, specifically relating to the paused and pausing states.
+func isLifecycleChange(mvtx *dfv1.MonoVertex) bool {
+	// Extract the current phase from the status of the MonoVertex.
+	// Check if the desired phase or the current phase of the MonoVertex is 'Paused'.
+	// This indicates a transition into or out of a paused state
+	// which is a lifecycle phase change
+	if mvtx.Status.Phase == dfv1.MonoVertexPhasePaused || mvtx.Spec.Lifecycle.GetDesiredPhase() == dfv1.MonoVertexPhasePaused {
+		return true
+	}
+	// If none of the conditions are met, return false
+	return false
+}
+
+// scaleDownMonoVertex scales down the number of replicas of the specified MonoVertex to zero.
+func (mr *monoVertexReconciler) scaleDownMonoVertex(ctx context.Context, mvtx *dfv1.MonoVertex) (bool, error) {
+	return mr.scaleMonoVertex(ctx, mvtx, 0)
+}
+
+// scaleUpMonoVertex scales up the number of replicas of the specified MonoVertex to its minimum replicas defined in Spec.
+func (mr *monoVertexReconciler) scaleUpMonoVertex(ctx context.Context, mvtx *dfv1.MonoVertex) (bool, error) {
+	return mr.scaleMonoVertex(ctx, mvtx, mvtx.Spec.Scale.GetMinReplicas())
+}
+
+// scaleMonoVertex scales the specified MonoVertex to the desired number of replicas.
+// It takes the current context, the MonoVertex to scale, and the desired number of replicas as arguments.
+func (mr *monoVertexReconciler) scaleMonoVertex(ctx context.Context, mvtx *dfv1.MonoVertex, desired int32) (bool, error) {
+	// Check if the current number of replicas (origin) differs from the desired number.
+	if origin := *mvtx.Spec.Replicas; origin != desired {
+		// Create a JSON patch to update the replicas in the spec.
+		patchJson := fmt.Sprintf(`{"spec":{"replicas":%d}}`, desired)
+
+		// Apply the patch to the MonoVertex using the client interface.
+		err := mr.client.Patch(ctx, mvtx, client.RawPatch(types.MergePatchType, []byte(patchJson)))
+
+		// Handle errors from the patch operation, excluding a not found error.
+		if err != nil && !apierrors.IsNotFound(err) {
+			return false, err // Return false and the error if patch fails.
+		}
+
+		// Log the scaling operation details.
+		mr.logger.Infow("Scaled MonoVertex", zap.Int32("from", origin), zap.Int32("to", desired), zap.String("MonoVertex", mvtx.Name))
+
+		// Record an event in the event tracker indicating that scaling occurred.
+		mr.recorder.Eventf(mvtx, corev1.EventTypeNormal, "ScalingMonoVertex", "Scaled MonoVertex %s from %d to %d replicas", mvtx.Name, origin, desired)
+
+		// Return true indicating that scaling operation was performed
+		return true, nil
+	}
+	// Return false if the desired number of replicas is the same as the current.
+	return false, nil
 }

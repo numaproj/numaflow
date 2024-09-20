@@ -35,11 +35,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/stretchr/testify/assert"
+
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/numaproj/numaflow/pkg/reconciler/monovertex/scaling"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
-	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -389,5 +390,42 @@ func Test_reconcile(t *testing.T) {
 		assert.Equal(t, 5, len(pods.Items))
 		assert.Equal(t, uint32(20), testObj.Status.Replicas)
 		assert.Equal(t, uint32(5), testObj.Status.UpdatedReplicas)
+	})
+}
+
+func Test_pauseAndResumePipeline(t *testing.T) {
+
+	t.Run("test pause monovertex", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		ctx := context.TODO()
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Replicas = ptr.To[int32](0)
+		_, err := r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+
+		_, err = r.pauseMonoVertex(ctx, testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, dfv1.MonoVertexPhasePaused, testObj.Status.Phase)
+		_, err = r.resumeMonoVertex(ctx, testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, dfv1.MonoVertexPhaseRunning, testObj.Status.Phase)
+	})
+	t.Run("test pause monovertex - start with Paused", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		ctx := context.TODO()
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Replicas = ptr.To[int32](2)
+		_, err := r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, uint32(2), testObj.Status.Replicas)
+
+		testObj = testMonoVtx.DeepCopy()
+		testObj.Spec.Replicas = ptr.To[int32](2)
+		testObj.Spec.Lifecycle.DesiredPhase = dfv1.MonoVertexPhasePaused
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, uint32(0), testObj.Status.Replicas)
 	})
 }
