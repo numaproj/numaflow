@@ -385,6 +385,22 @@ func TestMonoVertex_CalculateReplicas(t *testing.T) {
 		}
 		assert.Equal(t, 5, mv.CalculateReplicas())
 	})
+
+	t.Run("phase paused", func(t *testing.T) {
+		replicas := int32(10)
+		mv := MonoVertex{
+			Spec: MonoVertexSpec{
+				Lifecycle: MonoVertexLifecycle{DesiredPhase: MonoVertexPhasePaused},
+				Replicas:  &replicas,
+				Scale: Scale{
+					Disabled: false,
+					Min:      ptr.To[int32](2),
+					Max:      ptr.To[int32](5),
+				},
+			},
+		}
+		assert.Equal(t, 0, mv.CalculateReplicas())
+	})
 }
 
 func TestMonoVertex_GetServiceObj(t *testing.T) {
