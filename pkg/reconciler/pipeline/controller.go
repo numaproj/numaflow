@@ -88,6 +88,7 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	plCopy.Status.LastUpdated = metav1.Now()
 	if !equality.Semantic.DeepEqual(pl.Finalizers, plCopy.Finalizers) {
+		log.Debug("patching finalizer in")
 		patchYaml := "metadata:\n  finalizers: [" + strings.Join(plCopy.Finalizers, ",") + "]"
 		patchJson, _ := yaml.YAMLToJSON([]byte(patchYaml))
 		if err := r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil {
@@ -185,6 +186,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		oldPhase := pl.Status.Phase
 		requeue, err := r.updateDesiredState(ctx, pl)
 		if err != nil {
+			fmt.Println("deletethis: got here 1")
 			logMsg := fmt.Sprintf("Updated desired pipeline phase failed: %v", zap.Error(err))
 			log.Error(logMsg)
 			r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", logMsg)
@@ -797,6 +799,8 @@ var sourceVertexFilter vertexFilterFunc = func(v dfv1.Vertex) bool { return v.Is
 func (r *pipelineReconciler) updateDesiredState(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
 	switch pl.Spec.Lifecycle.GetDesiredPhase() {
 	case dfv1.PipelinePhasePaused:
+
+		fmt.Println("deletethis: got here 2")
 		return r.pausePipeline(ctx, pl)
 	case dfv1.PipelinePhaseRunning, dfv1.PipelinePhaseUnknown:
 		return r.resumePipeline(ctx, pl)
@@ -830,14 +834,34 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 
 func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
 	// check that annotations / pause timestamp annotation exist
-	if pl.GetAnnotations() == nil || pl.GetAnnotations()[dfv1.KeyPauseTimestamp] == "" {
-		patchJson := `[{"op": "add", "path": "` + pauseTimestampPath + `", "value": "` + time.Now().Format(time.RFC3339) + `"}]`
+	/*if len(pl.GetAnnotations()) == 0 {
+		patchJson := `[{"op": "add", "path": "/metadata/annotations", "value": {}}]`
+		fmt.Printf("deletethis: first adding patchJson: %s, annotations=%+v\n", patchJson, pl.GetAnnotations())
 		if err := r.client.Patch(ctx, pl, client.RawPatch(types.JSONPatchType, []byte(patchJson))); err != nil && !apierrors.IsNotFound(err) {
+			return true, err
+		}
+	}*/
+	if pl.GetAnnotations() == nil || pl.GetAnnotations()[dfv1.KeyPauseTimestamp] == "" {
+		/*patchJson := `[{"op": "add", "path": "` + pauseTimestampPath + `", "value": "` + time.Now().Format(time.RFC3339) + `"}]`
+		fmt.Printf("deletethis: adding patchJson: %s, annotations=%+v\n", patchJson, pl.GetAnnotations())
+		if err := r.client.Patch(ctx, pl, client.RawPatch(types.JSONPatchType, []byte(patchJson))); err != nil && !apierrors.IsNotFound(err) {
+			fmt.Printf("deletethis: failed to add patchJson: %v\n", err)
+			return true, err
+		}*/
+		//path := strings.Replace(pauseTimestampPath, "~1", "/", -1)
+		//path = strings.Replace(path, "~0", "~", -1)
+		path := "numaflow.numaproj.io/pause-timestamp"
+		patchJson := `{"metadata":{"annotations":{"` + path + `":"` + time.Now().Format(time.RFC3339) + `"}}}`
+		fmt.Printf("deletethis: adding patchJson: %s, annotations=%+v\n", patchJson, pl.GetAnnotations())
+		if err := r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil && !apierrors.IsNotFound(err) {
+			fmt.Printf("deletethis: failed to add patchJson: %v\n", err)
 			return true, err
 		}
 	}
 
+	fmt.Println("deletethis: got here 3")
 	pl.Status.MarkPhasePausing()
+	fmt.Println("deletethis: got here 4")
 	updated, err := r.scaleDownSourceVertices(ctx, pl)
 	if err != nil || updated {
 		// If there's an error, or scaling down happens, requeue the request
@@ -914,8 +938,10 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 				}
 			}
 			patchJson := fmt.Sprintf(`{"spec":{"replicas":%d}}`, scaleTo)
+			log.Infof("deletethis: patchJson=%q", patchJson)
 			err = r.client.Patch(ctx, &vertex, client.RawPatch(types.MergePatchType, []byte(patchJson)))
 			if err != nil && !apierrors.IsNotFound(err) {
+				log.Infof("deletethis: patching failed, error=%q", err)
 				return false, err
 			}
 			log.Infow("Scaled vertex", zap.Int32("from", origin), zap.Int32("to", scaleTo), zap.String("vertex", vertex.Name))
