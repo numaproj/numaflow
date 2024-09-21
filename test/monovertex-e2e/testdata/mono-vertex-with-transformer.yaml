@@ -8,7 +8,7 @@ spec:
   source:
     udsource:
       container:
-        image:  quay.io/yhl25/numaflow-go/source-simple-source:stable
+        image:  quay.io/numaio/numaflow-go/source-simple-source:stable
         imagePullPolicy: Always
     transformer:
       container:

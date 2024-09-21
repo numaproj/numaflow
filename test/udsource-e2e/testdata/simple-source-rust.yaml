@@ -9,8 +9,8 @@ spec:
         udsource:
           container:
             # A simple user-defined source for e2e testing
-            # See https://github.com/numaproj/numaflow-go/tree/main/pkg/sourcer/examples/simple_source
-            image: quay.io/yhl25/numaflow-rs/simple-source:stable
+            # https://github.com/numaproj/numaflow-rs/tree/main/examples/simple-source
+            image: quay.io/numaio/numaflow-rs/simple-source:stable
       limits:
         readBatchSize: 500
       scale:
