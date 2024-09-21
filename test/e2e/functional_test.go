@@ -41,7 +41,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	w := s.Given().Pipeline("@testdata/simple-pipeline.yaml").
 		When().
 		CreatePipelineAndWait()
-	//defer w.DeletePipelineAndWait()
+	defer w.DeletePipelineAndWait()
 	pipelineName := "simple-pipeline"
 
 	w.Expect().
