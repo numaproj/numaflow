@@ -132,7 +132,6 @@ impl SourceAcker {
     }
 
     pub(crate) async fn ack(&mut self, offsets: Vec<Offset>) -> Result<AckResponse> {
-        let start = tokio::time::Instant::now();
         let n = offsets.len();
 
         // send n ack requests
@@ -152,9 +151,6 @@ impl SourceAcker {
                 .await?
                 .ok_or(SourceError("failed to receive ack response".to_string()))?;
         }
-
-        // TODO: emit latency metrics.
-        info!("acked {} messages in {:?}", n, start.elapsed().as_millis());
 
         Ok(AckResponse {
             result: Some(ack_response::Result { success: Some(()) }),
