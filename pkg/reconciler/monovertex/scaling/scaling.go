@@ -173,7 +173,7 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 	}
 
 	if monoVtx.Spec.Lifecycle.GetDesiredPhase() != dfv1.MonoVertexPhaseRunning {
-		log.Info("MonoVertex is pausing, skip scaling.")
+		log.Info("MonoVertex desiredPhase is not running, skip scaling.")
 		return nil
 	}
 	if int(monoVtx.Status.Replicas) != monoVtx.CalculateReplicas() {
