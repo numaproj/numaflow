@@ -36,10 +36,12 @@ func TestClient_IsReady(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockClient := sinkmock.NewMockSinkClient(ctrl)
+	mockStream := sinkmock.NewMockSink_SinkFnClient(ctrl)
+	mockClient.EXPECT().SinkFn(gomock.Any(), gomock.Any()).Return(mockStream, nil)
 	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&sinkpb.ReadyResponse{Ready: true}, nil)
 	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&sinkpb.ReadyResponse{Ready: false}, fmt.Errorf("mock connection refused"))
 
-	testClient, err := NewFromClient(mockClient)
+	testClient, err := NewFromClient(ctx, mockClient)
 	assert.NoError(t, err)
 	reflect.DeepEqual(testClient, &client{
 		grpcClt: mockClient,
@@ -62,31 +64,37 @@ func TestClient_SinkFn(t *testing.T) {
 
 	mockSinkClient := sinkmock.NewMockSink_SinkFnClient(ctrl)
 	mockSinkClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-	mockSinkClient.EXPECT().CloseAndRecv().Return(&sinkpb.SinkResponse{
-		Results: []*sinkpb.SinkResponse_Result{
-			{
-				Id:     "temp-id",
-				Status: sinkpb.Status_SUCCESS,
-			},
+	mockSinkClient.EXPECT().Recv().Return(&sinkpb.SinkResponse{
+		Result: &sinkpb.SinkResponse_Result{
+			Id:     "temp-id",
+			Status: sinkpb.Status_SUCCESS,
 		},
 	}, nil)
 
 	mockClient := sinkmock.NewMockSinkClient(ctrl)
 	mockClient.EXPECT().SinkFn(gomock.Any(), gomock.Any()).Return(mockSinkClient, nil)
 
-	testClient, err := NewFromClient(mockClient)
+	testClient, err := NewFromClient(ctx, mockClient)
 	assert.NoError(t, err)
 	reflect.DeepEqual(testClient, &client{
 		grpcClt: mockClient,
 	})
 
-	response, err := testClient.SinkFn(ctx, []*sinkpb.SinkRequest{})
-	assert.Equal(t, &sinkpb.SinkResponse{Results: []*sinkpb.SinkResponse_Result{
+	response, err := testClient.SinkFn(ctx, []*sinkpb.SinkRequest{
 		{
-			Id:     "temp-id",
-			Status: sinkpb.Status_SUCCESS,
+			Request: &sinkpb.SinkRequest_Request{
+				Id: "temp-id",
+			},
 		},
-	}}, response)
+	})
+	assert.Equal(t, []*sinkpb.SinkResponse{
+		{
+			Result: &sinkpb.SinkResponse_Result{
+				Id:     "temp-id",
+				Status: sinkpb.Status_SUCCESS,
+			},
+		},
+	}, response)
 	assert.NoError(t, err)
 
 }

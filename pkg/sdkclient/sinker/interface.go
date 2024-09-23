@@ -27,5 +27,5 @@ import (
 type Client interface {
 	CloseConn(ctx context.Context) error
 	IsReady(ctx context.Context, in *emptypb.Empty) (bool, error)
-	SinkFn(ctx context.Context, datumList []*sinkpb.SinkRequest) (*sinkpb.SinkResponse, error)
+	SinkFn(ctx context.Context, datumList []*sinkpb.SinkRequest) ([]*sinkpb.SinkResponse, error)
 }

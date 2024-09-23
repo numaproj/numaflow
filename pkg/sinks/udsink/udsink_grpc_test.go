@@ -19,7 +19,6 @@ package udsink
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -32,8 +31,8 @@ import (
 	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sinker"
 )
 
-func NewMockUDSgRPCBasedUDSink(mockClient *sinkmock.MockSinkClient) *UDSgRPCBasedUDSink {
-	c, _ := sinkclient.NewFromClient(mockClient)
+func NewMockUDSgRPCBasedUDSink(ctx context.Context, mockClient *sinkmock.MockSinkClient) *UDSgRPCBasedUDSink {
+	c, _ := sinkclient.NewFromClient(ctx, mockClient)
 	return &UDSgRPCBasedUDSink{c}
 }
 
@@ -42,6 +41,8 @@ func Test_gRPCBasedUDSink_WaitUntilReadyWithMockClient(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockClient := sinkmock.NewMockSinkClient(ctrl)
+	mockStream := sinkmock.NewMockSink_SinkFnClient(ctrl)
+	mockClient.EXPECT().SinkFn(gomock.Any(), gomock.Any()).Return(mockStream, nil)
 	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&sinkpb.ReadyResponse{Ready: true}, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -53,7 +54,7 @@ func Test_gRPCBasedUDSink_WaitUntilReadyWithMockClient(t *testing.T) {
 		}
 	}()
 
-	u := NewMockUDSgRPCBasedUDSink(mockClient)
+	u := NewMockUDSgRPCBasedUDSink(ctx, mockClient)
 	err := u.WaitUntilReady(ctx)
 	assert.NoError(t, err)
 }
@@ -66,16 +67,20 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 
 		testDatumList := []*sinkpb.SinkRequest{
 			{
-				Id:        "test_id_0",
-				Value:     []byte(`sink_message_success`),
-				EventTime: timestamppb.New(time.Unix(1661169660, 0)),
-				Watermark: timestamppb.New(time.Time{}),
+				Request: &sinkpb.SinkRequest_Request{
+					Id:        "test_id_0",
+					Value:     []byte(`sink_message_success`),
+					EventTime: timestamppb.New(time.Unix(1661169660, 0)),
+					Watermark: timestamppb.New(time.Time{}),
+				},
 			},
 			{
-				Id:        "test_id_1",
-				Value:     []byte(`sink_message_err`),
-				EventTime: timestamppb.New(time.Unix(1661169660, 0)),
-				Watermark: timestamppb.New(time.Time{}),
+				Request: &sinkpb.SinkRequest_Request{
+					Id:        "test_id_1",
+					Value:     []byte(`sink_message_err`),
+					EventTime: timestamppb.New(time.Unix(1661169660, 0)),
+					Watermark: timestamppb.New(time.Time{}),
+				},
 			},
 		}
 		testResponseList := []*sinkpb.SinkResponse_Result{
@@ -93,8 +98,11 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 
 		mockSinkClient := sinkmock.NewMockSink_SinkFnClient(ctrl)
 		mockSinkClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
-		mockSinkClient.EXPECT().CloseAndRecv().Return(&sinkpb.SinkResponse{
-			Results: testResponseList,
+		mockSinkClient.EXPECT().Recv().Return(&sinkpb.SinkResponse{
+			Result: testResponseList[0],
+		}, nil)
+		mockSinkClient.EXPECT().Recv().Return(&sinkpb.SinkResponse{
+			Result: testResponseList[1],
 		}, nil)
 
 		mockClient := sinkmock.NewMockSinkClient(ctrl)
@@ -109,7 +117,7 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSgRPCBasedUDSink(mockClient)
+		u := NewMockUDSgRPCBasedUDSink(ctx, mockClient)
 		gotErrList := u.ApplySink(ctx, testDatumList)
 		assert.Equal(t, 2, len(gotErrList))
 		assert.Equal(t, nil, gotErrList[0])
@@ -127,16 +135,20 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 
 		testDatumList := []*sinkpb.SinkRequest{
 			{
-				Id:        "test_id_0",
-				Value:     []byte(`sink_message_grpc_err`),
-				EventTime: timestamppb.New(time.Unix(1661169660, 0)),
-				Watermark: timestamppb.New(time.Time{}),
+				Request: &sinkpb.SinkRequest_Request{
+					Id:        "test_id_0",
+					Value:     []byte(`sink_message_grpc_err`),
+					EventTime: timestamppb.New(time.Unix(1661169660, 0)),
+					Watermark: timestamppb.New(time.Time{}),
+				},
 			},
 			{
-				Id:        "test_id_1",
-				Value:     []byte(`sink_message_grpc_err`),
-				EventTime: timestamppb.New(time.Unix(1661169660, 0)),
-				Watermark: timestamppb.New(time.Time{}),
+				Request: &sinkpb.SinkRequest_Request{
+					Id:        "test_id_1",
+					Value:     []byte(`sink_message_grpc_err`),
+					EventTime: timestamppb.New(time.Unix(1661169660, 0)),
+					Watermark: timestamppb.New(time.Time{}),
+				},
 			},
 		}
 
@@ -144,7 +156,8 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 		mockSinkErrClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 
 		mockClient := sinkmock.NewMockSinkClient(ctrl)
-		mockClient.EXPECT().SinkFn(gomock.Any(), gomock.Any()).Return(mockSinkErrClient, fmt.Errorf("mock SinkFn error"))
+		mockClient.EXPECT().SinkFn(gomock.Any(), gomock.Any()).Return(mockSinkErrClient, nil)
+		mockSinkErrClient.EXPECT().Recv().Return(nil, errors.New("mock SinkFn error")).AnyTimes()
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -155,12 +168,12 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSgRPCBasedUDSink(mockClient)
+		u := NewMockUDSgRPCBasedUDSink(ctx, mockClient)
 		gotErrList := u.ApplySink(ctx, testDatumList)
 		expectedErrList := []error{
 			&ApplyUDSinkErr{
 				UserUDSinkErr: false,
-				Message:       "gRPC client.SinkFn failed, failed to execute c.grpcClt.SinkFn(): mock SinkFn error",
+				Message:       "gRPC client.SinkFn failed, failed to receive sink response: mock SinkFn error",
 				InternalErr: InternalErr{
 					Flag:        true,
 					MainCarDown: false,
@@ -168,7 +181,7 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 			},
 			&ApplyUDSinkErr{
 				UserUDSinkErr: false,
-				Message:       "gRPC client.SinkFn failed, failed to execute c.grpcClt.SinkFn(): mock SinkFn error",
+				Message:       "gRPC client.SinkFn failed, failed to receive sink response: mock SinkFn error",
 				InternalErr: InternalErr{
 					Flag:        true,
 					MainCarDown: false,
