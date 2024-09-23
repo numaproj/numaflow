@@ -1,78 +1,21 @@
-use crate::config::config;
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::message::Message;
-use crate::shared::connect_with_uds;
-use backoff::retry::Retry;
-use backoff::strategy::fixed;
+use crate::sink_pb::sink_client::SinkClient;
+use crate::sink_pb::{SinkRequest, SinkResponse};
 use tonic::transport::Channel;
-use tonic::Request;
 
-pub mod proto {
-    tonic::include_proto!("sink.v1");
-}
-
-const RECONNECT_INTERVAL: u64 = 1000;
-const MAX_RECONNECT_ATTEMPTS: usize = 5;
-const SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";
-const FB_SINK_SOCKET: &str = "/var/run/numaflow/fb-sink.sock";
-
-const SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/sinker-server-info";
-const FB_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/fb-sinker-server-info";
-
-/// SinkConfig is the configuration for the sink server.
-#[derive(Debug, Clone)]
-pub struct SinkConfig {
-    pub socket_path: String,
-    pub server_info_file: String,
-    pub max_message_size: usize,
-}
-
-impl Default for SinkConfig {
-    fn default() -> Self {
-        SinkConfig {
-            socket_path: SINK_SOCKET.to_string(),
-            server_info_file: SINK_SERVER_INFO_FILE.to_string(),
-            max_message_size: config().grpc_max_message_size,
-        }
-    }
-}
-
-impl SinkConfig {
-    /// default config for fallback sink
-    pub(crate) fn fallback_default() -> Self {
-        SinkConfig {
-            max_message_size: config().grpc_max_message_size,
-            socket_path: FB_SINK_SOCKET.to_string(),
-            server_info_file: FB_SINK_SERVER_INFO_FILE.to_string(),
-        }
-    }
-}
-
+/// SinkWriter writes messages to a sink.
 #[derive(Clone)]
-/// SinkClient is a client to interact with the sink server.
-pub struct SinkClient {
-    client: proto::sink_client::SinkClient<Channel>,
+pub struct SinkWriter {
+    client: SinkClient<Channel>,
 }
 
-impl SinkClient {
-    pub(crate) async fn connect(config: SinkConfig) -> Result<Self> {
-        let interval =
-            fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
-
-        let channel = Retry::retry(
-            interval,
-            || async { connect_with_uds(config.socket_path.clone().into()).await },
-            |_: &Error| true,
-        )
-        .await?;
-
-        let client = proto::sink_client::SinkClient::new(channel)
-            .max_decoding_message_size(config.max_message_size)
-            .max_encoding_message_size(config.max_message_size);
+impl SinkWriter {
+    pub(crate) async fn new(client: SinkClient<Channel>) -> Result<Self> {
         Ok(Self { client })
     }
 
-    pub(crate) async fn sink_fn(&mut self, messages: Vec<Message>) -> Result<proto::SinkResponse> {
+    pub(crate) async fn sink_fn(&mut self, messages: Vec<Message>) -> Result<SinkResponse> {
         // create a channel with at least size
         let (tx, rx) = tokio::sync::mpsc::channel(if messages.is_empty() {
             1
@@ -80,7 +23,7 @@ impl SinkClient {
             messages.len()
         });
 
-        let requests: Vec<proto::SinkRequest> =
+        let requests: Vec<SinkRequest> =
             messages.into_iter().map(|message| message.into()).collect();
 
         tokio::spawn(async move {
@@ -99,10 +42,6 @@ impl SinkClient {
 
         Ok(response)
     }
-
-    pub(crate) async fn is_ready(&mut self) -> bool {
-        self.client.is_ready(Request::new(())).await.is_ok()
-    }
 }
 
 #[cfg(test)]
@@ -111,9 +50,9 @@ mod tests {
     use numaflow::sink;
     use tracing::info;
 
-    use crate::message::Offset;
-
     use super::*;
+    use crate::message::Offset;
+    use crate::shared::create_rpc_channel;
 
     struct Logger;
     #[tonic::async_trait]
@@ -139,7 +78,7 @@ mod tests {
         }
     }
     #[tokio::test]
-    async fn sink_operations() {
+    async fn sink_operations() -> Result<()> {
         // start the server
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
@@ -160,13 +99,10 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let mut sink_client = SinkClient::connect(SinkConfig {
-            socket_path: sock_file.to_str().unwrap().to_string(),
-            server_info_file: server_info_file.to_str().unwrap().to_string(),
-            max_message_size: 4 * 1024 * 1024,
-        })
-        .await
-        .expect("failed to connect to sink server");
+        let mut sink_client =
+            SinkWriter::new(SinkClient::new(create_rpc_channel(sock_file).await?))
+                .await
+                .expect("failed to connect to sink server");
 
         let messages = vec![
             Message {
@@ -193,15 +129,13 @@ mod tests {
             },
         ];
 
-        let ready_response = sink_client.is_ready().await;
-        assert!(ready_response);
-
-        let response = sink_client.sink_fn(messages).await.unwrap();
+        let response = sink_client.sink_fn(messages).await?;
         assert_eq!(response.results.len(), 2);
 
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
         server_handle.await.expect("failed to join server task");
+        Ok(())
     }
 }

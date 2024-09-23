@@ -5,7 +5,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::app::callback::CallbackRequest;
-use crate::pipeline::{Edge, PipelineDCG, OperatorType};
+use crate::pipeline::{Edge, OperatorType, PipelineDCG};
 use crate::Error;
 
 fn compare_slice(operator: &OperatorType, a: &[String], b: &[String]) -> bool {

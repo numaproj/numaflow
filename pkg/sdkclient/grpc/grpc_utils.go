@@ -48,7 +48,7 @@ func ConnectToServer(udsSockAddr string, serverInfo *serverinfo.ServerInfo, maxM
 			return nil, fmt.Errorf("failed to start Multiproc Client: %w", err)
 		}
 
-		conn, err = grpc.Dial(
+		conn, err = grpc.NewClient(
 			fmt.Sprintf("%s:///%s", resolver.CustScheme, resolver.CustServiceName),
 			grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -58,12 +58,12 @@ func ConnectToServer(udsSockAddr string, serverInfo *serverinfo.ServerInfo, maxM
 		sockAddr = getUdsSockAddr(udsSockAddr)
 		log.Println("UDS Client:", sockAddr)
 
-		conn, err = grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		conn, err = grpc.NewClient(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMessageSize), grpc.MaxCallSendMsgSize(maxMessageSize)))
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute grpc.Dial(%q): %w", sockAddr, err)
+		return nil, fmt.Errorf("failed to execute grpc.NewClient(%q): %w", sockAddr, err)
 	}
 
 	return conn, nil

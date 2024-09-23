@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"testing"
 	"time"
 
@@ -31,8 +30,6 @@ import (
 	"go.uber.org/goleak"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -43,24 +40,8 @@ func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
 
-type rpcMsg struct {
-	msg proto.Message
-}
-
-func (r *rpcMsg) Matches(msg interface{}) bool {
-	m, ok := msg.(proto.Message)
-	if !ok {
-		return false
-	}
-	return proto.Equal(m, r.msg)
-}
-
-func (r *rpcMsg) String() string {
-	return fmt.Sprintf("is %s", r.msg)
-}
-
-func NewMockUDSgRPCBasedUDSource(mockClient *sourcemock.MockSourceClient) *GRPCBasedUDSource {
-	c, _ := sourceclient.NewFromClient(mockClient)
+func NewMockUDSgRPCBasedUDSource(ctx context.Context, mockClient *sourcemock.MockSourceClient) *GRPCBasedUDSource {
+	c, _ := sourceclient.NewFromClient(ctx, mockClient)
 	return &GRPCBasedUDSource{
 		vertexName:         "testVertex",
 		pipelineName:       "testPipeline",
@@ -75,6 +56,8 @@ func Test_gRPCBasedUDSource_WaitUntilReadyWithMockClient(t *testing.T) {
 
 	mockClient := sourcemock.NewMockSourceClient(ctrl)
 	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&sourcepb.ReadyResponse{Ready: true}, nil)
+	mockClient.EXPECT().ReadFn(gomock.Any(), gomock.Any()).Return(nil, nil)
+	mockClient.EXPECT().AckFn(gomock.Any(), gomock.Any()).Return(nil, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -85,7 +68,7 @@ func Test_gRPCBasedUDSource_WaitUntilReadyWithMockClient(t *testing.T) {
 		}
 	}()
 
-	u := NewMockUDSgRPCBasedUDSource(mockClient)
+	u := NewMockUDSgRPCBasedUDSource(ctx, mockClient)
 	err := u.WaitUntilReady(ctx)
 	assert.NoError(t, err)
 }
@@ -103,6 +86,8 @@ func Test_gRPCBasedUDSource_ApplyPendingWithMockClient(t *testing.T) {
 
 		mockSourceClient := sourcemock.NewMockSourceClient(ctrl)
 		mockSourceClient.EXPECT().PendingFn(gomock.Any(), gomock.Any()).Return(testResponse, nil).AnyTimes()
+		mockSourceClient.EXPECT().ReadFn(gomock.Any(), gomock.Any()).Return(nil, nil)
+		mockSourceClient.EXPECT().AckFn(gomock.Any(), gomock.Any()).Return(nil, nil)
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -113,7 +98,7 @@ func Test_gRPCBasedUDSource_ApplyPendingWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSgRPCBasedUDSource(mockSourceClient)
+		u := NewMockUDSgRPCBasedUDSource(ctx, mockSourceClient)
 		count, err := u.ApplyPendingFn(ctx)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(123), count)
@@ -131,6 +116,8 @@ func Test_gRPCBasedUDSource_ApplyPendingWithMockClient(t *testing.T) {
 
 		mockSourceClient := sourcemock.NewMockSourceClient(ctrl)
 		mockSourceClient.EXPECT().PendingFn(gomock.Any(), gomock.Any()).Return(testResponse, nil).AnyTimes()
+		mockSourceClient.EXPECT().ReadFn(gomock.Any(), gomock.Any()).Return(nil, nil)
+		mockSourceClient.EXPECT().AckFn(gomock.Any(), gomock.Any()).Return(nil, nil)
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -141,7 +128,7 @@ func Test_gRPCBasedUDSource_ApplyPendingWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSgRPCBasedUDSource(mockSourceClient)
+		u := NewMockUDSgRPCBasedUDSource(ctx, mockSourceClient)
 		count, err := u.ApplyPendingFn(ctx)
 		assert.NoError(t, err)
 		assert.Equal(t, isb.PendingNotAvailable, count)
@@ -159,6 +146,8 @@ func Test_gRPCBasedUDSource_ApplyPendingWithMockClient(t *testing.T) {
 
 		mockSourceErrClient := sourcemock.NewMockSourceClient(ctrl)
 		mockSourceErrClient.EXPECT().PendingFn(gomock.Any(), gomock.Any()).Return(testResponse, fmt.Errorf("mock udsource pending error")).AnyTimes()
+		mockSourceErrClient.EXPECT().ReadFn(gomock.Any(), gomock.Any()).Return(nil, nil)
+		mockSourceErrClient.EXPECT().AckFn(gomock.Any(), gomock.Any()).Return(nil, nil)
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -169,7 +158,7 @@ func Test_gRPCBasedUDSource_ApplyPendingWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSgRPCBasedUDSource(mockSourceErrClient)
+		u := NewMockUDSgRPCBasedUDSource(ctx, mockSourceErrClient)
 		count, err := u.ApplyPendingFn(ctx)
 
 		assert.Equal(t, isb.PendingNotAvailable, count)
@@ -183,13 +172,8 @@ func Test_gRPCBasedUDSource_ApplyReadWithMockClient(t *testing.T) {
 		defer ctrl.Finish()
 		mockClient := sourcemock.NewMockSourceClient(ctrl)
 		mockReadClient := sourcemock.NewMockSource_ReadFnClient(ctrl)
-
-		req := &sourcepb.ReadRequest{
-			Request: &sourcepb.ReadRequest_Request{
-				NumRecords:  1,
-				TimeoutInMs: 1000,
-			},
-		}
+		mockClient.EXPECT().ReadFn(gomock.Any(), gomock.Any()).Return(mockReadClient, nil)
+		mockClient.EXPECT().AckFn(gomock.Any(), gomock.Any()).Return(nil, nil)
 
 		offset := &sourcepb.Offset{Offset: []byte(`test_offset`), PartitionId: 0}
 
@@ -202,10 +186,18 @@ func Test_gRPCBasedUDSource_ApplyReadWithMockClient(t *testing.T) {
 				Keys:      []string{"test_key"},
 			},
 		}
-
 		mockReadClient.EXPECT().Recv().Return(expectedResponse, nil).Times(1)
-		mockReadClient.EXPECT().Recv().Return(nil, io.EOF).Times(1)
-		mockClient.EXPECT().ReadFn(gomock.Any(), &rpcMsg{msg: req}).Return(mockReadClient, nil)
+
+		eotResponse := &sourcepb.ReadResponse{Status: &sourcepb.ReadResponse_Status{Eot: true}}
+		mockReadClient.EXPECT().Recv().Return(eotResponse, nil).Times(1)
+
+		req := &sourcepb.ReadRequest{
+			Request: &sourcepb.ReadRequest_Request{
+				NumRecords:  1,
+				TimeoutInMs: 1000,
+			},
+		}
+		mockReadClient.EXPECT().Send(req).Return(nil).Times(1)
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -216,7 +208,7 @@ func Test_gRPCBasedUDSource_ApplyReadWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSgRPCBasedUDSource(mockClient)
+		u := NewMockUDSgRPCBasedUDSource(ctx, mockClient)
 		readMessages, err := u.ApplyReadFn(ctx, 1, time.Millisecond*1000)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(readMessages))
@@ -232,6 +224,8 @@ func Test_gRPCBasedUDSource_ApplyReadWithMockClient(t *testing.T) {
 
 		mockClient := sourcemock.NewMockSourceClient(ctrl)
 		mockReadClient := sourcemock.NewMockSource_ReadFnClient(ctrl)
+		mockClient.EXPECT().ReadFn(gomock.Any(), gomock.Any()).Return(mockReadClient, nil)
+		mockClient.EXPECT().AckFn(gomock.Any(), gomock.Any()).Return(nil, nil)
 
 		req := &sourcepb.ReadRequest{
 			Request: &sourcepb.ReadRequest_Request{
@@ -239,6 +233,7 @@ func Test_gRPCBasedUDSource_ApplyReadWithMockClient(t *testing.T) {
 				TimeoutInMs: 1000,
 			},
 		}
+		mockReadClient.EXPECT().Send(req).Return(nil).Times(1)
 
 		var TestEventTime = time.Unix(1661169600, 0).UTC()
 		expectedResponse := &sourcepb.ReadResponse{
@@ -249,10 +244,7 @@ func Test_gRPCBasedUDSource_ApplyReadWithMockClient(t *testing.T) {
 				Keys:      []string{"test_key"},
 			},
 		}
-
 		mockReadClient.EXPECT().Recv().Return(expectedResponse, errors.New("mock error for read")).AnyTimes()
-		mockClient.EXPECT().ReadFn(gomock.Any(), &rpcMsg{msg: req}).Return(mockReadClient, nil)
-
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		go func() {
@@ -262,7 +254,7 @@ func Test_gRPCBasedUDSource_ApplyReadWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSgRPCBasedUDSource(mockClient)
+		u := NewMockUDSgRPCBasedUDSource(ctx, mockClient)
 		readMessages, err := u.ApplyReadFn(ctx, 1, time.Millisecond*1000)
 		assert.Error(t, err)
 		assert.Equal(t, 0, len(readMessages))
@@ -278,16 +270,25 @@ func Test_gRPCBasedUDSource_ApplyAckWithMockClient(t *testing.T) {
 		offset2 := &sourcepb.Offset{Offset: []byte("test-offset-2"), PartitionId: 0}
 
 		mockClient := sourcemock.NewMockSourceClient(ctrl)
-		req := &sourcepb.AckRequest{
+		mockAckClient := sourcemock.NewMockSource_AckFnClient(ctrl)
+		mockClient.EXPECT().ReadFn(gomock.Any(), gomock.Any()).Return(nil, nil)
+		mockClient.EXPECT().AckFn(gomock.Any(), gomock.Any()).Return(mockAckClient, nil)
+
+		req1 := &sourcepb.AckRequest{
 			Request: &sourcepb.AckRequest_Request{
-				Offsets: []*sourcepb.Offset{
-					offset1,
-					offset2,
-				},
+				Offset: offset1,
 			},
 		}
 
-		mockClient.EXPECT().AckFn(gomock.Any(), &rpcMsg{msg: req}).Return(&sourcepb.AckResponse{Result: &sourcepb.AckResponse_Result{Success: &emptypb.Empty{}}}, nil).AnyTimes()
+		req2 := &sourcepb.AckRequest{
+			Request: &sourcepb.AckRequest_Request{
+				Offset: offset2,
+			},
+		}
+
+		mockAckClient.EXPECT().Send(req1).Return(nil).Times(1)
+		mockAckClient.EXPECT().Send(req2).Return(nil).Times(1)
+		mockAckClient.EXPECT().Recv().Return(&sourcepb.AckResponse{}, nil).Times(2)
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -298,7 +299,7 @@ func Test_gRPCBasedUDSource_ApplyAckWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSgRPCBasedUDSource(mockClient)
+		u := NewMockUDSgRPCBasedUDSource(ctx, mockClient)
 		err := u.ApplyAckFn(ctx, []isb.Offset{
 			NewUserDefinedSourceOffset(offset1),
 			NewUserDefinedSourceOffset(offset2),
@@ -314,16 +315,18 @@ func Test_gRPCBasedUDSource_ApplyAckWithMockClient(t *testing.T) {
 		offset2 := &sourcepb.Offset{Offset: []byte("test-offset-2"), PartitionId: 0}
 
 		mockClient := sourcemock.NewMockSourceClient(ctrl)
-		req := &sourcepb.AckRequest{
+		mockAckClient := sourcemock.NewMockSource_AckFnClient(ctrl)
+		mockClient.EXPECT().ReadFn(gomock.Any(), gomock.Any()).Return(nil, nil)
+		mockClient.EXPECT().AckFn(gomock.Any(), gomock.Any()).Return(mockAckClient, nil)
+
+		req1 := &sourcepb.AckRequest{
 			Request: &sourcepb.AckRequest_Request{
-				Offsets: []*sourcepb.Offset{
-					offset1,
-					offset2,
-				},
+				Offset: offset1,
 			},
 		}
 
-		mockClient.EXPECT().AckFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
+		mockAckClient.EXPECT().Send(req1).Return(status.New(codes.DeadlineExceeded, "mock test err").Err()).Times(1)
+
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		go func() {
@@ -333,11 +336,11 @@ func Test_gRPCBasedUDSource_ApplyAckWithMockClient(t *testing.T) {
 			}
 		}()
 
-		u := NewMockUDSgRPCBasedUDSource(mockClient)
+		u := NewMockUDSgRPCBasedUDSource(ctx, mockClient)
 		err := u.ApplyAckFn(ctx, []isb.Offset{
 			NewUserDefinedSourceOffset(offset1),
 			NewUserDefinedSourceOffset(offset2),
 		})
-		assert.ErrorIs(t, err, status.New(codes.DeadlineExceeded, "mock test err").Err())
+		assert.Equal(t, err.Error(), fmt.Sprintf("failed to send ack request: %s", status.New(codes.DeadlineExceeded, "mock test err").Err()))
 	})
 }

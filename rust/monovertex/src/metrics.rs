@@ -9,12 +9,6 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
-use prometheus_client::encoding::text::encode;
-use prometheus_client::metrics::counter::Counter;
-use prometheus_client::metrics::family::Family;
-use prometheus_client::metrics::gauge::Gauge;
-use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
-use prometheus_client::registry::Registry;
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::Mutex;
@@ -24,9 +18,17 @@ use tracing::{debug, error, info};
 
 use crate::config::config;
 use crate::error::Error;
-use crate::sink::SinkClient;
-use crate::source::SourceClient;
-use crate::transformer::TransformerClient;
+use crate::sink_pb::sink_client::SinkClient;
+use crate::source_pb::source_client::SourceClient;
+use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
+use prometheus_client::encoding::text::encode;
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::gauge::Gauge;
+use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
+use prometheus_client::registry::Registry;
+use tonic::transport::Channel;
+use tonic::Request;
 
 // Define the labels for the metrics
 // Note: Please keep consistent with the definitions in MonoVertex daemon
@@ -60,10 +62,10 @@ const SINK_TIME: &str = "monovtx_sink_time";
 
 #[derive(Clone)]
 pub(crate) struct MetricsState {
-    pub source_client: SourceClient,
-    pub sink_client: SinkClient,
-    pub transformer_client: Option<TransformerClient>,
-    pub fb_sink_client: Option<SinkClient>,
+    pub source_client: SourceClient<Channel>,
+    pub sink_client: SinkClient<Channel>,
+    pub transformer_client: Option<SourceTransformClient<Channel>>,
+    pub fb_sink_client: Option<SinkClient<Channel>>,
 }
 
 /// The global register of all metrics.
@@ -324,22 +326,27 @@ async fn livez() -> impl IntoResponse {
 }
 
 async fn sidecar_livez(State(mut state): State<MetricsState>) -> impl IntoResponse {
-    if !state.source_client.is_ready().await {
+    if state
+        .source_client
+        .is_ready(Request::new(()))
+        .await
+        .is_err()
+    {
         error!("Source client is not available");
         return StatusCode::SERVICE_UNAVAILABLE;
     }
-    if !state.sink_client.is_ready().await {
+    if state.sink_client.is_ready(Request::new(())).await.is_err() {
         error!("Sink client is not available");
         return StatusCode::SERVICE_UNAVAILABLE;
     }
     if let Some(mut transformer_client) = state.transformer_client {
-        if !transformer_client.is_ready().await {
+        if transformer_client.is_ready(Request::new(())).await.is_err() {
             error!("Transformer client is not available");
             return StatusCode::SERVICE_UNAVAILABLE;
         }
     }
     if let Some(mut fb_sink_client) = state.fb_sink_client {
-        if !fb_sink_client.is_ready().await {
+        if fb_sink_client.is_ready(Request::new(())).await.is_err() {
             error!("Fallback sink client is not available");
             return StatusCode::SERVICE_UNAVAILABLE;
         }
@@ -359,7 +366,7 @@ struct TimestampedPending {
 /// and exposing the metrics. It maintains a list of pending stats and ensures that
 /// only the most recent entries are kept.
 pub(crate) struct LagReader {
-    source_client: SourceClient,
+    source_client: SourceClient<Channel>,
     lag_checking_interval: Duration,
     refresh_interval: Duration,
     buildup_handle: Option<JoinHandle<()>>,
@@ -369,13 +376,13 @@ pub(crate) struct LagReader {
 
 /// LagReaderBuilder is used to build a `LagReader` instance.
 pub(crate) struct LagReaderBuilder {
-    source_client: SourceClient,
+    source_client: SourceClient<Channel>,
     lag_checking_interval: Option<Duration>,
     refresh_interval: Option<Duration>,
 }
 
 impl LagReaderBuilder {
-    pub(crate) fn new(source_client: SourceClient) -> Self {
+    pub(crate) fn new(source_client: SourceClient<Channel>) -> Self {
         Self {
             source_client,
             lag_checking_interval: None,
@@ -448,14 +455,14 @@ impl Drop for LagReader {
 
 /// Periodically checks the pending messages from the source client and build the pending stats.
 async fn build_pending_info(
-    mut source_client: SourceClient,
+    mut source_client: SourceClient<Channel>,
     lag_checking_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
     let mut ticker = time::interval(lag_checking_interval);
     loop {
         ticker.tick().await;
-        match source_client.pending_fn().await {
+        match fetch_pending(&mut source_client).await {
             Ok(pending) => {
                 if pending != -1 {
                     let mut stats = pending_stats.lock().await;
@@ -475,6 +482,17 @@ async fn build_pending_info(
             }
         }
     }
+}
+
+async fn fetch_pending(source_client: &mut SourceClient<Channel>) -> crate::error::Result<i64> {
+    let request = Request::new(());
+    let response = source_client
+        .pending_fn(request)
+        .await?
+        .into_inner()
+        .result
+        .map_or(-1, |r| r.count); // default to -1(unavailable)
+    Ok(response)
 }
 
 // Periodically exposes the pending metrics by calculating the average pending messages over different intervals.
@@ -539,3 +557,163 @@ async fn calculate_pending(
 }
 
 // TODO add tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::metrics::MetricsState;
+    use crate::shared::create_rpc_channel;
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source, sourcetransform};
+    use std::net::SocketAddr;
+    use tokio::sync::mpsc::Sender;
+
+    struct SimpleSource;
+    #[tonic::async_trait]
+    impl source::Sourcer for SimpleSource {
+        async fn read(&self, _: SourceReadRequest, _: Sender<Message>) {}
+
+        async fn ack(&self, _: Offset) {}
+
+        async fn pending(&self) -> usize {
+            0
+        }
+
+        async fn partitions(&self) -> Option<Vec<i32>> {
+            None
+        }
+    }
+
+    struct SimpleSink;
+
+    #[tonic::async_trait]
+    impl sink::Sinker for SimpleSink {
+        async fn sink(
+            &self,
+            _input: tokio::sync::mpsc::Receiver<sink::SinkRequest>,
+        ) -> Vec<sink::Response> {
+            vec![]
+        }
+    }
+
+    struct NowCat;
+
+    #[tonic::async_trait]
+    impl sourcetransform::SourceTransformer for NowCat {
+        async fn transform(
+            &self,
+            _input: sourcetransform::SourceTransformRequest,
+        ) -> Vec<sourcetransform::Message> {
+            vec![]
+        }
+    }
+
+    #[tokio::test]
+    async fn test_start_metrics_https_server() {
+        let (src_shutdown_tx, src_shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let src_sock_file = tmp_dir.path().join("source.sock");
+        let src_info_file = tmp_dir.path().join("source-server-info");
+
+        let server_info = src_info_file.clone();
+        let server_socket = src_sock_file.clone();
+        let src_server_handle = tokio::spawn(async move {
+            source::Server::new(SimpleSource)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(src_shutdown_rx)
+                .await
+                .unwrap();
+        });
+
+        let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
+        let (fb_sink_shutdown_tx, fb_sink_shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sink_sock_file = tmp_dir.path().join("sink.sock");
+        let sink_server_info = tmp_dir.path().join("sink-server-info");
+        let fb_sink_sock_file = tmp_dir.path().join("fallback-sink.sock");
+        let fb_sink_server_info = tmp_dir.path().join("fallback-sink-server-info");
+
+        let server_socket = sink_sock_file.clone();
+        let server_info = sink_server_info.clone();
+        let sink_server_handle = tokio::spawn(async move {
+            sink::Server::new(SimpleSink)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(sink_shutdown_rx)
+                .await
+                .unwrap();
+        });
+        let fb_server_socket = fb_sink_sock_file.clone();
+        let fb_server_info = fb_sink_server_info.clone();
+        let fb_sink_server_handle = tokio::spawn(async move {
+            sink::Server::new(SimpleSink)
+                .with_socket_file(fb_server_socket)
+                .with_server_info_file(fb_server_info)
+                .start_with_shutdown(fb_sink_shutdown_rx)
+                .await
+                .unwrap();
+        });
+
+        // start the transformer server
+        let (transformer_shutdown_tx, transformer_shutdown_rx) = tokio::sync::oneshot::channel();
+        let sock_file = tmp_dir.path().join("sourcetransform.sock");
+        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let transformer_handle = tokio::spawn(async move {
+            sourcetransform::Server::new(NowCat)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(transformer_shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the servers to start
+        // FIXME: we need to have a better way, this is flaky
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        let metrics_state = MetricsState {
+            source_client: SourceClient::new(create_rpc_channel(src_sock_file).await.unwrap()),
+            sink_client: SinkClient::new(create_rpc_channel(sink_sock_file).await.unwrap()),
+            transformer_client: Some(SourceTransformClient::new(
+                create_rpc_channel(sock_file).await.unwrap(),
+            )),
+            fb_sink_client: Some(SinkClient::new(
+                create_rpc_channel(fb_sink_sock_file).await.unwrap(),
+            )),
+        };
+
+        let addr: SocketAddr = "127.0.0.1:9091".parse().unwrap();
+        let metrics_state_clone = metrics_state.clone();
+        let server_handle = tokio::spawn(async move {
+            start_metrics_https_server(addr, metrics_state_clone)
+                .await
+                .unwrap();
+        });
+
+        // invoke the sidecar-livez endpoint
+        let response = sidecar_livez(State(metrics_state)).await;
+        assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
+
+        // invoke the livez endpoint
+        let response = livez().await;
+        assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
+
+        // invoke the metrics endpoint
+        let response = metrics_handler().await;
+        assert_eq!(response.into_response().status(), StatusCode::OK);
+
+        // Stop the servers
+        server_handle.abort();
+        src_shutdown_tx.send(()).unwrap();
+        sink_shutdown_tx.send(()).unwrap();
+        fb_sink_shutdown_tx.send(()).unwrap();
+        transformer_shutdown_tx.send(()).unwrap();
+        src_server_handle.await.unwrap();
+        sink_server_handle.await.unwrap();
+        fb_sink_server_handle.await.unwrap();
+        transformer_handle.await.unwrap();
+    }
+}

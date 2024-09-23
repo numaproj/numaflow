@@ -3,6 +3,8 @@ kind: MonoVertex
 metadata:
   name: transformer-mono-vertex
 spec:
+  scale:
+    min: 1
   source:
     udsource:
       container:

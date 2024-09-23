@@ -41,7 +41,7 @@ jobs:
           path: dist
 
   build-rust-amd64:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ./rust
@@ -71,7 +71,7 @@ jobs:
           path: rust/numaflow-rs-linux-amd64
 
   build-rust-arm64:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ./rust
@@ -160,4 +160,3 @@ jobs:
       - name: Container build and push with arm64/amd64
         run: |
           IMAGE_NAMESPACE=${{ secrets.QUAYIO_ORG }} VERSION=${{ steps.version.outputs.VERSION }} DOCKER_PUSH=true DOCKER_BUILD_ARGS="--label \"quay.expires-after=30d\"" make image-multi
-
