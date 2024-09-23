@@ -45,7 +45,7 @@ impl SourceReader {
         let handshake_response = resp_stream.message().await?.ok_or(SourceError(
             "failed to receive handshake response".to_string(),
         ))?;
-        // TODO(explain): why will this be None and why is None okay?
+        // handshake cannot to None during the initial phase and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
             return Err(SourceError("invalid handshake response".to_string()));
         }
@@ -120,7 +120,7 @@ impl SourceAcker {
         let ack_handshake_response = ack_resp_stream.message().await?.ok_or(SourceError(
             "failed to receive ack handshake response".to_string(),
         ))?;
-        // TODO(explain): why will this be None and why is None okay?
+        // handshake cannot to None during the initial phase and it has to set `sot` to true.
         if ack_handshake_response.handshake.map_or(true, |h| !h.sot) {
             return Err(SourceError("invalid ack handshake response".to_string()));
         }
