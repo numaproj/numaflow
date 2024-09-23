@@ -81,8 +81,8 @@ func (mv MonoVertex) getReplicas() int {
 
 func (mv MonoVertex) CalculateReplicas() int {
 	desiredReplicas := mv.getReplicas()
-	// If we are pausing the MonoVertex or in a paused state then we should have the desired replicas as 0
-	if mv.Spec.Lifecycle.GetDesiredPhase() == MonoVertexPhasePaused || mv.Status.Phase == MonoVertexPhasePaused {
+	// If we are pausing the MonoVertex then we should have the desired replicas as 0
+	if mv.Spec.Lifecycle.GetDesiredPhase() == MonoVertexPhasePaused {
 		return 0
 	}
 	// Don't allow replicas to be out of the range of min and max when auto scaling is enabled
