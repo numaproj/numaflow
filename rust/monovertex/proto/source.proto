@@ -7,16 +7,19 @@ package source.v1;
 
 service Source {
   // Read returns a stream of datum responses.
-  // The size of the returned ReadResponse is less than or equal to the num_records specified in ReadRequest.
-  // If the request timeout is reached on server side, the returned ReadResponse will contain all the datum that have been read (which could be an empty list).
-  rpc ReadFn(ReadRequest) returns (stream ReadResponse);
+  // The size of the returned responses is less than or equal to the num_records specified in each ReadRequest.
+  // If the request timeout is reached on the server side, the returned responses will contain all the datum that have been read (which could be an empty list).
+  // The server will continue to read and respond to subsequent ReadRequests until the client closes the stream.
+  // Once it has sent all the datum, the server will send a ReadResponse with the end of transmission flag set to true.
+  rpc ReadFn(stream ReadRequest) returns (stream ReadResponse);
 
-  // AckFn acknowledges a list of datum offsets.
+  // AckFn acknowledges a stream of datum offsets.
   // When AckFn is called, it implicitly indicates that the datum stream has been processed by the source vertex.
   // The caller (numa) expects the AckFn to be successful, and it does not expect any errors.
   // If there are some irrecoverable errors when the callee (UDSource) is processing the AckFn request,
-  // then it is best to crash because there are no other retry mechanisms possible. 
-  rpc AckFn(AckRequest) returns (AckResponse);
+  // then it is best to crash because there are no other retry mechanisms possible.
+  // Clients sends n requests and expects n responses.
+  rpc AckFn(stream AckRequest) returns (stream AckResponse);
 
   // PendingFn returns the number of pending records at the user defined source.
   rpc PendingFn(google.protobuf.Empty) returns (PendingResponse);
@@ -26,6 +29,14 @@ service Source {
 
   // IsReady is the heartbeat endpoint for user defined source gRPC.
   rpc IsReady(google.protobuf.Empty) returns (ReadyResponse);
+}
+
+/*
+ * Handshake message between client and server to indicate the start of transmission.
+ */
+message Handshake {
+  // Required field indicating the start of transmission.
+  bool sot = 1;
 }
 
 /*
@@ -42,6 +53,7 @@ message ReadRequest {
   }
   // Required field indicating the request.
   Request request = 1;
+  optional Handshake handshake = 2;
 }
 
 /*
@@ -65,8 +77,31 @@ message ReadResponse {
     // e.g. Kafka and Redis Stream message usually include information about the headers.
     map<string, string> headers = 5;
   }
+  message Status {
+    // Code to indicate the status of the response.
+    enum Code {
+      SUCCESS = 0;
+      FAILURE = 1;
+    }
+
+    // Error to indicate the error type. If the code is FAILURE, then the error field will be populated.
+    enum Error {
+      UNACKED = 0;
+      OTHER = 1;
+    }
+
+    // End of transmission flag.
+    bool eot = 1;
+    Code code = 2;
+    optional Error error = 3;
+    optional string msg = 4;
+  }
   // Required field holding the result.
   Result result = 1;
+  // Status of the response. Holds the end of transmission flag and the status code.
+  Status status = 2;
+  // Handshake message between client and server to indicate the start of transmission.
+  optional Handshake handshake = 3;
 }
 
 /*
@@ -75,14 +110,12 @@ message ReadResponse {
  */
 message AckRequest {
   message Request {
-    // Required field holding a list of offsets to be acknowledged.
-    // The offsets must be strictly corresponding to the previously read batch,
-    // meaning the offsets must be in the same order as the datum responses in the ReadResponse.
-    // By enforcing ordering, we can save deserialization effort on the server side, assuming the server keeps a local copy of the raw/un-serialized offsets.
-    repeated Offset offsets = 1;
+    // Required field holding the offset to be acked
+    Offset offset = 1;
   }
   // Required field holding the request. The list will be ordered and will have the same order as the original Read response.
   Request request = 1;
+  optional Handshake handshake = 2;
 }
 
 /*
@@ -102,6 +135,8 @@ message AckResponse {
   }
   // Required field holding the result.
   Result result = 1;
+  // Handshake message between client and server to indicate the start of transmission.
+  optional Handshake handshake = 2;
 }
 
 /*

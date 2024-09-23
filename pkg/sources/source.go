@@ -201,7 +201,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			return err
 		}
 
-		srcClient, err := sourceclient.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+		srcClient, err := sourceclient.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create a new gRPC client: %w", err)
 		}
