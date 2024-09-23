@@ -38,7 +38,7 @@ func NewGRPCClient(address string) (MonoVertexDaemonClient, error) {
 	config := &tls.Config{
 		InsecureSkipVerify: true,
 	}
-	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(credentials.NewTLS(config)))
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(credentials.NewTLS(config)))
 	if err != nil {
 		return nil, err
 	}

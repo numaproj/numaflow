@@ -113,8 +113,8 @@ jobs:
         with:
           tool: grcov
 
-      - name: Install Protobuf Compiler
-        run: sudo apt-get install -y protobuf-compiler
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
 
       - name: Test Rust
         working-directory: ./rust
@@ -150,7 +150,7 @@ jobs:
       - run: git diff --exit-code
 
   build-rust-amd64:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ./rust
@@ -169,6 +169,8 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.5
       - name: Install dependencies
         run: sudo apt-get install -y protobuf-compiler
+      - name: Print Protoc version
+        run: protoc --version
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
       - name: Rename binary
