@@ -1,13 +1,20 @@
+use crate::error::Error;
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
 use std::env;
 use std::sync::OnceLock;
 
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
+const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
+const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
+const DEFAULT_SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";
+const DEFAULT_FB_SINK_SOCKET: &str = "/var/run/numaflow/fb-sink.sock";
 
-use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
-
-use crate::error::Error;
-
+const DEFAULT_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/sinker-server-info";
+const DEFAULT_FB_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/fb-sinker-server-info";
+const DEFAULT_TRANSFORMER_SOCKET: &str = "/var/run/numaflow/sourcetransform.sock";
+const DEFAULT_TRANSFORMER_SERVER_INFO_FILE: &str =
+    "/var/run/numaflow/sourcetransformer-server-info";
 const ENV_MONO_VERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 const ENV_GRPC_MAX_MESSAGE_SIZE: &str = "NUMAFLOW_GRPC_MAX_MESSAGE_SIZE";
 const ENV_POD_REPLICA: &str = "NUMAFLOW_REPLICA";
@@ -77,15 +84,46 @@ pub struct Settings {
     pub batch_size: u64,
     pub timeout_in_ms: u32,
     pub metrics_server_listen_port: u16,
-    pub grpc_max_message_size: usize,
-    pub is_transformer_enabled: bool,
-    pub is_fallback_enabled: bool,
     pub lag_check_interval_in_secs: u16,
     pub lag_refresh_interval_in_secs: u16,
     pub sink_max_retry_attempts: u16,
     pub sink_retry_interval_in_ms: u32,
     pub sink_retry_on_fail_strategy: OnFailureStrategy,
     pub sink_default_retry_strategy: RetryStrategy,
+    pub sdk_config: SDKConfig,
+}
+
+#[derive(Debug, Clone)]
+pub struct SDKConfig {
+    pub grpc_max_message_size: usize,
+    pub is_transformer_enabled: bool,
+    pub is_fallback_enabled: bool,
+    pub source_socket_path: String,
+    pub sink_socket_path: String,
+    pub transformer_socket_path: String,
+    pub fallback_socket_path: String,
+    pub source_server_info_path: String,
+    pub sink_server_info_path: String,
+    pub transformer_server_info_path: String,
+    pub fallback_server_info_path: String,
+}
+
+impl Default for SDKConfig {
+    fn default() -> Self {
+        Self {
+            grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+            is_transformer_enabled: false,
+            is_fallback_enabled: false,
+            source_socket_path: DEFAULT_SOURCE_SOCKET.to_string(),
+            sink_socket_path: DEFAULT_SINK_SOCKET.to_string(),
+            transformer_socket_path: DEFAULT_TRANSFORMER_SOCKET.to_string(),
+            fallback_socket_path: DEFAULT_FB_SINK_SOCKET.to_string(),
+            source_server_info_path: DEFAULT_SOURCE_SERVER_INFO_FILE.to_string(),
+            sink_server_info_path: DEFAULT_SINK_SERVER_INFO_FILE.to_string(),
+            transformer_server_info_path: DEFAULT_TRANSFORMER_SERVER_INFO_FILE.to_string(),
+            fallback_server_info_path: DEFAULT_FB_SINK_SERVER_INFO_FILE.to_string(),
+        }
+    }
 }
 
 impl Default for Settings {
@@ -106,15 +144,13 @@ impl Default for Settings {
             batch_size: DEFAULT_BATCH_SIZE,
             timeout_in_ms: DEFAULT_TIMEOUT_IN_MS,
             metrics_server_listen_port: DEFAULT_METRICS_PORT,
-            grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-            is_transformer_enabled: false,
-            is_fallback_enabled: false,
             lag_check_interval_in_secs: DEFAULT_LAG_CHECK_INTERVAL_IN_SECS,
             lag_refresh_interval_in_secs: DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS,
             sink_max_retry_attempts: DEFAULT_MAX_SINK_RETRY_ATTEMPTS,
             sink_retry_interval_in_ms: DEFAULT_SINK_RETRY_INTERVAL_IN_MS,
             sink_retry_on_fail_strategy: DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY,
             sink_default_retry_strategy: default_retry_strategy,
+            sdk_config: Default::default(),
         }
     }
 }
@@ -158,14 +194,14 @@ impl Settings {
                 .and_then(|metadata| metadata.name)
                 .ok_or_else(|| Error::ConfigError("Mono vertex name not found".to_string()))?;
 
-            settings.is_transformer_enabled = mono_vertex_obj
+            settings.sdk_config.is_transformer_enabled = mono_vertex_obj
                 .spec
                 .source
                 .ok_or(Error::ConfigError("Source not found".to_string()))?
                 .transformer
                 .is_some();
 
-            settings.is_fallback_enabled = mono_vertex_obj
+            settings.sdk_config.is_fallback_enabled = mono_vertex_obj
                 .spec
                 .sink
                 .as_deref()
@@ -211,7 +247,7 @@ impl Settings {
                 // check if the sink retry strategy is set to fallback and there is no fallback sink configured
                 // then we should return an error
                 if settings.sink_retry_on_fail_strategy == OnFailureStrategy::Fallback
-                    && !settings.is_fallback_enabled
+                    && !settings.sdk_config.is_fallback_enabled
                 {
                     return Err(Error::ConfigError(
                         "Retry Strategy given as fallback but Fallback sink not configured"
@@ -221,7 +257,7 @@ impl Settings {
             }
         }
 
-        settings.grpc_max_message_size = env::var(ENV_GRPC_MAX_MESSAGE_SIZE)
+        settings.sdk_config.grpc_max_message_size = env::var(ENV_GRPC_MAX_MESSAGE_SIZE)
             .unwrap_or_else(|_| DEFAULT_GRPC_MAX_MESSAGE_SIZE.to_string())
             .parse()
             .map_err(|e| {

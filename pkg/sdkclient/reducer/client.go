@@ -64,7 +64,7 @@ func NewFromClient(c reducepb.ReduceClient) (Client, error) {
 }
 
 // CloseConn closes the grpc client connection.
-func (c *client) CloseConn(ctx context.Context) error {
+func (c *client) CloseConn(context.Context) error {
 	return c.conn.Close()
 }
 

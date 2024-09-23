@@ -62,10 +62,6 @@ func NewUserDefinedSource(ctx context.Context, vertexInstance *dfv1.VertexInstan
 		}
 	}
 
-	if err != nil {
-		u.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
-		return nil, err
-	}
 	return u, nil
 }
 

@@ -6,9 +6,10 @@ use chrono::{DateTime, Utc};
 
 use crate::error::Error;
 use crate::shared::{prost_timestamp_from_utc, utc_from_timestamp};
-use crate::sink::proto;
-use crate::source::proto::read_response;
-use crate::transformer::proto::SourceTransformRequest;
+use crate::sink_pb::SinkRequest;
+use crate::source_pb;
+use crate::source_pb::{AckRequest, read_response};
+use crate::sourcetransform_pb::SourceTransformRequest;
 
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone)]
@@ -34,6 +35,22 @@ pub(crate) struct Offset {
     pub(crate) offset: String,
     /// partition id of the message
     pub(crate) partition_id: i32,
+}
+
+impl From<Offset> for AckRequest {
+    fn from(offset: Offset) -> Self {
+        Self {
+            request: Some(source_pb::ack_request::Request {
+                offset: Some(source_pb::Offset {
+                    offset: BASE64_STANDARD
+                        .decode(offset.offset)
+                        .expect("we control the encoding, so this should never fail"),
+                    partition_id: offset.partition_id,
+                }),
+            }),
+            handshake: None,
+        }
+    }
 }
 
 /// Convert the [`Message`] to [`SourceTransformRequest`]
@@ -74,7 +91,7 @@ impl TryFrom<read_response::Result> for Message {
 }
 
 /// Convert [`Message`] to [`proto::SinkRequest`]
-impl From<Message> for proto::SinkRequest {
+impl From<Message> for SinkRequest {
     fn from(message: Message) -> Self {
         Self {
             keys: message.keys,

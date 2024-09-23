@@ -18,8 +18,9 @@ package source
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"io"
+	"time"
 
 	sourcepb "github.com/numaproj/numaflow-go/pkg/apis/proto/source/v1"
 	"google.golang.org/grpc"
@@ -28,19 +29,22 @@ import (
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	grpcutil "github.com/numaproj/numaflow/pkg/sdkclient/grpc"
 	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 // client contains the grpc connection and the grpc client.
 type client struct {
-	conn    *grpc.ClientConn
-	grpcClt sourcepb.SourceClient
+	conn       *grpc.ClientConn
+	grpcClt    sourcepb.SourceClient
+	readStream sourcepb.Source_ReadFnClient
+	ackStream  sourcepb.Source_AckFnClient
 }
 
 var _ Client = (*client)(nil)
 
-func New(serverInfo *serverinfo.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
+func New(ctx context.Context, serverInfo *serverinfo.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SourceAddr)
-
+	var logger = logging.FromContext(ctx)
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
 	}
@@ -54,16 +58,102 @@ func New(serverInfo *serverinfo.ServerInfo, inputOptions ...sdkclient.Option) (C
 
 	c.conn = conn
 	c.grpcClt = sourcepb.NewSourceClient(conn)
+
+	// wait until the server is ready
+waitUntilReady:
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("failed to connect to the server: %v", ctx.Err())
+		default:
+			ready, _ := c.IsReady(ctx, &emptypb.Empty{})
+			if ready {
+				break waitUntilReady
+			} else {
+				logger.Warnw("source client is not ready")
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}
+
+	c.readStream, err = c.grpcClt.ReadFn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create read stream: %v", err)
+	}
+
+	c.ackStream, err = c.grpcClt.AckFn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ack stream: %v", err)
+	}
+
+	// Send handshake request for read stream
+	readHandshakeRequest := &sourcepb.ReadRequest{
+		Handshake: &sourcepb.Handshake{
+			Sot: true,
+		},
+	}
+	if err := c.readStream.Send(readHandshakeRequest); err != nil {
+		return nil, fmt.Errorf("failed to send read handshake request: %v", err)
+	}
+
+	// Wait for handshake response for read stream
+	readHandshakeResponse, err := c.readStream.Recv()
+	if err != nil {
+		return nil, fmt.Errorf("failed to receive read handshake response: %v", err)
+	}
+	if readHandshakeResponse.GetHandshake() == nil || !readHandshakeResponse.GetHandshake().GetSot() {
+		return nil, fmt.Errorf("invalid read handshake response")
+	}
+
+	// Send handshake request for ack stream
+	ackHandshakeRequest := &sourcepb.AckRequest{
+		Handshake: &sourcepb.Handshake{
+			Sot: true,
+		},
+	}
+	if err := c.ackStream.Send(ackHandshakeRequest); err != nil {
+		return nil, fmt.Errorf("failed to send ack handshake request: %v", err)
+	}
+
+	// Wait for handshake response for ack stream
+	ackHandshakeResponse, err := c.ackStream.Recv()
+	if err != nil {
+		return nil, fmt.Errorf("failed to receive ack handshake response: %v", err)
+	}
+	if ackHandshakeResponse.GetHandshake() == nil || !ackHandshakeResponse.GetHandshake().GetSot() {
+		return nil, fmt.Errorf("invalid ack handshake response")
+	}
+
 	return c, nil
 }
 
 // NewFromClient creates a new client object from the grpc client. This is used for testing.
-func NewFromClient(c sourcepb.SourceClient) (Client, error) {
-	return &client{grpcClt: c}, nil
+func NewFromClient(ctx context.Context, srcClient sourcepb.SourceClient, inputOptions ...sdkclient.Option) (Client, error) {
+	var opts = sdkclient.DefaultOptions(sdkclient.SourceAddr)
+
+	for _, inputOption := range inputOptions {
+		inputOption(opts)
+	}
+
+	c := new(client)
+	c.grpcClt = srcClient
+
+	c.readStream, _ = c.grpcClt.ReadFn(ctx)
+	c.ackStream, _ = c.grpcClt.AckFn(ctx)
+
+	return c, nil
 }
 
 // CloseConn closes the grpc client connection.
-func (c *client) CloseConn(ctx context.Context) error {
+func (c *client) CloseConn(context.Context) error {
+	err := c.readStream.CloseSend()
+	if err != nil {
+		return err
+	}
+	err = c.ackStream.CloseSend()
+	if err != nil {
+		return err
+	}
 	return c.conn.Close()
 }
 
@@ -76,33 +166,51 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 	return resp.GetReady(), nil
 }
 
-// ReadFn reads data from the source.
-func (c *client) ReadFn(ctx context.Context, req *sourcepb.ReadRequest, datumCh chan<- *sourcepb.ReadResponse) error {
-	stream, err := c.grpcClt.ReadFn(ctx, req)
+func (c *client) ReadFn(_ context.Context, req *sourcepb.ReadRequest, datumCh chan<- *sourcepb.ReadResponse) error {
+	err := c.readStream.Send(req)
 	if err != nil {
-		return fmt.Errorf("failed to execute c.grpcClt.ReadFn(): %w", err)
+		return fmt.Errorf("failed to send read request: %v", err)
 	}
+
 	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			var resp *sourcepb.ReadResponse
-			resp, err = stream.Recv()
-			if err == io.EOF {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-			datumCh <- resp
+		resp, err := c.readStream.Recv()
+		// we don't need an EOF check because we only close the stream during shutdown.
+		if errors.Is(err, context.Canceled) {
+			break
 		}
+		if err != nil {
+			return fmt.Errorf("failed to receive read response: %v", err)
+		}
+		if resp.GetStatus().GetEot() {
+			break
+		}
+		datumCh <- resp
 	}
+	return nil
 }
 
 // AckFn acknowledges the data from the source.
-func (c *client) AckFn(ctx context.Context, req *sourcepb.AckRequest) (*sourcepb.AckResponse, error) {
-	return c.grpcClt.AckFn(ctx, req)
+func (c *client) AckFn(_ context.Context, reqs []*sourcepb.AckRequest) ([]*sourcepb.AckResponse, error) {
+	// Send the ack request
+	for _, req := range reqs {
+		err := c.ackStream.Send(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to send ack request: %v", err)
+		}
+	}
+
+	responses := make([]*sourcepb.AckResponse, len(reqs))
+	for i := 0; i < len(reqs); i++ {
+		// Wait for the ack response
+		resp, err := c.ackStream.Recv()
+		// we don't need an EOF check because we only close the stream during shutdown.
+		if err != nil {
+			return nil, fmt.Errorf("failed to receive ack response: %v", err)
+		}
+		responses[i] = resp
+	}
+
+	return responses, nil
 }
 
 // PendingFn returns the number of pending data from the source.
