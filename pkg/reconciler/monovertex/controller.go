@@ -132,12 +132,12 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 
 	// Update the phase based on the DesiredPhase from the lifecycle, this should encompass
 	// the Paused and running states.
-	currentPhase := monoVtx.Status.Phase
+	originalPhase := monoVtx.Status.Phase
 	monoVtx.Status.MarkPhase(monoVtx.Spec.Lifecycle.GetDesiredPhase(), "", "")
 	// If the phase has changed, log the event
-	if monoVtx.Status.Phase != currentPhase {
-		log.Infow("Updated MonoVertex phase", zap.String("originalPhase", string(currentPhase)), zap.String("currentPhase", string(monoVtx.Status.Phase)))
-		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "UpdateMonoVertexPhase", "Updated MonoVertex phase from %s to %s", string(currentPhase), string(monoVtx.Status.Phase))
+	if monoVtx.Status.Phase != originalPhase {
+		log.Infow("Updated MonoVertex phase", zap.String("originalPhase", string(originalPhase)), zap.String("originalPhase", string(monoVtx.Status.Phase)))
+		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "UpdateMonoVertexPhase", "Updated MonoVertex phase from %s to %s", string(originalPhase), string(monoVtx.Status.Phase))
 	}
 
 	// Check children resource status

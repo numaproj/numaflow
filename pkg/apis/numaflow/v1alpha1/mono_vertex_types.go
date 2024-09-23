@@ -80,11 +80,11 @@ func (mv MonoVertex) getReplicas() int {
 }
 
 func (mv MonoVertex) CalculateReplicas() int {
-	desiredReplicas := mv.getReplicas()
 	// If we are pausing the MonoVertex then we should have the desired replicas as 0
 	if mv.Spec.Lifecycle.GetDesiredPhase() == MonoVertexPhasePaused {
 		return 0
 	}
+	desiredReplicas := mv.getReplicas()
 	// Don't allow replicas to be out of the range of min and max when auto scaling is enabled
 	if s := mv.Spec.Scale; !s.Disabled {
 		max := int(s.GetMaxReplicas())
@@ -611,7 +611,6 @@ func (mvs *MonoVertexStatus) MarkPhasePaused() {
 // IsHealthy indicates whether the MonoVertex is in healthy status
 // It returns false if any issues exists
 // True indicates that the MonoVertex is healthy
-// TODO: Add support for paused whenever added in MonoVtx?
 func (mvs *MonoVertexStatus) IsHealthy() bool {
 	// check for the phase field first
 	switch mvs.Phase {
@@ -622,6 +621,8 @@ func (mvs *MonoVertexStatus) IsHealthy() bool {
 	// We check if all the required conditions are true for it to be healthy
 	case MonoVertexPhaseRunning:
 		return mvs.IsReady()
+	case MonoVertexPhasePaused:
+		return true
 	default:
 		return false
 	}
@@ -642,10 +643,12 @@ type MonoVertexLifecycle struct {
 	DesiredPhase MonoVertexPhase `json:"desiredPhase,omitempty" protobuf:"bytes,1,opt,name=desiredPhase"`
 }
 
-// GetDesiredPhase is used to fetch the desired lifecyle phase for a MonoVertex
+// GetDesiredPhase is used to fetch the desired lifecycle phase for a MonoVertex
 func (lc MonoVertexLifecycle) GetDesiredPhase() MonoVertexPhase {
-	if string(lc.DesiredPhase) != "" {
-		return lc.DesiredPhase
+	switch lc.DesiredPhase {
+	case MonoVertexPhasePaused:
+		return MonoVertexPhasePaused
+	default:
+		return MonoVertexPhaseRunning
 	}
-	return MonoVertexPhaseRunning
 }
