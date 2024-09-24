@@ -19132,6 +19132,15 @@
       ],
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.MonoVertexLifecycle": {
+      "properties": {
+        "desiredPhase": {
+          "description": "DesiredPhase used to bring the pipeline from current phase to desired phase",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.MonoVertexLimits": {
       "properties": {
         "readBatchSize": {
@@ -19212,6 +19221,10 @@
             "$ref": "#/definitions/io.k8s.api.core.v1.Container"
           },
           "type": "array"
+        },
+        "lifecycle": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexLifecycle",
+          "description": "Lifecycle defines the Lifecycle properties of a MonoVertex"
         },
         "limits": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.MonoVertexLimits",

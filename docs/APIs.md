@@ -5893,6 +5893,27 @@ The strategy to use to replace existing pods with new ones.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>lifecycle</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexLifecycle">
+MonoVertexLifecycle </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Lifecycle defines the Lifecycle properties of a MonoVertex
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -5911,6 +5932,69 @@ MonoVertexStatus </a> </em>
 <td>
 
 <em>(Optional)</em>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.MonoVertexLifecycle">
+
+MonoVertexLifecycle
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>desiredPhase</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexPhase">
+MonoVertexPhase </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+DesiredPhase used to bring the pipeline from current phase to desired
+phase
+</p>
+
 </td>
 
 </tr>
@@ -6010,6 +6094,7 @@ MonoVertexPhase (<code>string</code> alias)
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexLifecycle">MonoVertexLifecycle</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexStatus">MonoVertexStatus</a>)
 </p>
 
@@ -6276,6 +6361,27 @@ Template for the daemon service deployment.
 <p>
 
 The strategy to use to replace existing pods with new ones.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>lifecycle</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexLifecycle">
+MonoVertexLifecycle </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Lifecycle defines the Lifecycle properties of a MonoVertex
 </p>
 
 </td>

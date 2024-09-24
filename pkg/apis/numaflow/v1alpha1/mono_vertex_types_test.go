@@ -103,6 +103,22 @@ func TestMonoVertex_MarkPhaseRunning(t *testing.T) {
 	}
 }
 
+func TestMonoVertex_MarkPhasePaused(t *testing.T) {
+	mvs := MonoVertexStatus{}
+	mvs.MarkPhasePaused()
+
+	if mvs.Phase != MonoVertexPhasePaused {
+		t.Errorf("MarkPhaseRunning did not set the Phase to Paused, got %v", mvs.Phase)
+	}
+}
+
+func TestMonoVertex_GetDesiredPhase(t *testing.T) {
+	lc := MonoVertexLifecycle{}
+	assert.Equal(t, MonoVertexPhaseRunning, lc.GetDesiredPhase())
+	lc.DesiredPhase = MonoVertexPhasePaused
+	assert.Equal(t, MonoVertexPhasePaused, lc.GetDesiredPhase())
+}
+
 func TestMonoVertex_MarkDaemonUnHealthy(t *testing.T) {
 	mvs := MonoVertexStatus{}
 	mvs.MarkDaemonUnHealthy("reason", "message")
@@ -368,6 +384,22 @@ func TestMonoVertex_CalculateReplicas(t *testing.T) {
 			},
 		}
 		assert.Equal(t, 5, mv.CalculateReplicas())
+	})
+
+	t.Run("phase paused", func(t *testing.T) {
+		replicas := int32(10)
+		mv := MonoVertex{
+			Spec: MonoVertexSpec{
+				Lifecycle: MonoVertexLifecycle{DesiredPhase: MonoVertexPhasePaused},
+				Replicas:  &replicas,
+				Scale: Scale{
+					Disabled: false,
+					Min:      ptr.To[int32](2),
+					Max:      ptr.To[int32](5),
+				},
+			},
+		}
+		assert.Equal(t, 0, mv.CalculateReplicas())
 	})
 }
 

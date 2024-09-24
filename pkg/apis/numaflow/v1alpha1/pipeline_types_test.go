@@ -572,7 +572,7 @@ func TestPipelineStatus_IsHealthy(t *testing.T) {
 			name:  "Paused phase",
 			phase: PipelinePhasePaused,
 			ready: false,
-			want:  true,
+			want:  false,
 		},
 		{
 			name:  "Unknown phase",

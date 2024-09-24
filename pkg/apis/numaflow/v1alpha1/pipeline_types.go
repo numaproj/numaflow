@@ -783,12 +783,10 @@ func (pls *PipelineStatus) IsHealthy() bool {
 	switch pls.Phase {
 	case PipelinePhaseFailed:
 		return false
-	case PipelinePhaseRunning:
+	case PipelinePhaseRunning, PipelinePhasePaused:
 		return pls.IsReady()
 	case PipelinePhaseDeleting, PipelinePhasePausing:
 		// Transient phases, return true
-		return true
-	case PipelinePhasePaused:
 		return true
 	default:
 		return false

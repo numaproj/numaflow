@@ -90,6 +90,8 @@ pub mod metadata;
 pub use self::metadata::Metadata;
 pub mod mono_vertex;
 pub use self::mono_vertex::MonoVertex;
+pub mod mono_vertex_lifecycle;
+pub use self::mono_vertex_lifecycle::MonoVertexLifecycle;
 pub mod mono_vertex_limits;
 pub use self::mono_vertex_limits::MonoVertexLimits;
 pub mod mono_vertex_list;
