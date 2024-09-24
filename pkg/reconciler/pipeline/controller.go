@@ -845,18 +845,27 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		return updated, err
 	}
 
-	daemonClient, err := daemonclient.NewGRPCDaemonServiceClient(pl.GetDaemonServiceURL())
-	if err != nil {
-		return true, err
-	}
-	defer func() {
-		_ = daemonClient.Close()
-	}()
-	drainCompleted, err := daemonClient.IsDrained(ctx, pl.Name)
-	if err != nil {
-		return true, err
-	}
+	var daemonError error = nil
+	var drainCompleted = false
 
+	// Check for the daemon to obtain the buffer draining information, in case we see an error trying to
+	// retrieve this we do not exit prematurely to allow honoring the pause timeout for a consistent error
+	// - In case the timeout has not occurred we would trigger a requeue
+	// - If the timeout has occurred even after getting the drained error, we will try to pause the pipeline
+	daemonClient, daemonError := daemonclient.NewGRPCDaemonServiceClient(pl.GetDaemonServiceURL())
+	r.logger.Info(daemonClient.ListPipelineBuffers(ctx, pl.Name))
+	if err != nil {
+		daemonError = err
+	}
+	if daemonClient != nil {
+		defer func() {
+			_ = daemonClient.Close()
+		}()
+		drainCompleted, err = daemonClient.IsDrained(ctx, pl.Name)
+		if err != nil {
+			daemonError = err
+		}
+	}
 	pauseTimestamp, err := time.Parse(time.RFC3339, pl.GetAnnotations()[dfv1.KeyPauseTimestamp])
 	if err != nil {
 		return false, err
@@ -864,18 +873,21 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 
 	// if drain is completed, or we have exceeded the pause deadline, mark pl as paused and scale down
 	if time.Now().After(pauseTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetPauseGracePeriodSeconds())*time.Second)) || drainCompleted {
-		_, err := r.scaleDownAllVertices(ctx, pl)
+		_, err = r.scaleDownAllVertices(ctx, pl)
 		if err != nil {
 			return true, err
 		}
-		// if the drain completed succesfully, then set the DrainedOnPause field to true
+		if daemonError != nil {
+			r.logger.Errorf("error in fetching Drained status, Pausing due to timeout: %v", zap.Error(err))
+		}
+		// if the drain completed successfully, then set the DrainedOnPause field to true
 		if drainCompleted {
 			pl.Status.MarkDrainedOnPauseTrue()
 		}
 		pl.Status.MarkPhasePaused()
 		return false, nil
 	}
-	return true, nil
+	return true, daemonError
 }
 
 func (r *pipelineReconciler) scaleDownSourceVertices(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
