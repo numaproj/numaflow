@@ -381,11 +381,15 @@ impl Forwarder {
 
                 // create a map of id to result, since there is no strict requirement
                 // for the udsink to return the results in the same order as the requests
-                let result_map: HashMap<_, _> = response
-                    .results
-                    .iter()
-                    .map(|result| (result.id.clone(), result))
-                    .collect();
+                let result_map = response
+                    .into_iter()
+                    .map(|resp| match resp.result {
+                        Some(result) => Ok((result.id.clone(), result)),
+                        None => Err(Error::SinkError(
+                            "Response does not contain a result".to_string(),
+                        )),
+                    })
+                    .collect::<Result<HashMap<_, _>>>()?;
 
                 error_map.clear();
                 // drain all the messages that were successfully written
@@ -459,11 +463,15 @@ impl Forwarder {
 
                     // create a map of id to result, since there is no strict requirement
                     // for the udsink to return the results in the same order as the requests
-                    let result_map: HashMap<_, _> = fb_response
-                        .results
+                    let result_map = fb_response
                         .iter()
-                        .map(|result| (result.id.clone(), result))
-                        .collect();
+                        .map(|resp| match &resp.result {
+                            Some(result) => Ok((result.id.clone(), result)),
+                            None => Err(Error::SinkError(
+                                "Response does not contain a result".to_string(),
+                            )),
+                        })
+                        .collect::<Result<HashMap<_, _>>>()?;
 
                     let mut contains_fallback_status = false;
 

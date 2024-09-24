@@ -6,9 +6,10 @@ use chrono::{DateTime, Utc};
 
 use crate::error::Error;
 use crate::shared::{prost_timestamp_from_utc, utc_from_timestamp};
+use crate::sink_pb::sink_request::Request;
 use crate::sink_pb::SinkRequest;
 use crate::source_pb;
-use crate::source_pb::{AckRequest, read_response};
+use crate::source_pb::{read_response, AckRequest};
 use crate::sourcetransform_pb::SourceTransformRequest;
 
 /// A message that is sent from the source to the sink.
@@ -94,12 +95,16 @@ impl TryFrom<read_response::Result> for Message {
 impl From<Message> for SinkRequest {
     fn from(message: Message) -> Self {
         Self {
-            keys: message.keys,
-            value: message.value,
-            event_time: prost_timestamp_from_utc(message.event_time),
-            watermark: None,
-            id: message.id,
-            headers: message.headers,
+            request: Some(Request {
+                keys: message.keys,
+                value: message.value,
+                event_time: prost_timestamp_from_utc(message.event_time),
+                watermark: None,
+                id: message.id,
+                headers: message.headers,
+            }),
+            status: None,
+            handshake: None,
         }
     }
 }

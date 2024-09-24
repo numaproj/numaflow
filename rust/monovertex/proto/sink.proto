@@ -7,7 +7,7 @@ package sink.v1;
 
 service Sink {
   // SinkFn writes the request to a user defined sink.
-  rpc SinkFn(stream SinkRequest) returns (SinkResponse);
+  rpc SinkFn(stream SinkRequest) returns (stream SinkResponse);
 
   // IsReady is the heartbeat endpoint for gRPC.
   rpc IsReady(google.protobuf.Empty) returns (ReadyResponse);
@@ -17,12 +17,32 @@ service Sink {
  * SinkRequest represents a request element.
  */
 message SinkRequest {
-  repeated string keys = 1;
-  bytes value = 2;
-  google.protobuf.Timestamp event_time = 3;
-  google.protobuf.Timestamp watermark = 4;
-  string id = 5;
-  map<string, string> headers = 6;
+  message Request {
+    repeated string keys = 1;
+    bytes value = 2;
+    google.protobuf.Timestamp event_time = 3;
+    google.protobuf.Timestamp watermark = 4;
+    string id = 5;
+    map<string, string> headers = 6;
+  }
+  message Status {
+    bool eot = 1;
+  }
+  // Required field indicating the request.
+  Request request = 1;
+  // Required field indicating the status of the request.
+  // If eot is set to true, it indicates the end of transmission.
+  Status status = 2;
+  // optional field indicating the handshake message.
+  optional Handshake handshake = 3;
+}
+
+/*
+ * Handshake message between client and server to indicate the start of transmission.
+ */
+message Handshake {
+  // Required field indicating the start of transmission.
+  bool sot = 1;
 }
 
 /**
@@ -30,6 +50,15 @@ message SinkRequest {
  */
 message ReadyResponse {
   bool ready = 1;
+}
+
+/*
+  * Status is the status of the response.
+ */
+enum Status {
+  SUCCESS = 0;
+  FAILURE = 1;
+  FALLBACK = 2;
 }
 
 /**
@@ -44,14 +73,6 @@ message SinkResponse {
     // err_msg is the error message, set it if success is set to false.
     string err_msg = 3;
   }
-  repeated Result results = 1;
-}
-
-/*
-  * Status is the status of the response.
- */
-enum Status {
-  SUCCESS = 0;
-  FAILURE = 1;
-  FALLBACK = 2;
+  Result result = 1;
+  optional Handshake handshake = 2;
 }

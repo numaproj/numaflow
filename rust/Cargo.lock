@@ -1478,7 +1478,7 @@ dependencies = [
  "hyper-util",
  "kube",
  "log",
- "numaflow 0.1.1",
+ "numaflow 0.1.1 (git+https://github.com/numaproj/numaflow-rs.git?rev=a299a51043e947a27fa471ffcdef29401af7edd0)",
  "numaflow-models",
  "once_cell",
  "parking_lot",
@@ -1606,6 +1606,28 @@ dependencies = [
 name = "numaflow"
 version = "0.1.1"
 source = "git+https://github.com/numaproj/numaflow-rs.git?branch=handshake#baecc88456f317b08bc869f82596e2b746cf798b"
+dependencies = [
+ "chrono",
+ "futures-util",
+ "hyper-util",
+ "prost",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tonic",
+ "tonic-build",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "numaflow"
+version = "0.1.1"
+source = "git+https://github.com/numaproj/numaflow-rs.git?rev=a299a51043e947a27fa471ffcdef29401af7edd0#a299a51043e947a27fa471ffcdef29401af7edd0"
 dependencies = [
  "chrono",
  "futures-util",
@@ -2594,7 +2616,7 @@ dependencies = [
 name = "servesink"
 version = "0.1.0"
 dependencies = [
- "numaflow 0.1.1",
+ "numaflow 0.1.1 (git+https://github.com/numaproj/numaflow-rs.git?branch=handshake)",
  "reqwest 0.12.7",
  "tokio",
  "tonic",
