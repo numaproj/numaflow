@@ -617,12 +617,10 @@ func (mvs *MonoVertexStatus) IsHealthy() bool {
 	// Directly return an error if the phase is failed
 	case MonoVertexPhaseFailed:
 		return false
-	// Check if the MonoVertex is ready if the phase is running,
+	// Check if the MonoVertex is ready if the phase is running or Paused,
 	// We check if all the required conditions are true for it to be healthy
-	case MonoVertexPhaseRunning:
+	case MonoVertexPhaseRunning, MonoVertexPhasePaused:
 		return mvs.IsReady()
-	case MonoVertexPhasePaused:
-		return true
 	default:
 		return false
 	}
