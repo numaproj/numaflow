@@ -845,7 +845,7 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		return updated, err
 	}
 
-	var daemonError error = nil
+	var daemonError error
 	var drainCompleted = false
 
 	// Check for the daemon to obtain the buffer draining information, in case we see an error trying to
