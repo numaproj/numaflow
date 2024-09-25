@@ -84,7 +84,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		redisClient := redisclient.NewInClusterRedisClient()
-		readOptions := []redisclient.Option{}
+		var readOptions []redisclient.Option
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 			readOptions = append(readOptions, redisclient.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
@@ -155,7 +155,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			return err
 		}
 
-		sdkClient, err := sinkclient.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+		sdkClient, err := sinkclient.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create sdk client, %w", err)
 		}
@@ -184,7 +184,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			return err
 		}
 
-		sdkClient, err := sinkclient.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.FbSinkAddr))
+		sdkClient, err := sinkclient.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.FbSinkAddr))
 		if err != nil {
 			return fmt.Errorf("failed to create sdk client, %w", err)
 		}
@@ -292,7 +292,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	// wait for all the forwarders to exit
 	finalWg.Wait()
 
-	// close the from vertex wm stores
+	// close the fromVertex wm stores
 	// since we created the stores, we can close them
 	for _, wmStore := range fromVertexWmStores {
 		_ = wmStore.Close()
