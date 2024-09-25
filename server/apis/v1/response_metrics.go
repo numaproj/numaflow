@@ -1,12 +1,18 @@
 package v1
 
+type UserMetricName string
+type PrometheusResponseFormat string
+
+const (
+	Matrix PrometheusResponseFormat = "matrix"
+	Vector PrometheusResponseFormat = "vector"
+)
+
 type MetricMetaData struct {
 	NumaMetricName string
 	Description    string
 	Expression     string
 }
-
-type UserMetricName string
 type MetricSpecData struct {
 	MetricName UserMetricName    `json:"metricName"`
 	Duration   string            `json:"duration"`
@@ -15,21 +21,30 @@ type MetricSpecData struct {
 	Labels     map[string]string `json:"labels"`
 }
 
-// hardcoded map for now
+// necessary counter metrics - first iteration - revisit later
 var metricNameMap = map[UserMetricName]MetricMetaData{
-	"total_mssgs_read": {
+	"read-rate": {
 		NumaMetricName: "forwarder_read_total",
 		Description:    "Total number of Messages Read",
 	},
-	"udf_processing_time": {
-		NumaMetricName: "forwarder_udf_processing_time",
-		Description:    "Processing times of UDF (100 microseconds to 15 minutes)",
+	"write-rate": {
+		NumaMetricName: "forwarder_write_total",
+		Description:    "Total number of Messages Written",
+	},
+	"write-errors-rate": {
+		NumaMetricName: "forwarder_write_error_total",
+		Description:    "Total number of Write Errors",
+	},
+	"ack-rate": {
+		NumaMetricName: "forwarder_ack_total",
+		Description:    "Total number of Messages Acknowledged",
+	},
+	"fallback-sink-write-rate": {
+		NumaMetricName: "forwarder_fbsink_write_total",
+		Description:    "Total number of Messages written to a fallback sink",
+	},
+	"fallback-sink-write-errors-rate": {
+		NumaMetricName: "forwarder_fbsink_write_error_total",
+		Description:    "Total number of Write Errors while writing to a fallback sink",
 	},
 }
-
-type PrometheusResponseFormat string
-
-const (
-	Matrix PrometheusResponseFormat = "matrix"
-	Vector PrometheusResponseFormat = "vector"
-)

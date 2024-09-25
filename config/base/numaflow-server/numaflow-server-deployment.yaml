@@ -154,7 +154,7 @@ spec:
             valueFrom:
               configMapKeyRef:
                 name: numaflow-metric-server-config
-                key: url
+                key: metric.server.url
                 optional: true
           resources:
             limits:

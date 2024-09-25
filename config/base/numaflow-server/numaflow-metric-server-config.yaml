@@ -3,4 +3,5 @@ kind: ConfigMap
 metadata:
   name: numaflow-metric-server-config
 data:
-  url: "http://my-release-kube-prometheus-prometheus.default.svc.cluster.local:9090"
+  ### The  address of the Prometheus server. This is required for querying metrics from the server.
+  # metric.server.url: "http://localhost:9090"

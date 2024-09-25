@@ -25581,8 +25581,7 @@ metadata:
   name: numaflow-dex-server-config
 ---
 apiVersion: v1
-data:
-  url: http://my-release-kube-prometheus-prometheus.default.svc.cluster.local:9090
+data: null
 kind: ConfigMap
 metadata:
   name: numaflow-metric-server-config
@@ -25939,7 +25938,7 @@ spec:
         - name: NUMAFLOW_SERVER_PROMETHEUS_URL
           valueFrom:
             configMapKeyRef:
-              key: url
+              key: metric.server.url
               name: numaflow-metric-server-config
               optional: true
         image: quay.io/numaproj/numaflow:latest
@@ -25977,12 +25976,6 @@ spec:
             configMapKeyRef:
               key: server.base.href
               name: numaflow-cmd-params-config
-              optional: true
-        - name: NUMAFLOW_SERVER_PROMETHEUS_URL
-          valueFrom:
-            configMapKeyRef:
-              key: url
-              name: numaflow-metric-server-config
               optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always

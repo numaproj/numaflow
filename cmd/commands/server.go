@@ -82,7 +82,7 @@ func NewServerCommand() *cobra.Command {
 	command.Flags().StringVar(&serverAddr, "server-addr", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_ADDRESS", "https://localhost:8443"), "The external address of the Numaflow server.")
 	command.Flags().StringVar(&corsAllowedOrigins, "cors-allowed-origins", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_CORS_ALLOWED_ORIGINS", ""), "The values for allowed cors AllowOrigins header field, separated by comma.")
 	command.Flags().StringVar(&daemonClientProtocol, "daemon-client-protocol", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_DAEMON_CLIENT_PROTOCOL", "grpc"), "The protocol used to connect to the Pipeline daemon service from Numaflow UX server, defaults to 'grpc'.")
-	command.Flags().StringVar(&prometheusServerUrl, "prometheus-server-url", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_PROMETHEUS_URL", "http://localhost:9090"), "The prometheus server url for querying metrics data.")
+	command.Flags().StringVar(&prometheusServerUrl, "prometheus-server-url", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_PROMETHEUS_URL", ""), "The prometheus server url for querying metrics data.")
 
 	return command
 }

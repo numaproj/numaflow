@@ -1185,6 +1185,7 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
+// validate metric request body
 func validateMetricReqBody(data MetricSpecData) error {
 	if (data.From == "" && data.To != "") || (data.To == "" && data.From != "") {
 		return fmt.Errorf("bad request: either both from and to be set or none")
@@ -1196,7 +1197,7 @@ func validateMetricReqBody(data MetricSpecData) error {
 	return nil
 }
 
-// add any label from the user
+// build query from labels provided by user
 func buildMetricLabelQuery(data map[string]string) string {
 	query := ""
 	for key, val := range data {
@@ -1205,8 +1206,9 @@ func buildMetricLabelQuery(data map[string]string) string {
 	return query
 }
 
-func buildTimeSeriesData(ctx context.Context, v1api v1.API, data MetricSpecData, query string, format PrometheusResponseFormat) []any {
-	var timeSeriesData = make([]any, 0)
+// build time series data from prometheus response which can be in Matrix or Vector format
+func buildTimeSeriesData(ctx context.Context, v1api v1.API, data MetricSpecData, query string, format PrometheusResponseFormat) ([][]float64, error) {
+	var timeSeriesData = make([][]float64, 0)
 	if format == Matrix {
 		startTime, _ := time.Parse(time.RFC3339, data.From)
 		endTime, _ := time.Parse(time.RFC3339, data.To)
@@ -1217,33 +1219,45 @@ func buildTimeSeriesData(ctx context.Context, v1api v1.API, data MetricSpecData,
 		}
 		result, _, err := v1api.QueryRange(ctx, query, r)
 		if err != nil {
-			return timeSeriesData
+			return timeSeriesData, err
 		}
 		matrixRes := result.(model.Matrix)
 
 		for _, sampleStream := range matrixRes {
 			for _, val := range sampleStream.Values {
-				timeSeriesData = append(timeSeriesData, val)
+				timeSeriesData = append(timeSeriesData, []float64{
+					float64(val.Timestamp),
+					float64(val.Value),
+				})
 			}
 		}
 
 	} else if format == Vector {
 		result, _, err := v1api.Query(ctx, query, model.Now().Time())
 		if err != nil {
-			return timeSeriesData
+			return timeSeriesData, err
 		}
 		vectorRes := result.(model.Vector)
 		for _, sample := range vectorRes {
-			timeSeriesData = append(timeSeriesData, sample.Value)
+			timeSeriesData = append(timeSeriesData, []float64{
+				float64(sample.Timestamp),
+				float64(sample.Value),
+			})
 		}
 	}
-	return timeSeriesData
+	return timeSeriesData, nil
 }
 
 func (h *handler) GetMetricData(c *gin.Context) {
 
+	if h.prometheusServerUrl == "" {
+		h.respondWithError(c, "Prometheus Server URL not set.")
+		return
+	}
+
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
+	// bind request body to metric specs data
 	var metricSpecData MetricSpecData
 	if err := bindJson(c, &metricSpecData); err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body to metric data spec, %s", err.Error()))
@@ -1257,7 +1271,7 @@ func (h *handler) GetMetricData(c *gin.Context) {
 	// build labels query
 	labelQuery := buildMetricLabelQuery(metricSpecData.Labels)
 
-	// build query
+	// query builder: "rate" hardcoded for counter metrics - first iteration - revisit later
 	query := fmt.Sprintf(`rate(%s{namespace="%s",pipeline="%s"%s}[%s])`, metricNameMap[metricSpecData.MetricName].NumaMetricName, ns, pipeline, labelQuery, metricSpecData.Duration)
 
 	client, err := api.NewClient(api.Config{
@@ -1272,11 +1286,17 @@ func (h *handler) GetMetricData(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var timeSeriesData = make([]any, 0)
+	var timeSeriesData = make([][]float64, 0)
 	if metricSpecData.From != "" {
-		timeSeriesData = buildTimeSeriesData(ctx, v1api, metricSpecData, query, Matrix)
+		timeSeriesData, err = buildTimeSeriesData(ctx, v1api, metricSpecData, query, Matrix)
 	} else {
-		timeSeriesData = buildTimeSeriesData(ctx, v1api, metricSpecData, query, Vector)
+		timeSeriesData, err = buildTimeSeriesData(ctx, v1api, metricSpecData, query, Vector)
+	}
+
+	if err != nil {
+		errMsg := fmt.Sprintf("Error building time series data: %v\n", err)
+		h.respondWithError(c, errMsg)
+		return
 	}
 
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, timeSeriesData))
