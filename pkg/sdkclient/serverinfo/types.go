@@ -29,6 +29,8 @@ const (
 
 type ContainerType string
 
+// the string content matches the corresponding server info file name.
+// DO NOT change it unless the server info file name is changed.
 const (
 	sourcer           ContainerType = "sourcer"
 	sourcetransformer ContainerType = "sourcetransformer"
