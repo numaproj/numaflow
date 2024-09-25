@@ -55,6 +55,7 @@ type ServerOptions struct {
 	CorsAllowedOrigins   string
 	ReadOnly             bool
 	DaemonClientProtocol string
+	PrometheusServerUrl  string
 }
 
 type server struct {
@@ -113,6 +114,9 @@ func (s *server) Start(ctx context.Context) {
 			DisableAuth:   s.options.DisableAuth,
 			DexServerAddr: s.options.DexServerAddr,
 			ServerAddr:    s.options.ServerAddr,
+		},
+		routes.MetricInfo{
+			PrometheusServerUrl: s.options.PrometheusServerUrl,
 		},
 		s.options.BaseHref,
 		authRouteMap,

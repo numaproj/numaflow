@@ -48,8 +48,12 @@ func TestRoutes(t *testing.T) {
 		DexServerAddr: "test-dex-server-addr",
 	}
 
+	metricInfo := MetricInfo{
+		PrometheusServerUrl: "http://localhost:9090",
+	}
+
 	authRouteMap := authz.RouteMap{}
-	Routes(logging.WithLogger(signals.SetupSignalHandler(), log), router, sysInfo, authInfo, "/", authRouteMap)
+	Routes(logging.WithLogger(signals.SetupSignalHandler(), log), router, sysInfo, authInfo, metricInfo, "/", authRouteMap)
 	t.Run("/404", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		req, err := http.NewRequest(http.MethodGet, "/404", nil)

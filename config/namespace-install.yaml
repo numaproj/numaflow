@@ -25567,6 +25567,13 @@ metadata:
 ---
 apiVersion: v1
 data:
+  url: http://my-release-kube-prometheus-prometheus.default.svc.cluster.local:9090
+kind: ConfigMap
+metadata:
+  name: numaflow-metric-server-config
+---
+apiVersion: v1
+data:
   admin.enabled: "true"
 kind: ConfigMap
 metadata:
@@ -25914,6 +25921,12 @@ spec:
               key: server.daemon.client.protocol
               name: numaflow-cmd-params-config
               optional: true
+        - name: NUMAFLOW_SERVER_PROMETHEUS_URL
+          valueFrom:
+            configMapKeyRef:
+              key: url
+              name: numaflow-metric-server-config
+              optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         livenessProbe:
@@ -25950,6 +25963,12 @@ spec:
               key: server.base.href
               name: numaflow-cmd-params-config
               optional: true
+        - name: NUMAFLOW_SERVER_PROMETHEUS_URL
+          valueFrom:
+            configMapKeyRef:
+              key: url
+              name: numaflow-metric-server-config
+              optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         name: server-init
@@ -25968,6 +25987,12 @@ spec:
             configMapKeyRef:
               key: server.disable.auth
               name: numaflow-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_PROMETHEUS_URL
+          valueFrom:
+            configMapKeyRef:
+              key: url
+              name: numaflow-metric-server-config
               optional: true
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always

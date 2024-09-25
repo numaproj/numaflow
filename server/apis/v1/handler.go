@@ -101,11 +101,12 @@ type handler struct {
 	dexObj                *DexObject
 	localUsersAuthObject  *LocalUsersAuthObject
 	healthChecker         *HealthChecker
+	prometheusServerUrl   string
 	opts                  *handlerOptions
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, opts ...HandlerOption) (*handler, error) {
+func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, prometheusServerUrl string, opts ...HandlerOption) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -141,6 +142,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 		dexObj:                dexObj,
 		localUsersAuthObject:  localUsersAuthObject,
 		healthChecker:         NewHealthChecker(ctx),
+		prometheusServerUrl:   prometheusServerUrl,
 		opts:                  o,
 	}, nil
 }
@@ -1194,30 +1196,48 @@ func validateMetricReqBody(data MetricSpecData) error {
 	return nil
 }
 
-func buildMetricLabelQuery(data MetricSpecData) string {
+// add any label from the user
+func buildMetricLabelQuery(data map[string]string) string {
 	query := ""
-	if data.Labels.LabelVertex != "" {
-		query += fmt.Sprintf(`,vertex="%s"`, data.Labels.LabelVertex)
-	}
-	if data.Labels.LabelMonoVertexName != "" {
-		query += fmt.Sprintf(`,mvtx_name="%s"`, data.Labels.LabelMonoVertexName)
-	}
-	if data.Labels.LabelPartitionName != "" {
-		query += fmt.Sprintf(`,partition_name="%s"`, data.Labels.LabelPartitionName)
-	}
-	if data.Labels.LabelISBService != "" {
-		query += fmt.Sprintf(`,isbsvc="%s"`, data.Labels.LabelISBService)
-	}
-	if data.Labels.LabelPlatform != "" {
-		query += fmt.Sprintf(`,platform="%s"`, data.Labels.LabelPlatform)
-	}
-	if data.Labels.LabelVertexType != "" {
-		query += fmt.Sprintf(`,vertex_type="%s"`, data.Labels.LabelVertexType)
-	}
-	if data.Labels.LabelVersion != "" {
-		query += fmt.Sprintf(`,version="%s"`, data.Labels.LabelVersion)
+	for key, val := range data {
+		query += fmt.Sprintf(`,%s="%s"`, key, val)
 	}
 	return query
+}
+
+func buildTimeSeriesData(ctx context.Context, v1api v1.API, data MetricSpecData, query string, format PrometheusResponseFormat) []any {
+	var timeSeriesData = make([]any, 0)
+	if format == Matrix {
+		startTime, _ := time.Parse(time.RFC3339, data.From)
+		endTime, _ := time.Parse(time.RFC3339, data.To)
+		r := v1.Range{
+			Start: startTime,
+			End:   endTime,
+			Step:  time.Minute,
+		}
+		result, _, err := v1api.QueryRange(ctx, query, r)
+		if err != nil {
+			return timeSeriesData
+		}
+		matrixRes := result.(model.Matrix)
+
+		for _, sampleStream := range matrixRes {
+			for _, val := range sampleStream.Values {
+				timeSeriesData = append(timeSeriesData, val)
+			}
+		}
+
+	} else if format == Vector {
+		result, _, err := v1api.Query(ctx, query, model.Now().Time())
+		if err != nil {
+			return timeSeriesData
+		}
+		vectorRes := result.(model.Vector)
+		for _, sample := range vectorRes {
+			timeSeriesData = append(timeSeriesData, sample.Value)
+		}
+	}
+	return timeSeriesData
 }
 
 func (h *handler) GetMetricData(c *gin.Context) {
@@ -1235,13 +1255,13 @@ func (h *handler) GetMetricData(c *gin.Context) {
 	}
 
 	// build labels query
-	labelQuery := buildMetricLabelQuery(metricSpecData)
+	labelQuery := buildMetricLabelQuery(metricSpecData.Labels)
 
 	// build query
 	query := fmt.Sprintf(`rate(%s{namespace="%s",pipeline="%s"%s}[%s])`, metricNameMap[metricSpecData.MetricName].NumaMetricName, ns, pipeline, labelQuery, metricSpecData.Duration)
 
 	client, err := api.NewClient(api.Config{
-		Address: "http://my-release-kube-prometheus-prometheus.default.svc.cluster.local:9090", // Replace with your Prometheus server address
+		Address: h.prometheusServerUrl,
 	})
 	if err != nil {
 		errMsg := fmt.Sprintf("Error creating client: %v\n", err)
@@ -1249,37 +1269,17 @@ func (h *handler) GetMetricData(c *gin.Context) {
 		return
 	}
 	v1api := v1.NewAPI(client)
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var (
-		result   model.Value
-		warnings v1.Warnings
-	)
+	var timeSeriesData = make([]any, 0)
 	if metricSpecData.From != "" {
-		startTime, _ := time.Parse(time.RFC3339, metricSpecData.From)
-		endTime, _ := time.Parse(time.RFC3339, metricSpecData.To)
-		r := v1.Range{
-			Start: startTime,
-			End:   endTime,
-			Step:  time.Minute,
-		}
-		result, warnings, err = v1api.QueryRange(ctx, query, r)
+		timeSeriesData = buildTimeSeriesData(ctx, v1api, metricSpecData, query, Matrix)
 	} else {
-		result, warnings, err = v1api.Query(ctx, query, model.Now().Time())
+		timeSeriesData = buildTimeSeriesData(ctx, v1api, metricSpecData, query, Vector)
 	}
 
-	if err != nil {
-		errMsg := fmt.Sprintf("error in querying Prometheus %v", err)
-		h.respondWithError(c, errMsg)
-		return
-	}
-	if len(warnings) > 0 {
-		errMsg := fmt.Sprintf("Warnings: %v\n", warnings)
-		h.respondWithError(c, errMsg)
-		return
-	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, result))
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, timeSeriesData))
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster

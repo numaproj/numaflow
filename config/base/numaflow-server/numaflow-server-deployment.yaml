@@ -58,6 +58,12 @@ spec:
                 name: numaflow-cmd-params-config
                 key: server.disable.auth
                 optional: true
+          - name: NUMAFLOW_SERVER_PROMETHEUS_URL
+            valueFrom:
+              configMapKeyRef:
+                name: numaflow-metric-server-config
+                key: url
+                optional: true
       containers:
         - name: main
           image: quay.io/numaproj/numaflow:latest
@@ -143,6 +149,12 @@ spec:
               configMapKeyRef:
                 name: numaflow-cmd-params-config
                 key: server.daemon.client.protocol
+                optional: true
+          - name: NUMAFLOW_SERVER_PROMETHEUS_URL
+            valueFrom:
+              configMapKeyRef:
+                name: numaflow-metric-server-config
+                key: url
                 optional: true
           resources:
             limits:

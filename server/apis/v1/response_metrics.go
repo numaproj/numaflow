@@ -3,29 +3,19 @@ package v1
 type MetricMetaData struct {
 	NumaMetricName string
 	Description    string
+	Expression     string
 }
 
 type UserMetricName string
-
-type MetricLabel struct {
-	LabelVertex             string `json:"vertex,omitempty"`
-	LabelVertexType         string `json:"vertex_type,omitempty"`
-	LabelVertexReplicaIndex string `json:"replica,omitempty"`
-	LabelPartitionName      string `json:"partition_name,omitempty"`
-	LabelMonoVertexName     string `json:"mvtx_name,omitempty"`
-	LabelISBService         string `json:"isbsvc,omitempty"`
-	LabelPlatform           string `json:"platform,omitempty"`
-	LabelVersion            string `json:"version,omitempty"`
-}
-
 type MetricSpecData struct {
-	MetricName UserMetricName `json:"metricName"`
-	Duration   string         `json:"duration"`
-	From       string         `json:"from"`
-	To         string         `json:"to"`
-	Labels     MetricLabel    `json:"labels"`
+	MetricName UserMetricName    `json:"metricName"`
+	Duration   string            `json:"duration"`
+	From       string            `json:"from"`
+	To         string            `json:"to"`
+	Labels     map[string]string `json:"labels"`
 }
 
+// hardcoded map for now
 var metricNameMap = map[UserMetricName]MetricMetaData{
 	"total_mssgs_read": {
 		NumaMetricName: "forwarder_read_total",
@@ -36,3 +26,10 @@ var metricNameMap = map[UserMetricName]MetricMetaData{
 		Description:    "Processing times of UDF (100 microseconds to 15 minutes)",
 	},
 }
+
+type PrometheusResponseFormat string
+
+const (
+	Matrix PrometheusResponseFormat = "matrix"
+	Vector PrometheusResponseFormat = "vector"
+)
