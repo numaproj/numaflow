@@ -5195,6 +5195,21 @@ spec:
                   - name
                   type: object
                 type: array
+              lifecycle:
+                default:
+                  desiredPhase: Running
+                properties:
+                  desiredPhase:
+                    default: Running
+                    enum:
+                    - ""
+                    - Running
+                    - Failed
+                    - Pausing
+                    - Paused
+                    - Deleting
+                    type: string
+                type: object
               limits:
                 properties:
                   readBatchSize:

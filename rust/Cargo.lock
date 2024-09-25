@@ -1597,7 +1597,7 @@ dependencies = [
 [[package]]
 name = "numaflow"
 version = "0.1.1"
-source = "git+https://github.com/numaproj/numaflow-rs.git?branch=handshake#baecc88456f317b08bc869f82596e2b746cf798b"
+source = "git+https://github.com/numaproj/numaflow-rs.git?branch=main#362f2b0a0705c34ce3693b8714885dfbae7843e8"
 dependencies = [
  "chrono",
  "futures-util",
@@ -2608,7 +2608,7 @@ dependencies = [
 name = "servesink"
 version = "0.1.0"
 dependencies = [
- "numaflow 0.1.1 (git+https://github.com/numaproj/numaflow-rs.git?branch=handshake)",
+ "numaflow 0.1.1 (git+https://github.com/numaproj/numaflow-rs.git?branch=main)",
  "reqwest 0.12.7",
  "tokio",
  "tonic",
