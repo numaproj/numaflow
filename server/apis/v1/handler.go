@@ -1286,7 +1286,7 @@ func (h *handler) GetMetricData(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var timeSeriesData = make([][]float64, 0)
+	var timeSeriesData [][]float64
 	if metricSpecData.From != "" {
 		timeSeriesData, err = buildTimeSeriesData(ctx, v1api, metricSpecData, query, Matrix)
 	} else {
