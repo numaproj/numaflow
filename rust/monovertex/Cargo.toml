@@ -38,7 +38,7 @@ log = "0.4.22"
 
 [dev-dependencies]
 tempfile = "3.11.0"
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "6f67004ad70a4ba9b25290a4cfa503987a5944f5" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "0c1682864a4b906fab52e149cfd7cacc679ce688" }
 
 [build-dependencies]
 tonic-build = "0.12.1"

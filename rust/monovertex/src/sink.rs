@@ -1,6 +1,7 @@
 use crate::error::{Error, Result};
 use crate::message::Message;
 use crate::sink_pb::sink_client::SinkClient;
+use crate::sink_pb::sink_request::Status;
 use crate::sink_pb::{Handshake, SinkRequest, SinkResponse};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -68,8 +69,8 @@ impl SinkWriter {
         // send eot request to indicate the end of the stream
         let eot_request = SinkRequest {
             request: None,
-            status: None,
-            handshake: Some(Handshake { sot: false }),
+            status: Some(Status { eot: true }),
+            handshake: None,
         };
         self.sink_tx
             .send(eot_request)
@@ -102,10 +103,7 @@ mod tests {
     struct Logger;
     #[tonic::async_trait]
     impl sink::Sinker for Logger {
-        async fn sink(
-            &self,
-            mut input: tokio::sync::mpsc::Receiver<sink::SinkRequest>,
-        ) -> Vec<sink::Response> {
+        async fn sink(&self, mut input: mpsc::Receiver<sink::SinkRequest>) -> Vec<sink::Response> {
             let mut responses: Vec<sink::Response> = Vec::new();
             while let Some(datum) = input.recv().await {
                 let response = match std::str::from_utf8(&datum.value) {
@@ -140,7 +138,6 @@ mod tests {
                 .start_with_shutdown(shutdown_rx)
                 .await
                 .expect("failed to start sink server");
-            println!("Server is exiting");
         });
 
         // wait for the server to start
@@ -176,14 +173,18 @@ mod tests {
             },
         ];
 
-        let response = sink_client.sink_fn(messages).await?;
+        let response = sink_client.sink_fn(messages.clone()).await?;
+        assert_eq!(response.len(), 2);
+
+        let response = sink_client.sink_fn(messages.clone()).await?;
         assert_eq!(response.len(), 2);
 
         drop(sink_client);
-        // shutdown_tx
-        //     .send(())
-        //     .expect("failed to send shutdown signal");
-        // server_handle.await.expect("failed to join server task");
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+
+        server_handle.await.expect("failed to join server task");
         Ok(())
     }
 }
