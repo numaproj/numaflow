@@ -25,12 +25,12 @@ import (
 func TestCreateAuthRouteMap(t *testing.T) {
 	t.Run("empty base", func(t *testing.T) {
 		got := CreateAuthRouteMap("")
-		assert.Equal(t, 30, len(got))
+		assert.Equal(t, 31, len(got))
 	})
 
 	t.Run("customize base", func(t *testing.T) {
 		got := CreateAuthRouteMap("abcdefg")
-		assert.Equal(t, 30, len(got))
+		assert.Equal(t, 31, len(got))
 		for k := range got {
 			assert.Contains(t, k, "abcdefg")
 		}
@@ -50,6 +50,7 @@ func TestNewServer(t *testing.T) {
 		CorsAllowedOrigins:   "http://localhost:3000,http://example.com",
 		ReadOnly:             false,
 		DaemonClientProtocol: "http",
+		PrometheusServerUrl:  "http://localhost:9090",
 	}
 
 	s := NewServer(opts)
