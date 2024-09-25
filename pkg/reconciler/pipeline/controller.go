@@ -853,10 +853,6 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 	// - In case the timeout has not occurred we would trigger a requeue
 	// - If the timeout has occurred even after getting the drained error, we will try to pause the pipeline
 	daemonClient, daemonError := daemonclient.NewGRPCDaemonServiceClient(pl.GetDaemonServiceURL())
-	r.logger.Info(daemonClient.ListPipelineBuffers(ctx, pl.Name))
-	if err != nil {
-		daemonError = err
-	}
 	if daemonClient != nil {
 		defer func() {
 			_ = daemonClient.Close()
