@@ -7,6 +7,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
+const DEFAULT_CHANNEL_SIZE: usize = 1000;
+
 /// SinkWriter writes messages to a sink.
 pub struct SinkWriter {
     sink_tx: mpsc::Sender<SinkRequest>,
@@ -15,7 +17,7 @@ pub struct SinkWriter {
 
 impl SinkWriter {
     pub(crate) async fn new(mut client: SinkClient<Channel>) -> Result<Self> {
-        let (sink_tx, sink_rx) = mpsc::channel(100); // Adjust the buffer size as needed
+        let (sink_tx, sink_rx) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
         let sink_stream = ReceiverStream::new(sink_rx);
 
         // Perform handshake with the server before sending any requests
@@ -57,12 +59,22 @@ impl SinkWriter {
         let num_requests = requests.len();
 
         for request in requests {
-            println!("Sending request: {:?}", request);
             self.sink_tx
                 .send(request)
                 .await
                 .map_err(|e| Error::SinkError(format!("failed to send request: {}", e)))?;
         }
+
+        // send eot request to indicate the end of the stream
+        let eot_request = SinkRequest {
+            request: None,
+            status: None,
+            handshake: Some(Handshake { sot: false }),
+        };
+        self.sink_tx
+            .send(eot_request)
+            .await
+            .map_err(|e| Error::SinkError(format!("failed to send eot request: {}", e)))?;
 
         let mut responses = Vec::new();
         for _ in 0..num_requests {
@@ -71,7 +83,6 @@ impl SinkWriter {
                 .message()
                 .await?
                 .ok_or(Error::SinkError("failed to receive response".to_string()))?;
-            println!("Received response: {:?}", response);
             responses.push(response);
         }
         Ok(responses)
@@ -112,7 +123,6 @@ mod tests {
         }
     }
     #[tokio::test]
-    #[ignore]
     async fn sink_operations() -> Result<()> {
         // start the server
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
@@ -122,23 +132,24 @@ mod tests {
 
         let server_info = server_info_file.clone();
         let server_socket = sock_file.clone();
+
         let server_handle = tokio::spawn(async move {
             sink::Server::new(Logger)
                 .with_socket_file(server_socket)
                 .with_server_info_file(server_info)
                 .start_with_shutdown(shutdown_rx)
                 .await
-                .unwrap();
+                .expect("failed to start sink server");
+            println!("Server is exiting");
         });
 
         // wait for the server to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        println!("Connecting to sink server");
+
         let mut sink_client =
             SinkWriter::new(SinkClient::new(create_rpc_channel(sock_file).await?))
                 .await
                 .expect("failed to connect to sink server");
-        println!("Connected to sink server");
 
         let messages = vec![
             Message {
@@ -168,9 +179,10 @@ mod tests {
         let response = sink_client.sink_fn(messages).await?;
         assert_eq!(response.len(), 2);
 
-        shutdown_tx
-            .send(())
-            .expect("failed to send shutdown signal");
+        drop(sink_client);
+        // shutdown_tx
+        //     .send(())
+        //     .expect("failed to send shutdown signal");
         // server_handle.await.expect("failed to join server task");
         Ok(())
     }
