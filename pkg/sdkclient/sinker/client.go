@@ -154,6 +154,17 @@ func (c *client) SinkFn(ctx context.Context, requests []*sinkpb.SinkRequest) ([]
 		}
 	}
 
+	// send eot request
+	eotRequest := &sinkpb.SinkRequest{
+		Status: &sinkpb.SinkRequest_Status{
+			Eot: true,
+		},
+	}
+
+	if err := c.sinkStream.Send(eotRequest); err != nil {
+		return nil, fmt.Errorf("failed to send eot request: %v", err)
+	}
+
 	// Wait for the corresponding responses
 	var responses []*sinkpb.SinkResponse
 	for i := 0; i < len(requests); i++ {
