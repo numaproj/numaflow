@@ -54,11 +54,13 @@ impl SinkWriter {
         })
     }
 
+    /// writes a set of messages to the sink.
     pub(crate) async fn sink_fn(&mut self, messages: Vec<Message>) -> Result<Vec<SinkResponse>> {
         let requests: Vec<SinkRequest> =
             messages.into_iter().map(|message| message.into()).collect();
         let num_requests = requests.len();
 
+        // write requests to the server
         for request in requests {
             self.sink_tx
                 .send(request)
@@ -77,6 +79,9 @@ impl SinkWriter {
             .await
             .map_err(|e| Error::SinkError(format!("failed to send eot request: {}", e)))?;
 
+        // now that we have sent, we wait for responses!
+        // NOTE: this works now because the results are not streamed, as of today it will give the
+        // response only once it has read all the requests.
         let mut responses = Vec::new();
         for _ in 0..num_requests {
             let response = self
@@ -85,7 +90,8 @@ impl SinkWriter {
                 .await?
                 .ok_or(Error::SinkError("failed to receive response".to_string()))?;
             responses.push(response);
-        }
+        };
+        
         Ok(responses)
     }
 }
