@@ -27,7 +27,23 @@ const (
 	Rust   Language = "rust"
 )
 
-type sdkConstraints map[Language]string
+type ContainerType string
+
+// the string content matches the corresponding server info file name.
+// DO NOT change it unless the server info file name is changed.
+const (
+	sourcer           ContainerType = "sourcer"
+	sourcetransformer ContainerType = "sourcetransformer"
+	sinker            ContainerType = "sinker"
+	mapper            ContainerType = "mapper"
+	reducer           ContainerType = "reducer"
+	reducestreamer    ContainerType = "reducestreamer"
+	sessionreducer    ContainerType = "sessionreducer"
+	sideinput         ContainerType = "sideinput"
+	fbsinker          ContainerType = "fb-sinker"
+)
+
+type sdkConstraints map[Language]map[ContainerType]string
 
 /*
 minimumSupportedSDKVersions is the minimum supported version of each SDK for the current numaflow version.
@@ -70,14 +86,54 @@ A constraint ">=0.8.0-z" will match any pre-release version of 0.8.0, including 
 More details about version comparison can be found in the PEP 440 and semver documentation.
 */
 var minimumSupportedSDKVersions = sdkConstraints{
-	// meaning the minimum supported python SDK version is 0.8.0
-	Python: "0.8.0rc100",
-	// meaning the minimum supported go SDK version is 0.8.0
-	Go: "0.8.0-z",
-	// meaning the minimum supported java SDK version is 0.8.0
-	Java: "0.8.0-z",
-	// meaning the minimum supported rust SDK version is 0.1.0
-	Rust: "0.1.0-z",
+	Python: map[ContainerType]string{
+		// meaning the minimum supported python SDK version is 0.8.0
+		sourcer:           "0.8.0rc100",
+		sourcetransformer: "0.8.0rc100",
+		sinker:            "0.8.0rc100",
+		mapper:            "0.8.0rc100",
+		reducer:           "0.8.0rc100",
+		reducestreamer:    "0.8.0rc100",
+		sessionreducer:    "0.8.0rc100",
+		sideinput:         "0.8.0rc100",
+		fbsinker:          "0.8.0rc100",
+	},
+	Go: map[ContainerType]string{
+		// meaning the minimum supported go SDK version is 0.8.0
+		sourcer:           "0.8.0-z",
+		sourcetransformer: "0.8.0-z",
+		sinker:            "0.8.0-z",
+		mapper:            "0.8.0-z",
+		reducer:           "0.8.0-z",
+		reducestreamer:    "0.8.0-z",
+		sessionreducer:    "0.8.0-z",
+		sideinput:         "0.8.0-z",
+		fbsinker:          "0.8.0-z",
+	},
+	Java: map[ContainerType]string{
+		// meaning the minimum supported go SDK version is 0.8.0
+		sourcer:           "0.8.0-z",
+		sourcetransformer: "0.8.0-z",
+		sinker:            "0.8.0-z",
+		mapper:            "0.8.0-z",
+		reducer:           "0.8.0-z",
+		reducestreamer:    "0.8.0-z",
+		sessionreducer:    "0.8.0-z",
+		sideinput:         "0.8.0-z",
+		fbsinker:          "0.8.0-z",
+	},
+	Rust: map[ContainerType]string{
+		// meaning the minimum supported go SDK version is 0.1.0
+		sourcer:           "0.1.0-z",
+		sourcetransformer: "0.1.0-z",
+		sinker:            "0.1.0-z",
+		mapper:            "0.1.0-z",
+		reducer:           "0.1.0-z",
+		reducestreamer:    "0.1.0-z",
+		sessionreducer:    "0.1.0-z",
+		sideinput:         "0.1.0-z",
+		fbsinker:          "0.1.0-z",
+	},
 }
 
 // humanReadable returns the human-readable minimum supported version.
