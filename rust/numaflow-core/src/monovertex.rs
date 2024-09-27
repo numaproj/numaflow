@@ -3,7 +3,7 @@ use crate::metrics::MetricsState;
 use crate::shared::create_rpc_channel;
 use crate::sink::user_defined::SinkWriter;
 use crate::source::user_defined::{SourceAcker, SourceReader};
-use crate::transformer::SourceTransformer;
+use crate::transformer::user_defined::SourceTransformer;
 use crate::{error, startup};
 use forwarder::ForwarderBuilder;
 use sink_pb::sink_client::SinkClient;

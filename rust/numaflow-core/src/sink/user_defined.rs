@@ -112,7 +112,6 @@ mod tests {
     use crate::monovertex::sink_pb::sink_client::SinkClient;
     use crate::shared::create_rpc_channel;
     use crate::sink::user_defined::SinkWriter;
-    use crate::sink::*;
 
     struct Logger;
     #[tonic::async_trait]

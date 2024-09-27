@@ -5,7 +5,7 @@ use crate::metrics::forward_metrics;
 use crate::monovertex::sink_pb::Status::{Failure, Fallback, Success};
 use crate::sink::user_defined::SinkWriter;
 use crate::source::user_defined::{SourceAcker, SourceReader};
-use crate::transformer::SourceTransformer;
+use crate::transformer::user_defined::SourceTransformer;
 use crate::{error, metrics};
 use chrono::Utc;
 use log::warn;
@@ -572,7 +572,7 @@ mod tests {
     use crate::shared::create_rpc_channel;
     use crate::sink::user_defined::SinkWriter;
     use crate::source::user_defined::{SourceAcker, SourceReader};
-    use crate::transformer::SourceTransformer;
+    use crate::transformer::user_defined::SourceTransformer;
 
     struct SimpleSource {
         yet_to_be_acked: std::sync::RwLock<HashSet<String>>,
