@@ -1,8 +1,8 @@
 use crate::error::{Error, Result};
 use crate::message::Message;
-use crate::sink_pb::sink_client::SinkClient;
-use crate::sink_pb::sink_request::Status;
-use crate::sink_pb::{Handshake, SinkRequest, SinkResponse};
+use crate::monovertex::sink_pb::sink_client::SinkClient;
+use crate::monovertex::sink_pb::sink_request::Status;
+use crate::monovertex::sink_pb::{Handshake, SinkRequest, SinkResponse};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
@@ -91,7 +91,7 @@ impl SinkWriter {
                 .ok_or(Error::SinkError("failed to receive response".to_string()))?;
             responses.push(response);
         };
-        
+
         Ok(responses)
     }
 }

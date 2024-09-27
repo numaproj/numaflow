@@ -2,9 +2,9 @@ use crate::config::config;
 use crate::error::Error::SourceError;
 use crate::error::Result;
 use crate::message::{Message, Offset};
-use crate::source_pb;
-use crate::source_pb::source_client::SourceClient;
-use crate::source_pb::{
+use crate::monovertex::source_pb;
+use crate::monovertex::source_pb::source_client::SourceClient;
+use crate::monovertex::source_pb::{
     ack_response, read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
 };
 use tokio::sync::mpsc;
@@ -164,7 +164,7 @@ mod tests {
 
     use crate::shared::create_rpc_channel;
     use crate::source::{SourceAcker, SourceReader};
-    use crate::source_pb::source_client::SourceClient;
+    use crate::monovertex::source_pb::source_client::SourceClient;
     use chrono::Utc;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -251,16 +251,16 @@ mod tests {
         let mut source_reader = SourceReader::new(SourceClient::new(
             create_rpc_channel(sock_file.clone()).await.unwrap(),
         ))
-        .await
-        .map_err(|e| panic!("failed to create source reader: {:?}", e))
-        .unwrap();
+            .await
+            .map_err(|e| panic!("failed to create source reader: {:?}", e))
+            .unwrap();
 
         let mut source_acker = SourceAcker::new(SourceClient::new(
             create_rpc_channel(sock_file).await.unwrap(),
         ))
-        .await
-        .map_err(|e| panic!("failed to create source acker: {:?}", e))
-        .unwrap();
+            .await
+            .map_err(|e| panic!("failed to create source acker: {:?}", e))
+            .unwrap();
 
         let messages = source_reader.read(5, 1000).await.unwrap();
         assert_eq!(messages.len(), 5);

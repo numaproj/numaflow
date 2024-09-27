@@ -5,9 +5,9 @@ use std::time::Duration;
 use crate::config::config;
 use crate::error::Error;
 use crate::metrics::{start_metrics_https_server, LagReader, LagReaderBuilder, MetricsState};
-use crate::sink_pb::sink_client::SinkClient;
-use crate::source_pb::source_client::SourceClient;
-use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
+use crate::monovertex::sink_pb::sink_client::SinkClient;
+use crate::monovertex::source_pb::source_client::SourceClient;
+use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;
 use crate::{error, server_info};
 
 use tokio::task::JoinHandle;
@@ -216,7 +216,7 @@ mod tests {
             Some(transformer_file_path),
             Some(fb_sink_file_path),
         )
-        .await;
+            .await;
 
         assert!(result.is_err());
         handle.await.unwrap();
@@ -335,7 +335,7 @@ mod tests {
             &mut transformer_grpc_client,
             &mut fb_sink_grpc_client,
         )
-        .await;
+            .await;
         assert!(result.is_ok());
 
         source_shutdown_tx.send(()).unwrap();
