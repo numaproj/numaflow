@@ -1,18 +1,18 @@
-use tokio::signal;
-use tracing::info;
-use tokio_util::sync::CancellationToken;
-use tokio::task::JoinHandle;
+use crate::config::{config, SDKConfig};
+use crate::metrics::MetricsState;
+use crate::shared::create_rpc_channel;
+use crate::sink::user_defined::SinkWriter;
+use crate::source::user_defined::{SourceAcker, SourceReader};
+use crate::transformer::SourceTransformer;
+use crate::{error, startup};
+use forwarder::ForwarderBuilder;
 use sink_pb::sink_client::SinkClient;
 use source_pb::source_client::SourceClient;
 use sourcetransform_pb::source_transform_client::SourceTransformClient;
-use crate::config::{config, SDKConfig};
-use crate::{error, startup};
-use forwarder::ForwarderBuilder;
-use crate::metrics::MetricsState;
-use crate::shared::create_rpc_channel;
-use crate::sink::SinkWriter;
-use crate::source::user_defined::{SourceAcker, SourceReader};
-use crate::transformer::SourceTransformer;
+use tokio::signal;
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 mod forwarder;
 
@@ -92,7 +92,7 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
             None
         },
     )
-        .await?;
+    .await?;
 
     let mut source_grpc_client =
         SourceClient::new(create_rpc_channel(sdk_config.source_socket_path.into()).await?)
@@ -108,8 +108,8 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
         let transformer_grpc_client = SourceTransformClient::new(
             create_rpc_channel(sdk_config.transformer_socket_path.into()).await?,
         )
-            .max_encoding_message_size(sdk_config.grpc_max_message_size)
-            .max_encoding_message_size(sdk_config.grpc_max_message_size);
+        .max_encoding_message_size(sdk_config.grpc_max_message_size)
+        .max_encoding_message_size(sdk_config.grpc_max_message_size);
 
         Some(transformer_grpc_client.clone())
     } else {
@@ -135,7 +135,7 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
         &mut transformer_grpc_client,
         &mut fb_sink_grpc_client,
     )
-        .await?;
+    .await?;
 
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
@@ -187,15 +187,15 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
 #[cfg(test)]
 mod tests {
     use crate::config::SDKConfig;
-    use crate::server_info::ServerInfo;
     use crate::error;
+    use crate::monovertex::start_forwarder;
+    use crate::server_info::ServerInfo;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source};
     use std::fs::File;
     use std::io::Write;
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
-    use crate::monovertex::start_forwarder;
 
     struct SimpleSource;
     #[tonic::async_trait]
