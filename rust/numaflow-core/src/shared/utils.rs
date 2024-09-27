@@ -5,7 +5,9 @@ use std::time::Duration;
 use crate::config::config;
 use crate::error;
 use crate::error::Error;
-use crate::metrics::{start_metrics_https_server, LagReader, LagReaderBuilder, MetricsState};
+use crate::monovertex::metrics::{
+    start_metrics_https_server, LagReader, LagReaderBuilder, MetricsState,
+};
 use crate::monovertex::sink_pb::sink_client::SinkClient;
 use crate::monovertex::source_pb::source_client::SourceClient;
 use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;

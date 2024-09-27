@@ -1,12 +1,13 @@
 use crate::config::{config, OnFailureStrategy};
+use crate::error;
 use crate::error::Error;
 use crate::message::{Message, Offset};
-use crate::metrics::forward_metrics;
+use crate::monovertex::metrics;
+use crate::monovertex::metrics::forward_metrics;
 use crate::monovertex::sink_pb::Status::{Failure, Fallback, Success};
 use crate::sink::user_defined::SinkWriter;
 use crate::source::user_defined::{SourceAcker, SourceReader};
 use crate::transformer::user_defined::SourceTransformer;
-use crate::{error, metrics};
 use chrono::Utc;
 use log::warn;
 use std::collections::HashMap;

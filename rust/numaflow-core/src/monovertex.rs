@@ -1,12 +1,12 @@
 use crate::config::{config, SDKConfig};
 use crate::error;
-use crate::metrics::MetricsState;
 use crate::shared::utils;
 use crate::shared::utils::create_rpc_channel;
 use crate::sink::user_defined::SinkWriter;
 use crate::source::user_defined::{SourceAcker, SourceReader};
 use crate::transformer::user_defined::SourceTransformer;
 use forwarder::ForwarderBuilder;
+use metrics::MetricsState;
 use sink_pb::sink_client::SinkClient;
 use source_pb::source_client::SourceClient;
 use sourcetransform_pb::source_transform_client::SourceTransformClient;
@@ -16,6 +16,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 mod forwarder;
+pub mod metrics;
 
 pub(crate) mod source_pb {
     tonic::include_proto!("source.v1");

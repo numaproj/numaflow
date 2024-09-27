@@ -561,7 +561,7 @@ async fn calculate_pending(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metrics::MetricsState;
+    use crate::monovertex::metrics::MetricsState;
     use crate::shared::utils::create_rpc_channel;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
