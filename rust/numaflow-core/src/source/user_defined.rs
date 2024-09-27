@@ -1,10 +1,10 @@
 use crate::config::config;
+use crate::error;
 use crate::error::Error::SourceError;
-use crate::error::Result;
 use crate::message::{Message, Offset};
-use crate::source_pb;
-use crate::source_pb::source_client::SourceClient;
-use crate::source_pb::{
+use crate::monovertex::source_pb;
+use crate::monovertex::source_pb::source_client::SourceClient;
+use crate::monovertex::source_pb::{
     ack_response, read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
 };
 use tokio::sync::mpsc;
@@ -20,7 +20,7 @@ pub(crate) struct SourceReader {
 }
 
 impl SourceReader {
-    pub(crate) async fn new(mut client: SourceClient<Channel>) -> Result<Self> {
+    pub(crate) async fn new(mut client: SourceClient<Channel>) -> error::Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(config().batch_size as usize);
         let read_stream = ReceiverStream::new(read_rx);
 
@@ -59,7 +59,7 @@ impl SourceReader {
         &mut self,
         num_records: u64,
         timeout_in_ms: u32,
-    ) -> Result<Vec<Message>> {
+    ) -> error::Result<Vec<Message>> {
         let request = ReadRequest {
             request: Some(read_request::Request {
                 num_records,
@@ -98,7 +98,7 @@ pub(crate) struct SourceAcker {
 }
 
 impl SourceAcker {
-    pub(crate) async fn new(mut client: SourceClient<Channel>) -> Result<Self> {
+    pub(crate) async fn new(mut client: SourceClient<Channel>) -> error::Result<Self> {
         let (ack_tx, ack_rx) = mpsc::channel(config().batch_size as usize);
         let ack_stream = ReceiverStream::new(ack_rx);
 
@@ -130,7 +130,7 @@ impl SourceAcker {
         })
     }
 
-    pub(crate) async fn ack(&mut self, offsets: Vec<Offset>) -> Result<AckResponse> {
+    pub(crate) async fn ack(&mut self, offsets: Vec<Offset>) -> error::Result<AckResponse> {
         let n = offsets.len();
 
         // send n ack requests
@@ -162,9 +162,9 @@ impl SourceAcker {
 mod tests {
     use std::collections::HashSet;
 
-    use crate::shared::create_rpc_channel;
-    use crate::source::{SourceAcker, SourceReader};
-    use crate::source_pb::source_client::SourceClient;
+    use crate::monovertex::source_pb::source_client::SourceClient;
+    use crate::shared::utils::create_rpc_channel;
+    use crate::source::user_defined::{SourceAcker, SourceReader};
     use chrono::Utc;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};

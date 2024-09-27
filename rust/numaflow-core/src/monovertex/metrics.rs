@@ -18,9 +18,9 @@ use tracing::{debug, error, info};
 
 use crate::config::config;
 use crate::error::Error;
-use crate::sink_pb::sink_client::SinkClient;
-use crate::source_pb::source_client::SourceClient;
-use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
+use crate::monovertex::sink_pb::sink_client::SinkClient;
+use crate::monovertex::source_pb::source_client::SourceClient;
+use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
@@ -561,8 +561,8 @@ async fn calculate_pending(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metrics::MetricsState;
-    use crate::shared::create_rpc_channel;
+    use crate::monovertex::metrics::MetricsState;
+    use crate::shared::utils::create_rpc_channel;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
     use std::net::SocketAddr;

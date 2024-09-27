@@ -1,4 +1,4 @@
-workspace = { members = ["backoff", "numaflow-models", "servesink", "serving", "monovertex"] }
+workspace = { members = ["backoff", "numaflow-models", "servesink", "serving", "numaflow-core"] }
 
 [[bin]]
 name = "numaflow"
@@ -15,6 +15,6 @@ tokio = "1.39.2"
 backoff = { path = "backoff" }
 servesink = { path = "servesink" }
 serving = { path = "serving" }
-monovertex = { path = "monovertex" }
+numaflow-core = { path = "numaflow-core" }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

@@ -1458,46 +1458,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9be0862c1b3f26a88803c4a49de6889c10e608b3ee9344e6ef5b45fb37ad3d1"
 
 [[package]]
-name = "monovertex"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-server",
- "backoff",
- "base64 0.22.1",
- "bytes",
- "chrono",
- "hyper-util",
- "kube",
- "log",
- "numaflow 0.1.1",
- "numaflow-models",
- "once_cell",
- "parking_lot",
- "pep440_rs",
- "prometheus-client",
- "prost",
- "prost-types",
- "rcgen",
- "rustls 0.23.13",
- "semver",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tonic",
- "tonic-build",
- "tower 0.4.13",
- "tracing",
- "tracing-subscriber",
- "trait-variant",
- "uuid",
-]
-
-[[package]]
 name = "multimap"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1586,7 +1546,7 @@ name = "numaflow"
 version = "0.1.0"
 dependencies = [
  "backoff",
- "monovertex",
+ "numaflow-core",
  "servesink",
  "serving",
  "tokio",
@@ -1613,6 +1573,46 @@ dependencies = [
  "tonic",
  "tonic-build",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "numaflow-core"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "axum-server",
+ "backoff",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "hyper-util",
+ "kube",
+ "log",
+ "numaflow 0.1.1",
+ "numaflow-models",
+ "once_cell",
+ "parking_lot",
+ "pep440_rs",
+ "prometheus-client",
+ "prost",
+ "prost-types",
+ "rcgen",
+ "rustls 0.23.13",
+ "semver",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tonic",
+ "tonic-build",
+ "tower 0.4.13",
+ "tracing",
+ "tracing-subscriber",
+ "trait-variant",
  "uuid",
 ]
 

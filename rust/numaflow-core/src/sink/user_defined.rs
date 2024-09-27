@@ -1,8 +1,9 @@
-use crate::error::{Error, Result};
+use crate::error;
+use crate::error::Error;
 use crate::message::Message;
-use crate::sink_pb::sink_client::SinkClient;
-use crate::sink_pb::sink_request::Status;
-use crate::sink_pb::{Handshake, SinkRequest, SinkResponse};
+use crate::monovertex::sink_pb::sink_client::SinkClient;
+use crate::monovertex::sink_pb::sink_request::Status;
+use crate::monovertex::sink_pb::{Handshake, SinkRequest, SinkResponse};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
@@ -17,7 +18,7 @@ pub struct SinkWriter {
 }
 
 impl SinkWriter {
-    pub(crate) async fn new(mut client: SinkClient<Channel>) -> Result<Self> {
+    pub(crate) async fn new(mut client: SinkClient<Channel>) -> error::Result<Self> {
         let (sink_tx, sink_rx) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
         let sink_stream = ReceiverStream::new(sink_rx);
 
@@ -55,7 +56,10 @@ impl SinkWriter {
     }
 
     /// writes a set of messages to the sink.
-    pub(crate) async fn sink_fn(&mut self, messages: Vec<Message>) -> Result<Vec<SinkResponse>> {
+    pub(crate) async fn sink_fn(
+        &mut self,
+        messages: Vec<Message>,
+    ) -> error::Result<Vec<SinkResponse>> {
         let requests: Vec<SinkRequest> =
             messages.into_iter().map(|message| message.into()).collect();
         let num_requests = requests.len();
@@ -90,8 +94,8 @@ impl SinkWriter {
                 .await?
                 .ok_or(Error::SinkError("failed to receive response".to_string()))?;
             responses.push(response);
-        };
-        
+        }
+
         Ok(responses)
     }
 }
@@ -100,11 +104,14 @@ impl SinkWriter {
 mod tests {
     use chrono::offset::Utc;
     use numaflow::sink;
+    use tokio::sync::mpsc;
     use tracing::info;
 
-    use super::*;
-    use crate::message::Offset;
-    use crate::shared::create_rpc_channel;
+    use crate::error::Result;
+    use crate::message::{Message, Offset};
+    use crate::monovertex::sink_pb::sink_client::SinkClient;
+    use crate::shared::utils::create_rpc_channel;
+    use crate::sink::user_defined::SinkWriter;
 
     struct Logger;
     #[tonic::async_trait]

@@ -1,43 +1,28 @@
-extern crate core;
-
+use crate::config::{config, SDKConfig};
+use crate::error;
+use crate::shared::utils;
+use crate::shared::utils::create_rpc_channel;
+use crate::sink::user_defined::SinkWriter;
+use crate::source::user_defined::{SourceAcker, SourceReader};
+use crate::transformer::user_defined::SourceTransformer;
+use forwarder::ForwarderBuilder;
+use metrics::MetricsState;
+use sink_pb::sink_client::SinkClient;
+use source_pb::source_client::SourceClient;
+use sourcetransform_pb::source_transform_client::SourceTransformClient;
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::info;
 
-use crate::config::{config, SDKConfig};
-
-use crate::forwarder::ForwarderBuilder;
-use crate::metrics::MetricsState;
-use crate::shared::create_rpc_channel;
-use crate::sink::SinkWriter;
-use crate::sink_pb::sink_client::SinkClient;
-use crate::source::{SourceAcker, SourceReader};
-use crate::source_pb::source_client::SourceClient;
-use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
-use crate::transformer::SourceTransformer;
-
-pub(crate) use self::error::Result;
-
-/// SourcerSinker orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
+/// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
 /// - Read X messages from the source
 /// - Invokes the SourceTransformer concurrently
 /// - Calls the Sinker to write the batch to the Sink
 /// - Send Acknowledgement back to the Source
-mod error;
-pub(crate) use crate::error::Error;
-
-mod config;
 mod forwarder;
-mod message;
-mod metrics;
-mod server_info;
-mod shared;
-mod sink;
-mod source;
-mod startup;
-mod transformer;
+pub(crate) mod metrics;
 
 pub(crate) mod source_pb {
     tonic::include_proto!("source.v1");
@@ -51,12 +36,12 @@ pub(crate) mod sourcetransform_pb {
     tonic::include_proto!("sourcetransformer.v1");
 }
 
-pub async fn mono_vertex() -> Result<()> {
+pub async fn mono_vertex() -> error::Result<()> {
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
 
     // wait for SIG{INT,TERM} and invoke cancellation token.
-    let shutdown_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
+    let shutdown_handle: JoinHandle<error::Result<()>> = tokio::spawn(async move {
         shutdown_signal().await;
         shutdown_cln_token.cancel();
         Ok(())
@@ -98,9 +83,9 @@ async fn shutdown_signal() {
     }
 }
 
-async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) -> Result<()> {
+async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) -> error::Result<()> {
     // make sure that we have compatibility with the server
-    startup::check_compatibility(
+    utils::check_compatibility(
         &cln_token,
         sdk_config.source_server_info_path.into(),
         sdk_config.sink_server_info_path.into(),
@@ -151,7 +136,7 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
     };
 
     // readiness check for all the ud containers
-    startup::wait_until_ready(
+    utils::wait_until_ready(
         cln_token.clone(),
         &mut source_grpc_client,
         &mut sink_grpc_client,
@@ -172,10 +157,10 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
 
     // start the metrics server
     // FIXME: what to do with the handle
-    startup::start_metrics_server(metrics_state).await;
+    utils::start_metrics_server(metrics_state).await;
 
     // start the lag reader to publish lag metrics
-    let mut lag_reader = startup::create_lag_reader(source_grpc_client.clone()).await;
+    let mut lag_reader = utils::create_lag_reader(source_grpc_client.clone()).await;
     lag_reader.start().await;
 
     // build the forwarder
@@ -210,8 +195,9 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
 #[cfg(test)]
 mod tests {
     use crate::config::SDKConfig;
-    use crate::server_info::ServerInfo;
-    use crate::{error, start_forwarder};
+    use crate::error;
+    use crate::monovertex::start_forwarder;
+    use crate::shared::server_info::ServerInfo;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source};
     use std::fs::File;

@@ -1,8 +1,8 @@
-use crate::error::Result;
+use crate::error;
 use crate::message::Message;
-use crate::shared::utc_from_timestamp;
-use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
-use crate::sourcetransform_pb::SourceTransformRequest;
+use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;
+use crate::monovertex::sourcetransform_pb::SourceTransformRequest;
+use crate::shared::utils::utc_from_timestamp;
 use tonic::transport::Channel;
 
 const DROP: &str = "U+005C__DROP__";
@@ -14,11 +14,14 @@ pub struct SourceTransformer {
 }
 
 impl SourceTransformer {
-    pub(crate) async fn new(client: SourceTransformClient<Channel>) -> Result<Self> {
+    pub(crate) async fn new(client: SourceTransformClient<Channel>) -> error::Result<Self> {
         Ok(Self { client })
     }
 
-    pub(crate) async fn transform_fn(&mut self, message: Message) -> Result<Option<Vec<Message>>> {
+    pub(crate) async fn transform_fn(
+        &mut self,
+        message: Message,
+    ) -> error::Result<Option<Vec<Message>>> {
         // fields which will not be changed
         let offset = message.offset.clone();
         let id = message.id.clone();
@@ -57,9 +60,9 @@ impl SourceTransformer {
 mod tests {
     use std::error::Error;
 
-    use crate::shared::create_rpc_channel;
-    use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
-    use crate::transformer::SourceTransformer;
+    use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;
+    use crate::shared::utils::create_rpc_channel;
+    use crate::transformer::user_defined::SourceTransformer;
     use numaflow::sourcetransform;
     use tempfile::TempDir;
 
@@ -137,7 +140,7 @@ mod tests {
         ) -> Vec<sourcetransform::Message> {
             let message = sourcetransform::Message::new(input.value, chrono::offset::Utc::now())
                 .keys(input.keys)
-                .tags(vec![crate::transformer::DROP.to_string()]);
+                .tags(vec![crate::transformer::user_defined::DROP.to_string()]);
             vec![message]
         }
     }
