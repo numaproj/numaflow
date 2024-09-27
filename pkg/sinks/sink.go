@@ -230,7 +230,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to find a sink, error: %w", err)
 			}
-			log.Infow("Fallback sink writer created", zap.String("vertex", u.VertexInstance.Vertex.Spec.Sink.Fallback.String()))
+			log.Info("Fallback sink writer created")
 			forwardOpts = append(forwardOpts, sinkforward.WithFbSinkWriter(fbSinkWriter))
 		}
 
