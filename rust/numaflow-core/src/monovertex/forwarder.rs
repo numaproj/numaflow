@@ -569,7 +569,7 @@ mod tests {
     use crate::monovertex::sink_pb::sink_client::SinkClient;
     use crate::monovertex::source_pb::source_client::SourceClient;
     use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;
-    use crate::shared::create_rpc_channel;
+    use crate::shared::utils::create_rpc_channel;
     use crate::sink::user_defined::SinkWriter;
     use crate::source::user_defined::{SourceAcker, SourceReader};
     use crate::transformer::user_defined::SourceTransformer;

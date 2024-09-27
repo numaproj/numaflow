@@ -110,7 +110,7 @@ mod tests {
     use crate::error::Result;
     use crate::message::{Message, Offset};
     use crate::monovertex::sink_pb::sink_client::SinkClient;
-    use crate::shared::create_rpc_channel;
+    use crate::shared::utils::create_rpc_channel;
     use crate::sink::user_defined::SinkWriter;
 
     struct Logger;

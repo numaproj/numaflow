@@ -562,7 +562,7 @@ async fn calculate_pending(
 mod tests {
     use super::*;
     use crate::metrics::MetricsState;
-    use crate::shared::create_rpc_channel;
+    use crate::shared::utils::create_rpc_channel;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
     use std::net::SocketAddr;

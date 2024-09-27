@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 use crate::error::{self, Error};
-use crate::server_info::version::SdkConstraints;
+use crate::shared::server_info::version::SdkConstraints;
 
 // Constant to represent the end of the server info.
 // Equivalent to U+005C__END__.

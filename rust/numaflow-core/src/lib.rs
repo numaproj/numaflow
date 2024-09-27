@@ -19,10 +19,7 @@ mod config;
 
 mod message;
 mod metrics;
-mod server_info;
 mod shared;
 mod sink;
 mod source;
-mod startup;
 mod transformer;
-

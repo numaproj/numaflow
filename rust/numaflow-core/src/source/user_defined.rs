@@ -1,14 +1,16 @@
-use tonic::transport::Channel;
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
-use tonic::{Request, Streaming};
 use crate::config::config;
 use crate::error;
 use crate::error::Error::SourceError;
 use crate::message::{Message, Offset};
 use crate::monovertex::source_pb;
-use crate::monovertex::source_pb::{ack_response, read_request, AckRequest, AckResponse, ReadRequest, ReadResponse};
 use crate::monovertex::source_pb::source_client::SourceClient;
+use crate::monovertex::source_pb::{
+    ack_response, read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
+};
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::transport::Channel;
+use tonic::{Request, Streaming};
 
 /// SourceReader reads messages from a source.
 #[derive(Debug)]
@@ -160,13 +162,13 @@ impl SourceAcker {
 mod tests {
     use std::collections::HashSet;
 
-    use crate::shared::create_rpc_channel;
     use crate::monovertex::source_pb::source_client::SourceClient;
+    use crate::shared::utils::create_rpc_channel;
+    use crate::source::user_defined::{SourceAcker, SourceReader};
     use chrono::Utc;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use tokio::sync::mpsc::Sender;
-    use crate::source::user_defined::{SourceAcker, SourceReader};
 
     struct SimpleSource {
         num: usize,
@@ -249,16 +251,16 @@ mod tests {
         let mut source_reader = SourceReader::new(SourceClient::new(
             create_rpc_channel(sock_file.clone()).await.unwrap(),
         ))
-            .await
-            .map_err(|e| panic!("failed to create source reader: {:?}", e))
-            .unwrap();
+        .await
+        .map_err(|e| panic!("failed to create source reader: {:?}", e))
+        .unwrap();
 
         let mut source_acker = SourceAcker::new(SourceClient::new(
             create_rpc_channel(sock_file).await.unwrap(),
         ))
-            .await
-            .map_err(|e| panic!("failed to create source acker: {:?}", e))
-            .unwrap();
+        .await
+        .map_err(|e| panic!("failed to create source acker: {:?}", e))
+        .unwrap();
 
         let messages = source_reader.read(5, 1000).await.unwrap();
         assert_eq!(messages.len(), 5);

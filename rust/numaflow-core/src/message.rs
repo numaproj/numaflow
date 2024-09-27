@@ -5,12 +5,12 @@ use base64::Engine;
 use chrono::{DateTime, Utc};
 
 use crate::error::Error;
-use crate::shared::{prost_timestamp_from_utc, utc_from_timestamp};
 use crate::monovertex::sink_pb::sink_request::Request;
 use crate::monovertex::sink_pb::SinkRequest;
 use crate::monovertex::source_pb;
 use crate::monovertex::source_pb::{read_response, AckRequest};
 use crate::monovertex::sourcetransform_pb::SourceTransformRequest;
+use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
 
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone)]
