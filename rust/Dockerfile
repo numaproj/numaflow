@@ -21,7 +21,7 @@ RUN cargo new numaflow-models
 COPY ./numaflow-models/Cargo.toml ./numaflow-models/Cargo.toml
 
 RUN cargo new monovertex
-COPY monovertex/Cargo.toml ./monovertex/Cargo.toml
+COPY numaflow-core/Cargo.toml ./monovertex/Cargo.toml
 
 RUN cargo new serving
 COPY ./serving/Cargo.toml ./serving/Cargo.toml
@@ -39,9 +39,9 @@ COPY ./servesink/src ./servesink/src
 COPY ./backoff/src ./backoff/src
 COPY ./numaflow-models/src ./numaflow-models/src
 COPY ./serving/src ./serving/src
-COPY monovertex/src ./monovertex/src
-COPY monovertex/build.rs ./monovertex/build.rs
-COPY monovertex/proto ./monovertex/proto
+COPY numaflow-core/src ./monovertex/src
+COPY numaflow-core/build.rs ./monovertex/build.rs
+COPY numaflow-core/proto ./monovertex/proto
 
 # Build the real binaries
 RUN touch src/bin/main.rs && \
