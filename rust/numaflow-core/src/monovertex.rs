@@ -15,8 +15,14 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+/// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
+/// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
+/// - Read X messages from the source
+/// - Invokes the SourceTransformer concurrently
+/// - Calls the Sinker to write the batch to the Sink
+/// - Send Acknowledgement back to the Source
 mod forwarder;
-pub mod metrics;
+pub(crate) mod metrics;
 
 pub(crate) mod source_pb {
     tonic::include_proto!("source.v1");
