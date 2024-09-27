@@ -11,7 +11,7 @@ use forwarder::ForwarderBuilder;
 use crate::metrics::MetricsState;
 use crate::shared::create_rpc_channel;
 use crate::sink::SinkWriter;
-use crate::source::{SourceAcker, SourceReader};
+use crate::source::user_defined::{SourceAcker, SourceReader};
 use crate::transformer::SourceTransformer;
 
 mod forwarder;

@@ -12,7 +12,7 @@ use crate::message::{Message, Offset};
 use crate::metrics::forward_metrics;
 use crate::monovertex::sink_pb::Status::{Failure, Fallback, Success};
 use crate::sink::SinkWriter;
-use crate::source::{SourceAcker, SourceReader};
+use crate::source::user_defined::{SourceAcker, SourceReader};
 use crate::transformer::SourceTransformer;
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
@@ -569,9 +569,9 @@ mod tests {
     use crate::shared::create_rpc_channel;
     use crate::sink::SinkWriter;
     use crate::monovertex::sink_pb::sink_client::SinkClient;
-    use crate::source::{SourceAcker, SourceReader};
     use crate::monovertex::source_pb::source_client::SourceClient;
     use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;
+    use crate::source::user_defined::{SourceAcker, SourceReader};
     use crate::transformer::SourceTransformer;
 
     struct SimpleSource {
