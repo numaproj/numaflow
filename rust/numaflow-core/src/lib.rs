@@ -17,7 +17,6 @@ pub use crate::monovertex::mono_vertex;
 
 mod config;
 
-mod forwarder;
 mod message;
 mod metrics;
 mod server_info;

@@ -7,7 +7,7 @@ use source_pb::source_client::SourceClient;
 use sourcetransform_pb::source_transform_client::SourceTransformClient;
 use crate::config::{config, SDKConfig};
 use crate::{error, startup};
-use crate::forwarder::ForwarderBuilder;
+use forwarder::ForwarderBuilder;
 use crate::metrics::MetricsState;
 use crate::shared::create_rpc_channel;
 use crate::sink::SinkWriter;
