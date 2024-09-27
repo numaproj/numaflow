@@ -67,6 +67,10 @@ func waitForServerInfo(timeout time.Duration, filePath string) (*ServerInfo, err
 	minNumaflowVersion := serverInfo.MinimumNumaflowVersion
 	sdkLanguage := serverInfo.Language
 	numaflowVersion := numaflow.GetVersion().Version
+	containerType, err := getContainerType(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container type: %w", err)
+	}
 
 	// If MinimumNumaflowVersion is empty, skip the numaflow compatibility check as there was an
 	// error writing server info file on the SDK side
@@ -87,7 +91,7 @@ func waitForServerInfo(timeout time.Duration, filePath string) (*ServerInfo, err
 	if sdkVersion == "" || sdkLanguage == "" {
 		log.Printf("warning: failed to get the SDK version/language, skipping SDK version compatibility check")
 	} else {
-		if err := checkSDKCompatibility(sdkVersion, sdkLanguage, minimumSupportedSDKVersions); err != nil {
+		if err := checkSDKCompatibility(sdkVersion, sdkLanguage, containerType, minimumSupportedSDKVersions); err != nil {
 			return nil, fmt.Errorf("SDK version %s does not satisfy the minimum required by numaflow version %s: %w",
 				sdkVersion, numaflowVersion, err)
 		}
@@ -176,8 +180,11 @@ func checkNumaflowCompatibility(numaflowVersion string, minNumaflowVersion strin
 }
 
 // checkSDKCompatibility checks if the current SDK version is compatible with the numaflow version
-func checkSDKCompatibility(sdkVersion string, sdkLanguage Language, minSupportedSDKVersions sdkConstraints) error {
-	if sdkRequiredVersion, ok := minSupportedSDKVersions[sdkLanguage]; ok {
+func checkSDKCompatibility(sdkVersion string, sdkLanguage Language, containerType ContainerType, minSupportedSDKVersions sdkConstraints) error {
+	if _, ok := minSupportedSDKVersions[sdkLanguage]; !ok {
+		return fmt.Errorf("SDK language %s is not supported", sdkLanguage)
+	}
+	if sdkRequiredVersion, ok := minSupportedSDKVersions[sdkLanguage][containerType]; ok {
 		sdkConstraint := fmt.Sprintf(">= %s", sdkRequiredVersion)
 		if sdkLanguage == Python {
 			// Python pre-releases/releases follow PEP440 specification which requires a different library for parsing
@@ -206,6 +213,19 @@ func checkSDKCompatibility(sdkVersion string, sdkLanguage Language, minSupported
 					sdkVersionSemVer.String(), humanReadable(sdkRequiredVersion), err)
 			}
 		}
+	} else {
+		return fmt.Errorf("SDK container type %s is not supported", containerType)
 	}
 	return nil
+}
+
+// getContainerType returns the container type from the server info file path
+// serverInfoFilePath is in the format of "/var/run/numaflow/{ContainerType}-server-info"
+func getContainerType(serverInfoFilePath string) (ContainerType, error) {
+	splits := strings.Split(serverInfoFilePath, "/")
+	if containerType := strings.TrimSuffix(splits[len(splits)-1], "-server-info"); containerType == "" {
+		return "", fmt.Errorf("failed to get container type from server info file path: %s", serverInfoFilePath)
+	} else {
+		return ContainerType(containerType), nil
+	}
 }

@@ -7,7 +7,6 @@ use crate::source_pb::source_client::SourceClient;
 use crate::source_pb::{
     ack_response, read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
 };
-use log::info;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;

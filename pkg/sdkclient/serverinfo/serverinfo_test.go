@@ -29,7 +29,7 @@ import (
 )
 
 func Test_SDKServerInfo(t *testing.T) {
-	filepath := os.TempDir() + "/server-info"
+	filepath := os.TempDir() + "/sourcer-server-info"
 	defer os.Remove(filepath)
 	info := &ServerInfo{
 		Protocol:               TCP,
@@ -185,10 +185,18 @@ func Test_CheckNumaflowCompatibility(t *testing.T) {
 // this test suite is to test SDK compatibility check when all the minimum-supported versions are stable releases
 func Test_CheckSDKCompatibility_MinimumBeingStableReleases(t *testing.T) {
 	var testMinimumSupportedSDKVersions = sdkConstraints{
-		Python: "0.6.0rc100",
-		Go:     "0.6.0-z",
-		Java:   "0.6.0-z",
-		Rust:   "0.1.0-z",
+		Python: map[ContainerType]string{
+			sourcer: "0.6.0rc100",
+		},
+		Go: map[ContainerType]string{
+			sourcer: "0.6.0-z",
+		},
+		Java: map[ContainerType]string{
+			sourcer: "0.6.0-z",
+		},
+		Rust: map[ContainerType]string{
+			sourcer: "0.1.0-z",
+		},
 	}
 	tests := []struct {
 		name                        string
@@ -275,7 +283,7 @@ func Test_CheckSDKCompatibility_MinimumBeingStableReleases(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := checkSDKCompatibility(tt.sdkVersion, tt.sdkLanguage, tt.minimumSupportedSDKVersions)
+			err := checkSDKCompatibility(tt.sdkVersion, tt.sdkLanguage, sourcer, tt.minimumSupportedSDKVersions)
 			if tt.shouldErr {
 				assert.Error(t, err, "Expected error")
 				assert.Contains(t, err.Error(), tt.errMessage)
@@ -289,10 +297,18 @@ func Test_CheckSDKCompatibility_MinimumBeingStableReleases(t *testing.T) {
 // this test suite is to test SDK compatibility check when all the minimum-supported versions are pre-releases
 func Test_CheckSDKCompatibility_MinimumBeingPreReleases(t *testing.T) {
 	var testMinimumSupportedSDKVersions = sdkConstraints{
-		Python: "0.6.0b1",
-		Go:     "0.6.0-rc2",
-		Java:   "0.6.0-rc2",
-		Rust:   "0.1.0-rc3",
+		Python: map[ContainerType]string{
+			sourcer: "0.6.0b1",
+		},
+		Go: map[ContainerType]string{
+			sourcer: "0.6.0-rc2",
+		},
+		Java: map[ContainerType]string{
+			sourcer: "0.6.0-rc2",
+		},
+		Rust: map[ContainerType]string{
+			sourcer: "0.1.0-rc3",
+		},
 	}
 	tests := []struct {
 		name                        string
@@ -379,7 +395,7 @@ func Test_CheckSDKCompatibility_MinimumBeingPreReleases(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := checkSDKCompatibility(tt.sdkVersion, tt.sdkLanguage, tt.minimumSupportedSDKVersions)
+			err := checkSDKCompatibility(tt.sdkVersion, tt.sdkLanguage, sourcer, tt.minimumSupportedSDKVersions)
 			if tt.shouldErr {
 				assert.Error(t, err, "Expected error")
 				assert.Contains(t, err.Error(), tt.errMessage)
