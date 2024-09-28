@@ -2,8 +2,8 @@ use tracing::error;
 
 /// Custom Error handling.
 mod error;
-pub(crate) use crate::error::Result;
 pub(crate) use crate::error::Error;
+pub(crate) use crate::error::Result;
 
 /// MonoVertex is a simplified version of the [Pipeline] spec which is ideal for high TPS, low latency
 /// use-cases which do not require [ISB].
@@ -18,6 +18,8 @@ mod config;
 
 /// Internal message structure that is passed around.
 mod message;
+/// Shared entities that can be used orthogonal to different modules.
+mod shared;
 /// [Sink] serves as the endpoint for processed data that has been outputted from the platform,
 /// which is then sent to an external system or application.
 ///
@@ -32,5 +34,3 @@ mod source;
 ///
 /// [Transformer]: https://numaflow.numaproj.io/user-guide/sources/transformer/overview/
 mod transformer;
-/// Shared entities that can be used orthogonal to different modules.
-mod shared;
