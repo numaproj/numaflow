@@ -3,7 +3,7 @@ use crate::error;
 use crate::shared::utils;
 use crate::shared::utils::create_rpc_channel;
 use crate::sink::user_defined::SinkWriter;
-use crate::source::user_defined::{SourceAcker, SourceReader};
+use crate::source::user_defined::Source;
 use crate::transformer::user_defined::SourceTransformer;
 use forwarder::ForwarderBuilder;
 use metrics::MetricsState;
@@ -164,12 +164,10 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
     lag_reader.start().await;
 
     // build the forwarder
-    let source_reader = SourceReader::new(source_grpc_client.clone()).await?;
-    let source_acker = SourceAcker::new(source_grpc_client.clone()).await?;
+    let source_reader = Source::new(source_grpc_client.clone()).await?;
     let sink_writer = SinkWriter::new(sink_grpc_client.clone()).await?;
 
-    let mut forwarder_builder =
-        ForwarderBuilder::new(source_reader, source_acker, sink_writer, cln_token);
+    let mut forwarder_builder = ForwarderBuilder::new(source_reader, sink_writer, cln_token);
 
     // add transformer if exists
     if let Some(transformer_grpc_client) = transformer_grpc_client {
