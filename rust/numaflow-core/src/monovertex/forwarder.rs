@@ -413,7 +413,7 @@ impl Forwarder {
                 sleep(tokio::time::Duration::from_millis(
                     config().sink_retry_interval_in_ms as u64,
                 ))
-                    .await;
+                .await;
 
                 // we need to retry
                 Ok(false)
@@ -750,26 +750,24 @@ mod tests {
         let source = Source::new(SourceClient::new(
             create_rpc_channel(source_sock_file.clone()).await.unwrap(),
         ))
-            .await
-            .expect("failed to connect to source server");
-
+        .await
+        .expect("failed to connect to source server");
 
         let sink_writer = SinkWriter::new(SinkClient::new(
             create_rpc_channel(sink_sock_file).await.unwrap(),
         ))
-            .await
-            .expect("failed to connect to sink server");
+        .await
+        .expect("failed to connect to sink server");
 
         let transformer_client = SourceTransformer::new(SourceTransformClient::new(
             create_rpc_channel(transformer_sock_file).await.unwrap(),
         ))
-            .await
-            .expect("failed to connect to transformer server");
+        .await
+        .expect("failed to connect to transformer server");
 
-        let mut forwarder =
-            ForwarderBuilder::new(source, sink_writer, cln_token.clone())
-                .source_transformer(transformer_client)
-                .build();
+        let mut forwarder = ForwarderBuilder::new(source, sink_writer, cln_token.clone())
+            .source_transformer(transformer_client)
+            .build();
 
         // Assert the received message in a different task
         let assert_handle = tokio::spawn(async move {
@@ -874,19 +872,16 @@ mod tests {
         let source = Source::new(SourceClient::new(
             create_rpc_channel(source_sock_file.clone()).await.unwrap(),
         ))
-            .await
-            .expect("failed to connect to source server");
-
+        .await
+        .expect("failed to connect to source server");
 
         let sink_writer = SinkWriter::new(SinkClient::new(
             create_rpc_channel(sink_sock_file).await.unwrap(),
         ))
-            .await
-            .expect("failed to connect to sink server");
+        .await
+        .expect("failed to connect to sink server");
 
-        let mut forwarder =
-            ForwarderBuilder::new(source, sink_writer, cln_token.clone())
-                .build();
+        let mut forwarder = ForwarderBuilder::new(source, sink_writer, cln_token.clone()).build();
 
         let cancel_handle = tokio::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -991,26 +986,24 @@ mod tests {
         let source = Source::new(SourceClient::new(
             create_rpc_channel(source_sock_file.clone()).await.unwrap(),
         ))
-            .await
-            .expect("failed to connect to source server");
-
+        .await
+        .expect("failed to connect to source server");
 
         let sink_writer = SinkWriter::new(SinkClient::new(
             create_rpc_channel(sink_sock_file).await.unwrap(),
         ))
-            .await
-            .expect("failed to connect to sink server");
+        .await
+        .expect("failed to connect to sink server");
 
         let fb_sink_writer = SinkWriter::new(SinkClient::new(
             create_rpc_channel(fb_sink_sock_file).await.unwrap(),
         ))
-            .await
-            .expect("failed to connect to fb sink server");
+        .await
+        .expect("failed to connect to fb sink server");
 
-        let mut forwarder =
-            ForwarderBuilder::new(source, sink_writer, cln_token.clone())
-                .fallback_sink_writer(fb_sink_writer)
-                .build();
+        let mut forwarder = ForwarderBuilder::new(source, sink_writer, cln_token.clone())
+            .fallback_sink_writer(fb_sink_writer)
+            .build();
 
         let assert_handle = tokio::spawn(async move {
             let received_message = sink_rx.recv().await.unwrap();

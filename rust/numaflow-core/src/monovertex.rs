@@ -100,7 +100,7 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
             None
         },
     )
-        .await?;
+    .await?;
 
     let mut source_grpc_client =
         SourceClient::new(create_rpc_channel(sdk_config.source_socket_path.into()).await?)
@@ -116,8 +116,8 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
         let transformer_grpc_client = SourceTransformClient::new(
             create_rpc_channel(sdk_config.transformer_socket_path.into()).await?,
         )
-            .max_encoding_message_size(sdk_config.grpc_max_message_size)
-            .max_encoding_message_size(sdk_config.grpc_max_message_size);
+        .max_encoding_message_size(sdk_config.grpc_max_message_size)
+        .max_encoding_message_size(sdk_config.grpc_max_message_size);
 
         Some(transformer_grpc_client.clone())
     } else {
@@ -143,7 +143,7 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
         &mut transformer_grpc_client,
         &mut fb_sink_grpc_client,
     )
-        .await?;
+    .await?;
 
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
@@ -167,8 +167,7 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
     let source_reader = Source::new(source_grpc_client.clone()).await?;
     let sink_writer = SinkWriter::new(sink_grpc_client.clone()).await?;
 
-    let mut forwarder_builder =
-        ForwarderBuilder::new(source_reader, sink_writer, cln_token);
+    let mut forwarder_builder = ForwarderBuilder::new(source_reader, sink_writer, cln_token);
 
     // add transformer if exists
     if let Some(transformer_grpc_client) = transformer_grpc_client {

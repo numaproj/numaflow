@@ -34,7 +34,9 @@ impl Source {
         })
     }
 
-    pub(crate) async fn create_reader(client: &mut SourceClient<Channel>) -> error::Result<(mpsc::Sender<ReadRequest>, Streaming<ReadResponse>)> {
+    pub(crate) async fn create_reader(
+        client: &mut SourceClient<Channel>,
+    ) -> error::Result<(mpsc::Sender<ReadRequest>, Streaming<ReadResponse>)> {
         let (read_tx, read_rx) = mpsc::channel(config().batch_size as usize);
         let read_stream = ReceiverStream::new(read_rx);
 
@@ -63,13 +65,12 @@ impl Source {
             return Err(SourceError("invalid handshake response".to_string()));
         }
 
-        Ok((
-            read_tx,
-            resp_stream,
-        ))
+        Ok((read_tx, resp_stream))
     }
 
-    pub(crate) async fn create_acker(client: &mut SourceClient<Channel>) -> error::Result<(mpsc::Sender<AckRequest>, Streaming<AckResponse>)> {
+    pub(crate) async fn create_acker(
+        client: &mut SourceClient<Channel>,
+    ) -> error::Result<(mpsc::Sender<AckRequest>, Streaming<AckResponse>)> {
         let (ack_tx, ack_rx) = mpsc::channel(config().batch_size as usize);
         let ack_stream = ReceiverStream::new(ack_rx);
 
@@ -95,10 +96,7 @@ impl Source {
             return Err(SourceError("invalid ack handshake response".to_string()));
         }
 
-        Ok((
-            ack_tx,
-            ack_resp_stream,
-        ))
+        Ok((ack_tx, ack_resp_stream))
     }
 
     pub(crate) async fn read(
@@ -253,15 +251,12 @@ mod tests {
         // TODO: flaky
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let client = SourceClient::new(
-            create_rpc_channel(sock_file).await.unwrap(),
-        );
+        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
         let mut source = Source::new(client)
             .await
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
-
 
         let messages = source.read(5, 1000).await.unwrap();
         assert_eq!(messages.len(), 5);
