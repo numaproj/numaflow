@@ -1,6 +1,6 @@
 # Use multi-stage builds to keep the final image small
 # Use an official Rust image for the build stage
-FROM rust:1.79-bookworm as builder
+FROM rust:1.80-bookworm as builder
 
 RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 
