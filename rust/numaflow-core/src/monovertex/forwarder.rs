@@ -13,14 +13,15 @@ use crate::monovertex::metrics;
 use crate::monovertex::metrics::forward_metrics;
 use crate::monovertex::sink_pb::Status::{Failure, Fallback, Success};
 use crate::sink::user_defined::SinkWriter;
-use crate::source::user_defined::Source;
+use crate::source::user_defined::UserDefinedSource;
+use crate::source::Source;
 use crate::transformer::user_defined::SourceTransformer;
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
 /// back to the source.
 pub(crate) struct Forwarder {
-    source: Source,
+    source: UserDefinedSource,
     sink_writer: SinkWriter,
     source_transformer: Option<SourceTransformer>,
     fb_sink_writer: Option<SinkWriter>,
@@ -30,7 +31,7 @@ pub(crate) struct Forwarder {
 
 /// ForwarderBuilder is used to build a Forwarder instance with optional fields.
 pub(crate) struct ForwarderBuilder {
-    source: Source,
+    source: UserDefinedSource,
     sink_writer: SinkWriter,
     cln_token: CancellationToken,
     source_transformer: Option<SourceTransformer>,
@@ -40,7 +41,7 @@ pub(crate) struct ForwarderBuilder {
 impl ForwarderBuilder {
     /// Create a new builder with mandatory fields
     pub(crate) fn new(
-        source: Source,
+        source: UserDefinedSource,
         sink_writer: SinkWriter,
         cln_token: CancellationToken,
     ) -> Self {
@@ -121,13 +122,9 @@ impl Forwarder {
     /// and then acknowledge the messages back to the source.
     async fn read_and_process_messages(&mut self) -> error::Result<usize> {
         let start_time = tokio::time::Instant::now();
-        let messages = self
-            .source
-            .read(config().batch_size, config().timeout_in_ms)
-            .await
-            .map_err(|e| {
-                Error::ForwarderError(format!("Failed to read messages from source {:?}", e))
-            })?;
+        let messages = self.source.read().await.map_err(|e| {
+            Error::ForwarderError(format!("Failed to read messages from source {:?}", e))
+        })?;
 
         debug!(
             "Read batch size: {} and latency - {}ms",
@@ -555,7 +552,7 @@ mod tests {
     use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;
     use crate::shared::utils::create_rpc_channel;
     use crate::sink::user_defined::SinkWriter;
-    use crate::source::user_defined::Source;
+    use crate::source::user_defined::UserDefinedSource;
     use crate::transformer::user_defined::SourceTransformer;
 
     struct SimpleSource {
@@ -735,9 +732,11 @@ mod tests {
 
         let cln_token = CancellationToken::new();
 
-        let source = Source::new(SourceClient::new(
-            create_rpc_channel(source_sock_file.clone()).await.unwrap(),
-        ))
+        let source = UserDefinedSource::new(
+            SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap()),
+            500,
+            100,
+        )
         .await
         .expect("failed to connect to source server");
 
@@ -857,9 +856,11 @@ mod tests {
 
         let cln_token = CancellationToken::new();
 
-        let source = Source::new(SourceClient::new(
-            create_rpc_channel(source_sock_file.clone()).await.unwrap(),
-        ))
+        let source = UserDefinedSource::new(
+            SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap()),
+            500,
+            100,
+        )
         .await
         .expect("failed to connect to source server");
 
@@ -971,9 +972,11 @@ mod tests {
 
         let cln_token = CancellationToken::new();
 
-        let source = Source::new(SourceClient::new(
-            create_rpc_channel(source_sock_file.clone()).await.unwrap(),
-        ))
+        let source = UserDefinedSource::new(
+            SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap()),
+            500,
+            100,
+        )
         .await
         .expect("failed to connect to source server");
 
