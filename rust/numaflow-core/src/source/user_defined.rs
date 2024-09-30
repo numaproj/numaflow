@@ -14,13 +14,29 @@ use tonic::{Request, Streaming};
 
 /// SourceReader reads messages from a source.
 #[derive(Debug)]
-pub(crate) struct SourceReader {
+pub(crate) struct Source {
     read_tx: mpsc::Sender<ReadRequest>,
     resp_stream: Streaming<ReadResponse>,
+    ack_tx: mpsc::Sender<AckRequest>,
+    ack_resp_stream: Streaming<AckResponse>,
 }
 
-impl SourceReader {
+impl Source {
     pub(crate) async fn new(mut client: SourceClient<Channel>) -> error::Result<Self> {
+        let (read_tx, resp_stream) = Self::create_reader(&mut client).await?;
+        let (ack_tx, ack_resp_stream) = Self::create_acker(&mut client).await?;
+
+        Ok(Self {
+            read_tx,
+            resp_stream,
+            ack_tx,
+            ack_resp_stream,
+        })
+    }
+
+    pub(crate) async fn create_reader(
+        client: &mut SourceClient<Channel>,
+    ) -> error::Result<(mpsc::Sender<ReadRequest>, Streaming<ReadResponse>)> {
         let (read_tx, read_rx) = mpsc::channel(config().batch_size as usize);
         let read_stream = ReceiverStream::new(read_rx);
 
@@ -49,10 +65,38 @@ impl SourceReader {
             return Err(SourceError("invalid handshake response".to_string()));
         }
 
-        Ok(Self {
-            read_tx,
-            resp_stream,
-        })
+        Ok((read_tx, resp_stream))
+    }
+
+    pub(crate) async fn create_acker(
+        client: &mut SourceClient<Channel>,
+    ) -> error::Result<(mpsc::Sender<AckRequest>, Streaming<AckResponse>)> {
+        let (ack_tx, ack_rx) = mpsc::channel(config().batch_size as usize);
+        let ack_stream = ReceiverStream::new(ack_rx);
+
+        // do a handshake for ack with the server before we start sending ack requests
+        let ack_handshake_request = AckRequest {
+            request: None,
+            handshake: Some(source_pb::Handshake { sot: true }),
+        };
+        ack_tx
+            .send(ack_handshake_request)
+            .await
+            .map_err(|e| SourceError(format!("failed to send ack handshake request: {}", e)))?;
+
+        let mut ack_resp_stream = client.ack_fn(Request::new(ack_stream)).await?.into_inner();
+
+        // first response from the server will be the handshake response. We need to check if the
+        // server has accepted the handshake.
+        let ack_handshake_response = ack_resp_stream.message().await?.ok_or(SourceError(
+            "failed to receive ack handshake response".to_string(),
+        ))?;
+        // handshake cannot to None during the initial phase and it has to set `sot` to true.
+        if ack_handshake_response.handshake.map_or(true, |h| !h.sot) {
+            return Err(SourceError("invalid ack handshake response".to_string()));
+        }
+
+        Ok((ack_tx, ack_resp_stream))
     }
 
     pub(crate) async fn read(
@@ -87,47 +131,6 @@ impl SourceReader {
             messages.push(result.try_into()?);
         }
         Ok(messages)
-    }
-}
-
-/// SourceAcker acks the messages from a source.
-#[derive(Debug)]
-pub(crate) struct SourceAcker {
-    ack_tx: mpsc::Sender<AckRequest>,
-    ack_resp_stream: Streaming<AckResponse>,
-}
-
-impl SourceAcker {
-    pub(crate) async fn new(mut client: SourceClient<Channel>) -> error::Result<Self> {
-        let (ack_tx, ack_rx) = mpsc::channel(config().batch_size as usize);
-        let ack_stream = ReceiverStream::new(ack_rx);
-
-        // do a handshake for ack with the server before we start sending ack requests
-        let ack_handshake_request = AckRequest {
-            request: None,
-            handshake: Some(source_pb::Handshake { sot: true }),
-        };
-        ack_tx
-            .send(ack_handshake_request)
-            .await
-            .map_err(|e| SourceError(format!("failed to send ack handshake request: {}", e)))?;
-
-        let mut ack_resp_stream = client.ack_fn(Request::new(ack_stream)).await?.into_inner();
-
-        // first response from the server will be the handshake response. We need to check if the
-        // server has accepted the handshake.
-        let ack_handshake_response = ack_resp_stream.message().await?.ok_or(SourceError(
-            "failed to receive ack handshake response".to_string(),
-        ))?;
-        // handshake cannot to None during the initial phase and it has to set `sot` to true.
-        if ack_handshake_response.handshake.map_or(true, |h| !h.sot) {
-            return Err(SourceError("invalid ack handshake response".to_string()));
-        }
-
-        Ok(Self {
-            ack_tx,
-            ack_resp_stream,
-        })
     }
 
     pub(crate) async fn ack(&mut self, offsets: Vec<Offset>) -> error::Result<AckResponse> {
@@ -164,7 +167,7 @@ mod tests {
 
     use crate::monovertex::source_pb::source_client::SourceClient;
     use crate::shared::utils::create_rpc_channel;
-    use crate::source::user_defined::{SourceAcker, SourceReader};
+    use crate::source::user_defined::Source;
     use chrono::Utc;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -248,24 +251,17 @@ mod tests {
         // TODO: flaky
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let mut source_reader = SourceReader::new(SourceClient::new(
-            create_rpc_channel(sock_file.clone()).await.unwrap(),
-        ))
-        .await
-        .map_err(|e| panic!("failed to create source reader: {:?}", e))
-        .unwrap();
+        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let mut source_acker = SourceAcker::new(SourceClient::new(
-            create_rpc_channel(sock_file).await.unwrap(),
-        ))
-        .await
-        .map_err(|e| panic!("failed to create source acker: {:?}", e))
-        .unwrap();
+        let mut source = Source::new(client)
+            .await
+            .map_err(|e| panic!("failed to create source reader: {:?}", e))
+            .unwrap();
 
-        let messages = source_reader.read(5, 1000).await.unwrap();
+        let messages = source.read(5, 1000).await.unwrap();
         assert_eq!(messages.len(), 5);
 
-        let response = source_acker
+        let response = source
             .ack(messages.iter().map(|m| m.offset.clone()).collect())
             .await
             .unwrap();
@@ -273,8 +269,8 @@ mod tests {
 
         // we need to drop the client, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
-        drop(source_reader);
-        drop(source_acker);
+        drop(source);
+
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
