@@ -350,7 +350,7 @@ mod version {
 
     pub(crate) type SdkConstraints = HashMap<String, HashMap<String, String>>;
 
-    // MINIMUM_SUPPORTED_SDK_VERSIONS is a HashMap with SDK language as key and minimum supported version as value
+    // MINIMUM_SUPPORTED_SDK_VERSIONS is the minimum supported version of each SDK for the current numaflow version.
     static MINIMUM_SUPPORTED_SDK_VERSIONS: Lazy<SdkConstraints> = Lazy::new(|| {
         // TODO: populate this from a static file and make it part of the release process
         // the value of the map matches `minimumSupportedSDKVersions` in pkg/sdkclient/serverinfo/types.go
