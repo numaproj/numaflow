@@ -3,6 +3,7 @@ use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
 use std::env;
+use std::fmt::Display;
 use std::sync::OnceLock;
 
 const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
@@ -53,17 +54,14 @@ impl OnFailureStrategy {
             _ => Some(DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY),
         }
     }
+}
 
-    /// Converts the `OnFailureStrategy` enum variant to a String.
-    /// This facilitates situations where the enum needs to be displayed or logged as a string.
-    ///
-    /// # Returns
-    /// A string representing the `OnFailureStrategy` enum variant.
-    fn to_string(&self) -> String {
+impl Display for OnFailureStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
-            OnFailureStrategy::Retry => "retry".to_string(),
-            OnFailureStrategy::Fallback => "fallback".to_string(),
-            OnFailureStrategy::Drop => "drop".to_string(),
+            OnFailureStrategy::Retry => write!(f, "retry"),
+            OnFailureStrategy::Fallback => write!(f, "fallback"),
+            OnFailureStrategy::Drop => write!(f, "drop"),
         }
     }
 }
