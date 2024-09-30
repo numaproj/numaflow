@@ -26,26 +26,21 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/isb/tracker"
 	"github.com/numaproj/numaflow/pkg/sdkclient/batchmapper"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 // GRPCBasedBatchMap is a map applier that uses gRPC client to invoke the map UDF. It implements the applier.MapApplier interface.
 type GRPCBasedBatchMap struct {
-	vertexName     string
-	client         batchmapper.Client
-	requestTracker *tracker
+	vertexName string
+	client     batchmapper.Client
 }
 
 func NewUDSgRPCBasedBatchMap(vertexName string, client batchmapper.Client) *GRPCBasedBatchMap {
 	return &GRPCBasedBatchMap{
 		vertexName: vertexName,
 		client:     client,
-		// requestTracker is used to store the read messages in a key, value manner where
-		// key is the read offset and the reference to read message as the value.
-		// Once the results are received from the UDF, we map the responses to the corresponding request
-		// using a lookup on this tracker.
-		requestTracker: NewTracker(),
 	}
 }
 
@@ -93,18 +88,17 @@ func (u *GRPCBasedBatchMap) ApplyBatchMap(ctx context.Context, messages []*isb.R
 	// trackerReq is used to store the read messages in a key, value manner where
 	// key is the read offset and the reference to read message as the value.
 	// Once the results are received from the UDF, we map the responses to the corresponding request
-	// using a lookup on this tracker.
-	trackerReq := NewTracker()
+	// using a lookup on this Tracker.
+	trackerReq := tracker.NewMessageTracker(messages)
 
 	// Read routine: this goroutine iterates over the input messages and sends each
 	// of the read messages to the grpc client after transforming it to a BatchMapRequest.
 	// Once all messages are sent, it closes the input channel to indicate that all requests have been read.
-	// On creating a new request, we add it to a tracker map so that the responses on the stream
+	// On creating a new request, we add it to a Tracker map so that the responses on the stream
 	// can be mapped backed to the given parent request
 	go func() {
 		defer close(inputChan)
 		for _, msg := range messages {
-			trackerReq.addRequest(msg)
 			inputChan <- u.parseInputRequest(msg)
 		}
 	}()
@@ -139,14 +133,14 @@ loop:
 			}
 			// Get the unique request ID for which these responses are meant for.
 			msgId := grpcResp.GetId()
-			// Fetch the request value for the given ID from the tracker
-			parentMessage, ok := trackerReq.getRequest(msgId)
-			if !ok {
-				// this case is when the given request ID was not present in the tracker.
+			// Fetch the request value for the given ID from the Tracker
+			parentMessage := trackerReq.Remove(msgId)
+			if parentMessage == nil {
+				// this case is when the given request ID was not present in the Tracker.
 				// This means that either the UDF added an incorrect ID
 				// This cannot be processed further and should result in an error
 				// Can there be another case for this?
-				logger.Error("Request missing from tracker, ", msgId)
+				logger.Error("Request missing from message tracker, ", msgId)
 				return nil, fmt.Errorf("incorrect ID found during batch map processing")
 			}
 			// parse the responses received
@@ -159,12 +153,11 @@ loop:
 				Err:           nil,
 			}
 			udfResults = append(udfResults, responsePair)
-			trackerReq.removeRequest(msgId)
 		}
 	}
-	// check if there are elements left in the tracker. This cannot be an acceptable case as we want the
+	// check if there are elements left in the Tracker. This cannot be an acceptable case as we want the
 	// UDF to send responses for all elements.
-	if !trackerReq.isEmpty() {
+	if !trackerReq.IsEmpty() {
 		logger.Error("BatchMap response for all requests not received from UDF")
 		return nil, fmt.Errorf("batchMap response for all requests not received from UDF")
 	}

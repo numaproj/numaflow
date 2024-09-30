@@ -22,11 +22,14 @@ install-protobuf() {
   ARCH=$(uname_arch)
 
   echo "OS: $OS  ARCH: $ARCH"
+  if [[ "$ARCH" = "amd64" ]]; then
+    ARCH="x86_64"
+  elif [[ "$ARCH" = "arm64" ]]; then
+    ARCH="aarch_64"
+  fi
   BINARY_URL=$PB_REL/download/v${PROTOBUF_VERSION}/protoc-${PROTOBUF_VERSION}-${OS}-${ARCH}.zip
   if [[ "$OS" = "darwin" ]]; then
     BINARY_URL=$PB_REL/download/v${PROTOBUF_VERSION}/protoc-${PROTOBUF_VERSION}-osx-universal_binary.zip
-  elif [[ "$OS" = "linux" ]]; then
-    BINARY_URL=$PB_REL/download/v${PROTOBUF_VERSION}/protoc-${PROTOBUF_VERSION}-linux-x86_64.zip
   fi
   echo "Downloading $BINARY_URL"
 
