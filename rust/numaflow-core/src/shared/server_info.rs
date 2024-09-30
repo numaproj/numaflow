@@ -49,7 +49,7 @@ pub(crate) async fn check_for_server_compatibility(
     let sdk_version = &server_info.version;
     let min_numaflow_version = &server_info.minimum_numaflow_version;
     let sdk_language = &server_info.language;
-    let container_type = get_container_type(&file_path);
+    let container_type = get_container_type(&file_path).unwrap_or("");
     // Get version information
     let version_info = version::get_version_info();
     let numaflow_version = &version_info.version;
@@ -73,7 +73,7 @@ pub(crate) async fn check_for_server_compatibility(
     } else {
         // Get minimum supported SDK versions and check compatibility
         let min_supported_sdk_versions = version::get_minimum_supported_sdk_versions();
-        check_sdk_compatibility(sdk_version, sdk_language, container_type.unwrap_or(""), min_supported_sdk_versions)?;
+        check_sdk_compatibility(sdk_version, sdk_language, container_type, min_supported_sdk_versions)?;
     }
 
     Ok(())
@@ -357,12 +357,24 @@ mod version {
         // please follow the instruction there to update the value
         let mut go_version_map = HashMap::new();
         go_version_map.insert("sourcer".to_string(), "0.8.0-z".to_string());
+        go_version_map.insert("sourcetransformer".to_string(), "0.8.0-z".to_string());
+        go_version_map.insert("sinker".to_string(), "0.8.0-z".to_string());
+        go_version_map.insert("fb-sinker".to_string(), "0.8.0-z".to_string());
         let mut python_version_map = HashMap::new();
-        python_version_map.insert("sourcer".to_string(), "0.8.0-z".to_string());
+        python_version_map.insert("sourcer".to_string(), "0.8.0rc100".to_string());
+        python_version_map.insert("sourcetransformer".to_string(), "0.8.0rc100".to_string());
+        python_version_map.insert("sinker".to_string(), "0.8.0rc100".to_string());
+        python_version_map.insert("fb-sinker".to_string(), "0.8.0rc100".to_string());
         let mut java_version_map = HashMap::new();
         java_version_map.insert("sourcer".to_string(), "0.8.0-z".to_string());
+        java_version_map.insert("sourcetransformer".to_string(), "0.8.0-z".to_string());
+        java_version_map.insert("sinker".to_string(), "0.8.0-z".to_string());
+        java_version_map.insert("fb-sinker".to_string(), "0.8.0-z".to_string());
         let mut rust_version_map = HashMap::new();
-        rust_version_map.insert("sourcer".to_string(), "0.8.0-z".to_string());
+        rust_version_map.insert("sourcer".to_string(), "0.1.0-z".to_string());
+        rust_version_map.insert("sourcetransformer".to_string(), "0.1.0-z".to_string());
+        rust_version_map.insert("sinker".to_string(), "0.1.0-z".to_string());
+        rust_version_map.insert("fb-sinker".to_string(), "0.1.0-z".to_string());
 
         let mut m = HashMap::new();
         m.insert("go".to_string(), go_version_map);
@@ -371,12 +383,6 @@ mod version {
         m.insert("rust".to_string(), rust_version_map);
         m
     });
-
-    /*
-        m.insert("python".to_string(), "0.8.0rc100".to_string());
-        m.insert("java".to_string(), "0.8.0-z".to_string());
-        m.insert("rust".to_string(), "0.1.0-z".to_string());
-     */
 
     // Function to get the minimum supported SDK version hash map
     pub(crate) fn get_minimum_supported_sdk_versions() -> &'static SdkConstraints {
@@ -917,6 +923,13 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains(
             "numaflow version 1.1.6-rc1 must be upgraded to at least 1.1.6-rc2, in order to work with current SDK version"));
+    }
+
+    #[tokio::test]
+    async fn test_get_container_type_from_file_valid() {
+        let file_path = PathBuf::from("/var/run/numaflow/sourcer-server-info");
+        let container_type = get_container_type(&file_path);
+        assert_eq!("sourcer", container_type.unwrap());
     }
 
     #[tokio::test]

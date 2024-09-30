@@ -214,10 +214,10 @@ mod tests {
     #[tokio::test]
     async fn test_check_compatibility_success() {
         let dir = tempdir().unwrap();
-        let source_file_path = dir.path().join("source_server_info.json");
-        let sink_file_path = dir.path().join("sink_server_info.json");
-        let transformer_file_path = dir.path().join("transformer_server_info.json");
-        let fb_sink_file_path = dir.path().join("fb_sink_server_info.json");
+        let source_file_path = dir.path().join("sourcer-server-info");
+        let sink_file_path = dir.path().join("sinker-server-info");
+        let transformer_file_path = dir.path().join("sourcetransformer-server-info");
+        let fb_sink_file_path = dir.path().join("fb-sink-server-info");
 
         let server_info = ServerInfo {
             protocol: "uds".to_string(),
