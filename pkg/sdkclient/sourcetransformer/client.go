@@ -19,7 +19,8 @@ package sourcetransformer
 import (
 	"context"
 	"fmt"
-	"golang.org/x/sync/errgroup"
+	"log"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -36,32 +37,9 @@ import (
 
 // client contains the grpc connection and the grpc client.
 type client struct {
-	conn        *grpc.ClientConn
-	grpcClt     transformpb.SourceTransformClient
-	stream      transformpb.SourceTransform_SourceTransformFnClient
-	requestsCh  chan<- *transformpb.SourceTransformRequest
-	responsesCh <-chan *transformpb.SourceTransformResponse
-	errCh       <-chan error
-}
-
-func sendRequests(stream transformpb.SourceTransform_SourceTransformFnClient, requestsCh <-chan *transformpb.SourceTransformRequest, errCh chan<- error) {
-	for request := range requestsCh {
-		if err := stream.Send(request); err != nil {
-			errCh <- sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Send", err)
-			return
-		}
-	}
-}
-
-func receiveResponses(stream transformpb.SourceTransform_SourceTransformFnClient, responseCh chan<- *transformpb.SourceTransformResponse, errCh chan<- error) {
-	for {
-		resp, err := stream.Recv()
-		if err != nil {
-			errCh <- sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Recv", err)
-			return
-		}
-		responseCh <- resp
-	}
+	conn    *grpc.ClientConn
+	grpcClt transformpb.SourceTransformClient
+	stream  transformpb.SourceTransform_SourceTransformFnClient
 }
 
 // New creates a new client object.
@@ -109,15 +87,6 @@ waitUntilReady:
 		return nil, err
 	}
 
-	errCh := make(chan error, 2)
-	requestsCh := make(chan *transformpb.SourceTransformRequest)
-	responsesCh := make(chan *transformpb.SourceTransformResponse)
-	go sendRequests(c.stream, requestsCh, errCh)
-	go receiveResponses(c.stream, responsesCh, errCh)
-
-	c.errCh = errCh
-	c.requestsCh = requestsCh
-	c.responsesCh = responsesCh
 	return c, nil
 }
 
@@ -185,36 +154,48 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 func (c *client) SourceTransformFn(ctx context.Context, requests []*transformpb.SourceTransformRequest) ([]*transformpb.SourceTransformResponse, error) {
 	//logger := logging.FromContext(ctx)
 
-	grp, grpCtx := errgroup.WithContext(ctx)
-	grp.Go(func() error {
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer func() { wg.Done() }()
 		for _, req := range requests {
 			select {
-			case <-grpCtx.Done():
-				return grpCtx.Err()
-			case c.requestsCh <- req:
-				continue
-			case err := <-c.errCh:
-				return err
+			case <-ctx.Done():
+				return
+			default:
 			}
-		}
-		return nil
-	})
-
-	resp := make([]*transformpb.SourceTransformResponse, 0, len(requests))
-	grp.Go(func() error {
-		for i := 0; i < len(requests); i++ {
-			select {
-			case <-grpCtx.Done():
-				return grpCtx.Err()
-			case r := <-c.responsesCh:
-				resp = append(resp, r)
-			case err := <-c.errCh:
-				return err
+			log.Println("Sending request:", req.Request.Id)
+			if err := c.stream.Send(req); err != nil {
+				cancel(sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Send", err))
+				return
 			}
+			log.Println("Sent request:", req.Request.Id)
 		}
-		return nil
-	})
+	}()
 
-	err := grp.Wait()
-	return resp, err
+	responses := make([]*transformpb.SourceTransformResponse, 0, len(requests))
+	for i := 0; i < len(requests); i++ {
+		select {
+		case <-ctx.Done():
+			err := context.Cause(ctx)
+			log.Println("Context cancelled while receiving:", err)
+			return nil, err
+		default:
+		}
+		log.Println("Receiving response")
+		resp, err := c.stream.Recv()
+		log.Println("Received response:", resp.GetId(), err)
+		if err != nil {
+			err = sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Recv", err)
+			cancel(err)
+			return nil, err
+		}
+		responses = append(responses, resp)
+	}
+
+	wg.Wait()
+
+	return responses, nil
 }

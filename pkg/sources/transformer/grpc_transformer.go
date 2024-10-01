@@ -84,8 +84,7 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, messages []*i
 	requests := make([]*v1.SourceTransformRequest, 0, len(messages))
 	idToMsgMapping := make(map[string]*isb.ReadMessage)
 	for _, msg := range messages {
-		log.Println("Sending message to source transform client")
-		id := msg.ReadOffset.String()
+		id := msg.Message.ID.String()
 		idToMsgMapping[id] = msg
 		req := &v1.SourceTransformRequest{
 			Request: &v1.SourceTransformRequest_Request{
@@ -99,7 +98,10 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, messages []*i
 		}
 		requests = append(requests, req)
 	}
+
+	log.Println("Sending message to source transform client")
 	responses, err := u.client.SourceTransformFn(ctx, requests)
+	log.Println("Received responses from source transform client")
 
 	if err != nil {
 		err = &rpc.ApplyUDFErr{
