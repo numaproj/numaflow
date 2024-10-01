@@ -355,6 +355,8 @@ mod version {
         // TODO: populate this from a static file and make it part of the release process
         // the value of the map matches `minimumSupportedSDKVersions` in pkg/sdkclient/serverinfo/types.go
         // please follow the instruction there to update the value
+        // NOTE: the string content of the keys matches the corresponding server info file name.
+        // DO NOT change it unless the server info file name is changed.
         let mut go_version_map = HashMap::new();
         go_version_map.insert("sourcer".to_string(), "0.8.0-z".to_string());
         go_version_map.insert("sourcetransformer".to_string(), "0.8.0-z".to_string());
