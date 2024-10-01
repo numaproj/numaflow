@@ -3,18 +3,28 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::config::config;
+use crate::error;
 use crate::error::Error;
-use crate::metrics::{start_metrics_https_server, LagReader, LagReaderBuilder, MetricsState};
-use crate::sink_pb::sink_client::SinkClient;
-use crate::source_pb::source_client::SourceClient;
-use crate::sourcetransform_pb::source_transform_client::SourceTransformClient;
-use crate::{error, server_info};
+use crate::monovertex::metrics::{
+    start_metrics_https_server, LagReader, LagReaderBuilder, MetricsState,
+};
+use crate::monovertex::sink_pb::sink_client::SinkClient;
+use crate::monovertex::source_pb::source_client::SourceClient;
+use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;
+use crate::shared::server_info;
 
+use axum::http::Uri;
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
+use chrono::{DateTime, TimeZone, Timelike, Utc};
+use prost_types::Timestamp;
+use tokio::net::UnixStream;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
+use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
+use tower::service_fn;
 use tracing::{info, warn};
 
 pub(crate) async fn check_compatibility(
@@ -135,11 +145,55 @@ pub(crate) async fn wait_until_ready(
     Ok(())
 }
 
+pub(crate) fn utc_from_timestamp(t: Option<Timestamp>) -> DateTime<Utc> {
+    t.map_or(Utc.timestamp_nanos(-1), |t| {
+        DateTime::from_timestamp(t.seconds, t.nanos as u32).unwrap_or(Utc.timestamp_nanos(-1))
+    })
+}
+
+pub(crate) fn prost_timestamp_from_utc(t: DateTime<Utc>) -> Option<Timestamp> {
+    Some(Timestamp {
+        seconds: t.timestamp(),
+        nanos: t.nanosecond() as i32,
+    })
+}
+
+pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> crate::error::Result<Channel> {
+    const RECONNECT_INTERVAL: u64 = 1000;
+    const MAX_RECONNECT_ATTEMPTS: usize = 5;
+
+    let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
+
+    let channel = Retry::retry(
+        interval,
+        || async { connect_with_uds(socket_path.clone()).await },
+        |_: &Error| true,
+    )
+    .await?;
+    Ok(channel)
+}
+
+pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> Result<Channel, Error> {
+    let channel = Endpoint::try_from("http://[::]:50051")
+        .map_err(|e| Error::ConnectionError(format!("Failed to create endpoint: {:?}", e)))?
+        .connect_with_connector(service_fn(move |_: Uri| {
+            let uds_socket = uds_path.clone();
+            async move {
+                Ok::<_, std::io::Error>(hyper_util::rt::TokioIo::new(
+                    UnixStream::connect(uds_socket).await?,
+                ))
+            }
+        }))
+        .await
+        .map_err(|e| Error::ConnectionError(format!("Failed to connect: {:?}", e)))?;
+    Ok(channel)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server_info::ServerInfo;
-    use crate::shared::create_rpc_channel;
+    use crate::shared::server_info::ServerInfo;
+    use crate::shared::utils::create_rpc_channel;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
     use std::fs::File;

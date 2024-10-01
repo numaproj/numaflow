@@ -30,7 +30,7 @@ async fn main() {
             info!("Error running servesink: {}", e);
         }
     } else if args.contains(&"--monovertex".to_string()) {
-        if let Err(e) = monovertex::mono_vertex().await {
+        if let Err(e) = numaflow_core::monovertex::mono_vertex().await {
             error!("Error running monovertex: {}", e);
         }
     } else {

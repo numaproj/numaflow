@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.3.2 (2024-09-26)
+
+ * [cb7d17d4](https://github.com/numaproj/numaflow/commit/cb7d17d4f3e2ecfcf6a1aa413031f714c135983d) Update manifests to v1.3.2
+ * [816a8e74](https://github.com/numaproj/numaflow/commit/816a8e749c3f071b0c5e4c2ce97025c8138c6cbb) feat: container-type level version compatibility check (#2087)
+ * [9fae141e](https://github.com/numaproj/numaflow/commit/9fae141e686c99e95824b8bdcbec4d4e1bf04241) feat: add pause for monovertex (#2077)
+ * [fc59a3e0](https://github.com/numaproj/numaflow/commit/fc59a3e06f3e86947d9f905e1a728aa155f68bf4) fix: rollback codegen script (#2079)
+ * [82beda64](https://github.com/numaproj/numaflow/commit/82beda6462b4828f914ea70a07d8bed5f1302675) Fix: Use Merge patch rather than json patch for `pause-timestamp` annotation apply (#2078)
+ * [9c2e8f81](https://github.com/numaproj/numaflow/commit/9c2e8f812148d6cc45781762b6328a509225e747) fix: support version compatibility check for pre-release versions (#2069)
+ * [b0e60014](https://github.com/numaproj/numaflow/commit/b0e60014b3e98019fcc20edd668de90e542534a3) feat: allow customization on readyz and livez config (#2068)
+ * [88d2a7a3](https://github.com/numaproj/numaflow/commit/88d2a7a30ae9e1fd63799878f1a0e8b0650615e8) doc: example for PVC (#2067)
+ * [7726cf42](https://github.com/numaproj/numaflow/commit/7726cf4272a2f534202e4ec6ecd81c52e731dbf7) fix: skip updating phase for resource check (#2065)
+ * [782872f5](https://github.com/numaproj/numaflow/commit/782872f55c7fcfb0b1f4747ad71c71f0fc26280c) chore(deps): bump express from 4.19.2 to 4.21.0 in /ui (#2061)
+ * [234e19fc](https://github.com/numaproj/numaflow/commit/234e19fc84d8c4f3c29217ccc4deafb35e9182f1) fix: builtin transformer should keep the keys (#2047)
+ * [f7716aa2](https://github.com/numaproj/numaflow/commit/f7716aa2a6afd9cc3596d307c68125f77cf55f92) feat: rolling update for Pipeline Vertex (#2040)
+ * [db9337a2](https://github.com/numaproj/numaflow/commit/db9337a2cd00e0b19fda1f79793bb9f35eae9436) feat: rolling update for MonoVertex (#2029)
+ * [6f376414](https://github.com/numaproj/numaflow/commit/6f3764140cd86356a197c8d15cd6f7b7afc0a4a0) fix: pause lifecyle changes and add drained status (#2028)
+ * [754bc5e3](https://github.com/numaproj/numaflow/commit/754bc5e3646f52ed0784bdfc9810f6ad77c5ae2d) fix: Fix numaflow-rs binary location in image (#2050)
+
+### Contributors
+
+ * Derek Wang
+ * Julie Vogelman
+ * Keran Yang
+ * Sidhant Kohli
+ * Sreekanth
+ * Vigith Maurice
+ * dependabot[bot]
+
 ## v1.3.1 (2024-09-02)
 
  * [a42d0063](https://github.com/numaproj/numaflow/commit/a42d0063caf53d6f4c01c2fb2f6f6f6f74a8f987) Update manifests to v1.3.1
