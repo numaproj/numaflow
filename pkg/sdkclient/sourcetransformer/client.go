@@ -19,7 +19,7 @@ package sourcetransformer
 import (
 	"context"
 	"fmt"
-	"log"
+	"golang.org/x/sync/errgroup"
 	"time"
 
 	"google.golang.org/grpc"
@@ -36,9 +36,32 @@ import (
 
 // client contains the grpc connection and the grpc client.
 type client struct {
-	conn    *grpc.ClientConn
-	grpcClt transformpb.SourceTransformClient
-	stream  transformpb.SourceTransform_SourceTransformFnClient
+	conn        *grpc.ClientConn
+	grpcClt     transformpb.SourceTransformClient
+	stream      transformpb.SourceTransform_SourceTransformFnClient
+	requestsCh  chan<- *transformpb.SourceTransformRequest
+	responsesCh <-chan *transformpb.SourceTransformResponse
+	errCh       <-chan error
+}
+
+func sendRequests(stream transformpb.SourceTransform_SourceTransformFnClient, requestsCh <-chan *transformpb.SourceTransformRequest, errCh chan<- error) {
+	for request := range requestsCh {
+		if err := stream.Send(request); err != nil {
+			errCh <- sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Send", err)
+			return
+		}
+	}
+}
+
+func receiveResponses(stream transformpb.SourceTransform_SourceTransformFnClient, responseCh chan<- *transformpb.SourceTransformResponse, errCh chan<- error) {
+	for {
+		resp, err := stream.Recv()
+		if err != nil {
+			errCh <- sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Recv", err)
+			return
+		}
+		responseCh <- resp
+	}
 }
 
 // New creates a new client object.
@@ -86,6 +109,15 @@ waitUntilReady:
 		return nil, err
 	}
 
+	errCh := make(chan error, 2)
+	requestsCh := make(chan *transformpb.SourceTransformRequest)
+	responsesCh := make(chan *transformpb.SourceTransformResponse)
+	go sendRequests(c.stream, requestsCh, errCh)
+	go receiveResponses(c.stream, responsesCh, errCh)
+
+	c.errCh = errCh
+	c.requestsCh = requestsCh
+	c.responsesCh = responsesCh
 	return c, nil
 }
 
@@ -150,73 +182,39 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 
 // SourceTransformFn SourceTransformerFn applies a function to each request element.
 // Response channel will not be closed. Caller can select on response and error channel to exit on first error.
-func (c *client) SourceTransformFn(ctx context.Context, request <-chan *transformpb.SourceTransformRequest) (<-chan *transformpb.SourceTransformResponse, <-chan error) {
-	clientErrCh := make(chan error)
-	responseCh := make(chan *transformpb.SourceTransformResponse)
-	//defer func() {
-	//	close(responseCh)
-	//	clientErrCh = nil
-	//}()
+func (c *client) SourceTransformFn(ctx context.Context, requests []*transformpb.SourceTransformRequest) ([]*transformpb.SourceTransformResponse, error) {
+	//logger := logging.FromContext(ctx)
 
-	// This channel is to send the error from the goroutine that receives messages from the stream to the goroutine that sends requests to the server.
-	// This ensures that we don't need to use clientErrCh in both goroutines. The caller of this function will only be listening for the first error value in clientErrCh.
-	// If both goroutines were sending error message to this channel (eg. stream failure), one of them will be stuck in sending can not shutdown cleanly.
-	errCh := make(chan error, 1)
-
-	logger := logging.FromContext(ctx)
-
-	// Receive responses from the stream
-	go func() {
-		for {
-			resp, err := c.stream.Recv()
-			if err != nil {
-				log.Println("Error in receiving response from the stream")
-				// we don't need an EOF check because we only close the stream during shutdown.
-				errCh <- sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn", err)
-				close(errCh)
-				return
-			}
-			log.Println("Received response from the stream with id - ", resp.GetId())
-
+	grp, grpCtx := errgroup.WithContext(ctx)
+	grp.Go(func() error {
+		for _, req := range requests {
 			select {
-			case <-ctx.Done():
-				log.Println("Context cancelled. Stopping retrieving messages from the stream")
-				logger.Warnf("Context cancelled. Stopping retrieving messages from the stream")
-				return
-			case responseCh <- resp:
-				log.Println("Sent response to the channel with id - ", resp.GetId())
-			}
-			log.Println("We got a message from the stream")
-		}
-	}()
-
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("Context cancelled. Stopping sending messages to the stream")
-				clientErrCh <- sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Send", ctx.Err())
-				return
-			case err := <-errCh:
-				log.Println("Error in sending request to the stream")
-				clientErrCh <- err
-				return
-			case msg, ok := <-request:
-				if !ok {
-					log.Println("Request channel closed. Stopping sending messages to the stream")
-					// stream is only closed during shutdown
-					return
-				}
-				log.Println("Trying to send request to the stream with id - ", msg.GetRequest().GetId())
-				err := c.stream.Send(msg)
-				if err != nil {
-					clientErrCh <- sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Send", err)
-					return
-				}
-				log.Println("Sent request to the stream with id - ", msg.GetRequest().GetId())
+			case <-grpCtx.Done():
+				return grpCtx.Err()
+			case c.requestsCh <- req:
+				continue
+			case err := <-c.errCh:
+				return err
 			}
 		}
-	}()
+		return nil
+	})
 
-	return responseCh, clientErrCh
+	resp := make([]*transformpb.SourceTransformResponse, 0, len(requests))
+	grp.Go(func() error {
+		for i := 0; i < len(requests); i++ {
+			select {
+			case <-grpCtx.Done():
+				return grpCtx.Err()
+			case r := <-c.responsesCh:
+				resp = append(resp, r)
+			case err := <-c.errCh:
+				return err
+			}
+		}
+		return nil
+	})
+
+	err := grp.Wait()
+	return resp, err
 }

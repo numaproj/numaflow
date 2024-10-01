@@ -28,7 +28,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/tracker"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/rpc"
@@ -80,115 +79,78 @@ var errSourceTransformFnEmptyMsgId = errors.New("response from SourceTransformFn
 
 func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	var transformResults []isb.ReadWriteMessagePair
-	inputChan := make(chan *v1.SourceTransformRequest)
-	respChan, errChan := u.client.SourceTransformFn(ctx, inputChan)
-	defer func() {
-		log.Println("Returned from ApplyTransform")
-	}()
-
-	logger := logging.FromContext(ctx)
-
-	msgTracker := tracker.NewMessageTracker(messages)
-
-	go func() {
-		defer close(inputChan)
-		for _, msg := range messages {
-			log.Println("Sending message to source transform client")
-			req := &v1.SourceTransformRequest{
-				Request: &v1.SourceTransformRequest_Request{
-					Keys:      msg.Keys,
-					Value:     msg.Body.Payload,
-					EventTime: timestamppb.New(msg.MessageInfo.EventTime),
-					Watermark: timestamppb.New(msg.Watermark),
-					Headers:   msg.Headers,
-					Id:        msg.ReadOffset.String(),
-				},
-			}
-			inputChan <- req
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	requests := make([]*v1.SourceTransformRequest, 0, len(messages))
+	idToMsgMapping := make(map[string]*isb.ReadMessage)
+	for _, msg := range messages {
+		log.Println("Sending message to source transform client")
+		id := msg.ReadOffset.String()
+		idToMsgMapping[id] = msg
+		req := &v1.SourceTransformRequest{
+			Request: &v1.SourceTransformRequest_Request{
+				Keys:      msg.Keys,
+				Value:     msg.Body.Payload,
+				EventTime: timestamppb.New(msg.MessageInfo.EventTime),
+				Watermark: timestamppb.New(msg.Watermark),
+				Headers:   msg.Headers,
+				Id:        id,
+			},
 		}
-	}()
+		requests = append(requests, req)
+	}
+	responses, err := u.client.SourceTransformFn(ctx, requests)
 
-	messageCount := len(messages)
+	if err != nil {
+		err = &rpc.ApplyUDFErr{
+			UserUDFErr: false,
+			Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
+			InternalErr: rpc.InternalErr{
+				Flag:        true,
+				MainCarDown: false,
+			},
+		}
+		return nil, err
+	}
 
-loop:
-	for {
-		log.Println("Waiting for response from source transform client")
-		select {
-		case err := <-errChan:
-			log.Println("Error from source transform client")
-			err = &rpc.ApplyUDFErr{
-				UserUDFErr: false,
-				Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
-				InternalErr: rpc.InternalErr{
-					Flag:        true,
-					MainCarDown: false,
-				},
+	var taggedMessages []*isb.WriteMessage
+	for _, resp := range responses {
+		parentMessage, ok := idToMsgMapping[resp.GetId()]
+		if !ok {
+			panic("tracker doesn't contain the message ID received from the response")
+		}
+		for i, result := range resp.GetResults() {
+			keys := result.Keys
+			if result.EventTime != nil {
+				// Transformer supports changing event time.
+				log.Println("Updating event time from ", parentMessage.MessageInfo.EventTime.UnixMilli(), " to ", result.EventTime.AsTime().UnixMilli())
+				parentMessage.MessageInfo.EventTime = result.EventTime.AsTime()
 			}
-			return nil, err
-		case resp, ok := <-respChan:
-			println("Response from source transform client")
-			if !ok {
-				logger.Warn("Response channel from source transform client was closed.")
-				break loop
-			}
-			msgId := resp.GetId()
-			if msgId == "" {
-				return nil, errSourceTransformFnEmptyMsgId
-			}
-			parentMessage := msgTracker.Remove(msgId)
-			if parentMessage == nil {
-				return nil, errors.New("tracker doesn't contain the message ID received from the response")
-			}
-			messageCount--
-			log.Println("Message count: ", messageCount)
-
-			var taggedMessages []*isb.WriteMessage
-			for i, result := range resp.GetResults() {
-				keys := result.Keys
-				if result.EventTime != nil {
-					// Transformer supports changing event time.
-					log.Println("Updating event time from ", parentMessage.MessageInfo.EventTime.UnixMilli(), " to ", result.EventTime.AsTime().UnixMilli())
-					parentMessage.MessageInfo.EventTime = result.EventTime.AsTime()
-				}
-				taggedMessage := &isb.WriteMessage{
-					Message: isb.Message{
-						Header: isb.Header{
-							MessageInfo: parentMessage.MessageInfo,
-							ID: isb.MessageID{
-								VertexName: u.vertexName,
-								Offset:     parentMessage.ReadOffset.String(),
-								Index:      int32(i),
-							},
-							Keys: keys,
+			taggedMessage := &isb.WriteMessage{
+				Message: isb.Message{
+					Header: isb.Header{
+						MessageInfo: parentMessage.MessageInfo,
+						ID: isb.MessageID{
+							VertexName: u.vertexName,
+							Offset:     parentMessage.ReadOffset.String(),
+							Index:      int32(i),
 						},
-						Body: isb.Body{
-							Payload: result.Value,
-						},
+						Keys: keys,
 					},
-					Tags: result.Tags,
-				}
-				taggedMessages = append(taggedMessages, taggedMessage)
+					Body: isb.Body{
+						Payload: result.Value,
+					},
+				},
+				Tags: result.Tags,
 			}
-			responsePair := isb.ReadWriteMessagePair{
-				ReadMessage:   parentMessage,
-				WriteMessages: taggedMessages,
-				Err:           nil,
-			}
-			transformResults = append(transformResults, responsePair)
-
-			if messageCount == 0 {
-				log.Println("All messages are transformed.")
-				break loop
-			}
+			taggedMessages = append(taggedMessages, taggedMessage)
 		}
-		log.Println("Received some response from source transform client")
+		responsePair := isb.ReadWriteMessagePair{
+			ReadMessage:   parentMessage,
+			WriteMessages: taggedMessages,
+			Err:           nil,
+		}
+		transformResults = append(transformResults, responsePair)
 	}
-
-	log.Println("Checking if all messages are transformed.")
-	if !msgTracker.IsEmpty() {
-		log.Println("All messages are not transformed yet , pending messages count: ", msgTracker.Len())
-		return nil, fmt.Errorf("transform response for all requests were not received from UDF. Remaining=%d", msgTracker.Len())
-	}
-	log.Println("Exiting ApplyTransform")
 	return transformResults, nil
 }

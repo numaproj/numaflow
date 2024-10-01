@@ -571,6 +571,7 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 						zap.String("reason", err.Error()),
 						zap.String("partition", toBufferPartition.GetName()),
 						zap.String("vertex", df.vertexName), zap.String("pipeline", df.pipelineName),
+						zap.String("msg_id", msg.ID.String()),
 					)
 				} else {
 					needRetry = true
