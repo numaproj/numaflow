@@ -874,7 +874,7 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 			return true, err
 		}
 		if daemonError != nil {
-			r.logger.Errorf("Error in fetching Drained status, Pausing due to timeout: %v", zap.Error(err))
+			r.logger.Errorw("Error in fetching Drained status, Pausing due to timeout", zap.Error(err))
 		}
 		// if the drain completed successfully, then set the DrainedOnPause field to true
 		if drainCompleted {
