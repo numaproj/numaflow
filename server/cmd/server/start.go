@@ -55,7 +55,6 @@ type ServerOptions struct {
 	CorsAllowedOrigins   string
 	ReadOnly             bool
 	DaemonClientProtocol string
-	PrometheusServerUrl  string
 }
 
 type server struct {
@@ -207,6 +206,6 @@ func CreateAuthRouteMap(baseHref string) authz.RouteMap {
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/metrics":        authz.NewRouteInfo(authz.ObjectMonoVertex, true),
 		"POST:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices":                            authz.NewRouteInfo(authz.ObjectMonoVertex, true),
 		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/health":         authz.NewRouteInfo(authz.ObjectMonoVertex, true),
-		"POST:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/getMetricData":        authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"POST:" + baseHref + "api/v1/metricData":                                                     authz.NewRouteInfo(authz.ObjectAll, true),
 	}
 }

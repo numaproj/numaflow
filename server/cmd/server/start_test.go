@@ -50,7 +50,6 @@ func TestNewServer(t *testing.T) {
 		CorsAllowedOrigins:   "http://localhost:3000,http://example.com",
 		ReadOnly:             false,
 		DaemonClientProtocol: "http",
-		PrometheusServerUrl:  "http://localhost:9090",
 	}
 
 	s := NewServer(opts)
