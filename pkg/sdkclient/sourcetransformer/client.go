@@ -19,6 +19,7 @@ package sourcetransformer
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"google.golang.org/grpc"
@@ -152,6 +153,10 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 func (c *client) SourceTransformFn(ctx context.Context, request <-chan *transformpb.SourceTransformRequest) (<-chan *transformpb.SourceTransformResponse, <-chan error) {
 	clientErrCh := make(chan error)
 	responseCh := make(chan *transformpb.SourceTransformResponse)
+	//defer func() {
+	//	close(responseCh)
+	//	clientErrCh = nil
+	//}()
 
 	// This channel is to send the error from the goroutine that receives messages from the stream to the goroutine that sends requests to the server.
 	// This ensures that we don't need to use clientErrCh in both goroutines. The caller of this function will only be listening for the first error value in clientErrCh.
@@ -165,18 +170,23 @@ func (c *client) SourceTransformFn(ctx context.Context, request <-chan *transfor
 		for {
 			resp, err := c.stream.Recv()
 			if err != nil {
+				log.Println("Error in receiving response from the stream")
 				// we don't need an EOF check because we only close the stream during shutdown.
 				errCh <- sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn", err)
 				close(errCh)
 				return
 			}
+			log.Println("Received response from the stream with id - ", resp.GetId())
 
 			select {
 			case <-ctx.Done():
+				log.Println("Context cancelled. Stopping retrieving messages from the stream")
 				logger.Warnf("Context cancelled. Stopping retrieving messages from the stream")
 				return
 			case responseCh <- resp:
+				log.Println("Sent response to the channel with id - ", resp.GetId())
 			}
+			log.Println("We got a message from the stream")
 		}
 	}()
 
@@ -184,21 +194,26 @@ func (c *client) SourceTransformFn(ctx context.Context, request <-chan *transfor
 		for {
 			select {
 			case <-ctx.Done():
+				log.Println("Context cancelled. Stopping sending messages to the stream")
 				clientErrCh <- sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Send", ctx.Err())
 				return
 			case err := <-errCh:
+				log.Println("Error in sending request to the stream")
 				clientErrCh <- err
 				return
 			case msg, ok := <-request:
 				if !ok {
+					log.Println("Request channel closed. Stopping sending messages to the stream")
 					// stream is only closed during shutdown
 					return
 				}
+				log.Println("Trying to send request to the stream with id - ", msg.GetRequest().GetId())
 				err := c.stream.Send(msg)
 				if err != nil {
 					clientErrCh <- sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Send", err)
 					return
 				}
+				log.Println("Sent request to the stream with id - ", msg.GetRequest().GetId())
 			}
 		}
 	}()

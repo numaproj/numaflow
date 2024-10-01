@@ -20,16 +20,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	v1 "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/tracker"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/rpc"
-	"google.golang.org/protobuf/types/known/emptypb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // GRPCBasedTransformer applies user-defined transformer over gRPC (over Unix Domain Socket) client/server where server is the transformer.
@@ -80,6 +82,9 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, messages []*i
 	var transformResults []isb.ReadWriteMessagePair
 	inputChan := make(chan *v1.SourceTransformRequest)
 	respChan, errChan := u.client.SourceTransformFn(ctx, inputChan)
+	defer func() {
+		log.Println("Returned from ApplyTransform")
+	}()
 
 	logger := logging.FromContext(ctx)
 
@@ -88,6 +93,7 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, messages []*i
 	go func() {
 		defer close(inputChan)
 		for _, msg := range messages {
+			log.Println("Sending message to source transform client")
 			req := &v1.SourceTransformRequest{
 				Request: &v1.SourceTransformRequest_Request{
 					Keys:      msg.Keys,
@@ -106,8 +112,10 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, messages []*i
 
 loop:
 	for {
+		log.Println("Waiting for response from source transform client")
 		select {
 		case err := <-errChan:
+			log.Println("Error from source transform client")
 			err = &rpc.ApplyUDFErr{
 				UserUDFErr: false,
 				Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
@@ -118,6 +126,7 @@ loop:
 			}
 			return nil, err
 		case resp, ok := <-respChan:
+			println("Response from source transform client")
 			if !ok {
 				logger.Warn("Response channel from source transform client was closed.")
 				break loop
@@ -131,12 +140,14 @@ loop:
 				return nil, errors.New("tracker doesn't contain the message ID received from the response")
 			}
 			messageCount--
+			log.Println("Message count: ", messageCount)
 
 			var taggedMessages []*isb.WriteMessage
 			for i, result := range resp.GetResults() {
 				keys := result.Keys
 				if result.EventTime != nil {
 					// Transformer supports changing event time.
+					log.Println("Updating event time from ", parentMessage.MessageInfo.EventTime.UnixMilli(), " to ", result.EventTime.AsTime().UnixMilli())
 					parentMessage.MessageInfo.EventTime = result.EventTime.AsTime()
 				}
 				taggedMessage := &isb.WriteMessage{
@@ -166,13 +177,18 @@ loop:
 			transformResults = append(transformResults, responsePair)
 
 			if messageCount == 0 {
+				log.Println("All messages are transformed.")
 				break loop
 			}
 		}
+		log.Println("Received some response from source transform client")
 	}
 
+	log.Println("Checking if all messages are transformed.")
 	if !msgTracker.IsEmpty() {
+		log.Println("All messages are not transformed yet , pending messages count: ", msgTracker.Len())
 		return nil, fmt.Errorf("transform response for all requests were not received from UDF. Remaining=%d", msgTracker.Len())
 	}
+	log.Println("Exiting ApplyTransform")
 	return transformResults, nil
 }
