@@ -345,13 +345,12 @@ async fn read_server_info(
 mod version {
     use std::collections::HashMap;
     use std::env;
-
-    use once_cell::sync::Lazy;
+    use std::sync::LazyLock;
 
     pub(crate) type SdkConstraints = HashMap<String, HashMap<String, String>>;
 
     // MINIMUM_SUPPORTED_SDK_VERSIONS is the minimum supported version of each SDK for the current numaflow version.
-    static MINIMUM_SUPPORTED_SDK_VERSIONS: Lazy<SdkConstraints> = Lazy::new(|| {
+    static MINIMUM_SUPPORTED_SDK_VERSIONS: LazyLock<SdkConstraints> = LazyLock::new(|| {
         // TODO: populate this from a static file and make it part of the release process
         // the value of the map matches `minimumSupportedSDKVersions` in pkg/sdkclient/serverinfo/types.go
         // please follow the instruction there to update the value
@@ -447,8 +446,8 @@ mod version {
         }
     }
 
-    /// Use once_cell::sync::Lazy for thread-safe, one-time initialization
-    static VERSION_INFO: Lazy<VersionInfo> = Lazy::new(VersionInfo::init);
+    /// Use std::sync::LazyLock for thread-safe, one-time initialization
+    static VERSION_INFO: LazyLock<VersionInfo> = LazyLock::new(VersionInfo::init);
 
     /// Getter function for VersionInfo
     pub fn get_version_info() -> &'static VersionInfo {
