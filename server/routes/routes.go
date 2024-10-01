@@ -44,11 +44,7 @@ type AuthInfo struct {
 	ServerAddr    string `json:"serverAddr"`
 }
 
-type MetricInfo struct {
-	PrometheusServerUrl string `json:"prometheusServerUrl"`
-}
-
-func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, metricInfo MetricInfo, baseHref string, authRouteMap authz.RouteMap) {
+func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo AuthInfo, baseHref string, authRouteMap authz.RouteMap) {
 	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
@@ -76,9 +72,9 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 		}
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(ctx, authorizer, dexObj, localUsersAuthObj, authRouteMap))
-		v1Routes(ctx, r1Group, dexObj, localUsersAuthObj, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol, metricInfo)
+		v1Routes(ctx, r1Group, dexObj, localUsersAuthObj, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol)
 	} else {
-		v1Routes(ctx, r1Group, nil, nil, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol, metricInfo)
+		v1Routes(ctx, r1Group, nil, nil, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol)
 	}
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
@@ -102,12 +98,12 @@ func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v
 
 // v1Routes defines the routes for the v1 API. For adding a new route, add a new handler function
 // for the route along with an entry in the RouteMap in auth/route_map.go.
-func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v1.LocalUsersAuthObject, isReadOnly bool, daemonClientProtocol string, metricInfo MetricInfo) {
+func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v1.LocalUsersAuthObject, isReadOnly bool, daemonClientProtocol string) {
 	handlerOpts := []v1.HandlerOption{v1.WithDaemonClientProtocol(daemonClientProtocol)}
 	if isReadOnly {
 		handlerOpts = append(handlerOpts, v1.WithReadOnlyMode())
 	}
-	handler, err := v1.NewHandler(ctx, dexObj, localUsersAuthObject, metricInfo.PrometheusServerUrl, handlerOpts...)
+	handler, err := v1.NewHandler(ctx, dexObj, localUsersAuthObject, handlerOpts...)
 	if err != nil {
 		panic(err)
 	}
@@ -170,7 +166,7 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	// Get the health information of a mono vertex.
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/health", handler.GetMonoVertexHealth)
 	// Get the time series data for a specific metric.
-	r.POST("/namespaces/:namespace/pipelines/:pipeline/getMetricData", handler.GetMetricData)
+	r.POST("/metricData", handler.GetMetricData)
 }
 
 // authMiddleware is the middleware for AuthN/AuthZ.

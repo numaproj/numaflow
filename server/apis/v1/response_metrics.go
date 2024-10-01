@@ -1,50 +1,65 @@
 package v1
 
-type UserMetricName string
-type PrometheusResponseFormat string
+import (
+	"os"
 
-const (
-	Matrix PrometheusResponseFormat = "matrix"
-	Vector PrometheusResponseFormat = "vector"
+	"github.com/prometheus/client_golang/api"
+	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
+
+	"gopkg.in/yaml.v2"
 )
 
-type MetricMetaData struct {
-	NumaMetricName string
-	Description    string
-	Expression     string
-}
-type MetricSpecData struct {
-	MetricName UserMetricName    `json:"metricName"`
-	Duration   string            `json:"duration"`
-	From       string            `json:"from"`
-	To         string            `json:"to"`
-	Labels     map[string]string `json:"labels"`
+type PrometheusClient struct {
+	// prometheus metric config from yaml
+	ConfigData []map[string]any
+	// prom client
+	Client api.Client
+	// prom client API to query data
+	Api v1.API
 }
 
-// necessary counter metrics - first iteration - revisit later
-var metricNameMap = map[UserMetricName]MetricMetaData{
-	"read-rate": {
-		NumaMetricName: "forwarder_read_total",
-		Description:    "Total number of Messages Read",
-	},
-	"write-rate": {
-		NumaMetricName: "forwarder_write_total",
-		Description:    "Total number of Messages Written",
-	},
-	"write-errors-rate": {
-		NumaMetricName: "forwarder_write_error_total",
-		Description:    "Total number of Write Errors",
-	},
-	"ack-rate": {
-		NumaMetricName: "forwarder_ack_total",
-		Description:    "Total number of Messages Acknowledged",
-	},
-	"fallback-sink-write-rate": {
-		NumaMetricName: "forwarder_fbsink_write_total",
-		Description:    "Total number of Messages written to a fallback sink",
-	},
-	"fallback-sink-write-errors-rate": {
-		NumaMetricName: "forwarder_fbsink_write_error_total",
-		Description:    "Total number of Write Errors while writing to a fallback sink",
-	},
+type PrometheusConfig struct {
+	// prometheus server url in the config
+	ServerUrl string `yaml:"url"`
+	// patterns in the config
+	Patterns []map[string]any `yaml:"patterns"`
+}
+
+func NewPrometheusClient(config *PrometheusConfig) *PrometheusClient {
+	if config == nil || config.ServerUrl == "" {
+		return nil
+	}
+	client, err := api.NewClient(api.Config{
+		Address: config.ServerUrl,
+	})
+	if err != nil {
+		return nil
+	}
+	v1api := v1.NewAPI(client)
+	return &PrometheusClient{
+		ConfigData: config.Patterns,
+		Client:     client,
+		Api:        v1api,
+	}
+}
+
+func loadPrometheusMetricConfig() *PrometheusConfig {
+	var (
+		data       []byte
+		promConfig PrometheusConfig
+		err        error
+	)
+
+	// read prometheus metric config yaml from volume mount path
+	data, err = os.ReadFile("/etc/numaflow/metrics/config.yaml")
+	if err != nil {
+		return nil
+	}
+	err = yaml.Unmarshal(data, &promConfig)
+
+	if err != nil {
+		return nil
+	}
+
+	return &promConfig
 }

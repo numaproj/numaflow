@@ -115,9 +115,6 @@ func (s *server) Start(ctx context.Context) {
 			DexServerAddr: s.options.DexServerAddr,
 			ServerAddr:    s.options.ServerAddr,
 		},
-		routes.MetricInfo{
-			PrometheusServerUrl: s.options.PrometheusServerUrl,
-		},
 		s.options.BaseHref,
 		authRouteMap,
 	)

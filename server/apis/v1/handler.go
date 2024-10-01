@@ -25,6 +25,7 @@ import (
 	"math"
 	"net/http"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,9 +33,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	lru "github.com/hashicorp/golang-lru/v2"
-	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
-	"github.com/prometheus/common/model"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -95,18 +94,18 @@ func WithReadOnlyMode() HandlerOption {
 type handler struct {
 	kubeClient            kubernetes.Interface
 	metricsClient         *metricsversiond.Clientset
+	prometheusClient      *PrometheusClient
 	numaflowClient        dfv1clients.NumaflowV1alpha1Interface
 	daemonClientsCache    *lru.Cache[string, daemonclient.DaemonClient]
 	mvtDaemonClientsCache *lru.Cache[string, mvtdaemonclient.MonoVertexDaemonClient]
 	dexObj                *DexObject
 	localUsersAuthObject  *LocalUsersAuthObject
 	healthChecker         *HealthChecker
-	prometheusServerUrl   string
 	opts                  *handlerOptions
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, prometheusServerUrl string, opts ...HandlerOption) (*handler, error) {
+func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, opts ...HandlerOption) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -127,6 +126,11 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	mvtDaemonClientsCache, _ := lru.NewWithEvict[string, mvtdaemonclient.MonoVertexDaemonClient](500, func(key string, value mvtdaemonclient.MonoVertexDaemonClient) {
 		_ = value.Close()
 	})
+
+	// create handler instance even if prometheus server details not set, let API respond with error
+	prometheusMetricConfig := loadPrometheusMetricConfig()
+	prometheusClient := NewPrometheusClient(prometheusMetricConfig)
+
 	o := defaultHandlerOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -136,13 +140,13 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	return &handler{
 		kubeClient:            kubeClient,
 		metricsClient:         metricsClient,
+		prometheusClient:      prometheusClient,
 		numaflowClient:        numaflowClient,
 		daemonClientsCache:    daemonClientsCache,
 		mvtDaemonClientsCache: mvtDaemonClientsCache,
 		dexObj:                dexObj,
 		localUsersAuthObject:  localUsersAuthObject,
 		healthChecker:         NewHealthChecker(ctx),
-		prometheusServerUrl:   prometheusServerUrl,
 		opts:                  o,
 	}, nil
 }
@@ -1185,121 +1189,141 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
-// validate metric request body
-func validateMetricReqBody(data MetricSpecData) error {
-	if (data.From == "" && data.To != "") || (data.To == "" && data.From != "") {
-		return fmt.Errorf("bad request: either both from and to be set or none")
+func formatArrayLabels(arrLabels []interface{}) string {
+	var labelSelectors []string
+	for _, value := range arrLabels {
+		labelSelectors = append(labelSelectors, fmt.Sprintf(`%s`, value))
 	}
-
-	if _, ok := metricNameMap[data.MetricName]; !ok {
-		return fmt.Errorf("bad Request: requested user metric name not supported yet")
-	}
-	return nil
+	return strings.Join(labelSelectors, ",")
 }
 
-// build query from labels provided by user
-func buildMetricLabelQuery(data map[string]string) string {
-	query := ""
-	for key, val := range data {
-		query += fmt.Sprintf(`,%s="%s"`, key, val)
+func formatMapLabels(mapLabels map[string]interface{}) string {
+	var labelSelectors []string
+	for key, value := range mapLabels {
+		labelSelectors = append(labelSelectors, fmt.Sprintf(`%s="%s"`, key, value))
 	}
-	return query
-}
-
-// build time series data from prometheus response which can be in Matrix or Vector format
-func buildTimeSeriesData(ctx context.Context, v1api v1.API, data MetricSpecData, query string, format PrometheusResponseFormat) ([][]float64, error) {
-	var timeSeriesData = make([][]float64, 0)
-	if format == Matrix {
-		startTime, _ := time.Parse(time.RFC3339, data.From)
-		endTime, _ := time.Parse(time.RFC3339, data.To)
-		r := v1.Range{
-			Start: startTime,
-			End:   endTime,
-			Step:  time.Minute,
-		}
-		result, _, err := v1api.QueryRange(ctx, query, r)
-		if err != nil {
-			return timeSeriesData, err
-		}
-		matrixRes := result.(model.Matrix)
-
-		for _, sampleStream := range matrixRes {
-			for _, val := range sampleStream.Values {
-				timeSeriesData = append(timeSeriesData, []float64{
-					float64(val.Timestamp),
-					float64(val.Value),
-				})
-			}
-		}
-
-	} else if format == Vector {
-		result, _, err := v1api.Query(ctx, query, model.Now().Time())
-		if err != nil {
-			return timeSeriesData, err
-		}
-		vectorRes := result.(model.Vector)
-		for _, sample := range vectorRes {
-			timeSeriesData = append(timeSeriesData, []float64{
-				float64(sample.Timestamp),
-				float64(sample.Value),
-			})
-		}
-	}
-	return timeSeriesData, nil
+	return strings.Join(labelSelectors, ",")
 }
 
 func (h *handler) GetMetricData(c *gin.Context) {
 
-	if h.prometheusServerUrl == "" {
-		h.respondWithError(c, "Prometheus Server URL not set.")
+	if h.prometheusClient == nil || h.prometheusClient.Client == nil {
+		h.respondWithError(c, "Prometheus client not set.")
 		return
 	}
 
-	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
+	var index int = -1
+	var fieldsMap = make(map[string]any)
 
-	// bind request body to metric specs data
-	var metricSpecData MetricSpecData
-	if err := bindJson(c, &metricSpecData); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body to metric data spec, %s", err.Error()))
+	var (
+		requestBody     map[string]any
+		startTimeString string
+		endTimeString   string
+		pattern         map[string]any
+	)
+
+	if err := bindJson(c, &requestBody); err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body, %s", err.Error()))
 		return
 	}
-	if err := validateMetricReqBody(metricSpecData); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Validation check failed for metric data body, %s", err.Error()))
+
+	// find index and pattern from config based on req pattern name
+	for i, p := range h.prometheusClient.ConfigData {
+		if p["name"] == requestBody["name"] {
+			index = i
+			pattern = p
+			break
+		}
+	}
+
+	// throw error if pattern name not found in the config
+	if index == -1 {
+		h.respondWithError(c, fmt.Sprintf("pattern name %s not supported yet", requestBody["name"]))
 		return
 	}
 
-	// build labels query
-	labelQuery := buildMetricLabelQuery(metricSpecData.Labels)
+	// check if expression exists for the pattern
+	if _, ok := pattern["expr"].(string); !ok {
+		h.respondWithError(c, fmt.Sprintf("pattern name %s does not have any expression", requestBody["name"]))
+		return
+	}
 
-	// query builder: "rate" hardcoded for counter metrics - first iteration - revisit later
-	query := fmt.Sprintf(`rate(%s{namespace="%s",pipeline="%s"%s}[%s])`, metricNameMap[metricSpecData.MetricName].NumaMetricName, ns, pipeline, labelQuery, metricSpecData.Duration)
+	// get expression for the pattern
+	expr := pattern["expr"].(string)
 
-	client, err := api.NewClient(api.Config{
-		Address: h.prometheusServerUrl,
+	// Regular expression to match fields starting with '$'
+	re := regexp.MustCompile(`\$(\w+)`)
+
+	// Find all matches in the expression
+	matches := re.FindAllStringSubmatch(expr, -1)
+
+	// Generic impl: Extract and map the fields -> backend expect these fields in the request body
+	for _, match := range matches {
+		if len(match) > 1 {
+			if _, ok := requestBody[match[1]]; !ok {
+				h.respondWithError(c, fmt.Sprintf("req body doesnt have %s field", match[1]))
+				return
+			}
+			fieldsMap[match[1]] = requestBody[match[1]]
+		}
+	}
+
+	/* Generic promql builder impl: Replaces variables in the pattern expression.
+	   Variables in the expr are expected in req body. Note that if a variable is a map,
+	   resulting string would be "key: value, key: value", if its an array then "val_1,val_2"
+	   For eg: filter values should be a map and group by values should be an array
+	*/
+	promQuery := re.ReplaceAllStringFunc(expr, func(match string) string {
+		field := match[1:] // Remove '$'
+		value, ok := fieldsMap[field]
+		if !ok {
+			return match // Keep unmatched variables as is
+		}
+
+		// get the desired string based on type of value
+		switch v := value.(type) {
+		case string:
+			return v
+		case float64:
+			return fmt.Sprintf("%f", v)
+		case int64:
+			return fmt.Sprintf("%d", v)
+		case map[string]any:
+			return formatMapLabels(v)
+		case []any:
+			return formatArrayLabels(v)
+		default:
+			return match // Handle other types if needed
+		}
 	})
-	if err != nil {
-		errMsg := fmt.Sprintf("Error creating client: %v\n", err)
-		h.respondWithError(c, errMsg)
+
+	startTimeString, ok := requestBody["from"].(string)
+	if !ok {
+		h.respondWithError(c, "start time should be a RFC339 string")
 		return
 	}
-	v1api := v1.NewAPI(client)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	var timeSeriesData [][]float64
-	if metricSpecData.From != "" {
-		timeSeriesData, err = buildTimeSeriesData(ctx, v1api, metricSpecData, query, Matrix)
-	} else {
-		timeSeriesData, err = buildTimeSeriesData(ctx, v1api, metricSpecData, query, Vector)
-	}
-
-	if err != nil {
-		errMsg := fmt.Sprintf("Error building time series data: %v\n", err)
-		h.respondWithError(c, errMsg)
+	endTimeString, ok = requestBody["to"].(string)
+	if !ok {
+		h.respondWithError(c, "end time should be a RFC339 string")
 		return
 	}
 
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, timeSeriesData))
+	startTime, _ := time.Parse(time.RFC3339, startTimeString)
+	endTime, _ := time.Parse(time.RFC3339, endTimeString)
+
+	r := v1.Range{
+		Start: startTime,
+		End:   endTime,
+		Step:  time.Minute, // step size 1 min
+	}
+
+	result, _, err := h.prometheusClient.Api.QueryRange(context.Background(), promQuery, r)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("error in prometheus query %v", err))
+		return
+	}
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, result))
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster

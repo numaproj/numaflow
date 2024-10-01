@@ -26,6 +26,9 @@ spec:
       - name: rbac-config
         configMap:
           name: numaflow-server-rbac-config
+      - name: metric-config
+        configMap:
+          name: numaflow-metric-server-config
       initContainers:
       - name: server-init
         image: quay.io/numaproj/numaflow:latest
@@ -58,12 +61,6 @@ spec:
                 name: numaflow-cmd-params-config
                 key: server.disable.auth
                 optional: true
-          - name: NUMAFLOW_SERVER_PROMETHEUS_URL
-            valueFrom:
-              configMapKeyRef:
-                name: numaflow-metric-server-config
-                key: url
-                optional: true
       containers:
         - name: main
           image: quay.io/numaproj/numaflow:latest
@@ -79,6 +76,8 @@ spec:
             subPath: index.html
           - mountPath: /etc/numaflow
             name: rbac-config
+          - mountPath: /etc/numaflow/metrics
+            name: metric-config
           env:
           - name: NAMESPACE
             valueFrom:
@@ -149,12 +148,6 @@ spec:
               configMapKeyRef:
                 name: numaflow-cmd-params-config
                 key: server.daemon.client.protocol
-                optional: true
-          - name: NUMAFLOW_SERVER_PROMETHEUS_URL
-            valueFrom:
-              configMapKeyRef:
-                name: numaflow-metric-server-config
-                key: metric.server.url
                 optional: true
           resources:
             limits:
