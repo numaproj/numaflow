@@ -137,7 +137,7 @@ func TestGRPCBasedTransformer_BasicApplyWithServer(t *testing.T) {
 
 		expectedUDFErr := &rpc.ApplyUDFErr{
 			UserUDFErr: false,
-			Message:    "gRPC client.SourceTransformFn failed, NonRetryable: context canceled",
+			Message:    "gRPC client.SourceTransformFn failed, context canceled",
 			InternalErr: rpc.InternalErr{
 				Flag:        true,
 				MainCarDown: false,
