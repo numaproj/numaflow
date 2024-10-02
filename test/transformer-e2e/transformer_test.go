@@ -21,6 +21,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -142,7 +143,7 @@ wmLoop:
 	for {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				s.T().Log("test timed out")
 				assert.Fail(s.T(), "timed out")
 				break wmLoop
@@ -173,23 +174,24 @@ func (s *TransformerSuite) TestSourceTransformer() {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(4)
-	go func() {
-		defer wg.Done()
-		s.testSourceTransformer("python")
-	}()
-	go func() {
-		defer wg.Done()
-		s.testSourceTransformer("java")
-	}()
+	wg.Add(1)
+	// FIXME: Enable these tests after corresponding SDKs are changed to support bidirectional streaming
+	//go func() {
+	//	defer wg.Done()
+	//	s.testSourceTransformer("python")
+	//}()
+	//go func() {
+	//	defer wg.Done()
+	//	s.testSourceTransformer("java")
+	//}()
 	go func() {
 		defer wg.Done()
 		s.testSourceTransformer("go")
 	}()
-	go func() {
-		defer wg.Done()
-		s.testSourceTransformer("rust")
-	}()
+	//go func() {
+	//	defer wg.Done()
+	//	s.testSourceTransformer("rust")
+	//}()
 	wg.Wait()
 }
 

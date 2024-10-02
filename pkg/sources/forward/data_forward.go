@@ -305,34 +305,14 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 	// If a user-defined transformer exists, apply it
 	if df.opts.transformer != nil {
-		// user-defined transformer concurrent processing request channel
-		transformerCh := make(chan *isb.ReadWriteMessagePair)
-
-		// create a pool of Transformer Processors
-		var wg sync.WaitGroup
-		for i := 0; i < df.opts.transformerConcurrency; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				df.concurrentApplyTransformer(ctx, transformerCh)
-			}()
+		for _, m := range readMessages {
+			// assign watermark to the message
+			m.Watermark = time.Time(processorWM)
 		}
 
 		concurrentTransformerProcessingStart := time.Now()
-		for idx, m := range readMessages {
+		readWriteMessagePairs = df.applyTransformer(ctx, readMessages)
 
-			// assign watermark to the message
-			m.Watermark = time.Time(processorWM)
-			readWriteMessagePairs[idx].ReadMessage = m
-			// send transformer processing work to the channel. Thus, the results of the transformer
-			// application on a read message will be stored as the corresponding writeMessage in readWriteMessagePairs
-			transformerCh <- &readWriteMessagePairs[idx]
-		}
-		// let the go routines know that there is no more work
-		close(transformerCh)
-		// wait till the processing is done. this will not be an infinite wait because the transformer processing will exit if
-		// context.Done() is closed.
-		wg.Wait()
 		df.opts.logger.Debugw("concurrent applyTransformer completed",
 			zap.Int("concurrency", df.opts.transformerConcurrency),
 			zap.Duration("took", time.Since(concurrentTransformerProcessingStart)),
@@ -536,6 +516,7 @@ func (df *DataForward) writeToBuffers(
 	for toVertexName, toVertexMessages := range messageToStep {
 		writeOffsets[toVertexName] = make([][]isb.Offset, len(toVertexMessages))
 	}
+
 	for toVertexName, toVertexBuffer := range df.toBuffers {
 		for index, partition := range toVertexBuffer {
 			writeOffsets[toVertexName][index], err = df.writeToBuffer(ctx, partition, messageToStep[toVertexName][index])
@@ -591,6 +572,7 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 						zap.String("reason", err.Error()),
 						zap.String("partition", toBufferPartition.GetName()),
 						zap.String("vertex", df.vertexName), zap.String("pipeline", df.pipelineName),
+						zap.String("msg_id", msg.ID.String()),
 					)
 				} else {
 					needRetry = true
@@ -661,42 +643,12 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 	return writeOffsets, nil
 }
 
-// concurrentApplyTransformer applies the transformer based on the request from the channel
-func (df *DataForward) concurrentApplyTransformer(ctx context.Context, readMessagePair <-chan *isb.ReadWriteMessagePair) {
-	for message := range readMessagePair {
-		start := time.Now()
-		metrics.SourceTransformerReadMessagesCount.With(map[string]string{
-			metrics.LabelVertex:             df.vertexName,
-			metrics.LabelPipeline:           df.pipelineName,
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-			metrics.LabelPartitionName:      df.reader.GetName(),
-		}).Inc()
-
-		writeMessages, err := df.applyTransformer(ctx, message.ReadMessage)
-		metrics.SourceTransformerWriteMessagesCount.With(map[string]string{
-			metrics.LabelVertex:             df.vertexName,
-			metrics.LabelPipeline:           df.pipelineName,
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-			metrics.LabelPartitionName:      df.reader.GetName(),
-		}).Add(float64(len(writeMessages)))
-
-		message.WriteMessages = append(message.WriteMessages, writeMessages...)
-		message.Err = err
-		metrics.SourceTransformerProcessingTime.With(map[string]string{
-			metrics.LabelVertex:             df.vertexName,
-			metrics.LabelPipeline:           df.pipelineName,
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-			metrics.LabelPartitionName:      df.reader.GetName(),
-		}).Observe(float64(time.Since(start).Microseconds()))
-	}
-}
-
 // applyTransformer applies the transformer and will block if there is any InternalErr. On the other hand, if this is a UserError
 // the skip flag is set. The ShutDown flag will only if there is an InternalErr and ForceStop has been invoked.
 // The UserError retry will be done on the applyTransformer.
-func (df *DataForward) applyTransformer(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (df *DataForward) applyTransformer(ctx context.Context, messages []*isb.ReadMessage) []isb.ReadWriteMessagePair {
 	for {
-		writeMessages, err := df.opts.transformer.ApplyTransform(ctx, readMessage)
+		transformResults, err := df.opts.transformer.ApplyTransform(ctx, messages)
 		if err != nil {
 			df.opts.logger.Errorw("Transformer.Apply error", zap.Error(err))
 			// TODO: implement retry with backoff etc.
@@ -712,12 +664,11 @@ func (df *DataForward) applyTransformer(ctx context.Context, readMessage *isb.Re
 					metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
 					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 				}).Inc()
-
-				return nil, err
+				return []isb.ReadWriteMessagePair{{Err: err}}
 			}
 			continue
 		}
-		return writeMessages, nil
+		return transformResults
 	}
 }
 

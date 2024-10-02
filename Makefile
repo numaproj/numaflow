@@ -244,7 +244,7 @@ manifests: crds
 	kubectl kustomize config/extensions/webhook > config/validating-webhook-install.yaml
 
 $(GOPATH)/bin/golangci-lint:
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b `go env GOPATH`/bin v1.54.1
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b `go env GOPATH`/bin v1.61.0
 
 .PHONY: lint
 lint: $(GOPATH)/bin/golangci-lint
