@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	v1 "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1"
@@ -54,7 +53,7 @@ func (u *GRPCBasedTransformer) IsHealthy(ctx context.Context) error {
 
 // WaitUntilReady waits until the client is connected.
 func (u *GRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
-	log := logging.FromContext(ctx)
+	logger := logging.FromContext(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -63,7 +62,7 @@ func (u *GRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
 			if _, err := u.client.IsReady(ctx, &emptypb.Empty{}); err == nil {
 				return nil
 			} else {
-				log.Infof("waiting for transformer to be ready: %v", err)
+				logger.Infof("waiting for transformer to be ready: %v", err)
 				time.Sleep(1 * time.Second)
 			}
 		}
@@ -78,15 +77,16 @@ func (u *GRPCBasedTransformer) CloseConn(ctx context.Context) error {
 var errSourceTransformFnEmptyMsgId = errors.New("response from SourceTransformFn doesn't contain a message id")
 
 func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
-	var transformResults []isb.ReadWriteMessagePair
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	requests := make([]*v1.SourceTransformRequest, 0, len(messages))
+	transformResults := make([]isb.ReadWriteMessagePair, len(messages))
+	requests := make([]*v1.SourceTransformRequest, len(messages))
 	idToMsgMapping := make(map[string]*isb.ReadMessage)
-	for _, msg := range messages {
+
+	for i, msg := range messages {
+		// we track the id to the message mapping to be able to match the response with the original message.
+		// we use the original message's event time if the user doesn't change it. Also we use the original message's
+		// read offset + index as the id for the response.
 		id := msg.ReadOffset.String()
 		idToMsgMapping[id] = msg
-		log.Println("Sending message with read offset ID: ", id, " message id: ", msg.ID.String())
 		req := &v1.SourceTransformRequest{
 			Request: &v1.SourceTransformRequest_Request{
 				Keys:      msg.Keys,
@@ -97,7 +97,7 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, messages []*i
 				Id:        id,
 			},
 		}
-		requests = append(requests, req)
+		requests[i] = req
 	}
 
 	responses, err := u.client.SourceTransformFn(ctx, requests)
@@ -114,17 +114,16 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, messages []*i
 		return nil, err
 	}
 
-	for _, resp := range responses {
+	for i, resp := range responses {
 		parentMessage, ok := idToMsgMapping[resp.GetId()]
 		if !ok {
 			panic("tracker doesn't contain the message ID received from the response")
 		}
-		var taggedMessages []*isb.WriteMessage
+		taggedMessages := make([]*isb.WriteMessage, len(resp.GetResults()))
 		for i, result := range resp.GetResults() {
 			keys := result.Keys
 			if result.EventTime != nil {
 				// Transformer supports changing event time.
-				log.Println("Updating event time from ", parentMessage.MessageInfo.EventTime.UnixMilli(), " to ", result.EventTime.AsTime().UnixMilli())
 				parentMessage.MessageInfo.EventTime = result.EventTime.AsTime()
 			}
 			taggedMessage := &isb.WriteMessage{
@@ -144,15 +143,14 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, messages []*i
 				},
 				Tags: result.Tags,
 			}
-			log.Println("Received message with ID: ", taggedMessage.ID.String())
-			taggedMessages = append(taggedMessages, taggedMessage)
+			taggedMessages[i] = taggedMessage
 		}
 		responsePair := isb.ReadWriteMessagePair{
 			ReadMessage:   parentMessage,
 			WriteMessages: taggedMessages,
 			Err:           nil,
 		}
-		transformResults = append(transformResults, responsePair)
+		transformResults[i] = responsePair
 	}
 	return transformResults, nil
 }

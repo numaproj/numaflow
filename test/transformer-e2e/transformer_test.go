@@ -21,6 +21,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -142,7 +143,7 @@ wmLoop:
 	for {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				s.T().Log("test timed out")
 				assert.Fail(s.T(), "timed out")
 				break wmLoop

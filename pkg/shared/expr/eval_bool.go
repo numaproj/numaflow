@@ -22,6 +22,7 @@ import (
 	"strconv"
 
 	"github.com/Masterminds/sprig/v3"
+	"github.com/antonmedv/expr"
 )
 
 var sprigFuncMap = sprig.GenericFuncMap()
@@ -29,19 +30,19 @@ var sprigFuncMap = sprig.GenericFuncMap()
 const root = "payload"
 
 func EvalBool(expression string, msg []byte) (bool, error) {
-	//msgMap := map[string]interface{}{
-	//	root: string(msg),
-	//}
-	//env := getFuncMap(msgMap)
-	//result, err := expr.Eval(expression, env)
-	//if err != nil {
-	//	return false, fmt.Errorf("unable to evaluate expression '%s': %s", expression, err)
-	//}
-	//resultBool, ok := result.(bool)
-	//if !ok {
-	//	return false, fmt.Errorf("unable to cast expression result '%s' to bool", result)
-	//}
-	return true, nil
+	msgMap := map[string]interface{}{
+		root: string(msg),
+	}
+	env := getFuncMap(msgMap)
+	result, err := expr.Eval(expression, env)
+	if err != nil {
+		return false, fmt.Errorf("unable to evaluate expression '%s': %s", expression, err)
+	}
+	resultBool, ok := result.(bool)
+	if !ok {
+		return false, fmt.Errorf("unable to cast expression result '%s' to bool", result)
+	}
+	return resultBool, nil
 }
 
 func getFuncMap(m map[string]interface{}) map[string]interface{} {

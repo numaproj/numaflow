@@ -5,24 +5,13 @@ metadata:
 spec:
   vertices:
     - name: in
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_PPROF
-            value: !!str "true"
       source:
-        generator:
-          # How many messages to generate in the duration.
-          rpu: 5
-          duration: 1s
-          # Optional, size of each generated message, defaults to 10.
-          msgSize: 1024
-#        transformer:
-#          container:
-#            image: quay.io/numaio/numaflow-rs/source-transformer-now:stable
-#          builtin:
-#            name: eventTimeExtractor
-#            kwargs:
-#              expression: json(payload).item[1].time
+        http: { }
+        transformer:
+          builtin:
+            name: eventTimeExtractor
+            kwargs:
+              expression: json(payload).item[1].time
     - name: out
       scale:
         min: 1

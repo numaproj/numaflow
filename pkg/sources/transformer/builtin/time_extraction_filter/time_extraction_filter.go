@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/araddon/dateparse"
 	"github.com/numaproj/numaflow-go/pkg/sourcetransformer"
 
+	"github.com/numaproj/numaflow/pkg/shared/expr"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -67,27 +69,27 @@ func New(args map[string]string) (sourcetransformer.SourceTransformFunc, error) 
 }
 
 func (e expressions) apply(et time.Time, payload []byte, keys []string) (sourcetransformer.Message, error) {
-	//result, err := expr.EvalBool(e.filterExpr, payload)
-	//if err != nil {
-	//	return sourcetransformer.MessageToDrop(et), err
-	//}
-	//if result {
-	//	timeStr, err := expr.EvalStr(e.eventTimeExpr, payload)
-	//	if err != nil {
-	//		return sourcetransformer.NewMessage(payload, et).WithKeys(keys), err
-	//	}
-	//	var newEventTime time.Time
-	//	time.Local, _ = time.LoadLocation("UTC")
-	//	if e.eventTimeFormat != "" {
-	//		newEventTime, err = time.Parse(e.eventTimeFormat, timeStr)
-	//	} else {
-	//		newEventTime, err = dateparse.ParseStrict(timeStr)
-	//	}
-	//	if err != nil {
-	//		return sourcetransformer.NewMessage(payload, et).WithKeys(keys), err
-	//	} else {
-	//		return sourcetransformer.NewMessage(payload, newEventTime).WithKeys(keys), nil
-	//	}
-	//}
-	return sourcetransformer.NewMessage(payload, et).WithKeys(keys), nil
+	result, err := expr.EvalBool(e.filterExpr, payload)
+	if err != nil {
+		return sourcetransformer.MessageToDrop(et), err
+	}
+	if result {
+		timeStr, err := expr.EvalStr(e.eventTimeExpr, payload)
+		if err != nil {
+			return sourcetransformer.NewMessage(payload, et).WithKeys(keys), err
+		}
+		var newEventTime time.Time
+		time.Local, _ = time.LoadLocation("UTC")
+		if e.eventTimeFormat != "" {
+			newEventTime, err = time.Parse(e.eventTimeFormat, timeStr)
+		} else {
+			newEventTime, err = dateparse.ParseStrict(timeStr)
+		}
+		if err != nil {
+			return sourcetransformer.NewMessage(payload, et).WithKeys(keys), err
+		} else {
+			return sourcetransformer.NewMessage(payload, newEventTime).WithKeys(keys), nil
+		}
+	}
+	return sourcetransformer.MessageToDrop(et), nil
 }

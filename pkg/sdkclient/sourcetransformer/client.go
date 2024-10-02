@@ -19,10 +19,9 @@ package sourcetransformer
 import (
 	"context"
 	"fmt"
-	"log"
-	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
@@ -152,48 +151,45 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 // SourceTransformFn SourceTransformerFn applies a function to each request element.
 // Response channel will not be closed. Caller can select on response and error channel to exit on first error.
 func (c *client) SourceTransformFn(ctx context.Context, requests []*transformpb.SourceTransformRequest) ([]*transformpb.SourceTransformResponse, error) {
-	//logger := logging.FromContext(ctx)
-
-	ctx, cancel := context.WithCancelCause(ctx)
-	defer cancel(nil)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer func() { wg.Done() }()
+	var eg errgroup.Group
+	// send n requests
+	eg.Go(func() error {
 		for _, req := range requests {
 			select {
 			case <-ctx.Done():
-				return
+				return nil
 			default:
 			}
 			if err := c.stream.Send(req); err != nil {
-				cancel(sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Send", err))
-				return
+				return sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Send", err)
 			}
-			log.Println("Sent request:", req.Request.Id)
 		}
-	}()
+		return nil
+	})
 
-	responses := make([]*transformpb.SourceTransformResponse, 0, len(requests))
-	for i := 0; i < len(requests); i++ {
-		select {
-		case <-ctx.Done():
-			err := context.Cause(ctx)
-			log.Println("Context cancelled while receiving:", err)
-			return nil, err
-		default:
+	// receive n responses
+	responses := make([]*transformpb.SourceTransformResponse, len(requests))
+	eg.Go(func() error {
+		for i := 0; i < len(requests); i++ {
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+			}
+			resp, err := c.stream.Recv()
+			if err != nil {
+				return sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Recv", err)
+			}
+			responses[i] = resp
 		}
-		resp, err := c.stream.Recv()
-		if err != nil {
-			err = sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Recv", err)
-			cancel(err)
-			return nil, err
-		}
-		log.Println("Received response:", resp.GetId())
-		responses = append(responses, resp)
+		return nil
+	})
+
+	// wait for the send and receive goroutines to finish
+	// if any of the goroutines return an error, the error will be caught here
+	if err := eg.Wait(); err != nil {
+		return nil, err
 	}
-
-	wg.Wait()
 
 	return responses, nil
 }

@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/araddon/dateparse"
 	"github.com/numaproj/numaflow-go/pkg/sourcetransformer"
 
+	"github.com/numaproj/numaflow/pkg/shared/expr"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -65,17 +67,21 @@ func New(args map[string]string) (sourcetransformer.SourceTransformFunc, error) 
 // apply compiles the payload to extract the new event time. If there is any error during extraction,
 // we pass on the original input event time. Otherwise, we assign the new event time to the message.
 func (e eventTimeExtractor) apply(payload []byte, et time.Time, keys []string) (sourcetransformer.Message, error) {
-	//timeStr, err := expr.EvalStr(e.expression, payload)
-	//if err != nil {
-	//	return sourcetransformer.NewMessage(payload, et).WithKeys(keys), err
-	//}
-	//
-	//var newEventTime time.Time
-	//time.Local, _ = time.LoadLocation("UTC")
-	//if e.format != "" {
-	//	newEventTime, err = time.Parse(e.format, timeStr)
-	//} else {
-	//	newEventTime, err = dateparse.ParseStrict(timeStr)
-	//}
-	return sourcetransformer.NewMessage(payload, et).WithKeys(keys), nil
+	timeStr, err := expr.EvalStr(e.expression, payload)
+	if err != nil {
+		return sourcetransformer.NewMessage(payload, et).WithKeys(keys), err
+	}
+
+	var newEventTime time.Time
+	time.Local, _ = time.LoadLocation("UTC")
+	if e.format != "" {
+		newEventTime, err = time.Parse(e.format, timeStr)
+	} else {
+		newEventTime, err = dateparse.ParseStrict(timeStr)
+	}
+	if err != nil {
+		return sourcetransformer.NewMessage(payload, et).WithKeys(keys), err
+	} else {
+		return sourcetransformer.NewMessage(payload, newEventTime).WithKeys(keys), nil
+	}
 }
