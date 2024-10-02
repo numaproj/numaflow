@@ -7,6 +7,7 @@ use crate::monovertex::source_pb::source_client::SourceClient;
 use crate::monovertex::source_pb::{
     read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
 };
+use crate::reader::LagReader;
 use crate::source::Source;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -22,6 +23,20 @@ pub(crate) struct UserDefinedSource {
     ack_resp_stream: Streaming<AckResponse>,
     num_records: usize,
     timeout_in_ms: u16,
+}
+
+/// Creates a new User-Defined Source and its corresponding Lag Reader.
+pub(crate) async fn new_source(
+    client: SourceClient<Channel>,
+    num_records: usize,
+    timeout_in_ms: u16,
+) -> error::Result<(UserDefinedSource, UserDefinedSourceLagReader)> {
+    let ud_src = UserDefinedSource::new(client.clone(), num_records, timeout_in_ms)
+        .await
+        .map_err(|e| e)?;
+    let lag_reader = UserDefinedSourceLagReader::new(client);
+
+    Ok((ud_src, lag_reader))
 }
 
 impl UserDefinedSource {
@@ -173,6 +188,28 @@ impl Source for UserDefinedSource {
     }
 }
 
+pub(crate) struct UserDefinedSourceLagReader {
+    source_client: SourceClient<Channel>,
+}
+
+impl UserDefinedSourceLagReader {
+    fn new(source_client: SourceClient<Channel>) -> Self {
+        Self { source_client }
+    }
+}
+
+impl LagReader for UserDefinedSourceLagReader {
+    async fn pending(&mut self) -> error::Result<Option<usize>> {
+        Ok(self
+            .source_client
+            .pending_fn(Request::new(()))
+            .await?
+            .into_inner()
+            .result
+            .map_or(None, |r| Some(r.count as usize)))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,7 +218,7 @@ mod tests {
 
     use crate::monovertex::source_pb::source_client::SourceClient;
     use crate::shared::utils::create_rpc_channel;
-    use crate::source::user_defined::UserDefinedSource;
+
     use chrono::Utc;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -267,7 +304,7 @@ mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let mut source = UserDefinedSource::new(client, 5, 1000)
+        let (mut source, mut lagreader) = new_source(client, 5, 1000)
             .await
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
@@ -280,6 +317,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response, ());
+
+        let pending = lagreader.pending().await.unwrap();
+        assert_eq!(pending, Some(0));
 
         // we need to drop the client, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85

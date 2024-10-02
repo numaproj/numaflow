@@ -7,6 +7,7 @@ pub(crate) mod user_defined;
 
 /// Set of items that has to be implemented to become a Source.
 pub(crate) trait Source {
+    #[allow(dead_code)]
     /// Name of the source.
     fn name(&self) -> &'static str;
 
@@ -15,13 +16,7 @@ pub(crate) trait Source {
     /// acknowledge an offset. The implementor might choose to do it in an asynchronous way.
     async fn ack(&mut self, _: Vec<Offset>) -> crate::Result<()>;
 
+    #[allow(dead_code)]
     /// number of partitions processed by this source.
     fn partitions(&self) -> Vec<u16>;
-}
-
-/// Lag reader reports the pending information at source, this information is used by the auto-scaler.
-pub(crate) trait LagReader {
-    /// Pending elements yet to be processed at the source. It may or may not included unacknowledged
-    /// messages.
-    fn pending(&self) -> crate::Result<usize>;
 }
