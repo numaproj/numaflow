@@ -146,8 +146,6 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
     .await?;
 
     let (source_reader, lag_reader) = new_source(source_grpc_client.clone(), 500, 100).await?;
-    // FIXME: use me
-    let _ = lag_reader;
 
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
@@ -164,7 +162,7 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
     utils::start_metrics_server(metrics_state).await;
 
     // start the lag reader to publish lag metrics
-    let mut lag_reader = utils::create_lag_reader(source_grpc_client.clone()).await;
+    let mut lag_reader = utils::create_lag_reader(lag_reader).await;
     lag_reader.start().await;
 
     // build the forwarder

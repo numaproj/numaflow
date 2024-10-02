@@ -188,6 +188,7 @@ impl Source for UserDefinedSource {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct UserDefinedSourceLagReader {
     source_client: SourceClient<Channel>,
 }
