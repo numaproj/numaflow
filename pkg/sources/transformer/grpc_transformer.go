@@ -18,7 +18,6 @@ package transformer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -73,8 +72,6 @@ func (u *GRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
 func (u *GRPCBasedTransformer) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
-
-var errSourceTransformFnEmptyMsgId = errors.New("response from SourceTransformFn doesn't contain a message id")
 
 func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	transformResults := make([]isb.ReadWriteMessagePair, len(messages))

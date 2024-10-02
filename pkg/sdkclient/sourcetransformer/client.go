@@ -157,7 +157,7 @@ func (c *client) SourceTransformFn(ctx context.Context, requests []*transformpb.
 		for _, req := range requests {
 			select {
 			case <-ctx.Done():
-				return nil
+				return ctx.Err()
 			default:
 			}
 			if err := c.stream.Send(req); err != nil {
@@ -173,7 +173,7 @@ func (c *client) SourceTransformFn(ctx context.Context, requests []*transformpb.
 		for i := 0; i < len(requests); i++ {
 			select {
 			case <-ctx.Done():
-				return nil
+				return ctx.Err()
 			default:
 			}
 			resp, err := c.stream.Recv()
