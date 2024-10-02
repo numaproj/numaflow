@@ -26,9 +26,9 @@ spec:
       - name: rbac-config
         configMap:
           name: numaflow-server-rbac-config
-      - name: metric-config
+      - name: metrics-proxy-config
         configMap:
-          name: numaflow-metric-server-config
+          name: numaflow-metrics-proxy-config
       initContainers:
       - name: server-init
         image: quay.io/numaproj/numaflow:latest
@@ -77,7 +77,7 @@ spec:
           - mountPath: /etc/numaflow
             name: rbac-config
           - mountPath: /etc/numaflow/metrics
-            name: metric-config
+            name: metrics-proxy-config
           env:
           - name: NAMESPACE
             valueFrom:

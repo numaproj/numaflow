@@ -11,18 +11,39 @@ import (
 
 type PrometheusClient struct {
 	// prometheus metric config from yaml
-	ConfigData []map[string]any
+	ConfigData []PatternData
 	// prom client
 	Client api.Client
 	// prom client API to query data
 	Api v1.API
 }
 
+// To Do: Dynamically get labels for a metric from server
+type MetricData struct {
+	Name string `yaml:"metric_name"`
+	// array of supported filter labels.
+	FilterLabels []string `yaml:"filter_labels"`
+	//array of supported group by labels
+	GroupByLabels []string `yaml:"group_by_labels"`
+}
+type PatternData struct {
+	Name        string `yaml:"name" json:"name"`
+	Object      string `yaml:"object" json:"object"`
+	Title       string `yaml:"title"`
+	Description string `yaml:"description"`
+	Expression  string `yaml:"expr"`
+	Duration    string `yaml:"duration"`
+	// list of metrics and their labels for a pattern
+	Metrics []MetricData `yaml:"metrics"`
+	//supported quantiles for histogram quantiles pattern
+	Quantiles []float64 `yaml:"quantile_percentile"`
+}
+
 type PrometheusConfig struct {
 	// prometheus server url in the config
 	ServerUrl string `yaml:"url"`
 	// patterns in the config
-	Patterns []map[string]any `yaml:"patterns"`
+	Patterns []PatternData `yaml:"patterns"`
 }
 
 func NewPrometheusClient(config *PrometheusConfig) *PrometheusClient {

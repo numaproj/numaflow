@@ -141,7 +141,7 @@ data:
     0.90\n        - 0.50\n  duration: 5m\n"
 kind: ConfigMap
 metadata:
-  name: numaflow-metric-server-config
+  name: numaflow-metrics-proxy-config
 ---
 apiVersion: v1
 data:
@@ -310,7 +310,7 @@ spec:
         - mountPath: /etc/numaflow
           name: rbac-config
         - mountPath: /etc/numaflow/metrics
-          name: metric-config
+          name: metrics-proxy-config
       initContainers:
       - args:
         - server-init
@@ -354,5 +354,5 @@ spec:
           name: numaflow-server-rbac-config
         name: rbac-config
       - configMap:
-          name: numaflow-metric-server-config
-        name: metric-config
+          name: numaflow-metrics-proxy-config
+        name: metrics-proxy-config

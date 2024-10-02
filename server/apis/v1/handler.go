@@ -127,7 +127,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 		_ = value.Close()
 	})
 
-	// create handler instance even if prometheus server details not set, let API respond with error
+	// create handler instance even if prometheus server details are not set, let the API respond with err mssg
 	prometheusMetricConfig := loadPrometheusMetricConfig()
 	prometheusClient := NewPrometheusClient(prometheusMetricConfig)
 
@@ -1219,7 +1219,7 @@ func (h *handler) GetMetricData(c *gin.Context) {
 		requestBody     map[string]any
 		startTimeString string
 		endTimeString   string
-		pattern         map[string]any
+		pattern         PatternData
 	)
 
 	if err := bindJson(c, &requestBody); err != nil {
@@ -1229,7 +1229,7 @@ func (h *handler) GetMetricData(c *gin.Context) {
 
 	// find index and pattern from config based on req pattern name
 	for i, p := range h.prometheusClient.ConfigData {
-		if p["name"] == requestBody["name"] {
+		if p.Name == requestBody["name"] {
 			index = i
 			pattern = p
 			break
@@ -1243,13 +1243,13 @@ func (h *handler) GetMetricData(c *gin.Context) {
 	}
 
 	// check if expression exists for the pattern
-	if _, ok := pattern["expr"].(string); !ok {
+	if pattern.Expression == "" {
 		h.respondWithError(c, fmt.Sprintf("pattern name %s does not have any expression", requestBody["name"]))
 		return
 	}
 
 	// get expression for the pattern
-	expr := pattern["expr"].(string)
+	expr := pattern.Expression
 
 	// Regular expression to match fields starting with '$'
 	re := regexp.MustCompile(`\$(\w+)`)
