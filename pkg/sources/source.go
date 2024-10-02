@@ -240,7 +240,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 			return err
 		}
 
-		srcTransformerClient, err := sourcetransformer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+		srcTransformerClient, err := sourcetransformer.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create transformer gRPC client, %w", err)
 		}
