@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use crate::error::Error;
 use crate::monovertex::sink_pb::sink_request::Request;
 use crate::monovertex::sink_pb::SinkRequest;
-use crate::monovertex::source_pb;
+use crate::monovertex::{source_pb, sourcetransform_pb};
 use crate::monovertex::source_pb::{read_response, AckRequest};
 use crate::monovertex::sourcetransform_pb::SourceTransformRequest;
 use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
@@ -58,11 +58,15 @@ impl From<Offset> for AckRequest {
 impl From<Message> for SourceTransformRequest {
     fn from(message: Message) -> Self {
         Self {
-            keys: message.keys,
-            value: message.value,
-            event_time: prost_timestamp_from_utc(message.event_time),
-            watermark: None,
-            headers: message.headers,
+            request: Some(sourcetransform_pb::source_transform_request::Request {
+                id: message.id,
+                keys: message.keys,
+                value: message.value,
+                event_time: prost_timestamp_from_utc(message.event_time),
+                watermark: None,
+                headers: message.headers,
+            }),
+            handshake: None,
         }
     }
 }

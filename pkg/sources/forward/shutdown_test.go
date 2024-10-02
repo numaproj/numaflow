@@ -43,8 +43,16 @@ func (s myShutdownTest) WhereTo([]string, []string, string) ([]forwarder.VertexB
 	return []forwarder.VertexBuffer{}, nil
 }
 
-func (s myShutdownTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, "", message)
+func (f myShutdownTest) ApplyTransform(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	results := make([]isb.ReadWriteMessagePair, len(messages))
+	for i, message := range messages {
+		writeMsg, _ := testutils.CopyUDFTestApply(ctx, "", message)
+		results[i] = isb.ReadWriteMessagePair{
+			ReadMessage:   message,
+			WriteMessages: writeMsg,
+		}
+	}
+	return results, nil
 }
 
 func (s myShutdownTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {

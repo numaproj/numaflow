@@ -1557,7 +1557,7 @@ dependencies = [
 [[package]]
 name = "numaflow"
 version = "0.1.1"
-source = "git+https://github.com/numaproj/numaflow-rs.git?rev=0c1682864a4b906fab52e149cfd7cacc679ce688#0c1682864a4b906fab52e149cfd7cacc679ce688"
+source = "git+https://github.com/numaproj/numaflow-rs.git?rev=30d8ce1972fd3f0c0b8059fee209516afeef0088#30d8ce1972fd3f0c0b8059fee209516afeef0088"
 dependencies = [
  "chrono",
  "futures-util",

@@ -1,4 +1,4 @@
-package rpc
+package tracker
 
 import (
 	"testing"
@@ -6,32 +6,34 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 )
 
 func TestTracker_AddRequest(t *testing.T) {
-	tr := NewTracker()
 	readMessages := testutils.BuildTestReadMessages(3, time.Unix(1661169600, 0), nil)
-	for _, msg := range readMessages {
-		tr.addRequest(&msg)
+	messages := make([]*isb.ReadMessage, len(readMessages))
+	for i, msg := range readMessages {
+		messages[i] = &msg
 	}
+	tr := NewMessageTracker(messages)
 	id := readMessages[0].ReadOffset.String()
-	m, ok := tr.getRequest(id)
-	assert.True(t, ok)
+	m := tr.Remove(id)
+	assert.NotNil(t, m)
 	assert.Equal(t, readMessages[0], *m)
 }
 
 func TestTracker_RemoveRequest(t *testing.T) {
-	tr := NewTracker()
 	readMessages := testutils.BuildTestReadMessages(3, time.Unix(1661169600, 0), nil)
-	for _, msg := range readMessages {
-		tr.addRequest(&msg)
+	messages := make([]*isb.ReadMessage, len(readMessages))
+	for i, msg := range readMessages {
+		messages[i] = &msg
 	}
+	tr := NewMessageTracker(messages)
 	id := readMessages[0].ReadOffset.String()
-	m, ok := tr.getRequest(id)
-	assert.True(t, ok)
+	m := tr.Remove(id)
+	assert.NotNil(t, m)
 	assert.Equal(t, readMessages[0], *m)
-	tr.removeRequest(id)
-	_, ok = tr.getRequest(id)
-	assert.False(t, ok)
+	m = tr.Remove(id)
+	assert.Nil(t, m)
 }

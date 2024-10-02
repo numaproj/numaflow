@@ -19,101 +19,60 @@ package transformer
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
+	"net"
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
-	v1 "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1"
-	transformermock "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1/transformmock"
-	"github.com/stretchr/testify/assert"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
+	"github.com/numaproj/numaflow-go/pkg/sourcetransformer"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
 
+	transformpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
-	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
+	sourcetransformerSdk "github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
 	"github.com/numaproj/numaflow/pkg/udf/rpc"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
-func NewMockGRPCBasedTransformer(mockClient *transformermock.MockSourceTransformClient) *GRPCBasedTransformer {
-	c, _ := sourcetransformer.NewFromClient(mockClient)
-	return &GRPCBasedTransformer{"test-vertex", c}
-}
+func TestGRPCBasedTransformer_WaitUntilReadyWithServer(t *testing.T) {
+	svc := &sourcetransformer.Service{
+		Transformer: sourcetransformer.SourceTransformFunc(func(ctx context.Context, keys []string, datum sourcetransformer.Datum) sourcetransformer.Messages {
+			return sourcetransformer.Messages{}
+		}),
+	}
 
-func TestGRPCBasedTransformer_WaitUntilReadyWithMockClient(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockClient := transformermock.NewMockSourceTransformClient(ctrl)
-	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&v1.ReadyResponse{Ready: true}, nil)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-		}
-	}()
-
-	u := NewMockGRPCBasedTransformer(mockClient)
-	err := u.WaitUntilReady(ctx)
+	conn := newServer(t, func(server *grpc.Server) {
+		transformpb.RegisterSourceTransformServer(server, svc)
+	})
+	transformClient := transformpb.NewSourceTransformClient(conn)
+	client, _ := sourcetransformerSdk.NewFromClient(context.Background(), transformClient)
+	u := NewGRPCBasedTransformer("testVertex", client)
+	err := u.WaitUntilReady(context.Background())
 	assert.NoError(t, err)
 }
 
-type rpcMsg struct {
-	msg proto.Message
-}
-
-func (r *rpcMsg) Matches(msg interface{}) bool {
-	m, ok := msg.(proto.Message)
-	if !ok {
-		return false
-	}
-	return proto.Equal(m, r.msg)
-}
-
-func (r *rpcMsg) String() string {
-	return fmt.Sprintf("is %s", r.msg)
-}
-
-func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
+func TestGRPCBasedTransformer_BasicApplyWithServer(t *testing.T) {
 	t.Run("test success", func(t *testing.T) {
-
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := transformermock.NewMockSourceTransformClient(ctrl)
-		req := &v1.SourceTransformRequest{
-			Keys:      []string{"test_success_key"},
-			Value:     []byte(`forward_message`),
-			EventTime: timestamppb.New(time.Unix(1661169600, 0)),
-			Watermark: timestamppb.New(time.Time{}),
+		svc := &sourcetransformer.Service{
+			Transformer: sourcetransformer.SourceTransformFunc(func(ctx context.Context, keys []string, datum sourcetransformer.Datum) sourcetransformer.Messages {
+				return sourcetransformer.MessagesBuilder().Append(sourcetransformer.NewMessage(datum.Value(), datum.EventTime()).WithKeys(keys))
+			}),
 		}
-		mockClient.EXPECT().SourceTransformFn(gomock.Any(), &rpcMsg{msg: req}).Return(&v1.SourceTransformResponse{
-			Results: []*v1.SourceTransformResponse_Result{
-				{
-					Keys:  []string{"test_success_key"},
-					Value: []byte(`forward_message`),
-				},
-			},
-		}, nil)
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
+		conn := newServer(t, func(server *grpc.Server) {
+			transformpb.RegisterSourceTransformServer(server, svc)
+		})
+		transformClient := transformpb.NewSourceTransformClient(conn)
+		ctx := context.Background()
+		client, err := sourcetransformerSdk.NewFromClient(ctx, transformClient)
+		require.NoError(t, err, "creating source transformer client")
+		u := NewGRPCBasedTransformer("testVertex", client)
 
-		u := NewMockGRPCBasedTransformer(mockClient)
-		got, err := u.ApplyTransform(ctx, &isb.ReadMessage{
+		got, err := u.ApplyTransform(ctx, []*isb.ReadMessage{{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -130,37 +89,33 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 				},
 			},
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
-		},
+		}},
 		)
 		assert.NoError(t, err)
-		assert.Equal(t, req.Keys, got[0].Keys)
-		assert.Equal(t, req.Value, got[0].Payload)
+		assert.Equal(t, []string{"test_success_key"}, got[0].WriteMessages[0].Keys)
+		assert.Equal(t, []byte(`forward_message`), got[0].WriteMessages[0].Payload)
 	})
 
 	t.Run("test error", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := transformermock.NewMockSourceTransformClient(ctrl)
-		req := &v1.SourceTransformRequest{
-			Keys:      []string{"test_error_key"},
-			Value:     []byte(`forward_message`),
-			EventTime: timestamppb.New(time.Unix(1661169660, 0)),
-			Watermark: timestamppb.New(time.Time{}),
+		svc := &sourcetransformer.Service{
+			Transformer: sourcetransformer.SourceTransformFunc(func(ctx context.Context, keys []string, datum sourcetransformer.Datum) sourcetransformer.Messages {
+				return sourcetransformer.Messages{}
+			}),
 		}
-		mockClient.EXPECT().SourceTransformFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, fmt.Errorf("mock error"))
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
+		conn := newServer(t, func(server *grpc.Server) {
+			transformpb.RegisterSourceTransformServer(server, svc)
+		})
+		transformClient := transformpb.NewSourceTransformClient(conn)
+		ctx, cancel := context.WithCancel(context.Background())
+		client, err := sourcetransformerSdk.NewFromClient(ctx, transformClient)
+		require.NoError(t, err, "creating source transformer client")
+		u := NewGRPCBasedTransformer("testVertex", client)
 
-		u := NewMockGRPCBasedTransformer(mockClient)
-		_, err := u.ApplyTransform(ctx, &isb.ReadMessage{
+		// This cancelled context is passed to the ApplyTransform function to simulate failure
+		cancel()
+
+		_, err = u.ApplyTransform(ctx, []*isb.ReadMessage{{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -177,349 +132,155 @@ func TestGRPCBasedTransformer_BasicApplyWithMockClient(t *testing.T) {
 				},
 			},
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
-		},
+		}},
 		)
-		assert.ErrorIs(t, err, &rpc.ApplyUDFErr{
+
+		expectedUDFErr := &rpc.ApplyUDFErr{
 			UserUDFErr: false,
-			Message:    fmt.Sprintf("%s", err),
+			Message:    "gRPC client.SourceTransformFn failed, context canceled",
 			InternalErr: rpc.InternalErr{
 				Flag:        true,
 				MainCarDown: false,
 			},
-		})
-	})
-
-	t.Run("test error retryable: failed after 5 retries", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := transformermock.NewMockSourceTransformClient(ctrl)
-		req := &v1.SourceTransformRequest{
-			Keys:      []string{"test_error_key"},
-			Value:     []byte(`forward_message`),
-			EventTime: timestamppb.New(time.Unix(1661169660, 0)),
-			Watermark: timestamppb.New(time.Time{}),
 		}
-		mockClient.EXPECT().SourceTransformFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().SourceTransformFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().SourceTransformFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().SourceTransformFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().SourceTransformFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().SourceTransformFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
-
-		u := NewMockGRPCBasedTransformer(mockClient)
-		_, err := u.ApplyTransform(ctx, &isb.ReadMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: isb.MessageInfo{
-						EventTime: time.Unix(1661169660, 0),
-					},
-					ID: isb.MessageID{
-						VertexName: "test-vertex",
-						Offset:     "0-0",
-					},
-					Keys: []string{"test_error_key"},
-				},
-				Body: isb.Body{
-					Payload: []byte(`forward_message`),
-				},
-			},
-			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
-		},
-		)
-		assert.ErrorIs(t, err, &rpc.ApplyUDFErr{
-			UserUDFErr: false,
-			Message:    fmt.Sprintf("%s", err),
-			InternalErr: rpc.InternalErr{
-				Flag:        true,
-				MainCarDown: false,
-			},
-		})
-	})
-
-	t.Run("test error retryable: failed after 1 retry", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := transformermock.NewMockSourceTransformClient(ctrl)
-		req := &v1.SourceTransformRequest{
-			Keys:      []string{"test_error_key"},
-			Value:     []byte(`forward_message`),
-			EventTime: timestamppb.New(time.Unix(1661169660, 0)),
-			Watermark: timestamppb.New(time.Time{}),
-		}
-		mockClient.EXPECT().SourceTransformFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().SourceTransformFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().SourceTransformFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.InvalidArgument, "mock test err: non retryable").Err())
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
-
-		u := NewMockGRPCBasedTransformer(mockClient)
-		_, err := u.ApplyTransform(ctx, &isb.ReadMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: isb.MessageInfo{
-						EventTime: time.Unix(1661169660, 0),
-					},
-					ID: isb.MessageID{
-						VertexName: "test-vertex",
-						Offset:     "0-0",
-					},
-					Keys: []string{"test_error_key"},
-				},
-				Body: isb.Body{
-					Payload: []byte(`forward_message`),
-				},
-			},
-			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
-		},
-		)
-		assert.ErrorIs(t, err, &rpc.ApplyUDFErr{
-			UserUDFErr: false,
-			Message:    fmt.Sprintf("%s", err),
-			InternalErr: rpc.InternalErr{
-				Flag:        true,
-				MainCarDown: false,
-			},
-		})
-	})
-
-	t.Run("test error retryable: success after 1 retry", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := transformermock.NewMockSourceTransformClient(ctrl)
-		req := &v1.SourceTransformRequest{
-			Keys:      []string{"test_success_key"},
-			Value:     []byte(`forward_message`),
-			EventTime: timestamppb.New(time.Unix(1661169720, 0)),
-			Watermark: timestamppb.New(time.Time{}),
-		}
-		mockClient.EXPECT().SourceTransformFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().SourceTransformFn(gomock.Any(), &rpcMsg{msg: req}).Return(&v1.SourceTransformResponse{
-			Results: []*v1.SourceTransformResponse_Result{
-				{
-					Keys:  []string{"test_success_key"},
-					Value: []byte(`forward_message`),
-				},
-			},
-		}, nil)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
-
-		u := NewMockGRPCBasedTransformer(mockClient)
-		got, err := u.ApplyTransform(ctx, &isb.ReadMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: isb.MessageInfo{
-						EventTime: time.Unix(1661169720, 0),
-					},
-					ID: isb.MessageID{
-						VertexName: "test-vertex",
-						Offset:     "0-0",
-					},
-					Keys: []string{"test_success_key"},
-				},
-				Body: isb.Body{
-					Payload: []byte(`forward_message`),
-				},
-			},
-			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
-		},
-		)
-		assert.NoError(t, err)
-		assert.Equal(t, req.Keys, got[0].Keys)
-		assert.Equal(t, req.Value, got[0].Payload)
-	})
-
-	t.Run("test error non retryable", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := transformermock.NewMockSourceTransformClient(ctrl)
-		req := &v1.SourceTransformRequest{
-			Keys:      []string{"test_error_key"},
-			Value:     []byte(`forward_message`),
-			EventTime: timestamppb.New(time.Unix(1661169660, 0)),
-			Watermark: timestamppb.New(time.Time{}),
-		}
-		mockClient.EXPECT().SourceTransformFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.InvalidArgument, "mock test err: non retryable").Err())
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if ctx.Err() == context.DeadlineExceeded {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
-
-		u := NewMockGRPCBasedTransformer(mockClient)
-		_, err := u.ApplyTransform(ctx, &isb.ReadMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: isb.MessageInfo{
-						EventTime: time.Unix(1661169660, 0),
-					},
-					ID: isb.MessageID{
-						VertexName: "test-vertex",
-						Offset:     "0-0",
-					},
-					Keys: []string{"test_error_key"},
-				},
-				Body: isb.Body{
-					Payload: []byte(`forward_message`),
-				},
-			},
-			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
-		},
-		)
-		assert.ErrorIs(t, err, &rpc.ApplyUDFErr{
-			UserUDFErr: false,
-			Message:    fmt.Sprintf("%s", err),
-			InternalErr: rpc.InternalErr{
-				Flag:        true,
-				MainCarDown: false,
-			},
-		})
+		var receivedErr *rpc.ApplyUDFErr
+		assert.ErrorAs(t, err, &receivedErr)
+		assert.Equal(t, expectedUDFErr, receivedErr)
 	})
 }
 
-func TestGRPCBasedTransformer_ApplyWithMockClient_ChangePayload(t *testing.T) {
-	multiplyBy2 := func(body []byte) interface{} {
-		var result testutils.PayloadForTest
-		_ = json.Unmarshal(body, &result)
-		result.Value = result.Value * 2
-		return result
+func TestGRPCBasedTransformer_ApplyWithServer_ChangePayload(t *testing.T) {
+	svc := &sourcetransformer.Service{
+		Transformer: sourcetransformer.SourceTransformFunc(func(ctx context.Context, keys []string, datum sourcetransformer.Datum) sourcetransformer.Messages {
+			var originalValue testutils.PayloadForTest
+			_ = json.Unmarshal(datum.Value(), &originalValue)
+			doubledValue := testutils.PayloadForTest{
+				Value: originalValue.Value * 2,
+				Key:   originalValue.Key,
+			}
+			doubledValueBytes, _ := json.Marshal(&doubledValue)
+
+			var resultKeys []string
+			if originalValue.Value%2 == 0 {
+				resultKeys = []string{"even"}
+			} else {
+				resultKeys = []string{"odd"}
+			}
+			return sourcetransformer.MessagesBuilder().Append(sourcetransformer.NewMessage(doubledValueBytes, datum.EventTime()).WithKeys(resultKeys))
+		}),
 	}
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockClient := transformermock.NewMockSourceTransformClient(ctrl)
-	mockClient.EXPECT().SourceTransformFn(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, datum *v1.SourceTransformRequest, opts ...grpc.CallOption) (*v1.SourceTransformResponse, error) {
-			var originalValue testutils.PayloadForTest
-			_ = json.Unmarshal(datum.GetValue(), &originalValue)
-			doubledValue, _ := json.Marshal(multiplyBy2(datum.GetValue()).(testutils.PayloadForTest))
-			var Results []*v1.SourceTransformResponse_Result
-			if originalValue.Value%2 == 0 {
-				Results = append(Results, &v1.SourceTransformResponse_Result{
-					Keys:  []string{"even"},
-					Value: doubledValue,
-				})
-			} else {
-				Results = append(Results, &v1.SourceTransformResponse_Result{
-					Keys:  []string{"odd"},
-					Value: doubledValue,
-				})
-			}
-			datumList := &v1.SourceTransformResponse{
-				Results: Results,
-			}
-			return datumList, nil
-		},
-	).AnyTimes()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
-		}
-	}()
-
-	u := NewMockGRPCBasedTransformer(mockClient)
+	conn := newServer(t, func(server *grpc.Server) {
+		transformpb.RegisterSourceTransformServer(server, svc)
+	})
+	transformClient := transformpb.NewSourceTransformClient(conn)
+	ctx := context.Background()
+	client, _ := sourcetransformerSdk.NewFromClient(ctx, transformClient)
+	u := NewGRPCBasedTransformer("testVertex", client)
 
 	var count = int64(10)
 	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1661169600, 0), nil)
-
-	var results = make([][]byte, len(readMessages))
-	var resultKeys = make([][]string, len(readMessages))
+	messages := make([]*isb.ReadMessage, len(readMessages))
 	for idx, readMessage := range readMessages {
-		apply, err := u.ApplyTransform(ctx, &readMessage)
-		assert.NoError(t, err)
-		results[idx] = apply[0].Payload
-		resultKeys[idx] = apply[0].Header.Keys
+		messages[idx] = &readMessage
 	}
+	apply, err := u.ApplyTransform(context.TODO(), messages)
+	assert.NoError(t, err)
 
-	var expectedResults = make([][]byte, count)
-	var expectedKeys = make([][]string, count)
-	for idx, readMessage := range readMessages {
+	for _, pair := range apply {
+		resultPayload := pair.WriteMessages[0].Payload
+		resultKeys := pair.WriteMessages[0].Header.Keys
 		var readMessagePayload testutils.PayloadForTest
-		_ = json.Unmarshal(readMessage.Payload, &readMessagePayload)
+		_ = json.Unmarshal(pair.ReadMessage.Payload, &readMessagePayload)
+		var expectedKeys []string
 		if readMessagePayload.Value%2 == 0 {
-			expectedKeys[idx] = []string{"even"}
+			expectedKeys = []string{"even"}
 		} else {
-			expectedKeys[idx] = []string{"odd"}
+			expectedKeys = []string{"odd"}
 		}
-		marshal, _ := json.Marshal(multiplyBy2(readMessage.Payload))
-		expectedResults[idx] = marshal
-	}
+		assert.Equal(t, expectedKeys, resultKeys)
 
-	assert.Equal(t, expectedResults, results)
-	assert.Equal(t, expectedKeys, resultKeys)
+		doubledValue := testutils.PayloadForTest{
+			Key:   readMessagePayload.Key,
+			Value: readMessagePayload.Value * 2,
+		}
+		marshal, _ := json.Marshal(doubledValue)
+		assert.Equal(t, marshal, resultPayload)
+	}
 }
 
-func TestGRPCBasedTransformer_ApplyWithMockClient_ChangeEventTime(t *testing.T) {
-	testEventTime := time.Date(1992, 2, 8, 0, 0, 0, 100, time.UTC)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func newServer(t *testing.T, register func(server *grpc.Server)) *grpc.ClientConn {
+	lis := bufconn.Listen(100)
+	t.Cleanup(func() {
+		_ = lis.Close()
+	})
 
-	mockClient := transformermock.NewMockSourceTransformClient(ctrl)
-	mockClient.EXPECT().SourceTransformFn(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, datum *v1.SourceTransformRequest, opts ...grpc.CallOption) (*v1.SourceTransformResponse, error) {
-			var Results []*v1.SourceTransformResponse_Result
-			Results = append(Results, &v1.SourceTransformResponse_Result{
-				Keys:      []string{"even"},
-				Value:     datum.Value,
-				EventTime: timestamppb.New(testEventTime),
-			})
-			datumList := &v1.SourceTransformResponse{
-				Results: Results,
-			}
-			return datumList, nil
-		},
-	).AnyTimes()
+	server := grpc.NewServer()
+	t.Cleanup(func() {
+		server.Stop()
+	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
+	register(server)
+
+	errChan := make(chan error, 1)
 	go func() {
-		<-ctx.Done()
-		if ctx.Err() == context.DeadlineExceeded {
-			t.Log(t.Name(), "test timeout")
+		// t.Fatal should only be called from the goroutine running the test
+		if err := server.Serve(lis); err != nil {
+			errChan <- err
 		}
 	}()
 
-	u := NewMockGRPCBasedTransformer(mockClient)
+	dialer := func(context.Context, string) (net.Conn, error) {
+		return lis.Dial()
+	}
+
+	conn, err := grpc.NewClient("passthrough://", grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+	if err != nil {
+		t.Fatalf("Creating new gRPC client connection: %v", err)
+	}
+
+	var grpcServerErr error
+	select {
+	case grpcServerErr = <-errChan:
+	case <-time.After(500 * time.Millisecond):
+		grpcServerErr = errors.New("gRPC server didn't start in 500ms")
+	}
+	if err != nil {
+		t.Fatalf("Failed to start gRPC server: %v", grpcServerErr)
+	}
+
+	return conn
+}
+
+func TestGRPCBasedTransformer_Apply_ChangeEventTime(t *testing.T) {
+	testEventTime := time.Date(1992, 2, 8, 0, 0, 0, 100, time.UTC)
+	svc := &sourcetransformer.Service{
+		Transformer: sourcetransformer.SourceTransformFunc(func(ctx context.Context, keys []string, datum sourcetransformer.Datum) sourcetransformer.Messages {
+			msg := datum.Value()
+			return sourcetransformer.MessagesBuilder().Append(sourcetransformer.NewMessage(msg, testEventTime).WithKeys([]string{"even"}))
+		}),
+	}
+	conn := newServer(t, func(server *grpc.Server) {
+		transformpb.RegisterSourceTransformServer(server, svc)
+	})
+	transformClient := transformpb.NewSourceTransformClient(conn)
+	ctx := context.Background()
+	client, _ := sourcetransformerSdk.NewFromClient(ctx, transformClient)
+	u := NewGRPCBasedTransformer("testVertex", client)
 
 	var count = int64(2)
 	readMessages := testutils.BuildTestReadMessages(count, time.Unix(1661169600, 0), nil)
-	for _, readMessage := range readMessages {
-		apply, err := u.ApplyTransform(ctx, &readMessage)
-		assert.NoError(t, err)
-		assert.Equal(t, testEventTime, apply[0].EventTime)
+	messages := make([]*isb.ReadMessage, len(readMessages))
+	for idx, readMessage := range readMessages {
+		messages[idx] = &readMessage
+	}
+	apply, err := u.ApplyTransform(context.TODO(), messages)
+	assert.NoError(t, err)
+	for _, pair := range apply {
+		assert.NoError(t, pair.Err)
+		assert.Equal(t, testEventTime, pair.WriteMessages[0].EventTime)
 	}
 }

@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+   http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,80 +18,132 @@ package sourcetransformer
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"reflect"
+	"net"
 	"testing"
+	"time"
 
-	"github.com/golang/mock/gomock"
 	transformpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1"
-	transformermock "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1/transformmock"
-	"github.com/stretchr/testify/assert"
+	"github.com/numaproj/numaflow-go/pkg/sourcetransformer"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestClient_IsReady(t *testing.T) {
 	var ctx = context.Background()
+	svc := &sourcetransformer.Service{
+		Transformer: sourcetransformer.SourceTransformFunc(func(ctx context.Context, keys []string, datum sourcetransformer.Datum) sourcetransformer.Messages {
+			return sourcetransformer.MessagesBuilder()
+		}),
+	}
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockClient := transformermock.NewMockSourceTransformClient(ctrl)
-	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&transformpb.ReadyResponse{Ready: true}, nil)
-	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&transformpb.ReadyResponse{Ready: false}, fmt.Errorf("mock connection refused"))
-
-	testClient, err := NewFromClient(mockClient)
-	assert.NoError(t, err)
-	reflect.DeepEqual(testClient, &client{
-		grpcClt: mockClient,
+	// Start the gRPC server
+	conn := newServer(t, func(server *grpc.Server) {
+		transformpb.RegisterSourceTransformServer(server, svc)
 	})
+	defer conn.Close()
+
+	// Create a client connection to the server
+	client := transformpb.NewSourceTransformClient(conn)
+
+	testClient, err := NewFromClient(ctx, client)
+	require.NoError(t, err)
 
 	ready, err := testClient.IsReady(ctx, &emptypb.Empty{})
-	assert.True(t, ready)
-	assert.NoError(t, err)
+	require.True(t, ready)
+	require.NoError(t, err)
+}
 
-	ready, err = testClient.IsReady(ctx, &emptypb.Empty{})
-	assert.False(t, ready)
-	assert.EqualError(t, err, "mock connection refused")
+func newServer(t *testing.T, register func(server *grpc.Server)) *grpc.ClientConn {
+	lis := bufconn.Listen(100)
+	t.Cleanup(func() {
+		_ = lis.Close()
+	})
+
+	server := grpc.NewServer()
+	t.Cleanup(func() {
+		server.Stop()
+	})
+
+	register(server)
+
+	errChan := make(chan error, 1)
+	go func() {
+		// t.Fatal should only be called from the goroutine running the test
+		if err := server.Serve(lis); err != nil {
+			errChan <- err
+		}
+	}()
+
+	dialer := func(context.Context, string) (net.Conn, error) {
+		return lis.Dial()
+	}
+
+	conn, err := grpc.NewClient("passthrough://", grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+	if err != nil {
+		t.Fatalf("Creating new gRPC client connection: %v", err)
+	}
+
+	var grpcServerErr error
+	select {
+	case grpcServerErr = <-errChan:
+	case <-time.After(500 * time.Millisecond):
+		grpcServerErr = errors.New("gRPC server didn't start in 500ms")
+	}
+	if err != nil {
+		t.Fatalf("Failed to start gRPC server: %v", grpcServerErr)
+	}
+
+	return conn
 }
 
 func TestClient_SourceTransformFn(t *testing.T) {
-	var ctx = context.Background()
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockClient := transformermock.NewMockSourceTransformClient(ctrl)
-	mockClient.EXPECT().SourceTransformFn(gomock.Any(), gomock.Any()).Return(&transformpb.SourceTransformResponse{Results: []*transformpb.SourceTransformResponse_Result{
-		{
-			Keys:  []string{"temp-key"},
-			Value: []byte("mock result"),
-			Tags:  nil,
-		},
-	}}, nil)
-	mockClient.EXPECT().SourceTransformFn(gomock.Any(), gomock.Any()).Return(&transformpb.SourceTransformResponse{Results: []*transformpb.SourceTransformResponse_Result{
-		{
-			Keys:  []string{"temp-key"},
-			Value: []byte("mock result"),
-			Tags:  nil,
-		},
-	}}, fmt.Errorf("mock connection refused"))
-
-	testClient, err := NewFromClient(mockClient)
-	assert.NoError(t, err)
-	reflect.DeepEqual(testClient, &client{
-		grpcClt: mockClient,
+	var testTime = time.Date(2021, 8, 15, 14, 30, 45, 100, time.Local)
+	svc := &sourcetransformer.Service{
+		Transformer: sourcetransformer.SourceTransformFunc(func(ctx context.Context, keys []string, datum sourcetransformer.Datum) sourcetransformer.Messages {
+			msg := datum.Value()
+			return sourcetransformer.MessagesBuilder().Append(sourcetransformer.NewMessage(msg, testTime).WithKeys([]string{keys[0] + "_test"}))
+		}),
+	}
+	conn := newServer(t, func(server *grpc.Server) {
+		transformpb.RegisterSourceTransformServer(server, svc)
 	})
+	transformClient := transformpb.NewSourceTransformClient(conn)
+	var ctx = context.Background()
+	client, _ := NewFromClient(ctx, transformClient)
 
-	result, err := testClient.SourceTransformFn(ctx, &transformpb.SourceTransformRequest{})
-	assert.Equal(t, &transformpb.SourceTransformResponse{Results: []*transformpb.SourceTransformResponse_Result{
-		{
-			Keys:  []string{"temp-key"},
-			Value: []byte("mock result"),
-			Tags:  nil,
-		},
-	}}, result)
-	assert.NoError(t, err)
+	requests := make([]*transformpb.SourceTransformRequest, 5)
+	go func() {
+		for i := 0; i < 5; i++ {
+			requests[i] = &transformpb.SourceTransformRequest{
+				Request: &transformpb.SourceTransformRequest_Request{
+					Keys:  []string{fmt.Sprintf("client_key_%d", i)},
+					Value: []byte("test"),
+				},
+			}
+		}
+	}()
 
-	_, err = testClient.SourceTransformFn(ctx, &transformpb.SourceTransformRequest{})
-	assert.EqualError(t, err, "NonRetryable: mock connection refused")
+	responses, err := client.SourceTransformFn(ctx, requests)
+	require.NoError(t, err)
+	var results [][]*transformpb.SourceTransformResponse_Result
+	for _, resp := range responses {
+		results = append(results, resp.GetResults())
+	}
+	expected := [][]*transformpb.SourceTransformResponse_Result{
+		{{Keys: []string{"client_key_0_test"}, Value: []byte("test"), EventTime: timestamppb.New(testTime)}},
+		{{Keys: []string{"client_key_1_test"}, Value: []byte("test"), EventTime: timestamppb.New(testTime)}},
+		{{Keys: []string{"client_key_2_test"}, Value: []byte("test"), EventTime: timestamppb.New(testTime)}},
+		{{Keys: []string{"client_key_3_test"}, Value: []byte("test"), EventTime: timestamppb.New(testTime)}},
+		{{Keys: []string{"client_key_4_test"}, Value: []byte("test"), EventTime: timestamppb.New(testTime)}},
+	}
+	require.ElementsMatch(t, expected, results)
 }

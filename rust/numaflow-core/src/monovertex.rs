@@ -244,7 +244,7 @@ mod tests {
         let (src_shutdown_tx, src_shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let src_sock_file = tmp_dir.path().join("source.sock");
-        let src_info_file = tmp_dir.path().join("source-server-info");
+        let src_info_file = tmp_dir.path().join("sourcer-server-info");
         let server_info_obj = ServerInfo {
             protocol: "uds".to_string(),
             language: "rust".to_string(),
@@ -271,7 +271,7 @@ mod tests {
         let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let sink_sock_file = tmp_dir.path().join("sink.sock");
-        let sink_server_info = tmp_dir.path().join("sink-server-info");
+        let sink_server_info = tmp_dir.path().join("sinker-server-info");
 
         write_server_info(sink_server_info.to_str().unwrap(), &server_info_obj)
             .await

@@ -18,7 +18,6 @@ package grpc
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 
 	"google.golang.org/grpc"
@@ -56,7 +55,6 @@ func ConnectToServer(udsSockAddr string, serverInfo *serverinfo.ServerInfo, maxM
 		)
 	} else {
 		sockAddr = getUdsSockAddr(udsSockAddr)
-		log.Println("UDS Client:", sockAddr)
 
 		conn, err = grpc.NewClient(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMessageSize), grpc.MaxCallSendMsgSize(maxMessageSize)))
