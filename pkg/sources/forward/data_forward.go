@@ -516,6 +516,7 @@ func (df *DataForward) writeToBuffers(
 	for toVertexName, toVertexMessages := range messageToStep {
 		writeOffsets[toVertexName] = make([][]isb.Offset, len(toVertexMessages))
 	}
+
 	for toVertexName, toVertexBuffer := range df.toBuffers {
 		for index, partition := range toVertexBuffer {
 			writeOffsets[toVertexName][index], err = df.writeToBuffer(ctx, partition, messageToStep[toVertexName][index])
@@ -571,6 +572,7 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 						zap.String("reason", err.Error()),
 						zap.String("partition", toBufferPartition.GetName()),
 						zap.String("vertex", df.vertexName), zap.String("pipeline", df.pipelineName),
+						zap.String("msg_id", msg.ID.String()),
 					)
 				} else {
 					needRetry = true

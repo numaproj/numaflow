@@ -27,5 +27,5 @@ import (
 type Client interface {
 	CloseConn(ctx context.Context) error
 	IsReady(ctx context.Context, in *emptypb.Empty) (bool, error)
-	SourceTransformFn(ctx context.Context, request <-chan *transformpb.SourceTransformRequest) (<-chan *transformpb.SourceTransformResponse, <-chan error)
+	SourceTransformFn(ctx context.Context, requests []*transformpb.SourceTransformRequest) ([]*transformpb.SourceTransformResponse, error)
 }

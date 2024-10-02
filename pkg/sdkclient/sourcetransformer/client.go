@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
@@ -149,59 +150,46 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 
 // SourceTransformFn SourceTransformerFn applies a function to each request element.
 // Response channel will not be closed. Caller can select on response and error channel to exit on first error.
-func (c *client) SourceTransformFn(ctx context.Context, request <-chan *transformpb.SourceTransformRequest) (<-chan *transformpb.SourceTransformResponse, <-chan error) {
-	clientErrCh := make(chan error)
-	responseCh := make(chan *transformpb.SourceTransformResponse)
+func (c *client) SourceTransformFn(ctx context.Context, requests []*transformpb.SourceTransformRequest) ([]*transformpb.SourceTransformResponse, error) {
+	var eg errgroup.Group
+	// send n requests
+	eg.Go(func() error {
+		for _, req := range requests {
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+			}
+			if err := c.stream.Send(req); err != nil {
+				return sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Send", err)
+			}
+		}
+		return nil
+	})
 
-	// This channel is to send the error from the goroutine that receives messages from the stream to the goroutine that sends requests to the server.
-	// This ensures that we don't need to use clientErrCh in both goroutines. The caller of this function will only be listening for the first error value in clientErrCh.
-	// If both goroutines were sending error message to this channel (eg. stream failure), one of them will be stuck in sending can not shutdown cleanly.
-	errCh := make(chan error, 1)
-
-	logger := logging.FromContext(ctx)
-
-	// Receive responses from the stream
-	go func() {
-		for {
+	// receive n responses
+	responses := make([]*transformpb.SourceTransformResponse, len(requests))
+	eg.Go(func() error {
+		for i := 0; i < len(requests); i++ {
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+			}
 			resp, err := c.stream.Recv()
 			if err != nil {
-				// we don't need an EOF check because we only close the stream during shutdown.
-				errCh <- sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn", err)
-				close(errCh)
-				return
+				return sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Recv", err)
 			}
-
-			select {
-			case <-ctx.Done():
-				logger.Warnf("Context cancelled. Stopping retrieving messages from the stream")
-				return
-			case responseCh <- resp:
-			}
+			responses[i] = resp
 		}
-	}()
+		return nil
+	})
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				clientErrCh <- sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Send", ctx.Err())
-				return
-			case err := <-errCh:
-				clientErrCh <- err
-				return
-			case msg, ok := <-request:
-				if !ok {
-					// stream is only closed during shutdown
-					return
-				}
-				err := c.stream.Send(msg)
-				if err != nil {
-					clientErrCh <- sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Send", err)
-					return
-				}
-			}
-		}
-	}()
+	// wait for the send and receive goroutines to finish
+	// if any of the goroutines return an error, the error will be caught here
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
 
-	return responseCh, clientErrCh
+	return responses, nil
 }

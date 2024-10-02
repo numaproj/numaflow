@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+   http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,7 +26,6 @@ import (
 
 	transformpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1"
 	"github.com/numaproj/numaflow-go/pkg/sourcetransformer"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -121,10 +120,10 @@ func TestClient_SourceTransformFn(t *testing.T) {
 	var ctx = context.Background()
 	client, _ := NewFromClient(ctx, transformClient)
 
-	reqChan := make(chan *transformpb.SourceTransformRequest, 1)
+	requests := make([]*transformpb.SourceTransformRequest, 5)
 	go func() {
 		for i := 0; i < 5; i++ {
-			reqChan <- &transformpb.SourceTransformRequest{
+			requests[i] = &transformpb.SourceTransformRequest{
 				Request: &transformpb.SourceTransformRequest_Request{
 					Keys:  []string{fmt.Sprintf("client_key_%d", i)},
 					Value: []byte("test"),
@@ -133,16 +132,10 @@ func TestClient_SourceTransformFn(t *testing.T) {
 		}
 	}()
 
-	respChan, errChan := client.SourceTransformFn(ctx, reqChan)
+	responses, err := client.SourceTransformFn(ctx, requests)
+	require.NoError(t, err)
 	var results [][]*transformpb.SourceTransformResponse_Result
-	for i := 0; i < 5; i++ {
-		var resp *transformpb.SourceTransformResponse
-		var err error
-		select {
-		case resp = <-respChan:
-		case err = <-errChan:
-		}
-		assert.NoError(t, err)
+	for _, resp := range responses {
 		results = append(results, resp.GetResults())
 	}
 	expected := [][]*transformpb.SourceTransformResponse_Result{
@@ -152,5 +145,5 @@ func TestClient_SourceTransformFn(t *testing.T) {
 		{{Keys: []string{"client_key_3_test"}, Value: []byte("test"), EventTime: timestamppb.New(testTime)}},
 		{{Keys: []string{"client_key_4_test"}, Value: []byte("test"), EventTime: timestamppb.New(testTime)}},
 	}
-	assert.ElementsMatch(t, expected, results)
+	require.ElementsMatch(t, expected, results)
 }

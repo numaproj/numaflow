@@ -23,13 +23,13 @@ import (
 	"time"
 
 	v1 "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/isb/tracker"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/udf/rpc"
-	"google.golang.org/protobuf/types/known/emptypb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // GRPCBasedTransformer applies user-defined transformer over gRPC (over Unix Domain Socket) client/server where server is the transformer.
@@ -53,7 +53,7 @@ func (u *GRPCBasedTransformer) IsHealthy(ctx context.Context) error {
 
 // WaitUntilReady waits until the client is connected.
 func (u *GRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
-	log := logging.FromContext(ctx)
+	logger := logging.FromContext(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -62,7 +62,7 @@ func (u *GRPCBasedTransformer) WaitUntilReady(ctx context.Context) error {
 			if _, err := u.client.IsReady(ctx, &emptypb.Empty{}); err == nil {
 				return nil
 			} else {
-				log.Infof("waiting for transformer to be ready: %v", err)
+				logger.Infof("waiting for transformer to be ready: %v", err)
 				time.Sleep(1 * time.Second)
 			}
 		}
@@ -77,102 +77,80 @@ func (u *GRPCBasedTransformer) CloseConn(ctx context.Context) error {
 var errSourceTransformFnEmptyMsgId = errors.New("response from SourceTransformFn doesn't contain a message id")
 
 func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
-	var transformResults []isb.ReadWriteMessagePair
-	inputChan := make(chan *v1.SourceTransformRequest)
-	respChan, errChan := u.client.SourceTransformFn(ctx, inputChan)
+	transformResults := make([]isb.ReadWriteMessagePair, len(messages))
+	requests := make([]*v1.SourceTransformRequest, len(messages))
+	idToMsgMapping := make(map[string]*isb.ReadMessage)
 
-	logger := logging.FromContext(ctx)
-
-	msgTracker := tracker.NewMessageTracker(messages)
-
-	go func() {
-		defer close(inputChan)
-		for _, msg := range messages {
-			req := &v1.SourceTransformRequest{
-				Request: &v1.SourceTransformRequest_Request{
-					Keys:      msg.Keys,
-					Value:     msg.Body.Payload,
-					EventTime: timestamppb.New(msg.MessageInfo.EventTime),
-					Watermark: timestamppb.New(msg.Watermark),
-					Headers:   msg.Headers,
-					Id:        msg.ReadOffset.String(),
-				},
-			}
-			inputChan <- req
+	for i, msg := range messages {
+		// we track the id to the message mapping to be able to match the response with the original message.
+		// we use the original message's event time if the user doesn't change it. Also we use the original message's
+		// read offset + index as the id for the response.
+		id := msg.ReadOffset.String()
+		idToMsgMapping[id] = msg
+		req := &v1.SourceTransformRequest{
+			Request: &v1.SourceTransformRequest_Request{
+				Keys:      msg.Keys,
+				Value:     msg.Body.Payload,
+				EventTime: timestamppb.New(msg.MessageInfo.EventTime),
+				Watermark: timestamppb.New(msg.Watermark),
+				Headers:   msg.Headers,
+				Id:        id,
+			},
 		}
-	}()
-
-	messageCount := len(messages)
-
-loop:
-	for {
-		select {
-		case err := <-errChan:
-			err = &rpc.ApplyUDFErr{
-				UserUDFErr: false,
-				Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
-				InternalErr: rpc.InternalErr{
-					Flag:        true,
-					MainCarDown: false,
-				},
-			}
-			return nil, err
-		case resp, ok := <-respChan:
-			if !ok {
-				logger.Warn("Response channel from source transform client was closed.")
-				break loop
-			}
-			msgId := resp.GetId()
-			if msgId == "" {
-				return nil, errSourceTransformFnEmptyMsgId
-			}
-			parentMessage := msgTracker.Remove(msgId)
-			if parentMessage == nil {
-				return nil, errors.New("tracker doesn't contain the message ID received from the response")
-			}
-			messageCount--
-
-			var taggedMessages []*isb.WriteMessage
-			for i, result := range resp.GetResults() {
-				keys := result.Keys
-				if result.EventTime != nil {
-					// Transformer supports changing event time.
-					parentMessage.MessageInfo.EventTime = result.EventTime.AsTime()
-				}
-				taggedMessage := &isb.WriteMessage{
-					Message: isb.Message{
-						Header: isb.Header{
-							MessageInfo: parentMessage.MessageInfo,
-							ID: isb.MessageID{
-								VertexName: u.vertexName,
-								Offset:     parentMessage.ReadOffset.String(),
-								Index:      int32(i),
-							},
-							Keys: keys,
-						},
-						Body: isb.Body{
-							Payload: result.Value,
-						},
-					},
-					Tags: result.Tags,
-				}
-				taggedMessages = append(taggedMessages, taggedMessage)
-			}
-			responsePair := isb.ReadWriteMessagePair{
-				ReadMessage:   parentMessage,
-				WriteMessages: taggedMessages,
-				Err:           nil,
-			}
-			transformResults = append(transformResults, responsePair)
-
-			if messageCount == 0 {
-				break loop
-			}
-		}
+		requests[i] = req
 	}
 
-	if !msgTracker.IsEmpty() {
-		return nil, fmt.Errorf("transform response for all requests were not received from UDF. Remaining=%d", msgTracker.Len())
+	responses, err := u.client.SourceTransformFn(ctx, requests)
+
+	if err != nil {
+		err = &rpc.ApplyUDFErr{
+			UserUDFErr: false,
+			Message:    fmt.Sprintf("gRPC client.SourceTransformFn failed, %s", err),
+			InternalErr: rpc.InternalErr{
+				Flag:        true,
+				MainCarDown: false,
+			},
+		}
+		return nil, err
+	}
+
+	for i, resp := range responses {
+		parentMessage, ok := idToMsgMapping[resp.GetId()]
+		if !ok {
+			panic("tracker doesn't contain the message ID received from the response")
+		}
+		taggedMessages := make([]*isb.WriteMessage, len(resp.GetResults()))
+		for i, result := range resp.GetResults() {
+			keys := result.Keys
+			if result.EventTime != nil {
+				// Transformer supports changing event time.
+				parentMessage.MessageInfo.EventTime = result.EventTime.AsTime()
+			}
+			taggedMessage := &isb.WriteMessage{
+				Message: isb.Message{
+					Header: isb.Header{
+						MessageInfo: parentMessage.MessageInfo,
+						ID: isb.MessageID{
+							VertexName: u.vertexName,
+							Offset:     parentMessage.ReadOffset.String(),
+							Index:      int32(i),
+						},
+						Keys: keys,
+					},
+					Body: isb.Body{
+						Payload: result.Value,
+					},
+				},
+				Tags: result.Tags,
+			}
+			taggedMessages[i] = taggedMessage
+		}
+		responsePair := isb.ReadWriteMessagePair{
+			ReadMessage:   parentMessage,
+			WriteMessages: taggedMessages,
+			Err:           nil,
+		}
+		transformResults[i] = responsePair
 	}
 	return transformResults, nil
 }
