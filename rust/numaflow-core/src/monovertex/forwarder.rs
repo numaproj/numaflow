@@ -1,3 +1,10 @@
+use chrono::Utc;
+use log::warn;
+use std::collections::HashMap;
+use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, info};
+
 use crate::config::{config, OnFailureStrategy};
 use crate::error;
 use crate::error::Error;
@@ -8,13 +15,6 @@ use crate::monovertex::sink_pb::Status::{Failure, Fallback, Success};
 use crate::sink::user_defined::SinkWriter;
 use crate::source::user_defined::Source;
 use crate::transformer::user_defined::SourceTransformer;
-use chrono::Utc;
-use log::warn;
-use std::collections::HashMap;
-use tokio::task::JoinSet;
-use tokio::time::sleep;
-use tokio_util::sync::CancellationToken;
-use tracing::{debug, info};
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
@@ -193,26 +193,14 @@ impl Forwarder {
 
     // Applies transformation to the messages if transformer is present
     // we concurrently apply transformation to all the messages.
-    async fn apply_transformer(&self, messages: Vec<Message>) -> error::Result<Vec<Message>> {
-        let Some(transformer_client) = &self.source_transformer else {
+    async fn apply_transformer(&mut self, messages: Vec<Message>) -> error::Result<Vec<Message>> {
+        let Some(transformer_client) = &mut self.source_transformer else {
             // return early if there is no transformer
             return Ok(messages);
         };
 
         let start_time = tokio::time::Instant::now();
-        let mut jh = JoinSet::new();
-        for message in messages {
-            let mut transformer_client = transformer_client.clone();
-            jh.spawn(async move { transformer_client.transform_fn(message).await });
-        }
-
-        let mut results = Vec::new();
-        while let Some(task) = jh.join_next().await {
-            let result = task.map_err(|e| Error::TransformerError(format!("{:?}", e)))?;
-            if let Some(result) = result? {
-                results.extend(result);
-            }
-        }
+        let results = transformer_client.transform_fn(messages).await?;
 
         debug!(
             "Transformer latency - {}ms",

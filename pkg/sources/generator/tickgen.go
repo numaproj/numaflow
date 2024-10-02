@@ -202,7 +202,6 @@ loop:
 			tickgenSourceReadCount.With(map[string]string{metrics.LabelVertex: mg.vertexName, metrics.LabelPipeline: mg.pipelineName}).Inc()
 			msgs = append(msgs, mg.newReadMessage(r.key, r.data, r.offset, r.ts))
 		case <-timeout:
-			mg.logger.Infow("Timed out waiting for messages to read.", zap.Duration("waited", mg.readTimeout))
 			break loop
 		}
 	}

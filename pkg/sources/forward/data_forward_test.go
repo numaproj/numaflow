@@ -121,8 +121,16 @@ func (f myForwardTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.Ve
 	}}, nil
 }
 
-func (f myForwardTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, "test-vertex", message)
+func (f myForwardTest) ApplyTransform(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	out := make([]isb.ReadWriteMessagePair, len(messages))
+	for i, msg := range messages {
+		writeMsg, _ := testutils.CopyUDFTestApply(ctx, "test-vertex", msg)
+		out[i] = isb.ReadWriteMessagePair{
+			ReadMessage:   msg,
+			WriteMessages: writeMsg,
+		}
+	}
+	return out, nil
 }
 
 func TestNewDataForward(t *testing.T) {
@@ -856,36 +864,31 @@ func (f *mySourceForwardTestRoundRobin) WhereTo(_ []string, _ []string, s string
 // such that we can verify message IsLate attribute gets set to true.
 var testSourceNewEventTime = testSourceWatermark.Add(time.Duration(-1) * time.Minute)
 
-func (f mySourceForwardTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return func(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-		_ = ctx
-		offset := readMessage.ReadOffset
-		payload := readMessage.Body.Payload
-		parentPaneInfo := readMessage.MessageInfo
-
-		// apply source data transformer
-		_ = payload
-		// copy the payload
-		result := payload
-		// assign new event time
-		parentPaneInfo.EventTime = testSourceNewEventTime
-		var key []string
-
-		writeMessage := isb.Message{
+func (f mySourceForwardTest) ApplyTransform(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	results := make([]isb.ReadWriteMessagePair, len(messages))
+	for i, message := range messages {
+		message.MessageInfo.EventTime = testSourceNewEventTime
+		writeMsg := isb.Message{
 			Header: isb.Header{
-				MessageInfo: parentPaneInfo,
+				MessageInfo: message.MessageInfo,
 				ID: isb.MessageID{
 					VertexName: "test-vertex",
-					Offset:     offset.String(),
+					Offset:     message.ReadOffset.String(),
 				},
-				Keys: key,
+				Keys: []string{},
 			},
 			Body: isb.Body{
-				Payload: result,
+				Payload: message.Body.Payload,
 			},
 		}
-		return []*isb.WriteMessage{{Message: writeMessage}}, nil
-	}(ctx, message)
+		results[i] = isb.ReadWriteMessagePair{
+			ReadMessage: message,
+			WriteMessages: []*isb.WriteMessage{{
+				Message: writeMsg,
+			}},
+		}
+	}
+	return results, nil
 }
 
 // TestSourceWatermarkPublisher is a dummy implementation of isb.SourceWatermarkPublisher interface
@@ -1153,8 +1156,16 @@ func (f myForwardDropTest) WhereTo(_ []string, _ []string, s string) ([]forwarde
 	return []forwarder.VertexBuffer{}, nil
 }
 
-func (f myForwardDropTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, "test-vertex", message)
+func (f myForwardDropTest) ApplyTransform(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	results := make([]isb.ReadWriteMessagePair, len(messages))
+	for i, message := range messages {
+		writeMsg, _ := testutils.CopyUDFTestApply(ctx, "test-vertex", message)
+		results[i] = isb.ReadWriteMessagePair{
+			ReadMessage:   message,
+			WriteMessages: writeMsg,
+		}
+	}
+	return results, nil
 }
 
 type myForwardToAllTest struct {
@@ -1174,8 +1185,16 @@ func (f *myForwardToAllTest) WhereTo(_ []string, _ []string, s string) ([]forwar
 	return output, nil
 }
 
-func (f *myForwardToAllTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, "test-vertex", message)
+func (f *myForwardToAllTest) ApplyTransform(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	results := make([]isb.ReadWriteMessagePair, len(messages))
+	for i, message := range messages {
+		writeMsg, _ := testutils.CopyUDFTestApply(ctx, "test-vertex", message)
+		results[i] = isb.ReadWriteMessagePair{
+			ReadMessage:   message,
+			WriteMessages: writeMsg,
+		}
+	}
+	return results, nil
 }
 
 type myForwardInternalErrTest struct {
@@ -1188,7 +1207,7 @@ func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string, s string) ([]f
 	}}, nil
 }
 
-func (f myForwardInternalErrTest) ApplyTransform(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardInternalErrTest) ApplyTransform(ctx context.Context, _ []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	return nil, &udfapplier.ApplyUDFErr{
 		UserUDFErr: false,
 		InternalErr: struct {
@@ -1209,8 +1228,16 @@ func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string, s string) 
 	}}, fmt.Errorf("whereToStep failed")
 }
 
-func (f myForwardApplyWhereToErrTest) ApplyTransform(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, "test-vertex", message)
+func (f myForwardApplyWhereToErrTest) ApplyTransform(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	results := make([]isb.ReadWriteMessagePair, len(messages))
+	for i, message := range messages {
+		writeMsg, _ := testutils.CopyUDFTestApply(ctx, "test-vertex", message)
+		results[i] = isb.ReadWriteMessagePair{
+			ReadMessage:   message,
+			WriteMessages: writeMsg,
+		}
+	}
+	return results, nil
 }
 
 type myForwardApplyTransformerErrTest struct {
@@ -1223,7 +1250,7 @@ func (f myForwardApplyTransformerErrTest) WhereTo(_ []string, _ []string, s stri
 	}}, nil
 }
 
-func (f myForwardApplyTransformerErrTest) ApplyTransform(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardApplyTransformerErrTest) ApplyTransform(_ context.Context, _ []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	return nil, fmt.Errorf("transformer error")
 }
 
