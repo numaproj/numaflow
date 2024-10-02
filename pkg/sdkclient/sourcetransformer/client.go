@@ -166,7 +166,6 @@ func (c *client) SourceTransformFn(ctx context.Context, requests []*transformpb.
 				return
 			default:
 			}
-			log.Println("Sending request:", req.Request.Id)
 			if err := c.stream.Send(req); err != nil {
 				cancel(sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Send", err))
 				return
@@ -184,14 +183,13 @@ func (c *client) SourceTransformFn(ctx context.Context, requests []*transformpb.
 			return nil, err
 		default:
 		}
-		log.Println("Receiving response")
 		resp, err := c.stream.Recv()
-		log.Println("Received response:", resp.GetId(), err)
 		if err != nil {
 			err = sdkerr.ToUDFErr("c.grpcClt.SourceTransformFn stream.Recv", err)
 			cancel(err)
 			return nil, err
 		}
+		log.Println("Received response:", resp.GetId())
 		responses = append(responses, resp)
 	}
 

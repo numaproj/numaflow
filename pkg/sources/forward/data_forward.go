@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"sync"
 	"time"
@@ -516,6 +517,13 @@ func (df *DataForward) writeToBuffers(
 	for toVertexName, toVertexMessages := range messageToStep {
 		writeOffsets[toVertexName] = make([][]isb.Offset, len(toVertexMessages))
 	}
+	for _, toVertexMessages := range messageToStep {
+		for idx, messages := range toVertexMessages {
+			for _, message := range messages {
+				log.Println(idx, " Writing message to buffer with message id: ", message.ID.String())
+			}
+		}
+	}
 	for toVertexName, toVertexBuffer := range df.toBuffers {
 		for index, partition := range toVertexBuffer {
 			writeOffsets[toVertexName][index], err = df.writeToBuffer(ctx, partition, messageToStep[toVertexName][index])
@@ -666,6 +674,12 @@ func (df *DataForward) applyTransformer(ctx context.Context, messages []*isb.Rea
 				return []isb.ReadWriteMessagePair{{Err: err}}
 			}
 			continue
+		}
+		for _, result := range transformResults {
+			log.Println("Transformed read message with id: ", result.ReadMessage.ID.String())
+			for _, message := range result.WriteMessages {
+				log.Println("Transformed write message with id: ", message.ID.String())
+			}
 		}
 		return transformResults
 	}
