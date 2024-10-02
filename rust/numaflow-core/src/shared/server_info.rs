@@ -40,7 +40,7 @@ pub(crate) async fn check_for_server_compatibility(
     cln_token: CancellationToken,
 ) -> error::Result<()> {
     // Read the server info file
-    let server_info = read_server_info(file_path, cln_token).await?;
+    let server_info = read_server_info(&file_path, cln_token).await?;
 
     // Log the server info
     info!("Server info file: {:?}", server_info);
@@ -49,6 +49,7 @@ pub(crate) async fn check_for_server_compatibility(
     let sdk_version = &server_info.version;
     let min_numaflow_version = &server_info.minimum_numaflow_version;
     let sdk_language = &server_info.language;
+    let container_type = get_container_type(&file_path).unwrap_or("");
     // Get version information
     let version_info = version::get_version_info();
     let numaflow_version = &version_info.version;
@@ -72,7 +73,7 @@ pub(crate) async fn check_for_server_compatibility(
     } else {
         // Get minimum supported SDK versions and check compatibility
         let min_supported_sdk_versions = version::get_minimum_supported_sdk_versions();
-        check_sdk_compatibility(sdk_version, sdk_language, min_supported_sdk_versions)?;
+        check_sdk_compatibility(sdk_version, sdk_language, container_type, min_supported_sdk_versions)?;
     }
 
     Ok(())
@@ -109,10 +110,20 @@ fn check_numaflow_compatibility(
 fn check_sdk_compatibility(
     sdk_version: &str,
     sdk_language: &str,
+    container_type : &str,
     min_supported_sdk_versions: &SdkConstraints,
 ) -> error::Result<()> {
     // Check if the SDK language is present in the minimum supported SDK versions
-    if let Some(sdk_required_version) = min_supported_sdk_versions.get(sdk_language) {
+    if !min_supported_sdk_versions.contains_key(sdk_language) {
+        return Err(Error::ServerInfoError(format!(
+            "SDK version constraint not found for language: {}, container type: {}",
+            sdk_language,
+            container_type
+        )));
+    }
+    let empty_map = HashMap::new();
+    let lang_constraints = min_supported_sdk_versions.get(sdk_language).unwrap_or(&empty_map);
+    if let Some(sdk_required_version) = lang_constraints.get(container_type) {
         let sdk_constraint = format!(">={}", sdk_required_version);
 
         // For Python, use Pep440 versioning
@@ -149,14 +160,16 @@ fn check_sdk_compatibility(
     } else {
         // Language not found in the supported SDK versions
         warn!(
-            "SDK version constraint not found for language: {}",
-            sdk_language
+            "SDK version constraint not found for language: {}, container type: {}",
+            sdk_language,
+            container_type
         );
 
         // Return error indicating the language
         return Err(Error::ServerInfoError(format!(
-            "SDK version constraint not found for language: {}",
-            sdk_language
+            "SDK version constraint not found for language: {}, container type: {}",
+            sdk_language,
+            container_type
         )));
     }
     Ok(())
@@ -246,11 +259,25 @@ fn trim_after_dash(input: &str) -> &str {
     }
 }
 
+/// Extracts the container type from the server info file.
+/// The file name is in the format of <container_type>-server-info.
+fn get_container_type(server_info_file: &PathBuf) -> Option<&str> {
+    let file_name = server_info_file.file_name()?;
+    let container_type = file_name
+        .to_str()?
+        .trim_end_matches("-server-info");
+    if container_type.is_empty() {
+        None
+    } else {
+        Some(container_type)
+    }
+}
+
 /// Reads the server info file and returns the parsed ServerInfo struct.
 /// The cancellation token is used to stop ready-check of server_info file in case it is missing.
 /// This cancellation token is closed via the global shutdown handler.
 async fn read_server_info(
-    file_path: PathBuf,
+    file_path: &PathBuf,
     cln_token: CancellationToken,
 ) -> error::Result<ServerInfo> {
     // Infinite loop to keep checking until the file is ready
@@ -318,21 +345,43 @@ async fn read_server_info(
 mod version {
     use std::collections::HashMap;
     use std::env;
+    use std::sync::LazyLock;
 
-    use once_cell::sync::Lazy;
+    pub(crate) type SdkConstraints = HashMap<String, HashMap<String, String>>;
 
-    pub(crate) type SdkConstraints = HashMap<String, String>;
-
-    // MINIMUM_SUPPORTED_SDK_VERSIONS is a HashMap with SDK language as key and minimum supported version as value
-    static MINIMUM_SUPPORTED_SDK_VERSIONS: Lazy<SdkConstraints> = Lazy::new(|| {
+    // MINIMUM_SUPPORTED_SDK_VERSIONS is the minimum supported version of each SDK for the current numaflow version.
+    static MINIMUM_SUPPORTED_SDK_VERSIONS: LazyLock<SdkConstraints> = LazyLock::new(|| {
         // TODO: populate this from a static file and make it part of the release process
         // the value of the map matches `minimumSupportedSDKVersions` in pkg/sdkclient/serverinfo/types.go
         // please follow the instruction there to update the value
+        // NOTE: the string content of the keys matches the corresponding server info file name.
+        // DO NOT change it unless the server info file name is changed.
+        let mut go_version_map = HashMap::new();
+        go_version_map.insert("sourcer".to_string(), "0.8.0-z".to_string());
+        go_version_map.insert("sourcetransformer".to_string(), "0.8.0-z".to_string());
+        go_version_map.insert("sinker".to_string(), "0.8.0-z".to_string());
+        go_version_map.insert("fb-sinker".to_string(), "0.8.0-z".to_string());
+        let mut python_version_map = HashMap::new();
+        python_version_map.insert("sourcer".to_string(), "0.8.0rc100".to_string());
+        python_version_map.insert("sourcetransformer".to_string(), "0.8.0rc100".to_string());
+        python_version_map.insert("sinker".to_string(), "0.8.0rc100".to_string());
+        python_version_map.insert("fb-sinker".to_string(), "0.8.0rc100".to_string());
+        let mut java_version_map = HashMap::new();
+        java_version_map.insert("sourcer".to_string(), "0.8.0-z".to_string());
+        java_version_map.insert("sourcetransformer".to_string(), "0.8.0-z".to_string());
+        java_version_map.insert("sinker".to_string(), "0.8.0-z".to_string());
+        java_version_map.insert("fb-sinker".to_string(), "0.8.0-z".to_string());
+        let mut rust_version_map = HashMap::new();
+        rust_version_map.insert("sourcer".to_string(), "0.1.0-z".to_string());
+        rust_version_map.insert("sourcetransformer".to_string(), "0.1.0-z".to_string());
+        rust_version_map.insert("sinker".to_string(), "0.1.0-z".to_string());
+        rust_version_map.insert("fb-sinker".to_string(), "0.1.0-z".to_string());
+
         let mut m = HashMap::new();
-        m.insert("go".to_string(), "0.8.0-z".to_string());
-        m.insert("python".to_string(), "0.8.0rc100".to_string());
-        m.insert("java".to_string(), "0.8.0-z".to_string());
-        m.insert("rust".to_string(), "0.1.0-z".to_string());
+        m.insert("go".to_string(), go_version_map);
+        m.insert("python".to_string(), python_version_map);
+        m.insert("java".to_string(), java_version_map);
+        m.insert("rust".to_string(), rust_version_map);
         m
     });
 
@@ -397,8 +446,8 @@ mod version {
         }
     }
 
-    /// Use once_cell::sync::Lazy for thread-safe, one-time initialization
-    static VERSION_INFO: Lazy<VersionInfo> = Lazy::new(VersionInfo::init);
+    /// Use std::sync::LazyLock for thread-safe, one-time initialization
+    static VERSION_INFO: LazyLock<VersionInfo> = LazyLock::new(VersionInfo::init);
 
     /// Getter function for VersionInfo
     pub fn get_version_info() -> &'static VersionInfo {
@@ -420,6 +469,7 @@ mod tests {
     const TCP: &str = "tcp";
     const PYTHON: &str = "python";
     const GOLANG: &str = "go";
+    const TEST_CONTAINER_TYPE: &str = "sourcer";
 
     async fn write_server_info(
         svr_info: &ServerInfo,
@@ -470,22 +520,40 @@ mod tests {
 
     // Helper function to create a SdkConstraints struct with minimum supported SDK versions all being stable releases
     fn create_sdk_constraints_stable_versions() -> SdkConstraints {
-        let mut constraints = HashMap::new();
-        constraints.insert("python".to_string(), "1.2.0rc100".to_string());
-        constraints.insert("java".to_string(), "2.0.0-z".to_string());
-        constraints.insert("go".to_string(), "0.10.0-z".to_string());
-        constraints.insert("rust".to_string(), "0.1.0-z".to_string());
-        constraints
+        let mut go_version_map = HashMap::new();
+        go_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "0.10.0-z".to_string());
+        let mut python_version_map = HashMap::new();
+        python_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "1.2.0rc100".to_string());
+        let mut java_version_map = HashMap::new();
+        java_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "2.0.0-z".to_string());
+        let mut rust_version_map = HashMap::new();
+        rust_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "0.1.0-z".to_string());
+
+        let mut m = HashMap::new();
+        m.insert("go".to_string(), go_version_map);
+        m.insert("python".to_string(), python_version_map);
+        m.insert("java".to_string(), java_version_map);
+        m.insert("rust".to_string(), rust_version_map);
+        m
     }
 
     // Helper function to create a SdkConstraints struct with minimum supported SDK versions all being pre-releases
     fn create_sdk_constraints_pre_release_versions() -> SdkConstraints {
-        let mut constraints = HashMap::new();
-        constraints.insert("python".to_string(), "1.2.0b2".to_string());
-        constraints.insert("java".to_string(), "2.0.0-rc2".to_string());
-        constraints.insert("go".to_string(), "0.10.0-rc2".to_string());
-        constraints.insert("rust".to_string(), "0.1.0-rc3".to_string());
-        constraints
+        let mut go_version_map = HashMap::new();
+        go_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "0.10.0-rc2".to_string());
+        let mut python_version_map = HashMap::new();
+        python_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "1.2.0b2".to_string());
+        let mut java_version_map = HashMap::new();
+        java_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "2.0.0-rc2".to_string());
+        let mut rust_version_map = HashMap::new();
+        rust_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "0.1.0-rc3".to_string());
+
+        let mut m = HashMap::new();
+        m.insert("go".to_string(), go_version_map);
+        m.insert("python".to_string(), python_version_map);
+        m.insert("java".to_string(), java_version_map);
+        m.insert("rust".to_string(), rust_version_map);
+        m
     }
 
     #[tokio::test]
@@ -495,7 +563,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_ok());
     }
@@ -507,7 +575,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language,TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_err());
         assert!(
@@ -522,7 +590,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_ok());
     }
@@ -534,7 +602,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_err());
         assert!(
@@ -549,7 +617,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_ok());
     }
@@ -561,7 +629,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_err());
         assert!(
@@ -576,7 +644,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_ok());
     }
@@ -588,7 +656,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_err());
         assert!(
@@ -603,7 +671,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_ok());
     }
@@ -615,7 +683,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_err());
         assert!(
@@ -630,7 +698,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_ok());
     }
@@ -642,7 +710,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_err());
         assert!(
@@ -657,7 +725,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_ok());
     }
@@ -669,7 +737,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_err());
         assert!(
@@ -684,7 +752,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_ok());
     }
@@ -696,7 +764,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_err());
         assert!(
@@ -711,7 +779,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_ok());
     }
@@ -723,7 +791,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_err());
         assert!(
@@ -738,7 +806,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_ok());
     }
@@ -750,7 +818,7 @@ mod tests {
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
         let result =
-            check_sdk_compatibility(sdk_version, sdk_language, &min_supported_sdk_versions);
+            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
 
         assert!(result.is_err());
         assert!(
@@ -859,6 +927,13 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_get_container_type_from_file_valid() {
+        let file_path = PathBuf::from("/var/run/numaflow/sourcer-server-info");
+        let container_type = get_container_type(&file_path);
+        assert_eq!("sourcer", container_type.unwrap());
+    }
+
+    #[tokio::test]
     async fn test_write_server_info_success() {
         // Create a temporary directory
         let dir = tempdir().unwrap();
@@ -949,7 +1024,7 @@ mod tests {
         let _ = write_server_info(&server_info, file_path.to_str().unwrap()).await;
 
         // Call the read_server_info function
-        let result = read_server_info(file_path, cln_token).await;
+        let result = read_server_info(&file_path, cln_token).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
 
         let server_info = result.unwrap();
@@ -978,7 +1053,7 @@ mod tests {
         let _drop_guard = cln_token.clone().drop_guard();
 
         // Call the read_server_info function
-        let result = read_server_info(file_path, cln_token).await;
+        let result = read_server_info(&file_path, cln_token).await;
         assert!(result.is_err(), "Expected Err, got {:?}", result);
 
         let error = result.unwrap_err();
