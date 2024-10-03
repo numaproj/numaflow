@@ -363,7 +363,7 @@ struct TimestampedPending {
     timestamp: std::time::Instant,
 }
 
-/// `LagReader` is responsible for periodically checking the lag of the source client
+/// PendingReader is responsible for periodically checking the lag of the reader
 /// and exposing the metrics. It maintains a list of pending stats and ensures that
 /// only the most recent entries are kept.
 pub(crate) struct PendingReader<T> {
@@ -375,7 +375,7 @@ pub(crate) struct PendingReader<T> {
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 }
 
-/// LagReaderBuilder is used to build a `LagReader` instance.
+/// PendingReaderBuilder is used to build a [LagReader] instance.
 pub(crate) struct PendingReaderBuilder<T> {
     lag_reader: T,
     lag_checking_interval: Option<Duration>,
@@ -440,7 +440,7 @@ impl<T: reader::LagReader + Clone + Send + 'static> PendingReader<T> {
     }
 }
 
-/// When lag-reader is dropped, we need to clean up the pending exposer and the pending builder tasks.
+/// When the PendingReader is dropped, we need to clean up the pending exposer and the pending builder tasks.
 impl<T> Drop for PendingReader<T> {
     fn drop(&mut self) {
         if let Some(handle) = self.expose_handle.take() {
@@ -550,8 +550,6 @@ async fn calculate_pending(
 
     result
 }
-
-// TODO add tests
 
 #[cfg(test)]
 mod tests {
