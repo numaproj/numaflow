@@ -207,7 +207,7 @@ impl LagReader for UserDefinedSourceLagReader {
             .await?
             .into_inner()
             .result
-            .map_or(None, |r| Some(r.count as usize)))
+            .map(|r| r.count as usize))
     }
 }
 
