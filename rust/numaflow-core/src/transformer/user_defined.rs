@@ -1,17 +1,20 @@
 use std::collections::HashMap;
 
-use tonic::transport::Channel;
-use tonic::{Request, Streaming};
+use crate::config::config;
+use crate::error::{Error, Result};
+use crate::message::{Message, Offset};
+use crate::monovertex::sourcetransform_pb::{
+    self, source_transform_client::SourceTransformClient, SourceTransformRequest,
+    SourceTransformResponse,
+};
+use crate::shared::utils::utc_from_timestamp;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
+use tonic::{Request, Streaming};
 use tracing::warn;
-use crate::error::{Result, Error};
-use crate::message::{Message, Offset};
-use crate::monovertex::sourcetransform_pb::{self, SourceTransformRequest, SourceTransformResponse, source_transform_client::SourceTransformClient};
-use crate::shared::utils::utc_from_timestamp;
-use crate::config::config;
 
 const DROP: &str = "U+005C__DROP__";
 
@@ -216,7 +219,7 @@ mod tests {
         let mut client = SourceTransformer::new(SourceTransformClient::new(
             create_rpc_channel(sock_file).await?,
         ))
-            .await?;
+        .await?;
 
         let message = crate::message::Message {
             keys: vec!["first".into()],
@@ -234,7 +237,7 @@ mod tests {
             tokio::time::Duration::from_secs(2),
             client.transform_fn(vec![message]),
         )
-            .await??;
+        .await??;
         assert_eq!(resp.len(), 1);
 
         // we need to drop the client, because if there are any in-flight requests
@@ -291,7 +294,7 @@ mod tests {
         let mut client = SourceTransformer::new(SourceTransformClient::new(
             create_rpc_channel(sock_file).await?,
         ))
-            .await?;
+        .await?;
 
         let message = crate::message::Message {
             keys: vec!["second".into()],
