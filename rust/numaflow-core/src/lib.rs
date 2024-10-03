@@ -35,4 +35,5 @@ mod source;
 /// [Transformer]: https://numaflow.numaproj.io/user-guide/sources/transformer/overview/
 mod transformer;
 
+/// Reads from a stream.
 mod reader;
