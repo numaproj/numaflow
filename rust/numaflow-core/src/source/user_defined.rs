@@ -305,7 +305,7 @@ mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let (mut source, mut lagreader) = new_source(client, 5, 1000)
+        let (mut source, mut lag_reader) = new_source(client, 5, 1000)
             .await
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
