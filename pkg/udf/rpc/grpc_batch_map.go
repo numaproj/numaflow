@@ -150,7 +150,6 @@ loop:
 			responsePair := isb.ReadWriteMessagePair{
 				ReadMessage:   parentMessage,
 				WriteMessages: parsedResp,
-				Err:           nil,
 			}
 			udfResults = append(udfResults, responsePair)
 		}

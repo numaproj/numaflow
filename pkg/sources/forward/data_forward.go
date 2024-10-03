@@ -310,20 +310,24 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			m.Watermark = time.Time(processorWM)
 		}
 
-		concurrentTransformerProcessingStart := time.Now()
-		readWriteMessagePairs = df.applyTransformer(ctx, readMessages)
+		transformerProcessingStart := time.Now()
+		readWriteMessagePairs, err = df.applyTransformer(ctx, readMessages)
+		if err != nil {
+			df.opts.logger.Errorw("failed to apply source transformer", zap.Error(err))
+			return
+		}
 
 		df.opts.logger.Debugw("concurrent applyTransformer completed",
 			zap.Int("concurrency", df.opts.transformerConcurrency),
-			zap.Duration("took", time.Since(concurrentTransformerProcessingStart)),
+			zap.Duration("took", time.Since(transformerProcessingStart)),
 		)
 
-		metrics.SourceTransformerConcurrentProcessingTime.With(map[string]string{
+		metrics.SourceTransformerProcessingTime.With(map[string]string{
 			metrics.LabelVertex:             df.vertexName,
 			metrics.LabelPipeline:           df.pipelineName,
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 			metrics.LabelPartitionName:      df.reader.GetName(),
-		}).Observe(float64(time.Since(concurrentTransformerProcessingStart).Microseconds()))
+		}).Observe(float64(time.Since(transformerProcessingStart).Microseconds()))
 	} else {
 
 		for idx, m := range readMessages {
@@ -373,19 +377,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// let's figure out which vertex to send the results to.
 	// update the toBuffer(s) with writeMessages.
 	for _, m := range readWriteMessagePairs {
-		// Look for errors in transformer processing if we see even 1 error we return.
-		// Handling partial retrying is not worth ATM.
-		if m.Err != nil {
-			metrics.SourceTransformerError.With(map[string]string{
-				metrics.LabelVertex:             df.vertexName,
-				metrics.LabelPipeline:           df.pipelineName,
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-				metrics.LabelPartitionName:      df.reader.GetName(),
-			}).Inc()
-
-			df.opts.logger.Errorw("failed to apply source transformer", zap.Error(m.Err))
-			return
-		}
 		// for each message, we will determine where to send the message.
 		for _, message := range m.WriteMessages {
 			if err = df.whereToStep(message, messageToStep); err != nil {
@@ -646,7 +637,7 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 // applyTransformer applies the transformer and will block if there is any InternalErr. On the other hand, if this is a UserError
 // the skip flag is set. The ShutDown flag will only if there is an InternalErr and ForceStop has been invoked.
 // The UserError retry will be done on the applyTransformer.
-func (df *DataForward) applyTransformer(ctx context.Context, messages []*isb.ReadMessage) []isb.ReadWriteMessagePair {
+func (df *DataForward) applyTransformer(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	for {
 		transformResults, err := df.opts.transformer.ApplyTransform(ctx, messages)
 		if err != nil {
@@ -664,11 +655,11 @@ func (df *DataForward) applyTransformer(ctx context.Context, messages []*isb.Rea
 					metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
 					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 				}).Inc()
-				return []isb.ReadWriteMessagePair{{Err: err}}
+				return nil, err
 			}
 			continue
 		}
-		return transformResults
+		return transformResults, nil
 	}
 }
 

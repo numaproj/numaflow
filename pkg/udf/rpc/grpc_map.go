@@ -73,19 +73,29 @@ func (u *GRPCBasedMap) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	keys := readMessage.Keys
-	payload := readMessage.Body.Payload
-	parentMessageInfo := readMessage.MessageInfo
-	var req = &mappb.MapRequest{
-		Keys:      keys,
-		Value:     payload,
-		EventTime: timestamppb.New(parentMessageInfo.EventTime),
-		Watermark: timestamppb.New(readMessage.Watermark),
-		Headers:   readMessage.Headers,
+func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	requests := make([]*mappb.MapRequest, len(readMessages))
+	idToMsgMapping := make(map[string]*isb.ReadMessage)
+
+	for i, msg := range readMessages {
+		// we track the id to the message mapping to be able to match the response with the original message.
+		// message info of response should be the same as the message info of the request.
+		id := msg.ReadOffset.String()
+		idToMsgMapping[id] = msg
+		req := &mappb.MapRequest{
+			Request: &mappb.MapRequest_Request{
+				Keys:      msg.Keys,
+				Value:     msg.Body.Payload,
+				EventTime: timestamppb.New(msg.MessageInfo.EventTime),
+				Watermark: timestamppb.New(msg.Watermark),
+				Headers:   msg.Headers,
+			},
+			Id: id,
+		}
+		requests[i] = req
 	}
 
-	response, err := u.client.MapFn(ctx, req)
+	responses, err := u.client.MapFn(ctx, requests)
 	if err != nil {
 		udfErr, _ := sdkerr.FromError(err)
 		switch udfErr.ErrorKind() {
@@ -98,7 +108,7 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessag
 				Jitter:   0.1,
 				Steps:    5,
 			}, func(_ context.Context) (done bool, err error) {
-				response, err = u.client.MapFn(ctx, req)
+				responses, err = u.client.MapFn(ctx, requests)
 				if err != nil {
 					udfErr, _ = sdkerr.FromError(err)
 					switch udfErr.ErrorKind() {
@@ -144,27 +154,39 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessag
 		}
 	}
 
-	writeMessages := make([]*isb.WriteMessage, 0)
-	for index, result := range response.GetResults() {
-		keys := result.Keys
-		taggedMessage := &isb.WriteMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: parentMessageInfo,
-					Keys:        keys,
-					ID: isb.MessageID{
-						VertexName: u.vertexName,
-						Offset:     readMessage.ReadOffset.String(),
-						Index:      int32(index),
+	results := make([]isb.ReadWriteMessagePair, len(readMessages))
+	for i, resp := range responses {
+		parentMessage, ok := idToMsgMapping[resp.GetId()]
+		if !ok {
+			panic("tracker doesn't contain the message ID received from the response")
+		}
+		taggedMessages := make([]*isb.WriteMessage, len(resp.GetResults()))
+		for j, result := range resp.GetResults() {
+			keys := result.Keys
+			taggedMessage := &isb.WriteMessage{
+				Message: isb.Message{
+					Header: isb.Header{
+						MessageInfo: parentMessage.MessageInfo,
+						ID: isb.MessageID{
+							VertexName: u.vertexName,
+							Offset:     parentMessage.ReadOffset.String(),
+							Index:      int32(j),
+						},
+						Keys: keys,
+					},
+					Body: isb.Body{
+						Payload: result.Value,
 					},
 				},
-				Body: isb.Body{
-					Payload: result.Value,
-				},
-			},
-			Tags: result.Tags,
+				Tags: result.Tags,
+			}
+			taggedMessage.Headers = parentMessage.Headers
+			taggedMessages[j] = taggedMessage
 		}
-		writeMessages = append(writeMessages, taggedMessage)
+		results[i] = isb.ReadWriteMessagePair{
+			ReadMessage:   parentMessage,
+			WriteMessages: taggedMessages,
+		}
 	}
-	return writeMessages, nil
+	return results, nil
 }

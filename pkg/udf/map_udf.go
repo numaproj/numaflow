@@ -200,7 +200,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		// backward compatibility in case of version mismatch for map
 
 		// create the client and handler for map interface
-		mapClient, err := mapper.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+		mapClient, err := mapper.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create map client, %w", err)
 		}
