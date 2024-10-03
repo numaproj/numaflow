@@ -81,7 +81,7 @@ pub(crate) async fn start_metrics_server(metrics_state: MetricsState) -> JoinHan
     })
 }
 
-pub(crate) async fn create_lag_reader<T: reader::LagReader>(
+pub(crate) async fn create_pending_reader<T: reader::LagReader>(
     lag_reader_grpc_client: T,
 ) -> PendingReader<T> {
     PendingReaderBuilder::new(lag_reader_grpc_client)

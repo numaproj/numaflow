@@ -3,7 +3,7 @@ use crate::error;
 use crate::shared::utils;
 use crate::shared::utils::create_rpc_channel;
 use crate::sink::user_defined::SinkWriter;
-use crate::source::user_defined::{new_source, UserDefinedSourceLagReader};
+use crate::source::user_defined::new_source;
 use crate::transformer::user_defined::SourceTransformer;
 use forwarder::ForwarderBuilder;
 use metrics::MetricsState;
@@ -166,9 +166,9 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
     // FIXME: what to do with the handle
     utils::start_metrics_server(metrics_state).await;
 
-    // start the lag reader to publish lag metrics
-    let mut lag_reader = utils::create_lag_reader(lag_reader).await;
-    lag_reader.start().await;
+    // start the pending reader to publish pending metrics
+    let mut pending_reader = utils::create_pending_reader(lag_reader).await;
+    pending_reader.start().await;
 
     // build the forwarder
 
