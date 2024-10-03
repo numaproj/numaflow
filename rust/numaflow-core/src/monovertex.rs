@@ -3,7 +3,7 @@ use crate::error;
 use crate::shared::utils;
 use crate::shared::utils::create_rpc_channel;
 use crate::sink::user_defined::SinkWriter;
-use crate::source::user_defined::new_source;
+use crate::source::user_defined::{UserDefinedSource, UserDefinedSourceLagReader};
 use crate::transformer::user_defined::SourceTransformer;
 use forwarder::ForwarderBuilder;
 use metrics::MetricsState;
@@ -145,7 +145,14 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
     )
     .await?;
 
-    let (source_reader, lag_reader) = new_source(source_grpc_client.clone(), 500, 100).await?;
+    let source_reader = UserDefinedSource::new(
+        source_grpc_client.clone(),
+        config().batch_size as usize,
+        config().timeout_in_ms as u16,
+    )
+    .await?;
+
+    let lag_reader = UserDefinedSourceLagReader::new(source_grpc_client.clone());
 
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not

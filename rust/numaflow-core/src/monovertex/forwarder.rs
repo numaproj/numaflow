@@ -536,13 +536,7 @@ where
 mod tests {
     use std::collections::HashSet;
 
-    use chrono::Utc;
-    use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{sink, source, sourcetransform};
-    use tokio::sync::mpsc;
-    use tokio::sync::mpsc::Sender;
-    use tokio_util::sync::CancellationToken;
-
+    use crate::config::config;
     use crate::monovertex::forwarder::ForwarderBuilder;
     use crate::monovertex::sink_pb::sink_client::SinkClient;
     use crate::monovertex::source_pb::source_client::SourceClient;
@@ -551,6 +545,12 @@ mod tests {
     use crate::sink::user_defined::SinkWriter;
     use crate::source::user_defined::UserDefinedSource;
     use crate::transformer::user_defined::SourceTransformer;
+    use chrono::Utc;
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source, sourcetransform};
+    use tokio::sync::mpsc;
+    use tokio::sync::mpsc::Sender;
+    use tokio_util::sync::CancellationToken;
 
     struct SimpleSource {
         yet_to_be_acked: std::sync::RwLock<HashSet<String>>,
@@ -731,8 +731,8 @@ mod tests {
 
         let source = UserDefinedSource::new(
             SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap()),
-            500,
-            100,
+            config().batch_size as usize,
+            config().timeout_in_ms as u16,
         )
         .await
         .expect("failed to connect to source server");
