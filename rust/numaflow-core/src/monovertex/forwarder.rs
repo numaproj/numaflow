@@ -6,21 +6,20 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
 use crate::config::{config, OnFailureStrategy};
-use crate::error;
 use crate::error::Error;
 use crate::message::{Message, Offset};
 use crate::monovertex::metrics;
 use crate::monovertex::metrics::forward_metrics;
 use crate::monovertex::sink_pb::Status::{Failure, Fallback, Success};
 use crate::sink::user_defined::SinkWriter;
-use crate::source::user_defined::Source;
 use crate::transformer::user_defined::SourceTransformer;
+use crate::{error, source};
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
 /// back to the source.
-pub(crate) struct Forwarder {
-    source: Source,
+pub(crate) struct Forwarder<T> {
+    source: T,
     sink_writer: SinkWriter,
     source_transformer: Option<SourceTransformer>,
     fb_sink_writer: Option<SinkWriter>,
@@ -29,21 +28,17 @@ pub(crate) struct Forwarder {
 }
 
 /// ForwarderBuilder is used to build a Forwarder instance with optional fields.
-pub(crate) struct ForwarderBuilder {
-    source: Source,
+pub(crate) struct ForwarderBuilder<T> {
+    source: T,
     sink_writer: SinkWriter,
     cln_token: CancellationToken,
     source_transformer: Option<SourceTransformer>,
     fb_sink_writer: Option<SinkWriter>,
 }
 
-impl ForwarderBuilder {
+impl<T> ForwarderBuilder<T> {
     /// Create a new builder with mandatory fields
-    pub(crate) fn new(
-        source: Source,
-        sink_writer: SinkWriter,
-        cln_token: CancellationToken,
-    ) -> Self {
+    pub(crate) fn new(source: T, sink_writer: SinkWriter, cln_token: CancellationToken) -> Self {
         Self {
             source,
             sink_writer,
@@ -67,7 +62,7 @@ impl ForwarderBuilder {
 
     /// Build the Forwarder instance
     #[must_use]
-    pub(crate) fn build(self) -> Forwarder {
+    pub(crate) fn build(self) -> Forwarder<T> {
         let common_labels = metrics::forward_metrics_labels().clone();
         Forwarder {
             source: self.source,
@@ -80,7 +75,10 @@ impl ForwarderBuilder {
     }
 }
 
-impl Forwarder {
+impl<T> Forwarder<T>
+where
+    T: source::Source,
+{
     /// start starts the forward-a-chunk loop and exits only after a chunk has been forwarded and ack'ed.
     /// this means that, in the happy path scenario a block is always completely processed.
     /// this function will return on any error and will cause end up in a non-0 exit code.
@@ -121,13 +119,9 @@ impl Forwarder {
     /// and then acknowledge the messages back to the source.
     async fn read_and_process_messages(&mut self) -> error::Result<usize> {
         let start_time = tokio::time::Instant::now();
-        let messages = self
-            .source
-            .read(config().batch_size, config().timeout_in_ms)
-            .await
-            .map_err(|e| {
-                Error::ForwarderError(format!("Failed to read messages from source {:?}", e))
-            })?;
+        let messages = self.source.read().await.map_err(|e| {
+            Error::ForwarderError(format!("Failed to read messages from source {:?}", e))
+        })?;
 
         debug!(
             "Read batch size: {} and latency - {}ms",
@@ -542,21 +536,21 @@ impl Forwarder {
 mod tests {
     use std::collections::HashSet;
 
-    use chrono::Utc;
-    use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{sink, source, sourcetransform};
-    use tokio::sync::mpsc;
-    use tokio::sync::mpsc::Sender;
-    use tokio_util::sync::CancellationToken;
-
+    use crate::config::config;
     use crate::monovertex::forwarder::ForwarderBuilder;
     use crate::monovertex::sink_pb::sink_client::SinkClient;
     use crate::monovertex::source_pb::source_client::SourceClient;
     use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;
     use crate::shared::utils::create_rpc_channel;
     use crate::sink::user_defined::SinkWriter;
-    use crate::source::user_defined::Source;
+    use crate::source::user_defined::UserDefinedSource;
     use crate::transformer::user_defined::SourceTransformer;
+    use chrono::Utc;
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source, sourcetransform};
+    use tokio::sync::mpsc;
+    use tokio::sync::mpsc::Sender;
+    use tokio_util::sync::CancellationToken;
 
     struct SimpleSource {
         yet_to_be_acked: std::sync::RwLock<HashSet<String>>,
@@ -735,9 +729,11 @@ mod tests {
 
         let cln_token = CancellationToken::new();
 
-        let source = Source::new(SourceClient::new(
-            create_rpc_channel(source_sock_file.clone()).await.unwrap(),
-        ))
+        let source = UserDefinedSource::new(
+            SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap()),
+            config().batch_size as usize,
+            config().timeout_in_ms as u16,
+        )
         .await
         .expect("failed to connect to source server");
 
@@ -857,9 +853,11 @@ mod tests {
 
         let cln_token = CancellationToken::new();
 
-        let source = Source::new(SourceClient::new(
-            create_rpc_channel(source_sock_file.clone()).await.unwrap(),
-        ))
+        let source = UserDefinedSource::new(
+            SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap()),
+            500,
+            100,
+        )
         .await
         .expect("failed to connect to source server");
 
@@ -971,9 +969,11 @@ mod tests {
 
         let cln_token = CancellationToken::new();
 
-        let source = Source::new(SourceClient::new(
-            create_rpc_channel(source_sock_file.clone()).await.unwrap(),
-        ))
+        let source = UserDefinedSource::new(
+            SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap()),
+            500,
+            100,
+        )
         .await
         .expect("failed to connect to source server");
 

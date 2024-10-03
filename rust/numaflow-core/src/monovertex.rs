@@ -3,7 +3,7 @@ use crate::error;
 use crate::shared::utils;
 use crate::shared::utils::create_rpc_channel;
 use crate::sink::user_defined::SinkWriter;
-use crate::source::user_defined::Source;
+use crate::source::user_defined::new_source;
 use crate::transformer::user_defined::SourceTransformer;
 use forwarder::ForwarderBuilder;
 use metrics::MetricsState;
@@ -145,6 +145,13 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
     )
     .await?;
 
+    let (source_reader, lag_reader) = new_source(
+        source_grpc_client.clone(),
+        config().batch_size as usize,
+        config().timeout_in_ms as u16,
+    )
+    .await?;
+
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
     // joined.
@@ -159,12 +166,12 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
     // FIXME: what to do with the handle
     utils::start_metrics_server(metrics_state).await;
 
-    // start the lag reader to publish lag metrics
-    let mut lag_reader = utils::create_lag_reader(source_grpc_client.clone()).await;
-    lag_reader.start().await;
+    // start the pending reader to publish pending metrics
+    let mut pending_reader = utils::create_pending_reader(lag_reader).await;
+    pending_reader.start().await;
 
     // build the forwarder
-    let source_reader = Source::new(source_grpc_client.clone()).await?;
+
     let sink_writer = SinkWriter::new(sink_grpc_client.clone()).await?;
 
     let mut forwarder_builder = ForwarderBuilder::new(source_reader, sink_writer, cln_token);
