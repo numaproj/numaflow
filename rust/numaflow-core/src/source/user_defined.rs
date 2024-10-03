@@ -5,24 +5,44 @@ use crate::message::{Message, Offset};
 use crate::monovertex::source_pb;
 use crate::monovertex::source_pb::source_client::SourceClient;
 use crate::monovertex::source_pb::{
-    ack_response, read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
+    read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
 };
+use crate::reader::LagReader;
+use crate::source::Source;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
-/// SourceReader reads messages from a source.
+/// User-Defined Source to operative on custom sources.
 #[derive(Debug)]
-pub(crate) struct Source {
+pub(crate) struct UserDefinedSource {
     read_tx: mpsc::Sender<ReadRequest>,
     resp_stream: Streaming<ReadResponse>,
     ack_tx: mpsc::Sender<AckRequest>,
     ack_resp_stream: Streaming<AckResponse>,
+    num_records: usize,
+    timeout_in_ms: u16,
 }
 
-impl Source {
-    pub(crate) async fn new(mut client: SourceClient<Channel>) -> error::Result<Self> {
+/// Creates a new User-Defined Source and its corresponding Lag Reader.
+pub(crate) async fn new_source(
+    client: SourceClient<Channel>,
+    num_records: usize,
+    timeout_in_ms: u16,
+) -> error::Result<(UserDefinedSource, UserDefinedSourceLagReader)> {
+    let ud_src = UserDefinedSource::new(client.clone(), num_records, timeout_in_ms).await?;
+    let lag_reader = UserDefinedSourceLagReader::new(client);
+
+    Ok((ud_src, lag_reader))
+}
+
+impl UserDefinedSource {
+    pub(crate) async fn new(
+        mut client: SourceClient<Channel>,
+        num_records: usize,
+        timeout_in_ms: u16,
+    ) -> error::Result<Self> {
         let (read_tx, resp_stream) = Self::create_reader(&mut client).await?;
         let (ack_tx, ack_resp_stream) = Self::create_acker(&mut client).await?;
 
@@ -31,6 +51,8 @@ impl Source {
             resp_stream,
             ack_tx,
             ack_resp_stream,
+            num_records,
+            timeout_in_ms,
         })
     }
 
@@ -98,16 +120,18 @@ impl Source {
 
         Ok((ack_tx, ack_resp_stream))
     }
+}
 
-    pub(crate) async fn read(
-        &mut self,
-        num_records: u64,
-        timeout_in_ms: u32,
-    ) -> error::Result<Vec<Message>> {
+impl Source for UserDefinedSource {
+    fn name(&self) -> &'static str {
+        "user-defined-source"
+    }
+
+    async fn read(&mut self) -> error::Result<Vec<Message>> {
         let request = ReadRequest {
             request: Some(read_request::Request {
-                num_records,
-                timeout_in_ms,
+                num_records: self.num_records as u64,
+                timeout_in_ms: self.timeout_in_ms as u32,
             }),
             handshake: None,
         };
@@ -117,7 +141,7 @@ impl Source {
             .await
             .map_err(|e| SourceError(e.to_string()))?;
 
-        let mut messages = Vec::with_capacity(num_records as usize);
+        let mut messages = Vec::with_capacity(self.num_records);
 
         while let Some(response) = self.resp_stream.message().await? {
             if response.status.map_or(false, |status| status.eot) {
@@ -133,7 +157,7 @@ impl Source {
         Ok(messages)
     }
 
-    pub(crate) async fn ack(&mut self, offsets: Vec<Offset>) -> error::Result<AckResponse> {
+    async fn ack(&mut self, offsets: Vec<Offset>) -> error::Result<()> {
         let n = offsets.len();
 
         // send n ack requests
@@ -154,20 +178,46 @@ impl Source {
                 .ok_or(SourceError("failed to receive ack response".to_string()))?;
         }
 
-        Ok(AckResponse {
-            result: Some(ack_response::Result { success: Some(()) }),
-            handshake: None,
-        })
+        Ok(())
+    }
+
+    fn partitions(&self) -> Vec<u16> {
+        todo!()
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct UserDefinedSourceLagReader {
+    source_client: SourceClient<Channel>,
+}
+
+impl UserDefinedSourceLagReader {
+    fn new(source_client: SourceClient<Channel>) -> Self {
+        Self { source_client }
+    }
+}
+
+impl LagReader for UserDefinedSourceLagReader {
+    async fn pending(&mut self) -> error::Result<Option<usize>> {
+        Ok(self
+            .source_client
+            .pending_fn(Request::new(()))
+            .await?
+            .into_inner()
+            .result
+            .map(|r| r.count as usize))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     use std::collections::HashSet;
 
     use crate::monovertex::source_pb::source_client::SourceClient;
     use crate::shared::utils::create_rpc_channel;
-    use crate::source::user_defined::Source;
+
     use chrono::Utc;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -253,19 +303,21 @@ mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let mut source = Source::new(client)
+        let (mut source, mut lag_reader) = new_source(client, 5, 1000)
             .await
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
 
-        let messages = source.read(5, 1000).await.unwrap();
+        let messages = source.read().await.unwrap();
         assert_eq!(messages.len(), 5);
 
         let response = source
             .ack(messages.iter().map(|m| m.offset.clone()).collect())
-            .await
-            .unwrap();
-        assert!(response.result.unwrap().success.is_some());
+            .await;
+        assert!(response.is_ok());
+
+        let pending = lag_reader.pending().await.unwrap();
+        assert_eq!(pending, Some(0));
 
         // we need to drop the client, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
