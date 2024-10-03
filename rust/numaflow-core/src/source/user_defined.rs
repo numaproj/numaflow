@@ -25,6 +25,18 @@ pub(crate) struct UserDefinedSource {
     timeout_in_ms: u16,
 }
 
+/// Creates a new User-Defined Source and its corresponding Lag Reader.
+pub(crate) async fn new_source(
+    client: SourceClient<Channel>,
+    num_records: usize,
+    timeout_in_ms: u16,
+) -> error::Result<(UserDefinedSource, UserDefinedSourceLagReader)> {
+    let ud_src = UserDefinedSource::new(client.clone(), num_records, timeout_in_ms).await?;
+    let lag_reader = UserDefinedSourceLagReader::new(client);
+
+    Ok((ud_src, lag_reader))
+}
+
 impl UserDefinedSource {
     pub(crate) async fn new(
         mut client: SourceClient<Channel>,
@@ -180,7 +192,7 @@ pub(crate) struct UserDefinedSourceLagReader {
 }
 
 impl UserDefinedSourceLagReader {
-    pub(crate) fn new(source_client: SourceClient<Channel>) -> Self {
+    fn new(source_client: SourceClient<Channel>) -> Self {
         Self { source_client }
     }
 }
@@ -291,20 +303,18 @@ mod tests {
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let mut source = UserDefinedSource::new(client.clone(), 5, 1000)
+        let (mut source, mut lag_reader) = new_source(client, 5, 1000)
             .await
+            .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
-
-        let mut lag_reader = UserDefinedSourceLagReader::new(client.clone());
 
         let messages = source.read().await.unwrap();
         assert_eq!(messages.len(), 5);
 
         let response = source
             .ack(messages.iter().map(|m| m.offset.clone()).collect())
-            .await
-            .unwrap();
-        assert_eq!(response, ());
+            .await;
+        assert!(response.is_ok());
 
         let pending = lag_reader.pending().await.unwrap();
         assert_eq!(pending, Some(0));
