@@ -1591,7 +1591,6 @@ dependencies = [
  "log",
  "numaflow 0.1.1",
  "numaflow-models",
- "once_cell",
  "parking_lot",
  "pep440_rs",
  "prometheus-client",

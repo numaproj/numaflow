@@ -25,7 +25,6 @@ import (
 	"math"
 	"net/http"
 	"reflect"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -94,7 +93,7 @@ func WithReadOnlyMode() HandlerOption {
 type handler struct {
 	kubeClient            kubernetes.Interface
 	metricsClient         *metricsversiond.Clientset
-	prometheusClient      *PrometheusClient
+	prometheusClient      MetricServerClientInterface
 	numaflowClient        dfv1clients.NumaflowV1alpha1Interface
 	daemonClientsCache    *lru.Cache[string, daemonclient.DaemonClient]
 	mvtDaemonClientsCache *lru.Cache[string, mvtdaemonclient.MonoVertexDaemonClient]
@@ -1189,37 +1188,18 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
-func formatArrayLabels(arrLabels []interface{}) string {
-	var labelSelectors []string
-	for _, value := range arrLabels {
-		labelSelectors = append(labelSelectors, fmt.Sprintf(`%s`, value))
-	}
-	return strings.Join(labelSelectors, ",")
-}
-
-func formatMapLabels(mapLabels map[string]interface{}) string {
-	var labelSelectors []string
-	for key, value := range mapLabels {
-		labelSelectors = append(labelSelectors, fmt.Sprintf(`%s="%s"`, key, value))
-	}
-	return strings.Join(labelSelectors, ",")
-}
-
 func (h *handler) GetMetricData(c *gin.Context) {
 
-	if h.prometheusClient == nil || h.prometheusClient.Client == nil {
-		h.respondWithError(c, "Prometheus client not set.")
+	_, err := h.prometheusClient.GetClient()
+	if err != nil {
+		h.respondWithError(c, err.Error())
 		return
 	}
-
-	var index int = -1
-	var fieldsMap = make(map[string]any)
-
 	var (
-		requestBody     map[string]any
+		requestBody     MetricsRequestBody
 		startTimeString string
 		endTimeString   string
-		pattern         PatternData
+		pattern         *PatternData
 	)
 
 	if err := bindJson(c, &requestBody); err != nil {
@@ -1227,85 +1207,40 @@ func (h *handler) GetMetricData(c *gin.Context) {
 		return
 	}
 
-	// find index and pattern from config based on req pattern name
-	for i, p := range h.prometheusClient.ConfigData {
-		if p.Name == requestBody["name"] {
-			index = i
-			pattern = p
+	patternName := requestBody.Name
+	if patternName == "" {
+		h.respondWithError(c, "request does not have pattern name")
+		return
+	}
+
+	// find pattern from config based on req pattern name
+	for _, p := range h.prometheusClient.GetConfigData() {
+		if p.Name == patternName {
+			pattern = &p
 			break
 		}
 	}
 
-	// throw error if pattern name not found in the config
-	if index == -1 {
-		h.respondWithError(c, fmt.Sprintf("pattern name %s not supported yet", requestBody["name"]))
+	// Error if pattern name not found in the config
+	if pattern == nil {
+		h.respondWithError(c, fmt.Sprintf("pattern name %s not supported yet", patternName))
 		return
 	}
 
-	// check if expression exists for the pattern
-	if pattern.Expression == "" {
-		h.respondWithError(c, fmt.Sprintf("pattern name %s does not have any expression", requestBody["name"]))
-		return
+	promQlBuilder := getBuilder()
+	defer putBuilder(promQlBuilder)
+
+	promQlBuilder.PopulateBuilder(requestBody)
+	promQuery := promQlBuilder.Build()
+
+	startTimeString = requestBody.StartTime
+	endTimeString = requestBody.EndTime
+
+	if startTimeString == "" {
+		startTimeString = time.Now().Add(-30 * time.Minute).Format(time.RFC3339)
 	}
-
-	// get expression for the pattern
-	expr := pattern.Expression
-
-	// Regular expression to match fields starting with '$'
-	re := regexp.MustCompile(`\$(\w+)`)
-
-	// Find all matches in the expression
-	matches := re.FindAllStringSubmatch(expr, -1)
-
-	// Generic impl: Extract and map the fields -> backend expect these fields in the request body
-	for _, match := range matches {
-		if len(match) > 1 {
-			if _, ok := requestBody[match[1]]; !ok {
-				h.respondWithError(c, fmt.Sprintf("req body doesnt have %s field", match[1]))
-				return
-			}
-			fieldsMap[match[1]] = requestBody[match[1]]
-		}
-	}
-
-	/* Generic promql builder impl: Replaces variables in the pattern expression.
-	   Variables in the expr are expected in req body. Note that if a variable is a map,
-	   resulting string would be "key: value, key: value", if its an array then "val_1,val_2"
-	   For eg: filter values should be a map and group by values should be an array
-	*/
-	promQuery := re.ReplaceAllStringFunc(expr, func(match string) string {
-		field := match[1:] // Remove '$'
-		value, ok := fieldsMap[field]
-		if !ok {
-			return match // Keep unmatched variables as is
-		}
-
-		// get the desired string based on type of value
-		switch v := value.(type) {
-		case string:
-			return v
-		case float64:
-			return fmt.Sprintf("%f", v)
-		case int64:
-			return fmt.Sprintf("%d", v)
-		case map[string]any:
-			return formatMapLabels(v)
-		case []any:
-			return formatArrayLabels(v)
-		default:
-			return match // Handle other types if needed
-		}
-	})
-
-	startTimeString, ok := requestBody["from"].(string)
-	if !ok {
-		h.respondWithError(c, "start time should be a RFC339 string")
-		return
-	}
-	endTimeString, ok = requestBody["to"].(string)
-	if !ok {
-		h.respondWithError(c, "end time should be a RFC339 string")
-		return
+	if endTimeString == "" {
+		endTimeString = time.Now().Format(time.RFC3339)
 	}
 
 	startTime, _ := time.Parse(time.RFC3339, startTimeString)
@@ -1317,7 +1252,13 @@ func (h *handler) GetMetricData(c *gin.Context) {
 		Step:  time.Minute, // step size 1 min
 	}
 
-	result, _, err := h.prometheusClient.Api.QueryRange(context.Background(), promQuery, r)
+	api, err := h.prometheusClient.GetClientApi()
+	if err != nil {
+		h.respondWithError(c, err.Error())
+		return
+	}
+
+	result, _, err := api.QueryRange(context.Background(), promQuery, r)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("error in prometheus query %v", err))
 		return
