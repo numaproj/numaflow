@@ -145,7 +145,7 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
     )
     .await?;
 
-    let (source_reader, lag_reader) = new_source(
+    let (source_read, source_ack, lag_reader) = new_source(
         source_grpc_client.clone(),
         config().batch_size as usize,
         config().timeout_in_ms as u16,
@@ -174,7 +174,8 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
 
     let sink_writer = SinkWriter::new(sink_grpc_client.clone()).await?;
 
-    let mut forwarder_builder = ForwarderBuilder::new(source_reader, sink_writer, cln_token);
+    let mut forwarder_builder =
+        ForwarderBuilder::new(source_read, source_ack, sink_writer, cln_token);
 
     // add transformer if exists
     if let Some(transformer_grpc_client) = transformer_grpc_client {
