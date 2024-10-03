@@ -105,7 +105,10 @@ test-coverage:
 
 .PHONY: test-coverage-with-isb
 test-coverage-with-isb:
-	go test -covermode=atomic -coverprofile=test/profile.cov -tags=isb_redis $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
+	$(eval $@_START := $(shell date +%s))
+	$(eval $@_TEST_FILES := $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/))
+	@echo "Discovered test files in $$(($$(date +%s)-$($@_START))) seconds"
+	go test -timeout 8m -covermode=atomic -coverprofile=test/profile.cov -tags=isb_redis $($@_TEST_FILES)
 	go tool cover -func=test/profile.cov
 
 .PHONY: test-code
