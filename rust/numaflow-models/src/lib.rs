@@ -7,6 +7,4 @@ extern crate serde_json;
 extern crate url;
 
 pub mod apis;
-
-#[allow(clippy::all)]
 pub mod models;
