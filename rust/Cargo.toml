@@ -1,4 +1,10 @@
-workspace = { members = ["backoff", "numaflow-models", "servesink", "serving", "numaflow-core"] }
+workspace = { members = [
+    "backoff",
+    "numaflow-models",
+    "servesink",
+    "serving",
+    "numaflow-core",
+] }
 
 [[bin]]
 name = "numaflow"
