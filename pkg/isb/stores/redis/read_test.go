@@ -141,6 +141,7 @@ func TestRedisCheckBacklog(t *testing.T) {
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 	f, err := forward.NewInterStepDataForward(vertexInstance, rqr, toSteps, forwardReadWritePerformance{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithReadBatchSize(10), forward.WithUDFUnaryMap(forwardReadWritePerformance{}))
+	assert.NoError(t, err)
 
 	stopped := f.Start()
 	// validate the length of the toStep stream.
@@ -307,7 +308,7 @@ func (f forwardReadWritePerformance) WhereTo(_ []string, _ []string, _ string) (
 	}}, nil
 }
 
-func (f forwardReadWritePerformance) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f forwardReadWritePerformance) ApplyMap(ctx context.Context, message []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	return testutils.CopyUDFTestApply(ctx, "testVertex", message)
 }
 
@@ -473,7 +474,7 @@ func (suite *ReadWritePerformance) TestReadWriteLatencyPipelining() {
 }
 
 func getPercentiles(t *testing.T, latency []float64) string {
-	min, err := stats.Min(latency)
+	mi, err := stats.Min(latency)
 	assert.NoError(t, err)
 	p50, err := stats.Percentile(latency, 50)
 	assert.NoError(t, err)
@@ -485,10 +486,10 @@ func getPercentiles(t *testing.T, latency []float64) string {
 	assert.NoError(t, err)
 	p99, err := stats.Percentile(latency, 99)
 	assert.NoError(t, err)
-	max, err := stats.Max(latency)
+	mx, err := stats.Max(latency)
 	assert.NoError(t, err)
 
-	return fmt.Sprintf("min=%f p50=%f p75=%f p90=%f p95=%f p99=%f max=%f", min, p50, p75, p90, p95, p99, max)
+	return fmt.Sprintf("min=%f p50=%f p75=%f p90=%f p95=%f p99=%f max=%f", mi, p50, p75, p90, p95, p99, mx)
 }
 
 // writeTestMessages is used to add some dummy messages using XADD
