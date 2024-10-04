@@ -722,8 +722,8 @@ mod tests {
                 expose_pending_metrics(refresh_interval, pending_stats).await;
             }
         });
-        // We use tokio::time::interval() as ticker in the expose_pending_metrics() function.
-        // The first tick will happen immediately, so we need to wait for refresh_interval for the first iteration to complete.
+        // We use tokio::time::interval() as the ticker in the expose_pending_metrics() function.
+        // The first tick happens immediately, so we don't need to wait for the refresh_interval for the first iteration to complete.
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         // Get the stored values for all time intevals
