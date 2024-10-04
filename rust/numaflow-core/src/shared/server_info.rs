@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -190,12 +190,12 @@ fn human_readable(ver: &str) -> String {
         return String::new();
     }
     // semver
-    if ver.ends_with("-z") {
-        return ver[..ver.len() - 2].to_string();
+    if let Some(version) = ver.strip_suffix("-z") {
+        return version.to_string();
     }
     // PEP 440
-    if ver.ends_with("rc100") {
-        return ver[..ver.len() - 5].to_string();
+    if let Some(version) = ver.strip_suffix("rc100") {
+        return version.to_string();
     }
     ver.to_string()
 }
@@ -265,7 +265,7 @@ fn trim_after_dash(input: &str) -> &str {
 
 /// Extracts the container type from the server info file.
 /// The file name is in the format of <container_type>-server-info.
-fn get_container_type(server_info_file: &PathBuf) -> Option<&str> {
+fn get_container_type(server_info_file: &Path) -> Option<&str> {
     let file_name = server_info_file.file_name()?;
     let container_type = file_name.to_str()?.trim_end_matches("-server-info");
     if container_type.is_empty() {
