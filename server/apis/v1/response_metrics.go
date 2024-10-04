@@ -14,24 +14,18 @@ const (
 	metricsProxyConfigPath = "/etc/numaflow/metrics/config.yaml"
 )
 
-type FunctionStruct struct {
-	Name string   `json:"name" yaml:"name"`
-	Args []string `json:"args" yaml:"args"`
-}
 type MetricsRequestBody struct {
-	Name          string            `json:"name"`
+	PatternName string `json:"pattern_name"`
+	// required because a pattern can have multiple metric_names
 	MetricName    string            `json:"metric_name"`
-	Labels        map[string]string `json:"labels"`
+	FilterLabels  map[string]string `json:"filter_labels"`
 	GroupByLabels []string          `json:"group_by_labels"`
-	Aggregator    string            `json:"aggregator"`
-	RangeVector   string            `json:"range_vector"`
+	Duration      string            `json:"duration"`
+	Quantile      string            `json:"quantile_percentile"`
 	StartTime     string            `json:"start_time"`
 	EndTime       string            `json:"end_time"`
-	InnerFunction string            `json:"inner_function"`
-	Function      FunctionStruct    `json:"function"`
 }
 
-// To Do: Dynamically get labels for a metric from server
 type MetricData struct {
 	Name string `yaml:"metric_name"`
 	// array of supported filter labels.
@@ -40,15 +34,14 @@ type MetricData struct {
 	GroupByLabels []string `yaml:"group_by_labels"`
 }
 type PatternData struct {
-	Name          string         `yaml:"name" json:"name"`
-	Object        string         `yaml:"object" json:"object"`
-	Title         string         `yaml:"title"`
-	Description   string         `yaml:"description"`
-	Expression    *string        `yaml:"expr"`
-	RangeVector   string         `yaml:"rangeVector"`
-	Metrics       []MetricData   `yaml:"metrics"`
-	InnerFunction string         `yaml:"inner_function"`
-	Function      FunctionStruct `yaml:"function"`
+	Name        string       `yaml:"name" json:"name"`
+	Object      string       `yaml:"object" json:"object"`
+	Title       string       `yaml:"title"`
+	Description string       `yaml:"description"`
+	Expression  *string      `yaml:"expr"`
+	Duration    []string     `yaml:"duration"`
+	Metrics     []MetricData `yaml:"metrics"`
+	Quantile    []string     `yaml:"quantile_percentile"`
 }
 
 type PrometheusConfig struct {
@@ -58,22 +51,18 @@ type PrometheusConfig struct {
 	Patterns []PatternData `yaml:"patterns"`
 }
 
-type MetricServerClientInterface interface {
-	GetClient() (api.Client, error)
-	GetClientApi() (v1.API, error)
+type PrometheusClientInterface interface {
+	GetClientAndApi() (api.Client, v1.API, error)
 	GetConfigData() []PatternData
 }
 
 type PrometheusClient struct {
-	// prometheus metric config from yaml
 	ConfigData []PatternData
-	// prom client
-	Client api.Client
-	// prom client API to query data
-	Api v1.API
+	Client     api.Client
+	Api        v1.API
 }
 
-func NewPrometheusClient(config *PrometheusConfig) MetricServerClientInterface {
+func NewPrometheusClient(config *PrometheusConfig) PrometheusClientInterface {
 	if config == nil || config.ServerUrl == "" {
 		return &PrometheusClient{}
 	}
@@ -91,18 +80,11 @@ func NewPrometheusClient(config *PrometheusConfig) MetricServerClientInterface {
 	}
 }
 
-func (pc *PrometheusClient) GetClient() (api.Client, error) {
-	if pc != nil && pc.Client != nil {
-		return pc.Client, nil
+func (pc *PrometheusClient) GetClientAndApi() (api.Client, v1.API, error) {
+	if pc != nil && pc.Client != nil && pc.Api != nil {
+		return pc.Client, pc.Api, nil
 	}
-	return nil, fmt.Errorf("prometheus client not set")
-}
-
-func (pc *PrometheusClient) GetClientApi() (v1.API, error) {
-	if pc != nil && pc.Api != nil {
-		return pc.Api, nil
-	}
-	return nil, fmt.Errorf("prometheus api not set")
+	return nil, nil, fmt.Errorf("prometheus client/api not set")
 }
 
 func (pc *PrometheusClient) GetConfigData() []PatternData {
@@ -119,7 +101,6 @@ func loadPrometheusMetricConfig() *PrometheusConfig {
 		err        error
 	)
 
-	// read prometheus metric config yaml from volume mount path
 	data, err = os.ReadFile(metricsProxyConfigPath)
 	if err != nil {
 		return nil

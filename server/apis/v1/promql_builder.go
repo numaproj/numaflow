@@ -2,25 +2,75 @@ package v1
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 )
 
 type PromQlBuilder struct {
-	metricName     string
-	labels         map[string]string
-	rangeVector    string
-	aggregator     string
-	groubByFilters []string
-	innerFunction  string
-	function       string
+	PlaceHolders map[string]string
+	Expression   string
+}
+
+func formatArrayLabels(labels []string) string {
+	if len(labels) == 0 {
+		return ""
+	}
+	if len(labels) == 1 {
+		return labels[0]
+	}
+	var builder strings.Builder
+	first := true
+
+	for _, v := range labels {
+		builder.WriteString(v)
+		if first {
+			builder.WriteString(", ")
+		}
+		first = false
+	}
+	return builder.String()
+}
+
+// builds key, val pair string for labels
+func formatMapLabels(labels map[string]string) string {
+	if len(labels) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	first := true
+
+	for k, v := range labels {
+		if !first {
+			builder.WriteString(", ")
+		}
+		builder.WriteString(fmt.Sprintf("%s= \"%s\"", k, v))
+		first = false
+	}
+	return builder.String()
+}
+
+// throws err if any required placeholder in expr is not present in req body
+func substitutePlaceHolders(expr string, placeholders map[string]string) (string, error) {
+	re := regexp.MustCompile(`\$(\w+)`)
+	matches := re.FindAllStringSubmatch(expr, -1)
+
+	for _, match := range matches {
+		key := match[0]
+		val, ok := placeholders[key]
+		if !ok || val == "" {
+			return "", fmt.Errorf("req body doesn't have %s field", match[1])
+		}
+		expr = strings.Replace(expr, key, val, -1)
+	}
+	return expr, nil
 }
 
 // NewPromQlBuilder creates a new PromQlBuilder instance
 func NewPromQlBuilder() *PromQlBuilder {
 	return &PromQlBuilder{
-		labels:         make(map[string]string),
-		groubByFilters: make([]string, 0),
+		PlaceHolders: make(map[string]string),
+		Expression:   "",
 	}
 }
 
@@ -35,154 +85,33 @@ func getBuilder() *PromQlBuilder {
 }
 
 func putBuilder(b *PromQlBuilder) {
-	b.metricName = "" // Reset the builder
-	b.innerFunction = ""
-	b.labels = make(map[string]string)
-	b.rangeVector = ""
-	b.aggregator = ""
-	b.groubByFilters = make([]string, 0)
-	b.function = ""
+	b.Expression = ""
+	b.PlaceHolders = make(map[string]string)
 	builderPool.Put(b)
 }
 
-func (b *PromQlBuilder) WithMetricName(name string) *PromQlBuilder {
-	b.metricName = name
+// populate placeholders and expression with req body and pattern expr
+func (b *PromQlBuilder) PopulateBuilder(requestBody MetricsRequestBody, expr string) *PromQlBuilder {
+	b.Expression = expr
+	b.PlaceHolders = map[string]string{
+		"$metric_name":         requestBody.MetricName,
+		"$filter_labels":       formatMapLabels(requestBody.FilterLabels),
+		"$group_by_labels":     formatArrayLabels(requestBody.GroupByLabels),
+		"$quantile_percentile": requestBody.Quantile,
+		"$duration":            requestBody.Duration,
+	}
 	return b
 }
 
-// WithLabels adds  labels to the PromQL query
-func (b *PromQlBuilder) WithLabels(key, value string) *PromQlBuilder {
-	b.labels[key] = value
-	return b
-}
-
-// WithRangeVector adds a range vector to the PromQL query
-func (b *PromQlBuilder) WithRangeVector(rangeVector string) *PromQlBuilder {
-	b.rangeVector = rangeVector
-	return b
-}
-
-// WithAggregator adds an aggregator to the PromQL query
-func (b *PromQlBuilder) WithAggregator(aggregator string) *PromQlBuilder {
-	if aggregator == "" {
-		return b
+// Build constructs the PromQL query string
+func (b *PromQlBuilder) Build() (string, error) {
+	var query string
+	if b.Expression == "" {
+		return "", fmt.Errorf("expr not set for the pattern")
 	}
-	b.aggregator = aggregator
-	return b
-}
-
-// WithGroupByFilter adds group by filters to the PromQL query
-func (b *PromQlBuilder) WithGroupByFilters(filters []string) *PromQlBuilder {
-	if len(filters) == 0 {
-		return b
+	query, err := substitutePlaceHolders(b.Expression, b.PlaceHolders)
+	if err != nil {
+		return "", fmt.Errorf("error: %w", err)
 	}
-	b.groubByFilters = make([]string, 0)
-	b.groubByFilters = append(b.groubByFilters, filters...)
-	return b
-}
-
-// Add Inner functions like "rate"
-func (b *PromQlBuilder) WithInnerFunction(function string) *PromQlBuilder {
-	if function == "" {
-		return b
-	}
-	var innerFnStr strings.Builder
-	innerFnStr.WriteString(function)
-	b.innerFunction = innerFnStr.String()
-	return b
-}
-
-// WithFunction adds a function to the PromQL query like histogram_quantile with args like quantiles(0.99)
-func (b *PromQlBuilder) WithFunction(functionName string, args ...string) *PromQlBuilder {
-	if functionName == "" {
-		return b
-	}
-	var argsStr strings.Builder
-	for i, arg := range args {
-		if i > 0 {
-			argsStr.WriteString(", ")
-		}
-		argsStr.WriteString(arg)
-	}
-	b.function = fmt.Sprintf("%s(%s,", functionName, argsStr.String())
-	return b
-}
-
-func (b *PromQlBuilder) PopulateBuilder(requestBody MetricsRequestBody) *PromQlBuilder {
-	b.WithMetricName(requestBody.MetricName)
-	for k, v := range requestBody.Labels {
-		b.WithLabels(k, v)
-	}
-	b.WithInnerFunction(requestBody.InnerFunction)
-	b.WithRangeVector(requestBody.RangeVector)
-	b.WithAggregator(requestBody.Aggregator)
-	b.WithGroupByFilters(requestBody.GroupByLabels)
-	b.WithFunction(requestBody.Function.Name, requestBody.Function.Args...)
-	return b
-}
-
-/*
-Build constructs the PromQL query string
-
-# All below queries are valid queries
-
-1. query: metric name + labels
-2. inner_query: inner_function(eg: rate) + query(in point 1) + range vector
-3. outer_query w/o aggregator: function + args + 2/1
-4. outer_query with aggregator: function + args + aggregator query + 2/1
-*/
-
-func (b *PromQlBuilder) Build() string {
-
-	var query strings.Builder
-	query.WriteString(b.metricName)
-	if len(b.labels) > 0 {
-		query.WriteString("{")
-		firstLabel := true
-		for k, v := range b.labels {
-			if !firstLabel {
-				query.WriteString(",")
-			}
-			query.WriteString(k)
-			query.WriteString("=\"")
-			query.WriteString(v)
-			query.WriteString("\"")
-			firstLabel = false
-		}
-		query.WriteString("}")
-	}
-
-	var innerQuery strings.Builder
-	if b.innerFunction != "" && b.rangeVector != "" {
-		innerQuery.WriteString(b.innerFunction)
-		innerQuery.WriteString("(" + query.String() + "[" + b.rangeVector + "]" + ")")
-	} else {
-		innerQuery.WriteString(query.String())
-	}
-
-	var aggregatorQuery strings.Builder
-	if b.aggregator != "" && len(b.groubByFilters) > 0 {
-		aggregatorQuery.WriteString(b.aggregator)
-		aggregatorQuery.WriteString(" by(")
-		for _, filter := range b.groubByFilters {
-			aggregatorQuery.WriteString(filter + ", ")
-		}
-		aggregatorQuery.WriteString("le) ")
-	}
-
-	var outerQuery strings.Builder
-	if b.function != "" {
-		outerQuery.WriteString(b.function)
-		outerQuery.WriteString(aggregatorQuery.String())
-	}
-	if outerQuery.Len() > 0 {
-		outerQuery.WriteString("(")
-		outerQuery.WriteString(innerQuery.String())
-		outerQuery.WriteString("))")
-
-	} else {
-		outerQuery.WriteString(innerQuery.String())
-	}
-
-	return outerQuery.String()
+	return query, nil
 }

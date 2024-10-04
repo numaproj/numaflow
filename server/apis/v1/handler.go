@@ -93,7 +93,7 @@ func WithReadOnlyMode() HandlerOption {
 type handler struct {
 	kubeClient            kubernetes.Interface
 	metricsClient         *metricsversiond.Clientset
-	prometheusClient      MetricServerClientInterface
+	prometheusClient      PrometheusClientInterface
 	numaflowClient        dfv1clients.NumaflowV1alpha1Interface
 	daemonClientsCache    *lru.Cache[string, daemonclient.DaemonClient]
 	mvtDaemonClientsCache *lru.Cache[string, mvtdaemonclient.MonoVertexDaemonClient]
@@ -1190,72 +1190,64 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 
 func (h *handler) GetMetricData(c *gin.Context) {
 
-	_, err := h.prometheusClient.GetClient()
+	_, api, err := h.prometheusClient.GetClientAndApi()
 	if err != nil {
 		h.respondWithError(c, err.Error())
 		return
 	}
 	var (
-		requestBody     MetricsRequestBody
-		startTimeString string
-		endTimeString   string
-		pattern         *PatternData
+		pattern     *PatternData
+		requestBody MetricsRequestBody
 	)
 
 	if err := bindJson(c, &requestBody); err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body, %s", err.Error()))
+		h.respondWithError(c, fmt.Sprintf("error in decoding JSON req body %v", err))
 		return
 	}
 
-	patternName := requestBody.Name
-	if patternName == "" {
+	if requestBody.PatternName == "" {
 		h.respondWithError(c, "request does not have pattern name")
 		return
 	}
-
 	// find pattern from config based on req pattern name
 	for _, p := range h.prometheusClient.GetConfigData() {
-		if p.Name == patternName {
+		if p.Name == requestBody.PatternName {
 			pattern = &p
 			break
 		}
 	}
-
 	// Error if pattern name not found in the config
 	if pattern == nil {
-		h.respondWithError(c, fmt.Sprintf("pattern name %s not supported yet", patternName))
+		h.respondWithError(c, fmt.Sprintf("pattern name %s not supported yet", requestBody.PatternName))
 		return
 	}
 
 	promQlBuilder := getBuilder()
 	defer putBuilder(promQlBuilder)
 
-	promQlBuilder.PopulateBuilder(requestBody)
-	promQuery := promQlBuilder.Build()
+	promQlBuilder.PopulateBuilder(requestBody, *pattern.Expression)
+	promQuery, err := promQlBuilder.Build()
 
-	startTimeString = requestBody.StartTime
-	endTimeString = requestBody.EndTime
-
-	if startTimeString == "" {
-		startTimeString = time.Now().Add(-30 * time.Minute).Format(time.RFC3339)
-	}
-	if endTimeString == "" {
-		endTimeString = time.Now().Format(time.RFC3339)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("error in building promql %v", err))
+		return
 	}
 
-	startTime, _ := time.Parse(time.RFC3339, startTimeString)
-	endTime, _ := time.Parse(time.RFC3339, endTimeString)
+	// default start and end times
+	if requestBody.StartTime == "" {
+		requestBody.StartTime = time.Now().Add(-30 * time.Minute).Format(time.RFC3339)
+	}
+	if requestBody.EndTime == "" {
+		requestBody.EndTime = time.Now().Format(time.RFC3339)
+	}
+
+	startTime, _ := time.Parse(time.RFC3339, requestBody.StartTime)
+	endTime, _ := time.Parse(time.RFC3339, requestBody.EndTime)
 
 	r := v1.Range{
 		Start: startTime,
 		End:   endTime,
-		Step:  time.Minute, // step size 1 min
-	}
-
-	api, err := h.prometheusClient.GetClientApi()
-	if err != nil {
-		h.respondWithError(c, err.Error())
-		return
+		Step:  time.Minute,
 	}
 
 	result, _, err := api.QueryRange(context.Background(), promQuery, r)

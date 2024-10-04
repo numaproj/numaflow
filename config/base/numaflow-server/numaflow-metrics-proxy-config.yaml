@@ -11,22 +11,21 @@ data:
       title: Processing Time Latency
       description: This query pattern is for P99,P90 and P50 quantiles for a mono-vertex across different dimensions
       expr: |
-        $function_name($args, $aggregator by($group_by_labels,le) ($inner_function($metric_name{$filter_labels}[$rangeVector])))
-      metrics:
+        histogram_quantile($quantile_percentile, sum by($group_by_labels,le) (rate($metric_name{$filter_labels}[$duration])))
+      metrics: 
         - metric_name: monovtx_processing_time_bucket
           filter_labels:
             - namespace
-            - mvtx-name
+            - mvtx_name
             - pod
           group_by_labels:
             - mvtx_name
             - pod
-      inner_function: rate
-      function:
-        name: histogram_quantile
-        args:
-          - 0.99
-          - 0.90
-          - 0.50
-      rangeVector: 5m
-      aggregator: sum
+      quantile_percentile:
+        - 0.99
+        - 0.95
+        - 0.90
+        - 0.50
+      duration: 
+        - 5m
+        - 10m
