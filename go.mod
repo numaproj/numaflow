@@ -1,6 +1,6 @@
 module github.com/numaproj/numaflow
 
-go 1.23.1
+go 1.22.7
 
 require (
 	github.com/IBM/sarama v1.43.2
@@ -61,7 +61,7 @@ require (
 	k8s.io/apimachinery v0.31.0
 	k8s.io/client-go v0.31.0
 	k8s.io/code-generator v0.31.0
-	k8s.io/gengo v0.0.0-20230829151522-9cce18d56c01
+	k8s.io/gengo v0.0.0-20240911193312-2b36238f13e9
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340
 	k8s.io/metrics v0.23.3
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8

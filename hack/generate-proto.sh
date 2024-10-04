@@ -52,12 +52,18 @@ go install -mod=vendor ./vendor/github.com/grpc-ecosystem/grpc-gateway/v2/protoc
 go install -mod=vendor ./vendor/golang.org/x/tools/cmd/goimports
 go install -mod=vendor ./vendor/k8s.io/code-generator/cmd/go-to-protobuf
 
-export GO111MODULE="off"
+export GO111MODULE="on"
+
+# go-to-protobuf expects dependency proto files to be in $GOPATH/src. Copy them there.
+#rm -rf "${GOPATH}/src/github.com/gogo/protobuf" && mkdir -p "${GOPATH}/src/github.com/gogo" && cp -r "${FAKE_REPOPATH}/vendor/github.com/gogo/protobuf" "${GOPATH}/src/github.com/gogo"
+rm -rf "${GOPATH}/src/k8s.io/apimachinery" && mkdir -p "${GOPATH}/src/k8s.io" && cp -r "${FAKE_REPOPATH}/vendor/k8s.io/apimachinery" "${GOPATH}/src/k8s.io"
+rm -rf "${GOPATH}/src/k8s.io/api" && mkdir -p "${GOPATH}/src/k8s.io" && cp -r "${FAKE_REPOPATH}/vendor/k8s.io/api" "${GOPATH}/src/k8s.io"
 
 go-to-protobuf \
         --go-header-file=./hack/boilerplate/boilerplate.go.txt \
         --packages=github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1 \
-        --apimachinery-packages=+k8s.io/apimachinery/pkg/util/intstr,+k8s.io/apimachinery/pkg/api/resource,k8s.io/apimachinery/pkg/runtime/schema,+k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/api/core/v1,k8s.io/api/policy/v1beta1 \
+        --apimachinery-packages=+k8s.io/apimachinery/pkg/util/intstr,+k8s.io/apimachinery/pkg/api/resource,+k8s.io/apimachinery/pkg/runtime/schema,+k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/api/core/v1,k8s.io/api/policy/v1beta1 \
+        --output-dir="${GOPATH}/src/" \
         --proto-import ./vendor
 
 # Following 2 proto files are needed
