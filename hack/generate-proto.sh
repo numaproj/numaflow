@@ -55,7 +55,6 @@ go install -mod=vendor ./vendor/k8s.io/code-generator/cmd/go-to-protobuf
 export GO111MODULE="on"
 
 # go-to-protobuf expects dependency proto files to be in $GOPATH/src. Copy them there.
-#rm -rf "${GOPATH}/src/github.com/gogo/protobuf" && mkdir -p "${GOPATH}/src/github.com/gogo" && cp -r "${FAKE_REPOPATH}/vendor/github.com/gogo/protobuf" "${GOPATH}/src/github.com/gogo"
 rm -rf "${GOPATH}/src/k8s.io/apimachinery" && mkdir -p "${GOPATH}/src/k8s.io" && cp -r "${FAKE_REPOPATH}/vendor/k8s.io/apimachinery" "${GOPATH}/src/k8s.io"
 rm -rf "${GOPATH}/src/k8s.io/api" && mkdir -p "${GOPATH}/src/k8s.io" && cp -r "${FAKE_REPOPATH}/vendor/k8s.io/api" "${GOPATH}/src/k8s.io"
 
