@@ -280,46 +280,6 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 			newBuckets[b] = b
 		}
 	}
-	newObjs := buildVertices(pl)
-	for vertexName, newObj := range newObjs {
-		if oldObj, existing := existingObjs[vertexName]; !existing {
-			if err := r.client.Create(ctx, &newObj); err != nil {
-				if apierrors.IsAlreadyExists(err) { // probably somebody else already created it
-					continue
-				} else {
-					r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateVertexFailed", "Failed to create vertex: %w", err.Error())
-					return fmt.Errorf("failed to create vertex, err: %w", err)
-				}
-			}
-			log.Infow("Created vertex successfully", zap.String("vertex", vertexName))
-			r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateVertexSuccess", "Created vertex %s successfully", vertexName)
-		} else {
-			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] { // need to update
-				originalReplicas := oldObj.Spec.Replicas
-				oldObj.Spec = newObj.Spec
-				oldObj.Spec.Replicas = originalReplicas
-				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
-				if err := r.client.Update(ctx, &oldObj); err != nil {
-					r.recorder.Eventf(pl, corev1.EventTypeWarning, "UpdateVertexFailed", "Failed to update vertex: %w", err.Error())
-					return fmt.Errorf("failed to update vertex, err: %w", err)
-				}
-				log.Infow("Updated vertex successfully", zap.String("vertex", vertexName))
-				r.recorder.Eventf(pl, corev1.EventTypeNormal, "UpdateVertexSuccess", "Updated vertex %s successfully", vertexName)
-			}
-			delete(existingObjs, vertexName)
-		}
-	}
-	for _, v := range existingObjs {
-		if err := r.client.Delete(ctx, &v); err != nil {
-			r.recorder.Eventf(pl, corev1.EventTypeWarning, "DeleteStaleVertexFailed", "Failed to delete vertex: %w", err.Error())
-			return fmt.Errorf("failed to delete vertex, err: %w", err)
-		}
-		log.Infow("Deleted stale vertex successfully", zap.String("vertex", v.Name))
-		r.recorder.Eventf(pl, corev1.EventTypeNormal, "DeleteStaleVertexSuccess", "Deleted stale vertex %s successfully", v.Name)
-		// Clean up vertex replica metrics
-		reconciler.VertexDesiredReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
-		reconciler.VertexCurrentReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
-	}
 
 	// create batch job
 	if len(newBuffers) > 0 || len(newBuckets) > 0 {
@@ -360,6 +320,47 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 		}
 		log.Infow("Created ISB Svc deleting job successfully", zap.Any("buffers", bfs), zap.Any("buckets", bks))
 		r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateJobForISBDeletionSuccessful", "Create ISB deletion job successfully")
+	}
+
+	newObjs := buildVertices(pl)
+	for vertexName, newObj := range newObjs {
+		if oldObj, existing := existingObjs[vertexName]; !existing {
+			if err := r.client.Create(ctx, &newObj); err != nil {
+				if apierrors.IsAlreadyExists(err) { // probably somebody else already created it
+					continue
+				} else {
+					r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateVertexFailed", "Failed to create vertex: %w", err.Error())
+					return fmt.Errorf("failed to create vertex, err: %w", err)
+				}
+			}
+			log.Infow("Created vertex successfully", zap.String("vertex", vertexName))
+			r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateVertexSuccess", "Created vertex %s successfully", vertexName)
+		} else {
+			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] { // need to update
+				originalReplicas := oldObj.Spec.Replicas
+				oldObj.Spec = newObj.Spec
+				oldObj.Spec.Replicas = originalReplicas
+				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
+				if err := r.client.Update(ctx, &oldObj); err != nil {
+					r.recorder.Eventf(pl, corev1.EventTypeWarning, "UpdateVertexFailed", "Failed to update vertex: %w", err.Error())
+					return fmt.Errorf("failed to update vertex, err: %w", err)
+				}
+				log.Infow("Updated vertex successfully", zap.String("vertex", vertexName))
+				r.recorder.Eventf(pl, corev1.EventTypeNormal, "UpdateVertexSuccess", "Updated vertex %s successfully", vertexName)
+			}
+			delete(existingObjs, vertexName)
+		}
+	}
+	for _, v := range existingObjs {
+		if err := r.client.Delete(ctx, &v); err != nil {
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "DeleteStaleVertexFailed", "Failed to delete vertex: %w", err.Error())
+			return fmt.Errorf("failed to delete vertex, err: %w", err)
+		}
+		log.Infow("Deleted stale vertex successfully", zap.String("vertex", v.Name))
+		r.recorder.Eventf(pl, corev1.EventTypeNormal, "DeleteStaleVertexSuccess", "Deleted stale vertex %s successfully", v.Name)
+		// Clean up vertex replica metrics
+		reconciler.VertexDesiredReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
+		reconciler.VertexCurrentReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
 	}
 
 	// Daemon service
