@@ -105,7 +105,7 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
     .await?;
 
     // FIXME: use me and use me right :)
-    let _ = generator::Generator::new(
+    let _ = generator::new_generator(
         bytes::Bytes::from("fix me"),
         1,
         10,
