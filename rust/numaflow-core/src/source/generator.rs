@@ -76,11 +76,11 @@ mod stream_generator {
             // Calculate the elapsed time since the last poll
             let elapsed = this.prev_time.elapsed();
 
-            // we can return the complete batch if enough time has passed, with a granularity +- 5ms
+            // we can return the complete batch if enough time has passed, with a precision +- 5ms
             if elapsed
                 >= (*this.unit)
                     .checked_sub(Duration::from_millis(5))
-                    .expect("at least 5ms granularity")
+                    .expect("there is +-5ms precision, so unit > 5ms")
             {
                 // Reset the timer
                 *this.prev_time = Instant::now();
@@ -291,9 +291,9 @@ mod tests {
         // Define the content to be generated
         let content = Bytes::from("test_data");
         // Define requests per unit (rpu), batch size, and time unit
-        let rpu = 500;
-        let batch = 500;
-        let unit = Duration::from_millis(1000);
+        let rpu = 10;
+        let batch = 5;
+        let unit = Duration::from_millis(100);
 
         // Create a new Generator
         let mut generator = GeneratorRead::new(content.clone(), rpu, batch, unit);
