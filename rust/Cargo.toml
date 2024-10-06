@@ -3,7 +3,8 @@ workspace = { members = [
     "numaflow-models",
     "servesink",
     "serving",
-    "numaflow-core", "numaflow-grpc",
+    "numaflow-core",
+    "numaflow-grpc",
 ] }
 
 [[bin]]
