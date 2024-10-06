@@ -32,6 +32,16 @@ kube::codegen::gen_client \
     --one-input-api "numaflow/v1alpha1" \
     "${REPO_ROOT}/pkg/apis"
 
+subheader "running openapi gen"
+
+kube::codegen::gen_openapi \
+    --output-dir "${REPO_ROOT}/pkg/apis/numaflow/v1alpha1" \
+    --output-pkg "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1" \
+    --report-filename "/dev/null" \
+    --update-report \
+    --boilerplate "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
+    "${REPO_ROOT}/pkg/apis"
+
 # gofmt the tree
 subheader "running gofmt"
 find . -name "*.go" -type f -print0 | xargs -0 gofmt -s -w
