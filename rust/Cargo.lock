@@ -1267,25 +1267,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "k8s-openapi"
-version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c8847402328d8301354c94d605481f25a6bdc1ed65471fd96af8eca71141b13"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "serde",
- "serde-value",
- "serde_json",
-]
-
-[[package]]
 name = "kube"
 version = "0.94.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52ace78a62b361077505f2950bd48aa3e46596fb15350c9c993de15ddfa3cac5"
 dependencies = [
- "k8s-openapi 0.22.0",
+ "k8s-openapi",
  "kube-client",
  "kube-core",
 ]
@@ -1311,7 +1298,7 @@ dependencies = [
  "hyper-timeout",
  "hyper-util",
  "jsonpath-rust",
- "k8s-openapi 0.22.0",
+ "k8s-openapi",
  "kube-core",
  "pem",
  "rustls 0.23.13",
@@ -1337,7 +1324,7 @@ dependencies = [
  "chrono",
  "form_urlencoded",
  "http 1.1.0",
- "k8s-openapi 0.22.0",
+ "k8s-openapi",
  "serde",
  "serde-value",
  "serde_json",
@@ -1632,7 +1619,7 @@ dependencies = [
 name = "numaflow-models"
 version = "0.0.0-pre"
 dependencies = [
- "k8s-openapi 0.23.0",
+ "k8s-openapi",
  "kube",
  "reqwest 0.11.27",
  "serde",
