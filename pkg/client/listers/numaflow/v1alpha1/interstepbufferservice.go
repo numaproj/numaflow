@@ -20,8 +20,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -38,25 +38,17 @@ type InterStepBufferServiceLister interface {
 
 // interStepBufferServiceLister implements the InterStepBufferServiceLister interface.
 type interStepBufferServiceLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.InterStepBufferService]
 }
 
 // NewInterStepBufferServiceLister returns a new InterStepBufferServiceLister.
 func NewInterStepBufferServiceLister(indexer cache.Indexer) InterStepBufferServiceLister {
-	return &interStepBufferServiceLister{indexer: indexer}
-}
-
-// List lists all InterStepBufferServices in the indexer.
-func (s *interStepBufferServiceLister) List(selector labels.Selector) (ret []*v1alpha1.InterStepBufferService, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.InterStepBufferService))
-	})
-	return ret, err
+	return &interStepBufferServiceLister{listers.New[*v1alpha1.InterStepBufferService](indexer, v1alpha1.Resource("interstepbufferservice"))}
 }
 
 // InterStepBufferServices returns an object that can list and get InterStepBufferServices.
 func (s *interStepBufferServiceLister) InterStepBufferServices(namespace string) InterStepBufferServiceNamespaceLister {
-	return interStepBufferServiceNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return interStepBufferServiceNamespaceLister{listers.NewNamespaced[*v1alpha1.InterStepBufferService](s.ResourceIndexer, namespace)}
 }
 
 // InterStepBufferServiceNamespaceLister helps list and get InterStepBufferServices.
@@ -74,26 +66,5 @@ type InterStepBufferServiceNamespaceLister interface {
 // interStepBufferServiceNamespaceLister implements the InterStepBufferServiceNamespaceLister
 // interface.
 type interStepBufferServiceNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all InterStepBufferServices in the indexer for a given namespace.
-func (s interStepBufferServiceNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.InterStepBufferService, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.InterStepBufferService))
-	})
-	return ret, err
-}
-
-// Get retrieves the InterStepBufferService from the indexer for a given namespace and name.
-func (s interStepBufferServiceNamespaceLister) Get(name string) (*v1alpha1.InterStepBufferService, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("interstepbufferservice"), name)
-	}
-	return obj.(*v1alpha1.InterStepBufferService), nil
+	listers.ResourceIndexer[*v1alpha1.InterStepBufferService]
 }
