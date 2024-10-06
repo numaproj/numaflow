@@ -1,7 +1,7 @@
 SHELL:=/bin/bash
 
-.PHONY: codegen
-codegen:
+.PHONY: generate
+generate:
 	$(MAKE) --directory numaflow-models generate
 	$(MAKE) --directory numaflow-grpc generate
 

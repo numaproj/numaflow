@@ -215,7 +215,7 @@ api/json-schema/schema.json: api/openapi-spec/swagger.json hack/json-schema/main
 
 .PHONY: rustgen
 rustgen:
-	$(MAKE) --directory rust codegen 
+	$(MAKE) --directory rust generate
 
 .PHONY: codegen
 codegen:
