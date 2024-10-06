@@ -14,33 +14,7 @@ export GOPATH="${FAKE_GOPATH}"
 export PATH="${GOPATH}/bin:${PATH}"
 cd "${FAKE_REPOPATH}"
 
-install-protobuf() {
-  # protobuf version
-  PROTOBUF_VERSION=27.2
-  PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-  OS=$(uname_os)
-  ARCH=$(uname_arch)
-
-  echo "OS: $OS  ARCH: $ARCH"
-  if [[ "$ARCH" = "amd64" ]]; then
-    ARCH="x86_64"
-  elif [[ "$ARCH" = "arm64" ]]; then
-    ARCH="aarch_64"
-  fi
-  BINARY_URL=$PB_REL/download/v${PROTOBUF_VERSION}/protoc-${PROTOBUF_VERSION}-${OS}-${ARCH}.zip
-  if [[ "$OS" = "darwin" ]]; then
-    BINARY_URL=$PB_REL/download/v${PROTOBUF_VERSION}/protoc-${PROTOBUF_VERSION}-osx-universal_binary.zip
-  fi
-  echo "Downloading $BINARY_URL"
-
-  tmp=$(mktemp -d)
-  trap 'rm -rf ${tmp}' EXIT
-
-  curl -sL -o ${tmp}/protoc-${PROTOBUF_VERSION}-${OS}-${ARCH}.zip $BINARY_URL
-  unzip ${tmp}/protoc-${PROTOBUF_VERSION}-${OS}-${ARCH}.zip -d ${GOPATH}
-}
-
-install-protobuf
+install-protobuf --install-dir ${GOPATH}
 
 go install -mod=vendor ./vendor/github.com/gogo/protobuf/protoc-gen-gogo
 go install -mod=vendor ./vendor/github.com/gogo/protobuf/protoc-gen-gogofast
