@@ -213,10 +213,6 @@ swagger:
 api/json-schema/schema.json: api/openapi-spec/swagger.json hack/json-schema/main.go
 	go run ./hack/json-schema
 
-.PHONY: rustgen
-rustgen:
-	$(MAKE) --directory rust/numaflow-models generate
-
 .PHONY: codegen
 codegen:
 	./hack/generate-proto.sh
@@ -227,7 +223,7 @@ codegen:
 	$(MAKE) manifests
 	rm -rf ./vendor
 	go mod tidy
-	$(MAKE) rustgen
+	$(MAKE) --directory rust/numaflow-models generate
 
 clean:
 	-rm -rf ${CURRENT_DIR}/dist
