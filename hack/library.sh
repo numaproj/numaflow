@@ -117,9 +117,8 @@ install-protobuf() {
   echo "Downloading $binary_url"
 
   tmp=$(mktemp -d)
-  trap 'rm -rf ${tmp}' EXIT
-
   curl -sL -o ${tmp}/protoc-${protobuf_version}-${os}-${arch}.zip $binary_url
   unzip ${tmp}/protoc-${protobuf_version}-${os}-${arch}.zip -d ${install_dir}
+  rm -rf ${tmp}
 }
 
