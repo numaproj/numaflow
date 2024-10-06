@@ -217,7 +217,7 @@ api/json-schema/schema.json: api/openapi-spec/swagger.json hack/json-schema/main
 codegen:
 	./hack/generate-proto.sh
 	./hack/update-codegen.sh
-	#./hack/openapi-gen.sh
+	./hack/openapi-gen.sh
 	$(MAKE) swagger
 	./hack/update-api-docs.sh
 	$(MAKE) manifests

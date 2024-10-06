@@ -32,15 +32,20 @@ kube::codegen::gen_client \
     --one-input-api "numaflow/v1alpha1" \
     "${REPO_ROOT}/pkg/apis"
 
-subheader "running openapi gen"
+#
+# Do not use following scripts for openapi generation, because it also 
+# generates apimachinery APIs, which makes trouble for swagger gen.
+#
+#subheader "running openapi gen"
 
-kube::codegen::gen_openapi \
-    --output-dir "${REPO_ROOT}/pkg/apis/numaflow/v1alpha1" \
-    --output-pkg "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1" \
-    --report-filename "/dev/null" \
-    --update-report \
-    --boilerplate "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
-    "${REPO_ROOT}/pkg/apis"
+#kube::codegen::gen_openapi \
+#    --output-dir "${REPO_ROOT}/pkg/apis/numaflow/v1alpha1" \
+#    --output-pkg "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1" \
+#    --report-filename "/dev/null" \
+#    --update-report \
+#    --boilerplate "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
+#    "${REPO_ROOT}/pkg/apis"
+#
 
 # gofmt the tree
 subheader "running gofmt"
