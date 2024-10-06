@@ -3,7 +3,7 @@ workspace = { members = [
     "numaflow-models",
     "servesink",
     "serving",
-    "numaflow-core",
+    "numaflow-core", "numaflow-grpc",
 ] }
 
 [[bin]]
@@ -22,5 +22,6 @@ backoff = { path = "backoff" }
 servesink = { path = "servesink" }
 serving = { path = "serving" }
 numaflow-core = { path = "numaflow-core" }
+numaflow-grpc = { path = "numaflow-grpc" }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

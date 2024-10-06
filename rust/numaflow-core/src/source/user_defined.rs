@@ -2,13 +2,13 @@ use crate::config::config;
 use crate::error;
 use crate::error::Error::SourceError;
 use crate::message::{Message, Offset};
-use crate::monovertex::source_pb;
-use crate::monovertex::source_pb::source_client::SourceClient;
-use crate::monovertex::source_pb::{
-    read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
-};
 use crate::reader::LagReader;
 use crate::source::{SourceAcker, SourceReader};
+use numaflow_grpc::clients::source;
+use numaflow_grpc::clients::source::source_client::SourceClient;
+use numaflow_grpc::clients::source::{
+    read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
+};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
@@ -72,7 +72,7 @@ impl UserDefinedSourceRead {
         // do a handshake for read with the server before we start sending read requests
         let handshake_request = ReadRequest {
             request: None,
-            handshake: Some(source_pb::Handshake { sot: true }),
+            handshake: Some(source::Handshake { sot: true }),
         };
         read_tx
             .send(handshake_request)
@@ -157,7 +157,7 @@ impl UserDefinedSourceAck {
         // do a handshake for ack with the server before we start sending ack requests
         let ack_handshake_request = AckRequest {
             request: None,
-            handshake: Some(source_pb::Handshake { sot: true }),
+            handshake: Some(source::Handshake { sot: true }),
         };
         ack_tx
             .send(ack_handshake_request)
@@ -235,8 +235,8 @@ mod tests {
 
     use std::collections::HashSet;
 
-    use crate::monovertex::source_pb::source_client::SourceClient;
     use crate::shared::utils::create_rpc_channel;
+    use numaflow_grpc::clients::source::source_client::SourceClient;
 
     use chrono::Utc;
     use numaflow::source;

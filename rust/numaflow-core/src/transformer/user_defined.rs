@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use crate::config::config;
 use crate::error::{Error, Result};
 use crate::message::{Message, Offset};
-use crate::monovertex::sourcetransform_pb::{
+use crate::shared::utils::utc_from_timestamp;
+use numaflow_grpc::clients::sourcetransformer::{
     self, source_transform_client::SourceTransformClient, SourceTransformRequest,
     SourceTransformResponse,
 };
-use crate::shared::utils::utc_from_timestamp;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
@@ -32,7 +32,7 @@ impl SourceTransformer {
         // do a handshake for read with the server before we start sending read requests
         let handshake_request = SourceTransformRequest {
             request: None,
-            handshake: Some(sourcetransform_pb::Handshake { sot: true }),
+            handshake: Some(sourcetransformer::Handshake { sot: true }),
         };
         read_tx.send(handshake_request).await.map_err(|e| {
             Error::TransformerError(format!("failed to send handshake request: {}", e))
@@ -175,9 +175,9 @@ mod tests {
     use std::time::Duration;
 
     use crate::shared::utils::create_rpc_channel;
-    use crate::transformer::user_defined::sourcetransform_pb::source_transform_client::SourceTransformClient;
     use crate::transformer::user_defined::SourceTransformer;
     use numaflow::sourcetransform;
+    use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
     use tempfile::TempDir;
 
     struct NowCat;

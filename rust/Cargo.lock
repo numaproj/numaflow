@@ -1547,6 +1547,7 @@ version = "0.1.0"
 dependencies = [
  "backoff",
  "numaflow-core",
+ "numaflow-grpc",
  "servesink",
  "serving",
  "tokio",
@@ -1590,6 +1591,7 @@ dependencies = [
  "kube",
  "log",
  "numaflow 0.1.1",
+ "numaflow-grpc",
  "numaflow-models",
  "parking_lot",
  "pep440_rs",
@@ -1607,12 +1609,21 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tonic",
- "tonic-build",
  "tower 0.4.13",
  "tracing",
  "tracing-subscriber",
  "trait-variant",
  "uuid",
+]
+
+[[package]]
+name = "numaflow-grpc"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "prost-types",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]
@@ -3041,13 +3052,14 @@ dependencies = [
 
 [[package]]
 name = "tonic-build"
-version = "0.12.2"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe4ee8877250136bd7e3d2331632810a4df4ea5e004656990d8d66d2f5ee8a67"
+checksum = "9557ce109ea773b399c9b9e5dca39294110b74f1f342cb347a80d1fce8c26a11"
 dependencies = [
  "prettyplease",
  "proc-macro2",
  "prost-build",
+ "prost-types",
  "quote",
  "syn",
 ]

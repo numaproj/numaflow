@@ -25,10 +25,10 @@ use tracing::{debug, error, info};
 
 use crate::config::config;
 use crate::error::Error;
-use crate::monovertex::sink_pb::sink_client::SinkClient;
-use crate::monovertex::source_pb::source_client::SourceClient;
-use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;
 use crate::reader;
+use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use numaflow_grpc::clients::source::source_client::SourceClient;
+use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 
 // Define the labels for the metrics
 // Note: Please keep consistent with the definitions in MonoVertex daemon

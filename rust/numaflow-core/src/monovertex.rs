@@ -7,9 +7,9 @@ use crate::source::user_defined::new_source;
 use crate::transformer::user_defined::SourceTransformer;
 use forwarder::ForwarderBuilder;
 use metrics::MetricsState;
-use sink_pb::sink_client::SinkClient;
-use source_pb::source_client::SourceClient;
-use sourcetransform_pb::source_transform_client::SourceTransformClient;
+use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use numaflow_grpc::clients::source::source_client::SourceClient;
+use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -23,18 +23,6 @@ use tracing::info;
 /// - Send Acknowledgement back to the Source
 mod forwarder;
 pub(crate) mod metrics;
-
-pub(crate) mod source_pb {
-    tonic::include_proto!("source.v1");
-}
-
-pub(crate) mod sink_pb {
-    tonic::include_proto!("sink.v1");
-}
-
-pub(crate) mod sourcetransform_pb {
-    tonic::include_proto!("sourcetransformer.v1");
-}
 
 pub async fn mono_vertex() -> error::Result<()> {
     let cln_token = CancellationToken::new();
