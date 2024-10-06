@@ -15,9 +15,11 @@ use std::time::Duration;
 /// ```text
 ///       Ticks: |     1     |     2     |     3     |     4     |     5     |     6     |
 ///              =========================================================================> time
-/// Read RPU=5:  | :xxx:xx:  | :xxx <delay>             |:xxx:xx:| :xxx:xx:  | :xxx:xx:  |
-///                2 batches    only 1 batch (no read)       5         5           5
+///  Read RPU=5: | :xxx:xx:  | :xxx <delay>             |:xxx:xx:| :xxx:xx:  | :xxx:xx:  |
+///                2 batches   only 1 batch (no reread)      5         5           5
+///                 
 /// ```
+/// NOTE: The most minimum granularity of duration 10ms.
 mod stream_generator {
     use bytes::Bytes;
     use futures::Stream;
@@ -51,6 +53,16 @@ mod stream_generator {
             let mut tick = tokio::time::interval(unit);
             tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
+            // set default value of the unit to 10ms,
+            // and subtract 5ms due to timer precision constraints
+            let unit = (if unit < Duration::from_millis(10) {
+                Duration::from_millis(10)
+            } else {
+                unit
+            })
+            .checked_sub(Duration::from_millis(5))
+            .expect("there is +-5ms precision, so unit > 5ms");
+
             Self {
                 content,
                 rpu,
@@ -77,15 +89,9 @@ mod stream_generator {
             let elapsed = this.prev_time.elapsed();
 
             // we can return the complete batch if enough time has passed, with a precision +- 5ms
-            if elapsed
-                >= (*this.unit)
-                    .checked_sub(Duration::from_millis(5))
-                    .expect("there is +-5ms precision, so unit > 5ms")
-            {
+            if elapsed >= *this.unit {
                 // Reset the timer
                 *this.prev_time = Instant::now();
-
-                *this.used = 0;
 
                 // Generate data that equals to batch data
                 let data = vec![this.content.clone(); *this.batch];
