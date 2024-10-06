@@ -21,8 +21,6 @@ RUN chmod +x /bin/numaflow-rs
 FROM lukemathwalker/cargo-chef:latest-rust-1.80 AS chef
 ARG TARGETPLATFORM
 WORKDIR /numaflow
-RUN apt-get update && apt-get install -y protobuf-compiler
-
 
 FROM chef AS planner
 COPY ./rust/ .

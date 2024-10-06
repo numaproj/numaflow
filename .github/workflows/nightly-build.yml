@@ -58,8 +58,6 @@ jobs:
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.5
-      - name: Install dependencies
-        run: sudo apt-get install -y protobuf-compiler
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
       - name: Rename binary
@@ -92,7 +90,7 @@ jobs:
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.5
       - name: Install dependenices
-        run: sudo apt-get install -y gcc-aarch64-linux-gnu protobuf-compiler
+        run: sudo apt-get install -y gcc-aarch64-linux-gnu
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static -C linker=aarch64-linux-gnu-gcc' cargo build --release --target aarch64-unknown-linux-gnu
       - name: Rename binary
