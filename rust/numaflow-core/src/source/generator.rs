@@ -264,7 +264,8 @@ impl GeneratorLagReader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::SourceReader;
+    use crate::reader::LagReader;
+    use crate::source::{SourceAcker, SourceReader};
     use tokio::time::Duration;
 
     #[tokio::test]
@@ -288,5 +289,42 @@ mod tests {
         // Read the second batch of messages
         let messages = generator.read().await.unwrap();
         assert_eq!(messages.len(), rpu - batch);
+    }
+
+    #[tokio::test]
+    async fn test_generator_lag_pending() {
+        // Create a new GeneratorLagReader
+        let mut lag_reader = GeneratorLagReader::new();
+
+        // Call the pending method and check the result
+        let pending_result = lag_reader.pending().await;
+
+        // Assert that the result is Ok(None)
+        assert!(pending_result.is_ok());
+        assert_eq!(pending_result.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn test_generator_ack() {
+        // Create a new GeneratorAck instance
+        let mut generator_ack = GeneratorAck::new();
+
+        // Create a vector of offsets to acknowledge
+        let offsets = vec![
+            Offset {
+                offset: "offset1".to_string(),
+                partition_id: 0,
+            },
+            Offset {
+                offset: "offset2".to_string(),
+                partition_id: 1,
+            },
+        ];
+
+        // Call the ack method and check the result
+        let ack_result = generator_ack.ack(offsets).await;
+
+        // Assert that the result is Ok(())
+        assert!(ack_result.is_ok());
     }
 }
