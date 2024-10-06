@@ -5,6 +5,19 @@ use bytes::Bytes;
 use futures::StreamExt;
 use std::time::Duration;
 
+/// Stream Generator returns a set of messages for every `.next` call. It will throttle itself if
+/// the call exceeds the RPU. It will return a max (batch size, RPU) till the quota for that unit of
+/// time is over. If `.next` is called after the quota is over, it will park itself so that it won't
+/// return more than the RPU. Once parked, it will unpark itself and return as soon as the next poll
+/// happens.
+/// We skip the missed ticks because there is no point to give a burst, most likely that burst cannot
+/// be absorbed.
+/// ```text
+///       Ticks: |     1     |     2     |     3     |     4     |     5     |     6     |
+///              =========================================================================> time
+/// Read RPU=5:  | :xxx:xx:  | :xxx <delay>             |:xxx:xx:| :xxx:xx:  | :xxx:xx:  |
+///                2 batches    only 1 batch (no read)       5         5           5
+/// ```
 mod stream_generator {
     use bytes::Bytes;
     use futures::Stream;
@@ -162,6 +175,10 @@ mod stream_generator {
     }
 }
 
+/// Creates a new generator and returns all the necessary implementation of the Source trait.
+/// Generator Source is mainly used for development purpose, where you want to have self-contained
+/// source to generate some messages. We mainly use generator for load testing and integration
+/// testing of Numaflow. The load generated is per replica.
 pub(crate) fn new_generator(
     content: Bytes,
     rpu: usize,
@@ -175,9 +192,6 @@ pub(crate) fn new_generator(
     Ok((gen_read, gen_ack, gen_lag_reader))
 }
 
-/// Generator Source is mainly used for development purpose, where you want to have self-contained
-/// source to generate some messages. We mainly use generator for load testing and integration
-/// testing of Numaflow. The load generated is per replica.
 pub(crate) struct GeneratorRead {
     stream_generator: stream_generator::StreamGenerator,
 }
