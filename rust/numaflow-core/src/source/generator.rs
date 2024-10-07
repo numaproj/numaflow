@@ -277,6 +277,7 @@ impl source::SourceAcker for GeneratorAck {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct GeneratorLagReader {}
 
 impl GeneratorLagReader {
