@@ -41,22 +41,24 @@ var interstepbufferservicesKind = v1alpha1.SchemeGroupVersion.WithKind("InterSte
 
 // Get takes name of the interStepBufferService, and returns the corresponding interStepBufferService object, and an error if there is any.
 func (c *FakeInterStepBufferServices) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.InterStepBufferService, err error) {
+	emptyResult := &v1alpha1.InterStepBufferService{}
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(interstepbufferservicesResource, c.ns, name), &v1alpha1.InterStepBufferService{})
+		Invokes(testing.NewGetActionWithOptions(interstepbufferservicesResource, c.ns, name, options), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.InterStepBufferService), err
 }
 
 // List takes label and field selectors, and returns the list of InterStepBufferServices that match those selectors.
 func (c *FakeInterStepBufferServices) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.InterStepBufferServiceList, err error) {
+	emptyResult := &v1alpha1.InterStepBufferServiceList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(interstepbufferservicesResource, interstepbufferservicesKind, c.ns, opts), &v1alpha1.InterStepBufferServiceList{})
+		Invokes(testing.NewListActionWithOptions(interstepbufferservicesResource, interstepbufferservicesKind, c.ns, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -75,40 +77,43 @@ func (c *FakeInterStepBufferServices) List(ctx context.Context, opts v1.ListOpti
 // Watch returns a watch.Interface that watches the requested interStepBufferServices.
 func (c *FakeInterStepBufferServices) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(interstepbufferservicesResource, c.ns, opts))
+		InvokesWatch(testing.NewWatchActionWithOptions(interstepbufferservicesResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a interStepBufferService and creates it.  Returns the server's representation of the interStepBufferService, and an error, if there is any.
 func (c *FakeInterStepBufferServices) Create(ctx context.Context, interStepBufferService *v1alpha1.InterStepBufferService, opts v1.CreateOptions) (result *v1alpha1.InterStepBufferService, err error) {
+	emptyResult := &v1alpha1.InterStepBufferService{}
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(interstepbufferservicesResource, c.ns, interStepBufferService), &v1alpha1.InterStepBufferService{})
+		Invokes(testing.NewCreateActionWithOptions(interstepbufferservicesResource, c.ns, interStepBufferService, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.InterStepBufferService), err
 }
 
 // Update takes the representation of a interStepBufferService and updates it. Returns the server's representation of the interStepBufferService, and an error, if there is any.
 func (c *FakeInterStepBufferServices) Update(ctx context.Context, interStepBufferService *v1alpha1.InterStepBufferService, opts v1.UpdateOptions) (result *v1alpha1.InterStepBufferService, err error) {
+	emptyResult := &v1alpha1.InterStepBufferService{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(interstepbufferservicesResource, c.ns, interStepBufferService), &v1alpha1.InterStepBufferService{})
+		Invokes(testing.NewUpdateActionWithOptions(interstepbufferservicesResource, c.ns, interStepBufferService, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.InterStepBufferService), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeInterStepBufferServices) UpdateStatus(ctx context.Context, interStepBufferService *v1alpha1.InterStepBufferService, opts v1.UpdateOptions) (*v1alpha1.InterStepBufferService, error) {
+func (c *FakeInterStepBufferServices) UpdateStatus(ctx context.Context, interStepBufferService *v1alpha1.InterStepBufferService, opts v1.UpdateOptions) (result *v1alpha1.InterStepBufferService, err error) {
+	emptyResult := &v1alpha1.InterStepBufferService{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(interstepbufferservicesResource, "status", c.ns, interStepBufferService), &v1alpha1.InterStepBufferService{})
+		Invokes(testing.NewUpdateSubresourceActionWithOptions(interstepbufferservicesResource, "status", c.ns, interStepBufferService, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.InterStepBufferService), err
 }
@@ -123,7 +128,7 @@ func (c *FakeInterStepBufferServices) Delete(ctx context.Context, name string, o
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeInterStepBufferServices) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(interstepbufferservicesResource, c.ns, listOpts)
+	action := testing.NewDeleteCollectionActionWithOptions(interstepbufferservicesResource, c.ns, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.InterStepBufferServiceList{})
 	return err
@@ -131,11 +136,12 @@ func (c *FakeInterStepBufferServices) DeleteCollection(ctx context.Context, opts
 
 // Patch applies the patch and returns the patched interStepBufferService.
 func (c *FakeInterStepBufferServices) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.InterStepBufferService, err error) {
+	emptyResult := &v1alpha1.InterStepBufferService{}
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(interstepbufferservicesResource, c.ns, name, pt, data, subresources...), &v1alpha1.InterStepBufferService{})
+		Invokes(testing.NewPatchSubresourceActionWithOptions(interstepbufferservicesResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.InterStepBufferService), err
 }

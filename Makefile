@@ -105,7 +105,7 @@ test-coverage:
 
 .PHONY: test-coverage-with-isb
 test-coverage-with-isb:
-	go test -covermode=atomic -coverprofile=test/profile.cov -tags=isb_redis $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
+	go test -v -timeout 7m -covermode=atomic -coverprofile=test/profile.cov -tags=isb_redis $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
 	go tool cover -func=test/profile.cov
 
 .PHONY: test-code
@@ -192,10 +192,10 @@ endif
 .PHONY: build-rust-in-docker
 build-rust-in-docker:
 	mkdir -p dist
-	-$(DOCKER) container ls --all --filter=ancestor='$(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)' --format "{{.ID}}" | xargs docker rm
+	-$(DOCKER) container ls --all --filter=ancestor='$(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)' --format "{{.ID}}" | xargs $(DOCKER) rm
 	-$(DOCKER) image rm $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)
 	DOCKER_BUILDKIT=1 $(DOCKER) build --build-arg "BASE_IMAGE=$(DEV_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION) --target rust-builder -f $(DOCKERFILE) .
-	export CTR=$$(docker create $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)) && $(DOCKER) cp $$CTR:/root/numaflow dist/numaflow-rs-linux-$(HOST_ARCH) && $(DOCKER) rm $$CTR && $(DOCKER) image rm $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)
+	export CTR=$$($(DOCKER) create $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)) && $(DOCKER) cp $$CTR:/root/numaflow dist/numaflow-rs-linux-$(HOST_ARCH) && $(DOCKER) rm $$CTR && $(DOCKER) image rm $(IMAGE_NAMESPACE)/$(BINARY_NAME)-rust-builder:$(VERSION)
 
 image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
 	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file $(DOCKERFILE) ${PUSH_OPTION} .

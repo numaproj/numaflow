@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -73,7 +73,12 @@ pub(crate) async fn check_for_server_compatibility(
     } else {
         // Get minimum supported SDK versions and check compatibility
         let min_supported_sdk_versions = version::get_minimum_supported_sdk_versions();
-        check_sdk_compatibility(sdk_version, sdk_language, container_type, min_supported_sdk_versions)?;
+        check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            container_type,
+            min_supported_sdk_versions,
+        )?;
     }
 
     Ok(())
@@ -110,19 +115,20 @@ fn check_numaflow_compatibility(
 fn check_sdk_compatibility(
     sdk_version: &str,
     sdk_language: &str,
-    container_type : &str,
+    container_type: &str,
     min_supported_sdk_versions: &SdkConstraints,
 ) -> error::Result<()> {
     // Check if the SDK language is present in the minimum supported SDK versions
     if !min_supported_sdk_versions.contains_key(sdk_language) {
         return Err(Error::ServerInfoError(format!(
             "SDK version constraint not found for language: {}, container type: {}",
-            sdk_language,
-            container_type
+            sdk_language, container_type
         )));
     }
     let empty_map = HashMap::new();
-    let lang_constraints = min_supported_sdk_versions.get(sdk_language).unwrap_or(&empty_map);
+    let lang_constraints = min_supported_sdk_versions
+        .get(sdk_language)
+        .unwrap_or(&empty_map);
     if let Some(sdk_required_version) = lang_constraints.get(container_type) {
         let sdk_constraint = format!(">={}", sdk_required_version);
 
@@ -161,15 +167,13 @@ fn check_sdk_compatibility(
         // Language not found in the supported SDK versions
         warn!(
             "SDK version constraint not found for language: {}, container type: {}",
-            sdk_language,
-            container_type
+            sdk_language, container_type
         );
 
         // Return error indicating the language
         return Err(Error::ServerInfoError(format!(
             "SDK version constraint not found for language: {}, container type: {}",
-            sdk_language,
-            container_type
+            sdk_language, container_type
         )));
     }
     Ok(())
@@ -186,12 +190,12 @@ fn human_readable(ver: &str) -> String {
         return String::new();
     }
     // semver
-    if ver.ends_with("-z") {
-        return ver[..ver.len() - 2].to_string();
+    if let Some(version) = ver.strip_suffix("-z") {
+        return version.to_string();
     }
     // PEP 440
-    if ver.ends_with("rc100") {
-        return ver[..ver.len() - 5].to_string();
+    if let Some(version) = ver.strip_suffix("rc100") {
+        return version.to_string();
     }
     ver.to_string()
 }
@@ -261,11 +265,9 @@ fn trim_after_dash(input: &str) -> &str {
 
 /// Extracts the container type from the server info file.
 /// The file name is in the format of <container_type>-server-info.
-fn get_container_type(server_info_file: &PathBuf) -> Option<&str> {
+fn get_container_type(server_info_file: &Path) -> Option<&str> {
     let file_name = server_info_file.file_name()?;
-    let container_type = file_name
-        .to_str()?
-        .trim_end_matches("-server-info");
+    let container_type = file_name.to_str()?.trim_end_matches("-server-info");
     if container_type.is_empty() {
         None
     } else {
@@ -562,8 +564,12 @@ mod tests {
         let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_ok());
     }
@@ -574,8 +580,12 @@ mod tests {
         let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language,TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_err());
         assert!(
@@ -589,8 +599,12 @@ mod tests {
         let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_ok());
     }
@@ -601,8 +615,12 @@ mod tests {
         let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_err());
         assert!(
@@ -616,8 +634,12 @@ mod tests {
         let sdk_language = "java";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_ok());
     }
@@ -628,8 +650,12 @@ mod tests {
         let sdk_language = "java";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_err());
         assert!(
@@ -643,8 +669,12 @@ mod tests {
         let sdk_language = "go";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_ok());
     }
@@ -655,8 +685,12 @@ mod tests {
         let sdk_language = "go";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_err());
         assert!(
@@ -670,8 +704,12 @@ mod tests {
         let sdk_language = "rust";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_ok());
     }
@@ -682,8 +720,12 @@ mod tests {
         let sdk_language = "rust";
 
         let min_supported_sdk_versions = create_sdk_constraints_stable_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_err());
         assert!(
@@ -697,8 +739,12 @@ mod tests {
         let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_ok());
     }
@@ -709,8 +755,12 @@ mod tests {
         let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_err());
         assert!(
@@ -724,8 +774,12 @@ mod tests {
         let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_ok());
     }
@@ -736,8 +790,12 @@ mod tests {
         let sdk_language = "python";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_err());
         assert!(
@@ -751,8 +809,12 @@ mod tests {
         let sdk_language = "java";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_ok());
     }
@@ -763,8 +825,12 @@ mod tests {
         let sdk_language = "java";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_err());
         assert!(
@@ -778,8 +844,12 @@ mod tests {
         let sdk_language = "go";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_ok());
     }
@@ -790,8 +860,12 @@ mod tests {
         let sdk_language = "go";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_err());
         assert!(
@@ -805,8 +879,12 @@ mod tests {
         let sdk_language = "rust";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_ok());
     }
@@ -817,8 +895,12 @@ mod tests {
         let sdk_language = "rust";
 
         let min_supported_sdk_versions = create_sdk_constraints_pre_release_versions();
-        let result =
-            check_sdk_compatibility(sdk_version, sdk_language, TEST_CONTAINER_TYPE, &min_supported_sdk_versions);
+        let result = check_sdk_compatibility(
+            sdk_version,
+            sdk_language,
+            TEST_CONTAINER_TYPE,
+            &min_supported_sdk_versions,
+        );
 
         assert!(result.is_err());
         assert!(

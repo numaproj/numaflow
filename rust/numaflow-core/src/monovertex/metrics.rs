@@ -9,11 +9,18 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
+use prometheus_client::encoding::text::encode;
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::gauge::Gauge;
+use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
+use prometheus_client::registry::Registry;
 use rcgen::{generate_simple_self_signed, CertifiedKey};
-use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
+use tonic::transport::Channel;
+use tonic::Request;
 use tracing::{debug, error, info};
 
 use crate::config::config;
@@ -21,14 +28,7 @@ use crate::error::Error;
 use crate::monovertex::sink_pb::sink_client::SinkClient;
 use crate::monovertex::source_pb::source_client::SourceClient;
 use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;
-use prometheus_client::encoding::text::encode;
-use prometheus_client::metrics::counter::Counter;
-use prometheus_client::metrics::family::Family;
-use prometheus_client::metrics::gauge::Gauge;
-use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
-use prometheus_client::registry::Registry;
-use tonic::transport::Channel;
-use tonic::Request;
+use crate::reader;
 
 // Define the labels for the metrics
 // Note: Please keep consistent with the definitions in MonoVertex daemon
@@ -262,31 +262,6 @@ pub async fn metrics_handler() -> impl IntoResponse {
         .unwrap()
 }
 
-/// Collect and emit prometheus metrics.
-/// Metrics router and server over HTTP endpoint.
-// This is not used currently
-#[allow(dead_code)]
-pub(crate) async fn start_metrics_http_server<A>(
-    addr: A,
-    metrics_state: MetricsState,
-) -> crate::Result<()>
-where
-    A: ToSocketAddrs + std::fmt::Debug,
-{
-    let metrics_app = metrics_router(metrics_state);
-
-    let listener = TcpListener::bind(&addr)
-        .await
-        .map_err(|e| Error::MetricsError(format!("Creating listener on {:?}: {}", addr, e)))?;
-
-    debug!("metrics server started at addr: {:?}", addr);
-
-    axum::serve(listener, metrics_app)
-        .await
-        .map_err(|e| Error::MetricsError(format!("Starting web server for metrics: {}", e)))?;
-    Ok(())
-}
-
 pub(crate) async fn start_metrics_https_server(
     addr: SocketAddr,
     metrics_state: MetricsState,
@@ -362,11 +337,11 @@ struct TimestampedPending {
     timestamp: std::time::Instant,
 }
 
-/// `LagReader` is responsible for periodically checking the lag of the source client
+/// PendingReader is responsible for periodically checking the lag of the reader
 /// and exposing the metrics. It maintains a list of pending stats and ensures that
 /// only the most recent entries are kept.
-pub(crate) struct LagReader {
-    source_client: SourceClient<Channel>,
+pub(crate) struct PendingReader<T> {
+    lag_reader: T,
     lag_checking_interval: Duration,
     refresh_interval: Duration,
     buildup_handle: Option<JoinHandle<()>>,
@@ -374,17 +349,17 @@ pub(crate) struct LagReader {
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 }
 
-/// LagReaderBuilder is used to build a `LagReader` instance.
-pub(crate) struct LagReaderBuilder {
-    source_client: SourceClient<Channel>,
+/// PendingReaderBuilder is used to build a [LagReader] instance.
+pub(crate) struct PendingReaderBuilder<T> {
+    lag_reader: T,
     lag_checking_interval: Option<Duration>,
     refresh_interval: Option<Duration>,
 }
 
-impl LagReaderBuilder {
-    pub(crate) fn new(source_client: SourceClient<Channel>) -> Self {
+impl<T: reader::LagReader> PendingReaderBuilder<T> {
+    pub(crate) fn new(lag_reader: T) -> Self {
         Self {
-            source_client,
+            lag_reader,
             lag_checking_interval: None,
             refresh_interval: None,
         }
@@ -400,9 +375,9 @@ impl LagReaderBuilder {
         self
     }
 
-    pub(crate) fn build(self) -> LagReader {
-        LagReader {
-            source_client: self.source_client,
+    pub(crate) fn build(self) -> PendingReader<T> {
+        PendingReader {
+            lag_reader: self.lag_reader,
             lag_checking_interval: self
                 .lag_checking_interval
                 .unwrap_or_else(|| Duration::from_secs(3)),
@@ -416,20 +391,20 @@ impl LagReaderBuilder {
     }
 }
 
-impl LagReader {
+impl<T: reader::LagReader + Clone + Send + 'static> PendingReader<T> {
     /// Starts the lag reader by spawning tasks to build up pending info and expose pending metrics.
     ///
     /// This method spawns two asynchronous tasks:
     /// - One to periodically check the lag and update the pending stats.
     /// - Another to periodically expose the pending metrics.
     pub async fn start(&mut self) {
-        let source_client = self.source_client.clone();
+        let pending_reader = self.lag_reader.clone();
         let lag_checking_interval = self.lag_checking_interval;
         let refresh_interval = self.refresh_interval;
         let pending_stats = self.pending_stats.clone();
 
         self.buildup_handle = Some(tokio::spawn(async move {
-            build_pending_info(source_client, lag_checking_interval, pending_stats).await;
+            build_pending_info(pending_reader, lag_checking_interval, pending_stats).await;
         }));
 
         let pending_stats = self.pending_stats.clone();
@@ -439,8 +414,8 @@ impl LagReader {
     }
 }
 
-/// When lag-reader is dropped, we need to clean up the pending exposer and the pending builder tasks.
-impl Drop for LagReader {
+/// When the PendingReader is dropped, we need to clean up the pending exposer and the pending builder tasks.
+impl<T> Drop for PendingReader<T> {
     fn drop(&mut self) {
         if let Some(handle) = self.expose_handle.take() {
             handle.abort();
@@ -454,15 +429,15 @@ impl Drop for LagReader {
 }
 
 /// Periodically checks the pending messages from the source client and build the pending stats.
-async fn build_pending_info(
-    mut source_client: SourceClient<Channel>,
+async fn build_pending_info<T: reader::LagReader>(
+    mut lag_reader: T,
     lag_checking_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
     let mut ticker = time::interval(lag_checking_interval);
     loop {
         ticker.tick().await;
-        match fetch_pending(&mut source_client).await {
+        match fetch_pending(&mut lag_reader).await {
             Ok(pending) => {
                 if pending != -1 {
                     let mut stats = pending_stats.lock().await;
@@ -484,16 +459,13 @@ async fn build_pending_info(
     }
 }
 
-async fn fetch_pending(source_client: &mut SourceClient<Channel>) -> crate::error::Result<i64> {
-    let request = Request::new(());
-    let response = source_client
-        .pending_fn(request)
-        .await?
-        .into_inner()
-        .result
-        .map_or(-1, |r| r.count); // default to -1(unavailable)
+async fn fetch_pending<T: reader::LagReader>(lag_reader: &mut T) -> crate::error::Result<i64> {
+    let response: i64 = lag_reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
     Ok(response)
 }
+
+const LOOKBACK_SECONDS_MAP: [(&str, i64); 4] =
+    [("1m", 60), ("default", 120), ("5m", 300), ("15m", 900)];
 
 // Periodically exposes the pending metrics by calculating the average pending messages over different intervals.
 async fn expose_pending_metrics(
@@ -501,7 +473,6 @@ async fn expose_pending_metrics(
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
     let mut ticker = time::interval(refresh_interval);
-    let lookback_seconds_map = vec![("1m", 60), ("default", 120), ("5m", 300), ("15m", 900)];
 
     // store the pending info in a sorted way for deterministic display
     // string concat is more efficient?
@@ -509,8 +480,8 @@ async fn expose_pending_metrics(
 
     loop {
         ticker.tick().await;
-        for (label, seconds) in &lookback_seconds_map {
-            let pending = calculate_pending(*seconds, &pending_stats).await;
+        for (label, seconds) in LOOKBACK_SECONDS_MAP {
+            let pending = calculate_pending(seconds, &pending_stats).await;
             if pending != -1 {
                 let mut metric_labels = forward_metrics_labels().clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
@@ -556,17 +527,18 @@ async fn calculate_pending(
     result
 }
 
-// TODO add tests
-
 #[cfg(test)]
 mod tests {
+    use std::net::SocketAddr;
+    use std::time::Instant;
+
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source, sourcetransform};
+    use tokio::sync::mpsc::Sender;
+
     use super::*;
     use crate::monovertex::metrics::MetricsState;
     use crate::shared::utils::create_rpc_channel;
-    use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{sink, source, sourcetransform};
-    use std::net::SocketAddr;
-    use tokio::sync::mpsc::Sender;
 
     struct SimpleSource;
     #[tonic::async_trait]
@@ -715,5 +687,59 @@ mod tests {
         sink_server_handle.await.unwrap();
         fb_sink_server_handle.await.unwrap();
         transformer_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_expose_pending_metrics() {
+        let pending_stats = Arc::new(Mutex::new(Vec::with_capacity(MAX_PENDING_STATS)));
+        let refresh_interval = Duration::from_secs(1);
+
+        // Populate pending_stats with some values.
+        // The array will be sorted by the timestamp with the most recent last.
+        {
+            let mut pending_stats = pending_stats.lock().await;
+            pending_stats.push(TimestampedPending {
+                pending: 15,
+                timestamp: Instant::now() - Duration::from_secs(150),
+            });
+            pending_stats.push(TimestampedPending {
+                pending: 30,
+                timestamp: Instant::now() - Duration::from_secs(70),
+            });
+            pending_stats.push(TimestampedPending {
+                pending: 20,
+                timestamp: Instant::now() - Duration::from_secs(30),
+            });
+            pending_stats.push(TimestampedPending {
+                pending: 10,
+                timestamp: Instant::now(),
+            });
+        }
+
+        tokio::spawn({
+            let pending_stats = pending_stats.clone();
+            async move {
+                expose_pending_metrics(refresh_interval, pending_stats).await;
+            }
+        });
+        // We use tokio::time::interval() as the ticker in the expose_pending_metrics() function.
+        // The first tick happens immediately, so we don't need to wait for the refresh_interval for the first iteration to complete.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Get the stored values for all time intevals
+        // We will store the values corresponding to the labels (from LOOKBACK_SECONDS_MAP) "1m", "default", "5m", "15" in the same order in this array
+        let mut stored_values: [i64; 4] = [0; 4];
+        {
+            for (i, (label, _)) in LOOKBACK_SECONDS_MAP.iter().enumerate() {
+                let mut metric_labels = forward_metrics_labels().clone();
+                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
+                let guage = forward_metrics()
+                    .source_pending
+                    .get_or_create(&metric_labels)
+                    .get();
+                stored_values[i] = guage;
+            }
+        }
+        assert_eq!(stored_values, [15, 20, 18, 18]);
     }
 }
