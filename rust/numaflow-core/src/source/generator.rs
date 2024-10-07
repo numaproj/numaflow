@@ -19,7 +19,7 @@ use std::time::Duration;
 ///                2 batches   only 1 batch (no reread)      5         5           5
 ///                 
 /// ```
-/// NOTE: The most minimum granularity of duration 10ms.
+/// NOTE: The minimum granularity of duration is 10ms.
 mod stream_generator {
     use bytes::Bytes;
     use futures::Stream;
@@ -215,13 +215,6 @@ impl GeneratorRead {
     }
 }
 
-impl reader::LagReader for GeneratorLagReader {
-    async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
-        // Generator is not meant to auto-scale.
-        Ok(None)
-    }
-}
-
 impl source::SourceReader for GeneratorRead {
     fn name(&self) -> &'static str {
         "generator"
@@ -283,6 +276,13 @@ pub(crate) struct GeneratorLagReader {}
 impl GeneratorLagReader {
     fn new() -> Self {
         Self {}
+    }
+}
+
+impl reader::LagReader for GeneratorLagReader {
+    async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
+        // Generator is not meant to auto-scale.
+        Ok(None)
     }
 }
 
