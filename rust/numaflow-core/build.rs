@@ -1,7 +1,7 @@
 fn main() {
     tonic_build::configure()
         .build_server(true)
-        .compile(
+        .compile_protos(
             &[
                 "proto/source.proto",
                 "proto/sourcetransform.proto",

@@ -53,16 +53,6 @@ mod stream_generator {
             let mut tick = tokio::time::interval(unit);
             tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
-            // set default value of the unit to 10ms,
-            // and subtract 5ms due to timer precision constraints
-            let unit = (if unit < Duration::from_millis(10) {
-                Duration::from_millis(10)
-            } else {
-                unit
-            })
-            .checked_sub(Duration::from_millis(5))
-            .expect("there is +-5ms precision, so unit > 5ms");
-
             Self {
                 content,
                 rpu,
@@ -117,6 +107,15 @@ mod stream_generator {
             } else {
                 // we have to wait for the next tick because we are out of quota
                 let mut tick = this.tick;
+
+                // we need to wait for the remaining time to pass
+                let remaining_time = this
+                    .unit
+                    .checked_sub(elapsed)
+                    .unwrap_or_else(|| Duration::from_secs(0));
+
+                // resets the ticker so that the next tick will happen after the remaining time
+                tick.reset_at(Instant::now() + remaining_time);
                 match tick.poll_tick(cx) {
                     // we can recurse ourselves to return data since enough time has passed
                     Poll::Ready(_) => {
