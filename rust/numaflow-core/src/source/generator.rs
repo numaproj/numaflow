@@ -19,7 +19,7 @@ use std::time::Duration;
 ///                2 batches   only 1 batch (no reread)      5         5           5
 ///                 
 /// ```
-/// NOTE: The minimum granularity of duration is 10ms.
+/// NOTE: The minimum granularity of duration is 5ms.
 mod stream_generator {
     use bytes::Bytes;
     use futures::Stream;
@@ -60,7 +60,10 @@ mod stream_generator {
                 batch: if batch > rpu { rpu } else { batch },
                 unit,
                 used: 0,
-                prev_time: Instant::now().checked_sub(unit).unwrap(),
+                // rewind a bit to return on the first call
+                prev_time: Instant::now()
+                    .checked_sub(unit)
+                    .expect("subtraction cannot fail"),
                 tick,
             }
         }
@@ -107,19 +110,15 @@ mod stream_generator {
             } else {
                 // we have to wait for the next tick because we are out of quota
                 let mut tick = this.tick;
-
-                // we need to wait for the remaining time to pass
-                let remaining_time = this
-                    .unit
-                    .checked_sub(elapsed)
-                    .unwrap_or_else(|| Duration::from_secs(0));
-
-                // resets the ticker so that the next tick will happen after the remaining time
-                tick.reset_at(Instant::now() + remaining_time);
                 match tick.poll_tick(cx) {
-                    // we can recurse ourselves to return data since enough time has passed
                     Poll::Ready(_) => {
-                        // recursively call the poll_next since we are ready to serve
+                        // reset the prev_time as we are quite certain that we should be returning
+                        // data, else we would have been in Pending
+                        *this.prev_time = (*this.prev_time)
+                            .checked_sub(elapsed)
+                            .expect("subtraction cannot fail");
+
+                        // we can recurse ourselves to return data since enough time has passed
                         self.poll_next(cx)
                     }
                     Poll::Pending => Poll::Pending,
