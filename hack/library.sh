@@ -59,7 +59,7 @@ uname_os() {
     mingw*) os="windows" ;;
     cygwin*) os="windows" ;;
     win*) os="windows" ;;
-    sunos) [ "$(uname -o)" = "illumos" ] && os=illumos ;;
+    sunos) [[ "$(uname -o)" = "illumos" ]] && os=illumos ;;
   esac
   echo "$os"
 }
@@ -83,18 +83,34 @@ uname_arch() {
 
 install-protobuf() {
   local install_dir=""
-  while [ "$#" -gt 0 ]; do
+  while [[ "$#" -gt 0 ]]; do
     case "$1" in
       "--install-dir")
         install_dir="$2"
         shift 2
         ;;
       *)
+        if [[ "$1" =~ ^-- ]]; then
+          echo "unknown argument: $1" >&2
+          return 1
+        fi
+        if [ -n "$install_dir" ]; then
+          echo "too many arguments: $1 (already have $install_dir)" >&2
+          return 1
+        fi
+        install_dir="$1"
+        shift
+        ;;
     esac
   done
 
-  if [ -z "${install_dir}" ]; then
+  if [[ -z "${install_dir}" ]]; then
     echo "install-dir argument is required" >&2
+    return 1
+  fi
+
+  if [[ ! -d "${install_dir}" ]]; then
+    echo "${install_dir} does not exist" >&2
     return 1
   fi
 
