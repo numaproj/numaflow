@@ -59,7 +59,7 @@ func (s *UserDefinedSourceSuite) TestUDSource() {
 	wg.Add(4)
 	go func() {
 		defer wg.Done()
-		// s.testSimpleSourcePython() // FIXME: python udsource
+		s.testSimpleSourcePython()
 	}()
 	go func() {
 		defer wg.Done()
