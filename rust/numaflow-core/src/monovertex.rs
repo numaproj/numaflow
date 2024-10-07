@@ -3,6 +3,7 @@ use crate::error;
 use crate::shared::utils;
 use crate::shared::utils::create_rpc_channel;
 use crate::sink::user_defined::SinkWriter;
+use crate::source::generator;
 use crate::source::user_defined::new_source;
 use crate::transformer::user_defined::SourceTransformer;
 use forwarder::ForwarderBuilder;
@@ -10,6 +11,7 @@ use metrics::MetricsState;
 use numaflow_grpc::clients::sink::sink_client::SinkClient;
 use numaflow_grpc::clients::source::source_client::SourceClient;
 use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use std::time::Duration;
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -89,6 +91,14 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
         },
     )
     .await?;
+
+    // FIXME: use me and use me right :)
+    let _ = generator::new_generator(
+        bytes::Bytes::from("fix me"),
+        1,
+        10,
+        Duration::from_millis(1000),
+    );
 
     let mut source_grpc_client =
         SourceClient::new(create_rpc_channel(sdk_config.source_socket_path.into()).await?)

@@ -35,6 +35,8 @@ parking_lot = "0.12.3"
 prometheus-client = "0.22.3"
 kube = "0.95.0"
 log = "0.4.22"
+futures = "0.3.30"
+pin-project = "1.1.5"
 
 [dev-dependencies]
 tempfile = "3.11.0"
