@@ -92,7 +92,7 @@ func WithReadOnlyMode() HandlerOption {
 type handler struct {
 	kubeClient            kubernetes.Interface
 	metricsClient         *metricsversiond.Clientset
-	promQlBuilder         PromQl
+	promQlService         PromQl
 	numaflowClient        dfv1clients.NumaflowV1alpha1Interface
 	daemonClientsCache    *lru.Cache[string, daemonclient.DaemonClient]
 	mvtDaemonClientsCache *lru.Cache[string, mvtdaemonclient.MonoVertexDaemonClient]
@@ -130,7 +130,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	// prom client instance
 	prometheusClient := NewPrometheusClient(prometheusMetricConfig.ServerUrl)
 	// prom ql builder service instance
-	promQlBuilder := NewPromQlBuilder(prometheusClient, prometheusMetricConfig)
+	promQlService := NewPromQlService(prometheusClient, prometheusMetricConfig)
 
 	o := defaultHandlerOptions()
 	for _, opt := range opts {
@@ -141,7 +141,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	return &handler{
 		kubeClient:            kubeClient,
 		metricsClient:         metricsClient,
-		promQlBuilder:         promQlBuilder,
+		promQlService:         promQlService,
 		numaflowClient:        numaflowClient,
 		daemonClientsCache:    daemonClientsCache,
 		mvtDaemonClientsCache: mvtDaemonClientsCache,
@@ -1192,7 +1192,7 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 
 func (h *handler) GetMetricData(c *gin.Context) {
 	var requestBody MetricsRequestBody
-	if h.promQlBuilder == nil {
+	if h.promQlService == nil {
 		h.respondWithError(c, "prom ql service is nil")
 		return
 	}
@@ -1205,7 +1205,7 @@ func (h *handler) GetMetricData(c *gin.Context) {
 		return
 	}
 	// builds prom query
-	promQl, err := h.promQlBuilder.BuildQuery(requestBody.PatternName, requestBody)
+	promQl, err := h.promQlService.BuildQuery(requestBody.PatternName, requestBody)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("error in building promql %v", err))
 		return
@@ -1221,7 +1221,7 @@ func (h *handler) GetMetricData(c *gin.Context) {
 	startTime, _ := time.Parse(time.RFC3339, requestBody.StartTime)
 	endTime, _ := time.Parse(time.RFC3339, requestBody.EndTime)
 
-	result, err := h.promQlBuilder.QueryPrometheus(context.Background(), promQl, startTime, endTime)
+	result, err := h.promQlService.QueryPrometheus(context.Background(), promQl, startTime, endTime)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("error in prometheus query %v", err))
 		return

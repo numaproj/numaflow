@@ -16,7 +16,7 @@ type PromQl interface {
 	PopulateReqMap(MetricsRequestBody) map[string]string
 }
 
-type PromQlBuilder struct {
+type PromQlService struct {
 	Prometheus   *Prometheus
 	PlaceHolders map[string][]string
 	Expression   map[string]string
@@ -75,8 +75,8 @@ func substitutePlaceHolders(expr string, placeholders []string, reqMap map[strin
 	return expr, nil
 }
 
-// NewPromQlBuilder creates a new PromQlBuilder instance
-func NewPromQlBuilder(client *Prometheus, config *PrometheusConfig) PromQl {
+// NewPromQlService creates a new PromQlService instance
+func NewPromQlService(client *Prometheus, config *PrometheusConfig) PromQl {
 	var (
 		expressions  = make(map[string]string)
 		placeHolders = make(map[string][]string)
@@ -94,7 +94,7 @@ func NewPromQlBuilder(client *Prometheus, config *PrometheusConfig) PromQl {
 		placeHolders[name] = placeHoldersArr
 	}
 
-	return &PromQlBuilder{
+	return &PromQlService{
 		Prometheus:   client,
 		PlaceHolders: placeHolders,
 		Expression:   expressions,
@@ -103,7 +103,7 @@ func NewPromQlBuilder(client *Prometheus, config *PrometheusConfig) PromQl {
 }
 
 // populate map based on req fields
-func (b *PromQlBuilder) PopulateReqMap(requestBody MetricsRequestBody) map[string]string {
+func (b *PromQlService) PopulateReqMap(requestBody MetricsRequestBody) map[string]string {
 	reqMap := map[string]string{
 		"$metric_name":         requestBody.MetricName,
 		"$filter_labels":       formatMapLabels(requestBody.FilterLabels),
@@ -115,7 +115,7 @@ func (b *PromQlBuilder) PopulateReqMap(requestBody MetricsRequestBody) map[strin
 }
 
 // build constructs the PromQL query string
-func (b *PromQlBuilder) BuildQuery(patternName string, requestBody MetricsRequestBody) (string, error) {
+func (b *PromQlService) BuildQuery(patternName string, requestBody MetricsRequestBody) (string, error) {
 	var query string
 	expr := b.Expression[patternName]
 	placeHolders := b.PlaceHolders[patternName]
@@ -128,7 +128,7 @@ func (b *PromQlBuilder) BuildQuery(patternName string, requestBody MetricsReques
 }
 
 // query prometheus server
-func (b *PromQlBuilder) QueryPrometheus(ctx context.Context, promql string, start, end time.Time) (interface{}, error) {
+func (b *PromQlService) QueryPrometheus(ctx context.Context, promql string, start, end time.Time) (interface{}, error) {
 	if b.Prometheus == nil {
 		return nil, fmt.Errorf("prometheus client is nil")
 	}
