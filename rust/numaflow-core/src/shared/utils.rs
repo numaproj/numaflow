@@ -3,15 +3,15 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::config::config;
-use crate::error;
 use crate::error::Error;
 use crate::monovertex::metrics::{
-    start_metrics_https_server, LagReader, LagReaderBuilder, MetricsState,
+    start_metrics_https_server, MetricsState, PendingReader, PendingReaderBuilder,
 };
 use crate::monovertex::sink_pb::sink_client::SinkClient;
 use crate::monovertex::source_pb::source_client::SourceClient;
 use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;
 use crate::shared::server_info;
+use crate::{error, reader};
 
 use axum::http::Uri;
 use backoff::retry::Retry;
@@ -81,8 +81,10 @@ pub(crate) async fn start_metrics_server(metrics_state: MetricsState) -> JoinHan
     })
 }
 
-pub(crate) async fn create_lag_reader(lag_reader_grpc_client: SourceClient<Channel>) -> LagReader {
-    LagReaderBuilder::new(lag_reader_grpc_client)
+pub(crate) async fn create_pending_reader<T: reader::LagReader>(
+    lag_reader_grpc_client: T,
+) -> PendingReader<T> {
+    PendingReaderBuilder::new(lag_reader_grpc_client)
         .lag_checking_interval(Duration::from_secs(
             config().lag_check_interval_in_secs.into(),
         ))

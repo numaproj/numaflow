@@ -105,7 +105,7 @@ test-coverage:
 
 .PHONY: test-coverage-with-isb
 test-coverage-with-isb:
-	go test -covermode=atomic -coverprofile=test/profile.cov -tags=isb_redis $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
+	go test -v -timeout 7m -covermode=atomic -coverprofile=test/profile.cov -tags=isb_redis $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
 	go tool cover -func=test/profile.cov
 
 .PHONY: test-code
