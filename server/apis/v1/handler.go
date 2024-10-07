@@ -32,7 +32,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	lru "github.com/hashicorp/golang-lru/v2"
-	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -93,7 +92,7 @@ func WithReadOnlyMode() HandlerOption {
 type handler struct {
 	kubeClient            kubernetes.Interface
 	metricsClient         *metricsversiond.Clientset
-	prometheusClient      PrometheusClientInterface
+	promQlBuilder         PromQl
 	numaflowClient        dfv1clients.NumaflowV1alpha1Interface
 	daemonClientsCache    *lru.Cache[string, daemonclient.DaemonClient]
 	mvtDaemonClientsCache *lru.Cache[string, mvtdaemonclient.MonoVertexDaemonClient]
@@ -128,7 +127,10 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 
 	// create handler instance even if prometheus server details are not set, let the API respond with err mssg
 	prometheusMetricConfig := loadPrometheusMetricConfig()
-	prometheusClient := NewPrometheusClient(prometheusMetricConfig)
+	// prom client instance
+	prometheusClient := NewPrometheusClient(prometheusMetricConfig.ServerUrl)
+	// prom ql builder service instance
+	promQlBuilder := NewPromQlBuilder(prometheusClient, prometheusMetricConfig)
 
 	o := defaultHandlerOptions()
 	for _, opt := range opts {
@@ -139,7 +141,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	return &handler{
 		kubeClient:            kubeClient,
 		metricsClient:         metricsClient,
-		prometheusClient:      prometheusClient,
+		promQlBuilder:         promQlBuilder,
 		numaflowClient:        numaflowClient,
 		daemonClientsCache:    daemonClientsCache,
 		mvtDaemonClientsCache: mvtDaemonClientsCache,
@@ -1189,50 +1191,25 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 }
 
 func (h *handler) GetMetricData(c *gin.Context) {
-
-	_, api, err := h.prometheusClient.GetClientAndApi()
-	if err != nil {
-		h.respondWithError(c, err.Error())
+	var requestBody MetricsRequestBody
+	if h.promQlBuilder == nil {
+		h.respondWithError(c, "prom ql service is nil")
 		return
 	}
-	var (
-		pattern     *PatternData
-		requestBody MetricsRequestBody
-	)
-
 	if err := bindJson(c, &requestBody); err != nil {
 		h.respondWithError(c, fmt.Sprintf("error in decoding JSON req body %v", err))
 		return
 	}
-
 	if requestBody.PatternName == "" {
 		h.respondWithError(c, "request does not have pattern name")
 		return
 	}
-	// find pattern from config based on req pattern name
-	for _, p := range h.prometheusClient.GetConfigData() {
-		if p.Name == requestBody.PatternName {
-			pattern = &p
-			break
-		}
-	}
-	// Error if pattern name not found in the config
-	if pattern == nil {
-		h.respondWithError(c, fmt.Sprintf("pattern name %s not supported yet", requestBody.PatternName))
-		return
-	}
-
-	promQlBuilder := getBuilder()
-	defer putBuilder(promQlBuilder)
-
-	promQlBuilder.PopulateBuilder(requestBody, *pattern.Expression)
-	promQuery, err := promQlBuilder.Build()
-
+	// builds prom query
+	promQl, err := h.promQlBuilder.BuildQuery(requestBody.PatternName, requestBody)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("error in building promql %v", err))
 		return
 	}
-
 	// default start and end times
 	if requestBody.StartTime == "" {
 		requestBody.StartTime = time.Now().Add(-30 * time.Minute).Format(time.RFC3339)
@@ -1244,18 +1221,11 @@ func (h *handler) GetMetricData(c *gin.Context) {
 	startTime, _ := time.Parse(time.RFC3339, requestBody.StartTime)
 	endTime, _ := time.Parse(time.RFC3339, requestBody.EndTime)
 
-	r := v1.Range{
-		Start: startTime,
-		End:   endTime,
-		Step:  time.Minute,
-	}
-
-	result, _, err := api.QueryRange(context.Background(), promQuery, r)
+	result, err := h.promQlBuilder.QueryPrometheus(context.Background(), promQl, startTime, endTime)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("error in prometheus query %v", err))
 		return
 	}
-
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, result))
 }
 

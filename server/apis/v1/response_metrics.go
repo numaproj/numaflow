@@ -1,12 +1,10 @@
 package v1
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
-
 	"gopkg.in/yaml.v2"
 )
 
@@ -38,7 +36,7 @@ type PatternData struct {
 	Object      string       `yaml:"object" json:"object"`
 	Title       string       `yaml:"title"`
 	Description string       `yaml:"description"`
-	Expression  *string      `yaml:"expr"`
+	Expression  string       `yaml:"expr"`
 	Duration    []string     `yaml:"duration"`
 	Metrics     []MetricData `yaml:"metrics"`
 	Quantile    []string     `yaml:"quantile_percentile"`
@@ -51,47 +49,26 @@ type PrometheusConfig struct {
 	Patterns []PatternData `yaml:"patterns"`
 }
 
-type PrometheusClientInterface interface {
-	GetClientAndApi() (api.Client, v1.API, error)
-	GetConfigData() []PatternData
+type Prometheus struct {
+	Client api.Client
+	Api    v1.API
 }
 
-type PrometheusClient struct {
-	ConfigData []PatternData
-	Client     api.Client
-	Api        v1.API
-}
-
-func NewPrometheusClient(config *PrometheusConfig) PrometheusClientInterface {
-	if config == nil || config.ServerUrl == "" {
-		return &PrometheusClient{}
+func NewPrometheusClient(url string) *Prometheus {
+	if url == "" {
+		return nil
 	}
 	client, err := api.NewClient(api.Config{
-		Address: config.ServerUrl,
+		Address: url,
 	})
 	if err != nil {
-		return &PrometheusClient{}
+		return nil
 	}
 	v1api := v1.NewAPI(client)
-	return &PrometheusClient{
-		ConfigData: config.Patterns,
-		Client:     client,
-		Api:        v1api,
+	return &Prometheus{
+		Client: client,
+		Api:    v1api,
 	}
-}
-
-func (pc *PrometheusClient) GetClientAndApi() (api.Client, v1.API, error) {
-	if pc != nil && pc.Client != nil && pc.Api != nil {
-		return pc.Client, pc.Api, nil
-	}
-	return nil, nil, fmt.Errorf("prometheus client/api not set")
-}
-
-func (pc *PrometheusClient) GetConfigData() []PatternData {
-	if pc != nil {
-		return pc.ConfigData
-	}
-	return []PatternData{}
 }
 
 func loadPrometheusMetricConfig() *PrometheusConfig {
@@ -103,12 +80,12 @@ func loadPrometheusMetricConfig() *PrometheusConfig {
 
 	data, err = os.ReadFile(metricsProxyConfigPath)
 	if err != nil {
-		return nil
+		return &PrometheusConfig{}
 	}
 	err = yaml.Unmarshal(data, &promConfig)
 
 	if err != nil {
-		return nil
+		return &PrometheusConfig{}
 	}
 
 	return &promConfig
