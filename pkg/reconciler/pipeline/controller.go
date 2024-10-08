@@ -24,6 +24,7 @@ import (
 
 	"github.com/imdario/mergo"
 	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
 	appv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -835,22 +836,24 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		daemonClient   daemonclient.DaemonClient
 		err            error
 	)
-	// check that annotations / pause timestamp annotation exist
+	pl.Status.MarkPhasePausing()
+
 	if pl.GetAnnotations() == nil || pl.GetAnnotations()[dfv1.KeyPauseTimestamp] == "" {
-		patchJson := `{"metadata":{"annotations":{"` + dfv1.KeyPauseTimestamp + `":"` + time.Now().Format(time.RFC3339) + `"}}}`
-		if err := r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil && !apierrors.IsNotFound(err) {
+		_, err = r.scaleDownSourceVertices(ctx, pl)
+		if err != nil {
+			// If there's an error requeue the request
 			return true, err
 		}
-		pl.Status.MarkPhasePausing()
-		updated, err := r.scaleDownSourceVertices(ctx, pl)
-		if err != nil || updated {
-			// If there's an error, or scaling down happens, requeue the request
-			// This is to give some time to process the new messages, otherwise check IsDrained directly may get incorrect information
-			return updated, err
+		patchJson := `{"metadata":{"annotations":{"` + dfv1.KeyPauseTimestamp + `":"` + time.Now().Format(time.RFC3339) + `"}}}`
+		if err = r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil && !apierrors.IsNotFound(err) {
+			return true, err
 		}
+		// This is to give some time to process the new messages, otherwise check IsDrained directly may get incorrect information
+		return true, nil
 	}
+
 	// Check if all the source vertices have scaled down to zero
-	sourcesScaled, pauseError := r.sourceVerticesRunning(ctx, pl)
+	sourcesScaled, pauseError := r.sourceVerticesNotRunning(ctx, pl)
 	// If the sources have scaled down successfully then check for the buffer information.
 	// Check for the daemon to obtain the buffer draining information, in case we see an error trying to
 	// retrieve this we do not exit prematurely to allow honoring the pause timeout for a consistent error
@@ -893,18 +896,17 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 	return true, pauseError
 }
 
-// sourceVerticesRunning checks whether any source vertex has running replicas
-func (r *pipelineReconciler) sourceVerticesRunning(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
-	existingVertices, err := r.findExistingVertices(ctx, pl)
-	if err != nil {
+// sourceVerticesNotRunning checks whether any source vertex has running replicas
+func (r *pipelineReconciler) sourceVerticesNotRunning(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
+	sources := pl.Spec.GetSourcesByName()
+	pods := corev1.PodList{}
+	label := fmt.Sprintf("%s=%s, %s in (%s)", dfv1.KeyPipelineName, pl.Name,
+		dfv1.KeyVertexName, strings.Join(maps.Keys(sources), ","))
+	selector, _ := labels.Parse(label)
+	if err := r.client.List(ctx, &pods, &client.ListOptions{Namespace: pl.Namespace, LabelSelector: selector}); err != nil {
 		return false, err
 	}
-	for _, vertex := range existingVertices {
-		if sourceVertexFilter(vertex) && vertex.Status.Replicas != 0 {
-			return false, nil
-		}
-	}
-	return true, nil
+	return len(pods.Items) == 0, nil
 }
 
 func (r *pipelineReconciler) scaleDownSourceVertices(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
@@ -985,6 +987,8 @@ func (r *pipelineReconciler) checkChildrenResourceStatus(ctx context.Context, pi
 				return
 			}
 		}
+		// if all conditions are True, clear the status message.
+		pipeline.Status.Message = ""
 	}()
 
 	// get the daemon deployment and update the status of it to the pipeline
