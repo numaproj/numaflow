@@ -188,10 +188,10 @@ func (s *TransformerSuite) TestSourceTransformer() {
 		defer wg.Done()
 		s.testSourceTransformer("go")
 	}()
-	//go func() {
-	//	defer wg.Done()
-	//	s.testSourceTransformer("rust")
-	//}()
+	go func() {
+		defer wg.Done()
+		s.testSourceTransformer("rust")
+	}()
 	wg.Wait()
 }
 
