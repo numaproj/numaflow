@@ -10,6 +10,7 @@ ignore:
 - "test/.*"
 - "rust/**/error.rs"
 - "rust/numaflow-models/**" # ignore generated files
+- "rust/numaflow-grpc/**" # ignore generated files
 coverage:
   status:
     patch: off

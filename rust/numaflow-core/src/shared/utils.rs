@@ -7,11 +7,11 @@ use crate::error::Error;
 use crate::monovertex::metrics::{
     start_metrics_https_server, MetricsState, PendingReader, PendingReaderBuilder,
 };
-use crate::monovertex::sink_pb::sink_client::SinkClient;
-use crate::monovertex::source_pb::source_client::SourceClient;
-use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;
 use crate::shared::server_info;
 use crate::{error, reader};
+use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use numaflow_grpc::clients::source::source_client::SourceClient;
+use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 
 use axum::http::Uri;
 use backoff::retry::Retry;

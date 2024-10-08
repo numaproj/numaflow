@@ -10,10 +10,10 @@ use crate::error::Error;
 use crate::message::{Message, Offset};
 use crate::monovertex::metrics;
 use crate::monovertex::metrics::forward_metrics;
-use crate::monovertex::sink_pb::Status::{Failure, Fallback, Success};
 use crate::sink::user_defined::SinkWriter;
 use crate::transformer::user_defined::SourceTransformer;
 use crate::{error, source};
+use numaflow_grpc::clients::sink::Status::{Failure, Fallback, Success};
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
@@ -548,9 +548,6 @@ mod tests {
 
     use crate::config::config;
     use crate::monovertex::forwarder::ForwarderBuilder;
-    use crate::monovertex::sink_pb::sink_client::SinkClient;
-    use crate::monovertex::source_pb::source_client::SourceClient;
-    use crate::monovertex::sourcetransform_pb::source_transform_client::SourceTransformClient;
     use crate::shared::utils::create_rpc_channel;
     use crate::sink::user_defined::SinkWriter;
     use crate::source::user_defined::new_source;
@@ -558,6 +555,9 @@ mod tests {
     use chrono::Utc;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
+    use numaflow_grpc::clients::sink::sink_client::SinkClient;
+    use numaflow_grpc::clients::source::source_client::SourceClient;
+    use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
     use tokio::sync::mpsc;
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
