@@ -94,6 +94,7 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return result, err
 		}
 	}
+	log.Info("MYDEBUG: NEW STATUS ", plCopy.Status.DrainedOnPause, plCopy.Status.Phase)
 	if err := r.client.Status().Update(ctx, plCopy); err != nil {
 		return result, err
 	}
@@ -181,8 +182,8 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	}
 
 	// check if any changes related to pause/resume lifecycle for the pipeline
-	if isLifecycleChange(pl) {
-		oldPhase := pl.Status.Phase
+	oldPhase := pl.Status.Phase
+	if isLifecycleChange(pl) && oldPhase != pl.Spec.Lifecycle.GetDesiredPhase() {
 		requeue, err := r.updateDesiredState(ctx, pl)
 		if err != nil {
 			logMsg := fmt.Sprintf("Updated desired pipeline phase failed: %v", zap.Error(err))
@@ -611,7 +612,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		copyVertexTemplate(pl, vCopy)
 		copyVertexLimits(pl, vCopy)
 		replicas := int32(1)
-		// If the desired phase is paused or we are in the middle of pausing we should not start any vertex replicas
+		// If the desired phase is paused, or we are in the middle of pausing we should not start any vertex replicas
 		if isLifecycleChange(pl) {
 			replicas = int32(0)
 		} else if v.IsReduceUDF() {
@@ -836,33 +837,35 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		if err := r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil && !apierrors.IsNotFound(err) {
 			return true, err
 		}
+		pl.Status.MarkPhasePausing()
+		updated, err := r.scaleDownSourceVertices(ctx, pl)
+		if err != nil || updated {
+			// If there's an error, or scaling down happens, requeue the request
+			// This is to give some time to process the new messages, otherwise check IsDrained directly may get incorrect information
+			return updated, err
+		}
 	}
-
-	pl.Status.MarkPhasePausing()
-	updated, err := r.scaleDownSourceVertices(ctx, pl)
-	if err != nil || updated {
-		// If there's an error, or scaling down happens, requeue the request
-		// This is to give some time to process the new messages, otherwise check IsDrained directly may get incorrect information
-		return updated, err
-	}
-
-	var daemonError error
 	var drainCompleted = false
-
+	// Check if all the source vertices have scaled down to zero
+	sourcesScaled, pauseError := r.sourceVerticesRunning(ctx, pl)
+	// If the sources have scaled down successfully then check for the buffer information.
 	// Check for the daemon to obtain the buffer draining information, in case we see an error trying to
 	// retrieve this we do not exit prematurely to allow honoring the pause timeout for a consistent error
 	// - In case the timeout has not occurred we would trigger a requeue
 	// - If the timeout has occurred even after getting the drained error, we will try to pause the pipeline
-	daemonClient, daemonError := daemonclient.NewGRPCDaemonServiceClient(pl.GetDaemonServiceURL())
-	if daemonClient != nil {
-		defer func() {
-			_ = daemonClient.Close()
-		}()
-		drainCompleted, err = daemonClient.IsDrained(ctx, pl.Name)
-		if err != nil {
-			daemonError = err
+	if sourcesScaled {
+		daemonClient, err := daemonclient.NewGRPCDaemonServiceClient(pl.GetDaemonServiceURL())
+		if daemonClient != nil {
+			defer func() {
+				_ = daemonClient.Close()
+			}()
+			drainCompleted, err = daemonClient.IsDrained(ctx, pl.Name)
+			if err != nil {
+				pauseError = err
+			}
 		}
 	}
+
 	pauseTimestamp, err := time.Parse(time.RFC3339, pl.GetAnnotations()[dfv1.KeyPauseTimestamp])
 	if err != nil {
 		return false, err
@@ -874,8 +877,8 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		if err != nil {
 			return true, err
 		}
-		if daemonError != nil {
-			r.logger.Errorw("Error in fetching Drained status, Pausing due to timeout", zap.Error(daemonError))
+		if pauseError != nil {
+			r.logger.Errorw("Errors encountered while pausing, moving to paused after timeout", zap.Error(pauseError))
 		}
 		// if the drain completed successfully, then set the DrainedOnPause field to true
 		if drainCompleted {
@@ -884,7 +887,21 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		pl.Status.MarkPhasePaused()
 		return false, nil
 	}
-	return true, daemonError
+	return true, pauseError
+}
+
+// sourceVerticesRunning checks whether any source vertex has running replicas
+func (r *pipelineReconciler) sourceVerticesRunning(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
+	existingVertices, err := r.findExistingVertices(ctx, pl)
+	if err != nil {
+		return false, err
+	}
+	for _, vertex := range existingVertices {
+		if sourceVertexFilter(vertex) && vertex.Status.Replicas != 0 {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func (r *pipelineReconciler) scaleDownSourceVertices(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
