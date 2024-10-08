@@ -1200,12 +1200,8 @@ func (h *handler) GetMetricData(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("error in decoding JSON req body %v", err))
 		return
 	}
-	if requestBody.PatternName == "" {
-		h.respondWithError(c, "request does not have pattern name")
-		return
-	}
 	// builds prom query
-	promQl, err := h.promQlService.BuildQuery(requestBody.PatternName, requestBody)
+	promQl, err := h.promQlService.BuildQuery(requestBody)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("error in building promql %v", err))
 		return

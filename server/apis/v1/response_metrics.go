@@ -3,8 +3,6 @@ package v1
 import (
 	"os"
 
-	"github.com/prometheus/client_golang/api"
-	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"gopkg.in/yaml.v2"
 )
 
@@ -49,28 +47,6 @@ type PrometheusConfig struct {
 	Patterns []PatternData `yaml:"patterns"`
 }
 
-type Prometheus struct {
-	Client api.Client
-	Api    v1.API
-}
-
-func NewPrometheusClient(url string) *Prometheus {
-	if url == "" {
-		return nil
-	}
-	client, err := api.NewClient(api.Config{
-		Address: url,
-	})
-	if err != nil {
-		return nil
-	}
-	v1api := v1.NewAPI(client)
-	return &Prometheus{
-		Client: client,
-		Api:    v1api,
-	}
-}
-
 func loadPrometheusMetricConfig() *PrometheusConfig {
 	var (
 		data       []byte
@@ -87,6 +63,5 @@ func loadPrometheusMetricConfig() *PrometheusConfig {
 	if err != nil {
 		return &PrometheusConfig{}
 	}
-
 	return &promConfig
 }

@@ -3,16 +3,53 @@ package v1
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/common/model"
 )
 
+// PrometheusClient interface for the Prometheus HTTP client
+type PrometheusClient interface {
+	// implement client methods here
+	Do(context.Context, *http.Request) (*http.Response, []byte, error)
+}
+
+// PrometheusAPI interface for the Prometheus API
+type PrometheusAPI interface {
+	QueryRange(ctx context.Context, query string, r v1.Range, opts ...v1.Option) (model.Value, v1.Warnings, error)
+}
+
+// Prometheus struct holds the client and API
+type Prometheus struct {
+	Client PrometheusClient
+	Api    PrometheusAPI
+}
+
+func NewPrometheusClient(url string) *Prometheus {
+	if url == "" {
+		return nil
+	}
+	client, err := api.NewClient(api.Config{
+		Address: url,
+	})
+	if err != nil {
+		return nil
+	}
+	v1api := v1.NewAPI(client)
+	return &Prometheus{
+		Client: client,
+		Api:    v1api,
+	}
+}
+
 type PromQl interface {
-	QueryPrometheus(context.Context, string, time.Time, time.Time) (interface{}, error)
-	BuildQuery(string, MetricsRequestBody) (string, error)
+	QueryPrometheus(context.Context, string, time.Time, time.Time) (model.Value, error)
+	BuildQuery(MetricsRequestBody) (string, error)
 	PopulateReqMap(MetricsRequestBody) map[string]string
 }
 
@@ -115,10 +152,15 @@ func (b *PromQlService) PopulateReqMap(requestBody MetricsRequestBody) map[strin
 }
 
 // build constructs the PromQL query string
-func (b *PromQlService) BuildQuery(patternName string, requestBody MetricsRequestBody) (string, error) {
+func (b *PromQlService) BuildQuery(requestBody MetricsRequestBody) (string, error) {
 	var query string
+	var patternName = requestBody.PatternName
 	expr := b.Expression[patternName]
 	placeHolders := b.PlaceHolders[patternName]
+
+	if expr == "" || len(placeHolders) == 0 {
+		return query, fmt.Errorf("expr or placeholders do not exist for the pattern in the config")
+	}
 	reqMap := b.PopulateReqMap(requestBody)
 	query, err := substitutePlaceHolders(expr, placeHolders, reqMap)
 	if err != nil {
@@ -128,7 +170,7 @@ func (b *PromQlService) BuildQuery(patternName string, requestBody MetricsReques
 }
 
 // query prometheus server
-func (b *PromQlService) QueryPrometheus(ctx context.Context, promql string, start, end time.Time) (interface{}, error) {
+func (b *PromQlService) QueryPrometheus(ctx context.Context, promql string, start, end time.Time) (model.Value, error) {
 	if b.Prometheus == nil {
 		return nil, fmt.Errorf("prometheus client is nil")
 	}
@@ -137,6 +179,6 @@ func (b *PromQlService) QueryPrometheus(ctx context.Context, promql string, star
 		End:   end,
 		Step:  time.Minute,
 	}
-	result, _, err := b.Prometheus.Api.QueryRange(ctx, promql, r)
+	result, _, err := b.Prometheus.Api.QueryRange(ctx, promql, r, v1.WithTimeout(5*time.Second))
 	return result, err
 }
