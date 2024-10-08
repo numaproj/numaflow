@@ -23,7 +23,6 @@ ARG TARGETPLATFORM
 WORKDIR /numaflow
 RUN apt-get update && apt-get install -y protobuf-compiler
 
-
 FROM chef AS planner
 COPY ./rust/ .
 RUN cargo chef prepare --recipe-path recipe.json

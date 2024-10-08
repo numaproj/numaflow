@@ -1547,6 +1547,7 @@ version = "0.1.0"
 dependencies = [
  "backoff",
  "numaflow-core",
+ "numaflow-grpc",
  "servesink",
  "serving",
  "tokio",
@@ -1591,6 +1592,7 @@ dependencies = [
  "kube",
  "log",
  "numaflow 0.1.1",
+ "numaflow-grpc",
  "numaflow-models",
  "parking_lot",
  "pep440_rs",
@@ -1609,12 +1611,21 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tonic",
- "tonic-build",
  "tower 0.4.13",
  "tracing",
  "tracing-subscriber",
  "trait-variant",
  "uuid",
+]
+
+[[package]]
+name = "numaflow-grpc"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "prost-types",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]
