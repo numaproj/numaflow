@@ -3,12 +3,14 @@ ignore:
 - "**/*.pb.gw.go"
 - "**/*generated.go"
 - "**/*generated.deepcopy.go"
+- "**/*generated.openapi.go"
 - "**/*_test.go"
 - "pkg/client/.*"
 - "vendor/.*"
 - "test/.*"
 - "rust/**/error.rs"
 - "rust/numaflow-models/**" # ignore generated files
+- "rust/numaflow-grpc/**" # ignore generated files
 coverage:
   status:
     patch: off

@@ -3,13 +3,15 @@ use crate::error;
 use crate::shared::utils;
 use crate::shared::utils::create_rpc_channel;
 use crate::sink::user_defined::SinkWriter;
+use crate::source::generator;
 use crate::source::user_defined::new_source;
 use crate::transformer::user_defined::SourceTransformer;
 use forwarder::ForwarderBuilder;
 use metrics::MetricsState;
-use sink_pb::sink_client::SinkClient;
-use source_pb::source_client::SourceClient;
-use sourcetransform_pb::source_transform_client::SourceTransformClient;
+use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use numaflow_grpc::clients::source::source_client::SourceClient;
+use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use std::time::Duration;
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -23,18 +25,6 @@ use tracing::info;
 /// - Send Acknowledgement back to the Source
 mod forwarder;
 pub(crate) mod metrics;
-
-pub(crate) mod source_pb {
-    tonic::include_proto!("source.v1");
-}
-
-pub(crate) mod sink_pb {
-    tonic::include_proto!("sink.v1");
-}
-
-pub(crate) mod sourcetransform_pb {
-    tonic::include_proto!("sourcetransformer.v1");
-}
 
 pub async fn mono_vertex() -> error::Result<()> {
     let cln_token = CancellationToken::new();
@@ -101,6 +91,14 @@ async fn start_forwarder(cln_token: CancellationToken, sdk_config: SDKConfig) ->
         },
     )
     .await?;
+
+    // FIXME: use me and use me right :)
+    let _ = generator::new_generator(
+        bytes::Bytes::from("fix me"),
+        1,
+        10,
+        Duration::from_millis(1000),
+    );
 
     let mut source_grpc_client =
         SourceClient::new(create_rpc_channel(sdk_config.source_socket_path.into()).await?)

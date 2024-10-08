@@ -5,6 +5,8 @@ use crate::message::{Message, Offset};
 /// [User-Defined Source]: https://numaflow.numaproj.io/user-guide/sources/user-defined-sources/
 pub(crate) mod user_defined;
 
+pub(crate) mod generator;
+
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
     #[allow(dead_code)]
