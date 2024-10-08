@@ -67,12 +67,13 @@ mod stream_generator {
             mut self: Pin<&mut StreamGenerator>,
             cx: &mut Context<'_>,
         ) -> Poll<Option<Self::Item>> {
-            let this = self.as_mut().project();
+            let mut this = self.as_mut().project();
 
-            let mut tick = this.tick;
-            match tick.poll_tick(cx) {
+            match this.tick.poll_tick(cx) {
+                // Poll::Ready means we are ready to send data the whole batch since enough time
+                // has passed.
                 Poll::Ready(_) => {
-                    // Generate data that equals to batch data
+                    // generate data that equals to batch data
                     let data = vec![this.content.clone(); *this.batch];
                     // reset used quota
                     *this.used = *this.batch;
@@ -80,16 +81,11 @@ mod stream_generator {
                     Poll::Ready(Some(data))
                 }
                 Poll::Pending => {
+                    // even if enough time hasn't passed, we can still send data if we have
+                    // quota (rpu - used) left
                     if this.used < this.rpu {
-                        // even if enough time hasn't passed, we can still send data if we have
-                        // quota (rpu - used) left
-
                         // make sure we do not send more than desired
-                        let to_send = if *this.rpu - *this.used < *this.batch {
-                            *this.rpu - *this.used
-                        } else {
-                            *this.batch
-                        };
+                        let to_send = std::cmp::min(*this.batch - *this.rpu, *this.batch);
 
                         // update the counters
                         *this.used += to_send;
