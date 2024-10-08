@@ -188,6 +188,8 @@ func (s *TransformerSuite) TestSourceTransformer() {
 		defer wg.Done()
 		s.testSourceTransformer("go")
 	}()
+
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		s.testSourceTransformer("rust")
