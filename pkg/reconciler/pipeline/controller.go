@@ -848,7 +848,8 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		if err = r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil && !apierrors.IsNotFound(err) {
 			return true, err
 		}
-		// This is to give some time to process the new messages, otherwise check IsDrained directly may get incorrect information
+		// This is to give some time to process the new messages,
+		// otherwise check IsDrained directly may get incorrect information
 		return true, nil
 	}
 

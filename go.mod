@@ -49,6 +49,7 @@ require (
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.26.0
 	golang.org/x/crypto v0.27.0
+	golang.org/x/exp v0.0.0-20240531132922-fd00a4e0eefc
 	golang.org/x/net v0.29.0
 	golang.org/x/oauth2 v0.21.0
 	golang.org/x/sync v0.8.0
@@ -197,7 +198,6 @@ require (
 	github.com/yudai/golcs v0.0.0-20170316035057-ecda9a501e82 // indirect
 	go.mongodb.org/mongo-driver v1.15.0 // indirect
 	golang.org/x/arch v0.7.0 // indirect
-	golang.org/x/exp v0.0.0-20240531132922-fd00a4e0eefc // indirect
 	golang.org/x/mod v0.20.0 // indirect
 	golang.org/x/sys v0.25.0 // indirect
 	golang.org/x/term v0.24.0 // indirect
