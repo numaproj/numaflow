@@ -136,6 +136,22 @@ metadata:
 ---
 apiVersion: v1
 data:
+  config.yaml: "# url: http://my-release-kube-prometheus-prometheus.default.svc.cluster.local:9090\npatterns:\n-
+    name: mono_vertex_histogram\n  object: mono-vertex\n  title: Processing Time Latency\n
+    \ description: This query pattern is for P99,P90 and P50 quantiles for a mono-vertex
+    across different dimensions\n  expr: |\n    histogram_quantile($quantile_percentile,
+    sum by($group_by_labels,le) (rate($metric_name{$filter_labels}[$duration])))\n
+    \ metrics: \n    - metric_name: monovtx_processing_time_bucket\n      filter_labels:\n
+    \       - namespace\n        - mvtx_name\n        - pod\n      group_by_labels:\n
+    \       - mvtx_name\n        - pod\n  quantile_percentile:\n    - 0.99\n    -
+    0.95\n    - 0.90\n    - 0.50\n  duration: \n    - 5m\n    - 10m\n"
+kind: ConfigMap
+metadata:
+  name: numaflow-metrics-proxy-config
+  namespace: numaflow-system
+---
+apiVersion: v1
+data:
   admin.enabled: "true"
 kind: ConfigMap
 metadata:
@@ -305,6 +321,8 @@ spec:
           subPath: index.html
         - mountPath: /etc/numaflow
           name: rbac-config
+        - mountPath: /etc/numaflow/metrics
+          name: metrics-proxy-config
       initContainers:
       - args:
         - server-init
@@ -347,3 +365,6 @@ spec:
       - configMap:
           name: numaflow-server-rbac-config
         name: rbac-config
+      - configMap:
+          name: numaflow-metrics-proxy-config
+        name: metrics-proxy-config
