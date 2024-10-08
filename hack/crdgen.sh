@@ -4,7 +4,7 @@ set -eu -o pipefail
 source $(dirname $0)/library.sh
 ensure_vendor
 
-go  -mod=vendor install sigs.k8s.io/controller-tools/cmd/controller-gen
+go install -mod=vendor sigs.k8s.io/controller-tools/cmd/controller-gen
 
 header "Generating CRDs"
 # maxDescLen=0 avoids `kubectl apply` failing due to annotations being too long
