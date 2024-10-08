@@ -94,7 +94,6 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return result, err
 		}
 	}
-	log.Info("MYDEBUG: NEW STATUS ", plCopy.Status.DrainedOnPause, plCopy.Status.Phase)
 	if err := r.client.Status().Update(ctx, plCopy); err != nil {
 		return result, err
 	}
@@ -831,6 +830,11 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 }
 
 func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
+	var (
+		drainCompleted = false
+		daemonClient   daemonclient.DaemonClient
+		err            error
+	)
 	// check that annotations / pause timestamp annotation exist
 	if pl.GetAnnotations() == nil || pl.GetAnnotations()[dfv1.KeyPauseTimestamp] == "" {
 		patchJson := `{"metadata":{"annotations":{"` + dfv1.KeyPauseTimestamp + `":"` + time.Now().Format(time.RFC3339) + `"}}}`
@@ -845,7 +849,6 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 			return updated, err
 		}
 	}
-	var drainCompleted = false
 	// Check if all the source vertices have scaled down to zero
 	sourcesScaled, pauseError := r.sourceVerticesRunning(ctx, pl)
 	// If the sources have scaled down successfully then check for the buffer information.
@@ -854,7 +857,7 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 	// - In case the timeout has not occurred we would trigger a requeue
 	// - If the timeout has occurred even after getting the drained error, we will try to pause the pipeline
 	if sourcesScaled {
-		daemonClient, err := daemonclient.NewGRPCDaemonServiceClient(pl.GetDaemonServiceURL())
+		daemonClient, pauseError = daemonclient.NewGRPCDaemonServiceClient(pl.GetDaemonServiceURL())
 		if daemonClient != nil {
 			defer func() {
 				_ = daemonClient.Close()
