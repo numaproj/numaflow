@@ -5,12 +5,11 @@ use base64::Engine;
 use chrono::{DateTime, Utc};
 
 use crate::error::Error;
-use crate::monovertex::sink_pb::sink_request::Request;
-use crate::monovertex::sink_pb::SinkRequest;
-use crate::monovertex::source_pb::{read_response, AckRequest};
-use crate::monovertex::sourcetransform_pb::SourceTransformRequest;
-use crate::monovertex::{source_pb, sourcetransform_pb};
 use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
+use numaflow_grpc::clients::sink::sink_request::Request;
+use numaflow_grpc::clients::sink::SinkRequest;
+use numaflow_grpc::clients::source::{read_response, AckRequest};
+use numaflow_grpc::clients::sourcetransformer::SourceTransformRequest;
 
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone)]
@@ -41,8 +40,8 @@ pub(crate) struct Offset {
 impl From<Offset> for AckRequest {
     fn from(offset: Offset) -> Self {
         Self {
-            request: Some(source_pb::ack_request::Request {
-                offset: Some(source_pb::Offset {
+            request: Some(numaflow_grpc::clients::source::ack_request::Request {
+                offset: Some(numaflow_grpc::clients::source::Offset {
                     offset: BASE64_STANDARD
                         .decode(offset.offset)
                         .expect("we control the encoding, so this should never fail"),
@@ -58,14 +57,16 @@ impl From<Offset> for AckRequest {
 impl From<Message> for SourceTransformRequest {
     fn from(message: Message) -> Self {
         Self {
-            request: Some(sourcetransform_pb::source_transform_request::Request {
-                id: message.id,
-                keys: message.keys,
-                value: message.value,
-                event_time: prost_timestamp_from_utc(message.event_time),
-                watermark: None,
-                headers: message.headers,
-            }),
+            request: Some(
+                numaflow_grpc::clients::sourcetransformer::source_transform_request::Request {
+                    id: message.id,
+                    keys: message.keys,
+                    value: message.value,
+                    event_time: prost_timestamp_from_utc(message.event_time),
+                    watermark: None,
+                    headers: message.headers,
+                },
+            ),
             handshake: None,
         }
     }
