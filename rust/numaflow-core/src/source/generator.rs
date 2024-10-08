@@ -85,7 +85,7 @@ mod stream_generator {
                     // quota (rpu - used) left
                     if this.used < this.rpu {
                         // make sure we do not send more than desired
-                        let to_send = std::cmp::min(*this.batch - *this.rpu, *this.batch);
+                        let to_send = std::cmp::min(*this.rpu - *this.used, *this.batch);
 
                         // update the counters
                         *this.used += to_send;
