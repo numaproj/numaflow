@@ -1,9 +1,9 @@
 use crate::error;
 use crate::error::Error;
 use crate::message::Message;
-use crate::monovertex::sink_pb::sink_client::SinkClient;
-use crate::monovertex::sink_pb::sink_request::Status;
-use crate::monovertex::sink_pb::{Handshake, SinkRequest, SinkResponse};
+use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use numaflow_grpc::clients::sink::sink_request::Status;
+use numaflow_grpc::clients::sink::{Handshake, SinkRequest, SinkResponse};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
@@ -109,9 +109,9 @@ mod tests {
 
     use crate::error::Result;
     use crate::message::{Message, Offset};
-    use crate::monovertex::sink_pb::sink_client::SinkClient;
     use crate::shared::utils::create_rpc_channel;
     use crate::sink::user_defined::SinkWriter;
+    use numaflow_grpc::clients::sink::sink_client::SinkClient;
 
     struct Logger;
     #[tonic::async_trait]

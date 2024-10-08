@@ -59,7 +59,7 @@ uname_os() {
     mingw*) os="windows" ;;
     cygwin*) os="windows" ;;
     win*) os="windows" ;;
-    sunos) [ "$(uname -o)" = "illumos" ] && os=illumos ;;
+    sunos) [[ "$(uname -o)" = "illumos" ]] && os=illumos ;;
   esac
   echo "$os"
 }
@@ -80,3 +80,61 @@ uname_arch() {
   esac
   echo "${arch}"
 }
+
+install-protobuf() {
+  local install_dir=""
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      "--install-dir")
+        install_dir="$2"
+        shift 2
+        ;;
+      *)
+        if [[ "$1" =~ ^-- ]]; then
+          echo "unknown argument: $1" >&2
+          return 1
+        fi
+        if [ -n "$install_dir" ]; then
+          echo "too many arguments: $1 (already have $install_dir)" >&2
+          return 1
+        fi
+        install_dir="$1"
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z "${install_dir}" ]]; then
+    echo "install-dir argument is required" >&2
+    return 1
+  fi
+
+  if [[ ! -d "${install_dir}" ]]; then
+    echo "${install_dir} does not exist" >&2
+    return 1
+  fi
+
+  # protobuf version
+  local protobuf_version=27.2
+  local pb_rel="https://github.com/protocolbuffers/protobuf/releases"
+  local os=$(uname_os)
+  local arch=$(uname_arch)
+
+  echo "OS: $os  ARCH: $arch"
+  if [[ "$arch" = "amd64" ]]; then
+    arch="x86_64"
+  elif [[ "$arch" = "arm64" ]]; then
+    arch="aarch_64"
+  fi
+  local binary_url=${pb_rel}/download/v${protobuf_version}/protoc-${protobuf_version}-${os}-${arch}.zip
+  if [[ "$os" = "darwin" ]]; then
+    binary_url=${pb_rel}/download/v${protobuf_version}/protoc-${protobuf_version}-osx-universal_binary.zip
+  fi
+  echo "Downloading $binary_url"
+
+  tmp=$(mktemp -d)
+  curl -sL -o ${tmp}/protoc-${protobuf_version}-${os}-${arch}.zip $binary_url
+  unzip ${tmp}/protoc-${protobuf_version}-${os}-${arch}.zip -d ${install_dir}
+  rm -rf ${tmp}
+}
+
