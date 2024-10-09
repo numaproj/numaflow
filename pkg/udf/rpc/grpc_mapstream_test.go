@@ -28,6 +28,7 @@ import (
 	mapstreampb "github.com/numaproj/numaflow-go/pkg/apis/proto/mapstream/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/mapstream/v1/mapstreammock"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/numaproj/numaflow/pkg/isb"
@@ -58,6 +59,22 @@ func TestGRPCBasedMapStream_WaitUntilReadyWithMockClient(t *testing.T) {
 	u := NewMockUDSGRPCBasedMapStream(mockClient)
 	err := u.WaitUntilReady(ctx)
 	assert.NoError(t, err)
+}
+
+type rpcMsg struct {
+	msg proto.Message
+}
+
+func (r *rpcMsg) Matches(msg interface{}) bool {
+	m, ok := msg.(proto.Message)
+	if !ok {
+		return false
+	}
+	return proto.Equal(m, r.msg)
+}
+
+func (r *rpcMsg) String() string {
+	return fmt.Sprintf("is %s", r.msg)
 }
 
 func TestGRPCBasedUDF_BasicApplyStreamWithMockClient(t *testing.T) {

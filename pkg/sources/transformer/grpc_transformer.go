@@ -145,7 +145,6 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, messages []*i
 		responsePair := isb.ReadWriteMessagePair{
 			ReadMessage:   parentMessage,
 			WriteMessages: taggedMessages,
-			Err:           nil,
 		}
 		transformResults[i] = responsePair
 	}

@@ -23,32 +23,35 @@ import (
 )
 
 // CopyUDFTestApply applies a copy UDF that simply copies the input to output.
-func CopyUDFTestApply(ctx context.Context, vertexName string, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	_ = ctx
-	offset := readMessage.ReadOffset
-	payload := readMessage.Body.Payload
-	parentPaneInfo := readMessage.MessageInfo
+func CopyUDFTestApply(ctx context.Context, vertexName string, readMessages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	udfResults := make([]isb.ReadWriteMessagePair, len(readMessages))
+	for i, readMessage := range readMessages {
+		offset := readMessage.ReadOffset
+		payload := readMessage.Body.Payload
+		parentPaneInfo := readMessage.MessageInfo
+		// copy the payload
+		result := payload
+		var keys []string
 
-	// apply UDF
-	_ = payload
-	// copy the payload
-	result := payload
-	var keys []string
-
-	writeMessage := isb.Message{
-		Header: isb.Header{
-			MessageInfo: parentPaneInfo,
-			ID: isb.MessageID{
-				VertexName: vertexName,
-				Offset:     offset.String(),
+		writeMessage := isb.Message{
+			Header: isb.Header{
+				MessageInfo: parentPaneInfo,
+				ID: isb.MessageID{
+					VertexName: vertexName,
+					Offset:     offset.String(),
+				},
+				Keys: keys,
 			},
-			Keys: keys,
-		},
-		Body: isb.Body{
-			Payload: result,
-		},
+			Body: isb.Body{
+				Payload: result,
+			},
+		}
+		udfResults[i] = isb.ReadWriteMessagePair{
+			ReadMessage:   readMessage,
+			WriteMessages: []*isb.WriteMessage{{Message: writeMessage}},
+		}
 	}
-	return []*isb.WriteMessage{{Message: writeMessage}}, nil
+	return udfResults, nil
 }
 
 func CopyUDFTestApplyStream(ctx context.Context, vertexName string, writeMessageCh chan<- isb.WriteMessage, readMessage *isb.ReadMessage) error {
