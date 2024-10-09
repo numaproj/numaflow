@@ -34,6 +34,8 @@ pub struct Container {
     pub image_pull_policy: Option<String>,
     #[serde(rename = "livenessProbe", skip_serializing_if = "Option::is_none")]
     pub liveness_probe: Option<Box<crate::models::Probe>>,
+    #[serde(rename = "ports", skip_serializing_if = "Option::is_none")]
+    pub ports: Option<Vec<k8s_openapi::api::core::v1::ContainerPort>>,
     #[serde(rename = "readinessProbe", skip_serializing_if = "Option::is_none")]
     pub readiness_probe: Option<Box<crate::models::Probe>>,
     #[serde(rename = "resources", skip_serializing_if = "Option::is_none")]
@@ -55,6 +57,7 @@ impl Container {
             image: None,
             image_pull_policy: None,
             liveness_probe: None,
+            ports: None,
             readiness_probe: None,
             resources: None,
             security_context: None,

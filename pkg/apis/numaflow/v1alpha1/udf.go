@@ -91,7 +91,7 @@ func (in UDF) getUDFContainer(mainContainerReq getContainerReq) corev1.Container
 		c = c.image(mainContainerReq.image).args(args...) // Use the same image as the main container
 	}
 	if x := in.Container; x != nil {
-		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
+		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...).appendPorts(x.Ports...)
 		if x.ImagePullPolicy != nil {
 			c = c.imagePullPolicy(*x.ImagePullPolicy)
 		}
