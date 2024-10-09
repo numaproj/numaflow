@@ -62,7 +62,7 @@ const SINK_TIME: &str = "monovtx_sink_time";
 
 #[derive(Clone)]
 pub(crate) struct MetricsState {
-    pub source_client: SourceClient<Channel>,
+    pub source_client: Option<SourceClient<Channel>>,
     pub sink_client: SinkClient<Channel>,
     pub transformer_client: Option<SourceTransformClient<Channel>>,
     pub fb_sink_client: Option<SinkClient<Channel>>,
@@ -301,14 +301,11 @@ async fn livez() -> impl IntoResponse {
 }
 
 async fn sidecar_livez(State(mut state): State<MetricsState>) -> impl IntoResponse {
-    if state
-        .source_client
-        .is_ready(Request::new(()))
-        .await
-        .is_err()
-    {
-        error!("Source client is not available");
-        return StatusCode::SERVICE_UNAVAILABLE;
+    if let Some(mut source_client) = state.source_client {
+        if source_client.is_ready(Request::new(())).await.is_err() {
+            error!("Source client is not available");
+            return StatusCode::SERVICE_UNAVAILABLE;
+        }
     }
     if state.sink_client.is_ready(Request::new(())).await.is_err() {
         error!("Sink client is not available");
@@ -647,7 +644,9 @@ mod tests {
         // FIXME: we need to have a better way, this is flaky
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         let metrics_state = MetricsState {
-            source_client: SourceClient::new(create_rpc_channel(src_sock_file).await.unwrap()),
+            source_client: Some(SourceClient::new(
+                create_rpc_channel(src_sock_file).await.unwrap(),
+            )),
             sink_client: SinkClient::new(create_rpc_channel(sink_sock_file).await.unwrap()),
             transformer_client: Some(SourceTransformClient::new(
                 create_rpc_channel(sock_file).await.unwrap(),
