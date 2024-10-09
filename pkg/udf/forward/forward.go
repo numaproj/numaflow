@@ -675,7 +675,7 @@ func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessages []*
 			case <-ctx.Done():
 				// no point in retrying if the context is cancelled
 				return nil, err
-			case <-time.After(time.Second):
+			case <-time.After(isdf.opts.retryInterval):
 			}
 			// keep retrying, I cannot think of a use case where a user could say, errors are fine :-)
 			// as a platform we should not lose or corrupt data.

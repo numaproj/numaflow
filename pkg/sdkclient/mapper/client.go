@@ -128,7 +128,7 @@ func NewFromClient(ctx context.Context, c mappb.MapClient) (Client, error) {
 }
 
 // CloseConn closes the grpc client connection.
-func (c *client) CloseConn(_ context.Context) error {
+func (c *client) CloseConn() error {
 	err := c.stream.CloseSend()
 	if err != nil {
 		return err

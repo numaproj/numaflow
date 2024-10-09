@@ -44,9 +44,9 @@ func NewUDSgRPCBasedBatchMap(vertexName string, client batchmapper.Client) *GRPC
 	}
 }
 
-// CloseConn closes the gRPC client connection.
-func (u *GRPCBasedBatchMap) CloseConn(ctx context.Context) error {
-	return u.client.CloseConn(ctx)
+// Close closes the gRPC client connection.
+func (u *GRPCBasedBatchMap) Close() error {
+	return u.client.CloseConn()
 }
 
 // IsHealthy checks if the map udf is healthy.

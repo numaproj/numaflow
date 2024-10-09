@@ -24,10 +24,8 @@ import (
 	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
@@ -45,9 +43,9 @@ func NewUDSgRPCBasedMap(vertexName string, client mapper.Client) *GRPCBasedMap {
 	}
 }
 
-// CloseConn closes the gRPC client connection.
-func (u *GRPCBasedMap) CloseConn(ctx context.Context) error {
-	return u.client.CloseConn(ctx)
+// Close closes the gRPC client connection.
+func (u *GRPCBasedMap) Close() error {
+	return u.client.CloseConn()
 }
 
 // IsHealthy checks if the map udf is healthy.
@@ -75,6 +73,7 @@ func (u *GRPCBasedMap) WaitUntilReady(ctx context.Context) error {
 
 func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	requests := make([]*mappb.MapRequest, len(readMessages))
+	results := make([]isb.ReadWriteMessagePair, len(readMessages))
 	idToMsgMapping := make(map[string]*isb.ReadMessage)
 
 	for i, msg := range readMessages {
@@ -96,69 +95,24 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessages []*isb.ReadMes
 	}
 
 	responses, err := u.client.MapFn(ctx, requests)
+
 	if err != nil {
-		udfErr, _ := sdkerr.FromError(err)
-		switch udfErr.ErrorKind() {
-		case sdkerr.Retryable:
-			var success bool
-			_ = wait.ExponentialBackoffWithContext(ctx, wait.Backoff{
-				// retry every "duration * factor + [0, jitter]" interval for 5 times
-				Duration: 1 * time.Second,
-				Factor:   1,
-				Jitter:   0.1,
-				Steps:    5,
-			}, func(_ context.Context) (done bool, err error) {
-				responses, err = u.client.MapFn(ctx, requests)
-				if err != nil {
-					udfErr, _ = sdkerr.FromError(err)
-					switch udfErr.ErrorKind() {
-					case sdkerr.Retryable:
-						return false, nil
-					case sdkerr.NonRetryable:
-						return true, nil
-					default:
-						return true, nil
-					}
-				}
-				success = true
-				return true, nil
-			})
-			if !success {
-				return nil, &ApplyUDFErr{
-					UserUDFErr: false,
-					Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
-					InternalErr: InternalErr{
-						Flag:        true,
-						MainCarDown: false,
-					},
-				}
-			}
-		case sdkerr.NonRetryable:
-			return nil, &ApplyUDFErr{
-				UserUDFErr: false,
-				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
-				InternalErr: InternalErr{
-					Flag:        true,
-					MainCarDown: false,
-				},
-			}
-		default:
-			return nil, &ApplyUDFErr{
-				UserUDFErr: false,
-				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
-				InternalErr: InternalErr{
-					Flag:        true,
-					MainCarDown: false,
-				},
-			}
+		println("gRPC client.mapFn failed, ", err.Error())
+		err = &ApplyUDFErr{
+			UserUDFErr: false,
+			Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
+			InternalErr: InternalErr{
+				Flag:        true,
+				MainCarDown: false,
+			},
 		}
+		return nil, err
 	}
 
-	results := make([]isb.ReadWriteMessagePair, len(readMessages))
 	for i, resp := range responses {
 		parentMessage, ok := idToMsgMapping[resp.GetId()]
 		if !ok {
-			panic("tracker doesn't contain the message ID received from the response")
+			panic(fmt.Sprintf("tracker doesn't contain the message ID received from the response: %s", resp.GetId()))
 		}
 		taggedMessages := make([]*isb.WriteMessage, len(resp.GetResults()))
 		for j, result := range resp.GetResults() {
