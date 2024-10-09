@@ -11,7 +11,7 @@ use crate::source::user_defined::{
 use crate::source::{SourceAcker, SourceReader};
 use crate::transformer::user_defined::SourceTransformer;
 use forwarder::ForwarderBuilder;
-use metrics::MetricsState;
+use metrics::UserDefinedContainerState;
 use numaflow_grpc::clients::sink::sink_client::SinkClient;
 use numaflow_grpc::clients::source::source_client::SourceClient;
 use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -19,6 +19,7 @@ use std::time::Duration;
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
 use tracing::info;
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
@@ -154,32 +155,12 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
     )
     .await?;
 
-    let source_type = if let Some(source_grpc_client) = source_grpc_client.clone() {
-        let (source_read, source_ack, lag_reader) = new_source(
-            source_grpc_client,
-            config.batch_size as usize,
-            config.timeout_in_ms as u16,
-        )
-        .await?;
-        SourceType::UdSource(source_read, source_ack, lag_reader)
-    } else if let Some(generator_config) = &config.generator_config {
-        let (source_read, source_ack, lag_reader) = new_generator(
-            generator_config.content.clone(),
-            generator_config.rpu,
-            config.batch_size as usize,
-            Duration::from_millis(generator_config.duration as u64),
-        )?;
-        SourceType::Generator(source_read, source_ack, lag_reader)
-    } else {
-        return Err(error::Error::ConfigError(
-            "No valid source configuration found".into(),
-        ));
-    };
+    let source_type = fetch_source(&config, &mut source_grpc_client).await?;
 
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
     // joined.
-    let metrics_state = MetricsState {
+    let metrics_state = UserDefinedContainerState {
         source_client: source_grpc_client.clone(),
         sink_client: sink_grpc_client.clone(),
         transformer_client: transformer_grpc_client.clone(),
@@ -219,6 +200,34 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
 
     info!("Forwarder stopped gracefully");
     Ok(())
+}
+
+async fn fetch_source(
+    config: &Settings,
+    source_grpc_client: &mut Option<SourceClient<Channel>>,
+) -> crate::Result<SourceType> {
+    let source_type = if let Some(source_grpc_client) = source_grpc_client.clone() {
+        let (source_read, source_ack, lag_reader) = new_source(
+            source_grpc_client,
+            config.batch_size as usize,
+            config.timeout_in_ms as u16,
+        )
+        .await?;
+        SourceType::UdSource(source_read, source_ack, lag_reader)
+    } else if let Some(generator_config) = &config.generator_config {
+        let (source_read, source_ack, lag_reader) = new_generator(
+            generator_config.content.clone(),
+            generator_config.rpu,
+            config.batch_size as usize,
+            Duration::from_millis(generator_config.duration as u64),
+        )?;
+        SourceType::Generator(source_read, source_ack, lag_reader)
+    } else {
+        return Err(error::Error::ConfigError(
+            "No valid source configuration found".into(),
+        ));
+    };
+    Ok(source_type)
 }
 
 async fn start_forwarder_with_source<R, A, L>(

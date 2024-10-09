@@ -60,8 +60,12 @@ const TRANSFORM_TIME: &str = "monovtx_transformer_time";
 const ACK_TIME: &str = "monovtx_ack_time";
 const SINK_TIME: &str = "monovtx_sink_time";
 
+/// Only used defined functions will have containers since rest
+/// are builtins. We save the gRPC clients to retrieve metrics and also
+/// to do liveness checks. This means, these will be optionals since
+/// we do not require these for builtins.
 #[derive(Clone)]
-pub(crate) struct MetricsState {
+pub(crate) struct UserDefinedContainerState {
     pub source_client: Option<SourceClient<Channel>>,
     pub sink_client: SinkClient<Channel>,
     pub transformer_client: Option<SourceTransformClient<Channel>>,
@@ -264,7 +268,7 @@ pub async fn metrics_handler() -> impl IntoResponse {
 
 pub(crate) async fn start_metrics_https_server(
     addr: SocketAddr,
-    metrics_state: MetricsState,
+    metrics_state: UserDefinedContainerState,
 ) -> crate::Result<()> {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -287,7 +291,7 @@ pub(crate) async fn start_metrics_https_server(
 }
 
 /// router for metrics and k8s health endpoints
-fn metrics_router(metrics_state: MetricsState) -> Router {
+fn metrics_router(metrics_state: UserDefinedContainerState) -> Router {
     Router::new()
         .route("/metrics", get(metrics_handler))
         .route("/livez", get(livez))
@@ -300,7 +304,7 @@ async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-async fn sidecar_livez(State(mut state): State<MetricsState>) -> impl IntoResponse {
+async fn sidecar_livez(State(mut state): State<UserDefinedContainerState>) -> impl IntoResponse {
     if let Some(mut source_client) = state.source_client {
         if source_client.is_ready(Request::new(())).await.is_err() {
             error!("Source client is not available");
@@ -534,7 +538,7 @@ mod tests {
     use tokio::sync::mpsc::Sender;
 
     use super::*;
-    use crate::monovertex::metrics::MetricsState;
+    use crate::monovertex::metrics::UserDefinedContainerState;
     use crate::shared::utils::create_rpc_channel;
 
     struct SimpleSource;
@@ -643,7 +647,7 @@ mod tests {
         // wait for the servers to start
         // FIXME: we need to have a better way, this is flaky
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        let metrics_state = MetricsState {
+        let metrics_state = UserDefinedContainerState {
             source_client: Some(SourceClient::new(
                 create_rpc_channel(src_sock_file).await.unwrap(),
             )),

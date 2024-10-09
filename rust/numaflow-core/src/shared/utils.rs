@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::config::config;
 use crate::error::Error;
 use crate::monovertex::metrics::{
-    start_metrics_https_server, MetricsState, PendingReader, PendingReaderBuilder,
+    start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
 };
 use crate::shared::server_info;
 use crate::{error, reader};
@@ -70,7 +70,9 @@ pub(crate) async fn check_compatibility(
     Ok(())
 }
 
-pub(crate) async fn start_metrics_server(metrics_state: MetricsState) -> JoinHandle<()> {
+pub(crate) async fn start_metrics_server(
+    metrics_state: UserDefinedContainerState,
+) -> JoinHandle<()> {
     tokio::spawn(async {
         // Start the metrics server, which server the prometheus metrics.
         let metrics_addr: SocketAddr = format!("0.0.0.0:{}", &config().metrics_server_listen_port)
