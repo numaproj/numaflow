@@ -38,8 +38,8 @@ func (s myShutdownTest) WhereTo(_ []string, _ []string, _ string) ([]forwarder.V
 	return []forwarder.VertexBuffer{}, nil
 }
 
-func (s myShutdownTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, "", message)
+func (s myShutdownTest) ApplyMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApply(ctx, "", messages)
 }
 
 func (s myShutdownTest) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {

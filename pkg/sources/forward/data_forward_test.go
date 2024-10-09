@@ -122,15 +122,7 @@ func (f myForwardTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.Ve
 }
 
 func (f myForwardTest) ApplyTransform(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
-	out := make([]isb.ReadWriteMessagePair, len(messages))
-	for i, msg := range messages {
-		writeMsg, _ := testutils.CopyUDFTestApply(ctx, "test-vertex", msg)
-		out[i] = isb.ReadWriteMessagePair{
-			ReadMessage:   msg,
-			WriteMessages: writeMsg,
-		}
-	}
-	return out, nil
+	return testutils.CopyUDFTestApply(ctx, "test-vertex", messages)
 }
 
 func TestNewDataForward(t *testing.T) {
@@ -1157,15 +1149,7 @@ func (f myForwardDropTest) WhereTo(_ []string, _ []string, s string) ([]forwarde
 }
 
 func (f myForwardDropTest) ApplyTransform(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
-	results := make([]isb.ReadWriteMessagePair, len(messages))
-	for i, message := range messages {
-		writeMsg, _ := testutils.CopyUDFTestApply(ctx, "test-vertex", message)
-		results[i] = isb.ReadWriteMessagePair{
-			ReadMessage:   message,
-			WriteMessages: writeMsg,
-		}
-	}
-	return results, nil
+	return testutils.CopyUDFTestApply(ctx, "test-vertex", messages)
 }
 
 type myForwardToAllTest struct {
@@ -1186,15 +1170,7 @@ func (f *myForwardToAllTest) WhereTo(_ []string, _ []string, s string) ([]forwar
 }
 
 func (f *myForwardToAllTest) ApplyTransform(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
-	results := make([]isb.ReadWriteMessagePair, len(messages))
-	for i, message := range messages {
-		writeMsg, _ := testutils.CopyUDFTestApply(ctx, "test-vertex", message)
-		results[i] = isb.ReadWriteMessagePair{
-			ReadMessage:   message,
-			WriteMessages: writeMsg,
-		}
-	}
-	return results, nil
+	return testutils.CopyUDFTestApply(ctx, "test-vertex", messages)
 }
 
 type myForwardInternalErrTest struct {
@@ -1229,15 +1205,7 @@ func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string, s string) 
 }
 
 func (f myForwardApplyWhereToErrTest) ApplyTransform(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
-	results := make([]isb.ReadWriteMessagePair, len(messages))
-	for i, message := range messages {
-		writeMsg, _ := testutils.CopyUDFTestApply(ctx, "test-vertex", message)
-		results[i] = isb.ReadWriteMessagePair{
-			ReadMessage:   message,
-			WriteMessages: writeMsg,
-		}
-	}
-	return results, nil
+	return testutils.CopyUDFTestApply(ctx, "test-vertex", messages)
 }
 
 type myForwardApplyTransformerErrTest struct {

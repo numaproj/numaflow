@@ -18,6 +18,7 @@ package forward
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -64,7 +65,7 @@ func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
 
-func (t *testForwardFetcher) ComputeWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+func (t *testForwardFetcher) ComputeWatermark(isb.Offset, int32) wmb.Watermark {
 	return t.getWatermark()
 }
 
@@ -86,15 +87,15 @@ func (f myForwardTest) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMe
 	return testutils.CopyUDFTestApplyBatchMap(ctx, "test-vertex", messages)
 }
 
-func (f myForwardTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
+func (f myForwardTest) WhereTo(_ []string, _ []string, _ string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 
-func (f myForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, "", message)
+func (f myForwardTest) ApplyMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApply(ctx, "", messages)
 }
 
 func (f myForwardTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
@@ -1061,7 +1062,7 @@ func (t *testWMBFetcher) RevertBoolValue() {
 	t.WMBTestDiffHeadWMB = !t.WMBTestDiffHeadWMB
 }
 
-func (t *testWMBFetcher) ComputeWatermark(offset isb.Offset, partition int32) wmb.Watermark {
+func (t *testWMBFetcher) ComputeWatermark(isb.Offset, int32) wmb.Watermark {
 	return t.getWatermark()
 }
 
@@ -1179,7 +1180,7 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	for !fromStep.IsEmpty() {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Fatal("expected the buffer to be empty", ctx.Err())
 			}
 		default:
@@ -1213,7 +1214,7 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	for otDecode1.Offset != 0 { // the first ctrl message written to isb. can't use idle because default idle=false
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Fatal("expected to have idle watermark in to1 timeline", ctx.Err())
 			}
 		default:
@@ -1241,7 +1242,7 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 	for otDecode1.Idle {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Fatal("expected to have active watermark in to1 timeline", ctx.Err())
 			}
 		default:
@@ -1370,7 +1371,7 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 	for otDecode1.Offset != 0 { // the first ctrl message written to isb. can't use idle because default idle=false
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Fatal("expected to have idle watermark in to1 timeline", ctx.Err())
 			}
 		default:
@@ -1398,7 +1399,7 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 	for otDecode1.Idle {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Fatal("expected to have active watermark in to1 timeline", ctx.Err())
 			}
 		default:
@@ -1421,7 +1422,7 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 	for otDecode1.Offset != 3 { // the second ctrl message written to isb. can't use idle because default idle=false
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				t.Fatal("expected to have idle watermark in to1 timeline", ctx.Err())
 			}
 		default:
@@ -1459,7 +1460,7 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 type mySourceForwardTest struct {
 }
 
-func (f mySourceForwardTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
+func (f mySourceForwardTest) WhereTo(_ []string, _ []string, _ string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
@@ -1470,7 +1471,7 @@ type mySourceForwardTestRoundRobin struct {
 	count int
 }
 
-func (f *mySourceForwardTestRoundRobin) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
+func (f *mySourceForwardTestRoundRobin) WhereTo(_ []string, _ []string, _ string) ([]forwarder.VertexBuffer, error) {
 	var output = []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: int32(f.count % 2),
@@ -1483,8 +1484,9 @@ func (f mySourceForwardTest) ApplyBatchMap(ctx context.Context, messages []*isb.
 	return testutils.CopyUDFTestApplyBatchMap(ctx, "test-vertex", messages)
 }
 
-func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return func(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f mySourceForwardTest) ApplyMap(ctx context.Context, readMessages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	resp := make([]isb.ReadWriteMessagePair, 0)
+	for _, readMessage := range readMessages {
 		_ = ctx
 		offset := readMessage.ReadOffset
 		payload := readMessage.Body.Payload
@@ -1509,8 +1511,11 @@ func (f mySourceForwardTest) ApplyMap(ctx context.Context, message *isb.ReadMess
 				Payload: result,
 			},
 		}
-		return []*isb.WriteMessage{{Message: writeMessage}}, nil
-	}(ctx, message)
+		writeMessage.Header.Headers = readMessage.Header.Headers
+		resp = append(resp, isb.ReadWriteMessagePair{ReadMessage: readMessage, WriteMessages: []*isb.WriteMessage{{Message: writeMessage}}})
+	}
+
+	return resp, nil
 }
 
 func (f mySourceForwardTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
@@ -1545,14 +1550,6 @@ func (f mySourceForwardTest) ApplyMapStream(ctx context.Context, message *isb.Re
 		writeMessages <- isb.WriteMessage{Message: writeMessage}
 		return nil
 	}(ctx, message, writeMessageCh)
-}
-
-// TestSourceWatermarkPublisher is a dummy implementation of isb.SourcePublisher interface
-type TestSourceWatermarkPublisher struct {
-}
-
-func (p TestSourceWatermarkPublisher) PublishSourceWatermarks([]*isb.ReadMessage) {
-	// PublishSourceWatermarks is not tested in forwarder_test.go
 }
 
 func TestInterStepDataForwardSinglePartition(t *testing.T) {
@@ -1859,12 +1856,12 @@ func TestWriteToBuffer(t *testing.T) {
 type myForwardDropTest struct {
 }
 
-func (f myForwardDropTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
+func (f myForwardDropTest) WhereTo(_ []string, _ []string, _ string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{}, nil
 }
 
-func (f myForwardDropTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, "", message)
+func (f myForwardDropTest) ApplyMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApply(ctx, "", messages)
 }
 
 func (f myForwardDropTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
@@ -1879,7 +1876,7 @@ type myForwardToAllTest struct {
 	count int
 }
 
-func (f *myForwardToAllTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
+func (f *myForwardToAllTest) WhereTo(_ []string, _ []string, _ string) ([]forwarder.VertexBuffer, error) {
 	var output = []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: int32(f.count % 2),
@@ -1892,11 +1889,11 @@ func (f *myForwardToAllTest) WhereTo(_ []string, _ []string, s string) ([]forwar
 	return output, nil
 }
 
-func (f *myForwardToAllTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, "", message)
+func (f *myForwardToAllTest) ApplyMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApply(ctx, "", messages)
 }
 
-func (f myForwardToAllTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+func (f *myForwardToAllTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
 	return testutils.CopyUDFTestApplyStream(ctx, "", writeMessageCh, message)
 }
 
@@ -1907,14 +1904,14 @@ func (f *myForwardToAllTest) ApplyBatchMap(ctx context.Context, messages []*isb.
 type myForwardInternalErrTest struct {
 }
 
-func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
+func (f myForwardInternalErrTest) WhereTo(_ []string, _ []string, _ string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 
-func (f myForwardInternalErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardInternalErrTest) ApplyMap(_ context.Context, _ []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	return nil, &udfapplier.ApplyUDFErr{
 		UserUDFErr: false,
 		InternalErr: struct {
@@ -1925,7 +1922,7 @@ func (f myForwardInternalErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage
 	}
 }
 
-func (f myForwardInternalErrTest) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+func (f myForwardInternalErrTest) ApplyBatchMap(context.Context, []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	return nil, &udfapplier.ApplyUDFErr{
 		UserUDFErr: false,
 		InternalErr: struct {
@@ -1951,15 +1948,15 @@ func (f myForwardInternalErrTest) ApplyMapStream(_ context.Context, _ *isb.ReadM
 type myForwardApplyWhereToErrTest struct {
 }
 
-func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
+func (f myForwardApplyWhereToErrTest) WhereTo(_ []string, _ []string, _ string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
 	}}, fmt.Errorf("whereToStep failed")
 }
 
-func (f myForwardApplyWhereToErrTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, "", message)
+func (f myForwardApplyWhereToErrTest) ApplyMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApply(ctx, "", messages)
 }
 
 func (f myForwardApplyWhereToErrTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
@@ -1973,14 +1970,14 @@ func (f myForwardApplyWhereToErrTest) ApplyBatchMap(ctx context.Context, message
 type myForwardApplyUDFErrTest struct {
 }
 
-func (f myForwardApplyUDFErrTest) WhereTo(_ []string, _ []string, s string) ([]forwarder.VertexBuffer, error) {
+func (f myForwardApplyUDFErrTest) WhereTo(_ []string, _ []string, _ string) ([]forwarder.VertexBuffer, error) {
 	return []forwarder.VertexBuffer{{
 		ToVertexName:         "to1",
 		ToVertexPartitionIdx: 0,
 	}}, nil
 }
 
-func (f myForwardApplyUDFErrTest) ApplyMap(_ context.Context, _ *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardApplyUDFErrTest) ApplyMap(context.Context, []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	return nil, fmt.Errorf("UDF error")
 }
 
@@ -1989,7 +1986,7 @@ func (f myForwardApplyUDFErrTest) ApplyMapStream(_ context.Context, _ *isb.ReadM
 	return fmt.Errorf("UDF error")
 }
 
-func (f myForwardApplyUDFErrTest) ApplyBatchMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+func (f myForwardApplyUDFErrTest) ApplyBatchMap(context.Context, []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	return nil, fmt.Errorf("UDF error")
 }
 

@@ -351,7 +351,7 @@ func (f myForwardRedisTest) WhereTo(_ []string, _ []string, _ string) ([]forward
 	}}, nil
 }
 
-func (f myForwardRedisTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
+func (f myForwardRedisTest) ApplyMap(ctx context.Context, message []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
 	return testutils.CopyUDFTestApply(ctx, "", message)
 }
 
@@ -419,7 +419,7 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 	assert.False(t, to1.IsFull())
 
 	// forwardDataAndVerify is used to verify if data is forwarded from the from and received in the to buffer.
-	forwardDataAndVerify(ctx, t, fromStepWrite, to1Read, to1, fromStep, f, writeMessages, count)
+	forwardDataAndVerify(ctx, t, fromStepWrite, to1Read, to1, f, writeMessages, count)
 }
 
 // TestReadTimeout tests that even though we have a blocking read, our Stop function exits cleanly
@@ -590,7 +590,7 @@ func TestSetWriteInfo(t *testing.T) {
 }
 
 // forwardDataAndVerify start the forwarder and verify the data.
-func forwardDataAndVerify(ctx context.Context, t *testing.T, fromStepWrite *BufferWrite, to1Read *BufferRead, to1 *BufferWrite, fromStep *BufferRead, f *forward.InterStepDataForward, writeMessages []isb.Message, count int64) {
+func forwardDataAndVerify(ctx context.Context, t *testing.T, fromStepWrite *BufferWrite, to1Read *BufferRead, to1 *BufferWrite, f *forward.InterStepDataForward, writeMessages []isb.Message, count int64) {
 	stopped := f.Start()
 	// write some data
 	_, errs := fromStepWrite.Write(ctx, writeMessages[0:5])

@@ -45,8 +45,8 @@ func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string, s string) ([]for
 	}}, nil
 }
 
-func (f myForwardJetStreamTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, "test-vertex", message)
+func (f myForwardJetStreamTest) ApplyMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApply(ctx, "test-vertex", messages)
 }
 
 func (f myForwardJetStreamTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
