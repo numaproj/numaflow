@@ -25,7 +25,7 @@ import (
 
 // Client contains methods to call a gRPC client.
 type Client interface {
-	CloseConn(ctx context.Context) error
+	CloseConn() error
 	IsReady(ctx context.Context, in *emptypb.Empty) (bool, error)
-	MapFn(ctx context.Context, mapRequest *mappb.MapRequest) (*mappb.MapResponse, error)
+	MapFn(ctx context.Context, mapRequest []*mappb.MapRequest) ([]*mappb.MapResponse, error)
 }

@@ -25,7 +25,7 @@ import (
 
 // Client contains methods to call a gRPC client.
 type Client interface {
-	CloseConn(ctx context.Context) error
+	CloseConn() error
 	IsReady(ctx context.Context, in *emptypb.Empty) (bool, error)
 	BatchMapFn(ctx context.Context, inputCh <-chan *batchmappb.BatchMapRequest) (<-chan *batchmappb.BatchMapResponse, <-chan error)
 }

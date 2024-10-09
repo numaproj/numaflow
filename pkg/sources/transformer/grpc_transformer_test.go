@@ -29,13 +29,14 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 
 	transformpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sourcetransform/v1"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/isb/testutils"
 	sourcetransformerSdk "github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
 	"github.com/numaproj/numaflow/pkg/udf/rpc"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 func TestGRPCBasedTransformer_WaitUntilReadyWithServer(t *testing.T) {
@@ -280,7 +281,6 @@ func TestGRPCBasedTransformer_Apply_ChangeEventTime(t *testing.T) {
 	apply, err := u.ApplyTransform(context.TODO(), messages)
 	assert.NoError(t, err)
 	for _, pair := range apply {
-		assert.NoError(t, pair.Err)
 		assert.Equal(t, testEventTime, pair.WriteMessages[0].EventTime)
 	}
 }

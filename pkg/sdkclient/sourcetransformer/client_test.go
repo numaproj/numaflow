@@ -121,16 +121,14 @@ func TestClient_SourceTransformFn(t *testing.T) {
 	client, _ := NewFromClient(ctx, transformClient)
 
 	requests := make([]*transformpb.SourceTransformRequest, 5)
-	go func() {
-		for i := 0; i < 5; i++ {
-			requests[i] = &transformpb.SourceTransformRequest{
-				Request: &transformpb.SourceTransformRequest_Request{
-					Keys:  []string{fmt.Sprintf("client_key_%d", i)},
-					Value: []byte("test"),
-				},
-			}
+	for i := 0; i < 5; i++ {
+		requests[i] = &transformpb.SourceTransformRequest{
+			Request: &transformpb.SourceTransformRequest_Request{
+				Keys:  []string{fmt.Sprintf("client_key_%d", i)},
+				Value: []byte("test"),
+			},
 		}
-	}()
+	}
 
 	responses, err := client.SourceTransformFn(ctx, requests)
 	require.NoError(t, err)
