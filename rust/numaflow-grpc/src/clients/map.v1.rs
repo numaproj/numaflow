@@ -3,19 +3,40 @@
 /// MapRequest represents a request element.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MapRequest {
-    #[prost(string, repeated, tag = "1")]
-    pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    #[prost(bytes = "vec", tag = "2")]
-    pub value: ::prost::alloc::vec::Vec<u8>,
+    #[prost(message, optional, tag = "1")]
+    pub request: ::core::option::Option<map_request::Request>,
+    /// This ID is used to uniquely identify a map request
+    #[prost(string, tag = "2")]
+    pub id: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "3")]
-    pub event_time: ::core::option::Option<::prost_types::Timestamp>,
-    #[prost(message, optional, tag = "4")]
-    pub watermark: ::core::option::Option<::prost_types::Timestamp>,
-    #[prost(map = "string, string", tag = "5")]
-    pub headers: ::std::collections::HashMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
+    pub handshake: ::core::option::Option<Handshake>,
+}
+/// Nested message and enum types in `MapRequest`.
+pub mod map_request {
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Request {
+        #[prost(string, repeated, tag = "1")]
+        pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+        #[prost(bytes = "vec", tag = "2")]
+        pub value: ::prost::alloc::vec::Vec<u8>,
+        #[prost(message, optional, tag = "3")]
+        pub event_time: ::core::option::Option<::prost_types::Timestamp>,
+        #[prost(message, optional, tag = "4")]
+        pub watermark: ::core::option::Option<::prost_types::Timestamp>,
+        #[prost(map = "string, string", tag = "5")]
+        pub headers: ::std::collections::HashMap<
+            ::prost::alloc::string::String,
+            ::prost::alloc::string::String,
+        >,
+    }
+}
+///
+/// Handshake message between client and server to indicate the start of transmission.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct Handshake {
+    /// Required field indicating the start of transmission.
+    #[prost(bool, tag = "1")]
+    pub sot: bool,
 }
 /// *
 /// MapResponse represents a response element.
@@ -23,6 +44,11 @@ pub struct MapRequest {
 pub struct MapResponse {
     #[prost(message, repeated, tag = "1")]
     pub results: ::prost::alloc::vec::Vec<map_response::Result>,
+    /// This ID is used to refer the responses to the request it corresponds to.
+    #[prost(string, tag = "2")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "3")]
+    pub handshake: ::core::option::Option<Handshake>,
 }
 /// Nested message and enum types in `MapResponse`.
 pub mod map_response {
@@ -137,8 +163,11 @@ pub mod map_client {
         /// MapFn applies a function to each map request element.
         pub async fn map_fn(
             &mut self,
-            request: impl tonic::IntoRequest<super::MapRequest>,
-        ) -> std::result::Result<tonic::Response<super::MapResponse>, tonic::Status> {
+            request: impl tonic::IntoStreamingRequest<Message = super::MapRequest>,
+        ) -> std::result::Result<
+            tonic::Response<tonic::codec::Streaming<super::MapResponse>>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
@@ -149,9 +178,9 @@ pub mod map_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/map.v1.Map/MapFn");
-            let mut req = request.into_request();
+            let mut req = request.into_streaming_request();
             req.extensions_mut().insert(GrpcMethod::new("map.v1.Map", "MapFn"));
-            self.inner.unary(req, path, codec).await
+            self.inner.streaming(req, path, codec).await
         }
         /// IsReady is the heartbeat endpoint for gRPC.
         pub async fn is_ready(

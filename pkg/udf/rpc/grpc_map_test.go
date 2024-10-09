@@ -19,103 +19,103 @@ package rpc
 import (
 	"context"
 	"errors"
-	"fmt"
+	"net"
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
-	"github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1/mapmock"
+	"github.com/numaproj/numaflow-go/pkg/mapper"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/goleak"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
+	mapper2 "github.com/numaproj/numaflow/pkg/sdkclient/mapper"
 )
 
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
-}
-
-type rpcMsg struct {
-	msg proto.Message
-}
-
-func (r *rpcMsg) Matches(msg interface{}) bool {
-	m, ok := msg.(proto.Message)
-	if !ok {
-		return false
+func TestGRPCBasedMap_WaitUntilReadyWithServer(t *testing.T) {
+	svc := &mapper.Service{
+		Mapper: mapper.MapperFunc(func(ctx context.Context, keys []string, d mapper.Datum) mapper.Messages {
+			return mapper.Messages{}
+		}),
 	}
-	return proto.Equal(m, r.msg)
-}
 
-func (r *rpcMsg) String() string {
-	return fmt.Sprintf("is %s", r.msg)
-}
-
-func NewMockUDSGRPCBasedMap(mockClient *mapmock.MockMapClient) *GRPCBasedMap {
-	c, _ := mapper.NewFromClient(mockClient)
-	return &GRPCBasedMap{"test-vertex", c}
-}
-
-func TestGRPCBasedMap_WaitUntilReadyWithMockClient(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockClient := mapmock.NewMockMapClient(ctrl)
-	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&mappb.ReadyResponse{Ready: true}, nil)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	go func() {
-		<-ctx.Done()
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			t.Log(t.Name(), "test timeout")
-		}
-	}()
-
-	u := NewMockUDSGRPCBasedMap(mockClient)
-	err := u.WaitUntilReady(ctx)
+	conn := newServer(t, func(server *grpc.Server) {
+		mappb.RegisterMapServer(server, svc)
+	})
+	mapClient := mappb.NewMapClient(conn)
+	client, _ := mapper2.NewFromClient(context.Background(), mapClient)
+	u := NewUDSgRPCBasedMap("testVertex", client)
+	err := u.WaitUntilReady(context.Background())
 	assert.NoError(t, err)
 }
 
-func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
-	t.Run("test success", func(t *testing.T) {
+func newServer(t *testing.T, register func(server *grpc.Server)) *grpc.ClientConn {
+	lis := bufconn.Listen(100)
+	t.Cleanup(func() {
+		_ = lis.Close()
+	})
 
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+	server := grpc.NewServer()
+	t.Cleanup(func() {
+		server.Stop()
+	})
 
-		mockClient := mapmock.NewMockMapClient(ctrl)
-		req := &mappb.MapRequest{
-			Keys:      []string{"test_success_key"},
-			Value:     []byte(`forward_message`),
-			EventTime: timestamppb.New(time.Unix(1661169600, 0)),
-			Watermark: timestamppb.New(time.Time{}),
+	register(server)
+
+	errChan := make(chan error, 1)
+	go func() {
+		// t.Fatal should only be called from the goroutine running the test
+		if err := server.Serve(lis); err != nil {
+			errChan <- err
 		}
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(&mappb.MapResponse{
-			Results: []*mappb.MapResponse_Result{
-				{
-					Keys:  []string{"test_success_key"},
-					Value: []byte(`forward_message`),
-				},
-			},
-		}, nil)
+	}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
+	dialer := func(context.Context, string) (net.Conn, error) {
+		return lis.Dial()
+	}
 
-		u := NewMockUDSGRPCBasedMap(mockClient)
-		got, err := u.ApplyMap(ctx, &isb.ReadMessage{
+	conn, err := grpc.NewClient("passthrough://", grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+	if err != nil {
+		t.Fatalf("Creating new gRPC client connection: %v", err)
+	}
+
+	var grpcServerErr error
+	select {
+	case grpcServerErr = <-errChan:
+	case <-time.After(500 * time.Millisecond):
+		grpcServerErr = errors.New("gRPC server didn't start in 500ms")
+	}
+	if err != nil {
+		t.Fatalf("Failed to start gRPC server: %v", grpcServerErr)
+	}
+
+	return conn
+}
+
+func TestGRPCBasedMap_ApplyMapWithServer(t *testing.T) {
+	t.Run("test success", func(t *testing.T) {
+		svc := &mapper.Service{
+			Mapper: mapper.MapperFunc(func(ctx context.Context, keys []string, d mapper.Datum) mapper.Messages {
+				return mapper.MessagesBuilder().Append(mapper.NewMessage(d.Value()).WithKeys(keys))
+			}),
+		}
+
+		conn := newServer(t, func(server *grpc.Server) {
+			mappb.RegisterMapServer(server, svc)
+		})
+		mapClient := mappb.NewMapClient(conn)
+		ctx := context.Background()
+		client, err := mapper2.NewFromClient(ctx, mapClient)
+		require.NoError(t, err, "creating map client")
+		u := NewUDSgRPCBasedMap("testVertex", client)
+
+		got, err := u.ApplyMap(ctx, []*isb.ReadMessage{{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -123,7 +123,7 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 					},
 					ID: isb.MessageID{
 						VertexName: "test-vertex",
-						Offset:     "test-offset",
+						Offset:     "0-0",
 					},
 					Keys: []string{"test_success_key"},
 				},
@@ -132,45 +132,32 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 				},
 			},
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
-			Metadata: isb.MessageMetadata{
-				NumDelivered: 1,
-			},
-		},
-		)
+		}})
 		assert.NoError(t, err)
-		assert.Equal(t, req.Keys, got[0].Keys)
-		assert.Equal(t, req.Value, got[0].Payload)
+		assert.Equal(t, []string{"test_success_key"}, got[0].WriteMessages[0].Keys)
+		assert.Equal(t, []byte(`forward_message`), got[0].WriteMessages[0].Payload)
 	})
 
-	t.Run("test retryable error: failed after 5 retries", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := mapmock.NewMockMapClient(ctrl)
-		req := &mappb.MapRequest{
-			Keys:      []string{"test_error_key"},
-			Value:     []byte(`forward_message`),
-			EventTime: timestamppb.New(time.Unix(1661169660, 0)),
-			Watermark: timestamppb.New(time.Time{}),
+	t.Run("test error", func(t *testing.T) {
+		svc := &mapper.Service{
+			Mapper: mapper.MapperFunc(func(ctx context.Context, keys []string, d mapper.Datum) mapper.Messages {
+				return mapper.Messages{}
+			}),
 		}
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
+		conn := newServer(t, func(server *grpc.Server) {
+			mappb.RegisterMapServer(server, svc)
+		})
+		mapClient := mappb.NewMapClient(conn)
+		ctx, cancel := context.WithCancel(context.Background())
+		client, err := mapper2.NewFromClient(ctx, mapClient)
+		require.NoError(t, err, "creating map client")
+		u := NewUDSgRPCBasedMap("testVertex", client)
 
-		u := NewMockUDSGRPCBasedMap(mockClient)
-		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
+		// This cancelled context is passed to the ApplyMap function to simulate failure
+		cancel()
+
+		_, err = u.ApplyMap(ctx, []*isb.ReadMessage{{
 			Message: isb.Message{
 				Header: isb.Header{
 					MessageInfo: isb.MessageInfo{
@@ -178,7 +165,7 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 					},
 					ID: isb.MessageID{
 						VertexName: "test-vertex",
-						Offset:     "test-offset",
+						Offset:     "0-0",
 					},
 					Keys: []string{"test_error_key"},
 				},
@@ -187,178 +174,18 @@ func TestGRPCBasedMap_BasicApplyWithMockClient(t *testing.T) {
 				},
 			},
 			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
-		},
-		)
-		assert.ErrorIs(t, err, &ApplyUDFErr{
+		}})
+
+		expectedUDFErr := &ApplyUDFErr{
 			UserUDFErr: false,
-			Message:    fmt.Sprintf("%s", err),
+			Message:    "gRPC client.MapFn failed, context canceled",
 			InternalErr: InternalErr{
 				Flag:        true,
 				MainCarDown: false,
 			},
-		})
-	})
-
-	t.Run("test retryable error: failed after 1 retry", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := mapmock.NewMockMapClient(ctrl)
-		req := &mappb.MapRequest{
-			Keys:      []string{"test_error_key"},
-			Value:     []byte(`forward_message`),
-			EventTime: timestamppb.New(time.Unix(1661169660, 0)),
-			Watermark: timestamppb.New(time.Time{}),
 		}
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.InvalidArgument, "mock test err: non retryable").Err())
-
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
-
-		u := NewMockUDSGRPCBasedMap(mockClient)
-		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: isb.MessageInfo{
-						EventTime: time.Unix(1661169660, 0),
-					},
-					ID: isb.MessageID{
-						VertexName: "test-vertex",
-						Offset:     "test-offset",
-					},
-					Keys: []string{"test_error_key"},
-				},
-				Body: isb.Body{
-					Payload: []byte(`forward_message`),
-				},
-			},
-			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
-		},
-		)
-		assert.ErrorIs(t, err, &ApplyUDFErr{
-			UserUDFErr: false,
-			Message:    fmt.Sprintf("%s", err),
-			InternalErr: InternalErr{
-				Flag:        true,
-				MainCarDown: false,
-			},
-		})
-	})
-
-	t.Run("test retryable error: succeed after 1 retry", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := mapmock.NewMockMapClient(ctrl)
-		req := &mappb.MapRequest{
-			Keys:      []string{"test_success_key"},
-			Value:     []byte(`forward_message`),
-			EventTime: timestamppb.New(time.Unix(1661169720, 0)),
-			Watermark: timestamppb.New(time.Time{}),
-		}
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.DeadlineExceeded, "mock test err").Err())
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(&mappb.MapResponse{
-			Results: []*mappb.MapResponse_Result{
-				{
-					Keys:  []string{"test_success_key"},
-					Value: []byte(`forward_message`),
-				},
-			},
-		}, nil)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
-
-		u := NewMockUDSGRPCBasedMap(mockClient)
-		got, err := u.ApplyMap(ctx, &isb.ReadMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: isb.MessageInfo{
-						EventTime: time.Unix(1661169720, 0),
-					},
-					ID: isb.MessageID{
-						VertexName: "test-vertex",
-						Offset:     "test-offset",
-					},
-					Keys: []string{"test_success_key"},
-				},
-				Body: isb.Body{
-					Payload: []byte(`forward_message`),
-				},
-			},
-			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
-			Metadata: isb.MessageMetadata{
-				NumDelivered: 1,
-			},
-		},
-		)
-		assert.NoError(t, err)
-		assert.Equal(t, req.Keys, got[0].Keys)
-		assert.Equal(t, req.Value, got[0].Payload)
-	})
-
-	t.Run("test non retryable error", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mockClient := mapmock.NewMockMapClient(ctrl)
-		req := &mappb.MapRequest{
-			Keys:      []string{"test_error_key"},
-			Value:     []byte(`forward_message`),
-			EventTime: timestamppb.New(time.Unix(1661169660, 0)),
-			Watermark: timestamppb.New(time.Time{}),
-		}
-		mockClient.EXPECT().MapFn(gomock.Any(), &rpcMsg{msg: req}).Return(nil, status.New(codes.InvalidArgument, "mock test err: non retryable").Err())
-
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		go func() {
-			<-ctx.Done()
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				t.Log(t.Name(), "test timeout")
-			}
-		}()
-
-		u := NewMockUDSGRPCBasedMap(mockClient)
-		_, err := u.ApplyMap(ctx, &isb.ReadMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: isb.MessageInfo{
-						EventTime: time.Unix(1661169660, 0),
-					},
-					ID: isb.MessageID{
-						VertexName: "test-vertex",
-						Offset:     "test-offset",
-					},
-					Keys: []string{"test_error_key"},
-				},
-				Body: isb.Body{
-					Payload: []byte(`forward_message`),
-				},
-			},
-			ReadOffset: isb.SimpleStringOffset(func() string { return "0" }),
-		},
-		)
-		assert.ErrorIs(t, err, &ApplyUDFErr{
-			UserUDFErr: false,
-			Message:    fmt.Sprintf("%s", err),
-			InternalErr: InternalErr{
-				Flag:        true,
-				MainCarDown: false,
-			},
-		})
+		var receivedErr *ApplyUDFErr
+		assert.ErrorAs(t, err, &receivedErr)
+		assert.Equal(t, expectedUDFErr, receivedErr)
 	})
 }
