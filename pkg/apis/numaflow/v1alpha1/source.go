@@ -96,7 +96,7 @@ func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) core
 		c = c.image(mainContainerReq.image).args(args...) // Use the same image as the main container
 	}
 	if x := s.UDTransformer.Container; x != nil {
-		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
+		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...).appendPorts(x.Ports...)
 		if x.ImagePullPolicy != nil {
 			c = c.imagePullPolicy(*x.ImagePullPolicy)
 		}
@@ -142,7 +142,7 @@ func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Co
 		}
 	}
 	if x := s.UDSource.Container; x != nil {
-		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
+		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...).appendPorts(x.Ports...)
 		if x.ImagePullPolicy != nil {
 			c = c.imagePullPolicy(*x.ImagePullPolicy)
 		}

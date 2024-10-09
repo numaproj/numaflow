@@ -2959,6 +2959,30 @@ spec:
                                     format: int32
                                     type: integer
                                 type: object
+                              ports:
+                                items:
+                                  properties:
+                                    containerPort:
+                                      format: int32
+                                      type: integer
+                                    hostIP:
+                                      type: string
+                                    hostPort:
+                                      format: int32
+                                      type: integer
+                                    name:
+                                      type: string
+                                    protocol:
+                                      default: TCP
+                                      type: string
+                                  required:
+                                  - containerPort
+                                  type: object
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - containerPort
+                                - protocol
+                                x-kubernetes-list-type: map
                               readinessProbe:
                                 properties:
                                   failureThreshold:
@@ -3432,6 +3456,30 @@ spec:
                                 format: int32
                                 type: integer
                             type: object
+                          ports:
+                            items:
+                              properties:
+                                containerPort:
+                                  format: int32
+                                  type: integer
+                                hostIP:
+                                  type: string
+                                hostPort:
+                                  format: int32
+                                  type: integer
+                                name:
+                                  type: string
+                                protocol:
+                                  default: TCP
+                                  type: string
+                              required:
+                              - containerPort
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - containerPort
+                            - protocol
+                            x-kubernetes-list-type: map
                           readinessProbe:
                             properties:
                               failureThreshold:
@@ -4187,6 +4235,30 @@ spec:
                                 format: int32
                                 type: integer
                             type: object
+                          ports:
+                            items:
+                              properties:
+                                containerPort:
+                                  format: int32
+                                  type: integer
+                                hostIP:
+                                  type: string
+                                hostPort:
+                                  format: int32
+                                  type: integer
+                                name:
+                                  type: string
+                                protocol:
+                                  default: TCP
+                                  type: string
+                              required:
+                              - containerPort
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - containerPort
+                            - protocol
+                            x-kubernetes-list-type: map
                           readinessProbe:
                             properties:
                               failureThreshold:
@@ -4434,6 +4506,30 @@ spec:
                                 format: int32
                                 type: integer
                             type: object
+                          ports:
+                            items:
+                              properties:
+                                containerPort:
+                                  format: int32
+                                  type: integer
+                                hostIP:
+                                  type: string
+                                hostPort:
+                                  format: int32
+                                  type: integer
+                                name:
+                                  type: string
+                                protocol:
+                                  default: TCP
+                                  type: string
+                              required:
+                              - containerPort
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - containerPort
+                            - protocol
+                            x-kubernetes-list-type: map
                           readinessProbe:
                             properties:
                               failureThreshold:
@@ -4795,6 +4891,30 @@ spec:
                             format: int32
                             type: integer
                         type: object
+                      ports:
+                        items:
+                          properties:
+                            containerPort:
+                              format: int32
+                              type: integer
+                            hostIP:
+                              type: string
+                            hostPort:
+                              format: int32
+                              type: integer
+                            name:
+                              type: string
+                            protocol:
+                              default: TCP
+                              type: string
+                          required:
+                          - containerPort
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - containerPort
+                        - protocol
+                        x-kubernetes-list-type: map
                       readinessProbe:
                         properties:
                           failureThreshold:

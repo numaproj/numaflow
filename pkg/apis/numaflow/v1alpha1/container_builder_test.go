@@ -41,9 +41,21 @@ func Test_containerBuilder(t *testing.T) {
 	c := containerBuilder{}.
 		init(getContainerReq{
 			resources: testResources,
-		}).
+		}).args("numa", "args").
+		image("image").
+		imagePullPolicy(corev1.PullIfNotPresent).
+		command("cmd").
+		appendVolumeMounts(corev1.VolumeMount{Name: "vol", MountPath: "/vol"}).
+		appendEnv(corev1.EnvVar{
+			Name: "env", Value: "value"}).
+		appendPorts(corev1.ContainerPort{Name: "port", ContainerPort: 8080}).
 		build()
 	assert.Equal(t, "numa", c.Name)
-	assert.Len(t, c.VolumeMounts, 0)
+	assert.Len(t, c.VolumeMounts, 1)
 	assert.Equal(t, testResources, c.Resources)
+	assert.Equal(t, []string{"numa", "args"}, c.Args)
+	assert.Equal(t, "image", c.Image)
+	assert.Equal(t, corev1.PullIfNotPresent, c.ImagePullPolicy)
+	assert.Equal(t, []corev1.EnvVar{{Name: "env", Value: "value"}}, c.Env)
+	assert.Equal(t, []corev1.ContainerPort{{Name: "port", ContainerPort: 8080}}, c.Ports)
 }
