@@ -317,7 +317,7 @@ message Container {
   // +listType=map
   // +listMapKey=containerPort
   // +listMapKey=protocol
-  repeated .k8s.io.api.core.v1.ContainerPort ports = 12;
+  repeated k8s.io.api.core.v1.ContainerPort ports = 12;
 }
 
 // ContainerTemplate defines customized spec for a container
