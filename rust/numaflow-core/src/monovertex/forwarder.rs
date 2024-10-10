@@ -1,3 +1,10 @@
+use crate::config::{config, OnFailureStrategy};
+use crate::error::Error;
+use crate::message::{Message, Offset, ResponseStatusFromSink};
+use crate::monovertex::metrics;
+use crate::monovertex::metrics::forward_metrics;
+use crate::transformer::user_defined::SourceTransformer;
+use crate::{error, sink, source};
 use chrono::Utc;
 use log::warn;
 use std::collections::HashMap;
@@ -5,45 +12,35 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
-use crate::config::{config, OnFailureStrategy};
-use crate::error::Error;
-use crate::message::{Message, Offset, ResponseStatusFromSink};
-use crate::monovertex::metrics;
-use crate::monovertex::metrics::forward_metrics;
-use crate::sink::user_defined::UserDefinedSink;
-use crate::sink::Sink;
-use crate::transformer::user_defined::SourceTransformer;
-use crate::{error, source};
-
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
 /// back to the source.
-pub(crate) struct Forwarder<A, R> {
+pub(crate) struct Forwarder<A, R, S> {
     source_read: R,
     source_ack: A,
-    sink_writer: UserDefinedSink,
+    sink_writer: S,
     source_transformer: Option<SourceTransformer>,
-    fb_sink_writer: Option<UserDefinedSink>,
+    fb_sink_writer: Option<S>,
     cln_token: CancellationToken,
     common_labels: Vec<(String, String)>,
 }
 
 /// ForwarderBuilder is used to build a Forwarder instance with optional fields.
-pub(crate) struct ForwarderBuilder<A, R> {
+pub(crate) struct ForwarderBuilder<A, R, S> {
     source_read: R,
     source_ack: A,
-    sink_writer: UserDefinedSink,
+    sink_writer: S,
     cln_token: CancellationToken,
     source_transformer: Option<SourceTransformer>,
-    fb_sink_writer: Option<UserDefinedSink>,
+    fb_sink_writer: Option<S>,
 }
 
-impl<A, R> ForwarderBuilder<A, R> {
+impl<A, R, S> ForwarderBuilder<A, R, S> {
     /// Create a new builder with mandatory fields
     pub(crate) fn new(
         source_read: R,
         source_ack: A,
-        sink_writer: UserDefinedSink,
+        sink_writer: S,
         cln_token: CancellationToken,
     ) -> Self {
         Self {
@@ -63,14 +60,14 @@ impl<A, R> ForwarderBuilder<A, R> {
     }
 
     /// Set the optional fallback client
-    pub(crate) fn fallback_sink_writer(mut self, fallback_client: UserDefinedSink) -> Self {
+    pub(crate) fn fallback_sink_writer(mut self, fallback_client: S) -> Self {
         self.fb_sink_writer = Some(fallback_client);
         self
     }
 
     /// Build the Forwarder instance
     #[must_use]
-    pub(crate) fn build(self) -> Forwarder<A, R> {
+    pub(crate) fn build(self) -> Forwarder<A, R, S> {
         let common_labels = metrics::forward_metrics_labels().clone();
         Forwarder {
             source_read: self.source_read,
@@ -84,10 +81,11 @@ impl<A, R> ForwarderBuilder<A, R> {
     }
 }
 
-impl<A, R> Forwarder<A, R>
+impl<A, R, S> Forwarder<A, R, S>
 where
     A: source::SourceAcker,
     R: source::SourceReader,
+    S: sink::Sink,
 {
     /// start starts the forward-a-chunk loop and exits only after a chunk has been forwarded and ack'ed.
     /// this means that, in the happy path scenario a block is always completely processed.
