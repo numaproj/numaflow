@@ -52,32 +52,28 @@ func (s myShutdownTest) ApplyMapStream(ctx context.Context, message *isb.ReadMes
 
 func TestInterStepDataForward(t *testing.T) {
 	tests := []struct {
-		name            string
-		batchSize       int64
-		streamEnabled   bool
-		batchMapEnabled bool
-		unaryEnabled    bool
+		name          string
+		batchSize     int64
+		streamEnabled bool
+		unaryEnabled  bool
 	}{
 		{
-			name:            "stream_forward",
-			batchSize:       1,
-			streamEnabled:   true,
-			batchMapEnabled: false,
-			unaryEnabled:    false,
+			name:          "stream_forward",
+			batchSize:     1,
+			streamEnabled: true,
+			unaryEnabled:  false,
 		},
 		{
-			name:            "batch_forward",
-			batchSize:       5,
-			streamEnabled:   false,
-			batchMapEnabled: false,
-			unaryEnabled:    true,
+			name:          "batch_forward",
+			batchSize:     5,
+			streamEnabled: false,
+			unaryEnabled:  true,
 		},
 		{
-			name:            "batch_map_forward",
-			batchSize:       5,
-			streamEnabled:   false,
-			batchMapEnabled: true,
-			unaryEnabled:    false,
+			name:          "batch_map_forward",
+			batchSize:     5,
+			streamEnabled: false,
+			unaryEnabled:  true,
 		},
 	}
 	for _, tt := range tests {
@@ -109,14 +105,11 @@ func TestInterStepDataForward(t *testing.T) {
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 
 			opts := []Option{WithReadBatchSize(batchSize)}
-			if tt.batchMapEnabled {
-				opts = append(opts, WithUDFBatchMap(myShutdownTest{}))
-			}
 			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myShutdownTest{}))
 			}
 			if tt.unaryEnabled {
-				opts = append(opts, WithUDFUnaryMap(myShutdownTest{}))
+				opts = append(opts, WithUDFMap(myShutdownTest{}))
 			}
 
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
@@ -162,14 +155,11 @@ func TestInterStepDataForward(t *testing.T) {
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
 
 			opts := []Option{WithReadBatchSize(batchSize)}
-			if tt.batchMapEnabled {
-				opts = append(opts, WithUDFBatchMap(myShutdownTest{}))
-			}
 			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myShutdownTest{}))
 			}
 			if tt.unaryEnabled {
-				opts = append(opts, WithUDFUnaryMap(myShutdownTest{}))
+				opts = append(opts, WithUDFMap(myShutdownTest{}))
 			}
 
 			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myShutdownTest{}, fetchWatermark, publishWatermark, idleManager, opts...)

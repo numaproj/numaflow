@@ -19,6 +19,7 @@ package sdkclient
 type Options struct {
 	udsSockAddr    string
 	maxMessageSize int
+	batchMapMode   bool
 }
 
 // UdsSockAddr returns the UDS sock addr.
@@ -29,6 +30,11 @@ func (o *Options) UdsSockAddr() string {
 // MaxMessageSize returns the max message size.
 func (o *Options) MaxMessageSize() int {
 	return o.maxMessageSize
+}
+
+// BatchMapMode returns the batch map mode.
+func (o *Options) BatchMapMode() bool {
+	return o.batchMapMode
 }
 
 // DefaultOptions returns the default options.
@@ -53,5 +59,12 @@ func WithUdsSockAddr(addr string) Option {
 func WithMaxMessageSize(size int) Option {
 	return func(opts *Options) {
 		opts.maxMessageSize = size
+	}
+}
+
+// WithBatchMapMode sets the client to batch map mode.
+func WithBatchMapMode() Option {
+	return func(opts *Options) {
+		opts.batchMapMode = true
 	}
 }

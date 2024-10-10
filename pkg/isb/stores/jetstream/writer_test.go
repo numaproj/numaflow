@@ -176,7 +176,7 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 				opts = append(opts, forward.WithUDFStreamingMap(myForwardJetStreamTest{}))
 			}
 			if tt.unaryEnabled {
-				opts = append(opts, forward.WithUDFUnaryMap(myForwardJetStreamTest{}))
+				opts = append(opts, forward.WithUDFMap(myForwardJetStreamTest{}))
 			}
 
 			f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardJetStreamTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
