@@ -97,7 +97,6 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessages []*isb.ReadMes
 	responses, err := u.client.MapFn(ctx, requests)
 
 	if err != nil {
-		println("gRPC client.mapFn failed, ", err.Error())
 		err = &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),

@@ -36,9 +36,10 @@ import (
 
 // client contains the grpc connection and the grpc client.
 type client struct {
-	conn    *grpc.ClientConn
-	grpcClt mappb.MapClient
-	stream  mappb.Map_MapFnClient
+	conn         *grpc.ClientConn
+	grpcClt      mappb.MapClient
+	stream       mappb.Map_MapFnClient
+	batchMapMode bool
 }
 
 // New creates a new client object.
@@ -58,6 +59,7 @@ func New(ctx context.Context, serverInfo *serverinfo.ServerInfo, inputOptions ..
 	c := new(client)
 	c.conn = conn
 	c.grpcClt = mappb.NewMapClient(conn)
+	c.batchMapMode = opts.BatchMapMode()
 
 	var logger = logging.FromContext(ctx)
 
@@ -161,6 +163,13 @@ func (c *client) MapFn(ctx context.Context, requests []*mappb.MapRequest) ([]*ma
 			}
 			if err := c.stream.Send(req); err != nil {
 				return sdkerror.ToUDFErr("c.grpcClt.MapFn stream.Send", err)
+			}
+		}
+		// if it is a batch map, we need to send an end of transmission message to the server
+		// to indicate that the batch is finished.
+		if c.batchMapMode {
+			if err := c.stream.Send(&mappb.MapRequest{Status: &mappb.MapRequest_Status{Eot: true}}); err != nil {
+				return sdkerror.ToUDFErr("c.grpcClt.MapFn stream.Send end of transmission", err)
 			}
 		}
 		return nil
