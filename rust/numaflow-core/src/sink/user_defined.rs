@@ -1,6 +1,6 @@
 use crate::error;
 use crate::error::Error;
-use crate::message::Message;
+use crate::message::{Message, ResponseFromSink};
 use numaflow_grpc::clients::sink::sink_client::SinkClient;
 use numaflow_grpc::clients::sink::sink_request::Status;
 use numaflow_grpc::clients::sink::{Handshake, SinkRequest, SinkResponse};
@@ -59,7 +59,7 @@ impl SinkWriter {
     pub(crate) async fn sink_fn(
         &mut self,
         messages: Vec<Message>,
-    ) -> error::Result<Vec<SinkResponse>> {
+    ) -> error::Result<Vec<ResponseFromSink>> {
         let requests: Vec<SinkRequest> =
             messages.into_iter().map(|message| message.into()).collect();
         let num_requests = requests.len();
@@ -93,7 +93,7 @@ impl SinkWriter {
                 .message()
                 .await?
                 .ok_or(Error::SinkError("failed to receive response".to_string()))?;
-            responses.push(response);
+            responses.push(response.try_into()?);
         }
 
         Ok(responses)

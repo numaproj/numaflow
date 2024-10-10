@@ -5,6 +5,9 @@ use crate::message::{Message, Offset};
 /// [User-Defined Source]: https://numaflow.numaproj.io/user-guide/sources/user-defined-sources/
 pub(crate) mod user_defined;
 
+/// [Generator] is a builtin to generate data for load testing and other internal use-cases.
+///
+/// [Generator]: https://numaflow.numaproj.io/user-guide/sources/generator/
 pub(crate) mod generator;
 
 /// Set of Read related items that has to be implemented to become a Source.

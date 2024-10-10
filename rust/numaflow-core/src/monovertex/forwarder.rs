@@ -7,13 +7,12 @@ use tracing::{debug, info};
 
 use crate::config::{config, OnFailureStrategy};
 use crate::error::Error;
-use crate::message::{Message, Offset};
+use crate::message::{Message, Offset, ResponseStatusFromSink};
 use crate::monovertex::metrics;
 use crate::monovertex::metrics::forward_metrics;
 use crate::sink::user_defined::SinkWriter;
 use crate::transformer::user_defined::SourceTransformer;
 use crate::{error, source};
-use numaflow_grpc::clients::sink::Status::{Failure, Fallback, Success};
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
@@ -370,13 +369,8 @@ where
                 // for the udsink to return the results in the same order as the requests
                 let result_map = response
                     .into_iter()
-                    .map(|resp| match resp.result {
-                        Some(result) => Ok((result.id.clone(), result)),
-                        None => Err(Error::SinkError(
-                            "Response does not contain a result".to_string(),
-                        )),
-                    })
-                    .collect::<error::Result<HashMap<_, _>>>()?;
+                    .map(|resp| (resp.id, resp.status))
+                    .collect::<HashMap<_, _>>();
 
                 error_map.clear();
                 // drain all the messages that were successfully written
@@ -384,14 +378,16 @@ where
                 // construct the error map for the failed messages
                 messages_to_send.retain(|msg| {
                     if let Some(result) = result_map.get(&msg.id) {
-                        return if result.status == Success as i32 {
-                            false
-                        } else if result.status == Fallback as i32 {
-                            fallback_msgs.push(msg.clone()); // add to fallback messages
-                            false
-                        } else {
-                            *error_map.entry(result.err_msg.clone()).or_insert(0) += 1;
-                            true
+                        return match result {
+                            ResponseStatusFromSink::Success => false,
+                            ResponseStatusFromSink::Failed(err_msg) => {
+                                *error_map.entry(err_msg.clone()).or_insert(0) += 1;
+                                true
+                            }
+                            ResponseStatusFromSink::Fallback => {
+                                fallback_msgs.push(msg.clone());
+                                false
+                            }
                         };
                     }
                     false
@@ -451,14 +447,9 @@ where
                     // create a map of id to result, since there is no strict requirement
                     // for the udsink to return the results in the same order as the requests
                     let result_map = fb_response
-                        .iter()
-                        .map(|resp| match &resp.result {
-                            Some(result) => Ok((result.id.clone(), result)),
-                            None => Err(Error::SinkError(
-                                "Response does not contain a result".to_string(),
-                            )),
-                        })
-                        .collect::<error::Result<HashMap<_, _>>>()?;
+                        .into_iter()
+                        .map(|resp| (resp.id, resp.status))
+                        .collect::<HashMap<_, _>>();
 
                     let mut contains_fallback_status = false;
 
@@ -468,17 +459,17 @@ where
                     // construct the error map for the failed messages
                     messages_to_send.retain(|msg| {
                         if let Some(result) = result_map.get(&msg.id) {
-                            if result.status == Failure as i32 {
-                                *fallback_error_map
-                                    .entry(result.err_msg.clone())
-                                    .or_insert(0) += 1;
-                                true
-                            } else if result.status == Fallback as i32 {
-                                contains_fallback_status = true;
-                                false
-                            } else {
-                                false
-                            }
+                            return match result {
+                                ResponseStatusFromSink::Success => false,
+                                ResponseStatusFromSink::Failed(err_msg) => {
+                                    *fallback_error_map.entry(err_msg.clone()).or_insert(0) += 1;
+                                    true
+                                }
+                                ResponseStatusFromSink::Fallback => {
+                                    contains_fallback_status = true;
+                                    false
+                                }
+                            };
                         } else {
                             false
                         }
