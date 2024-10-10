@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.3.3 (2024-10-09)
+
+ * [4f31aad7](https://github.com/numaproj/numaflow/commit/4f31aad7f51cce59700ef53f363d06afeb6d6aee) Update manifests to v1.3.3
+ * [d0133636](https://github.com/numaproj/numaflow/commit/d01336364b1826c9d28ff81828919b17ca8da222) fix: pipeline pausing race conditions of draining and terminating source (#2131)
+ * [688dd730](https://github.com/numaproj/numaflow/commit/688dd73049617511806779a4e535ad9f380af21f) feat: expose ports for user defined containers (#2135)
+ * [a4a4fd05](https://github.com/numaproj/numaflow/commit/a4a4fd0578f7a4e45a6435505d03061c3612ed6f) fix: create buffers and buckets before updating Vertices (#2112)
+ * [498583f2](https://github.com/numaproj/numaflow/commit/498583f24573649f6ed2db959742f515804a2edc) chore(deps): bump rollup from 2.79.1 to 2.79.2 in /ui (#2096)
+
+### Contributors
+
+ * Derek Wang
+ * Julie Vogelman
+ * Sidhant Kohli
+ * dependabot[bot]
+
 ## v1.3.2 (2024-09-26)
 
  * [cb7d17d4](https://github.com/numaproj/numaflow/commit/cb7d17d4f3e2ecfcf6a1aa413031f714c135983d) Update manifests to v1.3.2
