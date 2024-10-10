@@ -6,6 +6,9 @@ use crate::message::{Message, ResponseFromSink};
 pub(crate) mod user_defined;
 
 /// Set of items to be implemented be a Numaflow Sink.
+///
+/// [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
 pub(crate) trait Sink {
-    async fn write(&mut self, _: Vec<Message>) -> crate::Result<Vec<ResponseFromSink>>;
+    /// Write the messages to the Sink.
+    async fn sink(&mut self, _: Vec<Message>) -> crate::Result<Vec<ResponseFromSink>>;
 }

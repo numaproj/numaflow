@@ -10,7 +10,8 @@ use crate::error::Error;
 use crate::message::{Message, Offset, ResponseStatusFromSink};
 use crate::monovertex::metrics;
 use crate::monovertex::metrics::forward_metrics;
-use crate::sink::user_defined::SinkWriter;
+use crate::sink::user_defined::UserDefinedSink;
+use crate::sink::Sink;
 use crate::transformer::user_defined::SourceTransformer;
 use crate::{error, source};
 
@@ -20,9 +21,9 @@ use crate::{error, source};
 pub(crate) struct Forwarder<A, R> {
     source_read: R,
     source_ack: A,
-    sink_writer: SinkWriter,
+    sink_writer: UserDefinedSink,
     source_transformer: Option<SourceTransformer>,
-    fb_sink_writer: Option<SinkWriter>,
+    fb_sink_writer: Option<UserDefinedSink>,
     cln_token: CancellationToken,
     common_labels: Vec<(String, String)>,
 }
@@ -31,10 +32,10 @@ pub(crate) struct Forwarder<A, R> {
 pub(crate) struct ForwarderBuilder<A, R> {
     source_read: R,
     source_ack: A,
-    sink_writer: SinkWriter,
+    sink_writer: UserDefinedSink,
     cln_token: CancellationToken,
     source_transformer: Option<SourceTransformer>,
-    fb_sink_writer: Option<SinkWriter>,
+    fb_sink_writer: Option<UserDefinedSink>,
 }
 
 impl<A, R> ForwarderBuilder<A, R> {
@@ -42,7 +43,7 @@ impl<A, R> ForwarderBuilder<A, R> {
     pub(crate) fn new(
         source_read: R,
         source_ack: A,
-        sink_writer: SinkWriter,
+        sink_writer: UserDefinedSink,
         cln_token: CancellationToken,
     ) -> Self {
         Self {
@@ -62,7 +63,7 @@ impl<A, R> ForwarderBuilder<A, R> {
     }
 
     /// Set the optional fallback client
-    pub(crate) fn fallback_sink_writer(mut self, fallback_client: SinkWriter) -> Self {
+    pub(crate) fn fallback_sink_writer(mut self, fallback_client: UserDefinedSink) -> Self {
         self.fb_sink_writer = Some(fallback_client);
         self
     }
@@ -361,7 +362,7 @@ where
         messages_to_send: &mut Vec<Message>,
     ) -> error::Result<bool> {
         let start_time = tokio::time::Instant::now();
-        match self.sink_writer.sink_fn(messages_to_send.clone()).await {
+        match self.sink_writer.sink(messages_to_send.clone()).await {
             Ok(response) => {
                 debug!("Sink latency - {}ms", start_time.elapsed().as_millis());
 
@@ -437,7 +438,7 @@ where
 
         while attempts < max_attempts {
             let start_time = tokio::time::Instant::now();
-            match fallback_client.sink_fn(messages_to_send.clone()).await {
+            match fallback_client.sink(messages_to_send.clone()).await {
                 Ok(fb_response) => {
                     debug!(
                         "Fallback sink latency - {}ms",
@@ -540,7 +541,7 @@ mod tests {
     use crate::config::config;
     use crate::monovertex::forwarder::ForwarderBuilder;
     use crate::shared::utils::create_rpc_channel;
-    use crate::sink::user_defined::SinkWriter;
+    use crate::sink::user_defined::UserDefinedSink;
     use crate::source::user_defined::new_source;
     use crate::transformer::user_defined::SourceTransformer;
     use chrono::Utc;
@@ -738,7 +739,7 @@ mod tests {
         .await
         .expect("failed to connect to source server");
 
-        let sink_writer = SinkWriter::new(SinkClient::new(
+        let sink_writer = UserDefinedSink::new(SinkClient::new(
             create_rpc_channel(sink_sock_file).await.unwrap(),
         ))
         .await
@@ -863,7 +864,7 @@ mod tests {
         .await
         .expect("failed to connect to source server");
 
-        let sink_writer = SinkWriter::new(SinkClient::new(
+        let sink_writer = UserDefinedSink::new(SinkClient::new(
             create_rpc_channel(sink_sock_file).await.unwrap(),
         ))
         .await
@@ -980,13 +981,13 @@ mod tests {
         .await
         .expect("failed to connect to source server");
 
-        let sink_writer = SinkWriter::new(SinkClient::new(
+        let sink_writer = UserDefinedSink::new(SinkClient::new(
             create_rpc_channel(sink_sock_file).await.unwrap(),
         ))
         .await
         .expect("failed to connect to sink server");
 
-        let fb_sink_writer = SinkWriter::new(SinkClient::new(
+        let fb_sink_writer = UserDefinedSink::new(SinkClient::new(
             create_rpc_channel(fb_sink_sock_file).await.unwrap(),
         ))
         .await

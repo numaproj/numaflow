@@ -3,7 +3,7 @@ use crate::error;
 use crate::reader::LagReader;
 use crate::shared::utils;
 use crate::shared::utils::create_rpc_channel;
-use crate::sink::user_defined::SinkWriter;
+use crate::sink::user_defined::UserDefinedSink;
 use crate::source::generator::{new_generator, GeneratorAck, GeneratorLagReader, GeneratorRead};
 use crate::source::user_defined::{
     new_source, UserDefinedSourceAck, UserDefinedSourceLagReader, UserDefinedSourceRead,
@@ -249,7 +249,7 @@ where
     pending_reader.start().await;
 
     // build the forwarder
-    let sink_writer = SinkWriter::new(sink_grpc_client).await?;
+    let sink_writer = UserDefinedSink::new(sink_grpc_client).await?;
 
     let mut forwarder_builder =
         ForwarderBuilder::new(source_reader, source_acker, sink_writer, cln_token);
@@ -262,7 +262,7 @@ where
 
     // add fallback sink if exists
     if let Some(fallback_sink_client) = fallback_sink_client {
-        let fallback_writer = SinkWriter::new(fallback_sink_client).await?;
+        let fallback_writer = UserDefinedSink::new(fallback_sink_client).await?;
         forwarder_builder = forwarder_builder.fallback_sink_writer(fallback_writer);
     }
     // build the final forwarder
