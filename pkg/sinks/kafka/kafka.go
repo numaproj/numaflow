@@ -150,10 +150,32 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 			}
 		}
 	}()
+
 	for index, msg := range messages {
+		// insert keys in the header.
+		// since keys is an array, to decompose it, we need len and key at each index.
+		var headers []sarama.RecordHeader
+		// insert __key_len
+		keyLen := sarama.RecordHeader{
+			Key:   []byte("__key_len"),
+			Value: []byte(fmt.Sprintf("%d", len(msg.Keys))),
+		}
+		headers = append(headers, keyLen)
+
+		// write keys into header if length > 0
+		if len(msg.Keys) > 0 {
+			for idx, key := range msg.Keys {
+				headers = append(headers, sarama.RecordHeader{
+					Key:   []byte(fmt.Sprintf("__key_%d", idx)),
+					Value: []byte(key),
+				})
+			}
+		}
+
 		message := &sarama.ProducerMessage{
 			Topic:    tk.topic,
 			Value:    sarama.ByteEncoder(msg.Payload),
+			Headers:  headers,
 			Metadata: index, // Use metadata to identify if it succeeds or fails in the async return.
 		}
 		tk.producer.Input() <- message
