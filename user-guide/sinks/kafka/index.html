@@ -845,9 +845,47 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Kafka Sink
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         Kafka Sink
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#kafka-headers" class="md-nav__link">
+    Kafka Headers
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    Example
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -2248,6 +2286,28 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#kafka-headers" class="md-nav__link">
+    Kafka Headers
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    Example
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2266,6 +2326,14 @@
 
 <h1 id="kafka-sink">Kafka Sink<a class="headerlink" href="#kafka-sink" title="Permanent link">&para;</a></h1>
 <p>A <code>Kafka</code> sink is used to forward the messages to a Kafka topic. Kafka sink supports configuration overrides.</p>
+<h2 id="kafka-headers">Kafka Headers<a class="headerlink" href="#kafka-headers" title="Permanent link">&para;</a></h2>
+<p>We will insert <code>keys</code> into the Kafka header, but since <code>keys</code> is an array, we will add <code>keys</code> into the header in the
+following format.</p>
+<ul>
+<li><code>__keys_len</code> will have the number of <code>key</code> in the header. if <code>__keys_len</code> == <code>0</code>, means no <code>keys</code> are present.</li>
+<li><code>__keys_%d</code> will have the <code>key</code>, e.g., <code>__key_0</code> will be the first key, and so forth.</li>
+</ul>
+<h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-output</span>
