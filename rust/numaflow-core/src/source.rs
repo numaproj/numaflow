@@ -1,4 +1,5 @@
 use crate::message::{Message, Offset};
+use async_trait::async_trait;
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -11,6 +12,7 @@ pub(crate) mod user_defined;
 pub(crate) mod generator;
 
 /// Set of Read related items that has to be implemented to become a Source.
+#[async_trait]
 pub(crate) trait SourceReader {
     #[allow(dead_code)]
     /// Name of the source.
@@ -24,6 +26,7 @@ pub(crate) trait SourceReader {
 }
 
 /// Set of Ack related items that has to be implemented to become a Source.
+#[async_trait]
 pub(crate) trait SourceAcker {
     /// acknowledge an offset. The implementor might choose to do it in an asynchronous way.
     async fn ack(&mut self, _: Vec<Offset>) -> crate::Result<()>;

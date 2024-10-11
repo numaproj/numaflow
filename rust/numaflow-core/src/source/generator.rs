@@ -1,6 +1,7 @@
 use crate::message::{Message, Offset};
 use crate::reader;
 use crate::source;
+use async_trait::async_trait;
 use bytes::Bytes;
 use futures::StreamExt;
 use std::time::Duration;
@@ -185,6 +186,7 @@ impl GeneratorRead {
     }
 }
 
+#[async_trait]
 impl source::SourceReader for GeneratorRead {
     fn name(&self) -> &'static str {
         "generator"
@@ -234,6 +236,7 @@ impl GeneratorAck {
     }
 }
 
+#[async_trait]
 impl source::SourceAcker for GeneratorAck {
     async fn ack(&mut self, _: Vec<Offset>) -> crate::error::Result<()> {
         Ok(())
@@ -249,6 +252,7 @@ impl GeneratorLagReader {
     }
 }
 
+#[async_trait]
 impl reader::LagReader for GeneratorLagReader {
     async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
         // Generator is not meant to auto-scale.

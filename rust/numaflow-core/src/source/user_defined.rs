@@ -4,6 +4,7 @@ use crate::error::Error::SourceError;
 use crate::message::{Message, Offset};
 use crate::reader::LagReader;
 use crate::source::{SourceAcker, SourceReader};
+use async_trait::async_trait;
 use numaflow_grpc::clients::source;
 use numaflow_grpc::clients::source::source_client::SourceClient;
 use numaflow_grpc::clients::source::{
@@ -98,6 +99,7 @@ impl UserDefinedSourceRead {
     }
 }
 
+#[async_trait]
 impl SourceReader for UserDefinedSourceRead {
     fn name(&self) -> &'static str {
         "user-defined-source"
@@ -180,6 +182,7 @@ impl UserDefinedSourceAck {
     }
 }
 
+#[async_trait]
 impl SourceAcker for UserDefinedSourceAck {
     async fn ack(&mut self, offsets: Vec<Offset>) -> error::Result<()> {
         let n = offsets.len();
@@ -216,7 +219,7 @@ impl UserDefinedSourceLagReader {
         Self { source_client }
     }
 }
-
+#[async_trait]
 impl LagReader for UserDefinedSourceLagReader {
     async fn pending(&mut self) -> error::Result<Option<usize>> {
         Ok(self

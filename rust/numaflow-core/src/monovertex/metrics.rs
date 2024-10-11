@@ -1,8 +1,4 @@
-use std::collections::BTreeMap;
-use std::net::SocketAddr;
-use std::sync::{Arc, OnceLock};
-use std::time::Duration;
-
+use async_trait::async_trait;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Response, StatusCode};
@@ -16,6 +12,10 @@ use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
 use prometheus_client::registry::Registry;
 use rcgen::{generate_simple_self_signed, CertifiedKey};
+use std::collections::BTreeMap;
+use std::net::SocketAddr;
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;

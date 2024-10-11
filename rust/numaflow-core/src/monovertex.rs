@@ -171,32 +171,43 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
     // FIXME: what to do with the handle
     utils::start_metrics_server(metrics_state).await;
 
-    match source_type {
-        SourceType::UdSource(udsource_reader, udsource_acker, udsource_lag_reader) => {
-            start_forwarder_with_source(
-                udsource_reader,
-                udsource_acker,
-                udsource_lag_reader,
-                sink_grpc_client,
-                transformer_grpc_client,
-                fb_sink_grpc_client,
-                cln_token,
-            )
-            .await?;
-        }
-        SourceType::Generator(generator_reader, generator_acker, generator_lag_reader) => {
-            start_forwarder_with_source(
-                generator_reader,
-                generator_acker,
-                generator_lag_reader,
-                sink_grpc_client,
-                transformer_grpc_client,
-                fb_sink_grpc_client,
-                cln_token,
-            )
-            .await?;
-        }
-    }
+    // match source_type {
+    //     SourceType::UdSource(udsource_reader, udsource_acker, udsource_lag_reader) => {
+    //         start_forwarder_with_source(
+    //             udsource_reader,
+    //             udsource_acker,
+    //             udsource_lag_reader,
+    //             sink_grpc_client,
+    //             transformer_grpc_client,
+    //             fb_sink_grpc_client,
+    //             cln_token,
+    //         )
+    //         .await?;
+    //     }
+    //     SourceType::Generator(generator_reader, generator_acker, generator_lag_reader) => {
+    //         start_forwarder_with_source(
+    //             generator_reader,
+    //             generator_acker,
+    //             generator_lag_reader,
+    //             sink_grpc_client,
+    //             transformer_grpc_client,
+    //             fb_sink_grpc_client,
+    //             cln_token,
+    //         )
+    //         .await?;
+    //     }
+    // }
+
+    start_forwarder_with_source(
+        source_type.0,
+        source_type.1,
+        source_type.2,
+        sink_grpc_client,
+        transformer_grpc_client,
+        fb_sink_grpc_client,
+        cln_token,
+    )
+    .await?;
 
     info!("Forwarder stopped gracefully");
     Ok(())
@@ -205,15 +216,23 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
 async fn fetch_source(
     config: &Settings,
     source_grpc_client: &mut Option<SourceClient<Channel>>,
-) -> crate::Result<SourceType> {
-    let source_type = if let Some(source_grpc_client) = source_grpc_client.clone() {
+) -> crate::Result<(
+    Box<dyn SourceReader>,
+    Box<dyn SourceAcker>,
+    Box<dyn LagReader + Send + 'static>,
+)> {
+    if let Some(source_grpc_client) = source_grpc_client.clone() {
         let (source_read, source_ack, lag_reader) = new_source(
             source_grpc_client,
             config.batch_size as usize,
             config.timeout_in_ms as u16,
         )
         .await?;
-        SourceType::UdSource(source_read, source_ack, lag_reader)
+        Ok((
+            Box::new(source_read),
+            Box::new(source_ack),
+            Box::new(lag_reader),
+        ))
     } else if let Some(generator_config) = &config.generator_config {
         let (source_read, source_ack, lag_reader) = new_generator(
             generator_config.content.clone(),
@@ -221,13 +240,16 @@ async fn fetch_source(
             config.batch_size as usize,
             Duration::from_millis(generator_config.duration as u64),
         )?;
-        SourceType::Generator(source_read, source_ack, lag_reader)
+        Ok((
+            Box::new(source_read),
+            Box::new(source_ack),
+            Box::new(lag_reader),
+        ))
     } else {
-        return Err(error::Error::ConfigError(
+        Err(error::Error::ConfigError(
             "No valid source configuration found".into(),
-        ));
-    };
-    Ok(source_type)
+        ))
+    }
 }
 
 async fn start_forwarder_with_source<R, A, L>(
@@ -242,7 +264,7 @@ async fn start_forwarder_with_source<R, A, L>(
 where
     R: SourceReader,
     A: SourceAcker,
-    L: LagReader + Clone + 'static,
+    L: LagReader + Send + Clone + 'static,
 {
     // start the pending reader to publish pending metrics
     let mut pending_reader = utils::create_pending_reader(source_lag_reader).await;
