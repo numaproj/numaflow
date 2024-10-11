@@ -1,14 +1,13 @@
 use crate::config::{config, Settings};
 use crate::error;
-use crate::reader::LagReader;
+use crate::monovertex::forwarder::{
+    SinkType, SourceAckType, SourceLagReaderType, SourceReaderType,
+};
 use crate::shared::utils;
 use crate::shared::utils::create_rpc_channel;
 use crate::sink::user_defined::UserDefinedSink;
-use crate::source::generator::{new_generator, GeneratorAck, GeneratorLagReader, GeneratorRead};
-use crate::source::user_defined::{
-    new_source, UserDefinedSourceAck, UserDefinedSourceLagReader, UserDefinedSourceRead,
-};
-use crate::source::{SourceAcker, SourceReader};
+use crate::source::generator::new_generator;
+use crate::source::user_defined::new_source;
 use crate::transformer::user_defined::SourceTransformer;
 use forwarder::ForwarderBuilder;
 use metrics::UserDefinedContainerState;
@@ -76,15 +75,6 @@ async fn shutdown_signal() {
         _ = ctrl_c => {},
         _ = terminate => {},
     }
-}
-
-enum SourceType {
-    UdSource(
-        UserDefinedSourceRead,
-        UserDefinedSourceAck,
-        UserDefinedSourceLagReader,
-    ),
-    Generator(GeneratorRead, GeneratorAck, GeneratorLagReader),
 }
 
 async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> error::Result<()> {
@@ -155,7 +145,7 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
     )
     .await?;
 
-    let source_type = fetch_source(&config, &mut source_grpc_client).await?;
+    let source_type = fetch_source(config, &mut source_grpc_client).await?;
 
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
@@ -171,32 +161,22 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
     // FIXME: what to do with the handle
     utils::start_metrics_server(metrics_state).await;
 
-    match source_type {
-        SourceType::UdSource(udsource_reader, udsource_acker, udsource_lag_reader) => {
-            start_forwarder_with_source(
-                udsource_reader,
-                udsource_acker,
-                udsource_lag_reader,
-                sink_grpc_client,
-                transformer_grpc_client,
-                fb_sink_grpc_client,
-                cln_token,
-            )
-            .await?;
-        }
-        SourceType::Generator(generator_reader, generator_acker, generator_lag_reader) => {
-            start_forwarder_with_source(
-                generator_reader,
-                generator_acker,
-                generator_lag_reader,
-                sink_grpc_client,
-                transformer_grpc_client,
-                fb_sink_grpc_client,
-                cln_token,
-            )
-            .await?;
-        }
-    }
+    start_forwarder_with_source(
+        source_type.0,
+        source_type.1,
+        source_type.2,
+        SinkType::UdSink(UserDefinedSink::new(sink_grpc_client).await?),
+        transformer_grpc_client,
+        if let Some(fb_sink_grpc_client) = fb_sink_grpc_client {
+            Some(SinkType::UdSink(
+                UserDefinedSink::new(fb_sink_grpc_client).await?,
+            ))
+        } else {
+            None
+        },
+        cln_token,
+    )
+    .await?;
 
     info!("Forwarder stopped gracefully");
     Ok(())
@@ -205,15 +185,19 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
 async fn fetch_source(
     config: &Settings,
     source_grpc_client: &mut Option<SourceClient<Channel>>,
-) -> crate::Result<SourceType> {
-    let source_type = if let Some(source_grpc_client) = source_grpc_client.clone() {
+) -> crate::Result<(SourceReaderType, SourceAckType, SourceLagReaderType)> {
+    if let Some(source_grpc_client) = source_grpc_client.clone() {
         let (source_read, source_ack, lag_reader) = new_source(
             source_grpc_client,
             config.batch_size as usize,
             config.timeout_in_ms as u16,
         )
         .await?;
-        SourceType::UdSource(source_read, source_ack, lag_reader)
+        Ok((
+            SourceReaderType::UdSource(source_read),
+            SourceAckType::UdSource(source_ack),
+            SourceLagReaderType::UdSource(lag_reader),
+        ))
     } else if let Some(generator_config) = &config.generator_config {
         let (source_read, source_ack, lag_reader) = new_generator(
             generator_config.content.clone(),
@@ -221,38 +205,42 @@ async fn fetch_source(
             config.batch_size as usize,
             Duration::from_millis(generator_config.duration as u64),
         )?;
-        SourceType::Generator(source_read, source_ack, lag_reader)
+        Ok((
+            SourceReaderType::Generator(source_read),
+            SourceAckType::Generator(source_ack),
+            SourceLagReaderType::Generator(lag_reader),
+        ))
     } else {
         return Err(error::Error::ConfigError(
             "No valid source configuration found".into(),
         ));
-    };
-    Ok(source_type)
+    }
 }
 
-async fn start_forwarder_with_source<R, A, L>(
-    source_reader: R,
-    source_acker: A,
-    source_lag_reader: L,
-    sink_grpc_client: SinkClient<tonic::transport::Channel>,
-    transformer_client: Option<SourceTransformClient<tonic::transport::Channel>>,
-    fallback_sink_client: Option<SinkClient<tonic::transport::Channel>>,
+async fn start_forwarder_with_source(
+    source_reader: SourceReaderType,
+    source_ack: SourceAckType,
+    source_lag_reader: SourceLagReaderType,
+    sink_type: SinkType,
+    transformer_client: Option<SourceTransformClient<Channel>>,
+    fallback_sink_client: Option<SinkType>,
     cln_token: CancellationToken,
 ) -> error::Result<()>
 where
-    R: SourceReader,
-    A: SourceAcker,
-    L: LagReader + Clone + 'static,
 {
-    // start the pending reader to publish pending metrics
-    let mut pending_reader = utils::create_pending_reader(source_lag_reader).await;
-    pending_reader.start().await;
-
-    // build the forwarder
-    let sink_writer = UserDefinedSink::new(sink_grpc_client).await?;
+    match source_lag_reader {
+        SourceLagReaderType::UdSource(lag_reader) => {
+            let mut pending_reader = utils::create_pending_reader(lag_reader.clone()).await;
+            pending_reader.start().await;
+        }
+        SourceLagReaderType::Generator(lag_reader) => {
+            let mut pending_reader = utils::create_pending_reader(lag_reader.clone()).await;
+            pending_reader.start().await;
+        }
+    };
 
     let mut forwarder_builder =
-        ForwarderBuilder::new(source_reader, source_acker, sink_writer, cln_token);
+        ForwarderBuilder::new(source_reader, source_ack, sink_type, cln_token);
 
     // add transformer if exists
     if let Some(transformer_client) = transformer_client {
@@ -262,8 +250,7 @@ where
 
     // add fallback sink if exists
     if let Some(fallback_sink_client) = fallback_sink_client {
-        let fallback_writer = UserDefinedSink::new(fallback_sink_client).await?;
-        forwarder_builder = forwarder_builder.fallback_sink_writer(fallback_writer);
+        forwarder_builder = forwarder_builder.fallback_sink_writer(fallback_sink_client);
     }
     // build the final forwarder
     let mut forwarder = forwarder_builder.build();

@@ -1,10 +1,17 @@
 use crate::config::{config, OnFailureStrategy};
+use crate::error;
 use crate::error::Error;
 use crate::message::{Message, Offset, ResponseStatusFromSink};
 use crate::monovertex::metrics;
 use crate::monovertex::metrics::forward_metrics;
+use crate::sink::user_defined::UserDefinedSink;
+use crate::sink::Sink;
+use crate::source::generator::{GeneratorAck, GeneratorLagReader, GeneratorRead};
+use crate::source::user_defined::{
+    UserDefinedSourceAck, UserDefinedSourceLagReader, UserDefinedSourceRead,
+};
+use crate::source::{SourceAcker, SourceReader};
 use crate::transformer::user_defined::SourceTransformer;
-use crate::{error, sink, source};
 use chrono::Utc;
 use log::warn;
 use std::collections::HashMap;
@@ -12,41 +19,60 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
+pub(crate) enum SourceReaderType {
+    UdSource(UserDefinedSourceRead),
+    Generator(GeneratorRead),
+}
+
+pub(crate) enum SourceAckType {
+    UdSource(UserDefinedSourceAck),
+    Generator(GeneratorAck),
+}
+
+pub(crate) enum SourceLagReaderType {
+    UdSource(UserDefinedSourceLagReader),
+    Generator(GeneratorLagReader),
+}
+
+pub(crate) enum SinkType {
+    UdSink(UserDefinedSink),
+}
+
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
 /// back to the source.
-pub(crate) struct Forwarder<A, R, S> {
-    source_read: R,
-    source_ack: A,
-    sink_writer: S,
+pub(crate) struct Forwarder {
+    source_reader: SourceReaderType,
+    source_ack: SourceAckType,
+    sink: SinkType,
     source_transformer: Option<SourceTransformer>,
-    fb_sink_writer: Option<S>,
+    fb_sink: Option<SinkType>,
     cln_token: CancellationToken,
     common_labels: Vec<(String, String)>,
 }
 
 /// ForwarderBuilder is used to build a Forwarder instance with optional fields.
-pub(crate) struct ForwarderBuilder<A, R, S> {
-    source_read: R,
-    source_ack: A,
-    sink_writer: S,
+pub(crate) struct ForwarderBuilder {
+    source_reader: SourceReaderType,
+    source_ack: SourceAckType,
+    sink: SinkType,
     cln_token: CancellationToken,
     source_transformer: Option<SourceTransformer>,
-    fb_sink_writer: Option<S>,
+    fb_sink_writer: Option<SinkType>,
 }
 
-impl<A, R, S> ForwarderBuilder<A, R, S> {
+impl ForwarderBuilder {
     /// Create a new builder with mandatory fields
     pub(crate) fn new(
-        source_read: R,
-        source_ack: A,
-        sink_writer: S,
+        source_reader: SourceReaderType,
+        source_ack: SourceAckType,
+        sink: SinkType,
         cln_token: CancellationToken,
     ) -> Self {
         Self {
-            source_read,
+            source_reader,
             source_ack,
-            sink_writer,
+            sink,
             cln_token,
             source_transformer: None,
             fb_sink_writer: None,
@@ -60,33 +86,28 @@ impl<A, R, S> ForwarderBuilder<A, R, S> {
     }
 
     /// Set the optional fallback client
-    pub(crate) fn fallback_sink_writer(mut self, fallback_client: S) -> Self {
-        self.fb_sink_writer = Some(fallback_client);
+    pub(crate) fn fallback_sink_writer(mut self, fb_sink: SinkType) -> Self {
+        self.fb_sink_writer = Some(fb_sink);
         self
     }
 
     /// Build the Forwarder instance
     #[must_use]
-    pub(crate) fn build(self) -> Forwarder<A, R, S> {
+    pub(crate) fn build(self) -> Forwarder {
         let common_labels = metrics::forward_metrics_labels().clone();
         Forwarder {
-            source_read: self.source_read,
+            source_reader: self.source_reader,
             source_ack: self.source_ack,
-            sink_writer: self.sink_writer,
+            sink: self.sink,
             source_transformer: self.source_transformer,
-            fb_sink_writer: self.fb_sink_writer,
+            fb_sink: self.fb_sink_writer,
             cln_token: self.cln_token,
             common_labels,
         }
     }
 }
 
-impl<A, R, S> Forwarder<A, R, S>
-where
-    A: source::SourceAcker,
-    R: source::SourceReader,
-    S: sink::Sink,
-{
+impl Forwarder {
     /// start starts the forward-a-chunk loop and exits only after a chunk has been forwarded and ack'ed.
     /// this means that, in the happy path scenario a block is always completely processed.
     /// this function will return on any error and will cause end up in a non-0 exit code.
@@ -127,9 +148,18 @@ where
     /// and then acknowledge the messages back to the source.
     async fn read_and_process_messages(&mut self) -> error::Result<usize> {
         let start_time = tokio::time::Instant::now();
-        let messages = self.source_read.read().await.map_err(|e| {
-            Error::ForwarderError(format!("Failed to read messages from source {:?}", e))
-        })?;
+        let messages = match self.source_reader {
+            SourceReaderType::UdSource(ref mut source_read) => {
+                source_read.read().await.map_err(|e| {
+                    Error::ForwarderError(format!("Failed to read messages from source {:?}", e))
+                })?
+            }
+            SourceReaderType::Generator(ref mut source_read) => {
+                source_read.read().await.map_err(|e| {
+                    Error::ForwarderError(format!("Failed to read messages from source {:?}", e))
+                })?
+            }
+        };
 
         debug!(
             "Read batch size: {} and latency - {}ms",
@@ -360,7 +390,13 @@ where
         messages_to_send: &mut Vec<Message>,
     ) -> error::Result<bool> {
         let start_time = tokio::time::Instant::now();
-        match self.sink_writer.sink(messages_to_send.clone()).await {
+        let response = match self.sink {
+            SinkType::UdSink(ref mut sink_writer) => sink_writer
+                .sink(messages_to_send.clone())
+                .await
+                .map_err(|e| Error::SinkError(format!("Failed to write messages to sink {:?}", e))),
+        };
+        match response {
             Ok(response) => {
                 debug!("Sink latency - {}ms", start_time.elapsed().as_millis());
 
@@ -411,14 +447,14 @@ where
 
     // Writes the fallback messages to the fallback sink
     async fn handle_fallback_messages(&mut self, fallback_msgs: Vec<Message>) -> error::Result<()> {
-        if self.fb_sink_writer.is_none() {
+        if self.fb_sink.is_none() {
             return Err(Error::SinkError(
                 "Response contains fallback messages but no fallback sink is configured"
                     .to_string(),
             ));
         }
 
-        let fallback_client = self.fb_sink_writer.as_mut().unwrap();
+        let fallback_client = self.fb_sink.as_mut().unwrap();
         let mut attempts = 0;
         let mut fallback_error_map = HashMap::new();
         // start with the original set of message to be sent.
@@ -436,7 +472,18 @@ where
 
         while attempts < max_attempts {
             let start_time = tokio::time::Instant::now();
-            match fallback_client.sink(messages_to_send.clone()).await {
+            let responses = match fallback_client {
+                SinkType::UdSink(ref mut sink_writer) => sink_writer
+                    .sink(messages_to_send.clone())
+                    .await
+                    .map_err(|e| {
+                        Error::SinkError(format!(
+                            "Failed to write messages to fallback sink {:?}",
+                            e
+                        ))
+                    }),
+            };
+            match responses {
                 Ok(fb_response) => {
                     debug!(
                         "Fallback sink latency - {}ms",
@@ -515,7 +562,14 @@ where
         let n = offsets.len();
         let start_time = tokio::time::Instant::now();
 
-        self.source_ack.ack(offsets).await?;
+        match self.source_ack {
+            SourceAckType::UdSource(ref mut source_ack) => {
+                source_ack.ack(offsets).await?;
+            }
+            SourceAckType::Generator(ref mut source_ack) => {
+                source_ack.ack(offsets).await?;
+            }
+        }
 
         debug!("Ack latency - {}ms", start_time.elapsed().as_millis());
 
@@ -537,7 +591,9 @@ mod tests {
     use std::collections::HashSet;
 
     use crate::config::config;
-    use crate::monovertex::forwarder::ForwarderBuilder;
+    use crate::monovertex::forwarder::{
+        ForwarderBuilder, SinkType, SourceAckType, SourceReaderType,
+    };
     use crate::shared::utils::create_rpc_channel;
     use crate::sink::user_defined::UserDefinedSink;
     use crate::source::user_defined::new_source;
@@ -749,10 +805,14 @@ mod tests {
         .await
         .expect("failed to connect to transformer server");
 
-        let mut forwarder =
-            ForwarderBuilder::new(source_read, source_ack, sink_writer, cln_token.clone())
-                .source_transformer(transformer_client)
-                .build();
+        let mut forwarder = ForwarderBuilder::new(
+            SourceReaderType::UdSource(source_read),
+            SourceAckType::UdSource(source_ack),
+            SinkType::UdSink(sink_writer),
+            cln_token.clone(),
+        )
+        .source_transformer(transformer_client)
+        .build();
 
         // Assert the received message in a different task
         let assert_handle = tokio::spawn(async move {
@@ -798,10 +858,7 @@ mod tests {
 
     #[tonic::async_trait]
     impl sink::Sinker for ErrorSink {
-        async fn sink(
-            &self,
-            mut input: tokio::sync::mpsc::Receiver<sink::SinkRequest>,
-        ) -> Vec<sink::Response> {
+        async fn sink(&self, mut input: mpsc::Receiver<sink::SinkRequest>) -> Vec<sink::Response> {
             let mut responses = vec![];
             while let Some(datum) = input.recv().await {
                 responses.append(&mut vec![sink::Response::failure(
@@ -868,8 +925,13 @@ mod tests {
         .await
         .expect("failed to connect to sink server");
 
-        let mut forwarder =
-            ForwarderBuilder::new(source_read, source_ack, sink_writer, cln_token.clone()).build();
+        let mut forwarder = ForwarderBuilder::new(
+            SourceReaderType::UdSource(source_read),
+            SourceAckType::UdSource(source_ack),
+            SinkType::UdSink(sink_writer),
+            cln_token.clone(),
+        )
+        .build();
 
         let cancel_handle = tokio::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -991,10 +1053,14 @@ mod tests {
         .await
         .expect("failed to connect to fb sink server");
 
-        let mut forwarder =
-            ForwarderBuilder::new(source_read, source_ack, sink_writer, cln_token.clone())
-                .fallback_sink_writer(fb_sink_writer)
-                .build();
+        let mut forwarder = ForwarderBuilder::new(
+            SourceReaderType::UdSource(source_read),
+            SourceAckType::UdSource(source_ack),
+            SinkType::UdSink(sink_writer),
+            cln_token.clone(),
+        )
+        .fallback_sink_writer(SinkType::UdSink(fb_sink_writer))
+        .build();
 
         let assert_handle = tokio::spawn(async move {
             let received_message = sink_rx.recv().await.unwrap();
