@@ -2,6 +2,16 @@
 
 A `Kafka` sink is used to forward the messages to a Kafka topic. Kafka sink supports configuration overrides.
 
+## Kafka Headers
+
+We will insert `keys` into the Kafka header, but since `keys` is an array, we will add `keys` into the header in the
+following format.
+
+* `__keys_len` will have the number of `key` in the header. if `__keys_len` == `0`, means no `keys` are present.
+* `__keys_%d` will have the `key`, e.g., `__key_0` will be the first key, and so forth.
+
+## Example 
+
 ```yaml
 spec:
   vertices:
