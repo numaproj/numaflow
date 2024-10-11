@@ -1,26 +1,26 @@
+use std::time::Duration;
+
+use tokio::signal;
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
+use tracing::info;
+
+use forwarder::ForwarderBuilder;
+use metrics::UserDefinedContainerState;
+use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use numaflow_grpc::clients::source::source_client::SourceClient;
+use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+
 use crate::config::{config, Settings};
 use crate::error;
 use crate::reader::LagReader;
 use crate::shared::utils;
 use crate::shared::utils::create_rpc_channel;
 use crate::sink::user_defined::UserDefinedSink;
-use crate::source::generator::{new_generator, GeneratorAck, GeneratorLagReader, GeneratorRead};
-use crate::source::user_defined::{
-    new_source, UserDefinedSourceAck, UserDefinedSourceLagReader, UserDefinedSourceRead,
-};
+use crate::source::{generator::new_generator, user_defined::new_source};
 use crate::source::{SourceAcker, SourceReader};
 use crate::transformer::user_defined::SourceTransformer;
-use forwarder::ForwarderBuilder;
-use metrics::UserDefinedContainerState;
-use numaflow_grpc::clients::sink::sink_client::SinkClient;
-use numaflow_grpc::clients::source::source_client::SourceClient;
-use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use std::time::Duration;
-use tokio::signal;
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
-use tracing::info;
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
@@ -76,15 +76,6 @@ async fn shutdown_signal() {
         _ = ctrl_c => {},
         _ = terminate => {},
     }
-}
-
-enum SourceType {
-    UdSource(
-        UserDefinedSourceRead,
-        UserDefinedSourceAck,
-        UserDefinedSourceLagReader,
-    ),
-    Generator(GeneratorRead, GeneratorAck, GeneratorLagReader),
 }
 
 async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> error::Result<()> {
@@ -155,7 +146,7 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
     )
     .await?;
 
-    let source_type = fetch_source(&config, &mut source_grpc_client).await?;
+    let (src_reader, src_acker, lag_reader) = fetch_source(config, &mut source_grpc_client).await?;
 
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
@@ -171,37 +162,10 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
     // FIXME: what to do with the handle
     utils::start_metrics_server(metrics_state).await;
 
-    // match source_type {
-    //     SourceType::UdSource(udsource_reader, udsource_acker, udsource_lag_reader) => {
-    //         start_forwarder_with_source(
-    //             udsource_reader,
-    //             udsource_acker,
-    //             udsource_lag_reader,
-    //             sink_grpc_client,
-    //             transformer_grpc_client,
-    //             fb_sink_grpc_client,
-    //             cln_token,
-    //         )
-    //         .await?;
-    //     }
-    //     SourceType::Generator(generator_reader, generator_acker, generator_lag_reader) => {
-    //         start_forwarder_with_source(
-    //             generator_reader,
-    //             generator_acker,
-    //             generator_lag_reader,
-    //             sink_grpc_client,
-    //             transformer_grpc_client,
-    //             fb_sink_grpc_client,
-    //             cln_token,
-    //         )
-    //         .await?;
-    //     }
-    // }
-
     start_forwarder_with_source(
-        source_type.0,
-        source_type.1,
-        source_type.2,
+        src_reader,
+        src_acker,
+        lag_reader,
         sink_grpc_client,
         transformer_grpc_client,
         fb_sink_grpc_client,
@@ -217,8 +181,8 @@ async fn fetch_source(
     config: &Settings,
     source_grpc_client: &mut Option<SourceClient<Channel>>,
 ) -> crate::Result<(
-    Box<dyn SourceReader>,
-    Box<dyn SourceAcker>,
+    Box<dyn SourceReader + Send + 'static>,
+    Box<dyn SourceAcker + Send + 'static>,
     Box<dyn LagReader + Send + 'static>,
 )> {
     if let Some(source_grpc_client) = source_grpc_client.clone() {
@@ -264,11 +228,11 @@ async fn start_forwarder_with_source<R, A, L>(
 where
     R: SourceReader,
     A: SourceAcker,
-    L: LagReader + Send + Clone + 'static,
+    L: LagReader + Send + 'static,
 {
     // start the pending reader to publish pending metrics
-    let mut pending_reader = utils::create_pending_reader(source_lag_reader).await;
-    pending_reader.start().await;
+    let pending_reader = utils::create_pending_reader(source_lag_reader).await;
+    let _pr_handle = metrics::start_pending_reader(pending_reader).await;
 
     // build the forwarder
     let sink_writer = UserDefinedSink::new(sink_grpc_client).await?;

@@ -9,3 +9,21 @@ pub(crate) trait LagReader {
     /// It may or may not include unacknowledged messages.
     async fn pending(&mut self) -> crate::error::Result<Option<usize>>;
 }
+
+impl<R: LagReader + ?Sized> LagReader for Box<R> {
+    fn pending<'life0, 'async_trait>(
+        &'life0 mut self,
+    ) -> ::core::pin::Pin<
+        Box<
+            dyn ::core::future::Future<Output = crate::error::Result<Option<usize>>>
+                + ::core::marker::Send
+                + 'async_trait,
+        >,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        (**self).pending()
+    }
+}

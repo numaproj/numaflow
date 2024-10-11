@@ -1,5 +1,4 @@
 use crate::message::{Message, ResponseFromSink};
-use async_trait::async_trait;
 
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///

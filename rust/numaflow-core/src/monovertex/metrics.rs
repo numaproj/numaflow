@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Response, StatusCode};
@@ -25,7 +24,7 @@ use tracing::{debug, error, info};
 
 use crate::config::config;
 use crate::error::Error;
-use crate::reader;
+use crate::reader::{self, LagReader};
 use numaflow_grpc::clients::sink::sink_client::SinkClient;
 use numaflow_grpc::clients::source::source_client::SourceClient;
 use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -345,8 +344,6 @@ pub(crate) struct PendingReader<T> {
     lag_reader: T,
     lag_checking_interval: Duration,
     refresh_interval: Duration,
-    buildup_handle: Option<JoinHandle<()>>,
-    expose_handle: Option<JoinHandle<()>>,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 }
 
@@ -385,49 +382,61 @@ impl<T: reader::LagReader> PendingReaderBuilder<T> {
             refresh_interval: self
                 .refresh_interval
                 .unwrap_or_else(|| Duration::from_secs(5)),
-            buildup_handle: None,
-            expose_handle: None,
             pending_stats: Arc::new(Mutex::new(Vec::with_capacity(MAX_PENDING_STATS))),
         }
     }
 }
 
-impl<T: reader::LagReader + Clone + Send + 'static> PendingReader<T> {
-    /// Starts the lag reader by spawning tasks to build up pending info and expose pending metrics.
-    ///
-    /// This method spawns two asynchronous tasks:
-    /// - One to periodically check the lag and update the pending stats.
-    /// - Another to periodically expose the pending metrics.
-    pub async fn start(&mut self) {
-        let pending_reader = self.lag_reader.clone();
-        let lag_checking_interval = self.lag_checking_interval;
-        let refresh_interval = self.refresh_interval;
-        let pending_stats = self.pending_stats.clone();
-
-        self.buildup_handle = Some(tokio::spawn(async move {
-            build_pending_info(pending_reader, lag_checking_interval, pending_stats).await;
-        }));
-
-        let pending_stats = self.pending_stats.clone();
-        self.expose_handle = Some(tokio::spawn(async move {
-            expose_pending_metrics(refresh_interval, pending_stats).await;
-        }));
-    }
+// Droping the PendingReaderHandle will abort the metrics populating/exposing tasks
+pub struct PendingReaderHandle {
+    buildup_handle: JoinHandle<()>,
+    expose_handle: JoinHandle<()>,
 }
 
-/// When the PendingReader is dropped, we need to clean up the pending exposer and the pending builder tasks.
-impl<T> Drop for PendingReader<T> {
+impl Drop for PendingReaderHandle {
     fn drop(&mut self) {
-        if let Some(handle) = self.expose_handle.take() {
-            handle.abort();
-        }
-        if let Some(handle) = self.buildup_handle.take() {
-            handle.abort();
-        }
-
-        info!("Stopped the Lag-Reader Expose and Builder tasks");
+        self.buildup_handle.abort();
+        self.expose_handle.abort();
     }
 }
+
+pub async fn start_pending_reader<T: LagReader + Send + 'static>(
+    pr: PendingReader<T>,
+) -> PendingReaderHandle {
+    let PendingReader {
+        lag_reader,
+        lag_checking_interval,
+        refresh_interval,
+        pending_stats,
+    } = pr;
+    let buildup_handle = tokio::spawn({
+        let pending_stats = pending_stats.clone();
+        async move {
+            build_pending_info(lag_reader, lag_checking_interval, pending_stats).await;
+        }
+    });
+    let expose_handle = tokio::spawn(async move {
+        expose_pending_metrics(refresh_interval, pending_stats).await;
+    });
+    PendingReaderHandle {
+        buildup_handle,
+        expose_handle,
+    }
+}
+
+// /// When the PendingReader is dropped, we need to clean up the pending exposer and the pending builder tasks.
+// impl<T> Drop for PendingReader<T> {
+//     fn drop(&mut self) {
+//         if let Some(handle) = self.expose_handle.take() {
+//             handle.abort();
+//         }
+//         if let Some(handle) = self.buildup_handle.take() {
+//             handle.abort();
+//         }
+
+//         info!("Stopped the Lag-Reader Expose and Builder tasks");
+//     }
+// }
 
 /// Periodically checks the pending messages from the source client and build the pending stats.
 async fn build_pending_info<T: reader::LagReader>(
