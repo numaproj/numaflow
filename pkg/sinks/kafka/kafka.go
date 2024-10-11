@@ -19,6 +19,7 @@ package kafka
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -38,6 +39,7 @@ type ToKafka struct {
 	producer     sarama.AsyncProducer
 	connected    bool
 	topic        string
+	retainKey    bool
 	kafkaSink    *dfv1.KafkaSink
 	log          *zap.SugaredLogger
 }
@@ -51,6 +53,7 @@ func NewToKafka(ctx context.Context, vertexInstance *dfv1.VertexInstance) (*ToKa
 	toKafka.name = vertexInstance.Vertex.Spec.Name
 	toKafka.pipelineName = vertexInstance.Vertex.Spec.PipelineName
 	toKafka.topic = kafkaSink.Topic
+	toKafka.retainKey = kafkaSink.RetainKey
 	toKafka.kafkaSink = kafkaSink
 
 	producer, err := connect(kafkaSink)
@@ -163,7 +166,11 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 		headers = append(headers, keyLen)
 
 		// write keys into header if length > 0
+		var kafkaKeyAccum = ""
 		if len(msg.Keys) > 0 {
+			// all keys concatenated together so set kafka key field if need be
+			kafkaKeyAccum = strings.Join(msg.Keys, ":")
+
 			for idx, key := range msg.Keys {
 				headers = append(headers, sarama.RecordHeader{
 					Key:   []byte(fmt.Sprintf("__key_%d", idx)),
@@ -172,7 +179,14 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 			}
 		}
 
+		var kafkaKey sarama.StringEncoder
+		// set kafka key if RetainKey is set.
+		if tk.kafkaSink.RetainKey {
+			kafkaKey = sarama.StringEncoder(kafkaKeyAccum)
+		}
+
 		message := &sarama.ProducerMessage{
+			Key:      kafkaKey,
 			Topic:    tk.topic,
 			Value:    sarama.ByteEncoder(msg.Payload),
 			Headers:  headers,

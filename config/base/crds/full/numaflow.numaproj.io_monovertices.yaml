@@ -3404,6 +3404,8 @@ spec:
                             type: array
                           config:
                             type: string
+                          retainKey:
+                            type: boolean
                           sasl:
                             properties:
                               gssapi:
@@ -3937,6 +3939,8 @@ spec:
                         type: array
                       config:
                         type: string
+                      retainKey:
+                        type: boolean
                       sasl:
                         properties:
                           gssapi:
