@@ -165,11 +165,12 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 		}
 		headers = append(headers, keyLen)
 
+		// keys is concatenated keys
+		var keys string
 		// write keys into header if length > 0
-		var kafkaKeyAccum = ""
 		if len(msg.Keys) > 0 {
-			// all keys concatenated together so set kafka key field if need be
-			kafkaKeyAccum = strings.Join(msg.Keys, ":")
+			// all keys concatenated together to set kafka key field if need be
+			keys = strings.Join(msg.Keys, ":")
 
 			for idx, key := range msg.Keys {
 				headers = append(headers, sarama.RecordHeader{
@@ -181,8 +182,8 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 
 		var kafkaKey sarama.StringEncoder
 		// set kafka key if RetainKey is set.
-		if tk.kafkaSink.RetainKey {
-			kafkaKey = sarama.StringEncoder(kafkaKeyAccum)
+		if tk.retainKey {
+			kafkaKey = sarama.StringEncoder(keys)
 		}
 
 		message := &sarama.ProducerMessage{
