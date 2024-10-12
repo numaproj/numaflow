@@ -78,7 +78,7 @@ async fn shutdown_signal() {
     }
 }
 
-enum SourceType {
+pub(crate) enum SourceType {
     UdSource(
         UserDefinedSourceRead,
         UserDefinedSourceAck,
@@ -202,7 +202,7 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
     Ok(())
 }
 
-async fn fetch_source(
+pub(crate) async fn fetch_source(
     config: &Settings,
     source_grpc_client: &mut Option<SourceClient<Channel>>,
 ) -> crate::Result<SourceType> {

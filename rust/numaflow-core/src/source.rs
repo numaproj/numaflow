@@ -1,4 +1,11 @@
-use crate::message::{Message, Offset};
+use numaflow_models::models::Source;
+use tokio::sync::{mpsc, oneshot};
+
+use crate::{
+    message::{Message, Offset},
+    monovertex::SourceType,
+    reader::LagReader,
+};
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -27,4 +34,85 @@ pub(crate) trait SourceReader {
 pub(crate) trait SourceAcker {
     /// acknowledge an offset. The implementor might choose to do it in an asynchronous way.
     async fn ack(&mut self, _: Vec<Offset>) -> crate::Result<()>;
+}
+
+enum ActorMessage {
+    Name {
+        respond_to: oneshot::Sender<&'static str>,
+    },
+    Read {
+        respond_to: oneshot::Sender<crate::Result<Vec<Message>>>,
+    },
+}
+
+struct SourceActor<R, A, L> {
+    receiver: mpsc::Receiver<ActorMessage>,
+    reader: R,
+    acker: A,
+    lag_reader: L,
+}
+
+impl<R, A, L> SourceActor<R, A, L>
+where
+    R: SourceReader,
+    A: SourceAcker,
+    L: LagReader,
+{
+    fn new(receiver: mpsc::Receiver<ActorMessage>, reader: R, acker: A, lag_reader: L) -> Self {
+        Self {
+            receiver,
+            reader,
+            acker,
+            lag_reader,
+        }
+    }
+
+    async fn handle_message(&mut self, msg: ActorMessage) {
+        match msg {
+            ActorMessage::Name { respond_to } => {
+                let name = self.reader.name();
+                let _ = respond_to.send(name);
+            }
+            ActorMessage::Read { respond_to } => {
+                let msgs = self.reader.read().await;
+                let _ = respond_to.send(msgs);
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct SourceActorHandle {
+    sender: mpsc::Sender<ActorMessage>,
+}
+
+impl SourceActorHandle {
+    pub(crate) fn new(src_type: SourceType) -> Self {
+        let (sender, receiver) = mpsc::channel(100);
+        match src_type {
+            SourceType::UdSource(reader, acker, lag_reader) => {
+                tokio::spawn(async move {
+                    let mut actor = SourceActor::new(receiver, reader, acker, lag_reader);
+                    while let Some(msg) = actor.receiver.recv().await {
+                        actor.handle_message(msg).await;
+                    }
+                });
+            }
+            SourceType::Generator(reader, acker, lag_reader) => {
+                tokio::spawn(async move {
+                    let mut actor = SourceActor::new(receiver, reader, acker, lag_reader);
+                    while let Some(msg) = actor.receiver.recv().await {
+                        actor.handle_message(msg).await;
+                    }
+                });
+            }
+        };
+        Self { sender }
+    }
+
+    pub(crate) async fn read(&self) -> crate::Result<Vec<Message>> {
+        let (sender, receiver) = oneshot::channel();
+        let _ = self.sender.send(ActorMessage::Read { respond_to: sender });
+        receiver.await.unwrap()
+    }
 }
