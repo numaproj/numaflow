@@ -1,4 +1,3 @@
-use numaflow_models::models::Source;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
@@ -43,6 +42,13 @@ enum ActorMessage {
     Read {
         respond_to: oneshot::Sender<crate::Result<Vec<Message>>>,
     },
+    Ack {
+        respond_to: oneshot::Sender<crate::Result<()>>,
+        offsets: Vec<Offset>,
+    },
+    Pending {
+        respond_to: oneshot::Sender<crate::Result<Option<usize>>>,
+    },
 }
 
 struct SourceActor<R, A, L> {
@@ -76,6 +82,17 @@ where
             ActorMessage::Read { respond_to } => {
                 let msgs = self.reader.read().await;
                 let _ = respond_to.send(msgs);
+            }
+            ActorMessage::Ack {
+                respond_to,
+                offsets,
+            } => {
+                let ack = self.acker.ack(offsets).await;
+                let _ = respond_to.send(ack);
+            }
+            ActorMessage::Pending { respond_to } => {
+                let pending = self.lag_reader.pending().await;
+                let _ = respond_to.send(pending);
             }
         }
     }
@@ -112,7 +129,25 @@ impl SourceActorHandle {
 
     pub(crate) async fn read(&self) -> crate::Result<Vec<Message>> {
         let (sender, receiver) = oneshot::channel();
-        let _ = self.sender.send(ActorMessage::Read { respond_to: sender });
+        let msg = ActorMessage::Read { respond_to: sender };
+        let _ = self.sender.send(msg).await;
+        receiver.await.unwrap()
+    }
+
+    pub(crate) async fn ack(&self, offsets: Vec<Offset>) -> crate::Result<()> {
+        let (sender, receiver) = oneshot::channel();
+        let msg = ActorMessage::Ack {
+            respond_to: sender,
+            offsets,
+        };
+        let _ = self.sender.send(msg).await;
+        receiver.await.unwrap()
+    }
+
+    pub(crate) async fn pending(&self) -> crate::error::Result<Option<usize>> {
+        let (sender, receiver) = oneshot::channel();
+        let msg = ActorMessage::Pending { respond_to: sender };
+        let _ = self.sender.send(msg).await;
         receiver.await.unwrap()
     }
 }

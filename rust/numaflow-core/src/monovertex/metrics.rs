@@ -25,7 +25,7 @@ use tracing::{debug, error, info};
 
 use crate::config::config;
 use crate::error::Error;
-use crate::reader;
+use crate::source::SourceActorHandle;
 use numaflow_grpc::clients::sink::sink_client::SinkClient;
 use numaflow_grpc::clients::source::source_client::SourceClient;
 use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -341,8 +341,8 @@ struct TimestampedPending {
 /// PendingReader is responsible for periodically checking the lag of the reader
 /// and exposing the metrics. It maintains a list of pending stats and ensures that
 /// only the most recent entries are kept.
-pub(crate) struct PendingReader<T> {
-    lag_reader: T,
+pub(crate) struct PendingReader {
+    lag_reader: SourceActorHandle,
     lag_checking_interval: Duration,
     refresh_interval: Duration,
     buildup_handle: Option<JoinHandle<()>>,
@@ -351,14 +351,14 @@ pub(crate) struct PendingReader<T> {
 }
 
 /// PendingReaderBuilder is used to build a [LagReader] instance.
-pub(crate) struct PendingReaderBuilder<T> {
-    lag_reader: T,
+pub(crate) struct PendingReaderBuilder {
+    lag_reader: SourceActorHandle,
     lag_checking_interval: Option<Duration>,
     refresh_interval: Option<Duration>,
 }
 
-impl<T: reader::LagReader> PendingReaderBuilder<T> {
-    pub(crate) fn new(lag_reader: T) -> Self {
+impl PendingReaderBuilder {
+    pub(crate) fn new(lag_reader: SourceActorHandle) -> Self {
         Self {
             lag_reader,
             lag_checking_interval: None,
@@ -376,7 +376,7 @@ impl<T: reader::LagReader> PendingReaderBuilder<T> {
         self
     }
 
-    pub(crate) fn build(self) -> PendingReader<T> {
+    pub(crate) fn build(self) -> PendingReader {
         PendingReader {
             lag_reader: self.lag_reader,
             lag_checking_interval: self
@@ -392,7 +392,7 @@ impl<T: reader::LagReader> PendingReaderBuilder<T> {
     }
 }
 
-impl<T: reader::LagReader + Clone + Send + 'static> PendingReader<T> {
+impl PendingReader {
     /// Starts the lag reader by spawning tasks to build up pending info and expose pending metrics.
     ///
     /// This method spawns two asynchronous tasks:
@@ -416,7 +416,7 @@ impl<T: reader::LagReader + Clone + Send + 'static> PendingReader<T> {
 }
 
 /// When the PendingReader is dropped, we need to clean up the pending exposer and the pending builder tasks.
-impl<T> Drop for PendingReader<T> {
+impl Drop for PendingReader {
     fn drop(&mut self) {
         if let Some(handle) = self.expose_handle.take() {
             handle.abort();
@@ -430,8 +430,8 @@ impl<T> Drop for PendingReader<T> {
 }
 
 /// Periodically checks the pending messages from the source client and build the pending stats.
-async fn build_pending_info<T: reader::LagReader>(
-    mut lag_reader: T,
+async fn build_pending_info(
+    mut lag_reader: SourceActorHandle,
     lag_checking_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
@@ -460,7 +460,7 @@ async fn build_pending_info<T: reader::LagReader>(
     }
 }
 
-async fn fetch_pending<T: reader::LagReader>(lag_reader: &mut T) -> crate::error::Result<i64> {
+async fn fetch_pending(lag_reader: &SourceActorHandle) -> crate::error::Result<i64> {
     let response: i64 = lag_reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
     Ok(response)
 }
