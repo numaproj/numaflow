@@ -5227,7 +5227,7 @@ Description
 
 <td>
 
-<code>retainKey</code></br> <em> bool </em>
+<code>setKey</code></br> <em> bool </em>
 </td>
 
 <td>
@@ -5235,7 +5235,7 @@ Description
 <em>(Optional)</em>
 <p>
 
-RetainKey sets the Kafka key to the keys passed in the Message. When the
+SetKey sets the Kafka key to the keys passed in the Message. When the
 key is null (default), the record is sent randomly to one of the
 available partitions of the topic. If a key exists, Kafka hashes the
 key, and the result is used to map the message to a specific partition.

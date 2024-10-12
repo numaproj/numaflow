@@ -19,12 +19,12 @@ package v1alpha1
 type KafkaSink struct {
 	Brokers []string `json:"brokers,omitempty" protobuf:"bytes,1,rep,name=brokers"`
 	Topic   string   `json:"topic" protobuf:"bytes,2,opt,name=topic"`
-	// RetainKey sets the Kafka key to the keys passed in the Message.
+	// SetKey sets the Kafka key to the keys passed in the Message.
 	// When the key is null (default), the record is sent randomly to one of the available partitions of the topic.
 	// If a key exists, Kafka hashes the key, and the result is used to map the message to a specific partition. This
 	// ensures that messages with the same key end up in the same partition.
 	// +optional
-	RetainKey bool `json:"retainKey" protobuf:"varint,3,opt,name=retainKey"`
+	SetKey bool `json:"setKey" protobuf:"varint,3,opt,name=setKey"`
 	// TLS user to configure TLS connection for kafka broker
 	// TLS.enable=true default for TLS.
 	// +optional

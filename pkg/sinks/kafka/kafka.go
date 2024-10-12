@@ -39,7 +39,7 @@ type ToKafka struct {
 	producer     sarama.AsyncProducer
 	connected    bool
 	topic        string
-	retainKey    bool
+	setKey       bool
 	kafkaSink    *dfv1.KafkaSink
 	log          *zap.SugaredLogger
 }
@@ -53,7 +53,7 @@ func NewToKafka(ctx context.Context, vertexInstance *dfv1.VertexInstance) (*ToKa
 	toKafka.name = vertexInstance.Vertex.Spec.Name
 	toKafka.pipelineName = vertexInstance.Vertex.Spec.PipelineName
 	toKafka.topic = kafkaSink.Topic
-	toKafka.retainKey = kafkaSink.RetainKey
+	toKafka.setKey = kafkaSink.SetKey
 	toKafka.kafkaSink = kafkaSink
 
 	producer, err := connect(kafkaSink)
@@ -181,8 +181,8 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 		}
 
 		var kafkaKey sarama.StringEncoder
-		// set kafka key if RetainKey is set.
-		if tk.retainKey {
+		// set Kafka Key if SetKey is set.
+		if tk.setKey {
 			kafkaKey = sarama.StringEncoder(keys)
 		}
 

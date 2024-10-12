@@ -3404,8 +3404,6 @@ spec:
                             type: array
                           config:
                             type: string
-                          retainKey:
-                            type: boolean
                           sasl:
                             properties:
                               gssapi:
@@ -3581,6 +3579,8 @@ spec:
                             required:
                             - mechanism
                             type: object
+                          setKey:
+                            type: boolean
                           tls:
                             properties:
                               caCertSecret:
@@ -3939,8 +3939,6 @@ spec:
                         type: array
                       config:
                         type: string
-                      retainKey:
-                        type: boolean
                       sasl:
                         properties:
                           gssapi:
@@ -4116,6 +4114,8 @@ spec:
                         required:
                         - mechanism
                         type: object
+                      setKey:
+                        type: boolean
                       tls:
                         properties:
                           caCertSecret:

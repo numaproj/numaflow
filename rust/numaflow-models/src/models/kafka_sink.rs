@@ -22,11 +22,11 @@ pub struct KafkaSink {
     pub brokers: Option<Vec<String>>,
     #[serde(rename = "config", skip_serializing_if = "Option::is_none")]
     pub config: Option<String>,
-    /// RetainKey sets the Kafka key to the keys passed in the Message. When the key is null (default), the record is sent randomly to one of the available partitions of the topic. If a key exists, Kafka hashes the key, and the result is used to map the message to a specific partition. This ensures that messages with the same key end up in the same partition.
-    #[serde(rename = "retainKey", skip_serializing_if = "Option::is_none")]
-    pub retain_key: Option<bool>,
     #[serde(rename = "sasl", skip_serializing_if = "Option::is_none")]
     pub sasl: Option<Box<crate::models::Sasl>>,
+    /// SetKey sets the Kafka key to the keys passed in the Message. When the key is null (default), the record is sent randomly to one of the available partitions of the topic. If a key exists, Kafka hashes the key, and the result is used to map the message to a specific partition. This ensures that messages with the same key end up in the same partition.
+    #[serde(rename = "setKey", skip_serializing_if = "Option::is_none")]
+    pub set_key: Option<bool>,
     #[serde(rename = "tls", skip_serializing_if = "Option::is_none")]
     pub tls: Option<Box<crate::models::Tls>>,
     #[serde(rename = "topic")]
@@ -38,8 +38,8 @@ impl KafkaSink {
         KafkaSink {
             brokers: None,
             config: None,
-            retain_key: None,
             sasl: None,
+            set_key: None,
             tls: None,
             topic,
         }
