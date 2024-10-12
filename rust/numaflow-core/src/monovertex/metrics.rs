@@ -431,14 +431,14 @@ impl Drop for PendingReader {
 
 /// Periodically checks the pending messages from the source client and build the pending stats.
 async fn build_pending_info(
-    mut lag_reader: SourceActorHandle,
+    source: SourceActorHandle,
     lag_checking_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
     let mut ticker = time::interval(lag_checking_interval);
     loop {
         ticker.tick().await;
-        match fetch_pending(&mut lag_reader).await {
+        match fetch_pending(&source).await {
             Ok(pending) => {
                 if pending != -1 {
                     let mut stats = pending_stats.lock().await;

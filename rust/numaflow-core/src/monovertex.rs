@@ -8,7 +8,7 @@ use crate::source::user_defined::{
     new_source, UserDefinedSourceAck, UserDefinedSourceLagReader, UserDefinedSourceRead,
 };
 use crate::source::SourceActorHandle;
-use crate::transformer::user_defined::SourceTransformer;
+use crate::transformer::user_defined::TransformerHandle;
 use forwarder::ForwarderBuilder;
 use metrics::UserDefinedContainerState;
 use numaflow_grpc::clients::sink::sink_client::SinkClient;
@@ -230,7 +230,7 @@ async fn start_forwarder_with_source(
 
     // add transformer if exists
     if let Some(transformer_client) = transformer_client {
-        let transformer = SourceTransformer::new(transformer_client).await?;
+        let transformer = TransformerHandle::new(transformer_client).await?;
         forwarder_builder = forwarder_builder.source_transformer(transformer);
     }
 

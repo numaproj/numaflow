@@ -4,7 +4,7 @@ use crate::message::{Message, Offset, ResponseStatusFromSink};
 use crate::monovertex::metrics;
 use crate::monovertex::metrics::forward_metrics;
 use crate::source::SourceActorHandle;
-use crate::transformer::user_defined::SourceTransformer;
+use crate::transformer::user_defined::TransformerHandle;
 use crate::{error, sink};
 use chrono::Utc;
 use log::warn;
@@ -40,7 +40,7 @@ Fallback(sink_writer)
 pub(crate) struct Forwarder<S> {
     source_reader: SourceActorHandle,
     sink_writer: S,
-    source_transformer: Option<SourceTransformer>,
+    source_transformer: Option<TransformerHandle>,
     fb_sink_writer: Option<S>,
     cln_token: CancellationToken,
     common_labels: Vec<(String, String)>,
@@ -51,7 +51,7 @@ pub(crate) struct ForwarderBuilder<S> {
     source_reader: SourceActorHandle,
     sink_writer: S,
     cln_token: CancellationToken,
-    source_transformer: Option<SourceTransformer>,
+    source_transformer: Option<TransformerHandle>,
     fb_sink_writer: Option<S>,
 }
 
@@ -72,7 +72,7 @@ impl<S> ForwarderBuilder<S> {
     }
 
     /// Set the optional transformer client
-    pub(crate) fn source_transformer(mut self, transformer_client: SourceTransformer) -> Self {
+    pub(crate) fn source_transformer(mut self, transformer_client: TransformerHandle) -> Self {
         self.source_transformer = Some(transformer_client);
         self
     }
@@ -211,13 +211,13 @@ where
     // Applies transformation to the messages if transformer is present
     // we concurrently apply transformation to all the messages.
     async fn apply_transformer(&mut self, messages: Vec<Message>) -> error::Result<Vec<Message>> {
-        let Some(transformer_client) = &mut self.source_transformer else {
+        let Some(client) = &mut self.source_transformer else {
             // return early if there is no transformer
             return Ok(messages);
         };
 
         let start_time = tokio::time::Instant::now();
-        let results = transformer_client.transform_fn(messages).await?;
+        let results = client.transform(messages).await?;
 
         debug!(
             "Transformer latency - {}ms",
@@ -569,7 +569,7 @@ mod tests {
     use crate::sink::user_defined::UserDefinedSink;
     use crate::source::user_defined::new_source;
     use crate::source::SourceActorHandle;
-    use crate::transformer::user_defined::SourceTransformer;
+    use crate::transformer::user_defined::TransformerHandle;
     use chrono::Utc;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
@@ -777,7 +777,7 @@ mod tests {
         .await
         .expect("failed to connect to sink server");
 
-        let transformer_client = SourceTransformer::new(SourceTransformClient::new(
+        let transformer_client = TransformerHandle::new(SourceTransformClient::new(
             create_rpc_channel(transformer_sock_file).await.unwrap(),
         ))
         .await
