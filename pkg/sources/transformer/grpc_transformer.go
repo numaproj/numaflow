@@ -114,7 +114,7 @@ func (u *GRPCBasedTransformer) ApplyTransform(ctx context.Context, messages []*i
 	for i, resp := range responses {
 		parentMessage, ok := idToMsgMapping[resp.GetId()]
 		if !ok {
-			panic("tracker doesn't contain the message ID received from the response")
+			panic("tracker doesn't contain the message ID received from the response - " + resp.GetId())
 		}
 		taggedMessages := make([]*isb.WriteMessage, len(resp.GetResults()))
 		for i, result := range resp.GetResults() {

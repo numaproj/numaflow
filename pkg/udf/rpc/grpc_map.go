@@ -22,6 +22,7 @@ import (
 	"time"
 
 	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -34,12 +35,14 @@ import (
 type GRPCBasedMap struct {
 	vertexName string
 	client     mapper.Client
+	log        *zap.SugaredLogger
 }
 
-func NewUDSgRPCBasedMap(vertexName string, client mapper.Client) *GRPCBasedMap {
+func NewUDSgRPCBasedMap(ctx context.Context, client mapper.Client, vertexName string) *GRPCBasedMap {
 	return &GRPCBasedMap{
 		vertexName: vertexName,
 		client:     client,
+		log:        logging.FromContext(ctx),
 	}
 }
 
@@ -97,7 +100,6 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessages []*isb.ReadMes
 	responses, err := u.client.MapFn(ctx, requests)
 
 	if err != nil {
-		println("gRPC client.mapFn failed, ", err.Error())
 		err = &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
@@ -112,7 +114,7 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessages []*isb.ReadMes
 	for i, resp := range responses {
 		parentMessage, ok := idToMsgMapping[resp.GetId()]
 		if !ok {
-			panic(fmt.Sprintf("tracker doesn't contain the message ID received from the response: %s", resp.GetId()))
+			panic("tracker doesn't contain the message ID received from the response - " + resp.GetId())
 		}
 		taggedMessages := make([]*isb.WriteMessage, len(resp.GetResults()))
 		for j, result := range resp.GetResults() {

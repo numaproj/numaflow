@@ -47,6 +47,7 @@ message MapRequest {
   // This ID is used to uniquely identify a map request
   string id = 2;
   optional Handshake handshake = 3;
+  optional Status status = 4;
 }
 
 /*
@@ -55,6 +56,13 @@ message MapRequest {
 message Handshake {
   // Required field indicating the start of transmission.
   bool sot = 1;
+}
+
+/*
+ * Status message to indicate the status of the message.
+ */
+message Status {
+  bool eot = 1;
 }
 
 /**
@@ -70,6 +78,7 @@ message MapResponse {
   // This ID is used to refer the responses to the request it corresponds to.
   string id = 2;
   optional Handshake handshake = 3;
+  optional Status status = 4;
 }
 
 /**
