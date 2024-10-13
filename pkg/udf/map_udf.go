@@ -179,7 +179,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to create batch map client, %w", err)
 			}
-			mapHandler = rpc.NewUDSgRPCBasedMap(vertexName, mapClient)
+			mapHandler = rpc.NewUDSgRPCBasedMap(ctx, mapClient, vertexName)
 			// Readiness check
 			if err := mapHandler.WaitUntilReady(ctx); err != nil {
 				return fmt.Errorf("failed on batch map UDF readiness check, %w", err)
@@ -199,7 +199,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to create map client, %w", err)
 			}
-			mapHandler = rpc.NewUDSgRPCBasedMap(vertexName, mapClient)
+			mapHandler = rpc.NewUDSgRPCBasedMap(ctx, mapClient, vertexName)
 
 			// Readiness check
 			if err := mapHandler.WaitUntilReady(ctx); err != nil {

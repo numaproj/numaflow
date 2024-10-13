@@ -22,6 +22,7 @@ import (
 	"time"
 
 	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
+	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -34,12 +35,14 @@ import (
 type GRPCBasedMap struct {
 	vertexName string
 	client     mapper.Client
+	log        *zap.SugaredLogger
 }
 
-func NewUDSgRPCBasedMap(vertexName string, client mapper.Client) *GRPCBasedMap {
+func NewUDSgRPCBasedMap(ctx context.Context, client mapper.Client, vertexName string) *GRPCBasedMap {
 	return &GRPCBasedMap{
 		vertexName: vertexName,
 		client:     client,
+		log:        logging.FromContext(ctx),
 	}
 }
 

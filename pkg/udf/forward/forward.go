@@ -556,7 +556,7 @@ func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBufferPar
 						metrics.LabelReason:             err.Error(),
 					}).Add(float64(len(msg.Payload)))
 
-					isdf.opts.logger.Infow("Dropped message", zap.String("reason", err.Error()), zap.String("partition", toBufferPartition.GetName()), zap.String("vertex", isdf.vertexName), zap.String("pipeline", isdf.pipelineName))
+					isdf.opts.logger.Infow("Dropped message", zap.String("reason", err.Error()), zap.String("partition", toBufferPartition.GetName()), zap.String("vertex", isdf.vertexName), zap.String("pipeline", isdf.pipelineName), zap.String("msg_id", msg.ID.String()))
 				} else {
 					needRetry = true
 					// we retry only failed messages
