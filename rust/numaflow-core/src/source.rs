@@ -1,5 +1,6 @@
 use tokio::sync::{mpsc, oneshot};
 
+use crate::config::config;
 use crate::{
     message::{Message, Offset},
     monovertex::SourceType,
@@ -36,6 +37,7 @@ pub(crate) trait SourceAcker {
 }
 
 enum ActorMessage {
+    #[allow(dead_code)]
     Name {
         respond_to: oneshot::Sender<&'static str>,
     },
@@ -105,7 +107,7 @@ pub(crate) struct SourceHandle {
 
 impl SourceHandle {
     pub(crate) fn new(src_type: SourceType) -> Self {
-        let (sender, receiver) = mpsc::channel(100);
+        let (sender, receiver) = mpsc::channel(config().batch_size as usize);
         match src_type {
             SourceType::UdSource(reader, acker, lag_reader) => {
                 tokio::spawn(async move {

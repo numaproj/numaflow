@@ -18,24 +18,6 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
-/*
-StartOrchestrator(enum(sources), enum(transfomers), enum(sinks))
-
-let rx_src = match sources {
-  tx_src, rx_src := channel::mpsc(struct{ Vec<Message>, oneshot})
-  rx_src = ReadFromSource(source_read, source_ack)
-}
-
-tx_trf, rx_trf := channel::mpsc({Vec<Message>, oneshot})
-rx_rtf = Transform(Option<SourceTransformer>, rx_src)
-
-tx_trf, rx_trf := channel::mpsc({Vec<Message>, oneshot})
-
-Sink(sink_writer)
-
-Fallback(sink_writer)
-*/
-
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
 /// back to the source.
@@ -228,17 +210,6 @@ impl Forwarder {
             .observe(start_time.elapsed().as_micros() as f64);
 
         Ok(results)
-    }
-
-    async fn write_to_sink_from_channel(
-        &mut self,
-        mut rx: mpsc::Receiver<(Vec<Message>, sync::oneshot::Receiver<PhantomData<()>>)>,
-    ) {
-        while let Some(messages) = rx.recv().await {
-            self.write_to_sink(messages.0)
-                .await
-                .expect("TODO: panic message");
-        }
     }
 
     // Writes the messages to the sink and handles fallback messages if present
