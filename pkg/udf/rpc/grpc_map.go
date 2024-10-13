@@ -114,7 +114,7 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessages []*isb.ReadMes
 	for i, resp := range responses {
 		parentMessage, ok := idToMsgMapping[resp.GetId()]
 		if !ok {
-			panic(fmt.Sprintf("tracker doesn't contain the message ID received from the response: %s", resp.GetId()))
+			panic("tracker doesn't contain the message ID received from the response - " + resp.GetId())
 		}
 		taggedMessages := make([]*isb.WriteMessage, len(resp.GetResults()))
 		for j, result := range resp.GetResults() {

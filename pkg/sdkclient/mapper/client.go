@@ -189,11 +189,16 @@ func (c *client) MapFn(ctx context.Context, requests []*mappb.MapRequest) ([]*ma
 			if err != nil {
 				return sdkerror.ToUDFErr("c.grpcClt.MapFn stream.Recv", err)
 			}
-			// we might get an end of transmission message from the server before receiving all the responses.
-			if resp.GetStatus() != nil && resp.GetStatus().GetEot() && i < len(requests)-1 {
-				c.log.Errorw("Received EOT message before all responses are received, we will wait indefinitely for the remaining responses", zap.Int("received_responses", i+1), zap.Int("total_requests", len(requests)))
+			if resp.GetStatus() != nil && resp.GetStatus().GetEot() {
+				// we might get an end of transmission message from the server before receiving all the responses.
+				if i < len(requests)-1 {
+					c.log.Errorw("Received EOT message before all responses are received, we will wait indefinitely for the remaining responses", zap.Int("received_responses", i+1), zap.Int("total_requests", len(requests)))
+				} else {
+					break
+				}
+			} else {
+				responses = append(responses, resp)
 			}
-			responses = append(responses, resp)
 		}
 		return nil
 	})
