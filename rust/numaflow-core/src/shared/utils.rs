@@ -9,7 +9,7 @@ use crate::monovertex::metrics::{
     start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
 };
 use crate::shared::server_info;
-use crate::source::SourceActorHandle;
+use crate::source::SourceHandle;
 use numaflow_grpc::clients::sink::sink_client::SinkClient;
 use numaflow_grpc::clients::source::source_client::SourceClient;
 use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -86,9 +86,7 @@ pub(crate) async fn start_metrics_server(
     })
 }
 
-pub(crate) async fn create_pending_reader(
-    lag_reader_grpc_client: SourceActorHandle,
-) -> PendingReader {
+pub(crate) async fn create_pending_reader(lag_reader_grpc_client: SourceHandle) -> PendingReader {
     PendingReaderBuilder::new(lag_reader_grpc_client)
         .lag_checking_interval(Duration::from_secs(
             config().lag_check_interval_in_secs.into(),

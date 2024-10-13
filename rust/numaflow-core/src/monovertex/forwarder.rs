@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::marker::PhantomData;
+
 use crate::config::{config, OnFailureStrategy};
 use crate::error;
 use crate::error::Error;
@@ -5,12 +8,10 @@ use crate::message::{Message, Offset, ResponseStatusFromSink};
 use crate::monovertex::metrics;
 use crate::monovertex::metrics::forward_metrics;
 use crate::sink::SinkHandle;
-use crate::source::SourceActorHandle;
-use crate::transformer::user_defined::TransformerHandle;
+use crate::{source::SourceHandle, transformer::user_defined::SourceTransformHandle};
+
 use chrono::Utc;
 use log::warn;
-use std::collections::HashMap;
-use std::marker::PhantomData;
 use tokio::sync;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
@@ -39,9 +40,9 @@ Fallback(sink_writer)
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
 /// back to the source.
 pub(crate) struct Forwarder {
-    source_reader: SourceActorHandle,
+    source_reader: SourceHandle,
     sink_writer: SinkHandle,
-    source_transformer: Option<TransformerHandle>,
+    source_transformer: Option<SourceTransformHandle>,
     fb_sink_writer: Option<SinkHandle>,
     cln_token: CancellationToken,
     common_labels: Vec<(String, String)>,
@@ -49,17 +50,17 @@ pub(crate) struct Forwarder {
 
 /// ForwarderBuilder is used to build a Forwarder instance with optional fields.
 pub(crate) struct ForwarderBuilder {
-    source_reader: SourceActorHandle,
+    source_reader: SourceHandle,
     sink_writer: SinkHandle,
     cln_token: CancellationToken,
-    source_transformer: Option<TransformerHandle>,
+    source_transformer: Option<SourceTransformHandle>,
     fb_sink_writer: Option<SinkHandle>,
 }
 
 impl ForwarderBuilder {
     /// Create a new builder with mandatory fields
     pub(crate) fn new(
-        source_reader: SourceActorHandle,
+        source_reader: SourceHandle,
         sink_writer: SinkHandle,
         cln_token: CancellationToken,
     ) -> Self {
@@ -73,7 +74,7 @@ impl ForwarderBuilder {
     }
 
     /// Set the optional transformer client
-    pub(crate) fn source_transformer(mut self, transformer_client: TransformerHandle) -> Self {
+    pub(crate) fn source_transformer(mut self, transformer_client: SourceTransformHandle) -> Self {
         self.source_transformer = Some(transformer_client);
         self
     }
@@ -566,8 +567,8 @@ mod tests {
     use crate::shared::utils::create_rpc_channel;
     use crate::sink::SinkHandle;
     use crate::source::user_defined::new_source;
-    use crate::source::SourceActorHandle;
-    use crate::transformer::user_defined::TransformerHandle;
+    use crate::source::SourceHandle;
+    use crate::transformer::user_defined::SourceTransformHandle;
     use chrono::Utc;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
@@ -763,7 +764,7 @@ mod tests {
         .await
         .expect("failed to connect to source server");
 
-        let src_reader = SourceActorHandle::new(SourceType::UdSource(
+        let src_reader = SourceHandle::new(SourceType::UdSource(
             source_read,
             source_ack,
             source_lag_reader,
@@ -775,7 +776,7 @@ mod tests {
         .await
         .expect("failed to connect to sink server");
 
-        let transformer_client = TransformerHandle::new(SourceTransformClient::new(
+        let transformer_client = SourceTransformHandle::new(SourceTransformClient::new(
             create_rpc_channel(transformer_sock_file).await.unwrap(),
         ))
         .await
@@ -894,7 +895,7 @@ mod tests {
         .expect("failed to connect to source server");
 
         let source_reader =
-            SourceActorHandle::new(SourceType::UdSource(source_read, source_ack, lag_reader));
+            SourceHandle::new(SourceType::UdSource(source_read, source_ack, lag_reader));
 
         let sink_writer = SinkHandle::new(SinkClient::new(
             create_rpc_channel(sink_sock_file).await.unwrap(),
@@ -1013,7 +1014,7 @@ mod tests {
         .await
         .expect("failed to connect to source server");
 
-        let source = SourceActorHandle::new(SourceType::UdSource(
+        let source = SourceHandle::new(SourceType::UdSource(
             source_read,
             source_ack,
             source_lag_reader,

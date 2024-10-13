@@ -1,13 +1,5 @@
 use std::collections::HashMap;
 
-use crate::config::config;
-use crate::error::{Error, Result};
-use crate::message::{Message, Offset};
-use crate::shared::utils::utc_from_timestamp;
-use numaflow_grpc::clients::sourcetransformer::{
-    self, source_transform_client::SourceTransformClient, SourceTransformRequest,
-    SourceTransformResponse,
-};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
@@ -15,6 +7,16 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::warn;
+
+use numaflow_grpc::clients::sourcetransformer::{
+    self, source_transform_client::SourceTransformClient, SourceTransformRequest,
+    SourceTransformResponse,
+};
+
+use crate::config::config;
+use crate::error::{Error, Result};
+use crate::message::{Message, Offset};
+use crate::shared::utils::utc_from_timestamp;
 
 const DROP: &str = "U+005C__DROP__";
 
@@ -194,11 +196,11 @@ enum ActorMessage {
 }
 
 #[derive(Clone)]
-pub(crate) struct TransformerHandle {
+pub(crate) struct SourceTransformHandle {
     sender: mpsc::Sender<ActorMessage>,
 }
 
-impl TransformerHandle {
+impl SourceTransformHandle {
     pub(crate) async fn new(client: SourceTransformClient<Channel>) -> crate::Result<Self> {
         let (sender, receiver) = mpsc::channel(100);
         let mut client = SourceTransformer::new(client, receiver).await?;
@@ -227,7 +229,7 @@ mod tests {
     use std::time::Duration;
 
     use crate::shared::utils::create_rpc_channel;
-    use crate::transformer::user_defined::TransformerHandle;
+    use crate::transformer::user_defined::SourceTransformHandle;
     use numaflow::sourcetransform;
     use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
     use tempfile::TempDir;
@@ -268,7 +270,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let client = TransformerHandle::new(SourceTransformClient::new(
+        let client = SourceTransformHandle::new(SourceTransformClient::new(
             create_rpc_channel(sock_file).await?,
         ))
         .await?;
@@ -343,7 +345,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let client = TransformerHandle::new(SourceTransformClient::new(
+        let client = SourceTransformHandle::new(SourceTransformClient::new(
             create_rpc_channel(sock_file).await?,
         ))
         .await?;

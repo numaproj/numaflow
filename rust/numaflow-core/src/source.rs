@@ -99,11 +99,11 @@ where
 }
 
 #[derive(Clone)]
-pub(crate) struct SourceActorHandle {
+pub(crate) struct SourceHandle {
     sender: mpsc::Sender<ActorMessage>,
 }
 
-impl SourceActorHandle {
+impl SourceHandle {
     pub(crate) fn new(src_type: SourceType) -> Self {
         let (sender, receiver) = mpsc::channel(100);
         match src_type {

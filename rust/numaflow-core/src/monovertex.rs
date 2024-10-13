@@ -1,3 +1,15 @@
+use std::time::Duration;
+
+use tokio::signal;
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
+use tracing::info;
+
+use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use numaflow_grpc::clients::source::source_client::SourceClient;
+use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+
 use crate::config::{config, Settings};
 use crate::error;
 use crate::shared::utils;
@@ -7,19 +19,10 @@ use crate::source::generator::{new_generator, GeneratorAck, GeneratorLagReader, 
 use crate::source::user_defined::{
     new_source, UserDefinedSourceAck, UserDefinedSourceLagReader, UserDefinedSourceRead,
 };
-use crate::source::SourceActorHandle;
-use crate::transformer::user_defined::TransformerHandle;
+use crate::source::SourceHandle;
+use crate::transformer::user_defined::SourceTransformHandle;
 use forwarder::ForwarderBuilder;
 use metrics::UserDefinedContainerState;
-use numaflow_grpc::clients::sink::sink_client::SinkClient;
-use numaflow_grpc::clients::source::source_client::SourceClient;
-use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use std::time::Duration;
-use tokio::signal;
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
-use tracing::info;
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
@@ -170,7 +173,7 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
     // FIXME: what to do with the handle
     utils::start_metrics_server(metrics_state).await;
 
-    let source = SourceActorHandle::new(source_type);
+    let source = SourceHandle::new(source_type);
     start_forwarder_with_source(
         source,
         sink_grpc_client,
@@ -213,7 +216,7 @@ pub(crate) async fn fetch_source(
 }
 
 async fn start_forwarder_with_source(
-    source: SourceActorHandle,
+    source: SourceHandle,
     sink_grpc_client: SinkClient<tonic::transport::Channel>,
     transformer_client: Option<SourceTransformClient<tonic::transport::Channel>>,
     fallback_sink_client: Option<SinkClient<tonic::transport::Channel>>,
@@ -230,7 +233,7 @@ async fn start_forwarder_with_source(
 
     // add transformer if exists
     if let Some(transformer_client) = transformer_client {
-        let transformer = TransformerHandle::new(transformer_client).await?;
+        let transformer = SourceTransformHandle::new(transformer_client).await?;
         forwarder_builder = forwarder_builder.source_transformer(transformer);
     }
 

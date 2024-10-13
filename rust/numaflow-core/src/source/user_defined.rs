@@ -1,18 +1,20 @@
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::transport::Channel;
+use tonic::{Request, Streaming};
+
+use numaflow_grpc::clients::source;
+use numaflow_grpc::clients::source::source_client::SourceClient;
+use numaflow_grpc::clients::source::{
+    read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
+};
+
 use crate::config::config;
 use crate::error;
 use crate::error::Error::SourceError;
 use crate::message::{Message, Offset};
 use crate::reader::LagReader;
 use crate::source::{SourceAcker, SourceReader};
-use numaflow_grpc::clients::source;
-use numaflow_grpc::clients::source::source_client::SourceClient;
-use numaflow_grpc::clients::source::{
-    read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
-};
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
-use tonic::transport::Channel;
-use tonic::{Request, Streaming};
 
 /// User-Defined Source to operative on custom sources.
 #[derive(Debug)]

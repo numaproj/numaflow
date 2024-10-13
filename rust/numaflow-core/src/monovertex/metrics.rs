@@ -23,12 +23,13 @@ use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{debug, error, info};
 
-use crate::config::config;
-use crate::error::Error;
-use crate::source::SourceActorHandle;
 use numaflow_grpc::clients::sink::sink_client::SinkClient;
 use numaflow_grpc::clients::source::source_client::SourceClient;
 use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+
+use crate::config::config;
+use crate::error::Error;
+use crate::source::SourceHandle;
 
 // Define the labels for the metrics
 // Note: Please keep consistent with the definitions in MonoVertex daemon
@@ -342,7 +343,7 @@ struct TimestampedPending {
 /// and exposing the metrics. It maintains a list of pending stats and ensures that
 /// only the most recent entries are kept.
 pub(crate) struct PendingReader {
-    lag_reader: SourceActorHandle,
+    lag_reader: SourceHandle,
     lag_checking_interval: Duration,
     refresh_interval: Duration,
     buildup_handle: Option<JoinHandle<()>>,
@@ -352,13 +353,13 @@ pub(crate) struct PendingReader {
 
 /// PendingReaderBuilder is used to build a [LagReader] instance.
 pub(crate) struct PendingReaderBuilder {
-    lag_reader: SourceActorHandle,
+    lag_reader: SourceHandle,
     lag_checking_interval: Option<Duration>,
     refresh_interval: Option<Duration>,
 }
 
 impl PendingReaderBuilder {
-    pub(crate) fn new(lag_reader: SourceActorHandle) -> Self {
+    pub(crate) fn new(lag_reader: SourceHandle) -> Self {
         Self {
             lag_reader,
             lag_checking_interval: None,
@@ -431,7 +432,7 @@ impl Drop for PendingReader {
 
 /// Periodically checks the pending messages from the source client and build the pending stats.
 async fn build_pending_info(
-    source: SourceActorHandle,
+    source: SourceHandle,
     lag_checking_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
@@ -460,7 +461,7 @@ async fn build_pending_info(
     }
 }
 
-async fn fetch_pending(lag_reader: &SourceActorHandle) -> crate::error::Result<i64> {
+async fn fetch_pending(lag_reader: &SourceHandle) -> crate::error::Result<i64> {
     let response: i64 = lag_reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
     Ok(response)
 }
