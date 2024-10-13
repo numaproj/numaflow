@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::marker::PhantomData;
 
 use crate::config::{config, OnFailureStrategy};
 use crate::error;
@@ -12,8 +11,6 @@ use crate::{source::SourceHandle, transformer::user_defined::SourceTransformHand
 
 use chrono::Utc;
 use log::warn;
-use tokio::sync;
-use tokio::sync::mpsc;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
@@ -735,7 +732,7 @@ mod tests {
         .await
         .expect("failed to connect to source server");
 
-        let src_reader = SourceHandle::new(SourceType::UdSource(
+        let src_reader = SourceHandle::new(SourceType::UserDefinedSource(
             source_read,
             source_ack,
             source_lag_reader,
@@ -865,8 +862,11 @@ mod tests {
         .await
         .expect("failed to connect to source server");
 
-        let source_reader =
-            SourceHandle::new(SourceType::UdSource(source_read, source_ack, lag_reader));
+        let source_reader = SourceHandle::new(SourceType::UserDefinedSource(
+            source_read,
+            source_ack,
+            lag_reader,
+        ));
 
         let sink_writer = SinkHandle::new(SinkClient::new(
             create_rpc_channel(sink_sock_file).await.unwrap(),
@@ -985,7 +985,7 @@ mod tests {
         .await
         .expect("failed to connect to source server");
 
-        let source = SourceHandle::new(SourceType::UdSource(
+        let source = SourceHandle::new(SourceType::UserDefinedSource(
             source_read,
             source_ack,
             source_lag_reader,

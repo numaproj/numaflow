@@ -81,7 +81,7 @@ async fn shutdown_signal() {
 }
 
 pub(crate) enum SourceType {
-    UdSource(
+    UserDefinedSource(
         UserDefinedSourceRead,
         UserDefinedSourceAck,
         UserDefinedSourceLagReader,
@@ -198,7 +198,7 @@ pub(crate) async fn fetch_source(
             config.timeout_in_ms as u16,
         )
         .await?;
-        SourceType::UdSource(source_read, source_ack, lag_reader)
+        SourceType::UserDefinedSource(source_read, source_ack, lag_reader)
     } else if let Some(generator_config) = &config.generator_config {
         let (source_read, source_ack, lag_reader) = new_generator(
             generator_config.content.clone(),

@@ -109,7 +109,7 @@ impl SourceHandle {
     pub(crate) fn new(src_type: SourceType) -> Self {
         let (sender, receiver) = mpsc::channel(config().batch_size as usize);
         match src_type {
-            SourceType::UdSource(reader, acker, lag_reader) => {
+            SourceType::UserDefinedSource(reader, acker, lag_reader) => {
                 tokio::spawn(async move {
                     let mut actor = SourceActor::new(receiver, reader, acker, lag_reader);
                     while let Some(msg) = actor.receiver.recv().await {
