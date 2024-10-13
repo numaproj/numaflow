@@ -1,14 +1,88 @@
+use tokio::sync::{mpsc, oneshot};
+use tonic::transport::Channel;
+
 use crate::message::{Message, ResponseFromSink};
+use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use user_defined::UserDefinedSink;
 
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
-pub(crate) mod user_defined;
+mod user_defined;
 
 /// Set of items to be implemented be a Numaflow Sink.
 ///
 /// [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
-pub(crate) trait Sink {
+#[trait_variant::make(Sink: Send)]
+#[allow(unused)]
+pub(crate) trait LocalSink {
     /// Write the messages to the Sink.
-    async fn sink(&mut self, _: Vec<Message>) -> crate::Result<Vec<ResponseFromSink>>;
+    async fn sink(&mut self, messages: Vec<Message>) -> crate::Result<Vec<ResponseFromSink>>;
+}
+
+enum ActorMessage {
+    Sink {
+        messages: Vec<Message>,
+        respond_to: oneshot::Sender<crate::Result<Vec<ResponseFromSink>>>,
+    },
+}
+
+struct SinkActor<T> {
+    actor_messages: mpsc::Receiver<ActorMessage>,
+    sink: T,
+}
+
+impl<T> SinkActor<T>
+where
+    T: Sink,
+{
+    fn new(actor_messages: mpsc::Receiver<ActorMessage>, sink: T) -> Self {
+        Self {
+            actor_messages,
+            sink,
+        }
+    }
+
+    async fn handle_message(&mut self, msg: ActorMessage) {
+        match msg {
+            ActorMessage::Sink {
+                messages,
+                respond_to,
+            } => {
+                let response = self.sink.sink(messages).await;
+                let _ = respond_to.send(response);
+            }
+        }
+    }
+}
+
+pub(crate) struct SinkHandle {
+    sender: mpsc::Sender<ActorMessage>,
+}
+
+impl SinkHandle {
+    pub(crate) async fn new(sink_client: SinkClient<Channel>) -> crate::Result<Self> {
+        let (sender, receiver) = mpsc::channel(100);
+        let sink = UserDefinedSink::new(sink_client).await?;
+        tokio::spawn(async move {
+            let mut actor = SinkActor::new(receiver, sink);
+            while let Some(msg) = actor.actor_messages.recv().await {
+                actor.handle_message(msg).await;
+            }
+        });
+        Ok(Self { sender })
+    }
+
+    pub(crate) async fn sink(
+        &self,
+        messages: Vec<Message>,
+    ) -> crate::Result<Vec<ResponseFromSink>> {
+        let (tx, rx) = oneshot::channel();
+        let msg = ActorMessage::Sink {
+            messages,
+            respond_to: tx,
+        };
+        let _ = self.sender.send(msg).await;
+        rx.await.unwrap()
+    }
 }

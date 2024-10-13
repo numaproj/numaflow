@@ -1,11 +1,12 @@
 use crate::config::{config, OnFailureStrategy};
+use crate::error;
 use crate::error::Error;
 use crate::message::{Message, Offset, ResponseStatusFromSink};
 use crate::monovertex::metrics;
 use crate::monovertex::metrics::forward_metrics;
+use crate::sink::SinkHandle;
 use crate::source::SourceActorHandle;
 use crate::transformer::user_defined::TransformerHandle;
-use crate::{error, sink};
 use chrono::Utc;
 use log::warn;
 use std::collections::HashMap;
@@ -37,29 +38,29 @@ Fallback(sink_writer)
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
 /// back to the source.
-pub(crate) struct Forwarder<S> {
+pub(crate) struct Forwarder {
     source_reader: SourceActorHandle,
-    sink_writer: S,
+    sink_writer: SinkHandle,
     source_transformer: Option<TransformerHandle>,
-    fb_sink_writer: Option<S>,
+    fb_sink_writer: Option<SinkHandle>,
     cln_token: CancellationToken,
     common_labels: Vec<(String, String)>,
 }
 
 /// ForwarderBuilder is used to build a Forwarder instance with optional fields.
-pub(crate) struct ForwarderBuilder<S> {
+pub(crate) struct ForwarderBuilder {
     source_reader: SourceActorHandle,
-    sink_writer: S,
+    sink_writer: SinkHandle,
     cln_token: CancellationToken,
     source_transformer: Option<TransformerHandle>,
-    fb_sink_writer: Option<S>,
+    fb_sink_writer: Option<SinkHandle>,
 }
 
-impl<S> ForwarderBuilder<S> {
+impl ForwarderBuilder {
     /// Create a new builder with mandatory fields
     pub(crate) fn new(
         source_reader: SourceActorHandle,
-        sink_writer: S,
+        sink_writer: SinkHandle,
         cln_token: CancellationToken,
     ) -> Self {
         Self {
@@ -78,14 +79,14 @@ impl<S> ForwarderBuilder<S> {
     }
 
     /// Set the optional fallback client
-    pub(crate) fn fallback_sink_writer(mut self, fallback_client: S) -> Self {
+    pub(crate) fn fallback_sink_writer(mut self, fallback_client: SinkHandle) -> Self {
         self.fb_sink_writer = Some(fallback_client);
         self
     }
 
     /// Build the Forwarder instance
     #[must_use]
-    pub(crate) fn build(self) -> Forwarder<S> {
+    pub(crate) fn build(self) -> Forwarder {
         let common_labels = metrics::forward_metrics_labels().clone();
         Forwarder {
             source_reader: self.source_reader,
@@ -98,10 +99,7 @@ impl<S> ForwarderBuilder<S> {
     }
 }
 
-impl<S> Forwarder<S>
-where
-    S: sink::Sink,
-{
+impl Forwarder {
     /// start starts the forward-a-chunk loop and exits only after a chunk has been forwarded and ack'ed.
     /// this means that, in the happy path scenario a block is always completely processed.
     /// this function will return on any error and will cause end up in a non-0 exit code.
@@ -566,7 +564,7 @@ mod tests {
     use crate::monovertex::forwarder::ForwarderBuilder;
     use crate::monovertex::SourceType;
     use crate::shared::utils::create_rpc_channel;
-    use crate::sink::user_defined::UserDefinedSink;
+    use crate::sink::SinkHandle;
     use crate::source::user_defined::new_source;
     use crate::source::SourceActorHandle;
     use crate::transformer::user_defined::TransformerHandle;
@@ -771,7 +769,7 @@ mod tests {
             source_lag_reader,
         ));
 
-        let sink_writer = UserDefinedSink::new(SinkClient::new(
+        let sink_writer = SinkHandle::new(SinkClient::new(
             create_rpc_channel(sink_sock_file).await.unwrap(),
         ))
         .await
@@ -898,7 +896,7 @@ mod tests {
         let source_reader =
             SourceActorHandle::new(SourceType::UdSource(source_read, source_ack, lag_reader));
 
-        let sink_writer = UserDefinedSink::new(SinkClient::new(
+        let sink_writer = SinkHandle::new(SinkClient::new(
             create_rpc_channel(sink_sock_file).await.unwrap(),
         ))
         .await
@@ -1021,13 +1019,13 @@ mod tests {
             source_lag_reader,
         ));
 
-        let sink_writer = UserDefinedSink::new(SinkClient::new(
+        let sink_writer = SinkHandle::new(SinkClient::new(
             create_rpc_channel(sink_sock_file).await.unwrap(),
         ))
         .await
         .expect("failed to connect to sink server");
 
-        let fb_sink_writer = UserDefinedSink::new(SinkClient::new(
+        let fb_sink_writer = SinkHandle::new(SinkClient::new(
             create_rpc_channel(fb_sink_sock_file).await.unwrap(),
         ))
         .await

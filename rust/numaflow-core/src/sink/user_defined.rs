@@ -12,7 +12,7 @@ use tonic::{Request, Streaming};
 
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
 
-/// User-Defined Since code writes messages to a custom [Sink].
+/// User-Defined Sink code writes messages to a custom [Sink].
 pub struct UserDefinedSink {
     sink_tx: mpsc::Sender<SinkRequest>,
     resp_stream: Streaming<SinkResponse>,
