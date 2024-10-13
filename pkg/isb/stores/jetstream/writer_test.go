@@ -169,14 +169,10 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			assert.NoError(t, err)
 
 			opts := []forward.Option{forward.WithReadBatchSize(tt.batchSize)}
-			if tt.batchEnabled {
-				opts = append(opts, forward.WithUDFBatchMap(myForwardJetStreamTest{}))
-			}
 			if tt.streamEnabled {
 				opts = append(opts, forward.WithUDFStreamingMap(myForwardJetStreamTest{}))
-			}
-			if tt.unaryEnabled {
-				opts = append(opts, forward.WithUDFUnaryMap(myForwardJetStreamTest{}))
+			} else {
+				opts = append(opts, forward.WithUDFMap(myForwardJetStreamTest{}))
 			}
 
 			f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardJetStreamTest{}, fetchWatermark, publishWatermark, idleManager, opts...)

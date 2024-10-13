@@ -47,7 +47,7 @@ func TestGRPCBasedMap_WaitUntilReadyWithServer(t *testing.T) {
 	})
 	mapClient := mappb.NewMapClient(conn)
 	client, _ := mapper2.NewFromClient(context.Background(), mapClient)
-	u := NewUDSgRPCBasedMap("testVertex", client)
+	u := NewUDSgRPCBasedMap(context.Background(), client, "testVertex")
 	err := u.WaitUntilReady(context.Background())
 	assert.NoError(t, err)
 }
@@ -113,7 +113,7 @@ func TestGRPCBasedMap_ApplyMapWithServer(t *testing.T) {
 		ctx := context.Background()
 		client, err := mapper2.NewFromClient(ctx, mapClient)
 		require.NoError(t, err, "creating map client")
-		u := NewUDSgRPCBasedMap("testVertex", client)
+		u := NewUDSgRPCBasedMap(ctx, client, "testVertex")
 
 		got, err := u.ApplyMap(ctx, []*isb.ReadMessage{{
 			Message: isb.Message{
@@ -152,7 +152,7 @@ func TestGRPCBasedMap_ApplyMapWithServer(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		client, err := mapper2.NewFromClient(ctx, mapClient)
 		require.NoError(t, err, "creating map client")
-		u := NewUDSgRPCBasedMap("testVertex", client)
+		u := NewUDSgRPCBasedMap(ctx, client, "testVertex")
 
 		// This cancelled context is passed to the ApplyMap function to simulate failure
 		cancel()

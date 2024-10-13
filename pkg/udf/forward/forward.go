@@ -53,7 +53,7 @@ type InterStepDataForward struct {
 	fromBufferPartition isb.BufferReader
 	// toBuffers is a map of toVertex name to the toVertex's owned buffers.
 	toBuffers map[string][]isb.BufferWriter
-	FSD       forwarder.ToWhichStepDecider
+	fsd       forwarder.ToWhichStepDecider
 	wmFetcher fetch.Fetcher
 	// wmPublishers stores the vertex to publisher mapping
 	wmPublishers  map[string]publish.Publisher
@@ -78,11 +78,6 @@ func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.B
 		}
 	}
 
-	// we can have all modes empty if no option was enabled, this is an invalid case
-	if !isValidMapMode(options) {
-		return nil, fmt.Errorf("no valid map mode selected")
-	}
-
 	// creating a context here which is managed by the forwarder's lifecycle
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -91,7 +86,7 @@ func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.B
 		cancelFn:            cancel,
 		fromBufferPartition: fromStep,
 		toBuffers:           toSteps,
-		FSD:                 fsd,
+		fsd:                 fsd,
 		wmFetcher:           fetchWatermark,
 		wmPublishers:        publishWatermark,
 		// should we do a check here for the values not being null?
@@ -271,22 +266,12 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		// Trigger the UDF processing based on the mode enabled for map
 		// ie Batch Map or unary map
 		// This will be a blocking call until the all the UDF results for the batch are received.
-		if isdf.opts.batchMapUdfApplier != nil {
-			udfResults, err = isdf.processBatchMessages(ctx, dataMessages)
-			if err != nil {
-				isdf.opts.logger.Errorw("failed to processBatchMessages", zap.Error(err))
-				// As there's no partial failure, non-ack all the readOffsets
-				isdf.fromBufferPartition.NoAck(ctx, readOffsets)
-				return
-			}
-		} else {
-			udfResults, err = isdf.applyUDF(ctx, dataMessages)
-			if err != nil {
-				isdf.opts.logger.Errorw("failed to applyUDF", zap.Error(err))
-				// As there's no partial failure, non-ack all the readOffsets
-				isdf.fromBufferPartition.NoAck(ctx, readOffsets)
-				return
-			}
+		udfResults, err = isdf.applyUDF(ctx, dataMessages)
+		if err != nil {
+			isdf.opts.logger.Errorw("failed to applyUDF", zap.Error(err))
+			// As there's no partial failure, non-ack all the readOffsets
+			isdf.fromBufferPartition.NoAck(ctx, readOffsets)
+			return
 		}
 
 		// let's figure out which vertex to send the results to.
@@ -375,54 +360,6 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 	// ProcessingTimes of the entire forwardAChunk
 	metrics.ForwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(start).Microseconds()))
-}
-
-// processBatchMessages is used for processing the Batch Map mode UDF
-// batch map processing we send a list of N input requests together to the UDF and get the consolidated
-// response for all of them.
-// if there is an error it will do a retry and will return when
-// - if there is a success while retrying
-// - if shutdown has been initiated.
-// - if context is cancelled
-func (isdf *InterStepDataForward) processBatchMessages(ctx context.Context, dataMessages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
-	concurrentUDFProcessingStart := time.Now()
-	var udfResults []isb.ReadWriteMessagePair
-	var err error
-
-	for {
-		// invoke the UDF call
-		udfResults, err = isdf.opts.batchMapUdfApplier.ApplyBatchMap(ctx, dataMessages)
-		if err != nil {
-			// check if there is a shutdown, in this case we will not retry further
-			if ok, _ := isdf.IsShuttingDown(); ok {
-				isdf.opts.logger.Errorw("batchMapUDF.Apply, Stop called during udf processing", zap.Error(err))
-				metrics.PlatformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName,
-					metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF),
-					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Inc()
-				return nil, err
-			}
-			isdf.opts.logger.Errorw("batchMapUDF.Apply got error during batch udf processing", zap.Error(err))
-			select {
-			case <-ctx.Done():
-				// no point in retrying if the context is cancelled
-				return nil, err
-			case <-time.After(time.Second):
-				// sleep for 1 second and keep retrying after that
-				// Keeping one second of timeout for consistency with other map modes (unary and stream)
-				// for retrying UDF errors.
-				// These errors can be induced due to grpc connections, pod restarts etc.
-				// Hence, a conservative sleep time chosen here.
-				// TODO: Would be a good exercise to understand the behaviour and see what can be
-				// a suitable time across all modes.
-				continue
-			}
-		}
-		// if no error is found, then we do not need to retry
-		break
-	}
-	isdf.opts.logger.Debugw("batch map applyUDF completed", zap.Int("concurrency", isdf.opts.udfConcurrency), zap.Duration("took", time.Since(concurrentUDFProcessingStart)))
-	metrics.ConcurrentUDFProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(concurrentUDFProcessingStart).Microseconds()))
-	return udfResults, nil
 }
 
 // streamMessage streams the data messages to the next step.
@@ -619,7 +556,7 @@ func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBufferPar
 						metrics.LabelReason:             err.Error(),
 					}).Add(float64(len(msg.Payload)))
 
-					isdf.opts.logger.Infow("Dropped message", zap.String("reason", err.Error()), zap.String("partition", toBufferPartition.GetName()), zap.String("vertex", isdf.vertexName), zap.String("pipeline", isdf.pipelineName))
+					isdf.opts.logger.Infow("Dropped message", zap.String("reason", err.Error()), zap.String("partition", toBufferPartition.GetName()), zap.String("vertex", isdf.vertexName), zap.String("pipeline", isdf.pipelineName), zap.String("msg_id", msg.ID.String()))
 				} else {
 					needRetry = true
 					// we retry only failed messages
@@ -694,7 +631,7 @@ func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessages []*
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
 func (isdf *InterStepDataForward) whereToStep(writeMessage *isb.WriteMessage, messageToStep map[string][][]isb.Message, readMessage *isb.ReadMessage) error {
 	// call WhereTo and drop it on errors
-	to, err := isdf.FSD.WhereTo(writeMessage.Keys, writeMessage.Tags, writeMessage.ID.String())
+	to, err := isdf.fsd.WhereTo(writeMessage.Keys, writeMessage.Tags, writeMessage.ID.String())
 	if err != nil {
 		isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(isb.MessageWriteErr{Name: isdf.fromBufferPartition.GetName(), Header: readMessage.Header, Body: readMessage.Body, Message: fmt.Sprintf("WhereTo failed, %s", err)}))
 		// a shutdown can break the blocking loop caused due to InternalErr
@@ -724,11 +661,4 @@ func errorArrayToMap(errs []error) map[string]int64 {
 		}
 	}
 	return result
-}
-
-// check if the options provided are for a valid map mode
-// exactly one of the appliers should not be nil as only one mode can be active at a time, not more not less only 1
-func isValidMapMode(opts *options) bool {
-	// if all the appliers are empty, then it is an invalid scenario
-	return !((opts.batchMapUdfApplier == nil) && (opts.unaryMapUdfApplier == nil) && (opts.streamMapUdfApplier == nil))
 }
