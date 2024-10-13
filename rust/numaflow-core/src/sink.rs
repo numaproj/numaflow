@@ -1,6 +1,7 @@
 use tokio::sync::{mpsc, oneshot};
 use tonic::transport::Channel;
 
+use crate::config::config;
 use crate::message::{Message, ResponseFromSink};
 use numaflow_grpc::clients::sink::sink_client::SinkClient;
 use user_defined::UserDefinedSink;
@@ -62,7 +63,7 @@ pub(crate) struct SinkHandle {
 
 impl SinkHandle {
     pub(crate) async fn new(sink_client: SinkClient<Channel>) -> crate::Result<Self> {
-        let (sender, receiver) = mpsc::channel(100);
+        let (sender, receiver) = mpsc::channel(config().batch_size as usize);
         let sink = UserDefinedSink::new(sink_client).await?;
         tokio::spawn(async move {
             let mut actor = SinkActor::new(receiver, sink);

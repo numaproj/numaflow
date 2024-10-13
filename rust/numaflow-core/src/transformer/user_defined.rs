@@ -70,7 +70,7 @@ impl SourceTransformer {
 
     async fn handle_message(&mut self, message: ActorMessage) {
         match message {
-            ActorMessage::Trasnform {
+            ActorMessage::Transform {
                 messages,
                 respond_to,
             } => {
@@ -189,7 +189,7 @@ impl SourceTransformer {
 }
 
 enum ActorMessage {
-    Trasnform {
+    Transform {
         messages: Vec<Message>,
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
     },
@@ -202,7 +202,7 @@ pub(crate) struct SourceTransformHandle {
 
 impl SourceTransformHandle {
     pub(crate) async fn new(client: SourceTransformClient<Channel>) -> crate::Result<Self> {
-        let (sender, receiver) = mpsc::channel(100);
+        let (sender, receiver) = mpsc::channel(config().batch_size as usize);
         let mut client = SourceTransformer::new(client, receiver).await?;
         tokio::spawn(async move {
             while let Some(msg) = client.actor_messages.recv().await {
@@ -214,7 +214,7 @@ impl SourceTransformHandle {
 
     pub(crate) async fn transform(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
         let (sender, receiver) = oneshot::channel();
-        let msg = ActorMessage::Trasnform {
+        let msg = ActorMessage::Transform {
             messages,
             respond_to: sender,
         };
