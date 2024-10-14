@@ -1,3 +1,4 @@
+use std::cmp::PartialEq;
 use std::collections::HashMap;
 
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -7,7 +8,8 @@ use chrono::{DateTime, Utc};
 use crate::error::Error;
 use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
 use numaflow_grpc::clients::sink::sink_request::Request;
-use numaflow_grpc::clients::sink::SinkRequest;
+use numaflow_grpc::clients::sink::Status::{Failure, Fallback, Success};
+use numaflow_grpc::clients::sink::{sink_response, SinkRequest, SinkResponse};
 use numaflow_grpc::clients::source::{read_response, AckRequest};
 use numaflow_grpc::clients::sourcetransformer::SourceTransformRequest;
 
@@ -111,5 +113,64 @@ impl From<Message> for SinkRequest {
             status: None,
             handshake: None,
         }
+    }
+}
+
+/// Sink's status for each [Message] written to Sink.
+#[derive(PartialEq)]
+pub(crate) enum ResponseStatusFromSink {
+    /// Successfully wrote to the Sink.
+    Success,
+    /// Failed with error message.
+    Failed(String),
+    /// Write to FallBack Sink.
+    Fallback,
+}
+
+/// Sink will give a response per [Message].
+pub(crate) struct ResponseFromSink {
+    /// Unique id per [Message]. We need to track per [Message] status.
+    pub(crate) id: String,
+    /// Status of the "sink" operation per [Message].
+    pub(crate) status: ResponseStatusFromSink,
+}
+
+impl From<ResponseFromSink> for SinkResponse {
+    fn from(value: ResponseFromSink) -> Self {
+        let (status, err_msg) = match value.status {
+            ResponseStatusFromSink::Success => (Success, "".to_string()),
+            ResponseStatusFromSink::Failed(err) => (Failure, err.to_string()),
+            ResponseStatusFromSink::Fallback => (Fallback, "".to_string()),
+        };
+
+        Self {
+            result: Some(sink_response::Result {
+                id: value.id,
+                status: status as i32,
+                err_msg,
+            }),
+            handshake: None,
+        }
+    }
+}
+
+impl TryFrom<SinkResponse> for ResponseFromSink {
+    type Error = crate::Error;
+
+    fn try_from(value: SinkResponse) -> Result<Self, Self::Error> {
+        let value = value
+            .result
+            .ok_or(Error::SinkError("result is empty".to_string()))?;
+
+        let status = match value.status() {
+            Success => ResponseStatusFromSink::Success,
+            Failure => ResponseStatusFromSink::Failed(value.err_msg),
+            Fallback => ResponseStatusFromSink::Fallback,
+        };
+
+        Ok(Self {
+            id: value.id,
+            status,
+        })
     }
 }

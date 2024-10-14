@@ -1,23 +1,26 @@
-use crate::error;
-use crate::error::Error;
-use crate::message::Message;
-use numaflow_grpc::clients::sink::sink_client::SinkClient;
-use numaflow_grpc::clients::sink::sink_request::Status;
-use numaflow_grpc::clients::sink::{Handshake, SinkRequest, SinkResponse};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
+use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use numaflow_grpc::clients::sink::sink_request::Status;
+use numaflow_grpc::clients::sink::{Handshake, SinkRequest, SinkResponse};
+
+use crate::error;
+use crate::error::Error;
+use crate::message::{Message, ResponseFromSink};
+use crate::sink::Sink;
+
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
 
-/// SinkWriter writes messages to a sink.
-pub struct SinkWriter {
+/// User-Defined Sink code writes messages to a custom [Sink].
+pub struct UserDefinedSink {
     sink_tx: mpsc::Sender<SinkRequest>,
     resp_stream: Streaming<SinkResponse>,
 }
 
-impl SinkWriter {
+impl UserDefinedSink {
     pub(crate) async fn new(mut client: SinkClient<Channel>) -> error::Result<Self> {
         let (sink_tx, sink_rx) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
         let sink_stream = ReceiverStream::new(sink_rx);
@@ -54,12 +57,11 @@ impl SinkWriter {
             resp_stream,
         })
     }
+}
 
+impl Sink for UserDefinedSink {
     /// writes a set of messages to the sink.
-    pub(crate) async fn sink_fn(
-        &mut self,
-        messages: Vec<Message>,
-    ) -> error::Result<Vec<SinkResponse>> {
+    async fn sink(&mut self, messages: Vec<Message>) -> error::Result<Vec<ResponseFromSink>> {
         let requests: Vec<SinkRequest> =
             messages.into_iter().map(|message| message.into()).collect();
         let num_requests = requests.len();
@@ -93,7 +95,7 @@ impl SinkWriter {
                 .message()
                 .await?
                 .ok_or(Error::SinkError("failed to receive response".to_string()))?;
-            responses.push(response);
+            responses.push(response.try_into()?);
         }
 
         Ok(responses)
@@ -102,6 +104,8 @@ impl SinkWriter {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     use chrono::offset::Utc;
     use numaflow::sink;
     use tokio::sync::mpsc;
@@ -110,7 +114,7 @@ mod tests {
     use crate::error::Result;
     use crate::message::{Message, Offset};
     use crate::shared::utils::create_rpc_channel;
-    use crate::sink::user_defined::SinkWriter;
+    use crate::sink::user_defined::UserDefinedSink;
     use numaflow_grpc::clients::sink::sink_client::SinkClient;
 
     struct Logger;
@@ -157,7 +161,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let mut sink_client =
-            SinkWriter::new(SinkClient::new(create_rpc_channel(sock_file).await?))
+            UserDefinedSink::new(SinkClient::new(create_rpc_channel(sock_file).await?))
                 .await
                 .expect("failed to connect to sink server");
 
@@ -186,10 +190,10 @@ mod tests {
             },
         ];
 
-        let response = sink_client.sink_fn(messages.clone()).await?;
+        let response = sink_client.sink(messages.clone()).await?;
         assert_eq!(response.len(), 2);
 
-        let response = sink_client.sink_fn(messages.clone()).await?;
+        let response = sink_client.sink(messages.clone()).await?;
         assert_eq!(response.len(), 2);
 
         drop(sink_client);
