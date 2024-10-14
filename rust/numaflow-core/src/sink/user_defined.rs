@@ -1,18 +1,20 @@
-use crate::error;
-use crate::error::Error;
-use crate::message::{Message, ResponseFromSink};
-use crate::sink::Sink;
-use numaflow_grpc::clients::sink::sink_client::SinkClient;
-use numaflow_grpc::clients::sink::sink_request::Status;
-use numaflow_grpc::clients::sink::{Handshake, SinkRequest, SinkResponse};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
+use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use numaflow_grpc::clients::sink::sink_request::Status;
+use numaflow_grpc::clients::sink::{Handshake, SinkRequest, SinkResponse};
+
+use crate::error;
+use crate::error::Error;
+use crate::message::{Message, ResponseFromSink};
+use crate::sink::Sink;
+
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
 
-/// User-Defined Since code writes messages to a custom [Sink].
+/// User-Defined Sink code writes messages to a custom [Sink].
 pub struct UserDefinedSink {
     sink_tx: mpsc::Sender<SinkRequest>,
     resp_stream: Streaming<SinkResponse>,
