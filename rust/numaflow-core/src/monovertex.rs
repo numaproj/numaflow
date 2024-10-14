@@ -122,7 +122,6 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
         None
     };
 
-    //FIXME: If is_ready method is made as a member of the Sink trait, we won't need grpc_client creation here. It could be done through the SinkHandle.
     let mut sink_grpc_client = if let Some(udsink_config) = &config.udsink_config {
         Some(
             SinkClient::new(create_rpc_channel(udsink_config.socket_path.clone().into()).await?)
@@ -195,34 +194,46 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
     Ok(())
 }
 
+// fetch right the source.
+// source_grpc_client can be optional because it is valid only for user-defined source.
 async fn fetch_source(
     config: &Settings,
     source_grpc_client: &mut Option<SourceClient<Channel>>,
 ) -> crate::Result<SourceType> {
-    let source_type = if let Some(source_grpc_client) = source_grpc_client.clone() {
+    // check whether the source grpc client is provided, this happens only of the source is a
+    // user defined source
+    if let Some(source_grpc_client) = source_grpc_client.clone() {
         let (source_read, source_ack, lag_reader) = new_source(
             source_grpc_client,
             config.batch_size as usize,
             config.timeout_in_ms as u16,
         )
         .await?;
-        SourceType::UserDefinedSource(source_read, source_ack, lag_reader)
-    } else if let Some(generator_config) = &config.generator_config {
+        return Ok(SourceType::UserDefinedSource(
+            source_read,
+            source_ack,
+            lag_reader,
+        ));
+    }
+
+    // now that we know it is not a user-defined source, it has to be a built-in
+    if let Some(generator_config) = &config.generator_config {
         let (source_read, source_ack, lag_reader) = new_generator(
             generator_config.content.clone(),
             generator_config.rpu,
             config.batch_size as usize,
             Duration::from_millis(generator_config.duration as u64),
         )?;
-        SourceType::Generator(source_read, source_ack, lag_reader)
+        Ok(SourceType::Generator(source_read, source_ack, lag_reader))
     } else {
-        return Err(error::Error::ConfigError(
+        Err(Error::ConfigError(
             "No valid source configuration found".into(),
-        ));
-    };
-    Ok(source_type)
+        ))
+    }
 }
 
+// fetch the actor handle for the sink.
+// sink_grpc_client can be optional because it is valid only for user-defined sink.
 async fn fetch_sink(
     settings: &Settings,
     sink_grpc_client: Option<SinkClient<Channel>>,
