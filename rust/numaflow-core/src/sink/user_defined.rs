@@ -4,8 +4,7 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
 use numaflow_grpc::clients::sink::sink_client::SinkClient;
-use numaflow_grpc::clients::sink::sink_request::Status;
-use numaflow_grpc::clients::sink::{Handshake, SinkRequest, SinkResponse};
+use numaflow_grpc::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 
 use crate::error;
 use crate::error::Error;
@@ -77,7 +76,7 @@ impl Sink for UserDefinedSink {
         // send eot request to indicate the end of the stream
         let eot_request = SinkRequest {
             request: None,
-            status: Some(Status { eot: true }),
+            status: Some(TransmissionStatus { eot: true }),
             handshake: None,
         };
         self.sink_tx
@@ -85,16 +84,24 @@ impl Sink for UserDefinedSink {
             .await
             .map_err(|e| Error::SinkError(format!("failed to send eot request: {}", e)))?;
 
-        // now that we have sent, we wait for responses!
-        // NOTE: this works now because the results are not streamed, as of today it will give the
+        // Now that we have sent, we wait for responses!
+        // NOTE: This works now because the results are not streamed. As of today, it will give the
         // response only once it has read all the requests.
+        // We wait for num_requests + 1 responses because the last response will be the EOT response.
         let mut responses = Vec::new();
-        for _ in 0..num_requests {
+        for i in 0..num_requests + 1 {
             let response = self
                 .resp_stream
                 .message()
                 .await?
                 .ok_or(Error::SinkError("failed to receive response".to_string()))?;
+
+            if response.status.map_or(false, |s| s.eot) {
+                if i != num_requests {
+                    log::error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
+                }
+                continue;
+            }
             responses.push(response.try_into()?);
         }
 

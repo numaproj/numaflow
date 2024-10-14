@@ -150,6 +150,7 @@ impl From<ResponseFromSink> for SinkResponse {
                 err_msg,
             }),
             handshake: None,
+            status: None,
         }
     }
 }
