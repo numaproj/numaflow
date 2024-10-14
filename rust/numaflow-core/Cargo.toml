@@ -40,7 +40,7 @@ pin-project = "1.1.5"
 
 [dev-dependencies]
 tempfile = "3.11.0"
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "30d8ce1972fd3f0c0b8059fee209516afeef0088" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", branch = "main" }
 
 [build-dependencies]
 
