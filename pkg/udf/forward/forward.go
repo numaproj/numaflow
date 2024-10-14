@@ -364,83 +364,98 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 
 // streamMessage streams the data messages to the next step.
 func (isdf *InterStepDataForward) streamMessage(ctx context.Context, dataMessages []*isb.ReadMessage) (map[string][][]isb.Offset, error) {
-	// create space for writeMessages specific to each step as we could forward to all the steps too.
-	// these messages are for per partition (due to round-robin writes) for load balancing
-	var messageToStep = make(map[string][][]isb.Message)
-	var writeOffsets = make(map[string][][]isb.Offset)
+	// Initialize maps for messages and offsets
+	messageToStep := make(map[string][][]isb.Message)
+	writeOffsets := make(map[string][][]isb.Offset)
 
 	for toVertex := range isdf.toBuffers {
-		// over allocating to have a predictable pattern
 		messageToStep[toVertex] = make([][]isb.Message, len(isdf.toBuffers[toVertex]))
 		writeOffsets[toVertex] = make([][]isb.Offset, len(isdf.toBuffers[toVertex]))
 	}
 
-	if len(dataMessages) > 1 {
+	// Ensure dataMessages length is 1 for streaming
+	if len(dataMessages) != 1 {
 		errMsg := "data message size is not 1 with map UDF streaming"
 		isdf.opts.logger.Errorw(errMsg)
 		return nil, errors.New(errMsg)
-	} else if len(dataMessages) == 1 {
-		// send to map UDF only the data messages
+	}
 
-		// process the mapStreamUDF and get the result
-		start := time.Now()
-		metrics.UDFReadMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Inc()
+	// Process the single data message
+	start := time.Now()
+	metrics.UDFReadMessagesCount.With(map[string]string{
+		metrics.LabelVertex:             isdf.vertexName,
+		metrics.LabelPipeline:           isdf.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeMapUDF),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)),
+		metrics.LabelPartitionName:      isdf.fromBufferPartition.GetName(),
+	}).Inc()
 
-		writeMessageCh := make(chan isb.WriteMessage)
-		errs, ctx := errgroup.WithContext(ctx)
-		errs.Go(func() error {
-			return isdf.opts.streamMapUdfApplier.ApplyMapStream(ctx, dataMessages[0], writeMessageCh)
-		})
+	writeMessageCh := make(chan isb.WriteMessage)
+	errs, ctx := errgroup.WithContext(ctx)
+	errs.Go(func() error {
+		return isdf.opts.streamMapUdfApplier.ApplyMapStream(ctx, dataMessages[0], writeMessageCh)
+	})
 
-		// Stream the message to the next vertex. First figure out which vertex
-		// to send the result to. Then update the toBuffer(s) with writeMessage.
-		msgIndex := 0
-		for writeMessage := range writeMessageCh {
-			writeMessage.Headers = dataMessages[0].Headers
-			msgIndex += 1
-			metrics.UDFWriteMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(1))
+	// Stream the message to the next vertex
+	for writeMessage := range writeMessageCh {
+		writeMessage.Headers = dataMessages[0].Headers
+		metrics.UDFWriteMessagesCount.With(map[string]string{
+			metrics.LabelVertex:             isdf.vertexName,
+			metrics.LabelPipeline:           isdf.pipelineName,
+			metrics.LabelVertexType:         string(dfv1.VertexTypeMapUDF),
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)),
+			metrics.LabelPartitionName:      isdf.fromBufferPartition.GetName(),
+		}).Add(1)
 
-			// update toBuffers
-			if err := isdf.whereToStep(&writeMessage, messageToStep, dataMessages[0]); err != nil {
-				return nil, fmt.Errorf("failed at whereToStep, error: %w", err)
-			}
-
-			// Forward the message to the edge buffer (could be multiple edges)
-			curWriteOffsets, err := isdf.writeToBuffers(ctx, messageToStep)
-			if err != nil {
-				return nil, fmt.Errorf("failed to write to toBuffers, error: %w", err)
-			}
-			// Merge curWriteOffsets into writeOffsets
-			for vertexName, toVertexBufferOffsets := range curWriteOffsets {
-				for index, offsets := range toVertexBufferOffsets {
-					writeOffsets[vertexName][index] = append(writeOffsets[vertexName][index], offsets...)
-				}
-			}
+		// Determine where to step and write to buffers
+		if err := isdf.whereToStep(&writeMessage, messageToStep, dataMessages[0]); err != nil {
+			return nil, fmt.Errorf("failed at whereToStep, error: %w", err)
 		}
 
-		// look for errors in udf processing, if we see even 1 error NoAck all messages
-		// then return. Handling partial retrying is not worth ATM.
-		if err := errs.Wait(); err != nil {
-			metrics.UDFError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName,
-				metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Inc()
-			// We do not retry as we are streaming
-			if ok, _ := isdf.IsShuttingDown(); ok {
-				isdf.opts.logger.Errorw("mapUDF.Apply, Stop called while stuck on an internal error", zap.Error(err))
-				metrics.PlatformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Inc()
-			}
-			return nil, fmt.Errorf("failed to applyUDF, error: %w", err)
-		}
-
-		metrics.UDFProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName,
-			metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(start).Microseconds()))
-	} else {
-		// Even not data messages, forward the message to the edge buffer (could be multiple edges)
-		var err error
-		writeOffsets, err = isdf.writeToBuffers(ctx, messageToStep)
+		curWriteOffsets, err := isdf.writeToBuffers(ctx, messageToStep)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write to toBuffers, error: %w", err)
 		}
+
+		// Merge current write offsets into the main writeOffsets map
+		for vertexName, toVertexBufferOffsets := range curWriteOffsets {
+			for index, offsets := range toVertexBufferOffsets {
+				writeOffsets[vertexName][index] = append(writeOffsets[vertexName][index], offsets...)
+			}
+		}
+
+		// Clear messageToStep, as we have written the messages to the buffers
+		for toVertex := range isdf.toBuffers {
+			messageToStep[toVertex] = make([][]isb.Message, len(isdf.toBuffers[toVertex]))
+		}
 	}
+
+	// Handle errors in UDF processing
+	if err := errs.Wait(); err != nil {
+		metrics.UDFError.With(map[string]string{
+			metrics.LabelVertex:             isdf.vertexName,
+			metrics.LabelPipeline:           isdf.pipelineName,
+			metrics.LabelVertexType:         string(dfv1.VertexTypeMapUDF),
+			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)),
+		}).Inc()
+		if ok, _ := isdf.IsShuttingDown(); ok {
+			isdf.opts.logger.Errorw("mapUDF.Apply, Stop called while stuck on an internal error", zap.Error(err))
+			metrics.PlatformError.With(map[string]string{
+				metrics.LabelVertex:             isdf.vertexName,
+				metrics.LabelPipeline:           isdf.pipelineName,
+				metrics.LabelVertexType:         string(dfv1.VertexTypeMapUDF),
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)),
+			}).Inc()
+		}
+		return nil, fmt.Errorf("failed to applyUDF, error: %w", err)
+	}
+
+	metrics.UDFProcessingTime.With(map[string]string{
+		metrics.LabelVertex:             isdf.vertexName,
+		metrics.LabelPipeline:           isdf.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeMapUDF),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)),
+	}).Observe(float64(time.Since(start).Microseconds()))
 
 	return writeOffsets, nil
 }

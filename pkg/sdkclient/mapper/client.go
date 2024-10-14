@@ -19,6 +19,7 @@ package mapper
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"go.uber.org/zap"
@@ -192,13 +193,11 @@ func (c *client) MapFn(ctx context.Context, requests []*mappb.MapRequest) ([]*ma
 			if resp.GetStatus() != nil && resp.GetStatus().GetEot() {
 				// we might get an end of transmission message from the server before receiving all the responses.
 				if i < len(requests)-1 {
-					c.log.Errorw("Received EOT message before all responses are received, we will wait indefinitely for the remaining responses", zap.Int("received_responses", i+1), zap.Int("total_requests", len(requests)))
-				} else {
-					break
+					c.log.Errorw("received EOT message before all responses are received, we will wait indefinitely for the remaining responses", zap.Int("received_responses", i+1), zap.Int("total_requests", len(requests)))
 				}
-			} else {
-				responses = append(responses, resp)
+				continue
 			}
+			responses = append(responses, resp)
 		}
 		return nil
 	})
@@ -210,4 +209,34 @@ func (c *client) MapFn(ctx context.Context, requests []*mappb.MapRequest) ([]*ma
 	}
 
 	return responses, nil
+}
+
+// MapStreamFn applies a function to each datum element and writes the response to the stream.
+func (c *client) MapStreamFn(ctx context.Context, request *mappb.MapRequest, responseCh chan<- *mappb.MapResponse) error {
+	defer close(responseCh)
+	err := c.stream.Send(request)
+	if err != nil {
+		return fmt.Errorf("failed to execute c.grpcClt.MapStreamFn(): %w", err)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			var resp *mappb.MapResponse
+			resp, err = c.stream.Recv()
+			if err == io.EOF {
+				return nil
+			}
+			if resp.GetStatus() != nil && resp.GetStatus().GetEot() {
+				return nil
+			}
+			err = sdkerror.ToUDFErr("c.grpcClt.MapStreamFn", err)
+			if err != nil {
+				return err
+			}
+			responseCh <- resp
+		}
+	}
 }

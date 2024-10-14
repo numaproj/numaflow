@@ -28,4 +28,5 @@ type Client interface {
 	CloseConn() error
 	IsReady(ctx context.Context, in *emptypb.Empty) (bool, error)
 	MapFn(ctx context.Context, mapRequest []*mappb.MapRequest) ([]*mappb.MapResponse, error)
+	MapStreamFn(ctx context.Context, request *mappb.MapRequest, responseCh chan<- *mappb.MapResponse) error
 }
