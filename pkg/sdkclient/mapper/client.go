@@ -158,7 +158,7 @@ func (c *client) MapFn(ctx context.Context, requests []*mappb.MapRequest) ([]*ma
 	if c.batchMapMode {
 		// if it is a batch map, we need to send an end of transmission message to the server
 		// to indicate that the batch is finished.
-		requests = append(requests, &mappb.MapRequest{Status: &mappb.Status{Eot: true}})
+		requests = append(requests, &mappb.MapRequest{Status: &mappb.TransmissionStatus{Eot: true}})
 	}
 	var eg errgroup.Group
 	// send n requests
