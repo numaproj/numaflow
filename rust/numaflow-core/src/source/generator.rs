@@ -1,9 +1,11 @@
+use std::time::Duration;
+
+use bytes::Bytes;
+use futures::StreamExt;
+
 use crate::message::{Message, Offset};
 use crate::reader;
 use crate::source;
-use bytes::Bytes;
-use futures::StreamExt;
-use std::time::Duration;
 
 /// Stream Generator returns a set of messages for every `.next` call. It will throttle itself if
 /// the call exceeds the RPU. It will return a max (batch size, RPU) till the quota for that unit of
