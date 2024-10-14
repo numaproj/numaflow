@@ -92,6 +92,7 @@ func WithReadOnlyMode() HandlerOption {
 type handler struct {
 	kubeClient            kubernetes.Interface
 	metricsClient         *metricsversiond.Clientset
+	promQlService         PromQl
 	numaflowClient        dfv1clients.NumaflowV1alpha1Interface
 	daemonClientsCache    *lru.Cache[string, daemonclient.DaemonClient]
 	mvtDaemonClientsCache *lru.Cache[string, mvtdaemonclient.MonoVertexDaemonClient]
@@ -123,6 +124,14 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	mvtDaemonClientsCache, _ := lru.NewWithEvict[string, mvtdaemonclient.MonoVertexDaemonClient](500, func(key string, value mvtdaemonclient.MonoVertexDaemonClient) {
 		_ = value.Close()
 	})
+
+	// create handler instance even if prometheus server details are not set, let the API respond with err mssg
+	prometheusMetricConfig := loadPrometheusMetricConfig()
+	// prom client instance
+	prometheusClient := NewPrometheusClient(prometheusMetricConfig.ServerUrl)
+	// prom ql builder service instance
+	promQlService := NewPromQlService(prometheusClient, prometheusMetricConfig)
+
 	o := defaultHandlerOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -132,6 +141,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	return &handler{
 		kubeClient:            kubeClient,
 		metricsClient:         metricsClient,
+		promQlService:         promQlService,
 		numaflowClient:        numaflowClient,
 		daemonClientsCache:    daemonClientsCache,
 		mvtDaemonClientsCache: mvtDaemonClientsCache,
@@ -1178,6 +1188,41 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 		resourceHealth.Message, dataHealth.GetMessage(), resourceHealth.Code, dataHealth.GetCode())
 
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
+}
+
+func (h *handler) GetMetricData(c *gin.Context) {
+	var requestBody MetricsRequestBody
+	if h.promQlService == nil {
+		h.respondWithError(c, "prom ql service is nil")
+		return
+	}
+	if err := bindJson(c, &requestBody); err != nil {
+		h.respondWithError(c, fmt.Sprintf("error in decoding JSON req body %v", err))
+		return
+	}
+	// builds prom query
+	promQl, err := h.promQlService.BuildQuery(requestBody)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("error in building promql %v", err))
+		return
+	}
+	// default start and end times
+	if requestBody.StartTime == "" {
+		requestBody.StartTime = time.Now().Add(-30 * time.Minute).Format(time.RFC3339)
+	}
+	if requestBody.EndTime == "" {
+		requestBody.EndTime = time.Now().Format(time.RFC3339)
+	}
+
+	startTime, _ := time.Parse(time.RFC3339, requestBody.StartTime)
+	endTime, _ := time.Parse(time.RFC3339, requestBody.EndTime)
+
+	result, err := h.promQlService.QueryPrometheus(context.Background(), promQl, startTime, endTime)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("error in prometheus query %v", err))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, result))
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
