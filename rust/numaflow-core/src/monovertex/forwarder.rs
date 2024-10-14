@@ -533,7 +533,7 @@ mod tests {
     use crate::monovertex::forwarder::ForwarderBuilder;
     use crate::monovertex::SourceType;
     use crate::shared::utils::create_rpc_channel;
-    use crate::sink::SinkHandle;
+    use crate::sink::{SinkClientType, SinkHandle};
     use crate::source::user_defined::new_source;
     use crate::source::SourceHandle;
     use crate::transformer::user_defined::SourceTransformHandle;
@@ -738,11 +738,10 @@ mod tests {
             source_lag_reader,
         ));
 
-        let sink_writer = SinkHandle::new(SinkClient::new(
-            create_rpc_channel(sink_sock_file).await.unwrap(),
-        ))
-        .await
-        .expect("failed to connect to sink server");
+        let sink_grpc_client = SinkClient::new(create_rpc_channel(sink_sock_file).await.unwrap());
+        let sink_writer = SinkHandle::new(SinkClientType::UserDefined(sink_grpc_client))
+            .await
+            .expect("failed to connect to sink server");
 
         let transformer_client = SourceTransformHandle::new(SourceTransformClient::new(
             create_rpc_channel(transformer_sock_file).await.unwrap(),
@@ -868,11 +867,10 @@ mod tests {
             lag_reader,
         ));
 
-        let sink_writer = SinkHandle::new(SinkClient::new(
-            create_rpc_channel(sink_sock_file).await.unwrap(),
-        ))
-        .await
-        .expect("failed to connect to sink server");
+        let sink_client = SinkClient::new(create_rpc_channel(sink_sock_file).await.unwrap());
+        let sink_writer = SinkHandle::new(SinkClientType::UserDefined(sink_client))
+            .await
+            .expect("failed to connect to sink server");
 
         let mut forwarder =
             ForwarderBuilder::new(source_reader, sink_writer, cln_token.clone()).build();
@@ -991,17 +989,15 @@ mod tests {
             source_lag_reader,
         ));
 
-        let sink_writer = SinkHandle::new(SinkClient::new(
-            create_rpc_channel(sink_sock_file).await.unwrap(),
-        ))
-        .await
-        .expect("failed to connect to sink server");
+        let sink_client = SinkClient::new(create_rpc_channel(sink_sock_file).await.unwrap());
+        let sink_writer = SinkHandle::new(SinkClientType::UserDefined(sink_client))
+            .await
+            .expect("failed to connect to sink server");
 
-        let fb_sink_writer = SinkHandle::new(SinkClient::new(
-            create_rpc_channel(fb_sink_sock_file).await.unwrap(),
-        ))
-        .await
-        .expect("failed to connect to fb sink server");
+        let fb_sink_writer = SinkClient::new(create_rpc_channel(fb_sink_sock_file).await.unwrap());
+        let fb_sink_writer = SinkHandle::new(SinkClientType::UserDefined(fb_sink_writer))
+            .await
+            .expect("failed to connect to fb sink server");
 
         let mut forwarder = ForwarderBuilder::new(source, sink_writer, cln_token.clone())
             .fallback_sink_writer(fb_sink_writer)
