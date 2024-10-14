@@ -11,10 +11,10 @@ use numaflow_grpc::clients::source::source_client::SourceClient;
 use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 
 use crate::config::{config, Settings};
-use crate::error;
+use crate::error::{self, Error};
 use crate::shared::utils;
 use crate::shared::utils::create_rpc_channel;
-use crate::sink::SinkHandle;
+use crate::sink::{SinkClientType, SinkHandle};
 use crate::source::generator::{new_generator, GeneratorAck, GeneratorLagReader, GeneratorRead};
 use crate::source::user_defined::{
     new_source, UserDefinedSourceAck, UserDefinedSourceLagReader, UserDefinedSourceRead,
@@ -46,7 +46,7 @@ pub async fn mono_vertex() -> error::Result<()> {
 
     // Run the forwarder with cancellation token.
     if let Err(e) = start_forwarder(cln_token, config()).await {
-        error!("Application error: {:?}", e);
+        tracing::error!("Application error: {:?}", e);
 
         // abort the signal handler task since we have an error and we are shutting down
         if !shutdown_handle.is_finished() {
@@ -97,7 +97,10 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
             .udsource_config
             .as_ref()
             .map(|source_config| source_config.server_info_path.clone().into()),
-        config.udsink_config.server_info_path.clone().into(),
+        config
+            .udsink_config
+            .as_ref()
+            .map(|sink_config| sink_config.server_info_path.clone().into()),
         config
             .transformer_config
             .as_ref()
@@ -119,10 +122,16 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
         None
     };
 
-    let mut sink_grpc_client =
-        SinkClient::new(create_rpc_channel(config.udsink_config.socket_path.clone().into()).await?)
-            .max_encoding_message_size(config.udsink_config.grpc_max_message_size)
-            .max_encoding_message_size(config.udsink_config.grpc_max_message_size);
+    let (sink, fb_sink) = fetch_sink(config).await?;
+    let mut sink_grpc_client = if let Some(udsink_config) = &config.udsink_config {
+        Some(
+            SinkClient::new(create_rpc_channel(udsink_config.socket_path.clone().into()).await?)
+                .max_encoding_message_size(udsink_config.grpc_max_message_size)
+                .max_encoding_message_size(udsink_config.grpc_max_message_size),
+        )
+    } else {
+        None
+    };
 
     let mut transformer_grpc_client = if let Some(transformer_config) = &config.transformer_config {
         let transformer_grpc_client = SourceTransformClient::new(
@@ -174,20 +183,13 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
     utils::start_metrics_server(metrics_state).await;
 
     let source = SourceHandle::new(source_type);
-    start_forwarder_with_source(
-        source,
-        sink_grpc_client,
-        transformer_grpc_client,
-        fb_sink_grpc_client,
-        cln_token,
-    )
-    .await?;
+    start_forwarder_with_source(source, sink, transformer_grpc_client, fb_sink, cln_token).await?;
 
     info!("Forwarder stopped gracefully");
     Ok(())
 }
 
-pub(crate) async fn fetch_source(
+async fn fetch_source(
     config: &Settings,
     source_grpc_client: &mut Option<SourceClient<Channel>>,
 ) -> crate::Result<SourceType> {
@@ -215,21 +217,48 @@ pub(crate) async fn fetch_source(
     Ok(source_type)
 }
 
+async fn fetch_sink(settings: &Settings) -> crate::Result<(SinkHandle, Option<SinkHandle>)> {
+    let fb_sink = match settings.fallback_config {
+        Some(ref fallback_config) => {
+            let fallback_sink = SinkClient::new(
+                create_rpc_channel(fallback_config.socket_path.clone().into()).await?,
+            )
+            .max_encoding_message_size(fallback_config.grpc_max_message_size)
+            .max_encoding_message_size(fallback_config.grpc_max_message_size);
+            Some(SinkHandle::new(SinkClientType::UserDefined(fallback_sink)).await?)
+        }
+        None => None,
+    };
+
+    if let Some(ref udsink_config) = settings.udsink_config {
+        let sink_client =
+            SinkClient::new(create_rpc_channel(udsink_config.socket_path.clone().into()).await?)
+                .max_encoding_message_size(udsink_config.grpc_max_message_size)
+                .max_encoding_message_size(udsink_config.grpc_max_message_size);
+        let sink = SinkHandle::new(SinkClientType::UserDefined(sink_client)).await?;
+        return Ok((sink, fb_sink));
+    }
+    if settings.logsink_config.is_some() {
+        let log = SinkHandle::new(SinkClientType::Log("log".to_string())).await?;
+        return Ok((log, fb_sink));
+    }
+    Err(Error::ConfigError(
+        "No valid Sink configuration found".to_string(),
+    ))
+}
+
 async fn start_forwarder_with_source(
     source: SourceHandle,
-    sink_grpc_client: SinkClient<tonic::transport::Channel>,
+    sink: SinkHandle,
     transformer_client: Option<SourceTransformClient<tonic::transport::Channel>>,
-    fallback_sink_client: Option<SinkClient<tonic::transport::Channel>>,
+    fallback_sink: Option<SinkHandle>,
     cln_token: CancellationToken,
 ) -> error::Result<()> {
     // start the pending reader to publish pending metrics
     let mut pending_reader = utils::create_pending_reader(source.clone()).await;
     pending_reader.start().await;
 
-    // build the forwarder
-    let sink_writer = SinkHandle::new(sink_grpc_client).await?;
-
-    let mut forwarder_builder = ForwarderBuilder::new(source, sink_writer, cln_token);
+    let mut forwarder_builder = ForwarderBuilder::new(source, sink, cln_token);
 
     // add transformer if exists
     if let Some(transformer_client) = transformer_client {
@@ -238,9 +267,8 @@ async fn start_forwarder_with_source(
     }
 
     // add fallback sink if exists
-    if let Some(fallback_sink_client) = fallback_sink_client {
-        let fallback_writer = SinkHandle::new(fallback_sink_client).await?;
-        forwarder_builder = forwarder_builder.fallback_sink_writer(fallback_writer);
+    if let Some(fallback_sink) = fallback_sink {
+        forwarder_builder = forwarder_builder.fallback_sink_writer(fallback_sink);
     }
     // build the final forwarder
     let mut forwarder = forwarder_builder.build();
@@ -254,7 +282,7 @@ async fn start_forwarder_with_source(
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{Settings, UDSourceConfig};
+    use crate::config::{Settings, UDSinkConfig, UDSourceConfig};
     use crate::error;
     use crate::monovertex::start_forwarder;
     use crate::shared::server_info::ServerInfo;
@@ -364,8 +392,11 @@ mod tests {
         });
 
         let mut config = Settings::default();
-        config.udsink_config.socket_path = sink_sock_file.to_str().unwrap().to_string();
-        config.udsink_config.server_info_path = sink_server_info.to_str().unwrap().to_string();
+        config.udsink_config = Some(UDSinkConfig {
+            socket_path: sink_sock_file.to_str().unwrap().to_string(),
+            server_info_path: sink_server_info.to_str().unwrap().to_string(),
+            grpc_max_message_size: 1024,
+        });
 
         config.udsource_config = Some(UDSourceConfig {
             socket_path: src_sock_file.to_str().unwrap().to_string(),
@@ -374,6 +405,7 @@ mod tests {
         });
 
         let result = start_forwarder(cln_token.clone(), &config).await;
+        dbg!(&result);
         assert!(result.is_ok());
 
         // stop the source and sink servers

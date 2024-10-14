@@ -4,8 +4,8 @@ use crate::{
     sink::Sink,
 };
 
-pub struct LogSink {
-    vertex_name: String,
+pub(crate) struct LogSink {
+    pub(crate) vertex_name: String,
 }
 
 impl Sink for LogSink {

@@ -90,8 +90,8 @@ pub struct Settings {
     pub sink_default_retry_strategy: RetryStrategy,
     pub transformer_config: Option<TransformerConfig>,
     pub udsource_config: Option<UDSourceConfig>,
-    pub udsink_config: UDSinkConfig,
-    pub logsink_config: (),
+    pub udsink_config: Option<UDSinkConfig>,
+    pub logsink_config: Option<()>,
     pub fallback_config: Option<UDSinkConfig>,
     pub generator_config: Option<GeneratorConfig>,
 }
@@ -201,7 +201,7 @@ impl Default for Settings {
             transformer_config: None,
             udsource_config: None,
             udsink_config: Default::default(),
-            logsink_config: (),
+            logsink_config: None,
             fallback_config: None,
             generator_config: None,
         }
@@ -276,8 +276,8 @@ impl Settings {
                 .ok_or(Error::ConfigError("Sink not found".to_string()))?
                 .udsink
             {
-                Some(_) => UDSinkConfig::default(),
-                _ => UDSinkConfig::default(),
+                Some(_) => Some(UDSinkConfig::default()),
+                _ => None,
             };
 
             settings.fallback_config = match mono_vertex_obj

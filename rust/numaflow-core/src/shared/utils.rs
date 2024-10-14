@@ -31,7 +31,7 @@ use tracing::{info, warn};
 pub(crate) async fn check_compatibility(
     cln_token: &CancellationToken,
     source_file_path: Option<PathBuf>,
-    sink_file_path: PathBuf,
+    sink_file_path: Option<PathBuf>,
     transformer_file_path: Option<PathBuf>,
     fb_sink_file_path: Option<PathBuf>,
 ) -> error::Result<()> {
@@ -44,12 +44,14 @@ pub(crate) async fn check_compatibility(
             })?;
     }
 
-    server_info::check_for_server_compatibility(sink_file_path, cln_token.clone())
-        .await
-        .map_err(|e| {
-            error!("Error waiting for sink server info file: {:?}", e);
-            Error::ForwarderError("Error waiting for server info file".to_string())
-        })?;
+    if let Some(sink_file_path) = sink_file_path {
+        server_info::check_for_server_compatibility(sink_file_path, cln_token.clone())
+            .await
+            .map_err(|e| {
+                error!("Error waiting for sink server info file: {:?}", e);
+                Error::ForwarderError("Error waiting for server info file".to_string())
+            })?;
+    }
 
     if let Some(transformer_path) = transformer_file_path {
         server_info::check_for_server_compatibility(transformer_path, cln_token.clone())
@@ -100,7 +102,7 @@ pub(crate) async fn create_pending_reader(lag_reader_grpc_client: SourceHandle) 
 pub(crate) async fn wait_until_ready(
     cln_token: CancellationToken,
     source_client: &mut Option<SourceClient<Channel>>,
-    sink_client: &mut SinkClient<Channel>,
+    sink_client: &mut Option<SinkClient<Channel>>,
     transformer_client: &mut Option<SourceTransformClient<Channel>>,
     fb_sink_client: &mut Option<SinkClient<Channel>>,
 ) -> error::Result<()> {
@@ -121,7 +123,11 @@ pub(crate) async fn wait_until_ready(
             true
         };
 
-        let sink_ready = sink_client.is_ready(Request::new(())).await.is_ok();
+        let sink_ready = if let Some(sink_client) = sink_client {
+            sink_client.is_ready(Request::new(())).await.is_ok()
+        } else {
+            true
+        };
         if !sink_ready {
             info!("UDSink is not ready, waiting...");
         }
@@ -255,7 +261,7 @@ mod tests {
         let result = check_compatibility(
             &cln_token,
             Some(source_file_path),
-            sink_file_path,
+            Some(sink_file_path),
             None,
             None,
         )
@@ -283,7 +289,7 @@ mod tests {
         let result = check_compatibility(
             &cln_token,
             Some(source_file_path),
-            sink_file_path,
+            Some(sink_file_path),
             Some(transformer_file_path),
             Some(fb_sink_file_path),
         )
@@ -388,7 +394,7 @@ mod tests {
 
         let source_grpc_client =
             SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap());
-        let mut sink_grpc_client =
+        let sink_grpc_client =
             SinkClient::new(create_rpc_channel(sink_sock_file.clone()).await.unwrap());
         let mut transformer_grpc_client = Some(SourceTransformClient::new(
             create_rpc_channel(transformer_sock_file.clone())
@@ -402,7 +408,7 @@ mod tests {
         let result = wait_until_ready(
             cln_token,
             &mut Some(source_grpc_client),
-            &mut sink_grpc_client,
+            &mut Some(sink_grpc_client),
             &mut transformer_grpc_client,
             &mut fb_sink_grpc_client,
         )

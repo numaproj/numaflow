@@ -68,7 +68,7 @@ const SINK_TIME: &str = "monovtx_sink_time";
 #[derive(Clone)]
 pub(crate) struct UserDefinedContainerState {
     pub source_client: Option<SourceClient<Channel>>,
-    pub sink_client: SinkClient<Channel>,
+    pub sink_client: Option<SinkClient<Channel>>,
     pub transformer_client: Option<SourceTransformClient<Channel>>,
     pub fb_sink_client: Option<SinkClient<Channel>>,
 }
@@ -305,16 +305,18 @@ async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-async fn sidecar_livez(State(mut state): State<UserDefinedContainerState>) -> impl IntoResponse {
+async fn sidecar_livez(State(state): State<UserDefinedContainerState>) -> impl IntoResponse {
     if let Some(mut source_client) = state.source_client {
         if source_client.is_ready(Request::new(())).await.is_err() {
             error!("Source client is not available");
             return StatusCode::SERVICE_UNAVAILABLE;
         }
     }
-    if state.sink_client.is_ready(Request::new(())).await.is_err() {
-        error!("Sink client is not available");
-        return StatusCode::SERVICE_UNAVAILABLE;
+    if let Some(mut sink_client) = state.sink_client {
+        if sink_client.is_ready(Request::new(())).await.is_err() {
+            error!("Sink client is not available");
+            return StatusCode::SERVICE_UNAVAILABLE;
+        }
     }
     if let Some(mut transformer_client) = state.transformer_client {
         if transformer_client.is_ready(Request::new(())).await.is_err() {
@@ -652,7 +654,9 @@ mod tests {
             source_client: Some(SourceClient::new(
                 create_rpc_channel(src_sock_file).await.unwrap(),
             )),
-            sink_client: SinkClient::new(create_rpc_channel(sink_sock_file).await.unwrap()),
+            sink_client: Some(SinkClient::new(
+                create_rpc_channel(sink_sock_file).await.unwrap(),
+            )),
             transformer_client: Some(SourceTransformClient::new(
                 create_rpc_channel(sock_file).await.unwrap(),
             )),

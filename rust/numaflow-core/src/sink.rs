@@ -1,16 +1,18 @@
+use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use numaflow_models::models::Log;
 use tokio::sync::{mpsc, oneshot};
 use tonic::transport::Channel;
+use user_defined::UserDefinedSink;
 
 use crate::config::config;
 use crate::message::{Message, ResponseFromSink};
-use numaflow_grpc::clients::sink::sink_client::SinkClient;
-use user_defined::UserDefinedSink;
+// use numaflow_grpc::clients::sink::sink_client::SinkClient;
 
+mod log;
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
 mod user_defined;
-mod log;
 
 /// Set of items to be implemented be a Numaflow Sink.
 ///
@@ -62,16 +64,34 @@ pub(crate) struct SinkHandle {
     sender: mpsc::Sender<ActorMessage>,
 }
 
+pub(crate) enum SinkClientType {
+    Log(String),
+    UserDefined(SinkClient<Channel>),
+}
+
 impl SinkHandle {
-    pub(crate) async fn new(sink_client: SinkClient<Channel>) -> crate::Result<Self> {
+    pub(crate) async fn new(sink_client: SinkClientType) -> crate::Result<Self> {
         let (sender, receiver) = mpsc::channel(config().batch_size as usize);
-        let sink = UserDefinedSink::new(sink_client).await?;
-        tokio::spawn(async move {
-            let mut actor = SinkActor::new(receiver, sink);
-            while let Some(msg) = actor.actor_messages.recv().await {
-                actor.handle_message(msg).await;
+        match sink_client {
+            SinkClientType::Log(vertex_name) => {
+                let log_sink = log::LogSink { vertex_name };
+                tokio::spawn(async {
+                    let mut actor = SinkActor::new(receiver, log_sink);
+                    while let Some(msg) = actor.actor_messages.recv().await {
+                        actor.handle_message(msg).await;
+                    }
+                });
             }
-        });
+            SinkClientType::UserDefined(sink_client) => {
+                let sink = UserDefinedSink::new(sink_client).await?;
+                tokio::spawn(async {
+                    let mut actor = SinkActor::new(receiver, sink);
+                    while let Some(msg) = actor.actor_messages.recv().await {
+                        actor.handle_message(msg).await;
+                    }
+                });
+            }
+        };
         Ok(Self { sender })
     }
 
