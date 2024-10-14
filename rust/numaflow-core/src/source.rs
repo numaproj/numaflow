@@ -132,8 +132,12 @@ impl SourceHandle {
     pub(crate) async fn read(&self) -> crate::Result<Vec<Message>> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Read { respond_to: sender };
+        // Ignore send errors. If send fails, so does the recv.await below. There's no reason
+        // to check for the same failure twice.
         let _ = self.sender.send(msg).await;
-        receiver.await.unwrap()
+        receiver
+            .await
+            .map_err(|e| crate::error::Error::ActorPatternRecvError(e.to_string()))?
     }
 
     pub(crate) async fn ack(&self, offsets: Vec<Offset>) -> crate::Result<()> {
@@ -142,14 +146,22 @@ impl SourceHandle {
             respond_to: sender,
             offsets,
         };
+        // Ignore send errors. If send fails, so does the recv.await below. There's no reason
+        // to check for the same failure twice.
         let _ = self.sender.send(msg).await;
-        receiver.await.unwrap()
+        receiver
+            .await
+            .map_err(|e| crate::error::Error::ActorPatternRecvError(e.to_string()))?
     }
 
     pub(crate) async fn pending(&self) -> crate::error::Result<Option<usize>> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Pending { respond_to: sender };
+        // Ignore send errors. If send fails, so does the recv.await below. There's no reason
+        // to check for the same failure twice.
         let _ = self.sender.send(msg).await;
-        receiver.await.unwrap()
+        receiver
+            .await
+            .map_err(|e| crate::error::Error::ActorPatternRecvError(e.to_string()))?
     }
 }
