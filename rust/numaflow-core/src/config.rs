@@ -91,6 +91,7 @@ pub struct Settings {
     pub transformer_config: Option<TransformerConfig>,
     pub udsource_config: Option<UDSourceConfig>,
     pub udsink_config: UDSinkConfig,
+    pub logsink_config: (),
     pub fallback_config: Option<UDSinkConfig>,
     pub generator_config: Option<GeneratorConfig>,
 }
@@ -200,6 +201,7 @@ impl Default for Settings {
             transformer_config: None,
             udsource_config: None,
             udsink_config: Default::default(),
+            logsink_config: (),
             fallback_config: None,
             generator_config: None,
         }

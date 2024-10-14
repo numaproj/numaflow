@@ -10,6 +10,7 @@ use user_defined::UserDefinedSink;
 ///
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
 mod user_defined;
+mod log;
 
 /// Set of items to be implemented be a Numaflow Sink.
 ///
