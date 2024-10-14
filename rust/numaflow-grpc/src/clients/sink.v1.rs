@@ -9,7 +9,7 @@ pub struct SinkRequest {
     /// Required field indicating the status of the request.
     /// If eot is set to true, it indicates the end of transmission.
     #[prost(message, optional, tag = "2")]
-    pub status: ::core::option::Option<sink_request::Status>,
+    pub status: ::core::option::Option<TransmissionStatus>,
     /// optional field indicating the handshake message.
     #[prost(message, optional, tag = "3")]
     pub handshake: ::core::option::Option<Handshake>,
@@ -34,11 +34,6 @@ pub mod sink_request {
             ::prost::alloc::string::String,
         >,
     }
-    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
-    pub struct Status {
-        #[prost(bool, tag = "1")]
-        pub eot: bool,
-    }
 }
 ///
 /// Handshake message between client and server to indicate the start of transmission.
@@ -56,6 +51,13 @@ pub struct ReadyResponse {
     pub ready: bool,
 }
 /// *
+/// TransmissionStatus is the status of the transmission.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct TransmissionStatus {
+    #[prost(bool, tag = "1")]
+    pub eot: bool,
+}
+/// *
 /// SinkResponse is the individual response of each message written to the sink.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SinkResponse {
@@ -63,6 +65,8 @@ pub struct SinkResponse {
     pub result: ::core::option::Option<sink_response::Result>,
     #[prost(message, optional, tag = "2")]
     pub handshake: ::core::option::Option<Handshake>,
+    #[prost(message, optional, tag = "3")]
+    pub status: ::core::option::Option<TransmissionStatus>,
 }
 /// Nested message and enum types in `SinkResponse`.
 pub mod sink_response {

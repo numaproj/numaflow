@@ -32,7 +32,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
-	"github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
 	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	"github.com/numaproj/numaflow/pkg/shared/callback"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
@@ -69,7 +68,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		fromVertexWmStores map[string]store.WatermarkStore
 		toVertexWmStores   map[string]store.WatermarkStore
 		mapHandler         *rpc.GRPCBasedMap
-		mapStreamHandler   *rpc.GRPCBasedMapStream
+		mapStreamHandler   *rpc.GRPCBasedMap
 		idleManager        wmb.IdleManager
 		vertexName         = u.VertexInstance.Vertex.Spec.Name
 		pipelineName       = u.VertexInstance.Vertex.Spec.PipelineName
@@ -157,11 +156,11 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			// Map Stream mode
 			enableMapUdfStream = true
 
-			mapStreamClient, err := mapstreamer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+			mapStreamClient, err := mapper.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.MapStreamAddr))
 			if err != nil {
 				return fmt.Errorf("failed to create map stream client, %w", err)
 			}
-			mapStreamHandler = rpc.NewUDSgRPCBasedMapStream(vertexName, mapStreamClient)
+			mapStreamHandler = rpc.NewUDSgRPCBasedMap(ctx, mapStreamClient, vertexName)
 
 			// Readiness check
 			if err := mapStreamHandler.WaitUntilReady(ctx); err != nil {
