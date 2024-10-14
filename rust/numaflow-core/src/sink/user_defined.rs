@@ -4,8 +4,7 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
 use numaflow_grpc::clients::sink::sink_client::SinkClient;
-use numaflow_grpc::clients::sink::sink_request::Status;
-use numaflow_grpc::clients::sink::{Handshake, SinkRequest, SinkResponse};
+use numaflow_grpc::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 
 use crate::error;
 use crate::error::Error;
@@ -77,7 +76,7 @@ impl Sink for UserDefinedSink {
         // send eot request to indicate the end of the stream
         let eot_request = SinkRequest {
             request: None,
-            status: Some(Status { eot: true }),
+            status: Some(TransmissionStatus { eot: true }),
             handshake: None,
         };
         self.sink_tx
