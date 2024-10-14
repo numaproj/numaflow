@@ -11,7 +11,7 @@ pub struct MapRequest {
     #[prost(message, optional, tag = "3")]
     pub handshake: ::core::option::Option<Handshake>,
     #[prost(message, optional, tag = "4")]
-    pub status: ::core::option::Option<Status>,
+    pub status: ::core::option::Option<TransmissionStatus>,
 }
 /// Nested message and enum types in `MapRequest`.
 pub mod map_request {
@@ -43,7 +43,7 @@ pub struct Handshake {
 ///
 /// Status message to indicate the status of the message.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct Status {
+pub struct TransmissionStatus {
     #[prost(bool, tag = "1")]
     pub eot: bool,
 }
@@ -59,7 +59,7 @@ pub struct MapResponse {
     #[prost(message, optional, tag = "3")]
     pub handshake: ::core::option::Option<Handshake>,
     #[prost(message, optional, tag = "4")]
-    pub status: ::core::option::Option<Status>,
+    pub status: ::core::option::Option<TransmissionStatus>,
 }
 /// Nested message and enum types in `MapResponse`.
 pub mod map_response {
