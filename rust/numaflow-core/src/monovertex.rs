@@ -122,13 +122,24 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
         None
     };
 
-    let (sink, fb_sink) = fetch_sink(config).await?;
+    //FIXME: If is_ready method is made as a member of the Sink trait, we won't need grpc_client creation here. It could be done through the SinkHandle.
     let mut sink_grpc_client = if let Some(udsink_config) = &config.udsink_config {
         Some(
             SinkClient::new(create_rpc_channel(udsink_config.socket_path.clone().into()).await?)
                 .max_encoding_message_size(udsink_config.grpc_max_message_size)
                 .max_encoding_message_size(udsink_config.grpc_max_message_size),
         )
+    } else {
+        None
+    };
+
+    let mut fb_sink_grpc_client = if let Some(fb_sink_config) = &config.fallback_config {
+        let fb_sink_grpc_client =
+            SinkClient::new(create_rpc_channel(fb_sink_config.socket_path.clone().into()).await?)
+                .max_encoding_message_size(fb_sink_config.grpc_max_message_size)
+                .max_encoding_message_size(fb_sink_config.grpc_max_message_size);
+
+        Some(fb_sink_grpc_client.clone())
     } else {
         None
     };
@@ -145,17 +156,6 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
         None
     };
 
-    let mut fb_sink_grpc_client = if let Some(fb_sink_config) = &config.fallback_config {
-        let fb_sink_grpc_client =
-            SinkClient::new(create_rpc_channel(fb_sink_config.socket_path.clone().into()).await?)
-                .max_encoding_message_size(fb_sink_config.grpc_max_message_size)
-                .max_encoding_message_size(fb_sink_config.grpc_max_message_size);
-
-        Some(fb_sink_grpc_client.clone())
-    } else {
-        None
-    };
-
     // readiness check for all the ud containers
     utils::wait_until_ready(
         cln_token.clone(),
@@ -167,6 +167,12 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
     .await?;
 
     let source_type = fetch_source(config, &mut source_grpc_client).await?;
+    let (sink, fb_sink) = fetch_sink(
+        config,
+        sink_grpc_client.clone(),
+        fb_sink_grpc_client.clone(),
+    )
+    .await?;
 
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
@@ -217,29 +223,24 @@ async fn fetch_source(
     Ok(source_type)
 }
 
-async fn fetch_sink(settings: &Settings) -> crate::Result<(SinkHandle, Option<SinkHandle>)> {
-    let fb_sink = match settings.fallback_config {
-        Some(ref fallback_config) => {
-            let fallback_sink = SinkClient::new(
-                create_rpc_channel(fallback_config.socket_path.clone().into()).await?,
-            )
-            .max_encoding_message_size(fallback_config.grpc_max_message_size)
-            .max_encoding_message_size(fallback_config.grpc_max_message_size);
+async fn fetch_sink(
+    settings: &Settings,
+    sink_grpc_client: Option<SinkClient<Channel>>,
+    fallback_sink_grpc_client: Option<SinkClient<Channel>>,
+) -> crate::Result<(SinkHandle, Option<SinkHandle>)> {
+    let fb_sink = match fallback_sink_grpc_client {
+        Some(fallback_sink) => {
             Some(SinkHandle::new(SinkClientType::UserDefined(fallback_sink)).await?)
         }
         None => None,
     };
 
-    if let Some(ref udsink_config) = settings.udsink_config {
-        let sink_client =
-            SinkClient::new(create_rpc_channel(udsink_config.socket_path.clone().into()).await?)
-                .max_encoding_message_size(udsink_config.grpc_max_message_size)
-                .max_encoding_message_size(udsink_config.grpc_max_message_size);
+    if let Some(sink_client) = sink_grpc_client {
         let sink = SinkHandle::new(SinkClientType::UserDefined(sink_client)).await?;
         return Ok((sink, fb_sink));
     }
     if settings.logsink_config.is_some() {
-        let log = SinkHandle::new(SinkClientType::Log("log".to_string())).await?;
+        let log = SinkHandle::new(SinkClientType::Log).await?;
         return Ok((log, fb_sink));
     }
     Err(Error::ConfigError(
@@ -391,18 +392,19 @@ mod tests {
             token_clone.cancel();
         });
 
-        let mut config = Settings::default();
-        config.udsink_config = Some(UDSinkConfig {
-            socket_path: sink_sock_file.to_str().unwrap().to_string(),
-            server_info_path: sink_server_info.to_str().unwrap().to_string(),
-            grpc_max_message_size: 1024,
-        });
-
-        config.udsource_config = Some(UDSourceConfig {
-            socket_path: src_sock_file.to_str().unwrap().to_string(),
-            server_info_path: src_info_file.to_str().unwrap().to_string(),
-            grpc_max_message_size: 1024,
-        });
+        let config = Settings {
+            udsink_config: Some(UDSinkConfig {
+                socket_path: sink_sock_file.to_str().unwrap().to_string(),
+                server_info_path: sink_server_info.to_str().unwrap().to_string(),
+                grpc_max_message_size: 1024,
+            }),
+            udsource_config: Some(UDSourceConfig {
+                socket_path: src_sock_file.to_str().unwrap().to_string(),
+                server_info_path: src_info_file.to_str().unwrap().to_string(),
+                grpc_max_message_size: 1024,
+            }),
+            ..Default::default()
+        };
 
         let result = start_forwarder(cln_token.clone(), &config).await;
         dbg!(&result);

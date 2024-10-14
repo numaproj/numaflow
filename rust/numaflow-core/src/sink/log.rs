@@ -4,9 +4,7 @@ use crate::{
     sink::Sink,
 };
 
-pub(crate) struct LogSink {
-    pub(crate) vertex_name: String,
-}
+pub(crate) struct LogSink;
 
 impl Sink for LogSink {
     async fn sink(&mut self, messages: Vec<Message>) -> error::Result<Vec<ResponseFromSink>> {
@@ -18,8 +16,7 @@ impl Sink for LogSink {
             });
 
             let log_line = format!(
-                "({}) Payload - {} Keys - {} EventTime - {} Headers - {} ID - {}",
-                self.vertex_name,
+                "Payload - {} Keys - {} EventTime - {} Headers - {} ID - {}",
                 &String::from_utf8_lossy(&msg.value),
                 msg.keys.join(","),
                 msg.event_time.timestamp_millis(),

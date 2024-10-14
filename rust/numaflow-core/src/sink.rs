@@ -1,12 +1,10 @@
-use numaflow_grpc::clients::sink::sink_client::SinkClient;
-use numaflow_models::models::Log;
 use tokio::sync::{mpsc, oneshot};
 use tonic::transport::Channel;
-use user_defined::UserDefinedSink;
 
 use crate::config::config;
 use crate::message::{Message, ResponseFromSink};
-// use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use user_defined::UserDefinedSink;
 
 mod log;
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
@@ -65,7 +63,7 @@ pub(crate) struct SinkHandle {
 }
 
 pub(crate) enum SinkClientType {
-    Log(String),
+    Log,
     UserDefined(SinkClient<Channel>),
 }
 
@@ -73,8 +71,8 @@ impl SinkHandle {
     pub(crate) async fn new(sink_client: SinkClientType) -> crate::Result<Self> {
         let (sender, receiver) = mpsc::channel(config().batch_size as usize);
         match sink_client {
-            SinkClientType::Log(vertex_name) => {
-                let log_sink = log::LogSink { vertex_name };
+            SinkClientType::Log => {
+                let log_sink = log::LogSink;
                 tokio::spawn(async {
                     let mut actor = SinkActor::new(receiver, log_sink);
                     while let Some(msg) = actor.actor_messages.recv().await {
