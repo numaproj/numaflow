@@ -348,9 +348,12 @@ pub(crate) struct PendingReader {
     lag_reader: SourceHandle,
     lag_checking_interval: Duration,
     refresh_interval: Duration,
-    buildup_handle: Option<JoinHandle<()>>,
-    expose_handle: Option<JoinHandle<()>>,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
+}
+
+pub(crate) struct PendingReaderTasks {
+    buildup_handle: JoinHandle<()>,
+    expose_handle: JoinHandle<()>,
 }
 
 /// PendingReaderBuilder is used to build a [LagReader] instance.
@@ -388,8 +391,6 @@ impl PendingReaderBuilder {
             refresh_interval: self
                 .refresh_interval
                 .unwrap_or_else(|| Duration::from_secs(5)),
-            buildup_handle: None,
-            expose_handle: None,
             pending_stats: Arc::new(Mutex::new(Vec::with_capacity(MAX_PENDING_STATS))),
         }
     }
@@ -401,33 +402,34 @@ impl PendingReader {
     /// This method spawns two asynchronous tasks:
     /// - One to periodically check the lag and update the pending stats.
     /// - Another to periodically expose the pending metrics.
-    pub async fn start(&mut self) {
+    ///
+    /// Dropping the PendingReaderTasks will abort the background tasks.
+    pub async fn start(&self) -> PendingReaderTasks {
         let pending_reader = self.lag_reader.clone();
         let lag_checking_interval = self.lag_checking_interval;
         let refresh_interval = self.refresh_interval;
         let pending_stats = self.pending_stats.clone();
 
-        self.buildup_handle = Some(tokio::spawn(async move {
+        let buildup_handle = tokio::spawn(async move {
             build_pending_info(pending_reader, lag_checking_interval, pending_stats).await;
-        }));
+        });
 
         let pending_stats = self.pending_stats.clone();
-        self.expose_handle = Some(tokio::spawn(async move {
+        let expose_handle = tokio::spawn(async move {
             expose_pending_metrics(refresh_interval, pending_stats).await;
-        }));
+        });
+        PendingReaderTasks {
+            buildup_handle,
+            expose_handle,
+        }
     }
 }
 
-/// When the PendingReader is dropped, we need to clean up the pending exposer and the pending builder tasks.
-impl Drop for PendingReader {
+/// When the PendingReaderTasks is dropped, we need to clean up the pending exposer and the pending builder tasks.
+impl Drop for PendingReaderTasks {
     fn drop(&mut self) {
-        if let Some(handle) = self.expose_handle.take() {
-            handle.abort();
-        }
-        if let Some(handle) = self.buildup_handle.take() {
-            handle.abort();
-        }
-
+        self.expose_handle.abort();
+        self.buildup_handle.abort();
         info!("Stopped the Lag-Reader Expose and Builder tasks");
     }
 }

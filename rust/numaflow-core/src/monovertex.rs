@@ -256,8 +256,8 @@ async fn start_forwarder_with_source(
     cln_token: CancellationToken,
 ) -> error::Result<()> {
     // start the pending reader to publish pending metrics
-    let mut pending_reader = utils::create_pending_reader(source.clone()).await;
-    pending_reader.start().await;
+    let pending_reader = utils::create_pending_reader(source.clone()).await;
+    let _pending_reader_handle = pending_reader.start().await;
 
     let mut forwarder_builder = ForwarderBuilder::new(source, sink, cln_token);
 
