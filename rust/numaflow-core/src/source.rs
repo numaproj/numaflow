@@ -137,7 +137,7 @@ impl SourceHandle {
         let _ = self.sender.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecvError(e.to_string()))?
+            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
     }
 
     pub(crate) async fn ack(&self, offsets: Vec<Offset>) -> crate::Result<()> {
@@ -151,7 +151,7 @@ impl SourceHandle {
         let _ = self.sender.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecvError(e.to_string()))?
+            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
     }
 
     pub(crate) async fn pending(&self) -> crate::error::Result<Option<usize>> {
@@ -162,6 +162,6 @@ impl SourceHandle {
         let _ = self.sender.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecvError(e.to_string()))?
+            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
     }
 }

@@ -32,8 +32,7 @@ pub enum Error {
     ServerInfo(String),
 
     #[error("OneShot Receiver Error - {0}")]
-    ActorPatternRecvError(String),
-
+    ActorPatternRecv(String),
 }
 
 impl From<tonic::Status> for Error {
