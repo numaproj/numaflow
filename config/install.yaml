@@ -28251,79 +28251,160 @@ metadata:
 ---
 apiVersion: v1
 data:
-  controller-config.yaml: "# Within a cluster, setting \"instance\" can be used to
-    run multiple Numaflow controllers. \n# If configured, the controller will only
-    watch the objects having an annotation with the key \"numaflow.numaproj.io/instance\"
-    and the corresponding value.\n# If not configured (or empty string), the controller
-    will watch all objects.\ninstance: \"\"\ndefaults:\n  containerResources: |\n
-    \   requests:\n      memory: \"128Mi\"\n      cpu: \"100m\"\nisbsvc:\n  redis:\n
-    \   # Default Redis settings, could be overridden by InterStepBufferService specs\n
-    \   settings:\n      # Redis config shared by both master and replicas\n      redis:
-    |\n        min-replicas-to-write 1\n        # Disable RDB persistence, AOF persistence
-    already enabled.\n        save \"\"\n        # Enable AOF https://redis.io/topics/persistence#append-only-file\n
-    \       appendonly yes\n        auto-aof-rewrite-percentage 100\n        auto-aof-rewrite-min-size
-    64mb\n        maxmemory 512mb\n        maxmemory-policy allkeys-lru\n      # Special
-    config only used by master\n      master: \"\"\n      # Special config only used
-    by replicas\n      replica: \"\"\n      # Sentinel config\n      sentinel: |\n
-    \       sentinel down-after-milliseconds mymaster 10000\n        sentinel failover-timeout
-    mymaster 2000\n        sentinel parallel-syncs mymaster 1\n    versions:\n    -
-    version: 7.0.11\n      redisImage: bitnami/redis:7.0.11-debian-11-r3\n      sentinelImage:
-    bitnami/redis-sentinel:7.0.11-debian-11-r3\n      redisExporterImage: bitnami/redis-exporter:1.50.0-debian-11-r4\n
-    \     initContainerImage: debian:latest\n    - version: 7.0.15\n      redisImage:
-    bitnami/redis:7.0.15-debian-11-r2\n      sentinelImage: bitnami/redis-sentinel:7.0.15-debian-11-r2\n
-    \     redisExporterImage: bitnami/redis-exporter:1.56.0-debian-11-r2\n      initContainerImage:
-    debian:latest\n  jetstream:\n    # Default JetStream settings, could be overridden
-    by InterStepBufferService specs\n    settings: |\n      # https://docs.nats.io/running-a-nats-service/configuration#limits\n
-    \     # Only support to configure \"max_payload\".\n      # Max payload size in
-    bytes, defaults to 1 MB. It is not recommended to use values over 8MB but max_payload
-    can be set up to 64MB.\n      max_payload: 1048576\n      # https://docs.nats.io/running-a-nats-service/configuration#jetstream\n
-    \     # Only configure \"max_memory_store\" or \"max_file_store\", do not set
-    \"store_dir\" as it has been hardcoded.\n      # e.g. 1G. -1 means no limit, up
-    to 75% of available memory. This only take effect for streams created using memory
-    storage.\n      max_memory_store: -1\n      # e.g. 20G. -1 means no limit, Up
-    to 1TB if available\n      max_file_store: 1TB\n    bufferConfig: |\n      # The
-    default properties of the buffers (streams) to be created in this JetStream service\n
-    \     stream:\n        # 0: Limits, 1: Interest, 2: WorkQueue\n        retention:
-    0\n        maxMsgs: 100000\n        maxAge: 72h\n        maxBytes: -1\n        #
-    0: File, 1: Memory\n        storage: 0\n        replicas: 3\n        duplicates:
-    60s\n      # The default consumer properties for the created streams\n      consumer:\n
-    \       ackWait: 60s\n        maxAckPending: 25000\n      otBucket:\n        maxValueSize:
-    0\n        history: 1\n        ttl: 3h\n        maxBytes: 0\n        # 0: File,
-    1: Memory\n        storage: 0\n        replicas: 3\n      procBucket:\n        maxValueSize:
-    0\n        history: 1\n        ttl: 72h\n        maxBytes: 0\n        # 0: File,
-    1: Memory\n        storage: 0\n        replicas: 3\n    versions:\n    - version:
-    latest\n      natsImage: nats:2.10.17\n      metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1\n
-    \     configReloaderImage: natsio/nats-server-config-reloader:0.7.0\n      startCommand:
-    /nats-server\n    - version: 2.8.1\n      natsImage: nats:2.8.1\n      metricsExporterImage:
-    natsio/prometheus-nats-exporter:0.9.1\n      configReloaderImage: natsio/nats-server-config-reloader:0.7.0\n
-    \     startCommand: /nats-server\n    - version: 2.8.1-alpine\n      natsImage:
-    nats:2.8.1-alpine\n      metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1\n
-    \     configReloaderImage: natsio/nats-server-config-reloader:0.7.0\n      startCommand:
-    nats-server\n    - version: 2.8.3\n      natsImage: nats:2.8.3\n      metricsExporterImage:
-    natsio/prometheus-nats-exporter:0.9.1\n      configReloaderImage: natsio/nats-server-config-reloader:0.7.0\n
-    \     startCommand: /nats-server\n    - version: 2.8.3-alpine\n      natsImage:
-    nats:2.8.3-alpine\n      metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1\n
-    \     configReloaderImage: natsio/nats-server-config-reloader:0.7.0\n      startCommand:
-    nats-server\n    - version: 2.9.0\n      natsImage: nats:2.9.0\n      metricsExporterImage:
-    natsio/prometheus-nats-exporter:0.9.1\n      configReloaderImage: natsio/nats-server-config-reloader:0.7.0\n
-    \     startCommand: /nats-server\n    - version: 2.9.0-alpine\n      natsImage:
-    nats:2.9.0-alpine\n      metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1\n
-    \     configReloaderImage: natsio/nats-server-config-reloader:0.7.0\n      startCommand:
-    nats-server\n    - version: 2.9.6\n      natsImage: nats:2.9.6\n      metricsExporterImage:
-    natsio/prometheus-nats-exporter:0.9.1\n      configReloaderImage: natsio/nats-server-config-reloader:0.7.0\n
-    \     startCommand: /nats-server\n    - version: 2.9.8\n      natsImage: nats:2.9.8\n
-    \     metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1\n      configReloaderImage:
-    natsio/nats-server-config-reloader:0.7.0\n      startCommand: /nats-server\n    -
-    version: 2.9.15\n      natsImage: nats:2.9.15\n      metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1\n
-    \     configReloaderImage: natsio/nats-server-config-reloader:0.7.0\n      startCommand:
-    /nats-server\n    - version: 2.10.3\n      natsImage: nats:2.10.3\n      metricsExporterImage:
-    natsio/prometheus-nats-exporter:0.9.1\n      configReloaderImage: natsio/nats-server-config-reloader:0.7.0\n
-    \     startCommand: /nats-server\n    - version: 2.10.11\n      natsImage: nats:2.10.11\n
-    \     metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1\n      configReloaderImage:
-    natsio/nats-server-config-reloader:0.7.0\n      startCommand: /nats-server\n    -
-    version: 2.10.17\n      natsImage: nats:2.10.17\n      metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1\n
-    \     configReloaderImage: natsio/nats-server-config-reloader:0.7.0\n      startCommand:
-    /nats-server\n"
+  controller-config.yaml: |
+    # "instance" configuration can be used to run multiple Numaflow controllers, check details at https://numaflow.numaproj.io/operations/installation/#multiple-controllers
+    instance: ""
+    defaults:
+      containerResources: |
+        requests:
+          memory: "128Mi"
+          cpu: "100m"
+    isbsvc:
+      redis:
+        # Default Redis settings, could be overridden by InterStepBufferService specs
+        settings:
+          # Redis config shared by both master and replicas
+          redis: |
+            min-replicas-to-write 1
+            # Disable RDB persistence, AOF persistence already enabled.
+            save ""
+            # Enable AOF https://redis.io/topics/persistence#append-only-file
+            appendonly yes
+            auto-aof-rewrite-percentage 100
+            auto-aof-rewrite-min-size 64mb
+            maxmemory 512mb
+            maxmemory-policy allkeys-lru
+          # Special config only used by master
+          master: ""
+          # Special config only used by replicas
+          replica: ""
+          # Sentinel config
+          sentinel: |
+            sentinel down-after-milliseconds mymaster 10000
+            sentinel failover-timeout mymaster 2000
+            sentinel parallel-syncs mymaster 1
+        versions:
+        - version: 7.0.11
+          redisImage: bitnami/redis:7.0.11-debian-11-r3
+          sentinelImage: bitnami/redis-sentinel:7.0.11-debian-11-r3
+          redisExporterImage: bitnami/redis-exporter:1.50.0-debian-11-r4
+          initContainerImage: debian:latest
+        - version: 7.0.15
+          redisImage: bitnami/redis:7.0.15-debian-11-r2
+          sentinelImage: bitnami/redis-sentinel:7.0.15-debian-11-r2
+          redisExporterImage: bitnami/redis-exporter:1.56.0-debian-11-r2
+          initContainerImage: debian:latest
+      jetstream:
+        # Default JetStream settings, could be overridden by InterStepBufferService specs
+        settings: |
+          # https://docs.nats.io/running-a-nats-service/configuration#limits
+          # Only support to configure "max_payload".
+          # Max payload size in bytes, defaults to 1 MB. It is not recommended to use values over 8MB but max_payload can be set up to 64MB.
+          max_payload: 1048576
+          # https://docs.nats.io/running-a-nats-service/configuration#jetstream
+          # Only configure "max_memory_store" or "max_file_store", do not set "store_dir" as it has been hardcoded.
+          # e.g. 1G. -1 means no limit, up to 75% of available memory. This only take effect for streams created using memory storage.
+          max_memory_store: -1
+          # e.g. 20G. -1 means no limit, Up to 1TB if available
+          max_file_store: 1TB
+        bufferConfig: |
+          # The default properties of the buffers (streams) to be created in this JetStream service
+          stream:
+            # 0: Limits, 1: Interest, 2: WorkQueue
+            retention: 0
+            maxMsgs: 100000
+            maxAge: 72h
+            maxBytes: -1
+            # 0: File, 1: Memory
+            storage: 0
+            replicas: 3
+            duplicates: 60s
+          # The default consumer properties for the created streams
+          consumer:
+            ackWait: 60s
+            maxAckPending: 25000
+          otBucket:
+            maxValueSize: 0
+            history: 1
+            ttl: 3h
+            maxBytes: 0
+            # 0: File, 1: Memory
+            storage: 0
+            replicas: 3
+          procBucket:
+            maxValueSize: 0
+            history: 1
+            ttl: 72h
+            maxBytes: 0
+            # 0: File, 1: Memory
+            storage: 0
+            replicas: 3
+        versions:
+        - version: latest
+          natsImage: nats:2.10.17
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+        - version: 2.8.1
+          natsImage: nats:2.8.1
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+        - version: 2.8.1-alpine
+          natsImage: nats:2.8.1-alpine
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: nats-server
+        - version: 2.8.3
+          natsImage: nats:2.8.3
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+        - version: 2.8.3-alpine
+          natsImage: nats:2.8.3-alpine
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: nats-server
+        - version: 2.9.0
+          natsImage: nats:2.9.0
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+        - version: 2.9.0-alpine
+          natsImage: nats:2.9.0-alpine
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: nats-server
+        - version: 2.9.6
+          natsImage: nats:2.9.6
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+        - version: 2.9.8
+          natsImage: nats:2.9.8
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+        - version: 2.9.15
+          natsImage: nats:2.9.15
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+        - version: 2.10.3
+          natsImage: nats:2.10.3
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+        - version: 2.10.11
+          natsImage: nats:2.10.11
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+        - version: 2.10.17
+          natsImage: nats:2.10.17
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
 kind: ConfigMap
 metadata:
   name: numaflow-controller-config
