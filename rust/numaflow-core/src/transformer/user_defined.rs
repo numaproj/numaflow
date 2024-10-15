@@ -1,14 +1,6 @@
 use std::collections::HashMap;
 
-use crate::config::config;
-use crate::error::{Error, Result};
-use crate::message::{Message, Offset};
-use crate::shared::utils::utc_from_timestamp;
-use numaflow_grpc::clients::sourcetransformer::{
-    self, source_transform_client::SourceTransformClient, SourceTransformRequest,
-    SourceTransformResponse,
-};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
@@ -16,16 +8,30 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::warn;
 
+use numaflow_grpc::clients::sourcetransformer::{
+    self, source_transform_client::SourceTransformClient, SourceTransformRequest,
+    SourceTransformResponse,
+};
+
+use crate::config::config;
+use crate::error::{Error, Result};
+use crate::message::{Message, Offset};
+use crate::shared::utils::utc_from_timestamp;
+
 const DROP: &str = "U+005C__DROP__";
 
 /// TransformerClient is a client to interact with the transformer server.
-pub struct SourceTransformer {
+struct SourceTransformer {
+    actor_messages: mpsc::Receiver<ActorMessage>,
     read_tx: mpsc::Sender<SourceTransformRequest>,
     resp_stream: Streaming<SourceTransformResponse>,
 }
 
 impl SourceTransformer {
-    pub(crate) async fn new(mut client: SourceTransformClient<Channel>) -> Result<Self> {
+    async fn new(
+        mut client: SourceTransformClient<Channel>,
+        actor_messages: mpsc::Receiver<ActorMessage>,
+    ) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(config().batch_size as usize);
         let read_stream = ReceiverStream::new(read_rx);
 
@@ -34,9 +40,10 @@ impl SourceTransformer {
             request: None,
             handshake: Some(sourcetransformer::Handshake { sot: true }),
         };
-        read_tx.send(handshake_request).await.map_err(|e| {
-            Error::TransformerError(format!("failed to send handshake request: {}", e))
-        })?;
+        read_tx
+            .send(handshake_request)
+            .await
+            .map_err(|e| Error::Transformer(format!("failed to send handshake request: {}", e)))?;
 
         let mut resp_stream = client
             .source_transform_fn(Request::new(read_stream))
@@ -45,23 +52,34 @@ impl SourceTransformer {
 
         // first response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let handshake_response = resp_stream.message().await?.ok_or(Error::TransformerError(
+        let handshake_response = resp_stream.message().await?.ok_or(Error::Transformer(
             "failed to receive handshake response".to_string(),
         ))?;
         // handshake cannot to None during the initial phase and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
-            return Err(Error::TransformerError(
-                "invalid handshake response".to_string(),
-            ));
+            return Err(Error::Transformer("invalid handshake response".to_string()));
         }
 
         Ok(Self {
+            actor_messages,
             read_tx,
             resp_stream,
         })
     }
 
-    pub(crate) async fn transform_fn(&mut self, messages: Vec<Message>) -> Result<Vec<Message>> {
+    async fn handle_message(&mut self, message: ActorMessage) {
+        match message {
+            ActorMessage::Transform {
+                messages,
+                respond_to,
+            } => {
+                let result = self.transform_fn(messages).await;
+                let _ = respond_to.send(result);
+            }
+        }
+    }
+
+    async fn transform_fn(&mut self, messages: Vec<Message>) -> Result<Vec<Message>> {
         // fields which will not be changed
         struct MessageInfo {
             offset: Offset,
@@ -100,7 +118,7 @@ impl SourceTransformer {
                         Ok(()) => continue,
                         Err(e) => {
                             token.cancel();
-                            return Err(Error::TransformerError(e.to_string()));
+                            return Err(Error::Transformer(e.to_string()));
                         }
                     };
                 }
@@ -128,7 +146,7 @@ impl SourceTransformer {
                 }
                 Err(e) => {
                     token.cancel();
-                    return Err(Error::TransformerError(format!(
+                    return Err(Error::Transformer(format!(
                         "gRPC error while receiving messages from source transformer server: {e:?}"
                     )));
                 }
@@ -136,7 +154,7 @@ impl SourceTransformer {
 
             let Some((msg_id, msg_info)) = tracker.remove_entry(&resp.id) else {
                 token.cancel();
-                return Err(Error::TransformerError(format!(
+                return Err(Error::Transformer(format!(
                     "Received message with unknown ID {}",
                     resp.id
                 )));
@@ -160,12 +178,47 @@ impl SourceTransformer {
         }
 
         sender_task.await.unwrap().map_err(|e| {
-            Error::TransformerError(format!(
+            Error::Transformer(format!(
                 "Sending messages to gRPC transformer failed: {e:?}",
             ))
         })?;
 
         Ok(messages)
+    }
+}
+
+enum ActorMessage {
+    Transform {
+        messages: Vec<Message>,
+        respond_to: oneshot::Sender<Result<Vec<Message>>>,
+    },
+}
+
+#[derive(Clone)]
+pub(crate) struct SourceTransformHandle {
+    sender: mpsc::Sender<ActorMessage>,
+}
+
+impl SourceTransformHandle {
+    pub(crate) async fn new(client: SourceTransformClient<Channel>) -> crate::Result<Self> {
+        let (sender, receiver) = mpsc::channel(config().batch_size as usize);
+        let mut client = SourceTransformer::new(client, receiver).await?;
+        tokio::spawn(async move {
+            while let Some(msg) = client.actor_messages.recv().await {
+                client.handle_message(msg).await;
+            }
+        });
+        Ok(Self { sender })
+    }
+
+    pub(crate) async fn transform(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
+        let (sender, receiver) = oneshot::channel();
+        let msg = ActorMessage::Transform {
+            messages,
+            respond_to: sender,
+        };
+        let _ = self.sender.send(msg).await;
+        receiver.await.unwrap()
     }
 }
 
@@ -175,7 +228,7 @@ mod tests {
     use std::time::Duration;
 
     use crate::shared::utils::create_rpc_channel;
-    use crate::transformer::user_defined::SourceTransformer;
+    use crate::transformer::user_defined::SourceTransformHandle;
     use numaflow::sourcetransform;
     use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
     use tempfile::TempDir;
@@ -216,7 +269,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let mut client = SourceTransformer::new(SourceTransformClient::new(
+        let client = SourceTransformHandle::new(SourceTransformClient::new(
             create_rpc_channel(sock_file).await?,
         ))
         .await?;
@@ -235,7 +288,7 @@ mod tests {
 
         let resp = tokio::time::timeout(
             tokio::time::Duration::from_secs(2),
-            client.transform_fn(vec![message]),
+            client.transform(vec![message]),
         )
         .await??;
         assert_eq!(resp.len(), 1);
@@ -291,7 +344,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        let mut client = SourceTransformer::new(SourceTransformClient::new(
+        let client = SourceTransformHandle::new(SourceTransformClient::new(
             create_rpc_channel(sock_file).await?,
         ))
         .await?;
@@ -308,7 +361,7 @@ mod tests {
             headers: Default::default(),
         };
 
-        let resp = client.transform_fn(vec![message]).await?;
+        let resp = client.transform(vec![message]).await?;
         assert!(resp.is_empty());
 
         // we need to drop the client, because if there are any in-flight requests

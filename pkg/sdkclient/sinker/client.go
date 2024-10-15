@@ -37,13 +37,13 @@ type client struct {
 	conn       *grpc.ClientConn
 	grpcClt    sinkpb.SinkClient
 	sinkStream sinkpb.Sink_SinkFnClient
+	log        *zap.SugaredLogger
 }
 
 var _ Client = (*client)(nil)
 
 func New(ctx context.Context, serverInfo *serverinfo.ServerInfo, inputOptions ...sdkclient.Option) (Client, error) {
 	var opts = sdkclient.DefaultOptions(sdkclient.SinkAddr)
-	var logger = logging.FromContext(ctx)
 
 	for _, inputOption := range inputOptions {
 		inputOption(opts)
@@ -58,7 +58,7 @@ func New(ctx context.Context, serverInfo *serverinfo.ServerInfo, inputOptions ..
 
 	c.conn = conn
 	c.grpcClt = sinkpb.NewSinkClient(conn)
-
+	c.log = logging.FromContext(ctx)
 	// Wait until the server is ready
 waitUntilReady:
 	for {
@@ -70,7 +70,7 @@ waitUntilReady:
 			if ready {
 				break waitUntilReady
 			} else {
-				logger.Warnw("waiting for the server to be ready", zap.String("server", opts.UdsSockAddr()))
+				c.log.Warnw("waiting for the server to be ready", zap.String("server", opts.UdsSockAddr()))
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
@@ -156,7 +156,7 @@ func (c *client) SinkFn(ctx context.Context, requests []*sinkpb.SinkRequest) ([]
 
 	// send eot request
 	eotRequest := &sinkpb.SinkRequest{
-		Status: &sinkpb.SinkRequest_Status{
+		Status: &sinkpb.TransmissionStatus{
 			Eot: true,
 		},
 	}
@@ -167,10 +167,16 @@ func (c *client) SinkFn(ctx context.Context, requests []*sinkpb.SinkRequest) ([]
 
 	// Wait for the corresponding responses
 	var responses []*sinkpb.SinkResponse
-	for i := 0; i < len(requests); i++ {
+	for i := 0; i < len(requests)+1; i++ {
 		resp, err := c.sinkStream.Recv()
 		if err != nil {
 			return nil, fmt.Errorf("failed to receive sink response: %v", err)
+		}
+		if resp.GetStatus() != nil && resp.GetStatus().GetEot() {
+			if i != len(requests) {
+				c.log.Errorw("Received EOT message before all responses are received, we will wait indefinitely for the remaining responses", zap.Int("received", i), zap.Int("expected", len(requests)))
+			}
+			continue
 		}
 		responses = append(responses, resp)
 	}

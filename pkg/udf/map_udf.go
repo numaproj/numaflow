@@ -31,9 +31,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	"github.com/numaproj/numaflow/pkg/sdkclient/batchmapper"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
-	"github.com/numaproj/numaflow/pkg/sdkclient/mapstreamer"
 	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	"github.com/numaproj/numaflow/pkg/shared/callback"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
@@ -70,8 +68,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		fromVertexWmStores map[string]store.WatermarkStore
 		toVertexWmStores   map[string]store.WatermarkStore
 		mapHandler         *rpc.GRPCBasedMap
-		mapStreamHandler   *rpc.GRPCBasedMapStream
-		batchMapHandler    *rpc.GRPCBasedBatchMap
+		mapStreamHandler   *rpc.GRPCBasedMap
 		idleManager        wmb.IdleManager
 		vertexName         = u.VertexInstance.Vertex.Spec.Name
 		pipelineName       = u.VertexInstance.Vertex.Spec.PipelineName
@@ -135,7 +132,6 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 	opts := []forward.Option{forward.WithLogger(log)}
 	enableMapUdfStream := false
-	enableBatchMapUdf := false
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 
 	// Wait for map server info to be ready, we use the same info file for all the map modes
@@ -146,6 +142,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 	// track all the resources that need to be closed
 	var resourcesToClose []io.Closer
+	mapMode, ok := serverInfo.Metadata[serverinfo.MapModeKey]
 
 	for index, bufferPartition := range fromBuffer {
 		// Read the server info file to read which map mode is enabled
@@ -153,18 +150,17 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		// we create a new client and handler for each partition because
 		// the client is not thread safe since we use one common gRPC Bidirectional stream
 		// to communicate with the server
-		mapMode, ok := serverInfo.Metadata[serverinfo.MapModeKey]
 
 		if ok && (serverinfo.MapMode(mapMode) == serverinfo.StreamMap) {
 			log.Info("Map mode enabled: Stream Map")
 			// Map Stream mode
 			enableMapUdfStream = true
 
-			mapStreamClient, err := mapstreamer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+			mapStreamClient, err := mapper.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.MapStreamAddr))
 			if err != nil {
 				return fmt.Errorf("failed to create map stream client, %w", err)
 			}
-			mapStreamHandler = rpc.NewUDSgRPCBasedMapStream(vertexName, mapStreamClient)
+			mapStreamHandler = rpc.NewUDSgRPCBasedMap(ctx, mapStreamClient, vertexName)
 
 			// Readiness check
 			if err := mapStreamHandler.WaitUntilReady(ctx); err != nil {
@@ -176,22 +172,20 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 
 		} else if ok && (serverinfo.MapMode(mapMode) == serverinfo.BatchMap) {
 			log.Info("Map mode enabled: Batch Map")
-			// if Batch Map mode is enabled, create the client and handler for that accordingly
-			enableBatchMapUdf = true
 
-			// create the client and handler for batch map interface
-			batchMapClient, err := batchmapper.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+			// create the map client with batch map socket address
+			mapClient, err := mapper.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.BatchMapAddr), sdkclient.WithBatchMapMode())
 			if err != nil {
 				return fmt.Errorf("failed to create batch map client, %w", err)
 			}
-			batchMapHandler = rpc.NewUDSgRPCBasedBatchMap(vertexName, batchMapClient)
+			mapHandler = rpc.NewUDSgRPCBasedMap(ctx, mapClient, vertexName)
 			// Readiness check
-			if err := batchMapHandler.WaitUntilReady(ctx); err != nil {
+			if err := mapHandler.WaitUntilReady(ctx); err != nil {
 				return fmt.Errorf("failed on batch map UDF readiness check, %w", err)
 			}
 
-			resourcesToClose = append(resourcesToClose, batchMapHandler)
-			opts = append(opts, forward.WithUDFBatchMap(batchMapHandler))
+			resourcesToClose = append(resourcesToClose, mapHandler)
+			opts = append(opts, forward.WithUDFMap(mapHandler))
 
 		} else {
 			log.Info("Map mode enabled: Unary Map")
@@ -204,7 +198,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to create map client, %w", err)
 			}
-			mapHandler = rpc.NewUDSgRPCBasedMap(vertexName, mapClient)
+			mapHandler = rpc.NewUDSgRPCBasedMap(ctx, mapClient, vertexName)
 
 			// Readiness check
 			if err := mapHandler.WaitUntilReady(ctx); err != nil {
@@ -212,7 +206,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 			}
 
 			resourcesToClose = append(resourcesToClose, mapHandler)
-			opts = append(opts, forward.WithUDFUnaryMap(mapHandler))
+			opts = append(opts, forward.WithUDFMap(mapHandler))
 		}
 
 		// Populate shuffle function map
@@ -327,11 +321,8 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	// Add the correct client handler for the metrics server, based on the mode being used.
 	if enableMapUdfStream {
 		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{mapStreamHandler}, lagReaders)
-	} else if enableBatchMapUdf {
-		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{batchMapHandler}, lagReaders)
 	} else {
 		metricsOpts = metrics.NewMetricsOptions(ctx, u.VertexInstance.Vertex, []metrics.HealthChecker{mapHandler}, lagReaders)
-
 	}
 	ms := metrics.NewMetricsServer(u.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
@@ -353,13 +344,13 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		}
 	}
 
-	// close the from vertex wm stores
+	// close the fromVertex wm stores
 	// since we created the stores, we can close them
 	for _, wmStore := range fromVertexWmStores {
 		_ = wmStore.Close()
 	}
 
-	// close the to vertex wm stores
+	// close the toVertex wm stores
 	// since we created the stores, we can close them
 	for _, wmStore := range toVertexWmStores {
 		_ = wmStore.Close()

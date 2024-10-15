@@ -414,7 +414,7 @@ func TestNewInterStepDataForwardRedis(t *testing.T) {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardRedisTest{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithUDFUnaryMap(myForwardRedisTest{}))
+	f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardRedisTest{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithUDFMap(myForwardRedisTest{}))
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
 
@@ -463,7 +463,7 @@ func TestReadTimeout(t *testing.T) {
 	}
 
 	fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-	f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardRedisTest{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithUDFUnaryMap(myForwardRedisTest{}))
+	f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardRedisTest{}, fetchWatermark, publishWatermark, wmb.NewNoOpIdleManager(), forward.WithUDFMap(myForwardRedisTest{}))
 	assert.NoError(t, err)
 	stopped := f.Start()
 	// Call stop to end the test as we have a blocking read. The forwarder is up and running with no messages written

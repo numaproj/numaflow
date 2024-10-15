@@ -22,6 +22,8 @@ import (
 	"time"
 
 	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -34,12 +36,14 @@ import (
 type GRPCBasedMap struct {
 	vertexName string
 	client     mapper.Client
+	log        *zap.SugaredLogger
 }
 
-func NewUDSgRPCBasedMap(vertexName string, client mapper.Client) *GRPCBasedMap {
+func NewUDSgRPCBasedMap(ctx context.Context, client mapper.Client, vertexName string) *GRPCBasedMap {
 	return &GRPCBasedMap{
 		vertexName: vertexName,
 		client:     client,
+		log:        logging.FromContext(ctx),
 	}
 }
 
@@ -97,7 +101,6 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessages []*isb.ReadMes
 	responses, err := u.client.MapFn(ctx, requests)
 
 	if err != nil {
-		println("gRPC client.mapFn failed, ", err.Error())
 		err = &ApplyUDFErr{
 			UserUDFErr: false,
 			Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
@@ -112,7 +115,7 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessages []*isb.ReadMes
 	for i, resp := range responses {
 		parentMessage, ok := idToMsgMapping[resp.GetId()]
 		if !ok {
-			panic(fmt.Sprintf("tracker doesn't contain the message ID received from the response: %s", resp.GetId()))
+			panic("tracker doesn't contain the message ID received from the response - " + resp.GetId())
 		}
 		taggedMessages := make([]*isb.WriteMessage, len(resp.GetResults()))
 		for j, result := range resp.GetResults() {
@@ -143,4 +146,71 @@ func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessages []*isb.ReadMes
 		}
 	}
 	return results, nil
+}
+
+func (u *GRPCBasedMap) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	defer close(writeMessageCh)
+
+	keys := message.Keys
+	payload := message.Body.Payload
+	offset := message.ReadOffset
+	parentMessageInfo := message.MessageInfo
+
+	var d = &mappb.MapRequest{
+		Request: &mappb.MapRequest_Request{
+			Keys:      keys,
+			Value:     payload,
+			EventTime: timestamppb.New(parentMessageInfo.EventTime),
+			Watermark: timestamppb.New(message.Watermark),
+			Headers:   message.Headers,
+		},
+		Id: offset.String(),
+	}
+
+	responseCh := make(chan *mappb.MapResponse)
+	errs, ctx := errgroup.WithContext(ctx)
+	errs.Go(func() error {
+		err := u.client.MapStreamFn(ctx, d, responseCh)
+		if err != nil {
+			err = &ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.MapStreamFn failed, %s", err),
+				InternalErr: InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
+			return err
+		}
+		return nil
+	})
+
+	i := 0
+	for response := range responseCh {
+		results := response.GetResults()
+		for _, result := range results {
+			i++
+			keys := result.GetKeys()
+			taggedMessage := &isb.WriteMessage{
+				Message: isb.Message{
+					Header: isb.Header{
+						MessageInfo: parentMessageInfo,
+						ID: isb.MessageID{
+							VertexName: u.vertexName,
+							Offset:     offset.String(),
+							Index:      int32(i),
+						},
+						Keys: keys,
+					},
+					Body: isb.Body{
+						Payload: result.GetValue(),
+					},
+				},
+				Tags: result.GetTags(),
+			}
+			writeMessageCh <- *taggedMessage
+		}
+	}
+
+	return errs.Wait()
 }

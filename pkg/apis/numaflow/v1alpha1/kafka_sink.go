@@ -19,14 +19,20 @@ package v1alpha1
 type KafkaSink struct {
 	Brokers []string `json:"brokers,omitempty" protobuf:"bytes,1,rep,name=brokers"`
 	Topic   string   `json:"topic" protobuf:"bytes,2,opt,name=topic"`
+	// SetKey sets the Kafka key to the keys passed in the Message.
+	// When the key is null (default), the record is sent randomly to one of the available partitions of the topic.
+	// If a key exists, Kafka hashes the key, and the result is used to map the message to a specific partition. This
+	// ensures that messages with the same key end up in the same partition.
+	// +optional
+	SetKey bool `json:"setKey" protobuf:"varint,3,opt,name=setKey"`
 	// TLS user to configure TLS connection for kafka broker
 	// TLS.enable=true default for TLS.
 	// +optional
-	TLS *TLS `json:"tls" protobuf:"bytes,3,opt,name=tls"`
+	TLS *TLS `json:"tls" protobuf:"bytes,4,opt,name=tls"`
 	// +optional
-	Config string `json:"config,omitempty" protobuf:"bytes,4,opt,name=config"`
+	Config string `json:"config,omitempty" protobuf:"bytes,5,opt,name=config"`
 	// SASL user to configure SASL connection for kafka broker
 	// SASL.enable=true default for SASL.
 	// +optional
-	SASL *SASL `json:"sasl" protobuf:"bytes,5,opt,name=sasl"`
+	SASL *SASL `json:"sasl" protobuf:"bytes,6,opt,name=sasl"`
 }

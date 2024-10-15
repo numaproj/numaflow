@@ -36,6 +36,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/numaproj/numaflow/pkg/reconciler/isbsvc/installer"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 const (
@@ -67,6 +68,11 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, err
 	}
 	log := r.logger.With("namespace", isbSvc.Namespace).With("isbsvc", isbSvc.Name)
+	if instance := isbSvc.GetAnnotations()[dfv1.KeyInstance]; instance != r.config.GetInstance() {
+		log.Debugw("ISB Service not managed by this controller, skipping", zap.String("instance", instance))
+		return ctrl.Result{}, nil
+	}
+	ctx = logging.WithLogger(ctx, log)
 	isbSvcCopy := isbSvc.DeepCopy()
 	reconcileErr := r.reconcile(ctx, isbSvcCopy)
 	if reconcileErr != nil {
@@ -87,7 +93,7 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 
 // reconcile does the real logic
 func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc *dfv1.InterStepBufferService) error {
-	log := r.logger.With("namespace", isbSvc.Namespace).With("isbsvc", isbSvc.Name)
+	log := logging.FromContext(ctx)
 	if !isbSvc.DeletionTimestamp.IsZero() {
 		log.Info("Deleting ISB Service")
 		if controllerutil.ContainsFinalizer(isbSvc, finalizerName) {

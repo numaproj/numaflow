@@ -19,8 +19,10 @@ package mapper
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -36,9 +38,11 @@ import (
 
 // client contains the grpc connection and the grpc client.
 type client struct {
-	conn    *grpc.ClientConn
-	grpcClt mappb.MapClient
-	stream  mappb.Map_MapFnClient
+	conn         *grpc.ClientConn
+	grpcClt      mappb.MapClient
+	stream       mappb.Map_MapFnClient
+	batchMapMode bool
+	log          *zap.SugaredLogger
 }
 
 // New creates a new client object.
@@ -58,8 +62,9 @@ func New(ctx context.Context, serverInfo *serverinfo.ServerInfo, inputOptions ..
 	c := new(client)
 	c.conn = conn
 	c.grpcClt = mappb.NewMapClient(conn)
+	c.batchMapMode = opts.BatchMapMode()
 
-	var logger = logging.FromContext(ctx)
+	c.log = logging.FromContext(ctx)
 
 waitUntilReady:
 	for {
@@ -69,7 +74,7 @@ waitUntilReady:
 		default:
 			_, err := c.IsReady(ctx, &emptypb.Empty{})
 			if err != nil {
-				logger.Warnf("Mapper server is not ready: %v", err)
+				c.log.Warnf("Mapper server is not ready: %v", err)
 				time.Sleep(100 * time.Millisecond)
 				continue waitUntilReady
 			}
@@ -150,6 +155,11 @@ func (c *client) IsReady(ctx context.Context, in *emptypb.Empty) (bool, error) {
 
 // MapFn applies a function to each map request element.
 func (c *client) MapFn(ctx context.Context, requests []*mappb.MapRequest) ([]*mappb.MapResponse, error) {
+	if c.batchMapMode {
+		// if it is a batch map, we need to send an end of transmission message to the server
+		// to indicate that the batch is finished.
+		requests = append(requests, &mappb.MapRequest{Status: &mappb.TransmissionStatus{Eot: true}})
+	}
 	var eg errgroup.Group
 	// send n requests
 	eg.Go(func() error {
@@ -166,9 +176,10 @@ func (c *client) MapFn(ctx context.Context, requests []*mappb.MapRequest) ([]*ma
 		return nil
 	})
 
-	// receive n responses
-	responses := make([]*mappb.MapResponse, len(requests))
+	// receive the responses
+	var responses []*mappb.MapResponse
 	eg.Go(func() error {
+		// we need to receive n+1 responses because the last response will be the end of transmission message.
 		for i := 0; i < len(requests); i++ {
 			select {
 			case <-ctx.Done():
@@ -179,7 +190,14 @@ func (c *client) MapFn(ctx context.Context, requests []*mappb.MapRequest) ([]*ma
 			if err != nil {
 				return sdkerror.ToUDFErr("c.grpcClt.MapFn stream.Recv", err)
 			}
-			responses[i] = resp
+			if resp.GetStatus() != nil && resp.GetStatus().GetEot() {
+				// we might get an end of transmission message from the server before receiving all the responses.
+				if i < len(requests)-1 {
+					c.log.Errorw("received EOT message before all responses are received, we will wait indefinitely for the remaining responses", zap.Int("received_responses", i+1), zap.Int("total_requests", len(requests)))
+				}
+				continue
+			}
+			responses = append(responses, resp)
 		}
 		return nil
 	})
@@ -191,4 +209,34 @@ func (c *client) MapFn(ctx context.Context, requests []*mappb.MapRequest) ([]*ma
 	}
 
 	return responses, nil
+}
+
+// MapStreamFn applies a function to each datum element and writes the response to the stream.
+func (c *client) MapStreamFn(ctx context.Context, request *mappb.MapRequest, responseCh chan<- *mappb.MapResponse) error {
+	defer close(responseCh)
+	err := c.stream.Send(request)
+	if err != nil {
+		return fmt.Errorf("failed to execute c.grpcClt.MapStreamFn(): %w", err)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			var resp *mappb.MapResponse
+			resp, err = c.stream.Recv()
+			if err == io.EOF {
+				return nil
+			}
+			if resp.GetStatus() != nil && resp.GetStatus().GetEot() {
+				return nil
+			}
+			err = sdkerror.ToUDFErr("c.grpcClt.MapStreamFn", err)
+			if err != nil {
+				return err
+			}
+			responseCh <- resp
+		}
+	}
 }

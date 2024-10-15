@@ -24,12 +24,13 @@ use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{debug, error, info};
 
-use crate::config::config;
-use crate::error::Error;
-use crate::reader;
 use numaflow_grpc::clients::sink::sink_client::SinkClient;
 use numaflow_grpc::clients::source::source_client::SourceClient;
 use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+
+use crate::config::config;
+use crate::source::SourceHandle;
+use crate::Error;
 
 // Define the labels for the metrics
 // Note: Please keep consistent with the definitions in MonoVertex daemon
@@ -68,7 +69,7 @@ const SINK_TIME: &str = "monovtx_sink_time";
 #[derive(Clone)]
 pub(crate) struct UserDefinedContainerState {
     pub source_client: Option<SourceClient<Channel>>,
-    pub sink_client: SinkClient<Channel>,
+    pub sink_client: Option<SinkClient<Channel>>,
     pub transformer_client: Option<SourceTransformClient<Channel>>,
     pub fb_sink_client: Option<SinkClient<Channel>>,
 }
@@ -297,18 +298,18 @@ pub(crate) async fn start_metrics_https_server(
 
     // Generate a self-signed certificate
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
-        .map_err(|e| Error::MetricsError(format!("Generating self-signed certificate: {}", e)))?;
+        .map_err(|e| Error::Metrics(format!("Generating self-signed certificate: {}", e)))?;
 
     let tls_config = RustlsConfig::from_pem(cert.pem().into(), key_pair.serialize_pem().into())
         .await
-        .map_err(|e| Error::MetricsError(format!("Creating tlsConfig from pem: {}", e)))?;
+        .map_err(|e| Error::Metrics(format!("Creating tlsConfig from pem: {}", e)))?;
 
     let metrics_app = metrics_router(metrics_state);
 
     axum_server::bind_rustls(addr, tls_config)
         .serve(metrics_app.into_make_service())
         .await
-        .map_err(|e| Error::MetricsError(format!("Starting web server for metrics: {}", e)))?;
+        .map_err(|e| Error::Metrics(format!("Starting web server for metrics: {}", e)))?;
 
     Ok(())
 }
@@ -327,16 +328,18 @@ async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-async fn sidecar_livez(State(mut state): State<UserDefinedContainerState>) -> impl IntoResponse {
+async fn sidecar_livez(State(state): State<UserDefinedContainerState>) -> impl IntoResponse {
     if let Some(mut source_client) = state.source_client {
         if source_client.is_ready(Request::new(())).await.is_err() {
             error!("Source client is not available");
             return StatusCode::SERVICE_UNAVAILABLE;
         }
     }
-    if state.sink_client.is_ready(Request::new(())).await.is_err() {
-        error!("Sink client is not available");
-        return StatusCode::SERVICE_UNAVAILABLE;
+    if let Some(mut sink_client) = state.sink_client {
+        if sink_client.is_ready(Request::new(())).await.is_err() {
+            error!("Sink client is not available");
+            return StatusCode::SERVICE_UNAVAILABLE;
+        }
     }
     if let Some(mut transformer_client) = state.transformer_client {
         if transformer_client.is_ready(Request::new(())).await.is_err() {
@@ -364,24 +367,27 @@ struct TimestampedPending {
 /// PendingReader is responsible for periodically checking the lag of the reader
 /// and exposing the metrics. It maintains a list of pending stats and ensures that
 /// only the most recent entries are kept.
-pub(crate) struct PendingReader<T> {
-    lag_reader: T,
+pub(crate) struct PendingReader {
+    lag_reader: SourceHandle,
     lag_checking_interval: Duration,
     refresh_interval: Duration,
-    buildup_handle: Option<JoinHandle<()>>,
-    expose_handle: Option<JoinHandle<()>>,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 }
 
+pub(crate) struct PendingReaderTasks {
+    buildup_handle: JoinHandle<()>,
+    expose_handle: JoinHandle<()>,
+}
+
 /// PendingReaderBuilder is used to build a [LagReader] instance.
-pub(crate) struct PendingReaderBuilder<T> {
-    lag_reader: T,
+pub(crate) struct PendingReaderBuilder {
+    lag_reader: SourceHandle,
     lag_checking_interval: Option<Duration>,
     refresh_interval: Option<Duration>,
 }
 
-impl<T: reader::LagReader> PendingReaderBuilder<T> {
-    pub(crate) fn new(lag_reader: T) -> Self {
+impl PendingReaderBuilder {
+    pub(crate) fn new(lag_reader: SourceHandle) -> Self {
         Self {
             lag_reader,
             lag_checking_interval: None,
@@ -399,7 +405,7 @@ impl<T: reader::LagReader> PendingReaderBuilder<T> {
         self
     }
 
-    pub(crate) fn build(self) -> PendingReader<T> {
+    pub(crate) fn build(self) -> PendingReader {
         PendingReader {
             lag_reader: self.lag_reader,
             lag_checking_interval: self
@@ -408,60 +414,59 @@ impl<T: reader::LagReader> PendingReaderBuilder<T> {
             refresh_interval: self
                 .refresh_interval
                 .unwrap_or_else(|| Duration::from_secs(5)),
-            buildup_handle: None,
-            expose_handle: None,
             pending_stats: Arc::new(Mutex::new(Vec::with_capacity(MAX_PENDING_STATS))),
         }
     }
 }
 
-impl<T: reader::LagReader + Clone + Send + 'static> PendingReader<T> {
+impl PendingReader {
     /// Starts the lag reader by spawning tasks to build up pending info and expose pending metrics.
     ///
     /// This method spawns two asynchronous tasks:
     /// - One to periodically check the lag and update the pending stats.
     /// - Another to periodically expose the pending metrics.
-    pub async fn start(&mut self) {
+    ///
+    /// Dropping the PendingReaderTasks will abort the background tasks.
+    pub async fn start(&self) -> PendingReaderTasks {
         let pending_reader = self.lag_reader.clone();
         let lag_checking_interval = self.lag_checking_interval;
         let refresh_interval = self.refresh_interval;
         let pending_stats = self.pending_stats.clone();
 
-        self.buildup_handle = Some(tokio::spawn(async move {
+        let buildup_handle = tokio::spawn(async move {
             build_pending_info(pending_reader, lag_checking_interval, pending_stats).await;
-        }));
+        });
 
         let pending_stats = self.pending_stats.clone();
-        self.expose_handle = Some(tokio::spawn(async move {
+        let expose_handle = tokio::spawn(async move {
             expose_pending_metrics(refresh_interval, pending_stats).await;
-        }));
+        });
+        PendingReaderTasks {
+            buildup_handle,
+            expose_handle,
+        }
     }
 }
 
-/// When the PendingReader is dropped, we need to clean up the pending exposer and the pending builder tasks.
-impl<T> Drop for PendingReader<T> {
+/// When the PendingReaderTasks is dropped, we need to clean up the pending exposer and the pending builder tasks.
+impl Drop for PendingReaderTasks {
     fn drop(&mut self) {
-        if let Some(handle) = self.expose_handle.take() {
-            handle.abort();
-        }
-        if let Some(handle) = self.buildup_handle.take() {
-            handle.abort();
-        }
-
+        self.expose_handle.abort();
+        self.buildup_handle.abort();
         info!("Stopped the Lag-Reader Expose and Builder tasks");
     }
 }
 
 /// Periodically checks the pending messages from the source client and build the pending stats.
-async fn build_pending_info<T: reader::LagReader>(
-    mut lag_reader: T,
+async fn build_pending_info(
+    source: SourceHandle,
     lag_checking_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
     let mut ticker = time::interval(lag_checking_interval);
     loop {
         ticker.tick().await;
-        match fetch_pending(&mut lag_reader).await {
+        match fetch_pending(&source).await {
             Ok(pending) => {
                 if pending != -1 {
                     let mut stats = pending_stats.lock().await;
@@ -483,7 +488,7 @@ async fn build_pending_info<T: reader::LagReader>(
     }
 }
 
-async fn fetch_pending<T: reader::LagReader>(lag_reader: &mut T) -> crate::error::Result<i64> {
+async fn fetch_pending(lag_reader: &SourceHandle) -> crate::error::Result<i64> {
     let response: i64 = lag_reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
     Ok(response)
 }
@@ -674,7 +679,9 @@ mod tests {
             source_client: Some(SourceClient::new(
                 create_rpc_channel(src_sock_file).await.unwrap(),
             )),
-            sink_client: SinkClient::new(create_rpc_channel(sink_sock_file).await.unwrap()),
+            sink_client: Some(SinkClient::new(
+                create_rpc_channel(sink_sock_file).await.unwrap(),
+            )),
             transformer_client: Some(SourceTransformClient::new(
                 create_rpc_channel(sock_file).await.unwrap(),
             )),

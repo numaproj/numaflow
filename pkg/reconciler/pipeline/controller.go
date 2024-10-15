@@ -81,6 +81,10 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 	log := r.logger.With("namespace", pl.Namespace).With("pipeline", pl.Name)
+	if instance := pl.GetAnnotations()[dfv1.KeyInstance]; instance != r.config.GetInstance() {
+		log.Debugw("Pipeline not managed by this controller, skipping", zap.String("instance", instance))
+		return ctrl.Result{}, nil
+	}
 	plCopy := pl.DeepCopy()
 	ctx = logging.WithLogger(ctx, log)
 	result, reconcileErr := r.reconcile(ctx, plCopy)
@@ -235,6 +239,10 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 		}
 		log.Errorw("Failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
 		return err
+	}
+	if isbSvc.GetAnnotations()[dfv1.KeyInstance] != pl.GetAnnotations()[dfv1.KeyInstance] {
+		log.Errorw("ISB Service is found but not managed by the same controller of this pipeline", zap.String("isbsvc", isbSvcName), zap.Error(err))
+		return fmt.Errorf("isbsvc not managed by the same controller of this pipeline")
 	}
 	if !isbSvc.Status.IsHealthy() {
 		log.Errorw("ISB Service is not in healthy status", zap.String("isbsvc", isbSvcName), zap.Error(err))
@@ -651,6 +659,10 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 				},
 			},
 			Spec: spec,
+		}
+		// If corresponding pipline has instance annotation, we should copy it to the vertex
+		if x := pl.GetAnnotations()[dfv1.KeyInstance]; x != "" {
+			obj.Annotations[dfv1.KeyInstance] = x
 		}
 		result[obj.Name] = obj
 	}

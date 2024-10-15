@@ -6765,6 +6765,8 @@ spec:
                             required:
                             - mechanism
                             type: object
+                          setKey:
+                            type: boolean
                           tls:
                             properties:
                               caCertSecret:
@@ -7298,6 +7300,8 @@ spec:
                         required:
                         - mechanism
                         type: object
+                      setKey:
+                        type: boolean
                       tls:
                         properties:
                           caCertSecret:
@@ -17990,6 +17994,8 @@ spec:
                                   required:
                                   - mechanism
                                   type: object
+                                setKey:
+                                  type: boolean
                                 tls:
                                   properties:
                                     caCertSecret:
@@ -18523,6 +18529,8 @@ spec:
                               required:
                               - mechanism
                               type: object
+                            setKey:
+                              type: boolean
                             tls:
                               properties:
                                 caCertSecret:
@@ -24394,6 +24402,8 @@ spec:
                             required:
                             - mechanism
                             type: object
+                          setKey:
+                            type: boolean
                           tls:
                             properties:
                               caCertSecret:
@@ -24927,6 +24937,8 @@ spec:
                         required:
                         - mechanism
                         type: object
+                      setKey:
+                        type: boolean
                       tls:
                         properties:
                           caCertSecret:
@@ -28240,6 +28252,8 @@ metadata:
 apiVersion: v1
 data:
   controller-config.yaml: |
+    # "instance" configuration can be used to run multiple Numaflow controllers, check details at https://numaflow.numaproj.io/operations/installation/#multiple-controllers
+    instance: ""
     defaults:
       containerResources: |
         requests:

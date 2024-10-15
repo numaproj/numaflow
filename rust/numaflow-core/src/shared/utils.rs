@@ -2,17 +2,6 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::config::config;
-use crate::error::Error;
-use crate::monovertex::metrics::{
-    start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
-};
-use crate::shared::server_info;
-use crate::{error, reader};
-use numaflow_grpc::clients::sink::sink_client::SinkClient;
-use numaflow_grpc::clients::source::source_client::SourceClient;
-use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-
 use axum::http::Uri;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
@@ -27,10 +16,22 @@ use tonic::Request;
 use tower::service_fn;
 use tracing::{info, warn};
 
+use crate::config::config;
+use crate::error;
+use crate::monovertex::metrics::{
+    start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
+};
+use crate::shared::server_info;
+use crate::source::SourceHandle;
+use crate::Error;
+use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use numaflow_grpc::clients::source::source_client::SourceClient;
+use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+
 pub(crate) async fn check_compatibility(
     cln_token: &CancellationToken,
     source_file_path: Option<PathBuf>,
-    sink_file_path: PathBuf,
+    sink_file_path: Option<PathBuf>,
     transformer_file_path: Option<PathBuf>,
     fb_sink_file_path: Option<PathBuf>,
 ) -> error::Result<()> {
@@ -39,23 +40,25 @@ pub(crate) async fn check_compatibility(
             .await
             .map_err(|e| {
                 warn!("Error waiting for source server info file: {:?}", e);
-                Error::ForwarderError("Error waiting for server info file".to_string())
+                Error::Forwarder("Error waiting for server info file".to_string())
             })?;
     }
 
-    server_info::check_for_server_compatibility(sink_file_path, cln_token.clone())
-        .await
-        .map_err(|e| {
-            error!("Error waiting for sink server info file: {:?}", e);
-            Error::ForwarderError("Error waiting for server info file".to_string())
-        })?;
+    if let Some(sink_file_path) = sink_file_path {
+        server_info::check_for_server_compatibility(sink_file_path, cln_token.clone())
+            .await
+            .map_err(|e| {
+                error!("Error waiting for sink server info file: {:?}", e);
+                Error::Forwarder("Error waiting for server info file".to_string())
+            })?;
+    }
 
     if let Some(transformer_path) = transformer_file_path {
         server_info::check_for_server_compatibility(transformer_path, cln_token.clone())
             .await
             .map_err(|e| {
                 error!("Error waiting for transformer server info file: {:?}", e);
-                Error::ForwarderError("Error waiting for server info file".to_string())
+                Error::Forwarder("Error waiting for server info file".to_string())
             })?;
     }
 
@@ -64,7 +67,7 @@ pub(crate) async fn check_compatibility(
             .await
             .map_err(|e| {
                 warn!("Error waiting for fallback sink server info file: {:?}", e);
-                Error::ForwarderError("Error waiting for server info file".to_string())
+                Error::Forwarder("Error waiting for server info file".to_string())
             })?;
     }
     Ok(())
@@ -85,9 +88,7 @@ pub(crate) async fn start_metrics_server(
     })
 }
 
-pub(crate) async fn create_pending_reader<T: reader::LagReader>(
-    lag_reader_grpc_client: T,
-) -> PendingReader<T> {
+pub(crate) async fn create_pending_reader(lag_reader_grpc_client: SourceHandle) -> PendingReader {
     PendingReaderBuilder::new(lag_reader_grpc_client)
         .lag_checking_interval(Duration::from_secs(
             config().lag_check_interval_in_secs.into(),
@@ -101,13 +102,13 @@ pub(crate) async fn create_pending_reader<T: reader::LagReader>(
 pub(crate) async fn wait_until_ready(
     cln_token: CancellationToken,
     source_client: &mut Option<SourceClient<Channel>>,
-    sink_client: &mut SinkClient<Channel>,
+    sink_client: &mut Option<SinkClient<Channel>>,
     transformer_client: &mut Option<SourceTransformClient<Channel>>,
     fb_sink_client: &mut Option<SinkClient<Channel>>,
 ) -> error::Result<()> {
     loop {
         if cln_token.is_cancelled() {
-            return Err(Error::ForwarderError(
+            return Err(Error::Forwarder(
                 "Cancellation token is cancelled".to_string(),
             ));
         }
@@ -122,7 +123,11 @@ pub(crate) async fn wait_until_ready(
             true
         };
 
-        let sink_ready = sink_client.is_ready(Request::new(())).await.is_ok();
+        let sink_ready = if let Some(sink_client) = sink_client {
+            sink_client.is_ready(Request::new(())).await.is_ok()
+        } else {
+            true
+        };
         if !sink_ready {
             info!("UDSink is not ready, waiting...");
         }
@@ -187,7 +192,7 @@ pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> crate::error::Re
 
 pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> Result<Channel, Error> {
     let channel = Endpoint::try_from("http://[::]:50051")
-        .map_err(|e| Error::ConnectionError(format!("Failed to create endpoint: {:?}", e)))?
+        .map_err(|e| Error::Connection(format!("Failed to create endpoint: {:?}", e)))?
         .connect_with_connector(service_fn(move |_: Uri| {
             let uds_socket = uds_path.clone();
             async move {
@@ -197,7 +202,7 @@ pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> Result<Channel, Error
             }
         }))
         .await
-        .map_err(|e| Error::ConnectionError(format!("Failed to connect: {:?}", e)))?;
+        .map_err(|e| Error::Connection(format!("Failed to connect: {:?}", e)))?;
     Ok(channel)
 }
 
@@ -256,7 +261,7 @@ mod tests {
         let result = check_compatibility(
             &cln_token,
             Some(source_file_path),
-            sink_file_path,
+            Some(sink_file_path),
             None,
             None,
         )
@@ -284,7 +289,7 @@ mod tests {
         let result = check_compatibility(
             &cln_token,
             Some(source_file_path),
-            sink_file_path,
+            Some(sink_file_path),
             Some(transformer_file_path),
             Some(fb_sink_file_path),
         )
@@ -389,7 +394,7 @@ mod tests {
 
         let source_grpc_client =
             SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap());
-        let mut sink_grpc_client =
+        let sink_grpc_client =
             SinkClient::new(create_rpc_channel(sink_sock_file.clone()).await.unwrap());
         let mut transformer_grpc_client = Some(SourceTransformClient::new(
             create_rpc_channel(transformer_sock_file.clone())
@@ -403,7 +408,7 @@ mod tests {
         let result = wait_until_ready(
             cln_token,
             &mut Some(source_grpc_client),
-            &mut sink_grpc_client,
+            &mut Some(sink_grpc_client),
             &mut transformer_grpc_client,
             &mut fb_sink_grpc_client,
         )

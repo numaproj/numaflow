@@ -103,135 +103,31 @@ func (f myForwardTest) ApplyMapStream(ctx context.Context, message *isb.ReadMess
 }
 
 type testingOpts struct {
-	name            string
-	batchSize       int64
-	streamEnabled   bool
-	batchMapEnabled bool
-	unaryMapEnabled bool
-}
-
-// Check valid initialization for map modes in forwarder
-func TestValidMapModeInit(t *testing.T) {
-	tests := []struct {
-		name            string
-		valid           bool
-		streamEnabled   bool
-		batchMapEnabled bool
-		unaryMapEnabled bool
-	}{
-		{
-			name:            "valid_stream",
-			streamEnabled:   true,
-			batchMapEnabled: false,
-			unaryMapEnabled: false,
-			valid:           true,
-		},
-		{
-			name:            "valid_batch",
-			streamEnabled:   false,
-			batchMapEnabled: false,
-			unaryMapEnabled: true,
-			valid:           true,
-		},
-		{
-			name:            "valid_unary",
-			streamEnabled:   false,
-			batchMapEnabled: true,
-			unaryMapEnabled: false,
-			valid:           true,
-		},
-		{
-			name:            "all_disabled",
-			streamEnabled:   false,
-			batchMapEnabled: false,
-			unaryMapEnabled: false,
-			valid:           false,
-		},
-		{
-			name:            "all_enabled",
-			streamEnabled:   true,
-			batchMapEnabled: true,
-			unaryMapEnabled: true,
-			valid:           false,
-		},
-		{
-			name:            "two_enabled",
-			streamEnabled:   true,
-			batchMapEnabled: true,
-			unaryMapEnabled: false,
-			valid:           false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name+"_map_mode", func(t *testing.T) {
-			batchSize := int64(1)
-			fromStep := simplebuffer.NewInMemoryBuffer("from", 5*batchSize, 0)
-			to11 := simplebuffer.NewInMemoryBuffer("to1-1", 2*batchSize, 0)
-			to12 := simplebuffer.NewInMemoryBuffer("to1-2", 2*batchSize, 1)
-			toSteps := map[string][]isb.BufferWriter{
-				"to1": {to11, to12},
-			}
-
-			vertex := &dfv1.Vertex{Spec: dfv1.VertexSpec{
-				PipelineName: "testPipeline",
-				AbstractVertex: dfv1.AbstractVertex{
-					Name: "testVertex",
-				},
-			}}
-			vertexInstance := &dfv1.VertexInstance{
-				Vertex:  vertex,
-				Replica: 0,
-			}
-
-			_, cancel := context.WithTimeout(context.Background(), time.Second*10)
-			defer cancel()
-
-			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
-
-			opts := []Option{WithReadBatchSize(batchSize)}
-			if tt.batchMapEnabled {
-				opts = append(opts, WithUDFBatchMap(myForwardTest{}))
-			}
-			if tt.streamEnabled {
-				opts = append(opts, WithUDFStreamingMap(myForwardTest{}))
-			}
-			if tt.unaryMapEnabled {
-				opts = append(opts, WithUDFUnaryMap(myForwardTest{}))
-			}
-
-			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-			_, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, fetchWatermark, publishWatermark, idleManager, opts...)
-			if tt.valid {
-				assert.NoError(t, err, "expected no error")
-			} else {
-				assert.Error(t, err, "expected error")
-			}
-		})
-	}
+	name          string
+	batchSize     int64
+	streamEnabled bool
+	mapEnabled    bool
 }
 
 func TestNewInterStepDataForward(t *testing.T) {
 	tests := []testingOpts{
 		{
-			name:            "stream_forward",
-			batchSize:       1,
-			streamEnabled:   true,
-			batchMapEnabled: false,
-			unaryMapEnabled: false,
+			name:          "stream_forward",
+			batchSize:     1,
+			streamEnabled: true,
+			mapEnabled:    false,
 		},
 		{
-			name:            "batch_forward",
-			batchSize:       10,
-			streamEnabled:   false,
-			batchMapEnabled: false,
-			unaryMapEnabled: true,
+			name:          "batch_forward",
+			batchSize:     10,
+			streamEnabled: false,
+			mapEnabled:    true,
 		},
 		{
-			name:            "batch_map_forward",
-			batchSize:       10,
-			streamEnabled:   false,
-			batchMapEnabled: true,
-			unaryMapEnabled: false,
+			name:          "batch_map_forward",
+			batchSize:     10,
+			streamEnabled: false,
+			mapEnabled:    true,
 		},
 	}
 	for _, tt := range tests {
@@ -264,14 +160,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			fetchWatermark, publishWatermark := generic.BuildNoOpWatermarkProgressorsFromBufferMap(toSteps)
 
 			opts := []Option{WithReadBatchSize(batchSize)}
-			if tt.batchMapEnabled {
-				opts = append(opts, WithUDFBatchMap(myForwardTest{}))
-			}
 			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardTest{}))
 			}
-			if tt.unaryMapEnabled {
-				opts = append(opts, WithUDFUnaryMap(myForwardTest{}))
+			if tt.mapEnabled {
+				opts = append(opts, WithUDFMap(myForwardTest{}))
 			}
 
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
@@ -379,14 +272,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
 			opts := []Option{WithReadBatchSize(batchSize)}
-			if tt.batchMapEnabled {
-				opts = append(opts, WithUDFBatchMap(&myForwardToAllTest{}))
-			}
 			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(&myForwardToAllTest{}))
 			}
-			if tt.unaryMapEnabled {
-				opts = append(opts, WithUDFUnaryMap(&myForwardToAllTest{}))
+			if tt.mapEnabled {
+				opts = append(opts, WithUDFMap(&myForwardToAllTest{}))
 			}
 			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &myForwardToAllTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
 
@@ -556,14 +446,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
 
 			opts := []Option{WithReadBatchSize(batchSize)}
-			if tt.batchMapEnabled {
-				opts = append(opts, WithUDFBatchMap(myForwardDropTest{}))
-			}
 			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardDropTest{}))
 			}
-			if tt.unaryMapEnabled {
-				opts = append(opts, WithUDFUnaryMap(myForwardDropTest{}))
+			if tt.mapEnabled {
+				opts = append(opts, WithUDFMap(myForwardDropTest{}))
 			}
 
 			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardDropTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
@@ -746,14 +633,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
 
 			opts := []Option{WithReadBatchSize(batchSize)}
-			if tt.batchMapEnabled {
-				opts = append(opts, WithUDFBatchMap(myForwardTest{}))
-			}
 			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardTest{}))
 			}
-			if tt.unaryMapEnabled {
-				opts = append(opts, WithUDFUnaryMap(myForwardTest{}))
+			if tt.mapEnabled {
+				opts = append(opts, WithUDFMap(myForwardTest{}))
 			}
 
 			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, fetchWatermark, publishWatermark, idleManager, opts...)
@@ -893,14 +777,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
 
 			opts := []Option{WithReadBatchSize(batchSize)}
-			if tt.batchMapEnabled {
-				opts = append(opts, WithUDFBatchMap(myForwardApplyUDFErrTest{}))
-			}
 			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardApplyUDFErrTest{}))
 			}
-			if tt.unaryMapEnabled {
-				opts = append(opts, WithUDFUnaryMap(myForwardApplyUDFErrTest{}))
+			if tt.mapEnabled {
+				opts = append(opts, WithUDFMap(myForwardApplyUDFErrTest{}))
 			}
 
 			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardApplyUDFErrTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
@@ -909,11 +790,6 @@ func TestNewInterStepDataForward(t *testing.T) {
 			assert.False(t, to1.IsFull())
 			assert.True(t, to1.IsEmpty())
 
-			if tt.batchMapEnabled {
-				// TODO(map-batch): if map-batch is enabled we panic on seeing an error, think of a way to
-				// gracefully test that
-				t.Skip()
-			}
 			stopped := f.Start()
 			// write some data
 			_, errs := fromStep.Write(ctx, writeMessages[0:batchSize])
@@ -954,14 +830,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
 
 			opts := []Option{WithReadBatchSize(batchSize)}
-			if tt.batchMapEnabled {
-				opts = append(opts, WithUDFBatchMap(myForwardApplyWhereToErrTest{}))
-			}
 			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardApplyWhereToErrTest{}))
 			}
-			if tt.unaryMapEnabled {
-				opts = append(opts, WithUDFUnaryMap(myForwardApplyWhereToErrTest{}))
+			if tt.mapEnabled {
+				opts = append(opts, WithUDFMap(myForwardApplyWhereToErrTest{}))
 			}
 
 			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardApplyWhereToErrTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
@@ -1008,14 +881,11 @@ func TestNewInterStepDataForward(t *testing.T) {
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
 
 			opts := []Option{WithReadBatchSize(batchSize)}
-			if tt.batchMapEnabled {
-				opts = append(opts, WithUDFBatchMap(myForwardInternalErrTest{}))
-			}
 			if tt.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardInternalErrTest{}))
 			}
-			if tt.unaryMapEnabled {
-				opts = append(opts, WithUDFUnaryMap(myForwardInternalErrTest{}))
+			if tt.mapEnabled {
+				opts = append(opts, WithUDFMap(myForwardInternalErrTest{}))
 			}
 
 			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardInternalErrTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
@@ -1024,11 +894,6 @@ func TestNewInterStepDataForward(t *testing.T) {
 			assert.False(t, to1.IsFull())
 			assert.True(t, to1.IsEmpty())
 
-			if tt.batchMapEnabled {
-				// TODO(map-batch): if map-batch is enabled we panic on seeing an error, think of a way to
-				// gracefully test that
-				t.Skip()
-			}
 			stopped := f.Start()
 
 			// write some data
@@ -1162,7 +1027,7 @@ func TestNewInterStepDataForwardIdleWatermark(t *testing.T) {
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
 
-	opts := []Option{WithReadBatchSize(2), WithUDFUnaryMap(myForwardTest{})}
+	opts := []Option{WithReadBatchSize(2), WithUDFMap(myForwardTest{})}
 	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
 	assert.NoError(t, err)
 	assert.False(t, to1.IsFull())
@@ -1342,7 +1207,7 @@ func TestNewInterStepDataForwardIdleWatermark_Reset(t *testing.T) {
 	}()
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
-	opts := []Option{WithReadBatchSize(2), WithUDFUnaryMap(myForwardTest{})}
+	opts := []Option{WithReadBatchSize(2), WithUDFMap(myForwardTest{})}
 
 	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
 	assert.NoError(t, err)
@@ -1579,7 +1444,7 @@ func TestInterStepDataForwardSinglePartition(t *testing.T) {
 	// create a forwarder
 	idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
 
-	opts := []Option{WithReadBatchSize(5), WithUDFUnaryMap(mySourceForwardTest{})}
+	opts := []Option{WithReadBatchSize(5), WithUDFMap(mySourceForwardTest{})}
 
 	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, mySourceForwardTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
 	assert.NoError(t, err)
@@ -1647,7 +1512,7 @@ func TestInterStepDataForwardMultiplePartition(t *testing.T) {
 
 	idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
 
-	opts := []Option{WithReadBatchSize(5), WithUDFUnaryMap(mySourceForwardTest{})}
+	opts := []Option{WithReadBatchSize(5), WithUDFMap(mySourceForwardTest{})}
 
 	f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, &mySourceForwardTestRoundRobin{}, fetchWatermark, publishWatermark, idleManager, opts...)
 	assert.NoError(t, err)
@@ -1717,8 +1582,6 @@ func TestWriteToBuffer(t *testing.T) {
 		batchSize     int64
 		strategy      dfv1.BufferFullWritingStrategy
 		streamEnabled bool
-		unaryEnabled  bool
-		batchEnabled  bool
 		throwError    bool
 	}{
 		{
@@ -1726,8 +1589,6 @@ func TestWriteToBuffer(t *testing.T) {
 			batchSize:     10,
 			strategy:      dfv1.DiscardLatest,
 			streamEnabled: false,
-			batchEnabled:  false,
-			unaryEnabled:  true,
 			// should not throw any error as we drop messages and finish writing before context is cancelled
 			throwError: false,
 		},
@@ -1736,8 +1597,6 @@ func TestWriteToBuffer(t *testing.T) {
 			batchSize:     10,
 			strategy:      dfv1.RetryUntilSuccess,
 			streamEnabled: false,
-			batchEnabled:  false,
-			unaryEnabled:  true,
 			// should throw context closed error as we keep retrying writing until context is cancelled
 			throwError: true,
 		},
@@ -1746,8 +1605,6 @@ func TestWriteToBuffer(t *testing.T) {
 			batchSize:     1,
 			strategy:      dfv1.DiscardLatest,
 			streamEnabled: true,
-			batchEnabled:  false,
-			unaryEnabled:  false,
 			// should not throw any error as we drop messages and finish writing before context is cancelled
 			throwError: false,
 		},
@@ -1756,8 +1613,6 @@ func TestWriteToBuffer(t *testing.T) {
 			batchSize:     1,
 			strategy:      dfv1.RetryUntilSuccess,
 			streamEnabled: true,
-			batchEnabled:  false,
-			unaryEnabled:  false,
 			// should throw context closed error as we keep retrying writing until context is cancelled
 			throwError: true,
 		},
@@ -1766,8 +1621,6 @@ func TestWriteToBuffer(t *testing.T) {
 			batchSize:     10,
 			strategy:      dfv1.DiscardLatest,
 			streamEnabled: false,
-			batchEnabled:  true,
-			unaryEnabled:  false,
 			// should not throw any error as we drop messages and finish writing before context is cancelled
 			throwError: false,
 		},
@@ -1776,8 +1629,6 @@ func TestWriteToBuffer(t *testing.T) {
 			batchSize:     10,
 			strategy:      dfv1.RetryUntilSuccess,
 			streamEnabled: false,
-			batchEnabled:  true,
-			unaryEnabled:  false,
 			// should throw context closed error as we keep retrying writing until context is cancelled
 			throwError: true,
 		},
@@ -1807,14 +1658,10 @@ func TestWriteToBuffer(t *testing.T) {
 			idleManager, _ := wmb.NewIdleManager(1, len(toSteps))
 
 			opts := []Option{WithReadBatchSize(value.batchSize)}
-			if value.batchEnabled {
-				opts = append(opts, WithUDFBatchMap(myForwardApplyWhereToErrTest{}))
-			}
 			if value.streamEnabled {
 				opts = append(opts, WithUDFStreamingMap(myForwardApplyWhereToErrTest{}))
-			}
-			if value.unaryEnabled {
-				opts = append(opts, WithUDFUnaryMap(myForwardApplyWhereToErrTest{}))
+			} else {
+				opts = append(opts, WithUDFMap(myForwardApplyWhereToErrTest{}))
 			}
 
 			f, err := NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardTest{}, fetchWatermark, publishWatermark, idleManager, opts...)
