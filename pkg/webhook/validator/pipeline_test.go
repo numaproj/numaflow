@@ -27,9 +27,22 @@ import (
 func TestValidatePipelineCreate(t *testing.T) {
 	pipeline := fakePipeline()
 	fk := MockInterStepBufferServices{}
-	v := NewPipelineValidator(&fk, nil, pipeline)
-	r := v.ValidateCreate(contextWithLogger(t))
-	assert.True(t, r.Allowed)
+
+	t.Run("test create ok", func(t *testing.T) {
+		v := NewPipelineValidator(&fk, nil, pipeline)
+		r := v.ValidateCreate(contextWithLogger(t))
+		assert.True(t, r.Allowed)
+	})
+
+	t.Run("test create with pipeline and isbsvc instance annotation mismatch", func(t *testing.T) {
+		newPipeline := pipeline.DeepCopy()
+		newPipeline.Annotations[dfv1.KeyInstance] = "abc"
+		v := NewPipelineValidator(&fk, pipeline, newPipeline)
+		r := v.ValidateCreate(contextWithLogger(t))
+		assert.False(t, r.Allowed)
+		assert.Contains(t, r.Result.Message, "does not have the same annotation")
+	})
+
 }
 
 func TestValidatePipelineUpdate(t *testing.T) {
