@@ -138,3 +138,29 @@ data:
 ```
 
 If HA is turned off, the controller deployment should not run with multiple replicas.
+
+## Multiple Controllers
+
+With in one cluster, or even in one namespace, you can run multiple Numaflow controllers by leveraging the `instance` configuration in the `numaflow-controller-config` ConfigMap.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-controller-config
+data:
+  controller-config.yaml: |
+    # Within a cluster, setting "instance" can be used to run N Numaflow controllers. 
+    # If configured, the controller will only watch the objects having an annotation with the key "numaflow.numaproj.io/instance" and the corresponding value.
+    # If not configured (or empty string), the controller will watch all objects.
+    instance: ""
+    defaults:
+      containerResources: |
+        requests:
+          memory: "128Mi"
+          cpu: "100m"
+    isbsvc: 
+      ...
+```
+
+When `instance` is configured (e.g. `my-instance`), the controller will only watch the objects (`InterStepBufferService`, `Pipeline` and `MonoVertex`) having the annotation `numaflow.numaproj.io/instance: my-instance`. Correspondingly, if a `Pipeline` object has an annotation `numaflow.numaproj.io/instance: my-instance`, it requires the referenced `InterStepBufferService` also has the same annotation, or it will fail to orchestrate the pipeline.
