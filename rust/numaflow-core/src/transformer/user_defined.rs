@@ -22,7 +22,7 @@ const DROP: &str = "U+005C__DROP__";
 
 /// TransformerClient is a client to interact with the transformer server.
 struct SourceTransformer {
-    actor_messages: mpsc::Receiver<ActorMessage>,
+    actor_messages: mpsc::Receiver<ActorTransformMessage>,
     read_tx: mpsc::Sender<SourceTransformRequest>,
     resp_stream: Streaming<SourceTransformResponse>,
 }
@@ -30,7 +30,7 @@ struct SourceTransformer {
 impl SourceTransformer {
     async fn new(
         mut client: SourceTransformClient<Channel>,
-        actor_messages: mpsc::Receiver<ActorMessage>,
+        actor_messages: mpsc::Receiver<ActorTransformMessage>,
     ) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(config().batch_size as usize);
         let read_stream = ReceiverStream::new(read_rx);
@@ -67,16 +67,13 @@ impl SourceTransformer {
         })
     }
 
-    async fn handle_message(&mut self, message: ActorMessage) {
-        match message {
-            ActorMessage::Transform {
-                messages,
-                respond_to,
-            } => {
-                let result = self.transform_fn(messages).await;
-                let _ = respond_to.send(result);
-            }
-        }
+    async fn handle_message(&mut self, message: ActorTransformMessage) {
+        let ActorTransformMessage {
+            messages,
+            respond_to,
+        } = message;
+        let result = self.transform_fn(messages).await;
+        let _ = respond_to.send(result);
     }
 
     async fn transform_fn(&mut self, messages: Vec<Message>) -> Result<Vec<Message>> {
@@ -187,16 +184,17 @@ impl SourceTransformer {
     }
 }
 
-enum ActorMessage {
-    Transform {
-        messages: Vec<Message>,
-        respond_to: oneshot::Sender<Result<Vec<Message>>>,
-    },
+struct ActorTransformMessage {
+    messages: Vec<Message>,
+    respond_to: oneshot::Sender<Result<Vec<Message>>>,
 }
 
+/* The actor task managed by this handler will be receiving messages from the sender channel here in an outer `while let Some(msg) = actor.receiver.recv().await` loop. When all copies of the SourceHandle is dropped, the sender channel will be closed. When the sender channel is closed all there are no messages remaining in the channel's buffer, the actor task will exit.
+If an immediate (without waiting for the buffer to be empty) exit is required, we might have to use a cancellation token.
+*/
 #[derive(Clone)]
 pub(crate) struct SourceTransformHandle {
-    sender: mpsc::Sender<ActorMessage>,
+    sender: mpsc::Sender<ActorTransformMessage>,
 }
 
 impl SourceTransformHandle {
@@ -213,7 +211,7 @@ impl SourceTransformHandle {
 
     pub(crate) async fn transform(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
         let (sender, receiver) = oneshot::channel();
-        let msg = ActorMessage::Transform {
+        let msg = ActorTransformMessage {
             messages,
             respond_to: sender,
         };
