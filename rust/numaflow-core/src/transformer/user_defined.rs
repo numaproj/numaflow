@@ -40,9 +40,10 @@ impl SourceTransformer {
             request: None,
             handshake: Some(sourcetransformer::Handshake { sot: true }),
         };
-        read_tx.send(handshake_request).await.map_err(|e| {
-            Error::TransformerError(format!("failed to send handshake request: {}", e))
-        })?;
+        read_tx
+            .send(handshake_request)
+            .await
+            .map_err(|e| Error::Transformer(format!("failed to send handshake request: {}", e)))?;
 
         let mut resp_stream = client
             .source_transform_fn(Request::new(read_stream))
@@ -51,14 +52,12 @@ impl SourceTransformer {
 
         // first response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let handshake_response = resp_stream.message().await?.ok_or(Error::TransformerError(
+        let handshake_response = resp_stream.message().await?.ok_or(Error::Transformer(
             "failed to receive handshake response".to_string(),
         ))?;
         // handshake cannot to None during the initial phase and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
-            return Err(Error::TransformerError(
-                "invalid handshake response".to_string(),
-            ));
+            return Err(Error::Transformer("invalid handshake response".to_string()));
         }
 
         Ok(Self {
@@ -119,7 +118,7 @@ impl SourceTransformer {
                         Ok(()) => continue,
                         Err(e) => {
                             token.cancel();
-                            return Err(Error::TransformerError(e.to_string()));
+                            return Err(Error::Transformer(e.to_string()));
                         }
                     };
                 }
@@ -147,7 +146,7 @@ impl SourceTransformer {
                 }
                 Err(e) => {
                     token.cancel();
-                    return Err(Error::TransformerError(format!(
+                    return Err(Error::Transformer(format!(
                         "gRPC error while receiving messages from source transformer server: {e:?}"
                     )));
                 }
@@ -155,7 +154,7 @@ impl SourceTransformer {
 
             let Some((msg_id, msg_info)) = tracker.remove_entry(&resp.id) else {
                 token.cancel();
-                return Err(Error::TransformerError(format!(
+                return Err(Error::Transformer(format!(
                     "Received message with unknown ID {}",
                     resp.id
                 )));
@@ -179,7 +178,7 @@ impl SourceTransformer {
         }
 
         sender_task.await.unwrap().map_err(|e| {
-            Error::TransformerError(format!(
+            Error::Transformer(format!(
                 "Sending messages to gRPC transformer failed: {e:?}",
             ))
         })?;

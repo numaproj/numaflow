@@ -5,8 +5,8 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
 use chrono::{DateTime, Utc};
 
-use crate::error::Error;
 use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
+use crate::Error;
 use numaflow_grpc::clients::sink::sink_request::Request;
 use numaflow_grpc::clients::sink::Status::{Failure, Fallback, Success};
 use numaflow_grpc::clients::sink::{sink_response, SinkRequest, SinkResponse};
@@ -84,7 +84,7 @@ impl TryFrom<read_response::Result> for Message {
                 offset: BASE64_STANDARD.encode(o.offset),
                 partition_id: o.partition_id,
             },
-            None => return Err(Error::SourceError("Offset not found".to_string())),
+            None => return Err(Error::Source("Offset not found".to_string())),
         };
 
         Ok(Message {
@@ -161,7 +161,7 @@ impl TryFrom<SinkResponse> for ResponseFromSink {
     fn try_from(value: SinkResponse) -> Result<Self, Self::Error> {
         let value = value
             .result
-            .ok_or(Error::SinkError("result is empty".to_string()))?;
+            .ok_or(Error::Sink("result is empty".to_string()))?;
 
         let status = match value.status() {
             Success => ResponseStatusFromSink::Success,

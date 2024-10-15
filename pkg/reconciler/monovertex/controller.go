@@ -72,6 +72,10 @@ func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 	log := mr.logger.With("namespace", monoVtx.Namespace).With("monoVertex", monoVtx.Name)
+	if instance := monoVtx.GetAnnotations()[dfv1.KeyInstance]; instance != mr.config.GetInstance() {
+		log.Debugw("MonoVertex not managed by this controller, skipping", zap.String("instance", instance))
+		return ctrl.Result{}, nil
+	}
 	ctx = logging.WithLogger(ctx, log)
 	monoVtxCopy := monoVtx.DeepCopy()
 	result, err := mr.reconcile(ctx, monoVtxCopy)

@@ -26,7 +26,8 @@ const (
 	Project = "numaflow"
 
 	// label/annotation keys.
-	KeyHash             = "numaflow.numaproj.io/hash" // hash of the object
+	KeyInstance         = "numaflow.numaproj.io/instance" // instance key of the object
+	KeyHash             = "numaflow.numaproj.io/hash"     // hash of the object
 	KeyComponent        = "app.kubernetes.io/component"
 	KeyPartOf           = "app.kubernetes.io/part-of"
 	KeyManagedBy        = "app.kubernetes.io/managed-by"
