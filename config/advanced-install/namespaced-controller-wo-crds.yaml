@@ -136,16 +136,16 @@ metadata:
 ---
 apiVersion: v1
 data:
-  controller-config.yaml: "defaults:\n  containerResources: |\n    requests:\n      memory:
-    \"128Mi\"\n      cpu: \"100m\"\n# Within a cluster, setting \"instance\" can be
-    used to run multiple Numaflow controllers. \n# If configured, the controller will
-    only watch the objects having an annotation with the key \"numaflow.numaproj.io/instance\"
+  controller-config.yaml: "# Within a cluster, setting \"instance\" can be used to
+    run multiple Numaflow controllers. \n# If configured, the controller will only
+    watch the objects having an annotation with the key \"numaflow.numaproj.io/instance\"
     and the corresponding value.\n# If not configured (or empty string), the controller
-    will watch all objects.\ninstance: \"\"\nisbsvc:\n  redis:\n    # Default Redis
-    settings, could be overridden by InterStepBufferService specs\n    settings:\n
-    \     # Redis config shared by both master and replicas\n      redis: |\n        min-replicas-to-write
-    1\n        # Disable RDB persistence, AOF persistence already enabled.\n        save
-    \"\"\n        # Enable AOF https://redis.io/topics/persistence#append-only-file\n
+    will watch all objects.\ninstance: \"\"\ndefaults:\n  containerResources: |\n
+    \   requests:\n      memory: \"128Mi\"\n      cpu: \"100m\"\nisbsvc:\n  redis:\n
+    \   # Default Redis settings, could be overridden by InterStepBufferService specs\n
+    \   settings:\n      # Redis config shared by both master and replicas\n      redis:
+    |\n        min-replicas-to-write 1\n        # Disable RDB persistence, AOF persistence
+    already enabled.\n        save \"\"\n        # Enable AOF https://redis.io/topics/persistence#append-only-file\n
     \       appendonly yes\n        auto-aof-rewrite-percentage 100\n        auto-aof-rewrite-min-size
     64mb\n        maxmemory 512mb\n        maxmemory-policy allkeys-lru\n      # Special
     config only used by master\n      master: \"\"\n      # Special config only used
