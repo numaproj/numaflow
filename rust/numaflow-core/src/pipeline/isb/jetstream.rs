@@ -1,12 +1,12 @@
+use crate::error::Error;
 use crate::message::Message;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+use crate::Result;
 use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::Context;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
-
-use crate::Result;
 
 /// Jetstream Writer is responsible for writing messages to Jetstream ISB.
 /// it exposes both sync and async methods to write messages.
@@ -31,17 +31,31 @@ enum ActorMessage {
 /// It also exposes a method to handle any future failures.
 #[derive(Debug)]
 pub struct PublishResult {
-    pub paf: PublishAckFuture,
+    paf: PublishAckFuture,
     js_writer: JetstreamWriter,
     stream: &'static str,
     message: Message,
 }
 
 impl PublishResult {
-    pub async fn handle_failure(&self) -> Result<PublishAck> {
-        self.js_writer
-            .sync_write(self.stream, self.message.clone())
-            .await
+    async fn handle_failure(
+        js_writer: JetstreamWriter,
+        stream_name: &'static str,
+        message: Message,
+    ) -> Result<PublishAck> {
+        js_writer.sync_write(stream_name, message).await
+    }
+
+    pub async fn get_ack(self) -> Result<PublishAck> {
+        // await on the future first, then return the result
+        // if it fails invoke the handle_failure method
+        match self.paf.await {
+            Ok(ack) => Ok(ack),
+            Err(e) => {
+                log::error!("Failed to write message: {}", e);
+                Self::handle_failure(self.js_writer, self.stream, self.message).await
+            }
+        }
     }
 }
 
@@ -89,7 +103,7 @@ impl WriterActor {
 }
 
 /// WriterHandle is the handle to the WriterActor. It exposes a method to send messages to the Actor.
-pub(super) struct WriterHandle {
+pub(crate) struct WriterHandle {
     sender: mpsc::Sender<ActorMessage>,
 }
 
@@ -108,6 +122,27 @@ impl WriterHandle {
         });
 
         Self { sender }
+    }
+
+    pub(crate) async fn write(
+        &self,
+        stream: &'static str,
+        message: Message,
+    ) -> Result<PublishResult> {
+        let (sender, receiver) = oneshot::channel();
+        let msg = ActorMessage::Write {
+            stream,
+            message,
+            success: sender,
+        };
+        self.sender
+            .send(msg)
+            .await
+            .map_err(|e| Error::ISB(format!("Failed to write message to actor channel: {}", e)))?;
+
+        receiver
+            .await
+            .map_err(|e| Error::ISB(format!("Failed to write message to ISB: {}", e)))?
     }
 }
 
@@ -168,7 +203,7 @@ mod tests {
             assert!(result.is_ok());
 
             let result = result.unwrap();
-            assert!(result.paf.await.is_ok());
+            assert!(result.get_ack().await.is_ok());
         }
         context.delete_stream(stream_name).await.unwrap();
     }

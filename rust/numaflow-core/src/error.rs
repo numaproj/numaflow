@@ -33,6 +33,9 @@ pub enum Error {
 
     #[error("Serde Error - {0}")]
     Serde(String),
+
+    #[error("ISB Error - {0}")]
+    ISB(String),
 }
 
 impl From<tonic::Status> for Error {

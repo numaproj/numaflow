@@ -1,1 +1,1 @@
-mod jetstream;
+pub(crate) mod jetstream;
