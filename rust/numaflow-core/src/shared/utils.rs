@@ -40,7 +40,7 @@ pub(crate) async fn check_compatibility(
             .await
             .map_err(|e| {
                 warn!("Error waiting for source server info file: {:?}", e);
-                Error::ForwarderError("Error waiting for server info file".to_string())
+                Error::Forwarder("Error waiting for server info file".to_string())
             })?;
     }
 
@@ -49,7 +49,7 @@ pub(crate) async fn check_compatibility(
             .await
             .map_err(|e| {
                 error!("Error waiting for sink server info file: {:?}", e);
-                Error::ForwarderError("Error waiting for server info file".to_string())
+                Error::Forwarder("Error waiting for server info file".to_string())
             })?;
     }
 
@@ -58,7 +58,7 @@ pub(crate) async fn check_compatibility(
             .await
             .map_err(|e| {
                 error!("Error waiting for transformer server info file: {:?}", e);
-                Error::ForwarderError("Error waiting for server info file".to_string())
+                Error::Forwarder("Error waiting for server info file".to_string())
             })?;
     }
 
@@ -67,7 +67,7 @@ pub(crate) async fn check_compatibility(
             .await
             .map_err(|e| {
                 warn!("Error waiting for fallback sink server info file: {:?}", e);
-                Error::ForwarderError("Error waiting for server info file".to_string())
+                Error::Forwarder("Error waiting for server info file".to_string())
             })?;
     }
     Ok(())
@@ -108,7 +108,7 @@ pub(crate) async fn wait_until_ready(
 ) -> error::Result<()> {
     loop {
         if cln_token.is_cancelled() {
-            return Err(Error::ForwarderError(
+            return Err(Error::Forwarder(
                 "Cancellation token is cancelled".to_string(),
             ));
         }
@@ -192,7 +192,7 @@ pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> crate::error::Re
 
 pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> Result<Channel, Error> {
     let channel = Endpoint::try_from("http://[::]:50051")
-        .map_err(|e| Error::ConnectionError(format!("Failed to create endpoint: {:?}", e)))?
+        .map_err(|e| Error::Connection(format!("Failed to create endpoint: {:?}", e)))?
         .connect_with_connector(service_fn(move |_: Uri| {
             let uds_socket = uds_path.clone();
             async move {
@@ -202,7 +202,7 @@ pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> Result<Channel, Error
             }
         }))
         .await
-        .map_err(|e| Error::ConnectionError(format!("Failed to connect: {:?}", e)))?;
+        .map_err(|e| Error::Connection(format!("Failed to connect: {:?}", e)))?;
     Ok(channel)
 }
 

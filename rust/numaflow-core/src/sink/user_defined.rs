@@ -33,7 +33,7 @@ impl UserDefinedSink {
         sink_tx
             .send(handshake_request)
             .await
-            .map_err(|e| Error::SinkError(format!("failed to send handshake request: {}", e)))?;
+            .map_err(|e| Error::Sink(format!("failed to send handshake request: {}", e)))?;
 
         let mut resp_stream = client
             .sink_fn(Request::new(sink_stream))
@@ -42,13 +42,13 @@ impl UserDefinedSink {
 
         // First response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let handshake_response = resp_stream.message().await?.ok_or(Error::SinkError(
+        let handshake_response = resp_stream.message().await?.ok_or(Error::Sink(
             "failed to receive handshake response".to_string(),
         ))?;
 
         // Handshake cannot be None during the initial phase and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
-            return Err(Error::SinkError("invalid handshake response".to_string()));
+            return Err(Error::Sink("invalid handshake response".to_string()));
         }
 
         Ok(Self {
@@ -70,7 +70,7 @@ impl Sink for UserDefinedSink {
             self.sink_tx
                 .send(request)
                 .await
-                .map_err(|e| Error::SinkError(format!("failed to send request: {}", e)))?;
+                .map_err(|e| Error::Sink(format!("failed to send request: {}", e)))?;
         }
 
         // send eot request to indicate the end of the stream
@@ -82,7 +82,7 @@ impl Sink for UserDefinedSink {
         self.sink_tx
             .send(eot_request)
             .await
-            .map_err(|e| Error::SinkError(format!("failed to send eot request: {}", e)))?;
+            .map_err(|e| Error::Sink(format!("failed to send eot request: {}", e)))?;
 
         // Now that we have sent, we wait for responses!
         // NOTE: This works now because the results are not streamed. As of today, it will give the
@@ -94,7 +94,7 @@ impl Sink for UserDefinedSink {
                 .resp_stream
                 .message()
                 .await?
-                .ok_or(Error::SinkError("failed to receive response".to_string()))?;
+                .ok_or(Error::Sink("failed to receive response".to_string()))?;
 
             if response.status.map_or(false, |s| s.eot) {
                 if i != num_requests {

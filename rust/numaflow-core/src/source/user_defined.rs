@@ -78,7 +78,7 @@ impl UserDefinedSourceRead {
         read_tx
             .send(handshake_request)
             .await
-            .map_err(|e| Error::SourceError(format!("failed to send handshake request: {}", e)))?;
+            .map_err(|e| Error::Source(format!("failed to send handshake request: {}", e)))?;
 
         let mut resp_stream = client
             .read_fn(Request::new(read_stream))
@@ -87,12 +87,12 @@ impl UserDefinedSourceRead {
 
         // first response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let handshake_response = resp_stream.message().await?.ok_or(Error::SourceError(
+        let handshake_response = resp_stream.message().await?.ok_or(Error::Source(
             "failed to receive handshake response".to_string(),
         ))?;
         // handshake cannot to None during the initial phase and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
-            return Err(Error::SourceError("invalid handshake response".to_string()));
+            return Err(Error::Source("invalid handshake response".to_string()));
         }
 
         Ok((read_tx, resp_stream))
@@ -116,7 +116,7 @@ impl SourceReader for UserDefinedSourceRead {
         self.read_tx
             .send(request)
             .await
-            .map_err(|e| Error::SourceError(e.to_string()))?;
+            .map_err(|e| Error::Source(e.to_string()))?;
 
         let mut messages = Vec::with_capacity(self.num_records);
 
@@ -127,7 +127,7 @@ impl SourceReader for UserDefinedSourceRead {
 
             let result = response
                 .result
-                .ok_or_else(|| Error::SourceError("Empty message".to_string()))?;
+                .ok_or_else(|| Error::Source("Empty message".to_string()))?;
 
             messages.push(result.try_into()?);
         }
@@ -160,22 +160,21 @@ impl UserDefinedSourceAck {
             request: None,
             handshake: Some(source::Handshake { sot: true }),
         };
-        ack_tx.send(ack_handshake_request).await.map_err(|e| {
-            Error::SourceError(format!("failed to send ack handshake request: {}", e))
-        })?;
+        ack_tx
+            .send(ack_handshake_request)
+            .await
+            .map_err(|e| Error::Source(format!("failed to send ack handshake request: {}", e)))?;
 
         let mut ack_resp_stream = client.ack_fn(Request::new(ack_stream)).await?.into_inner();
 
         // first response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let ack_handshake_response = ack_resp_stream.message().await?.ok_or(Error::SourceError(
+        let ack_handshake_response = ack_resp_stream.message().await?.ok_or(Error::Source(
             "failed to receive ack handshake response".to_string(),
         ))?;
         // handshake cannot to None during the initial phase and it has to set `sot` to true.
         if ack_handshake_response.handshake.map_or(true, |h| !h.sot) {
-            return Err(Error::SourceError(
-                "invalid ack handshake response".to_string(),
-            ));
+            return Err(Error::Source("invalid ack handshake response".to_string()));
         }
 
         Ok((ack_tx, ack_resp_stream))
@@ -192,7 +191,7 @@ impl SourceAcker for UserDefinedSourceAck {
             self.ack_tx
                 .send(request)
                 .await
-                .map_err(|e| Error::SourceError(e.to_string()))?;
+                .map_err(|e| Error::Source(e.to_string()))?;
         }
 
         // make sure we get n responses for the n requests.
@@ -201,9 +200,7 @@ impl SourceAcker for UserDefinedSourceAck {
                 .ack_resp_stream
                 .message()
                 .await?
-                .ok_or(Error::SourceError(
-                    "failed to receive ack response".to_string(),
-                ))?;
+                .ok_or(Error::Source("failed to receive ack response".to_string()))?;
         }
 
         Ok(())

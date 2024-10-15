@@ -121,7 +121,7 @@ impl Forwarder {
     async fn read_and_process_messages(&mut self) -> error::Result<usize> {
         let start_time = tokio::time::Instant::now();
         let messages = self.source_reader.read().await.map_err(|e| {
-            Error::ForwarderError(format!("Failed to read messages from source {:?}", e))
+            Error::Forwarder(format!("Failed to read messages from source {:?}", e))
         })?;
 
         debug!(
@@ -162,7 +162,7 @@ impl Forwarder {
 
         // Apply transformation if transformer is present
         let transformed_messages = self.apply_transformer(messages).await.map_err(|e| {
-            Error::ForwarderError(format!(
+            Error::Forwarder(format!(
                 "Failed to apply transformation to messages {:?}",
                 e
             ))
@@ -171,13 +171,11 @@ impl Forwarder {
         // Write the messages to the sink
         self.write_to_sink(transformed_messages)
             .await
-            .map_err(|e| {
-                Error::ForwarderError(format!("Failed to write messages to sink {:?}", e))
-            })?;
+            .map_err(|e| Error::Forwarder(format!("Failed to write messages to sink {:?}", e)))?;
 
         // Acknowledge the messages back to the source
         self.acknowledge_messages(offsets).await.map_err(|e| {
-            Error::ForwarderError(format!(
+            Error::Forwarder(format!(
                 "Failed to acknowledge messages back to source {:?}",
                 e
             ))
@@ -248,7 +246,7 @@ impl Forwarder {
 
                 // if we are shutting down, stop the retry
                 if self.cln_token.is_cancelled() {
-                    return Err(Error::SinkError(
+                    return Err(Error::Sink(
                         "Cancellation token triggered during retry".to_string(),
                     ));
                 }
@@ -405,7 +403,7 @@ impl Forwarder {
     // Writes the fallback messages to the fallback sink
     async fn handle_fallback_messages(&mut self, fallback_msgs: Vec<Message>) -> error::Result<()> {
         if self.fb_sink_writer.is_none() {
-            return Err(Error::SinkError(
+            return Err(Error::Sink(
                 "Response contains fallback messages but no fallback sink is configured"
                     .to_string(),
             ));
@@ -469,7 +467,7 @@ impl Forwarder {
 
                     // specifying fallback status in fallback response is not allowed
                     if contains_fallback_status {
-                        return Err(Error::SinkError(
+                        return Err(Error::Sink(
                             "Fallback response contains fallback status".to_string(),
                         ));
                     }
@@ -490,7 +488,7 @@ impl Forwarder {
             }
         }
         if !messages_to_send.is_empty() {
-            return Err(Error::SinkError(format!(
+            return Err(Error::Sink(format!(
                 "Failed to write messages to fallback sink after {} attempts. Errors: {:?}",
                 attempts, fallback_error_map
             )));

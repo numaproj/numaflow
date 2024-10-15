@@ -275,18 +275,18 @@ pub(crate) async fn start_metrics_https_server(
 
     // Generate a self-signed certificate
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
-        .map_err(|e| Error::MetricsError(format!("Generating self-signed certificate: {}", e)))?;
+        .map_err(|e| Error::Metrics(format!("Generating self-signed certificate: {}", e)))?;
 
     let tls_config = RustlsConfig::from_pem(cert.pem().into(), key_pair.serialize_pem().into())
         .await
-        .map_err(|e| Error::MetricsError(format!("Creating tlsConfig from pem: {}", e)))?;
+        .map_err(|e| Error::Metrics(format!("Creating tlsConfig from pem: {}", e)))?;
 
     let metrics_app = metrics_router(metrics_state);
 
     axum_server::bind_rustls(addr, tls_config)
         .serve(metrics_app.into_make_service())
         .await
-        .map_err(|e| Error::MetricsError(format!("Starting web server for metrics: {}", e)))?;
+        .map_err(|e| Error::Metrics(format!("Starting web server for metrics: {}", e)))?;
 
     Ok(())
 }
