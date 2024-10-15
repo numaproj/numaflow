@@ -36,6 +36,7 @@ type GlobalConfig struct {
 }
 
 type config struct {
+	Instance string         `json:"instance"`
 	Defaults *DefaultConfig `json:"defaults"`
 	ISBSvc   *ISBSvcConfig  `json:"isbsvc"`
 }
@@ -81,6 +82,12 @@ type JetStreamVersion struct {
 	MetricsExporterImage string `json:"metricsExporterImage"`
 	ConfigReloaderImage  string `json:"configReloaderImage"`
 	StartCommand         string `json:"startCommand"`
+}
+
+func (g *GlobalConfig) GetInstance() string {
+	g.lock.RLock()
+	defer g.lock.RUnlock()
+	return g.conf.Instance
 }
 
 // Get controller scope default config

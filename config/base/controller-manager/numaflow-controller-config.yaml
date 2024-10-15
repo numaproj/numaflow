@@ -4,6 +4,10 @@ metadata:
   name: numaflow-controller-config
 data:
   controller-config.yaml: |+
+    # Within a cluster, setting "instance" can be used to run N Numaflow controllers. 
+    # If configured, the controller will only watch the objects having an annotation with the key "numaflow.numaproj.io/instance" and the corresponding value.
+    # If not configured (or empty string), the controller will watch all objects.
+    instance: ""
     defaults:
       containerResources: |
         requests:
