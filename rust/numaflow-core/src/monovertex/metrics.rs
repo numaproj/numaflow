@@ -17,7 +17,7 @@ use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
 use prometheus_client::registry::Registry;
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
+use tokio::task::AbortHandle;
 use tokio::time;
 use tonic::transport::Channel;
 use tonic::Request;
@@ -349,11 +349,7 @@ pub(crate) struct PendingReader {
     lag_checking_interval: Duration,
     refresh_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
-}
-
-pub(crate) struct PendingReaderTasks {
-    buildup_handle: JoinHandle<()>,
-    expose_handle: JoinHandle<()>,
+    task_abort_handles: Vec<AbortHandle>,
 }
 
 /// PendingReaderBuilder is used to build a [LagReader] instance.
@@ -392,6 +388,7 @@ impl PendingReaderBuilder {
                 .refresh_interval
                 .unwrap_or_else(|| Duration::from_secs(5)),
             pending_stats: Arc::new(Mutex::new(Vec::with_capacity(MAX_PENDING_STATS))),
+            task_abort_handles: vec![],
         }
     }
 }
@@ -404,7 +401,7 @@ impl PendingReader {
     /// - Another to periodically expose the pending metrics.
     ///
     /// Dropping the PendingReaderTasks will abort the background tasks.
-    pub async fn start(&self) -> PendingReaderTasks {
+    pub async fn start(&mut self) {
         let pending_reader = self.lag_reader.clone();
         let lag_checking_interval = self.lag_checking_interval;
         let refresh_interval = self.refresh_interval;
@@ -418,19 +415,15 @@ impl PendingReader {
         let expose_handle = tokio::spawn(async move {
             expose_pending_metrics(refresh_interval, pending_stats).await;
         });
-        PendingReaderTasks {
-            buildup_handle,
-            expose_handle,
-        }
+        self.task_abort_handles.push(buildup_handle.abort_handle());
+        self.task_abort_handles.push(expose_handle.abort_handle());
     }
-}
 
-/// When the PendingReaderTasks is dropped, we need to clean up the pending exposer and the pending builder tasks.
-impl Drop for PendingReaderTasks {
-    fn drop(&mut self) {
-        self.expose_handle.abort();
-        self.buildup_handle.abort();
-        info!("Stopped the Lag-Reader Expose and Builder tasks");
+    // Sends abort signal to the background tasks.
+    pub fn abort(&self) {
+        for handle in &self.task_abort_handles {
+            handle.abort();
+        }
     }
 }
 

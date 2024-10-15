@@ -265,8 +265,8 @@ async fn start_forwarder_with_source(
     cln_token: CancellationToken,
 ) -> error::Result<()> {
     // start the pending reader to publish pending metrics
-    let pending_reader = utils::create_pending_reader(source.clone()).await;
-    let _pending_reader_handle = pending_reader.start().await;
+    let mut pending_reader = utils::create_pending_reader(source.clone()).await;
+    pending_reader.start().await;
 
     let mut forwarder_builder = ForwarderBuilder::new(source, sink, cln_token);
 
@@ -285,6 +285,7 @@ async fn start_forwarder_with_source(
 
     // start the forwarder, it will return only on Signal
     forwarder.start().await?;
+    pending_reader.abort();
 
     info!("Forwarder stopped gracefully");
     Ok(())
@@ -416,7 +417,6 @@ mod tests {
         };
 
         let result = start_forwarder(cln_token.clone(), &config).await;
-        dbg!(&result);
         assert!(result.is_ok());
 
         // stop the source and sink servers
