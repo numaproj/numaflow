@@ -1802,6 +1802,13 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#multiple-controllers" class="md-nav__link">
+    Multiple Controllers
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2332,6 +2339,13 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#multiple-controllers" class="md-nav__link">
+    Multiple Controllers
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2449,6 +2463,27 @@ kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> <
 <span class="w">  </span><span class="nt">controller.leader.election.disabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
 </code></pre></div>
 <p>If HA is turned off, the controller deployment should not run with multiple replicas.</p>
+<h2 id="multiple-controllers">Multiple Controllers<a class="headerlink" href="#multiple-controllers" title="Permanent link">&para;</a></h2>
+<p>With in one cluster, or even in one namespace, you can run multiple Numaflow controllers by leveraging the <code>instance</code> configuration in the <code>numaflow-controller-config</code> ConfigMap.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-controller-config</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">controller-config.yaml</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<span class="w">    </span><span class="no"># Within a cluster, setting &quot;instance&quot; can be used to run N Numaflow controllers. </span>
+<span class="w">    </span><span class="no"># If configured, the controller will only watch the objects having an annotation with the key &quot;numaflow.numaproj.io/instance&quot; and the corresponding value.</span>
+<span class="w">    </span><span class="no"># If not configured (or empty string), the controller will watch all objects.</span>
+<span class="w">    </span><span class="no">instance: &quot;&quot;</span>
+<span class="w">    </span><span class="no">defaults:</span>
+<span class="w">      </span><span class="no">containerResources: |</span>
+<span class="w">        </span><span class="no">requests:</span>
+<span class="w">          </span><span class="no">memory: &quot;128Mi&quot;</span>
+<span class="w">          </span><span class="no">cpu: &quot;100m&quot;</span>
+<span class="w">    </span><span class="no">isbsvc: </span>
+<span class="w">      </span><span class="no">...</span>
+</code></pre></div>
+<p>When <code>instance</code> is configured (e.g. <code>my-instance</code>), the controller will only watch the objects (<code>InterStepBufferService</code>, <code>Pipeline</code> and <code>MonoVertex</code>) having the annotation <code>numaflow.numaproj.io/instance: my-instance</code>. Correspondingly, if a <code>Pipeline</code> object has an annotation <code>numaflow.numaproj.io/instance: my-instance</code>, it requires the referenced <code>InterStepBufferService</code> also has the same annotation, or it will fail to orchestrate the pipeline.</p>
 
               
             </article>
