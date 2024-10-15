@@ -30,7 +30,7 @@ enum ActorMessage {
 /// It contains the PublishAckFuture which can be awaited to get the PublishAck.
 /// It also exposes a method to handle any future failures.
 #[derive(Debug)]
-struct PublishResult {
+pub(super) struct PublishResult {
     paf: PublishAckFuture,
     stream: &'static str,
     message: Message,
@@ -45,8 +45,12 @@ struct WriterActor {
 }
 
 impl WriterActor {
-    fn new(js_writer: JetstreamWriter, receiver: Receiver<ActorMessage>) -> Self {
-        let (paf_resolver_tx, paf_resolver_rx) = mpsc::channel::<PublishResult>(500);
+    fn new(
+        js_writer: JetstreamWriter,
+        receiver: Receiver<ActorMessage>,
+        batch_size: usize,
+    ) -> Self {
+        let (paf_resolver_tx, paf_resolver_rx) = mpsc::channel::<PublishResult>(batch_size);
 
         let mut resolver_actor = PafResolverActor::new(js_writer.clone(), paf_resolver_rx);
 
@@ -100,7 +104,7 @@ impl WriterActor {
     }
 }
 
-struct PafResolverActor {
+pub(super) struct PafResolverActor {
     js_writer: JetstreamWriter,
     receiver: Receiver<PublishResult>,
 }
@@ -112,14 +116,14 @@ impl PafResolverActor {
             receiver,
         }
     }
-    async fn handle_result(&mut self, result: PublishResult) {
+    pub(super) async fn handle_result(&mut self, result: PublishResult) {
         match result.paf.await {
             Ok(ack) => result.callee_tx.send(Ok(())).unwrap(),
             Err(e) => {
                 error!("Failed to resolve the future, trying sync write");
                 match self
                     .js_writer
-                    .sync_write(result.stream.clone(), result.message.clone())
+                    .sync_write(result.stream, result.message.clone())
                     .await
                 {
                     Ok(_) => result.callee_tx.send(Ok(())).unwrap(),
@@ -129,7 +133,7 @@ impl PafResolverActor {
         }
     }
 
-    async fn run(&mut self) {
+    pub(super) async fn run(&mut self) {
         while let Some(result) = self.receiver.recv().await {
             self.handle_result(result).await;
         }
@@ -146,7 +150,7 @@ impl WriterHandle {
         let (sender, receiver) = mpsc::channel::<ActorMessage>(batch_size);
 
         let js_writer = JetstreamWriter::new(js_ctx);
-        let mut actor = WriterActor::new(js_writer.clone(), receiver);
+        let mut actor = WriterActor::new(js_writer.clone(), receiver, batch_size);
 
         tokio::spawn(async move {
             actor.run().await;
