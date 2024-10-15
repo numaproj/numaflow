@@ -1,11 +1,13 @@
-use crate::error::Error;
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
-use bytes::Bytes;
-use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
 use std::env;
 use std::fmt::Display;
 use std::sync::OnceLock;
+
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use bytes::Bytes;
+
+use crate::Error;
+use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
 
 const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
 const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
@@ -216,13 +218,11 @@ impl Settings {
             let mono_vertex_spec = BASE64_STANDARD
                 .decode(mono_vertex_spec.as_bytes())
                 .map_err(|e| {
-                    Error::ConfigError(format!("Failed to decode mono vertex spec: {:?}", e))
+                    Error::Config(format!("Failed to decode mono vertex spec: {:?}", e))
                 })?;
 
-            let mono_vertex_obj: MonoVertex =
-                serde_json::from_slice(&mono_vertex_spec).map_err(|e| {
-                    Error::ConfigError(format!("Failed to parse mono vertex spec: {:?}", e))
-                })?;
+            let mono_vertex_obj: MonoVertex = serde_json::from_slice(&mono_vertex_spec)
+                .map_err(|e| Error::Config(format!("Failed to parse mono vertex spec: {:?}", e)))?;
 
             settings.batch_size = mono_vertex_obj
                 .spec
@@ -245,13 +245,13 @@ impl Settings {
             settings.mono_vertex_name = mono_vertex_obj
                 .metadata
                 .and_then(|metadata| metadata.name)
-                .ok_or_else(|| Error::ConfigError("Mono vertex name not found".to_string()))?;
+                .ok_or_else(|| Error::Config("Mono vertex name not found".to_string()))?;
 
             settings.transformer_config = match mono_vertex_obj
                 .spec
                 .source
                 .as_deref()
-                .ok_or(Error::ConfigError("Source not found".to_string()))?
+                .ok_or(Error::Config("Source not found".to_string()))?
                 .transformer
             {
                 Some(_) => Some(TransformerConfig::default()),
@@ -262,7 +262,7 @@ impl Settings {
                 .spec
                 .source
                 .as_deref()
-                .ok_or(Error::ConfigError("Source not found".to_string()))?
+                .ok_or(Error::Config("Source not found".to_string()))?
                 .udsource
             {
                 Some(_) => Some(UDSourceConfig::default()),
@@ -273,7 +273,7 @@ impl Settings {
                 .spec
                 .sink
                 .as_deref()
-                .ok_or(Error::ConfigError("Sink not found".to_string()))?
+                .ok_or(Error::Config("Sink not found".to_string()))?
                 .udsink
             {
                 Some(_) => Some(UDSinkConfig::default()),
@@ -284,7 +284,7 @@ impl Settings {
                 .spec
                 .sink
                 .as_deref()
-                .ok_or(Error::ConfigError("Sink not found".to_string()))?
+                .ok_or(Error::Config("Sink not found".to_string()))?
                 .fallback
             {
                 Some(_) => Some(UDSinkConfig::fallback_default()),
@@ -295,7 +295,7 @@ impl Settings {
                 .spec
                 .source
                 .as_deref()
-                .ok_or(Error::ConfigError("Source not found".to_string()))?
+                .ok_or(Error::Config("Source not found".to_string()))?
                 .generator
                 .as_deref()
             {
@@ -341,7 +341,7 @@ impl Settings {
 
                     // We do not allow 0 attempts to write to sink
                     if settings.sink_max_retry_attempts == 0 {
-                        return Err(Error::ConfigError(
+                        return Err(Error::Config(
                             "Retry Strategy given with 0 retry attempts".to_string(),
                         ));
                     }
@@ -359,7 +359,7 @@ impl Settings {
                 if settings.sink_retry_on_fail_strategy == OnFailureStrategy::Fallback
                     && settings.fallback_config.is_none()
                 {
-                    return Err(Error::ConfigError(
+                    return Err(Error::Config(
                         "Retry Strategy given as fallback but Fallback sink not configured"
                             .to_string(),
                     ));
@@ -370,7 +370,7 @@ impl Settings {
         settings.replica = env::var(ENV_POD_REPLICA)
             .unwrap_or_else(|_| "0".to_string())
             .parse()
-            .map_err(|e| Error::ConfigError(format!("Failed to parse pod replica: {:?}", e)))?;
+            .map_err(|e| Error::Config(format!("Failed to parse pod replica: {:?}", e)))?;
 
         Ok(settings)
     }
