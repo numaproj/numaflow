@@ -72,6 +72,10 @@ func (r *vertexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 	log := r.logger.With("namespace", vertex.Namespace).With("vertex", vertex.Name).With("pipeline", vertex.Spec.PipelineName)
 	ctx = logging.WithLogger(ctx, log)
+	if instance := vertex.GetAnnotations()[dfv1.KeyInstance]; instance != r.config.GetInstance() {
+		log.Debugw("Vertex not managed by this controller, skipping", zap.String("instance", instance))
+		return ctrl.Result{}, nil
+	}
 	vertexCopy := vertex.DeepCopy()
 	result, err := r.reconcile(ctx, vertexCopy)
 	if err != nil {
@@ -116,6 +120,10 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		log.Errorw("Failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
 		vertex.Status.MarkPhaseFailed("FindISBSvcFailed", err.Error())
 		return ctrl.Result{}, err
+	}
+	if isbSvc.GetAnnotations()[dfv1.KeyInstance] != vertex.GetAnnotations()[dfv1.KeyInstance] {
+		log.Errorw("ISB Service is found but not managed by the same controller of this vertex", zap.String("isbsvc", isbSvcName), zap.Error(err))
+		return ctrl.Result{}, fmt.Errorf("isbsvc not managed by the same controller of this vertex")
 	}
 	if !isbSvc.Status.IsHealthy() {
 		log.Errorw("ISB Service is not in healthy status", zap.String("isbsvc", isbSvcName), zap.Error(err))
