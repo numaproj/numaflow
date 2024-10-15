@@ -82,6 +82,10 @@ func (v *pipelineValidator) checkISBSVCExists(ctx context.Context, isbSvcName st
 	if err != nil {
 		return err
 	}
+	// Check if they have the same instance annotation
+	if v.newPipeline.GetAnnotations()[dfv1.KeyInstance] != isb.GetAnnotations()[dfv1.KeyInstance] {
+		return fmt.Errorf("ISB service %q does not have the same annotation %q as the pipeline", isbSvcName, dfv1.KeyInstance)
+	}
 	if !isb.Status.IsHealthy() {
 		return fmt.Errorf("ISB service %q is not healthy", isbSvcName)
 	}
@@ -94,7 +98,11 @@ func validatePipelineUpdate(old, new *dfv1.Pipeline) error {
 	if new.Spec.InterStepBufferServiceName != old.Spec.InterStepBufferServiceName {
 		return fmt.Errorf("cannot update pipeline with different ISB service name")
 	}
-	// rule 2: if a vertex is updated, the update must be valid
+	// rule 2: the instance annotation shall not change
+	if new.GetAnnotations()[dfv1.KeyInstance] != old.GetAnnotations()[dfv1.KeyInstance] {
+		return fmt.Errorf("cannot update pipeline with different annotation %q", dfv1.KeyInstance)
+	}
+	// rule 3: if a vertex is updated, the update must be valid
 	// we consider that a vertex is updated if its name is the same but its spec is different
 	nameMap := make(map[string]dfv1.AbstractVertex)
 	for _, v := range old.Spec.Vertices {
