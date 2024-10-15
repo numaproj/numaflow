@@ -28,7 +28,6 @@ func NewControllerCommand() *cobra.Command {
 	var (
 		namespaced       bool
 		managedNamespace string
-		instance         string
 	)
 
 	command := &cobra.Command{
@@ -40,6 +39,5 @@ func NewControllerCommand() *cobra.Command {
 	}
 	command.Flags().BoolVar(&namespaced, "namespaced", sharedutil.LookupEnvBoolOr("NUMAFLOW_CONTROLLER_NAMESPACED", false), "Whether to run in namespaced scope, defaults to false.")
 	command.Flags().StringVar(&managedNamespace, "managed-namespace", sharedutil.LookupEnvStringOr("NUMAFLOW_CONTROLLER_MANAGED_NAMESPACE", sharedutil.LookupEnvStringOr("NAMESPACE", "numaflow-system")), "The namespace that the controller watches when \"--namespaced\" is \"true\".")
-	command.Flags().StringVar(&instance, "instance", sharedutil.LookupEnvStringOr("NUMAFLOW_CONTROLLER_INSTANCE", ""), "The annotation value of 'numaflow.numaproj.io/instance' of the controller watched objects.")
 	return command
 }
