@@ -37,3 +37,8 @@ mod transformer;
 
 /// Reads from a stream.
 mod reader;
+
+/// [Pipeline]
+///
+/// [Pipeline]: https://numaflow.numaproj.io/core-concepts/pipeline/
+mod pipeline;
