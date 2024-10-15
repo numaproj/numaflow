@@ -67,6 +67,15 @@ type InterStepBufferService struct {
 	Status InterStepBufferServiceStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
+func (isbs InterStepBufferService) GetType() ISBSvcType {
+	if isbs.Spec.Redis != nil {
+		return ISBSvcTypeRedis
+	} else if isbs.Spec.JetStream != nil {
+		return ISBSvcTypeJetStream
+	}
+	return ISBSvcTypeUnknown
+}
+
 // InterStepBufferServiceList is the list of InterStepBufferService resources
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type InterStepBufferServiceList struct {
