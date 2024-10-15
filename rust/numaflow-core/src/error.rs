@@ -28,8 +28,11 @@ pub enum Error {
     #[error("Config Error - {0}")]
     Config(String),
 
-    #[error("ServerInfoError Error - {0}")]
+    #[error("ServerInfo Error - {0}")]
     ServerInfo(String),
+
+    #[error("Serde Error - {0}")]
+    Serde(String),
 }
 
 impl From<tonic::Status> for Error {

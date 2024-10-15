@@ -1,20 +1,21 @@
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 
+use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
+use crate::Error;
+use crate::Result;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
 use chrono::{DateTime, Utc};
-
-use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
-use crate::Error;
 use numaflow_grpc::clients::sink::sink_request::Request;
 use numaflow_grpc::clients::sink::Status::{Failure, Fallback, Success};
 use numaflow_grpc::clients::sink::{sink_response, SinkRequest, SinkResponse};
 use numaflow_grpc::clients::source::{read_response, AckRequest};
 use numaflow_grpc::clients::sourcetransformer::SourceTransformRequest;
+use serde::{Deserialize, Serialize};
 
 /// A message that is sent from the source to the sink.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Message {
     /// keys of the message
     pub(crate) keys: Vec<String>,
@@ -31,7 +32,7 @@ pub(crate) struct Message {
 }
 
 /// Offset of the message which will be used to acknowledge the message.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Offset {
     /// unique identifier of the message
     pub(crate) offset: String,
@@ -52,6 +53,16 @@ impl From<Offset> for AckRequest {
             }),
             handshake: None,
         }
+    }
+}
+
+impl Message {
+    pub(crate) fn to_bytes(&self) -> Result<Vec<u8>> {
+        bincode::serialize(self).map_err(|e| Error::Serde(e.to_string()))
+    }
+
+    pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        bincode::deserialize(bytes).map_err(|e| Error::Serde(e.to_string()))
     }
 }
 
@@ -76,9 +87,9 @@ impl From<Message> for SourceTransformRequest {
 
 /// Convert [`read_response::Result`] to [`Message`]
 impl TryFrom<read_response::Result> for Message {
-    type Error = crate::Error;
+    type Error = Error;
 
-    fn try_from(result: read_response::Result) -> Result<Self, Self::Error> {
+    fn try_from(result: read_response::Result) -> Result<Self> {
         let source_offset = match result.offset {
             Some(o) => Offset {
                 offset: BASE64_STANDARD.encode(o.offset),
@@ -156,9 +167,9 @@ impl From<ResponseFromSink> for SinkResponse {
 }
 
 impl TryFrom<SinkResponse> for ResponseFromSink {
-    type Error = crate::Error;
+    type Error = Error;
 
-    fn try_from(value: SinkResponse) -> Result<Self, Self::Error> {
+    fn try_from(value: SinkResponse) -> Result<Self> {
         let value = value
             .result
             .ok_or(Error::Sink("result is empty".to_string()))?;
