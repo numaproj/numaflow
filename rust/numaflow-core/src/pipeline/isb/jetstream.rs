@@ -3,8 +3,8 @@ use crate::message::Message;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::Result;
 use async_nats::jetstream::context::PublishAckFuture;
-use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::Context;
+use log::error;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 
@@ -20,7 +20,7 @@ enum ActorMessage {
         message: Message,
         /// once the message has been successfully written, we can let the sender know.
         /// This can be used to trigger Acknowledgement of the message from the Reader.
-        success: oneshot::Sender<Result<PublishResult>>,
+        success: oneshot::Sender<Result<()>>,
     },
     /// Stop the writer. Once Stop is send, we can drop the rx.
     Stop,
@@ -30,46 +30,34 @@ enum ActorMessage {
 /// It contains the PublishAckFuture which can be awaited to get the PublishAck.
 /// It also exposes a method to handle any future failures.
 #[derive(Debug)]
-pub struct PublishResult {
+struct PublishResult {
     paf: PublishAckFuture,
-    js_writer: JetstreamWriter,
     stream: &'static str,
     message: Message,
-}
-
-impl PublishResult {
-    async fn handle_failure(
-        js_writer: JetstreamWriter,
-        stream_name: &'static str,
-        message: Message,
-    ) -> Result<PublishAck> {
-        js_writer.sync_write(stream_name, message).await
-    }
-
-    pub async fn get_ack(self) -> Result<PublishAck> {
-        // await on the future first, then return the result
-        // if it fails invoke the handle_failure method
-        match self.paf.await {
-            Ok(ack) => Ok(ack),
-            Err(e) => {
-                log::error!("Failed to write message: {}", e);
-                Self::handle_failure(self.js_writer, self.stream, self.message).await
-            }
-        }
-    }
+    callee_tx: oneshot::Sender<Result<()>>,
 }
 
 /// WriterActor will handle the messages and write them to the Jetstream ISB.
 struct WriterActor {
     js_writer: JetstreamWriter,
     receiver: Receiver<ActorMessage>,
+    paf_resolver_tx: mpsc::Sender<PublishResult>,
 }
 
 impl WriterActor {
     fn new(js_writer: JetstreamWriter, receiver: Receiver<ActorMessage>) -> Self {
+        let (paf_resolver_tx, paf_resolver_rx) = mpsc::channel::<PublishResult>(500);
+
+        let mut resolver_actor = PafResolverActor::new(js_writer.clone(), paf_resolver_rx);
+
+        tokio::spawn(async move {
+            resolver_actor.run().await;
+        });
+
         Self {
             js_writer,
             receiver,
+            paf_resolver_tx,
         }
     }
 
@@ -83,21 +71,67 @@ impl WriterActor {
                 Ok(paf) => {
                     let result = PublishResult {
                         paf,
-                        js_writer: self.js_writer.clone(),
                         stream,
                         message,
+                        callee_tx: success,
                     };
-                    success.send(Ok(result)).expect("send should not fail");
+                    self.paf_resolver_tx
+                        .send(result)
+                        .await
+                        .expect("send should not fail");
                 }
                 Err(e) => {
                     log::error!("Failed to write message: {}", e);
-                    success.send(Err(e)).expect("send should not fail");
+                    success
+                        .send(Err(Error::ISB(format!("Failed to write message: {}", e))))
+                        .expect("send should not fail");
                 }
             },
-            // TODO: do we really need stop?
             ActorMessage::Stop => {
                 // Handle stop logic if necessary
             }
+        }
+    }
+
+    async fn run(&mut self) {
+        while let Some(msg) = self.receiver.recv().await {
+            self.handle_message(msg).await;
+        }
+    }
+}
+
+struct PafResolverActor {
+    js_writer: JetstreamWriter,
+    receiver: Receiver<PublishResult>,
+}
+
+impl PafResolverActor {
+    fn new(js_writer: JetstreamWriter, receiver: Receiver<PublishResult>) -> Self {
+        PafResolverActor {
+            js_writer,
+            receiver,
+        }
+    }
+    async fn handle_result(&mut self, result: PublishResult) {
+        match result.paf.await {
+            Ok(ack) => result.callee_tx.send(Ok(())).unwrap(),
+            Err(e) => {
+                error!("Failed to resolve the future, trying sync write");
+                match self
+                    .js_writer
+                    .sync_write(result.stream.clone(), result.message.clone())
+                    .await
+                {
+                    Ok(_) => result.callee_tx.send(Ok(())).unwrap(),
+                    Err(e) => result.callee_tx.send(Err(e)).unwrap(),
+                }
+            }
+        }
+    }
+
+    async fn run(&mut self) {
+        while let Some(result) = self.receiver.recv().await {
+            self.handle_result(result).await;
         }
     }
 }
@@ -112,13 +146,10 @@ impl WriterHandle {
         let (sender, receiver) = mpsc::channel::<ActorMessage>(batch_size);
 
         let js_writer = JetstreamWriter::new(js_ctx);
-
-        let mut actor = WriterActor::new(js_writer, receiver);
+        let mut actor = WriterActor::new(js_writer.clone(), receiver);
 
         tokio::spawn(async move {
-            while let Some(msg) = actor.receiver.recv().await {
-                actor.handle_message(msg).await;
-            }
+            actor.run().await;
         });
 
         Self { sender }
@@ -128,7 +159,7 @@ impl WriterHandle {
         &self,
         stream: &'static str,
         message: Message,
-    ) -> Result<PublishResult> {
+    ) -> Result<oneshot::Receiver<Result<()>>> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Write {
             stream,
@@ -140,9 +171,7 @@ impl WriterHandle {
             .await
             .map_err(|e| Error::ISB(format!("Failed to write message to actor channel: {}", e)))?;
 
-        receiver
-            .await
-            .map_err(|e| Error::ISB(format!("Failed to write message to ISB: {}", e)))?
+        Ok(receiver)
     }
 }
 
@@ -203,7 +232,6 @@ mod tests {
             assert!(result.is_ok());
 
             let result = result.unwrap();
-            assert!(result.get_ack().await.is_ok());
         }
         context.delete_stream(stream_name).await.unwrap();
     }

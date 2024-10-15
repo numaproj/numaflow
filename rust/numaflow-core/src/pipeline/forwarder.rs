@@ -137,7 +137,7 @@ impl Forwarder {
         // await for all the result futures to complete
         for result in results {
             // we can use the ack to publish watermark etc
-            let ack = result.get_ack().await?;
+            let ack = result.await.unwrap();
         }
         Ok(())
     }
