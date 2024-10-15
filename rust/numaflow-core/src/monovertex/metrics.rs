@@ -28,8 +28,8 @@ use numaflow_grpc::clients::source::source_client::SourceClient;
 use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 
 use crate::config::config;
-use crate::error::Error;
 use crate::source::SourceHandle;
+use crate::Error;
 
 // Define the labels for the metrics
 // Note: Please keep consistent with the definitions in MonoVertex daemon

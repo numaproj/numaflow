@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use crate::config::{config, OnFailureStrategy};
 use crate::error;
-use crate::error::Error;
 use crate::message::{Message, Offset, ResponseStatusFromSink};
 use crate::monovertex::metrics;
 use crate::monovertex::metrics::forward_metrics;
 use crate::sink::SinkHandle;
+use crate::Error;
 use crate::{source::SourceHandle, transformer::user_defined::SourceTransformHandle};
 
 use chrono::Utc;

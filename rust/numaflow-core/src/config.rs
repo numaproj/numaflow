@@ -1,11 +1,13 @@
-use crate::error::Error;
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
-use bytes::Bytes;
-use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
 use std::env;
 use std::fmt::Display;
 use std::sync::OnceLock;
+
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use bytes::Bytes;
+
+use crate::Error;
+use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
 
 const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
 const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";

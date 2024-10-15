@@ -5,8 +5,8 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
 use chrono::{DateTime, Utc};
 
-use crate::error::Error;
 use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
+use crate::Error;
 use numaflow_grpc::clients::sink::sink_request::Request;
 use numaflow_grpc::clients::sink::Status::{Failure, Fallback, Success};
 use numaflow_grpc::clients::sink::{sink_response, SinkRequest, SinkResponse};

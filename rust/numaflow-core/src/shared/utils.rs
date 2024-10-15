@@ -2,18 +2,6 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::config::config;
-use crate::error;
-use crate::error::Error;
-use crate::monovertex::metrics::{
-    start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
-};
-use crate::shared::server_info;
-use crate::source::SourceHandle;
-use numaflow_grpc::clients::sink::sink_client::SinkClient;
-use numaflow_grpc::clients::source::source_client::SourceClient;
-use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-
 use axum::http::Uri;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
@@ -27,6 +15,18 @@ use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tower::service_fn;
 use tracing::{info, warn};
+
+use crate::config::config;
+use crate::error;
+use crate::monovertex::metrics::{
+    start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
+};
+use crate::shared::server_info;
+use crate::source::SourceHandle;
+use crate::Error;
+use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use numaflow_grpc::clients::source::source_client::SourceClient;
+use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 
 pub(crate) async fn check_compatibility(
     cln_token: &CancellationToken,

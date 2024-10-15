@@ -7,9 +7,9 @@ use numaflow_grpc::clients::sink::sink_client::SinkClient;
 use numaflow_grpc::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 
 use crate::error;
-use crate::error::Error;
 use crate::message::{Message, ResponseFromSink};
 use crate::sink::Sink;
+use crate::Error;
 
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
 
