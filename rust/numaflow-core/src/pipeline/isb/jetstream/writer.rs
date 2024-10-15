@@ -6,6 +6,7 @@ use async_nats::jetstream::Context;
 use bytes::Bytes;
 use std::time::Duration;
 use tokio::time::sleep;
+use tracing::error;
 
 #[derive(Clone, Debug)]
 /// Writes to JetStream ISB. Exposes both sync and async methods to write messages.
@@ -28,24 +29,16 @@ impl JetstreamWriter {
         msg: Message,
     ) -> Result<PublishAckFuture> {
         let js_ctx = self.js_ctx.clone();
-        let payload = msg.clone();
-
+        let payload = Bytes::from(
+            msg.to_bytes()
+                .expect("message serialization should not fail"),
+        );
         // TODO: expose a way to exit the retry loop during shutdown
         loop {
-            match js_ctx
-                .publish(
-                    stream,
-                    Bytes::from(
-                        payload
-                            .to_bytes()
-                            .expect("message serialization should not fail"),
-                    ),
-                )
-                .await
-            {
+            match js_ctx.publish(stream, payload.clone()).await {
                 Ok(paf) => return Ok(paf),
                 Err(e) => {
-                    log::error!("publishing failed, retrying: {}", e);
+                    error!("publishing failed, retrying: {}", e);
                     sleep(Duration::from_millis(10)).await;
                 }
             }
@@ -61,30 +54,23 @@ impl JetstreamWriter {
         msg: Message,
     ) -> Result<PublishAck> {
         let js_ctx = self.js_ctx.clone();
-        let payload = msg.clone();
+        let payload = Bytes::from(
+            msg.to_bytes()
+                .expect("message serialization should not fail"),
+        );
 
         // TODO: expose a way to exit the retry loop during shutdown
         loop {
-            match js_ctx
-                .publish(
-                    stream,
-                    Bytes::from(
-                        payload
-                            .to_bytes()
-                            .expect("message serialization should not fail"),
-                    ),
-                )
-                .await
-            {
+            match js_ctx.publish(stream, payload.clone()).await {
                 Ok(paf) => match paf.await {
                     Ok(ack) => return Ok(ack),
                     Err(e) => {
-                        log::error!("awaiting publish ack failed, retrying: {}", e);
+                        error!("awaiting publish ack failed, retrying: {}", e);
                         sleep(Duration::from_millis(10)).await;
                     }
                 },
                 Err(e) => {
-                    log::error!("publishing failed, retrying: {}", e);
+                    error!("publishing failed, retrying: {}", e);
                     sleep(Duration::from_millis(10)).await;
                 }
             }

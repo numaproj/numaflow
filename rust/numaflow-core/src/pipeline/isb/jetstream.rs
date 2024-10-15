@@ -7,6 +7,7 @@ use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::Context;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
+use tracing::error;
 
 /// Jetstream Writer is responsible for writing messages to Jetstream ISB.
 /// it exposes both sync and async methods to write messages.
@@ -46,13 +47,13 @@ impl PublishResult {
         js_writer.sync_write(stream_name, message).await
     }
 
-    pub async fn get_ack(self) -> Result<PublishAck> {
+    pub(crate) async fn get_ack(self) -> Result<PublishAck> {
         // await on the future first, then return the result
         // if it fails invoke the handle_failure method
         match self.paf.await {
             Ok(ack) => Ok(ack),
             Err(e) => {
-                log::error!("Failed to write message: {}", e);
+                error!("Failed to write message: {}", e);
                 Self::handle_failure(self.js_writer, self.stream, self.message).await
             }
         }
@@ -140,6 +141,7 @@ impl WriterHandle {
             .await
             .map_err(|e| Error::ISB(format!("Failed to write message to actor channel: {}", e)))?;
 
+        // wait for PAF
         receiver
             .await
             .map_err(|e| Error::ISB(format!("Failed to write message to ISB: {}", e)))?
