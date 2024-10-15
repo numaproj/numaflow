@@ -163,3 +163,44 @@ func Test_ISBSvcIsHealthy(t *testing.T) {
 		})
 	}
 }
+
+func TestInterStepBufferService_GetType(t *testing.T) {
+	tests := []struct {
+		name string
+		isbs InterStepBufferService
+		want ISBSvcType
+	}{
+		{
+			name: "Redis type",
+			isbs: InterStepBufferService{
+				Spec: InterStepBufferServiceSpec{
+					Redis: &RedisBufferService{},
+				},
+			},
+			want: ISBSvcTypeRedis,
+		},
+		{
+			name: "JetStream type",
+			isbs: InterStepBufferService{
+				Spec: InterStepBufferServiceSpec{
+					JetStream: &JetStreamBufferService{},
+				},
+			},
+			want: ISBSvcTypeJetStream,
+		},
+		{
+			name: "Unknown type",
+			isbs: InterStepBufferService{
+				Spec: InterStepBufferServiceSpec{},
+			},
+			want: ISBSvcTypeUnknown,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.isbs.GetType()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
