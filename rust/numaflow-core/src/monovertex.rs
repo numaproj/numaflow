@@ -226,9 +226,7 @@ async fn fetch_source(
         )?;
         Ok(SourceType::Generator(source_read, source_ack, lag_reader))
     } else {
-        Err(Error::ConfigError(
-            "No valid source configuration found".into(),
-        ))
+        Err(Error::Config("No valid source configuration found".into()))
     }
 }
 
@@ -254,7 +252,7 @@ async fn fetch_sink(
         let log = SinkHandle::new(SinkClientType::Log).await?;
         return Ok((log, fb_sink));
     }
-    Err(Error::ConfigError(
+    Err(Error::Config(
         "No valid Sink configuration found".to_string(),
     ))
 }

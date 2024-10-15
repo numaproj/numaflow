@@ -18,6 +18,7 @@ package reconciler
 
 import (
 	"reflect"
+	"sync"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -75,5 +76,38 @@ func TestGlobalConfig_GetDefaultContainerResources(t *testing.T) {
 		if !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("%q.GetDefaultContainerResources() = %v, want %v", tt.name, got, tt.want)
 		}
+	}
+}
+
+func TestGlobalConfig_GetInstance(t *testing.T) {
+	tests := []struct {
+		name     string
+		instance string
+	}{
+		{
+			name:     "Empty instance",
+			instance: "",
+		},
+		{
+			name:     "Non-empty instance",
+			instance: "test-instance",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := &GlobalConfig{
+				conf: &config{
+					Instance: tt.instance,
+				},
+				lock: &sync.RWMutex{},
+			}
+
+			got := g.GetInstance()
+			if got != tt.instance {
+				t.Errorf("GetInstance() = %v, want %v", got, tt.instance)
+			}
+
+		})
 	}
 }
