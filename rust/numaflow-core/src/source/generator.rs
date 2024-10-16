@@ -1,11 +1,8 @@
-use std::time::Duration;
-
-use bytes::Bytes;
 use futures::StreamExt;
 
 use crate::message::{Message, Offset};
-use crate::reader;
 use crate::source;
+use crate::{config, reader};
 
 /// Stream Generator returns a set of messages for every `.next` call. It will throttle itself if
 /// the call exceeds the RPU. It will return a max (batch size, RPU) till the quota for that unit of
@@ -25,11 +22,14 @@ use crate::source;
 mod stream_generator {
     use bytes::Bytes;
     use futures::Stream;
+    use log::warn;
     use pin_project::pin_project;
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use std::time::Duration;
     use tokio::time::MissedTickBehavior;
+
+    use crate::config;
 
     #[pin_project]
     pub(super) struct StreamGenerator {
@@ -42,22 +42,41 @@ mod stream_generator {
         /// the amount of credits used for the current time-period.
         /// remaining = (rpu - used) for that time-period
         used: usize,
+
+        key_count: u8,
+        msg_size_bytes: u32,
+        jitter: Duration,
+        value: i64,
+
         #[pin]
         tick: tokio::time::Interval,
     }
 
     impl StreamGenerator {
-        pub(super) fn new(content: Bytes, rpu: usize, batch: usize, unit: Duration) -> Self {
-            let mut tick = tokio::time::interval(unit);
+        // pub(super) fn new(content: Bytes, mut rpu: usize, batch: usize, unit: Duration) -> Self {
+        pub(super) fn new(mut cfg: config::GeneratorConfig, batch_size: usize) -> Self {
+            let mut tick = tokio::time::interval(Duration::from_millis(cfg.duration as u64));
             tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
+            if cfg.rpu > 10000 {
+                warn!(
+                    "Capping the rate to 10000 msg/sec. rate has been changed from {} to 10000",
+                    cfg.rpu
+                );
+                cfg.rpu = 10000;
+            }
+
             Self {
-                content,
-                rpu,
+                content: cfg.content,
+                rpu: cfg.rpu,
                 // batch cannot > rpu
-                batch: if batch > rpu { rpu } else { batch },
+                batch: std::cmp::min(cfg.rpu, batch_size),
                 used: 0,
                 tick,
+                key_count: cfg.key_count,
+                msg_size_bytes: cfg.msg_size_bytes,
+                jitter: cfg.jitter,
+                value: cfg.value,
             }
         }
     }
@@ -117,12 +136,18 @@ mod stream_generator {
             // Define the content to be generated
             let content = Bytes::from("test_data");
             // Define requests per unit (rpu), batch size, and time unit
-            let rpu = 10;
             let batch = 6;
-            let unit = Duration::from_millis(100);
+            let rpu = 10;
+            let cfg = config::GeneratorConfig {
+                content: content.clone(),
+                rpu,
+                jitter: Duration::from_millis(0),
+                duration: 100,
+                ..Default::default()
+            };
 
             // Create a new StreamGenerator
-            let mut stream_generator = StreamGenerator::new(content.clone(), rpu, batch, unit);
+            let mut stream_generator = StreamGenerator::new(cfg, batch);
 
             // Collect the first batch of data
             let first_batch = stream_generator.next().await.unwrap();
@@ -162,12 +187,10 @@ mod stream_generator {
 /// source to generate some messages. We mainly use generator for load testing and integration
 /// testing of Numaflow. The load generated is per replica.
 pub(crate) fn new_generator(
-    content: Bytes,
-    rpu: usize,
-    batch: usize,
-    unit: Duration,
+    cfg: config::GeneratorConfig,
+    batch_size: usize,
 ) -> crate::Result<(GeneratorRead, GeneratorAck, GeneratorLagReader)> {
-    let gen_read = GeneratorRead::new(content, rpu, batch, unit);
+    let gen_read = GeneratorRead::new(cfg, batch_size);
     let gen_ack = GeneratorAck::new();
     let gen_lag_reader = GeneratorLagReader::new();
 
@@ -181,8 +204,8 @@ pub(crate) struct GeneratorRead {
 impl GeneratorRead {
     /// A new [GeneratorRead] is returned. It takes a static content, requests per unit-time, batch size
     /// to return per [source::SourceReader::read], and the unit-time as duration.
-    fn new(content: Bytes, rpu: usize, batch: usize, unit: Duration) -> Self {
-        let stream_generator = stream_generator::StreamGenerator::new(content, rpu, batch, unit);
+    fn new(cfg: config::GeneratorConfig, batch_size: usize) -> Self {
+        let stream_generator = stream_generator::StreamGenerator::new(cfg, batch_size);
         Self { stream_generator }
     }
 }
@@ -260,10 +283,12 @@ impl reader::LagReader for GeneratorLagReader {
 
 #[cfg(test)]
 mod tests {
+    use bytes::Bytes;
+    use tokio::time::Duration;
+
     use super::*;
     use crate::reader::LagReader;
     use crate::source::{SourceAcker, SourceReader};
-    use tokio::time::Duration;
 
     #[tokio::test]
     async fn test_generator_read() {
@@ -272,10 +297,16 @@ mod tests {
         // Define requests per unit (rpu), batch size, and time unit
         let rpu = 10;
         let batch = 5;
-        let unit = Duration::from_millis(100);
+        let cfg = config::GeneratorConfig {
+            content: content.clone(),
+            rpu,
+            jitter: Duration::from_millis(0),
+            duration: 100,
+            ..Default::default()
+        };
 
         // Create a new Generator
-        let mut generator = GeneratorRead::new(content.clone(), rpu, batch, unit);
+        let mut generator = GeneratorRead::new(cfg, batch);
 
         // Read the first batch of messages
         let messages = generator.read().await.unwrap();

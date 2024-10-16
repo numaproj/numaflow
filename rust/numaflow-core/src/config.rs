@@ -1,10 +1,11 @@
-use std::env;
 use std::fmt::Display;
 use std::sync::OnceLock;
+use std::{env, time::Duration};
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use bytes::Bytes;
+use tracing::warn;
 
 use crate::Error;
 use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
@@ -93,7 +94,7 @@ pub struct Settings {
     pub transformer_config: Option<TransformerConfig>,
     pub udsource_config: Option<UDSourceConfig>,
     pub udsink_config: Option<UDSinkConfig>,
-    pub logsink_config: Option<()>,
+    pub logsink_config: Option<LogSinkConfig>,
     pub fallback_config: Option<UDSinkConfig>,
     pub generator_config: Option<GeneratorConfig>,
 }
@@ -132,6 +133,9 @@ impl Default for UDSourceConfig {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct LogSinkConfig;
+
 #[derive(Debug, Clone)]
 pub struct UDSinkConfig {
     pub grpc_max_message_size: usize,
@@ -164,6 +168,10 @@ pub struct GeneratorConfig {
     pub rpu: usize,
     pub content: Bytes,
     pub duration: usize,
+    pub value: i64,
+    pub key_count: u8,
+    pub msg_size_bytes: u32,
+    pub jitter: Duration,
 }
 
 impl Default for GeneratorConfig {
@@ -172,6 +180,10 @@ impl Default for GeneratorConfig {
             rpu: 1,
             content: bytes::Bytes::from("5"),
             duration: 1000,
+            value: 0,
+            key_count: 0,
+            msg_size_bytes: 8,
+            jitter: Duration::from_secs(0),
         }
     }
 }
@@ -314,10 +326,45 @@ impl Settings {
                         config.duration = std::time::Duration::from(d).as_millis() as usize;
                     }
 
+                    if let Some(key_count) = generator_source.key_count {
+                        if key_count > u8::MAX as i32 {
+                            warn!(
+                                "Capping the key count to {}, provided value is {key_count}",
+                                u8::MAX
+                            );
+                        }
+                        config.key_count = std::cmp::min(key_count, u8::MAX as i32) as u8;
+                    }
+
+                    if let Some(jitter) = generator_source.jitter {
+                        config.jitter = std::time::Duration::from(jitter);
+                    }
+
+                    if let Some(msg_size) = generator_source.msg_size {
+                        if msg_size < 0 {
+                            warn!("'msgSize' can not be negative, using default value (8 bytes)");
+                        } else {
+                            config.msg_size_bytes = msg_size as u32;
+                        }
+                    }
+
+                    if let Some(value) = generator_source.value {
+                        config.value = value;
+                    }
+
                     Some(config)
                 }
                 None => None,
             };
+
+            settings.logsink_config = mono_vertex_obj
+                .spec
+                .sink
+                .as_deref()
+                .ok_or(Error::Config("Sink not found".to_string()))?
+                .log
+                .as_deref()
+                .map(|_| LogSinkConfig);
 
             if let Some(retry_strategy) = mono_vertex_obj
                 .spec
