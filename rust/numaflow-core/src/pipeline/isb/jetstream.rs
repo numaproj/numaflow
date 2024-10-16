@@ -2,9 +2,7 @@ use crate::error::Error;
 use crate::message::Message;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::Result;
-use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::Context;
-use log::error;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 
@@ -26,22 +24,10 @@ enum ActorMessage {
     Stop,
 }
 
-/// PublishResult is the result of the write operation.
-/// It contains the PublishAckFuture which can be awaited to get the PublishAck.
-/// It also exposes a method to handle any future failures.
-#[derive(Debug)]
-pub(super) struct PublishResult {
-    paf: PublishAckFuture,
-    stream: &'static str,
-    message: Message,
-    callee_tx: oneshot::Sender<Result<()>>,
-}
-
 /// WriterActor will handle the messages and write them to the Jetstream ISB.
 struct WriterActor {
     js_writer: JetstreamWriter,
     receiver: Receiver<ActorMessage>,
-    paf_resolver_tx: mpsc::Sender<PublishResult>,
 }
 
 impl WriterActor {
@@ -50,18 +36,9 @@ impl WriterActor {
         receiver: Receiver<ActorMessage>,
         batch_size: usize,
     ) -> Self {
-        let (paf_resolver_tx, paf_resolver_rx) = mpsc::channel::<PublishResult>(batch_size);
-
-        let mut resolver_actor = PafResolverActor::new(js_writer.clone(), paf_resolver_rx);
-
-        tokio::spawn(async move {
-            resolver_actor.run().await;
-        });
-
         Self {
             js_writer,
             receiver,
-            paf_resolver_tx,
         }
     }
 
@@ -71,26 +48,21 @@ impl WriterActor {
                 stream,
                 message,
                 success,
-            } => match self.js_writer.async_write(stream, message.clone()).await {
-                Ok(paf) => {
-                    let result = PublishResult {
-                        paf,
-                        stream,
-                        message,
-                        callee_tx: success,
-                    };
-                    self.paf_resolver_tx
-                        .send(result)
-                        .await
-                        .expect("send should not fail");
-                }
-                Err(e) => {
-                    log::error!("Failed to write message: {}", e);
-                    success
-                        .send(Err(Error::ISB(format!("Failed to write message: {}", e))))
-                        .expect("send should not fail");
-                }
-            },
+            } => {
+                // writer will do the right thing for the callee :)
+                self.js_writer.write(stream, message.clone(), success).await
+            }
+            // {
+            //     Ok(_) => {
+            //         // all is good
+            //     }
+            //     Err(e) => {
+            //         log::error!("Failed to write message: {}", e);
+            //         success
+            //             .send(Err(Error::ISB(format!("Failed to write message: {}", e))))
+            //             .expect("send should not fail");
+            //     }
+            // },
             ActorMessage::Stop => {
                 // Handle stop logic if necessary
             }
@@ -100,42 +72,6 @@ impl WriterActor {
     async fn run(&mut self) {
         while let Some(msg) = self.receiver.recv().await {
             self.handle_message(msg).await;
-        }
-    }
-}
-
-pub(super) struct PafResolverActor {
-    js_writer: JetstreamWriter,
-    receiver: Receiver<PublishResult>,
-}
-
-impl PafResolverActor {
-    fn new(js_writer: JetstreamWriter, receiver: Receiver<PublishResult>) -> Self {
-        PafResolverActor {
-            js_writer,
-            receiver,
-        }
-    }
-    pub(super) async fn handle_result(&mut self, result: PublishResult) {
-        match result.paf.await {
-            Ok(ack) => result.callee_tx.send(Ok(())).unwrap(),
-            Err(e) => {
-                error!("Failed to resolve the future, trying sync write");
-                match self
-                    .js_writer
-                    .sync_write(result.stream, result.message.clone())
-                    .await
-                {
-                    Ok(_) => result.callee_tx.send(Ok(())).unwrap(),
-                    Err(e) => result.callee_tx.send(Err(e)).unwrap(),
-                }
-            }
-        }
-    }
-
-    pub(super) async fn run(&mut self) {
-        while let Some(result) = self.receiver.recv().await {
-            self.handle_result(result).await;
         }
     }
 }
