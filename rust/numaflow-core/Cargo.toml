@@ -3,6 +3,10 @@ name = "numaflow-core"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+nats-tests = []
+all-tests = ["nats-tests"]
+
 [dependencies]
 axum = "0.7.5"
 axum-server = { version = "0.7.1", features = ["tls-rustls"] }

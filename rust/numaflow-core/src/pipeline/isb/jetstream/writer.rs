@@ -177,6 +177,7 @@ mod tests {
     use chrono::Utc;
     use std::collections::HashMap;
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_async_write() {
         let cln_token = CancellationToken::new();
@@ -222,6 +223,7 @@ mod tests {
         context.delete_stream(stream_name).await.unwrap();
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_sync_write() {
         let cln_token = CancellationToken::new();
@@ -269,6 +271,7 @@ mod tests {
         context.delete_stream(stream_name).await.unwrap();
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_write_with_cancellation() {
         let js_url = "localhost:4222";

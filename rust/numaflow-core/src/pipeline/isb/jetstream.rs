@@ -19,6 +19,7 @@ struct ActorMessage {
     message: Message,
     /// once the message has been successfully written, we can let the sender know.
     /// This can be used to trigger Acknowledgement of the message from the Reader.
+    // FIXME: concrete type
     success: oneshot::Sender<Result<u64>>,
 }
 
@@ -114,6 +115,7 @@ mod tests {
     use tokio::sync::oneshot;
     use tokio::time::Instant;
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_publish_messages() {
         let cln_token = CancellationToken::new();
@@ -172,6 +174,7 @@ mod tests {
         context.delete_stream(stream_name).await.unwrap();
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_publish_messages_with_cancellation() {
         let js_url = "localhost:4222";
@@ -250,6 +253,7 @@ mod tests {
         context.delete_stream(stream_name).await.unwrap();
     }
 
+    #[cfg(feature = "nats-tests")]
     #[ignore]
     #[tokio::test]
     async fn benchmark_publish_messages() {
