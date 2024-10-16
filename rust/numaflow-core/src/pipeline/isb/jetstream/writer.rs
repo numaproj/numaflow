@@ -13,16 +13,20 @@ use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 #[derive(Clone, Debug)]
-/// Writes to JetStream ISB. Exposes both sync and async methods to write messages.
+/// Writes to JetStream ISB. Exposes both write and blocking methods to write messages.
+/// It accepts a cancellation token to stop infinite retries during shutdown.
 pub(super) struct JetstreamWriter {
     js_ctx: Context,
-    paf_resolver_tx: mpsc::Sender<PublishResult>,
+    paf_resolver_tx: mpsc::Sender<ResolveAndPublishResult>,
     cancel_token: CancellationToken,
 }
 
 impl JetstreamWriter {
+    /// Creates a JetStream Writer and a background task to make sure the Write futures (PAFs) are
+    /// successful. Batch Size determines the maximum pending futures.
     pub(super) fn new(js_ctx: Context, batch_size: usize, cancel_token: CancellationToken) -> Self {
-        let (paf_resolver_tx, paf_resolver_rx) = mpsc::channel::<PublishResult>(batch_size);
+        let (paf_resolver_tx, paf_resolver_rx) =
+            mpsc::channel::<ResolveAndPublishResult>(batch_size);
 
         let this = Self {
             js_ctx,
@@ -41,16 +45,18 @@ impl JetstreamWriter {
 
     /// Writes the message to the JetStream ISB and returns a future which can be
     /// awaited to get the PublishAck. It will do infinite retries until the message
-    /// gets published successfully. If it returns an error it means it is fatal
-    /// error
+    /// gets published successfully. If it returns an error it means it is fatal error
     pub(super) async fn write(
         &self,
         stream: &'static str,
         payload: Vec<u8>,
-        success: oneshot::Sender<Result<u64>>,
+        callee_tx: oneshot::Sender<Result<u64>>,
     ) {
         let js_ctx = self.js_ctx.clone();
 
+        // FIXME: add gate for buffer-full check.
+
+        // loop till we get a PAF, there could be other reasons why PAFs cannot be created.
         let paf = loop {
             match js_ctx.publish(stream, Bytes::from(payload.clone())).await {
                 Ok(paf) => {
@@ -63,22 +69,21 @@ impl JetstreamWriter {
             }
             if self.cancel_token.is_cancelled() {
                 error!("Shutdown signal received, exiting write loop");
-                success
+                callee_tx
                     .send(Err(Error::ISB("Shutdown signal received".to_string())))
                     .unwrap();
                 return;
             }
         };
 
-        let result = PublishResult {
-            paf,
-            stream,
-            payload,
-            callee_tx: success,
-        };
-
+        // send the paf and callee_tx over
         self.paf_resolver_tx
-            .send(result)
+            .send(ResolveAndPublishResult {
+                paf,
+                stream,
+                payload,
+                callee_tx,
+            })
             .await
             .expect("send should not fail");
     }
@@ -122,33 +127,41 @@ impl JetstreamWriter {
     }
 }
 
-/// PublishResult is the result of the write operation.
-/// It contains the PublishAckFuture which can be awaited to get the PublishAck.
+/// ResolveAndPublishResult resolves the result of the write PAF operation.
+/// It contains the PublishAckFuture which can be awaited to get the PublishAck. Once PAF has
+/// resolved, the information is published to callee_tx.
 #[derive(Debug)]
-pub(super) struct PublishResult {
+pub(super) struct ResolveAndPublishResult {
     paf: PublishAckFuture,
     stream: &'static str,
     payload: Vec<u8>,
     callee_tx: oneshot::Sender<Result<u64>>,
 }
 
+/// Resolves the PAF from the write call, if not successful it will do a blocking write so that
+/// it is eventually successful. Once the PAF has been resolved (by either means) it will notify
+/// the top-level callee via the oneshot rx.
 struct PafResolverActor {
     js_writer: JetstreamWriter,
-    receiver: Receiver<PublishResult>,
+    receiver: Receiver<ResolveAndPublishResult>,
 }
 
 impl PafResolverActor {
-    fn new(js_writer: JetstreamWriter, receiver: Receiver<PublishResult>) -> Self {
+    fn new(js_writer: JetstreamWriter, receiver: Receiver<ResolveAndPublishResult>) -> Self {
         PafResolverActor {
             js_writer,
             receiver,
         }
     }
-    async fn handle_result(&mut self, result: PublishResult) {
+
+    /// Tries to the resolve the original PAF from the write call. If it is successful, will send
+    /// the successful result to the top-level callee's oneshot channel. If the original PAF does
+    /// not successfully resolve, it will do blocking write till write to JetStream succeeds.
+    async fn successfully_resolve_paf(&mut self, result: ResolveAndPublishResult) {
         match result.paf.await {
             Ok(ack) => result.callee_tx.send(Ok(ack.sequence)).unwrap(),
             Err(e) => {
-                error!("Failed to resolve the future, trying blocking write");
+                error!(?e, "Failed to resolve the future, trying blocking write");
                 match self
                     .js_writer
                     .blocking_write(result.stream, result.payload.clone())
@@ -163,7 +176,7 @@ impl PafResolverActor {
 
     async fn run(&mut self) {
         while let Some(result) = self.receiver.recv().await {
-            self.handle_result(result).await;
+            self.successfully_resolve_paf(result).await;
         }
     }
 }

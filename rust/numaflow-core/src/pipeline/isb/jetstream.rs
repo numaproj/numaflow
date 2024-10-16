@@ -19,16 +19,20 @@ struct ActorMessage {
     message: Message,
     /// once the message has been successfully written, we can let the sender know.
     /// This can be used to trigger Acknowledgement of the message from the Reader.
-    // FIXME: concrete type
-    success: oneshot::Sender<Result<u64>>,
+    // FIXME: concrete type and better name
+    callee_tx: oneshot::Sender<Result<u64>>,
 }
 
 impl ActorMessage {
-    fn new(stream: &'static str, message: Message, success: oneshot::Sender<Result<u64>>) -> Self {
+    fn new(
+        stream: &'static str,
+        message: Message,
+        callee_tx: oneshot::Sender<Result<u64>>,
+    ) -> Self {
         Self {
             stream,
             message,
-            success,
+            callee_tx,
         }
     }
 }
@@ -58,7 +62,9 @@ impl WriterActor {
             .message
             .try_into()
             .expect("message serialization should not fail");
-        self.js_writer.write(msg.stream, payload, msg.success).await
+        self.js_writer
+            .write(msg.stream, payload, msg.callee_tx)
+            .await
     }
 
     async fn run(&mut self) {
@@ -160,7 +166,7 @@ mod tests {
             let msg = ActorMessage {
                 stream: stream_name,
                 message,
-                success: sender,
+                callee_tx: sender,
             };
             handler.sender.send(msg).await.unwrap();
             result_receivers.push(receiver);
