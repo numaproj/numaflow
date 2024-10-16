@@ -24,9 +24,9 @@ use crate::monovertex::metrics::{
 use crate::shared::server_info;
 use crate::source::SourceHandle;
 use crate::Error;
-use numaflow_grpc::clients::sink::sink_client::SinkClient;
-use numaflow_grpc::clients::source::source_client::SourceClient;
-use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 
 pub(crate) async fn check_compatibility(
     cln_token: &CancellationToken,

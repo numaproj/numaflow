@@ -23,7 +23,7 @@ tower = "0.4.13"
 uuid = { version = "1.10.0", features = ["v4"] }
 serde_json = "1.0.122"
 numaflow-models = { path = "../numaflow-models" }
-numaflow-grpc = { path = "../numaflow-grpc" }
+numaflow-pb = { path = "../numaflow-pb" }
 trait-variant = "0.1.2"
 rcgen = "0.13.1"
 rustls = { version = "0.23.12", features = ["aws_lc_rs"] }

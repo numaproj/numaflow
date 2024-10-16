@@ -3,9 +3,9 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
-use numaflow_grpc::clients::source;
-use numaflow_grpc::clients::source::source_client::SourceClient;
-use numaflow_grpc::clients::source::{
+use numaflow_pb::clients::source;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::source::{
     read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
 };
 
@@ -237,7 +237,7 @@ mod tests {
     use std::collections::HashSet;
 
     use crate::shared::utils::create_rpc_channel;
-    use numaflow_grpc::clients::source::source_client::SourceClient;
+    use numaflow_pb::clients::source::source_client::SourceClient;
 
     use chrono::Utc;
     use numaflow::source;

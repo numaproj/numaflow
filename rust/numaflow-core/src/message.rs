@@ -5,11 +5,11 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
-use numaflow_grpc::clients::sink::sink_request::Request;
-use numaflow_grpc::clients::sink::Status::{Failure, Fallback, Success};
-use numaflow_grpc::clients::sink::{sink_response, SinkRequest, SinkResponse};
-use numaflow_grpc::clients::source::{read_response, AckRequest};
-use numaflow_grpc::clients::sourcetransformer::SourceTransformRequest;
+use numaflow_pb::clients::sink::sink_request::Request;
+use numaflow_pb::clients::sink::Status::{Failure, Fallback, Success};
+use numaflow_pb::clients::sink::{sink_response, SinkRequest, SinkResponse};
+use numaflow_pb::clients::source::{read_response, AckRequest};
+use numaflow_pb::clients::sourcetransformer::SourceTransformRequest;
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
@@ -88,8 +88,8 @@ impl fmt::Display for MessageID {
 impl From<Offset> for AckRequest {
     fn from(offset: Offset) -> Self {
         Self {
-            request: Some(numaflow_grpc::clients::source::ack_request::Request {
-                offset: Some(numaflow_grpc::clients::source::Offset {
+            request: Some(numaflow_pb::clients::source::ack_request::Request {
+                offset: Some(numaflow_pb::clients::source::Offset {
                     offset: BASE64_STANDARD
                         .decode(offset.offset)
                         .expect("we control the encoding, so this should never fail"),
@@ -105,14 +105,14 @@ impl TryFrom<Message> for Vec<u8> {
     type Error = Error;
 
     fn try_from(message: Message) -> std::result::Result<Self, Self::Error> {
-        let proto_message = numaflow_grpc::objects::isb::Message {
-            header: Some(numaflow_grpc::objects::isb::Header {
-                message_info: Some(numaflow_grpc::objects::isb::MessageInfo {
+        let proto_message = numaflow_pb::objects::isb::Message {
+            header: Some(numaflow_pb::objects::isb::Header {
+                message_info: Some(numaflow_pb::objects::isb::MessageInfo {
                     event_time: prost_timestamp_from_utc(message.event_time),
                     is_late: false, // Set this according to your logic
                 }),
-                kind: numaflow_grpc::objects::isb::MessageKind::Data as i32,
-                id: Some(numaflow_grpc::objects::isb::MessageId {
+                kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
+                id: Some(numaflow_pb::objects::isb::MessageId {
                     vertex_name: get_vertex_name().to_string(),
                     offset: message.offset.to_string(),
                     index: 0,
@@ -120,7 +120,7 @@ impl TryFrom<Message> for Vec<u8> {
                 keys: message.keys.clone(),
                 headers: message.headers.clone(),
             }),
-            body: Some(numaflow_grpc::objects::isb::Body {
+            body: Some(numaflow_pb::objects::isb::Body {
                 payload: message.value.clone(),
             }),
         };
@@ -137,7 +137,7 @@ impl TryFrom<Vec<u8>> for Message {
     type Error = Error;
 
     fn try_from(bytes: Vec<u8>) -> std::result::Result<Self, Self::Error> {
-        let proto_message = numaflow_grpc::objects::isb::Message::decode(Bytes::from(bytes))
+        let proto_message = numaflow_pb::objects::isb::Message::decode(Bytes::from(bytes))
             .map_err(|e| Error::Proto(e.to_string()))?;
 
         let header = proto_message
@@ -174,7 +174,7 @@ impl From<Message> for SourceTransformRequest {
     fn from(message: Message) -> Self {
         Self {
             request: Some(
-                numaflow_grpc::clients::sourcetransformer::source_transform_request::Request {
+                numaflow_pb::clients::sourcetransformer::source_transform_request::Request {
                     id: message.id.to_string(),
                     keys: message.keys,
                     value: message.value,

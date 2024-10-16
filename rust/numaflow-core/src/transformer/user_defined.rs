@@ -8,7 +8,7 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::warn;
 
-use numaflow_grpc::clients::sourcetransformer::{
+use numaflow_pb::clients::sourcetransformer::{
     self, source_transform_client::SourceTransformClient, SourceTransformRequest,
     SourceTransformResponse,
 };
@@ -236,7 +236,7 @@ mod tests {
     use crate::shared::utils::create_rpc_channel;
     use crate::transformer::user_defined::SourceTransformHandle;
     use numaflow::sourcetransform;
-    use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+    use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
     use tempfile::TempDir;
 
     struct NowCat;
