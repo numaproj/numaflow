@@ -3,7 +3,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use futures::StreamExt;
 
-use crate::message::{Message, Offset};
+use crate::message::{Message, MessageID, Offset};
 use crate::reader;
 use crate::source;
 
@@ -215,7 +215,11 @@ impl source::SourceReader for GeneratorRead {
                             partition_id: 0,
                         },
                         event_time: Default::default(),
-                        id,
+                        id: MessageID {
+                            vertex_name: Default::default(),
+                            offset: id,
+                            index: Default::default(),
+                        },
                         headers: Default::default(),
                     }
                 })

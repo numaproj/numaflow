@@ -15,7 +15,7 @@ use numaflow_pb::clients::sourcetransformer::{
 
 use crate::config::config;
 use crate::error::{Error, Result};
-use crate::message::{Message, Offset};
+use crate::message::{get_vertex_name, Message, MessageID, Offset};
 use crate::shared::utils::utc_from_timestamp;
 
 const DROP: &str = "U+005C__DROP__";
@@ -55,6 +55,7 @@ impl SourceTransformer {
         let handshake_response = resp_stream.message().await?.ok_or(Error::Transformer(
             "failed to receive handshake response".to_string(),
         ))?;
+
         // handshake cannot to None during the initial phase and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
             return Err(Error::Transformer("invalid handshake response".to_string()));
@@ -89,7 +90,7 @@ impl SourceTransformer {
         let mut tracker: HashMap<String, MessageInfo> = HashMap::with_capacity(messages.len());
         for message in &messages {
             tracker.insert(
-                message.id.clone(),
+                message.id.to_string(),
                 MessageInfo {
                     offset: message.offset.clone(),
                     headers: message.headers.clone(),
@@ -152,7 +153,7 @@ impl SourceTransformer {
                 }
             };
 
-            let Some((msg_id, msg_info)) = tracker.remove_entry(&resp.id) else {
+            let Some((_, msg_info)) = tracker.remove_entry(&resp.id) else {
                 token.cancel();
                 return Err(Error::Transformer(format!(
                     "Received message with unknown ID {}",
@@ -166,7 +167,11 @@ impl SourceTransformer {
                     continue;
                 }
                 let message = Message {
-                    id: format!("{}-{}", msg_id, i),
+                    id: MessageID {
+                        vertex_name: get_vertex_name().to_string(),
+                        index: i as i32,
+                        offset: msg_info.offset.to_string(),
+                    },
                     keys: result.keys,
                     value: result.value,
                     offset: msg_info.offset.clone(),
@@ -227,6 +232,7 @@ mod tests {
     use std::error::Error;
     use std::time::Duration;
 
+    use crate::message::MessageID;
     use crate::shared::utils::create_rpc_channel;
     use crate::transformer::user_defined::SourceTransformHandle;
     use numaflow::sourcetransform;
@@ -282,7 +288,11 @@ mod tests {
                 offset: "0".into(),
             },
             event_time: chrono::Utc::now(),
-            id: "1".to_string(),
+            id: MessageID {
+                vertex_name: "vertex_name".to_string(),
+                offset: "0".to_string(),
+                index: 0,
+            },
             headers: Default::default(),
         };
 
@@ -357,7 +367,11 @@ mod tests {
                 offset: "0".into(),
             },
             event_time: chrono::Utc::now(),
-            id: "".to_string(),
+            id: MessageID {
+                vertex_name: "vertex_name".to_string(),
+                offset: "0".to_string(),
+                index: 0,
+            },
             headers: Default::default(),
         };
 

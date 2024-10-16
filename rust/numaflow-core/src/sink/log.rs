@@ -25,7 +25,7 @@ impl Sink for LogSink {
             );
             tracing::info!("{}", log_line);
             result.push(ResponseFromSink {
-                id: msg.id,
+                id: msg.id.to_string(),
                 status: ResponseStatusFromSink::Success,
             })
         }

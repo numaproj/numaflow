@@ -87,6 +87,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-nats"
+version = "0.37.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd3bdd6ea595b2ea504500a3566071beb81125fc15d40a6f6bffa43575f64152"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "futures",
+ "memchr",
+ "nkeys",
+ "nuid",
+ "once_cell",
+ "portable-atomic",
+ "rand",
+ "regex",
+ "ring",
+ "rustls-native-certs 0.7.3",
+ "rustls-pemfile 2.2.0",
+ "rustls-webpki 0.102.8",
+ "serde",
+ "serde_json",
+ "serde_nanos",
+ "serde_repr",
+ "thiserror",
+ "time",
+ "tokio",
+ "tokio-rustls 0.26.0",
+ "tokio-util",
+ "tracing",
+ "tryhard",
+ "url",
+]
+
+[[package]]
 name = "async-stream"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1603,6 +1637,7 @@ dependencies = [
 name = "numaflow-core"
 version = "0.1.0"
 dependencies = [
+ "async-nats 0.37.0",
  "axum",
  "axum-server",
  "backoff",
@@ -2632,7 +2667,7 @@ dependencies = [
 name = "serving"
 version = "0.1.0"
 dependencies = [
- "async-nats",
+ "async-nats 0.35.1",
  "axum",
  "axum-macros",
  "axum-server",

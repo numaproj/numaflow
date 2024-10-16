@@ -28,8 +28,14 @@ pub enum Error {
     #[error("Config Error - {0}")]
     Config(String),
 
-    #[error("ServerInfoError Error - {0}")]
+    #[error("ServerInfo Error - {0}")]
     ServerInfo(String),
+
+    #[error("Proto Error - {0}")]
+    Proto(String),
+
+    #[error("ISB Error - {0}")]
+    ISB(String),
 
     #[error("OneShot Receiver Error - {0}")]
     ActorPatternRecv(String),
