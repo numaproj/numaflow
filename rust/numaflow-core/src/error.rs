@@ -36,6 +36,9 @@ pub enum Error {
 
     #[error("ISB Error - {0}")]
     ISB(String),
+
+    #[error("OneShot Receiver Error - {0}")]
+    ActorPatternRecv(String),
 }
 
 impl From<tonic::Status> for Error {
