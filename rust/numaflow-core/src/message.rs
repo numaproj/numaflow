@@ -7,11 +7,11 @@ use chrono::{DateTime, Utc};
 
 use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
 use crate::Error;
-use numaflow_grpc::clients::sink::sink_request::Request;
-use numaflow_grpc::clients::sink::Status::{Failure, Fallback, Success};
-use numaflow_grpc::clients::sink::{sink_response, SinkRequest, SinkResponse};
-use numaflow_grpc::clients::source::{read_response, AckRequest};
-use numaflow_grpc::clients::sourcetransformer::SourceTransformRequest;
+use numaflow_pb::clients::sink::sink_request::Request;
+use numaflow_pb::clients::sink::Status::{Failure, Fallback, Success};
+use numaflow_pb::clients::sink::{sink_response, SinkRequest, SinkResponse};
+use numaflow_pb::clients::source::{read_response, AckRequest};
+use numaflow_pb::clients::sourcetransformer::SourceTransformRequest;
 
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone)]
@@ -42,8 +42,8 @@ pub(crate) struct Offset {
 impl From<Offset> for AckRequest {
     fn from(offset: Offset) -> Self {
         Self {
-            request: Some(numaflow_grpc::clients::source::ack_request::Request {
-                offset: Some(numaflow_grpc::clients::source::Offset {
+            request: Some(numaflow_pb::clients::source::ack_request::Request {
+                offset: Some(numaflow_pb::clients::source::Offset {
                     offset: BASE64_STANDARD
                         .decode(offset.offset)
                         .expect("we control the encoding, so this should never fail"),
@@ -60,7 +60,7 @@ impl From<Message> for SourceTransformRequest {
     fn from(message: Message) -> Self {
         Self {
             request: Some(
-                numaflow_grpc::clients::sourcetransformer::source_transform_request::Request {
+                numaflow_pb::clients::sourcetransformer::source_transform_request::Request {
                     id: message.id,
                     keys: message.keys,
                     value: message.value,

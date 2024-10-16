@@ -3,8 +3,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
-use numaflow_grpc::clients::sink::sink_client::SinkClient;
-use numaflow_grpc::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 
 use crate::error;
 use crate::message::{Message, ResponseFromSink};
@@ -122,7 +122,7 @@ mod tests {
     use crate::message::{Message, Offset};
     use crate::shared::utils::create_rpc_channel;
     use crate::sink::user_defined::UserDefinedSink;
-    use numaflow_grpc::clients::sink::sink_client::SinkClient;
+    use numaflow_pb::clients::sink::sink_client::SinkClient;
 
     struct Logger;
     #[tonic::async_trait]
