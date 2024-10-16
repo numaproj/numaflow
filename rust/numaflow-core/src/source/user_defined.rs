@@ -90,7 +90,7 @@ impl UserDefinedSourceRead {
         let handshake_response = resp_stream.message().await?.ok_or(Error::Source(
             "failed to receive handshake response".to_string(),
         ))?;
-        // handshake cannot to None during the initial phase and it has to set `sot` to true.
+        // handshake cannot to None during the initial phase, and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
             return Err(Error::Source("invalid handshake response".to_string()));
         }
