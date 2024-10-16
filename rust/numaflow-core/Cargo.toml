@@ -37,6 +37,7 @@ kube = "0.95.0"
 log = "0.4.22"
 futures = "0.3.30"
 pin-project = "1.1.5"
+rand = "0.8.5"
 
 [dev-dependencies]
 tempfile = "3.11.0"

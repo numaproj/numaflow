@@ -24,12 +24,14 @@ mod stream_generator {
     use futures::Stream;
     use log::warn;
     use pin_project::pin_project;
+    use rand::Rng;
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use std::time::Duration;
     use tokio::time::MissedTickBehavior;
 
     use crate::config;
+    use crate::message::{Message, Offset};
 
     #[pin_project]
     pub(super) struct StreamGenerator {
@@ -43,10 +45,9 @@ mod stream_generator {
         /// remaining = (rpu - used) for that time-period
         used: usize,
 
-        key_count: u8,
-        msg_size_bytes: u32,
-        jitter: Duration,
         value: i64,
+        keys: (Vec<String>, usize),
+        jitter: Duration,
 
         #[pin]
         tick: tokio::time::Interval,
@@ -66,6 +67,10 @@ mod stream_generator {
                 cfg.rpu = 10000;
             }
 
+            let keys = (0..cfg.key_count)
+                .map(|i| format!("key-{}-{}", config::config().replica, i))
+                .collect();
+
             Self {
                 content: cfg.content,
                 rpu: cfg.rpu,
@@ -73,32 +78,71 @@ mod stream_generator {
                 batch: std::cmp::min(cfg.rpu, batch_size),
                 used: 0,
                 tick,
-                key_count: cfg.key_count,
-                msg_size_bytes: cfg.msg_size_bytes,
-                jitter: cfg.jitter,
                 value: cfg.value,
+                keys: (keys, 0),
+                jitter: cfg.jitter,
+            }
+        }
+
+        fn msg(
+            data: Bytes,
+            keys: Vec<String>,
+            jitter: Duration,
+            rng: &mut rand::rngs::ThreadRng,
+        ) -> Message {
+            let id = chrono::Utc::now()
+                .timestamp_nanos_opt()
+                .unwrap_or_default()
+                .to_string();
+
+            // rng.gen_range(0..0) panics with "cannot sample empty range"
+            // rng.gen_range(0..1) will always produce 0
+            let jitter = jitter.as_secs().max(1);
+            let event_time = chrono::Utc::now() - Duration::from_secs(rng.gen_range(0..jitter));
+
+            Message {
+                keys,
+                value: data.to_vec(),
+                offset: Offset {
+                    offset: id.clone(),
+                    partition_id: 0,
+                },
+                event_time,
+                id,
+                headers: Default::default(),
             }
         }
     }
 
     impl Stream for StreamGenerator {
-        type Item = Vec<Bytes>;
+        type Item = Vec<Message>;
 
         fn poll_next(
             mut self: Pin<&mut StreamGenerator>,
             cx: &mut Context<'_>,
         ) -> Poll<Option<Self::Item>> {
+            let jitter = self.jitter;
             let mut this = self.as_mut().project();
-
+            let mut rng = rand::thread_rng();
             match this.tick.poll_tick(cx) {
                 // Poll::Ready means we are ready to send data the whole batch since enough time
                 // has passed.
                 Poll::Ready(_) => {
                     // generate data that equals to batch data
-                    let data = vec![this.content.clone(); *this.batch];
+                    let mut data = Vec::with_capacity(*this.batch);
+                    for _ in 0..*this.batch {
+                        let idx = this.keys.1;
+                        let keys = match this.keys.0.get(idx) {
+                            Some(key) => {
+                                this.keys.1 = (idx + 1) % this.keys.0.len();
+                                vec![key.clone()]
+                            }
+                            None => vec![],
+                        };
+                        data.push(Self::msg(this.content.clone(), keys, jitter, &mut rng));
+                    }
                     // reset used quota
                     *this.used = *this.batch;
-
                     Poll::Ready(Some(data))
                 }
                 Poll::Pending => {
@@ -110,8 +154,20 @@ mod stream_generator {
 
                         // update the counters
                         *this.used += to_send;
-
-                        Poll::Ready(Some(vec![this.content.clone(); to_send]))
+                        // let data = vec![this.content.clone(); to_send];
+                        let mut data = Vec::with_capacity(to_send);
+                        for _ in 0..to_send {
+                            let idx = this.keys.1;
+                            let keys = match this.keys.0.get(idx) {
+                                Some(key) => {
+                                    this.keys.1 = (idx + 1) % this.keys.0.len();
+                                    vec![key.clone()]
+                                }
+                                None => vec![],
+                            };
+                            data.push(Self::msg(this.content.clone(), keys, jitter, &mut rng));
+                        }
+                        Poll::Ready(Some(data))
                     } else {
                         Poll::Pending
                     }
@@ -153,14 +209,14 @@ mod stream_generator {
             let first_batch = stream_generator.next().await.unwrap();
             assert_eq!(first_batch.len(), batch);
             for item in first_batch {
-                assert_eq!(item, content);
+                assert_eq!(item.value, content);
             }
 
             // Collect the second batch of data
             let second_batch = stream_generator.next().await.unwrap();
             assert_eq!(second_batch.len(), rpu - batch);
             for item in second_batch {
-                assert_eq!(item, content);
+                assert_eq!(item.value, content);
             }
 
             // no there is no more data left in the quota
@@ -171,7 +227,7 @@ mod stream_generator {
             let third_batch = stream_generator.next().await.unwrap();
             assert_eq!(third_batch.len(), 6);
             for item in third_batch {
-                assert_eq!(item, content);
+                assert_eq!(item.value, content);
             }
 
             // we should now have data
@@ -205,7 +261,7 @@ impl GeneratorRead {
     /// A new [GeneratorRead] is returned. It takes a static content, requests per unit-time, batch size
     /// to return per [source::SourceReader::read], and the unit-time as duration.
     fn new(cfg: config::GeneratorConfig, batch_size: usize) -> Self {
-        let stream_generator = stream_generator::StreamGenerator::new(cfg, batch_size);
+        let stream_generator = stream_generator::StreamGenerator::new(cfg.clone(), batch_size);
         Self { stream_generator }
     }
 }
@@ -216,34 +272,10 @@ impl source::SourceReader for GeneratorRead {
     }
 
     async fn read(&mut self) -> crate::error::Result<Vec<Message>> {
-        match self.stream_generator.next().await {
-            None => {
-                panic!("Stream generator has stopped");
-            }
-            Some(data) => Ok(data
-                .iter()
-                .map(|msg| {
-                    // FIXME: better id?
-                    let id = chrono::Utc::now()
-                        .timestamp_nanos_opt()
-                        .unwrap_or_default()
-                        .to_string();
-
-                    Message {
-                        keys: vec![],
-                        value: msg.clone().to_vec(),
-                        // FIXME: better offset?
-                        offset: Offset {
-                            offset: id.clone(),
-                            partition_id: 0,
-                        },
-                        event_time: Default::default(),
-                        id,
-                        headers: Default::default(),
-                    }
-                })
-                .collect::<Vec<_>>()),
-        }
+        let Some(messages) = self.stream_generator.next().await else {
+            panic!("Stream generator has stopped");
+        };
+        Ok(messages)
     }
 
     fn partitions(&self) -> Vec<u16> {
