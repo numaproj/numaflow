@@ -55,29 +55,18 @@ type PromQl interface {
 
 type PromQlService struct {
 	Prometheus   *Prometheus
-	PlaceHolders map[string][]string
-	Expression   map[string]string
+	PlaceHolders map[string]map[string][]string
+	Expression   map[string]map[string]string
 	ConfigData   *PrometheusConfig
 }
 
-func formatArrayLabels(labels []string) string {
-	if len(labels) == 0 {
-		return ""
+func formatDimension(dimension string) string {
+	switch dimension {
+	case "mono-vertex":
+		return "mvtx_name"
+	default:
+		return dimension
 	}
-	if len(labels) == 1 {
-		return labels[0]
-	}
-	var builder strings.Builder
-	first := true
-
-	for _, v := range labels {
-		builder.WriteString(v)
-		if first {
-			builder.WriteString(", ")
-		}
-		first = false
-	}
-	return builder.String()
 }
 
 // builds key, val pair string for labels
@@ -98,7 +87,7 @@ func formatMapLabels(labels map[string]string) string {
 	return builder.String()
 }
 
-// substitues placeholders in expr with req values
+// substitutes placeholders in expr with req values
 // throws err if any required placeholder is not present/empty in reqmap
 func substitutePlaceHolders(expr string, placeholders []string, reqMap map[string]string) (string, error) {
 	for _, match := range placeholders {
@@ -115,20 +104,38 @@ func substitutePlaceHolders(expr string, placeholders []string, reqMap map[strin
 // NewPromQlService creates a new PromQlService instance
 func NewPromQlService(client *Prometheus, config *PrometheusConfig) PromQl {
 	var (
-		expressions  = make(map[string]string)
-		placeHolders = make(map[string][]string)
+		expressions  = make(map[string]map[string]string) // map[metric_name][dimension] = expr
+		placeHolders = make(map[string]map[string][]string)
 	)
 	for _, pattern := range config.Patterns {
-		name := pattern.Name
-		expr := pattern.Expression
-		placeHoldersArr := make([]string, 0)
-		re := regexp.MustCompile(`\$(\w+)`)
-		matches := re.FindAllStringSubmatch(expr, -1)
-		for _, match := range matches {
-			placeHoldersArr = append(placeHoldersArr, match[0])
+		patternExpression := pattern.Expression
+		for _, metric := range pattern.Metrics {
+			metricName := metric.Name
+			for _, dimension := range metric.Dimensions {
+				dimensionName := dimension.Name
+				_, ok := expressions[metricName]
+				if !ok {
+					expressions[metricName] = make(map[string]string)
+				}
+				if dimension.Expression != "" {
+					expressions[metricName][dimensionName] = dimension.Expression
+				} else {
+					expressions[metricName][dimensionName] = patternExpression
+				}
+				expr := expressions[metricName][dimensionName]
+				placeHoldersArr := make([]string, 0)
+				re := regexp.MustCompile(`\$(\w+)`)
+				matches := re.FindAllStringSubmatch(expr, -1)
+				for _, match := range matches {
+					placeHoldersArr = append(placeHoldersArr, match[0])
+				}
+				_, ok = placeHolders[metricName]
+				if !ok {
+					placeHolders[metricName] = map[string][]string{}
+				}
+				placeHolders[metricName][dimensionName] = placeHoldersArr
+			}
 		}
-		expressions[name] = expr
-		placeHolders[name] = placeHoldersArr
 	}
 
 	return &PromQlService{
@@ -142,11 +149,11 @@ func NewPromQlService(client *Prometheus, config *PrometheusConfig) PromQl {
 // populate map based on req fields
 func (b *PromQlService) PopulateReqMap(requestBody MetricsRequestBody) map[string]string {
 	reqMap := map[string]string{
-		"$metric_name":         requestBody.MetricName,
-		"$filter_labels":       formatMapLabels(requestBody.FilterLabels),
-		"$group_by_labels":     formatArrayLabels(requestBody.GroupByLabels),
-		"$quantile_percentile": requestBody.Quantile,
-		"$duration":            requestBody.Duration,
+		"$metric_name": requestBody.MetricName,
+		"$filters":     formatMapLabels(requestBody.Filters),
+		"$dimension":   formatDimension(requestBody.Dimension),
+		"$quantile":    requestBody.Quantile,
+		"$duration":    requestBody.Duration,
 	}
 	return reqMap
 }
@@ -154,12 +161,22 @@ func (b *PromQlService) PopulateReqMap(requestBody MetricsRequestBody) map[strin
 // build constructs the PromQL query string
 func (b *PromQlService) BuildQuery(requestBody MetricsRequestBody) (string, error) {
 	var query string
-	var patternName = requestBody.PatternName
-	expr := b.Expression[patternName]
-	placeHolders := b.PlaceHolders[patternName]
+	var metricName = requestBody.MetricName
+	var dimension = requestBody.Dimension
+	if metricName == "" || dimension == "" {
+		return query, fmt.Errorf("metric name or dimension absent in the request body")
+	}
+	expr, ok := b.Expression[metricName][dimension]
+	if !ok {
+		return query, fmt.Errorf("expr not set for %s dimension of %s metric", dimension, metricName)
+	}
+	placeHolders, ok := b.PlaceHolders[metricName][dimension]
+	if !ok {
+		return query, fmt.Errorf("placeholders not set for %s dimension of %s metric", dimension, metricName)
+	}
 
 	if expr == "" || len(placeHolders) == 0 {
-		return query, fmt.Errorf("expr or placeholders do not exist for the pattern in the config")
+		return query, fmt.Errorf("expr or placeholders do not exist for for %s dimension of %s metric in the config", dimension, metricName)
 	}
 	reqMap := b.PopulateReqMap(requestBody)
 	query, err := substitutePlaceHolders(expr, placeHolders, reqMap)

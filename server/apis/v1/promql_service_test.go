@@ -31,18 +31,18 @@ func (m *MockPrometheusAPI) QueryRange(ctx context.Context, query string, r v1.R
 	return mockResponse, nil, nil
 }
 
-// comparePrometheusQueries compares two Prometheus queries, ignoring the order of labels within the curly braces
+// comparePrometheusQueries compares two Prometheus queries, ignoring the order of filters within the curly braces
 func comparePrometheusQueries(query1, query2 string) bool {
-	// Extract the label portions of the queries
-	labels1 := extractLabels(query1)
-	labels2 := extractLabels(query2)
-	// Compare the label portions using reflect.DeepEqual, which ignores order
-	return reflect.DeepEqual(labels1, labels2)
+	// Extract the filter portions of the queries
+	filters1 := extractfilters(query1)
+	filters2 := extractfilters(query2)
+	// Compare the filter portions using reflect.DeepEqual, which ignores order
+	return reflect.DeepEqual(filters1, filters2)
 }
 
-// extractLabels extracts the key-value pairs within the curly braces
+// extractfilters extracts the key-value pairs within the curly braces
 // from a Prometheus query using a regular expression.
-func extractLabels(query string) map[string]string {
+func extractfilters(query string) map[string]string {
 	re := regexp.MustCompile(`\{(.*?)\}`) // Regex to match content within curly braces
 	match := re.FindStringSubmatch(query)
 
@@ -50,52 +50,48 @@ func extractLabels(query string) map[string]string {
 		return nil
 	}
 
-	labelString := match[1] // Get the captured group (content within braces)
-	labelPairs := strings.Split(labelString, ",")
-	labels := make(map[string]string)
+	filterstring := match[1] // Get the captured group (content within braces)
+	filterPairs := strings.Split(filterstring, ",")
+	filters := make(map[string]string)
 
-	for _, pair := range labelPairs {
+	for _, pair := range filterPairs {
 		parts := strings.Split(pair, "=")
 		if len(parts) == 2 { // Ensure valid key-value pair
-			labels[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+			filters[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
 		}
 	}
 
-	return labels
+	return filters
 }
 
 func Test_PopulateReqMap(t *testing.T) {
 	t.Run("Map creation with all fields", func(t *testing.T) {
 		requestBody := MetricsRequestBody{
-			PatternName:   "test_pattern",
-			MetricName:    "test_metric",
-			FilterLabels:  map[string]string{"label1": "value1", "label2": "value2"},
-			GroupByLabels: []string{"group1", "group2"},
-			Duration:      "5m",
-			Quantile:      "0.95",
-			StartTime:     "2024-10-08T12:00:00Z",
-			EndTime:       "2024-10-08T13:00:00Z",
+			MetricName: "test_metric",
+			Filters:    map[string]string{"filter1": "value1", "filter2": "value2"},
+			Dimension:  "group1",
+			Duration:   "5m",
+			Quantile:   "0.95",
+			StartTime:  "2024-10-08T12:00:00Z",
+			EndTime:    "2024-10-08T13:00:00Z",
 		}
 		expectedMap := map[string]string{
-			"$metric_name":         "test_metric",
-			"$filter_labels":       "label1= \"value1\", label2= \"value2\"",
-			"$group_by_labels":     "group1, group2",
-			"$quantile_percentile": "0.95",
-			"$duration":            "5m",
+			"$metric_name": "test_metric",
+			"$filters":     "filter1= \"value1\", filter2= \"value2\"",
+			"$dimension":   "group1",
+			"$quantile":    "0.95",
+			"$duration":    "5m",
 		}
 
 		promQlService := &PromQlService{}
 		actualMap := promQlService.PopulateReqMap(requestBody)
 
 		assert.Equal(t, actualMap["$metric_name"], expectedMap["$metric_name"])
-		assert.Equal(t, actualMap["$quantile_percentile"], expectedMap["$quantile_percentile"])
+		assert.Equal(t, actualMap["$quantile"], expectedMap["$quantile"])
 		assert.Equal(t, actualMap["$duration"], expectedMap["$duration"])
-
-		if !comparePrometheusQueries(expectedMap["$group_by_labels"], actualMap["$group_by_labels"]) {
-			t.Errorf("Group by labels do not match")
-		}
-		if !comparePrometheusQueries(expectedMap["$filter_labels"], actualMap["$filter_labels"]) {
-			t.Errorf("Filterlabels do not match")
+		assert.Equal(t, actualMap["$dimension"], expectedMap["$dimension"])
+		if !comparePrometheusQueries(expectedMap["$filters"], actualMap["$filters"]) {
+			t.Errorf("filters do not match")
 		}
 	})
 
@@ -104,70 +100,67 @@ func Test_PopulateReqMap(t *testing.T) {
 			MetricName: "test_metric",
 		}
 		expectedMap := map[string]string{
-			"$metric_name":         "test_metric",
-			"$filter_labels":       "",
-			"$group_by_labels":     "",
-			"$quantile_percentile": "",
-			"$duration":            "",
+			"$metric_name": "test_metric",
+			"$filters":     "",
+			"$dimension":   "",
+			"$quantile":    "",
+			"$duration":    "",
 		}
 
 		promQlService := &PromQlService{}
 		actualMap := promQlService.PopulateReqMap(requestBody)
 		assert.Equal(t, actualMap["$metric_name"], expectedMap["$metric_name"])
-		assert.Equal(t, actualMap["$quantile_percentile"], expectedMap["$quantile_percentile"])
+		assert.Equal(t, actualMap["$quantile"], expectedMap["$quantile"])
 		assert.Equal(t, actualMap["$duration"], expectedMap["$duration"])
+		assert.Equal(t, actualMap["$dimension"], expectedMap["$dimension"])
 
-		if !comparePrometheusQueries(expectedMap["$group_by_labels"], actualMap["$group_by_labels"]) {
-			t.Errorf("Group by labels do not match")
-		}
-		if !comparePrometheusQueries(expectedMap["$filter_labels"], actualMap["$filter_labels"]) {
-			t.Errorf("Filter labels do not match")
+		if !comparePrometheusQueries(expectedMap["$filters"], actualMap["$filters"]) {
+			t.Errorf("filters do not match")
 		}
 	})
 }
 func Test_PromQueryBuilder(t *testing.T) {
 	var service = &PromQlService{
-		PlaceHolders: map[string][]string{
-			"test_pattern": {"$quantile_percentile", "$group_by_labels", "$metric_name", "$filter_labels", "$duration"},
+		PlaceHolders: map[string]map[string][]string{
+			"test_metric": {
+				"test_dimension": {"$quantile", "$dimension", "$metric_name", "$filters", "$duration"},
+			},
 		},
-		Expression: map[string]string{
-			"test_pattern": "histogram_quantile($quantile_percentile, sum by($group_by_labels,le) (rate($metric_name{$filter_labels}[$duration])))",
+		Expression: map[string]map[string]string{
+			"test_metric": {
+				"test_dimension": "histogram_quantile($quantile, sum by($dimension,le) (rate($metric_name{$filters}[$duration])))",
+			},
 		},
 	}
 
 	tests := []struct {
 		name          string
-		patternName   string
 		requestBody   MetricsRequestBody
 		expectedQuery string
 		expectError   bool
 	}{
 		{
-			name:        "Successful template substitution",
-			patternName: "test_pattern",
+			name: "Successful template substitution",
 			requestBody: MetricsRequestBody{
-				PatternName:   "test_pattern",
-				MetricName:    "test_bucket",
-				Quantile:      "0.90",
-				Duration:      "5m",
-				GroupByLabels: []string{"pod"},
-				FilterLabels: map[string]string{
+				MetricName: "test_metric",
+				Quantile:   "0.90",
+				Duration:   "5m",
+				Dimension:  "test_dimension",
+				Filters: map[string]string{
 					"namespace": "test_namespace",
 					"mvtx_name": "test-mono-vertex",
 					"pod":       "test-pod",
 				},
 			},
-			expectedQuery: `histogram_quantile(0.90, sum by(pod,le) (rate(test_bucket{namespace= "test_namespace", mvtx_name= "test-mono-vertex", pod= "test-pod"}[5m])))`,
+			expectedQuery: `histogram_quantile(0.90, sum by(test_dimension,le) (rate(test_bucket{namespace= "test_namespace", mvtx_name= "test-mono-vertex", pod= "test-pod"}[5m])))`,
 		},
 		{
-			name:        "Missing placeholder in req",
-			patternName: "test_pattern",
+			name: "Missing placeholder in req",
 			requestBody: MetricsRequestBody{
-				PatternName:   "test_pattern",
-				MetricName:    "test_bucket",
-				Duration:      "5m",
-				GroupByLabels: []string{"pod"},
-				FilterLabels: map[string]string{
+				MetricName: "test_metric",
+				Duration:   "5m",
+				Dimension:  "test_dimension",
+				Filters: map[string]string{
 					"namespace": "test_namespace",
 					"mvtx_name": "test-mono-vertex",
 					"pod":       "test-pod",
@@ -176,14 +169,12 @@ func Test_PromQueryBuilder(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:        "Missing pattern name in service config",
-			patternName: "test_pattern_2",
+			name: "Missing metric name in service config",
 			requestBody: MetricsRequestBody{
-				PatternName:   "test_pattern_2",
-				MetricName:    "test_bucket",
-				Duration:      "5m",
-				GroupByLabels: []string{"pod"},
-				FilterLabels: map[string]string{
+				MetricName: "test_bucket",
+				Duration:   "5m",
+				Dimension:  "test_dimension",
+				Filters: map[string]string{
 					"namespace": "test_namespace",
 					"mvtx_name": "test-mono-vertex",
 					"pod":       "test-pod",

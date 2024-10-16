@@ -11,23 +11,37 @@ const (
 )
 
 type MetricsRequestBody struct {
-	PatternName string `json:"pattern_name"`
-	// required because a pattern can have multiple metric_names
-	MetricName    string            `json:"metric_name"`
-	FilterLabels  map[string]string `json:"filter_labels"`
-	GroupByLabels []string          `json:"group_by_labels"`
-	Duration      string            `json:"duration"`
-	Quantile      string            `json:"quantile_percentile"`
-	StartTime     string            `json:"start_time"`
-	EndTime       string            `json:"end_time"`
+	MetricName string            `json:"metric_name"`
+	Dimension  string            `json:"dimension"`
+	Filters    map[string]string `json:"filters"`
+	Duration   string            `json:"duration"`
+	Quantile   string            `json:"quantile"`
+	StartTime  string            `json:"start_time"`
+	EndTime    string            `json:"end_time"`
+}
+
+type FilterData struct {
+	Name     string `yaml:"name"`
+	Required bool   `yaml:"required"`
+}
+
+type DimensionData struct {
+	Name       string       `yaml:"name"`
+	Expression string       `yaml:"expr"`
+	Filters    []FilterData `yaml:"filters"`
 }
 
 type MetricData struct {
 	Name string `yaml:"metric_name"`
-	// array of supported filter labels.
-	FilterLabels []string `yaml:"filter_labels"`
-	//array of supported group by labels
-	GroupByLabels []string `yaml:"group_by_labels"`
+	// array of required labels.
+	Filters []string `yaml:"required_filters"`
+	//array of dimensions and their data
+	Dimensions []DimensionData `yaml:"dimensions"`
+}
+
+type ParamData struct {
+	Name     string `yaml:"name"`
+	Required bool   `yaml:"required"`
 }
 type PatternData struct {
 	Name        string       `yaml:"name" json:"name"`
@@ -35,9 +49,8 @@ type PatternData struct {
 	Title       string       `yaml:"title"`
 	Description string       `yaml:"description"`
 	Expression  string       `yaml:"expr"`
-	Duration    []string     `yaml:"duration"`
+	Params      []ParamData  `yaml:"params"`
 	Metrics     []MetricData `yaml:"metrics"`
-	Quantile    []string     `yaml:"quantile_percentile"`
 }
 
 type PrometheusConfig struct {

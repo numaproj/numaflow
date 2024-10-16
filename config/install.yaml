@@ -25693,15 +25693,37 @@ metadata:
 ---
 apiVersion: v1
 data:
-  config.yaml: "# url: http://my-release-kube-prometheus-prometheus.default.svc.cluster.local:9090\npatterns:\n-
-    name: mono_vertex_histogram\n  object: mono-vertex\n  title: Processing Time Latency\n
-    \ description: This query pattern is for P99,P90 and P50 quantiles for a mono-vertex
-    across different dimensions\n  expr: |\n    histogram_quantile($quantile_percentile,
-    sum by($group_by_labels,le) (rate($metric_name{$filter_labels}[$duration])))\n
-    \ metrics: \n    - metric_name: monovtx_processing_time_bucket\n      filter_labels:\n
-    \       - namespace\n        - mvtx_name\n        - pod\n      group_by_labels:\n
-    \       - mvtx_name\n        - pod\n  quantile_percentile:\n    - 0.99\n    -
-    0.95\n    - 0.90\n    - 0.50\n  duration: \n    - 5m\n    - 10m\n"
+  config.yaml: |
+    url: http://my-release-kube-prometheus-prometheus.default.svc.cluster.local:9090
+    patterns:
+    - name: mono_vertex_histogram
+      object: mono-vertex
+      title: Processing Time Latency
+      description: This query pattern is for P99,P90 and P50 quantiles for a mono-vertex across different dimensions
+      expr: |
+        histogram_quantile($quantile, sum by($dimension,le) (rate($metric_name{$filters}[$duration])))
+      params:
+        - name: quantile
+          required: true
+        - name: duration
+          required: true
+        - name: start_time
+          required: false
+        - name: end_time
+          required: false
+      metrics:
+        - metric_name: monovtx_processing_time_bucket
+          required_filters:
+            - namespace
+            - mvtx_name
+          dimensions:
+            - name: pod
+              #expr: optional
+              filters:
+                - name: pod
+                  required: false
+            - name: mono-vertex
+              #expr: optional
 kind: ConfigMap
 metadata:
   name: numaflow-metrics-proxy-config
