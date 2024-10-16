@@ -15,7 +15,7 @@ use numaflow_grpc::clients::sourcetransformer::{
 
 use crate::config::config;
 use crate::error::{Error, Result};
-use crate::message::{Message, MessageID, Offset};
+use crate::message::{get_vertex_name, Message, MessageID, Offset};
 use crate::shared::utils::utc_from_timestamp;
 
 const DROP: &str = "U+005C__DROP__";
@@ -168,7 +168,7 @@ impl SourceTransformer {
                 }
                 let message = Message {
                     id: MessageID {
-                        vertex_name: Default::default(),
+                        vertex_name: get_vertex_name().to_string(),
                         index: i as i32,
                         offset: msg_info.offset.to_string(),
                     },

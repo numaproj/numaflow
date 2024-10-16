@@ -14,7 +14,21 @@ use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
-use std::fmt;
+use std::sync::OnceLock;
+use std::{env, fmt};
+
+const NUMAFLOW_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
+const NUMAFLOW_VERTEX_NAME: &str = "NUMAFLOW_VERTEX_NAME";
+
+static VERTEX_NAME: OnceLock<String> = OnceLock::new();
+
+pub(crate) fn get_vertex_name() -> &'static str {
+    VERTEX_NAME.get_or_init(|| {
+        env::var(NUMAFLOW_MONO_VERTEX_NAME)
+            .or_else(|_| env::var(NUMAFLOW_VERTEX_NAME))
+            .unwrap_or_default()
+    })
+}
 
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,7 +113,7 @@ impl TryFrom<Message> for Vec<u8> {
                 }),
                 kind: numaflow_grpc::objects::isb::MessageKind::Data as i32,
                 id: Some(numaflow_grpc::objects::isb::MessageId {
-                    vertex_name: Default::default(),
+                    vertex_name: get_vertex_name().to_string(),
                     offset: message.offset.to_string(),
                     index: 0,
                 }),
@@ -193,7 +207,7 @@ impl TryFrom<read_response::Result> for Message {
             offset: source_offset.clone(),
             event_time: utc_from_timestamp(result.event_time),
             id: MessageID {
-                vertex_name: "".to_string(),
+                vertex_name: get_vertex_name().to_string(),
                 offset: source_offset.offset,
                 index: 0,
             },
