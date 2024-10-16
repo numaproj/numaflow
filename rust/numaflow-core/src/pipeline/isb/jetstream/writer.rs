@@ -4,7 +4,6 @@ use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::Context;
 use bytes::Bytes;
-use futures::channel::oneshot::Sender;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
@@ -19,8 +18,8 @@ pub(super) struct JetstreamWriter {
 }
 
 impl JetstreamWriter {
-    pub(super) fn new(js_ctx: Context) -> Self {
-        let (paf_resolver_tx, paf_resolver_rx) = mpsc::channel::<PublishResult>(500);
+    pub(super) fn new(js_ctx: Context, batch_size: usize) -> Self {
+        let (paf_resolver_tx, paf_resolver_rx) = mpsc::channel::<PublishResult>(batch_size);
 
         let this = Self {
             js_ctx,
@@ -139,7 +138,7 @@ impl PafResolverActor {
         match result.paf.await {
             Ok(ack) => result.callee_tx.send(Ok(())).unwrap(),
             Err(e) => {
-                error!("Failed to resolve the future, trying sync write");
+                error!("Failed to resolve the future, trying blocking write");
                 match self
                     .js_writer
                     .blocking_write(result.stream, result.message.clone())
@@ -162,7 +161,7 @@ impl PafResolverActor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{Message, Offset};
+    use crate::message::{Message, MessageID, Offset};
     use async_nats::jetstream;
     use async_nats::jetstream::stream;
     use chrono::Utc;
@@ -185,7 +184,7 @@ mod tests {
             .await
             .unwrap();
 
-        let writer = JetstreamWriter::new(context.clone());
+        let writer = JetstreamWriter::new(context.clone(), 500);
 
         let message = Message {
             keys: vec!["key_0".to_string()],
@@ -195,7 +194,11 @@ mod tests {
                 partition_id: 0,
             },
             event_time: Utc::now(),
-            id: "id_0".to_string(),
+            id: MessageID {
+                vertex_name: "vertex".to_string(),
+                offset: "offset_0".to_string(),
+                index: 0,
+            },
             headers: HashMap::new(),
         };
 
@@ -227,7 +230,7 @@ mod tests {
             .await
             .unwrap();
 
-        let writer = JetstreamWriter::new(context.clone());
+        let writer = JetstreamWriter::new(context.clone(), 500);
 
         let message = Message {
             keys: vec!["key_0".to_string()],
@@ -237,7 +240,11 @@ mod tests {
                 partition_id: 1,
             },
             event_time: Utc::now(),
-            id: "id_0".to_string(),
+            id: MessageID {
+                vertex_name: "vertex".to_string(),
+                offset: "offset_0".to_string(),
+                index: 0,
+            },
             headers: HashMap::new(),
         };
 

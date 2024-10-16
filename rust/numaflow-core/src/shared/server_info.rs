@@ -729,7 +729,7 @@ mod tests {
         assert!(result.is_err());
         assert!(
             result.unwrap_err().to_string().contains(
-            "ServerInfoError Error - SDK version 0.0.9 must be upgraded to at least 0.1.0, in order to work with the current numaflow version"));
+            "ServerInfo Error - SDK version 0.0.9 must be upgraded to at least 0.1.0, in order to work with the current numaflow version"));
     }
 
     #[tokio::test]
@@ -904,7 +904,7 @@ mod tests {
         assert!(result.is_err());
         assert!(
             result.unwrap_err().to_string().contains(
-                "ServerInfoError Error - SDK version 0.0.9 must be upgraded to at least 0.1.0-rc3, in order to work with the current numaflow version"));
+                "ServerInfo Error - SDK version 0.0.9 must be upgraded to at least 0.1.0-rc3, in order to work with the current numaflow version"));
     }
 
     #[tokio::test]

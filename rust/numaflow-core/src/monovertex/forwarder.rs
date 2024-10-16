@@ -367,7 +367,7 @@ impl Forwarder {
                 // and keep only the failed messages to send again
                 // construct the error map for the failed messages
                 messages_to_send.retain(|msg| {
-                    if let Some(result) = result_map.get(&msg.id) {
+                    if let Some(result) = result_map.get(&msg.id.to_string()) {
                         return match result {
                             ResponseStatusFromSink::Success => false,
                             ResponseStatusFromSink::Failed(err_msg) => {
@@ -448,7 +448,7 @@ impl Forwarder {
                     // and keep only the failed messages to send again
                     // construct the error map for the failed messages
                     messages_to_send.retain(|msg| {
-                        if let Some(result) = result_map.get(&msg.id) {
+                        if let Some(result) = result_map.get(&msg.offset.to_string()) {
                             return match result {
                                 ResponseStatusFromSink::Success => false,
                                 ResponseStatusFromSink::Failed(err_msg) => {

@@ -1,6 +1,3 @@
-use std::cmp::PartialEq;
-use std::collections::HashMap;
-
 use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
 use crate::Error;
 use crate::Result;
@@ -12,7 +9,11 @@ use numaflow_grpc::clients::sink::Status::{Failure, Fallback, Success};
 use numaflow_grpc::clients::sink::{sink_response, SinkRequest, SinkResponse};
 use numaflow_grpc::clients::source::{read_response, AckRequest};
 use numaflow_grpc::clients::sourcetransformer::SourceTransformRequest;
+use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
+use std::cmp::PartialEq;
+use std::collections::HashMap;
+use std::fmt;
 
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,7 +27,7 @@ pub(crate) struct Message {
     /// event time of the message
     pub(crate) event_time: DateTime<Utc>,
     /// id of the message
-    pub(crate) id: String,
+    pub(crate) id: MessageID,
     /// headers of the message
     pub(crate) headers: HashMap<String, String>,
 }
@@ -38,6 +39,35 @@ pub(crate) struct Offset {
     pub(crate) offset: String,
     /// partition id of the message
     pub(crate) partition_id: i32,
+}
+
+impl fmt::Display for Offset {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}-{}", self.offset, self.partition_id)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct MessageID {
+    pub(crate) vertex_name: String,
+    pub(crate) offset: String,
+    pub(crate) index: i32,
+}
+
+impl MessageID {
+    fn new(vertex_name: String, offset: String, index: i32) -> Self {
+        Self {
+            vertex_name,
+            offset,
+            index,
+        }
+    }
+}
+
+impl fmt::Display for MessageID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}-{}-{}", self.vertex_name, self.offset, self.index)
+    }
 }
 
 impl From<Offset> for AckRequest {
@@ -58,11 +88,63 @@ impl From<Offset> for AckRequest {
 
 impl Message {
     pub(crate) fn to_bytes(&self) -> Result<Vec<u8>> {
-        bincode::serialize(self).map_err(|e| Error::Serde(e.to_string()))
+        let proto_message = numaflow_grpc::objects::isb::Message {
+            header: Some(numaflow_grpc::objects::isb::Header {
+                message_info: Some(numaflow_grpc::objects::isb::MessageInfo {
+                    event_time: prost_timestamp_from_utc(self.event_time),
+                    is_late: false, // Set this according to your logic
+                }),
+                kind: numaflow_grpc::objects::isb::MessageKind::Data as i32,
+                id: Some(numaflow_grpc::objects::isb::MessageId {
+                    vertex_name: Default::default(),
+                    offset: self.offset.to_string(),
+                    index: 0,
+                }),
+                keys: self.keys.clone(),
+                headers: self.headers.clone(),
+            }),
+            body: Some(numaflow_grpc::objects::isb::Body {
+                payload: self.value.clone(),
+            }),
+        };
+
+        let mut buf = Vec::new();
+        proto_message
+            .encode(&mut buf)
+            .map_err(|e| Error::Proto(e.to_string()))?;
+        Ok(buf)
     }
 
     pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        bincode::deserialize(bytes).map_err(|e| Error::Serde(e.to_string()))
+        let proto_message = numaflow_grpc::objects::isb::Message::decode(bytes)
+            .map_err(|e| Error::Proto(e.to_string()))?;
+
+        let header = proto_message
+            .header
+            .ok_or(Error::Proto("Missing header".to_string()))?;
+        let body = proto_message
+            .body
+            .ok_or(Error::Proto("Missing body".to_string()))?;
+        let message_info = header
+            .message_info
+            .ok_or(Error::Proto("Missing message_info".to_string()))?;
+        let id = header.id.ok_or(Error::Proto("Missing id".to_string()))?;
+
+        Ok(Message {
+            keys: header.keys,
+            value: body.payload,
+            offset: Offset {
+                offset: id.offset.clone(),
+                partition_id: 0, // Set this according to your logic
+            },
+            event_time: utc_from_timestamp(message_info.event_time),
+            id: MessageID {
+                vertex_name: id.vertex_name,
+                offset: id.offset,
+                index: id.index,
+            },
+            headers: header.headers,
+        })
     }
 }
 
@@ -72,7 +154,7 @@ impl From<Message> for SourceTransformRequest {
         Self {
             request: Some(
                 numaflow_grpc::clients::sourcetransformer::source_transform_request::Request {
-                    id: message.id,
+                    id: message.id.to_string(),
                     keys: message.keys,
                     value: message.value,
                     event_time: prost_timestamp_from_utc(message.event_time),
@@ -103,7 +185,11 @@ impl TryFrom<read_response::Result> for Message {
             value: result.payload,
             offset: source_offset.clone(),
             event_time: utc_from_timestamp(result.event_time),
-            id: format!("{}-{}", source_offset.partition_id, source_offset.offset),
+            id: MessageID {
+                vertex_name: "".to_string(),
+                offset: source_offset.offset,
+                index: 0,
+            },
             headers: result.headers,
         })
     }
@@ -118,7 +204,7 @@ impl From<Message> for SinkRequest {
                 value: message.value,
                 event_time: prost_timestamp_from_utc(message.event_time),
                 watermark: None,
-                id: message.id,
+                id: message.id.to_string(),
                 headers: message.headers,
             }),
             status: None,

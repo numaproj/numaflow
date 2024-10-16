@@ -11,6 +11,7 @@ use tokio::sync::{mpsc, oneshot};
 pub(super) mod writer;
 
 /// ISB Writer accepts an Actor pattern based messages.
+#[derive(Debug)]
 enum ActorMessage {
     /// Write the messages to ISB
     Write {
@@ -52,17 +53,6 @@ impl WriterActor {
                 // writer will do the right thing for the callee :)
                 self.js_writer.write(stream, message.clone(), success).await
             }
-            // {
-            //     Ok(_) => {
-            //         // all is good
-            //     }
-            //     Err(e) => {
-            //         log::error!("Failed to write message: {}", e);
-            //         success
-            //             .send(Err(Error::ISB(format!("Failed to write message: {}", e))))
-            //             .expect("send should not fail");
-            //     }
-            // },
             ActorMessage::Stop => {
                 // Handle stop logic if necessary
             }
@@ -85,7 +75,7 @@ impl WriterHandle {
     pub(super) fn new(js_ctx: Context, batch_size: usize) -> Self {
         let (sender, receiver) = mpsc::channel::<ActorMessage>(batch_size);
 
-        let js_writer = JetstreamWriter::new(js_ctx);
+        let js_writer = JetstreamWriter::new(js_ctx, batch_size);
         let mut actor = WriterActor::new(js_writer.clone(), receiver, batch_size);
 
         tokio::spawn(async move {
@@ -118,7 +108,7 @@ impl WriterHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{Message, Offset};
+    use crate::message::{Message, MessageID, Offset};
     use async_nats::jetstream;
     use async_nats::jetstream::stream;
     use chrono::Utc;
@@ -146,6 +136,7 @@ mod tests {
         let batch_size = 500;
         let handler = WriterHandle::new(context.clone(), batch_size);
 
+        let mut result_receivers = Vec::new();
         // Publish 500 messages
         for i in 0..500 {
             let message = Message {
@@ -156,7 +147,11 @@ mod tests {
                     partition_id: i,
                 },
                 event_time: Utc::now(),
-                id: format!("id_{}", i),
+                id: MessageID {
+                    vertex_name: "vertex".to_string(),
+                    offset: format!("offset_{}", i),
+                    index: i,
+                },
                 headers: HashMap::new(),
             };
             let (sender, receiver) = oneshot::channel();
@@ -166,13 +161,14 @@ mod tests {
                 success: sender,
             };
             handler.sender.send(msg).await.unwrap();
+            result_receivers.push(receiver);
+        }
 
-            // Await the result
+        for receiver in result_receivers {
             let result = receiver.await.unwrap();
             assert!(result.is_ok());
-
-            let result = result.unwrap();
         }
+
         context.delete_stream(stream_name).await.unwrap();
     }
 }

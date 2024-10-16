@@ -119,7 +119,7 @@ mod tests {
     use tracing::info;
 
     use crate::error::Result;
-    use crate::message::{Message, Offset};
+    use crate::message::{Message, MessageID, Offset};
     use crate::shared::utils::create_rpc_channel;
     use crate::sink::user_defined::UserDefinedSink;
     use numaflow_grpc::clients::sink::sink_client::SinkClient;
@@ -182,7 +182,11 @@ mod tests {
                 },
                 event_time: Utc::now(),
                 headers: Default::default(),
-                id: "one".to_string(),
+                id: MessageID {
+                    vertex_name: "vertex".to_string(),
+                    offset: "1".to_string(),
+                    index: 0,
+                },
             },
             Message {
                 keys: vec![],
@@ -193,7 +197,11 @@ mod tests {
                 },
                 event_time: Utc::now(),
                 headers: Default::default(),
-                id: "two".to_string(),
+                id: MessageID {
+                    vertex_name: "vertex".to_string(),
+                    offset: "2".to_string(),
+                    index: 1,
+                },
             },
         ];
 

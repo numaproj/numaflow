@@ -31,8 +31,8 @@ pub enum Error {
     #[error("ServerInfo Error - {0}")]
     ServerInfo(String),
 
-    #[error("Serde Error - {0}")]
-    Serde(String),
+    #[error("Proto Error - {0}")]
+    Proto(String),
 
     #[error("ISB Error - {0}")]
     ISB(String),
