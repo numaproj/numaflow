@@ -138,7 +138,7 @@ const (
 	EnvDebug                            = "NUMAFLOW_DEBUG"
 	EnvPPROF                            = "NUMAFLOW_PPROF"
 	EnvHealthCheckDisabled              = "NUMAFLOW_HEALTH_CHECK_DISABLED"
-	EnvGRPCMaxMessageSize               = "numaflow_pb_MAX_MESSAGE_SIZE"
+	EnvGRPCMaxMessageSize               = "NUMAFLOW_GRPC_MAX_MESSAGE_SIZE"
 	EnvCPURequest                       = "NUMAFLOW_CPU_REQUEST"
 	EnvCPULimit                         = "NUMAFLOW_CPU_LIMIT"
 	EnvMemoryRequest                    = "NUMAFLOW_MEMORY_REQUEST"
