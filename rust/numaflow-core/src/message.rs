@@ -235,7 +235,7 @@ impl From<Message> for SinkRequest {
 }
 
 /// Sink's status for each [Message] written to Sink.
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub(crate) enum ResponseStatusFromSink {
     /// Successfully wrote to the Sink.
     Success,
@@ -291,5 +291,232 @@ impl TryFrom<SinkResponse> for ResponseFromSink {
             id: value.id,
             status,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+    use numaflow_pb::clients::sink::sink_response::Result as SinkResult;
+    use numaflow_pb::clients::source::Offset as SourceOffset;
+    use numaflow_pb::objects::isb::{
+        Body, Header, Message as ProtoMessage, MessageId, MessageInfo,
+    };
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_offset_display() {
+        let offset = Offset {
+            offset: "123".to_string(),
+            partition_id: 1,
+        };
+        assert_eq!(format!("{}", offset), "123-1");
+    }
+
+    #[test]
+    fn test_message_id_display() {
+        let message_id = MessageID {
+            vertex_name: "vertex".to_string(),
+            offset: "123".to_string(),
+            index: 0,
+        };
+        assert_eq!(format!("{}", message_id), "vertex-123-0");
+    }
+
+    #[test]
+    fn test_offset_to_ack_request() {
+        let offset = Offset {
+            offset: BASE64_STANDARD.encode("123"),
+            partition_id: 1,
+        };
+        let ack_request: AckRequest = offset.into();
+        assert_eq!(ack_request.request.unwrap().offset.unwrap().partition_id, 1);
+    }
+
+    #[test]
+    fn test_message_to_vec_u8() {
+        let message = Message {
+            keys: vec!["key1".to_string()],
+            value: vec![1, 2, 3],
+            offset: Offset {
+                offset: "123".to_string(),
+                partition_id: 0,
+            },
+            event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+            id: MessageID {
+                vertex_name: "vertex".to_string(),
+                offset: "123".to_string(),
+                index: 0,
+            },
+            headers: HashMap::new(),
+        };
+
+        let result: Result<Vec<u8>> = message.clone().try_into();
+        assert!(result.is_ok());
+
+        let proto_message = ProtoMessage {
+            header: Some(Header {
+                message_info: Some(MessageInfo {
+                    event_time: prost_timestamp_from_utc(message.event_time),
+                    is_late: false,
+                }),
+                kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
+                id: Some(MessageId {
+                    vertex_name: get_vertex_name().to_string(),
+                    offset: message.offset.to_string(),
+                    index: 0,
+                }),
+                keys: message.keys.clone(),
+                headers: message.headers.clone(),
+            }),
+            body: Some(Body {
+                payload: message.value.clone(),
+            }),
+        };
+
+        let mut buf = Vec::new();
+        prost::Message::encode(&proto_message, &mut buf).unwrap();
+        assert_eq!(result.unwrap(), buf);
+    }
+
+    #[test]
+    fn test_vec_u8_to_message() {
+        let proto_message = ProtoMessage {
+            header: Some(Header {
+                message_info: Some(MessageInfo {
+                    event_time: prost_timestamp_from_utc(Utc.timestamp_opt(1627846261, 0).unwrap()),
+                    is_late: false,
+                }),
+                kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
+                id: Some(MessageId {
+                    vertex_name: "vertex".to_string(),
+                    offset: "123".to_string(),
+                    index: 0,
+                }),
+                keys: vec!["key1".to_string()],
+                headers: HashMap::new(),
+            }),
+            body: Some(Body {
+                payload: vec![1, 2, 3],
+            }),
+        };
+
+        let mut buf = Vec::new();
+        prost::Message::encode(&proto_message, &mut buf).unwrap();
+
+        let result: Result<Message> = buf.try_into();
+        assert!(result.is_ok());
+
+        let message = result.unwrap();
+        assert_eq!(message.keys, vec!["key1".to_string()]);
+        assert_eq!(message.value, vec![1, 2, 3]);
+        assert_eq!(message.offset.offset, "123");
+        assert_eq!(
+            message.event_time,
+            Utc.timestamp_opt(1627846261, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_message_to_source_transform_request() {
+        let message = Message {
+            keys: vec!["key1".to_string()],
+            value: vec![1, 2, 3],
+            offset: Offset {
+                offset: "123".to_string(),
+                partition_id: 0,
+            },
+            event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+            id: MessageID {
+                vertex_name: "vertex".to_string(),
+                offset: "123".to_string(),
+                index: 0,
+            },
+            headers: HashMap::new(),
+        };
+
+        let request: SourceTransformRequest = message.into();
+        assert!(request.request.is_some());
+    }
+
+    #[test]
+    fn test_read_response_result_to_message() {
+        let result = read_response::Result {
+            payload: vec![1, 2, 3],
+            offset: Some(SourceOffset {
+                offset: BASE64_STANDARD.encode("123").into_bytes(),
+                partition_id: 0,
+            }),
+            event_time: Some(
+                prost_timestamp_from_utc(Utc.timestamp_opt(1627846261, 0).unwrap()).unwrap(),
+            ),
+            keys: vec!["key1".to_string()],
+            headers: HashMap::new(),
+        };
+
+        let message: Result<Message> = result.try_into();
+        assert!(message.is_ok());
+
+        let message = message.unwrap();
+        assert_eq!(message.keys, vec!["key1".to_string()]);
+        assert_eq!(message.value, vec![1, 2, 3]);
+        assert_eq!(
+            message.event_time,
+            Utc.timestamp_opt(1627846261, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_message_to_sink_request() {
+        let message = Message {
+            keys: vec!["key1".to_string()],
+            value: vec![1, 2, 3],
+            offset: Offset {
+                offset: "123".to_string(),
+                partition_id: 0,
+            },
+            event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+            id: MessageID {
+                vertex_name: "vertex".to_string(),
+                offset: "123".to_string(),
+                index: 0,
+            },
+            headers: HashMap::new(),
+        };
+
+        let request: SinkRequest = message.into();
+        assert!(request.request.is_some());
+    }
+
+    #[test]
+    fn test_response_from_sink_to_sink_response() {
+        let response = ResponseFromSink {
+            id: "123".to_string(),
+            status: ResponseStatusFromSink::Success,
+        };
+
+        let sink_response: SinkResponse = response.into();
+        assert_eq!(sink_response.result.unwrap().status, Success as i32);
+    }
+
+    #[test]
+    fn test_sink_response_to_response_from_sink() {
+        let sink_response = SinkResponse {
+            result: Some(SinkResult {
+                id: "123".to_string(),
+                status: Success as i32,
+                err_msg: "".to_string(),
+            }),
+            handshake: None,
+            status: None,
+        };
+
+        let response: Result<ResponseFromSink> = sink_response.try_into();
+        assert!(response.is_ok());
+
+        let response = response.unwrap();
+        assert_eq!(response.id, "123");
+        assert_eq!(response.status, ResponseStatusFromSink::Success);
     }
 }
