@@ -3,6 +3,7 @@ use crate::Error;
 use crate::Result;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_grpc::clients::sink::sink_request::Request;
 use numaflow_grpc::clients::sink::Status::{Failure, Fallback, Success};
@@ -86,25 +87,27 @@ impl From<Offset> for AckRequest {
     }
 }
 
-impl Message {
-    pub(crate) fn to_bytes(&self) -> Result<Vec<u8>> {
+impl TryFrom<Message> for Vec<u8> {
+    type Error = Error;
+
+    fn try_from(message: Message) -> std::result::Result<Self, Self::Error> {
         let proto_message = numaflow_grpc::objects::isb::Message {
             header: Some(numaflow_grpc::objects::isb::Header {
                 message_info: Some(numaflow_grpc::objects::isb::MessageInfo {
-                    event_time: prost_timestamp_from_utc(self.event_time),
+                    event_time: prost_timestamp_from_utc(message.event_time),
                     is_late: false, // Set this according to your logic
                 }),
                 kind: numaflow_grpc::objects::isb::MessageKind::Data as i32,
                 id: Some(numaflow_grpc::objects::isb::MessageId {
                     vertex_name: Default::default(),
-                    offset: self.offset.to_string(),
+                    offset: message.offset.to_string(),
                     index: 0,
                 }),
-                keys: self.keys.clone(),
-                headers: self.headers.clone(),
+                keys: message.keys.clone(),
+                headers: message.headers.clone(),
             }),
             body: Some(numaflow_grpc::objects::isb::Body {
-                payload: self.value.clone(),
+                payload: message.value.clone(),
             }),
         };
 
@@ -114,9 +117,13 @@ impl Message {
             .map_err(|e| Error::Proto(e.to_string()))?;
         Ok(buf)
     }
+}
 
-    pub(crate) fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        let proto_message = numaflow_grpc::objects::isb::Message::decode(bytes)
+impl TryFrom<Vec<u8>> for Message {
+    type Error = Error;
+
+    fn try_from(bytes: Vec<u8>) -> std::result::Result<Self, Self::Error> {
+        let proto_message = numaflow_grpc::objects::isb::Message::decode(Bytes::from(bytes))
             .map_err(|e| Error::Proto(e.to_string()))?;
 
         let header = proto_message
