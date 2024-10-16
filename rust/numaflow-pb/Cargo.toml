@@ -1,9 +1,9 @@
 [[bin]]
-name = "numaflow-grpc"
+name = "numaflow-pb"
 path = "src/main.rs"
 
 [package]
-name = "numaflow-grpc"
+name = "numaflow-pb"
 version = "0.1.0"
 edition = "2021"
 

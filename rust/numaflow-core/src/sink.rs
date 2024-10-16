@@ -3,7 +3,7 @@ use tonic::transport::Channel;
 
 use crate::config::config;
 use crate::message::{Message, ResponseFromSink};
-use numaflow_grpc::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::sink::sink_client::SinkClient;
 use user_defined::UserDefinedSink;
 
 mod log;
