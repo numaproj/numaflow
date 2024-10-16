@@ -24,9 +24,9 @@ use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{debug, error, info};
 
-use numaflow_grpc::clients::sink::sink_client::SinkClient;
-use numaflow_grpc::clients::source::source_client::SourceClient;
-use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 
 use crate::config::config;
 use crate::source::SourceHandle;

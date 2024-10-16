@@ -1547,7 +1547,7 @@ version = "0.1.0"
 dependencies = [
  "backoff",
  "numaflow-core",
- "numaflow-grpc",
+ "numaflow-pb",
  "servesink",
  "serving",
  "tokio",
@@ -1614,8 +1614,8 @@ dependencies = [
  "kube",
  "log",
  "numaflow 0.1.1 (git+https://github.com/numaproj/numaflow-rs.git?rev=9fb3c0ad0f5f43cc42b4919f849b7dcce9a91387)",
- "numaflow-grpc",
  "numaflow-models",
+ "numaflow-pb",
  "parking_lot",
  "pep440_rs",
  "pin-project",
@@ -1641,17 +1641,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "numaflow-grpc"
-version = "0.1.0"
-dependencies = [
- "prost",
- "prost-build",
- "prost-types",
- "tonic",
- "tonic-build",
-]
-
-[[package]]
 name = "numaflow-models"
 version = "0.0.0-pre"
 dependencies = [
@@ -1663,6 +1652,17 @@ dependencies = [
  "serde_json",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "numaflow-pb"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "prost-build",
+ "prost-types",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]

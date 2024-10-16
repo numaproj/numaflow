@@ -6,9 +6,9 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::info;
 
-use numaflow_grpc::clients::sink::sink_client::SinkClient;
-use numaflow_grpc::clients::source::source_client::SourceClient;
-use numaflow_grpc::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 
 use crate::config::{config, Settings};
 use crate::error::{self, Error};
