@@ -1657,6 +1657,7 @@ dependencies = [
  "prometheus-client",
  "prost",
  "prost-types",
+ "rand",
  "rcgen",
  "rustls 0.23.14",
  "semver",

@@ -1,11 +1,11 @@
-use std::time::Duration;
-
-use bytes::Bytes;
 use futures::StreamExt;
 
-use crate::message::{Message, MessageID, Offset};
-use crate::reader;
+use crate::config;
 use crate::source;
+use crate::{
+    message::{Message, Offset},
+    reader,
+};
 
 /// Stream Generator returns a set of messages for every `.next` call. It will throttle itself if
 /// the call exceeds the RPU. It will return a max (batch size, RPU) till the quota for that unit of
@@ -30,7 +30,11 @@ mod stream_generator {
     use bytes::Bytes;
     use futures::Stream;
     use pin_project::pin_project;
+    use rand::Rng;
     use tokio::time::MissedTickBehavior;
+
+    use crate::config;
+    use crate::message::{Message, MessageID, Offset};
 
     #[pin_project]
     pub(super) struct StreamGenerator {
@@ -43,44 +47,161 @@ mod stream_generator {
         /// the amount of credits used for the current time-period.
         /// remaining = (rpu - used) for that time-period
         used: usize,
+
+        value: Option<i64>,
+        msg_size_bytes: u32,
+        keys: (Vec<String>, usize),
+        jitter: Duration,
+
         #[pin]
         tick: tokio::time::Interval,
     }
 
     impl StreamGenerator {
-        pub(super) fn new(content: Bytes, rpu: usize, batch: usize, unit: Duration) -> Self {
-            let mut tick = tokio::time::interval(unit);
+        // pub(super) fn new(content: Bytes, mut rpu: usize, batch: usize, unit: Duration) -> Self {
+        pub(super) fn new(cfg: config::GeneratorConfig, batch_size: usize) -> Self {
+            let mut tick = tokio::time::interval(Duration::from_millis(cfg.duration as u64));
             tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
+            let keys = (0..cfg.key_count)
+                .map(|i| format!("key-{}-{}", config::config().replica, i))
+                .collect();
+
             Self {
-                content,
-                rpu,
+                content: cfg.content,
+                rpu: cfg.rpu,
                 // batch cannot > rpu
-                batch: if batch > rpu { rpu } else { batch },
+                batch: std::cmp::min(cfg.rpu, batch_size),
                 used: 0,
                 tick,
+                value: cfg.value,
+                msg_size_bytes: cfg.msg_size_bytes,
+                keys: (keys, 0),
+                jitter: cfg.jitter,
             }
+        }
+
+        // Generates a similar payload as the Go implementation.
+        // This is only needed if the user has not specified `valueBlob` in the generator source configuration in the pipeline
+        fn generate_payload(value: i64, msg_size_bytes: u32) -> Vec<u8> {
+            #[derive(serde::Serialize)]
+            struct Data {
+                value: i64,
+                // only to ensure a desired message size
+                #[serde(skip_serializing_if = "Vec::is_empty")]
+                padding: Vec<u8>,
+            }
+
+            let padding: Vec<u8> = (msg_size_bytes > 8)
+                .then(|| {
+                    let size = msg_size_bytes - 8;
+                    let mut bytes = vec![0; size as usize];
+                    rand::thread_rng().fill(&mut bytes[..]);
+                    bytes
+                })
+                .unwrap_or_default();
+
+            let data = Data { value, padding };
+            serde_json::to_vec(&data).unwrap()
+        }
+
+        fn create_message(
+            data: Bytes,
+            keys: Vec<String>,
+            value: Option<i64>,
+            msg_size_bytes: u32,
+            jitter: Duration,
+        ) -> Message {
+            let id = chrono::Utc::now()
+                .timestamp_nanos_opt()
+                .unwrap_or_default()
+                .to_string();
+
+            // rng.gen_range(0..0) panics with "cannot sample empty range"
+            // rng.gen_range(0..1) will always produce 0
+            let jitter = jitter.as_secs().max(1);
+            let event_time =
+                chrono::Utc::now() - Duration::from_secs(rand::thread_rng().gen_range(0..jitter));
+            let mut data = data.to_vec();
+            if data.is_empty() {
+                let value = match value {
+                    Some(v) => v,
+                    None => event_time.timestamp_nanos_opt().unwrap_or_default(),
+                };
+                data = Self::generate_payload(value, msg_size_bytes);
+            }
+
+            Message {
+                keys,
+                value: data,
+                offset: Offset {
+                    offset: id.clone(),
+                    partition_id: 0,
+                },
+                event_time,
+                id: MessageID {
+                    vertex_name: Default::default(),
+                    offset: id,
+                    index: Default::default(),
+                },
+                headers: Default::default(),
+            }
+        }
+
+        fn generate_messages(
+            count: usize,
+            content: Bytes,
+            value: Option<i64>,
+            msg_size_bytes: u32,
+            keys: &mut (Vec<String>, usize),
+            jitter: Duration,
+        ) -> Vec<Message> {
+            let mut data = Vec::with_capacity(count);
+            for _ in 0..count {
+                let idx = keys.1;
+                let keys = match keys.0.get(idx) {
+                    Some(key) => {
+                        keys.1 = (idx + 1) % keys.0.len();
+                        vec![key.clone()]
+                    }
+                    None => vec![],
+                };
+                data.push(Self::create_message(
+                    content.clone(),
+                    keys,
+                    value,
+                    msg_size_bytes,
+                    jitter,
+                ));
+            }
+            data
         }
     }
 
     impl Stream for StreamGenerator {
-        type Item = Vec<Bytes>;
+        type Item = Vec<Message>;
 
         fn poll_next(
             mut self: Pin<&mut StreamGenerator>,
             cx: &mut Context<'_>,
         ) -> Poll<Option<Self::Item>> {
+            let jitter = self.jitter;
             let mut this = self.as_mut().project();
-
             match this.tick.poll_tick(cx) {
                 // Poll::Ready means we are ready to send data the whole batch since enough time
                 // has passed.
                 Poll::Ready(_) => {
                     // generate data that equals to batch data
-                    let data = vec![this.content.clone(); *this.batch];
+                    let data = Self::generate_messages(
+                        *this.batch,
+                        this.content.clone(),
+                        *this.value,
+                        *this.msg_size_bytes,
+                        this.keys,
+                        jitter,
+                    );
                     // reset used quota
                     *this.used = *this.batch;
-
                     Poll::Ready(Some(data))
                 }
                 Poll::Pending => {
@@ -92,8 +213,15 @@ mod stream_generator {
 
                         // update the counters
                         *this.used += to_send;
-
-                        Poll::Ready(Some(vec![this.content.clone(); to_send]))
+                        let data = Self::generate_messages(
+                            to_send,
+                            this.content.clone(),
+                            *this.value,
+                            *this.msg_size_bytes,
+                            this.keys,
+                            jitter,
+                        );
+                        Poll::Ready(Some(data))
                     } else {
                         Poll::Pending
                     }
@@ -119,25 +247,31 @@ mod stream_generator {
             // Define the content to be generated
             let content = Bytes::from("test_data");
             // Define requests per unit (rpu), batch size, and time unit
-            let rpu = 10;
             let batch = 6;
-            let unit = Duration::from_millis(100);
+            let rpu = 10;
+            let cfg = config::GeneratorConfig {
+                content: content.clone(),
+                rpu,
+                jitter: Duration::from_millis(0),
+                duration: 100,
+                ..Default::default()
+            };
 
             // Create a new StreamGenerator
-            let mut stream_generator = StreamGenerator::new(content.clone(), rpu, batch, unit);
+            let mut stream_generator = StreamGenerator::new(cfg, batch);
 
             // Collect the first batch of data
             let first_batch = stream_generator.next().await.unwrap();
             assert_eq!(first_batch.len(), batch);
             for item in first_batch {
-                assert_eq!(item, content);
+                assert_eq!(item.value, content);
             }
 
             // Collect the second batch of data
             let second_batch = stream_generator.next().await.unwrap();
             assert_eq!(second_batch.len(), rpu - batch);
             for item in second_batch {
-                assert_eq!(item, content);
+                assert_eq!(item.value, content);
             }
 
             // no there is no more data left in the quota
@@ -148,7 +282,7 @@ mod stream_generator {
             let third_batch = stream_generator.next().await.unwrap();
             assert_eq!(third_batch.len(), 6);
             for item in third_batch {
-                assert_eq!(item, content);
+                assert_eq!(item.value, content);
             }
 
             // we should now have data
@@ -164,12 +298,10 @@ mod stream_generator {
 /// source to generate some messages. We mainly use generator for load testing and integration
 /// testing of Numaflow. The load generated is per replica.
 pub(crate) fn new_generator(
-    content: Bytes,
-    rpu: usize,
-    batch: usize,
-    unit: Duration,
+    cfg: config::GeneratorConfig,
+    batch_size: usize,
 ) -> crate::Result<(GeneratorRead, GeneratorAck, GeneratorLagReader)> {
-    let gen_read = GeneratorRead::new(content, rpu, batch, unit);
+    let gen_read = GeneratorRead::new(cfg, batch_size);
     let gen_ack = GeneratorAck::new();
     let gen_lag_reader = GeneratorLagReader::new();
 
@@ -183,8 +315,8 @@ pub(crate) struct GeneratorRead {
 impl GeneratorRead {
     /// A new [GeneratorRead] is returned. It takes a static content, requests per unit-time, batch size
     /// to return per [source::SourceReader::read], and the unit-time as duration.
-    fn new(content: Bytes, rpu: usize, batch: usize, unit: Duration) -> Self {
-        let stream_generator = stream_generator::StreamGenerator::new(content, rpu, batch, unit);
+    fn new(cfg: config::GeneratorConfig, batch_size: usize) -> Self {
+        let stream_generator = stream_generator::StreamGenerator::new(cfg.clone(), batch_size);
         Self { stream_generator }
     }
 }
@@ -195,38 +327,10 @@ impl source::SourceReader for GeneratorRead {
     }
 
     async fn read(&mut self) -> crate::error::Result<Vec<Message>> {
-        match self.stream_generator.next().await {
-            None => {
-                panic!("Stream generator has stopped");
-            }
-            Some(data) => Ok(data
-                .iter()
-                .map(|msg| {
-                    // FIXME: better id?
-                    let id = chrono::Utc::now()
-                        .timestamp_nanos_opt()
-                        .unwrap_or_default()
-                        .to_string();
-
-                    Message {
-                        keys: vec![],
-                        value: msg.clone().to_vec(),
-                        // FIXME: better offset?
-                        offset: Offset {
-                            offset: id.clone(),
-                            partition_id: 0,
-                        },
-                        event_time: Default::default(),
-                        id: MessageID {
-                            vertex_name: Default::default(),
-                            offset: id,
-                            index: Default::default(),
-                        },
-                        headers: Default::default(),
-                    }
-                })
-                .collect::<Vec<_>>()),
-        }
+        let Some(messages) = self.stream_generator.next().await else {
+            panic!("Stream generator has stopped");
+        };
+        Ok(messages)
     }
 
     fn partitions(&self) -> Vec<u16> {
@@ -266,6 +370,7 @@ impl reader::LagReader for GeneratorLagReader {
 
 #[cfg(test)]
 mod tests {
+    use bytes::Bytes;
     use tokio::time::Duration;
 
     use super::*;
@@ -279,20 +384,68 @@ mod tests {
         // Define requests per unit (rpu), batch size, and time unit
         let rpu = 10;
         let batch = 5;
-        let unit = Duration::from_millis(100);
+        let cfg = config::GeneratorConfig {
+            content: content.clone(),
+            rpu,
+            jitter: Duration::from_millis(0),
+            duration: 100,
+            ..Default::default()
+        };
 
         // Create a new Generator
-        let mut generator = GeneratorRead::new(content.clone(), rpu, batch, unit);
+        let mut generator = GeneratorRead::new(cfg, batch);
 
         // Read the first batch of messages
         let messages = generator.read().await.unwrap();
         assert_eq!(messages.len(), batch);
+
+        assert!(messages.first().unwrap().value.eq(&content));
 
         // Verify that each message has the expected structure
 
         // Read the second batch of messages
         let messages = generator.read().await.unwrap();
         assert_eq!(messages.len(), rpu - batch);
+    }
+
+    #[tokio::test]
+    async fn test_generator_read_with_random_data() {
+        // Here we do not provide any content, so the generator will generate random data
+        // Define requests per unit (rpu), batch size, and time unit
+        let rpu = 10;
+        let batch = 5;
+        let cfg = config::GeneratorConfig {
+            content: Bytes::new(),
+            rpu,
+            jitter: Duration::from_millis(0),
+            duration: 100,
+            key_count: 3,
+            msg_size_bytes: 100,
+            ..Default::default()
+        };
+
+        // Create a new Generator
+        let mut generator = GeneratorRead::new(cfg, batch);
+
+        // Read the first batch of messages
+        let messages = generator.read().await.unwrap();
+        let keys = messages
+            .iter()
+            .map(|m| m.keys[0].clone())
+            .collect::<Vec<_>>();
+
+        let expected_keys = vec![
+            "key-0-0".to_string(),
+            "key-0-1".to_string(),
+            "key-0-2".to_string(),
+            "key-0-0".to_string(),
+            "key-0-1".to_string(),
+        ];
+
+        assert_eq!(keys, expected_keys);
+        assert!(messages.first().unwrap().value.len() >= 100);
+
+        assert_eq!(messages.len(), batch);
     }
 
     #[tokio::test]

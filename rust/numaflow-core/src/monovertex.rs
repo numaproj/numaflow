@@ -1,15 +1,14 @@
-use std::time::Duration;
-
 use forwarder::ForwarderBuilder;
 use metrics::UserDefinedContainerState;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::config::{config, Settings};
 use crate::error::{self, Error};
@@ -45,7 +44,7 @@ pub async fn mono_vertex() -> error::Result<()> {
 
     // Run the forwarder with cancellation token.
     if let Err(e) = start_forwarder(cln_token, config()).await {
-        tracing::error!("Application error: {:?}", e);
+        error!("Application error: {:?}", e);
 
         // abort the signal handler task since we have an error and we are shutting down
         if !shutdown_handle.is_finished() {
@@ -217,12 +216,8 @@ async fn fetch_source(
 
     // now that we know it is not a user-defined source, it has to be a built-in
     if let Some(generator_config) = &config.generator_config {
-        let (source_read, source_ack, lag_reader) = new_generator(
-            generator_config.content.clone(),
-            generator_config.rpu,
-            config.batch_size as usize,
-            Duration::from_millis(generator_config.duration as u64),
-        )?;
+        let (source_read, source_ack, lag_reader) =
+            new_generator(generator_config.clone(), config.batch_size as usize)?;
         Ok(SourceType::Generator(source_read, source_ack, lag_reader))
     } else {
         Err(Error::Config("No valid source configuration found".into()))
