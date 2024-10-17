@@ -1,16 +1,18 @@
-use crate::error::Error;
-use crate::Result;
+use std::time::Duration;
+
 use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::Context;
 use bytes::Bytes;
 use log::warn;
-use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
+
+use crate::error::Error;
+use crate::Result;
 
 #[derive(Clone, Debug)]
 /// Writes to JetStream ISB. Exposes both write and blocking methods to write messages.
@@ -183,12 +185,14 @@ impl PafResolverActor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::message::{Message, MessageID, Offset};
+    use std::collections::HashMap;
+
     use async_nats::jetstream;
     use async_nats::jetstream::stream;
     use chrono::Utc;
-    use std::collections::HashMap;
+
+    use super::*;
+    use crate::message::{Message, MessageID, Offset};
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]

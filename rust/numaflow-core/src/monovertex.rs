@@ -1,14 +1,15 @@
 use std::time::Duration;
 
+use forwarder::ForwarderBuilder;
+use metrics::UserDefinedContainerState;
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::info;
-
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 
 use crate::config::{config, Settings};
 use crate::error::{self, Error};
@@ -21,8 +22,6 @@ use crate::source::user_defined::{
 };
 use crate::source::SourceHandle;
 use crate::transformer::user_defined::SourceTransformHandle;
-use forwarder::ForwarderBuilder;
-use metrics::UserDefinedContainerState;
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
@@ -292,16 +291,18 @@ async fn start_forwarder_with_source(
 
 #[cfg(test)]
 mod tests {
+    use std::fs::File;
+    use std::io::Write;
+
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source};
+    use tokio::sync::mpsc::Sender;
+    use tokio_util::sync::CancellationToken;
+
     use crate::config::{Settings, UDSinkConfig, UDSourceConfig};
     use crate::error;
     use crate::monovertex::start_forwarder;
     use crate::shared::server_info::ServerInfo;
-    use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{sink, source};
-    use std::fs::File;
-    use std::io::Write;
-    use tokio::sync::mpsc::Sender;
-    use tokio_util::sync::CancellationToken;
 
     struct SimpleSource;
     #[tonic::async_trait]

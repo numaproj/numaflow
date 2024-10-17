@@ -1,11 +1,12 @@
 use std::env;
 use std::sync::OnceLock;
 
-use crate::Error::ParseConfig;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use numaflow_models::models::PipelineSpec;
 use serde::{Deserialize, Serialize};
+
+use crate::Error::ParseConfig;
 
 const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 
