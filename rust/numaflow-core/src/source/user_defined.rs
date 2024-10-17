@@ -186,7 +186,7 @@ impl SourceAcker for UserDefinedSourceAck {
 
         // send n ack requests
         for offset in offsets {
-            let request = offset.into();
+            let request = offset.try_into()?;
             self.ack_tx
                 .send(request)
                 .await
@@ -331,7 +331,7 @@ mod tests {
         assert_eq!(messages.len(), 5);
 
         let response = src_ack
-            .ack(messages.iter().map(|m| m.offset.clone()).collect())
+            .ack(messages.iter().map(|m| m.offset.clone().unwrap()).collect())
             .await;
         assert!(response.is_ok());
 
