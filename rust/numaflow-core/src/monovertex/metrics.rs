@@ -759,7 +759,7 @@ mod tests {
         // The first tick happens immediately, so we don't need to wait for the refresh_interval for the first iteration to complete.
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        // Get the stored values for all time intevals
+        // Get the stored values for all time intervals
         // We will store the values corresponding to the labels (from LOOKBACK_SECONDS_MAP) "1m", "default", "5m", "15" in the same order in this array
         let mut stored_values: [i64; 4] = [0; 4];
         {

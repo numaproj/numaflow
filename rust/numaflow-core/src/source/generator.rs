@@ -1,6 +1,7 @@
 use futures::StreamExt;
 
-use crate::message::{Message, Offset};
+use crate::message::{Message, MessageID, Offset};
+use crate::reader;
 use crate::source;
 use crate::{config, reader};
 

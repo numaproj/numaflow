@@ -3,6 +3,10 @@ name = "numaflow-core"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+nats-tests = []
+all-tests = ["nats-tests"]
+
 [dependencies]
 axum = "0.7.5"
 axum-server = { version = "0.7.1", features = ["tls-rustls"] }
@@ -38,6 +42,7 @@ log = "0.4.22"
 futures = "0.3.30"
 pin-project = "1.1.5"
 rand = "0.8.5"
+async-nats = "0.37.0"
 
 [dev-dependencies]
 tempfile = "3.11.0"
