@@ -6,6 +6,7 @@ use user_defined::UserDefinedSink;
 use crate::config::config;
 use crate::message::{Message, ResponseFromSink};
 
+mod blackhole;
 mod log;
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
