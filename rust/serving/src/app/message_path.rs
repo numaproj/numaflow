@@ -3,10 +3,9 @@ use axum::{
     routing, Router,
 };
 
-use crate::app::response::ApiError;
-
 use super::callback::state::State as CallbackState;
 use super::callback::store::Store;
+use crate::app::response::ApiError;
 
 pub fn get_message_path<T: Send + Sync + Clone + Store + 'static>(
     callback_store: CallbackState<T>,
@@ -44,11 +43,10 @@ mod tests {
     use axum::http::StatusCode;
     use tower::ServiceExt;
 
+    use super::*;
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::app::tracker::MessageGraph;
     use crate::pipeline::min_pipeline_spec;
-
-    use super::*;
 
     #[tokio::test]
     async fn test_message_path_not_present() {

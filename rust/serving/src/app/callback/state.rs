@@ -5,11 +5,10 @@ use std::{
 
 use tokio::sync::oneshot;
 
+use super::store::Store;
 use crate::app::callback::{store::PayloadToSave, CallbackRequest};
 use crate::app::tracker::MessageGraph;
 use crate::Error;
-
-use super::store::Store;
 
 struct RequestState {
     // Channel to notify when all callbacks for a message is received
@@ -235,10 +234,9 @@ where
 mod tests {
     use axum::body::Bytes;
 
+    use super::*;
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::pipeline::min_pipeline_spec;
-
-    use super::*;
 
     #[tokio::test]
     async fn test_state() {

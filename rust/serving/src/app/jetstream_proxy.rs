@@ -12,11 +12,10 @@ use axum::{
 use tracing::error;
 use uuid::Uuid;
 
+use super::callback::{state::State as CallbackState, store::Store};
 use crate::app::callback::state;
 use crate::app::response::{ApiError, ServeResponse};
 use crate::config;
-
-use super::callback::{state::State as CallbackState, store::Store};
 
 // TODO:
 // - [ ] better health check
@@ -273,14 +272,13 @@ mod tests {
     use serde_json::{json, Value};
     use tower::ServiceExt;
 
+    use super::*;
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::app::callback::store::PayloadToSave;
     use crate::app::callback::CallbackRequest;
     use crate::app::tracker::MessageGraph;
     use crate::pipeline::min_pipeline_spec;
     use crate::Error;
-
-    use super::*;
 
     #[derive(Clone)]
     struct MockStore;

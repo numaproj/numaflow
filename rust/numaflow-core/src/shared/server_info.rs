@@ -458,9 +458,10 @@ mod version {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
     use std::io::{Read, Write};
     use std::{collections::HashMap, fs::File};
+
+    use serde_json::json;
     use tempfile::tempdir;
 
     use super::*;
