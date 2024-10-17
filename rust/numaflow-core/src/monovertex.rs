@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use forwarder::ForwarderBuilder;
 use metrics::UserDefinedContainerState;
 use numaflow_pb::clients::sink::sink_client::SinkClient;

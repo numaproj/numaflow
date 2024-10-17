@@ -23,11 +23,6 @@ use crate::{
 /// ```
 /// NOTE: The minimum granularity of duration is 10ms.
 mod stream_generator {
-    use bytes::Bytes;
-    use futures::Stream;
-    use pin_project::pin_project;
-    use rand::Rng;
-
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use std::time::Duration;
@@ -35,6 +30,7 @@ mod stream_generator {
     use bytes::Bytes;
     use futures::Stream;
     use pin_project::pin_project;
+    use rand::Rng;
     use tokio::time::MissedTickBehavior;
 
     use crate::config;
