@@ -149,7 +149,6 @@ impl Forwarder {
         let (offsets, bytes_count): (Vec<Offset>, u64) = messages.iter().fold(
             (Vec::with_capacity(messages.len()), 0),
             |(mut offsets, mut bytes_count), msg| {
-                // FIXME: unwrap
                 offsets.push(msg.offset.clone().unwrap());
                 bytes_count += msg.value.len() as u64;
                 (offsets, bytes_count)

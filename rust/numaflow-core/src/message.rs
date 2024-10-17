@@ -35,6 +35,7 @@ pub(crate) fn get_vertex_name() -> &'static str {
 
 static VERTEX_REPLICA: OnceLock<u16> = OnceLock::new();
 
+// fetch the vertex replica information from the environment variable
 pub(crate) fn get_vertex_replica() -> &'static u16 {
     VERTEX_REPLICA.get_or_init(|| {
         env::var(NUMAFLOW_REPLICA)
@@ -77,6 +78,7 @@ impl fmt::Display for Offset {
     }
 }
 
+/// IntOffset is integer based offset enum type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntOffset {
     offset: u64,
@@ -108,6 +110,7 @@ impl fmt::Display for IntOffset {
     }
 }
 
+/// StringOffset is string based offset enum type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StringOffset {
     offset: String,
@@ -606,5 +609,27 @@ mod tests {
         let response = response.unwrap();
         assert_eq!(response.id, "123");
         assert_eq!(response.status, ResponseStatusFromSink::Success);
+    }
+
+    #[test]
+    fn test_message_id_from_proto() {
+        let proto_id = MessageId {
+            vertex_name: "vertex".to_string(),
+            offset: "123".to_string(),
+            index: 0,
+        };
+        let message_id: MessageID = proto_id.into();
+        assert_eq!(message_id.vertex_name, "vertex");
+        assert_eq!(message_id.offset, "123");
+        assert_eq!(message_id.index, 0);
+    }
+
+    #[test]
+    fn test_message_id_to_proto() {
+        let message_id = MessageID::new("vertex".to_string(), "123".to_string(), 0);
+        let proto_id: MessageId = message_id.into();
+        assert_eq!(proto_id.vertex_name, "vertex");
+        assert_eq!(proto_id.offset, "123");
+        assert_eq!(proto_id.index, 0);
     }
 }
