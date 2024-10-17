@@ -7,8 +7,11 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
-/// Jetstream Writer is responsible for writing messages to Jetstream ISB.
-/// it exposes both sync and async methods to write messages.
+/// JetStream Writer is responsible for writing messages to JetStream ISB.
+/// it exposes both sync and async methods to write messages. It has gates
+/// to prevent writing into the buffer if the buffer is full. After successful
+/// writes, it will let the callee know the status (or return a non-retryable
+/// exception).
 pub(super) mod writer;
 
 /// ISB Writer accepts an Actor pattern based messages.

@@ -4,19 +4,22 @@ use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::Context;
 use bytes::Bytes;
-use log::warn;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
+use tracing::{debug, warn};
 
 #[derive(Clone, Debug)]
 /// Writes to JetStream ISB. Exposes both write and blocking methods to write messages.
 /// It accepts a cancellation token to stop infinite retries during shutdown.
 pub(super) struct JetstreamWriter {
     js_ctx: Context,
+    is_full: Arc<AtomicBool>,
     paf_resolver_tx: mpsc::Sender<ResolveAndPublishResult>,
     cancel_token: CancellationToken,
 }
@@ -30,17 +33,31 @@ impl JetstreamWriter {
 
         let this = Self {
             js_ctx,
+            is_full: Arc::new(AtomicBool::new(false)),
             paf_resolver_tx,
             cancel_token,
         };
 
-        let mut resolver_actor = PafResolverActor::new(this.clone(), paf_resolver_rx);
+        // spawn a task for checking whether buffer is_full
 
+        tokio::task::spawn({
+            let mut this = this.clone();
+            async move {
+                this.get_stream_stats().await;
+            }
+        });
+
+        // spawn a task for resolving PAFs
+        let mut resolver_actor = PafResolverActor::new(this.clone(), paf_resolver_rx);
         tokio::spawn(async move {
             resolver_actor.run().await;
         });
 
         this
+    }
+
+    async fn get_stream_stats(&mut self) {
+        self.is_full.store(true, Ordering::Relaxed);
     }
 
     /// Writes the message to the JetStream ISB and returns a future which can be
@@ -54,19 +71,24 @@ impl JetstreamWriter {
     ) {
         let js_ctx = self.js_ctx.clone();
 
-        // FIXME: add gate for buffer-full check.
-
         // loop till we get a PAF, there could be other reasons why PAFs cannot be created.
         let paf = loop {
-            match js_ctx.publish(stream, Bytes::from(payload.clone())).await {
-                Ok(paf) => {
-                    break paf;
+            // let's write only if the buffer is not full
+            match self.is_full.load(Ordering::Relaxed) {
+                true => {
+                    // FIXME: add metrics
+                    debug!(%stream, "buffer is full");
                 }
-                Err(e) => {
-                    error!(?e, "publishing failed, retrying");
-                    sleep(Duration::from_millis(10)).await;
-                }
+                false => match js_ctx.publish(stream, Bytes::from(payload.clone())).await {
+                    Ok(paf) => {
+                        break paf;
+                    }
+                    Err(e) => {
+                        error!(?e, "publishing failed, retrying");
+                    }
+                },
             }
+            // short-circuit out in failure mode if shutdown has been initiated
             if self.cancel_token.is_cancelled() {
                 error!("Shutdown signal received, exiting write loop");
                 callee_tx
@@ -74,6 +96,10 @@ impl JetstreamWriter {
                     .unwrap();
                 return;
             }
+
+            // FIXME: make it configurable
+            // sleep to avoid busy looping
+            sleep(Duration::from_millis(10)).await;
         };
 
         // send the paf and callee_tx over
