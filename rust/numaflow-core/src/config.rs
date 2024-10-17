@@ -43,7 +43,7 @@ pub mod jetstream {
     const DEFAULT_USAGE_LIMIT: f64 = 0.8;
     const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
     const DEFAULT_BUFFER_FULL_STRATEGY: BufferFullStrategy = BufferFullStrategy::RetryUntilSuccess;
-    const DEFAULT_RETRY_TIMEOUT_MILLIS: u64 = 10;
+    const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 
     #[derive(Debug, Clone)]
     pub(crate) struct StreamWriterConfig {
@@ -53,7 +53,7 @@ pub mod jetstream {
         pub refresh_interval: Duration,
         pub usage_limit: f64,
         pub buffer_full_strategy: BufferFullStrategy,
-        pub retry_timeout: Duration,
+        pub retry_interval: Duration,
     }
 
     impl Default for StreamWriterConfig {
@@ -65,7 +65,7 @@ pub mod jetstream {
                 usage_limit: DEFAULT_USAGE_LIMIT,
                 refresh_interval: Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS),
                 buffer_full_strategy: DEFAULT_BUFFER_FULL_STRATEGY,
-                retry_timeout: Duration::from_millis(DEFAULT_RETRY_TIMEOUT_MILLIS),
+                retry_interval: Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS),
             }
         }
     }

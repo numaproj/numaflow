@@ -5,7 +5,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config::jetstream::StreamWriterConfig;
 use crate::error::Error;
-use crate::message::Message;
+use crate::message::{Message, Offset};
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::Result;
 
@@ -24,11 +24,11 @@ struct ActorMessage {
     /// once the message has been successfully written, we can let the sender know.
     /// This can be used to trigger Acknowledgement of the message from the Reader.
     // FIXME: concrete type and better name
-    callee_tx: oneshot::Sender<Result<u64>>,
+    callee_tx: oneshot::Sender<Result<Offset>>,
 }
 
 impl ActorMessage {
-    fn new(message: Message, callee_tx: oneshot::Sender<Result<u64>>) -> Self {
+    fn new(message: Message, callee_tx: oneshot::Sender<Result<Offset>>) -> Self {
         Self { message, callee_tx }
     }
 }
@@ -92,7 +92,10 @@ impl WriterHandle {
         Self { sender }
     }
 
-    pub(crate) async fn write(&self, message: Message) -> Result<oneshot::Receiver<Result<u64>>> {
+    pub(crate) async fn write(
+        &self,
+        message: Message,
+    ) -> Result<oneshot::Receiver<Result<Offset>>> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::new(message, sender);
         self.sender
@@ -116,7 +119,7 @@ mod tests {
     use tokio::time::Instant;
 
     use super::*;
-    use crate::message::{Message, MessageID, Offset};
+    use crate::message::{Message, MessageID};
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -152,10 +155,7 @@ mod tests {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
                 value: format!("message {}", i).as_bytes().to_vec(),
-                offset: Offset {
-                    offset: format!("offset_{}", i),
-                    partition_id: i,
-                },
+                offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
                     vertex_name: "vertex".to_string(),
@@ -214,10 +214,7 @@ mod tests {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
                 value: format!("message {}", i).as_bytes().to_vec(),
-                offset: Offset {
-                    offset: format!("offset_{}", i),
-                    partition_id: 0,
-                },
+                offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
                     vertex_name: "vertex".to_string(),
@@ -234,10 +231,7 @@ mod tests {
         let message = Message {
             keys: vec!["key_101".to_string()],
             value: vec![0; 1024],
-            offset: Offset {
-                offset: "offset_101".to_string(),
-                partition_id: 0,
-            },
+            offset: None,
             event_time: Utc::now(),
             id: MessageID {
                 vertex_name: "vertex".to_string(),
@@ -305,10 +299,7 @@ mod tests {
                 let message = Message {
                     keys: vec![format!("key_{}", i)],
                     value: format!("message {}", i).as_bytes().to_vec(),
-                    offset: Offset {
-                        offset: format!("offset_{}", i),
-                        partition_id: i,
-                    },
+                    offset: None,
                     event_time: Utc::now(),
                     id: MessageID {
                         vertex_name: "".to_string(),
