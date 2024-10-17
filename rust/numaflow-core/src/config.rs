@@ -9,7 +9,6 @@ use tracing::warn;
 
 use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
 
-
 use crate::Error;
 
 const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
