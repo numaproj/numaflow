@@ -52,7 +52,9 @@ pub(crate) struct Message {
     pub(crate) keys: Vec<String>,
     /// actual payload of the message
     pub(crate) value: Vec<u8>,
-    /// offset of the message
+    /// offset of the message, it is optional because offset is only
+    /// available when we read the message, and we don't persist the
+    /// offset in the ISB.
     pub(crate) offset: Option<Offset>,
     /// event time of the message
     pub(crate) event_time: DateTime<Utc>,

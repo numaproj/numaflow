@@ -225,7 +225,7 @@ impl JetstreamWriter {
                 },
                 Err(e) => {
                     error!(?e, "publishing failed, retrying");
-                    sleep(Duration::from_millis(10)).await;
+                    sleep(self.config.retry_interval).await;
                 }
             }
             if self.cancel_token.is_cancelled() {

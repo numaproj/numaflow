@@ -146,15 +146,18 @@ impl Forwarder {
             .get_or_create(&self.common_labels)
             .inc_by(msg_count);
 
-        let (offsets, bytes_count): (Vec<Offset>, u64) = messages.iter().fold(
+        let (offsets, bytes_count): (Vec<Offset>, u64) = messages.iter().try_fold(
             (Vec::with_capacity(messages.len()), 0),
             |(mut offsets, mut bytes_count), msg| {
-                // FIXME:
-                offsets.push(msg.offset.clone().unwrap());
-                bytes_count += msg.value.len() as u64;
-                (offsets, bytes_count)
+                if let Some(offset) = &msg.offset {
+                    offsets.push(offset.clone());
+                    bytes_count += msg.value.len() as u64;
+                    Ok((offsets, bytes_count))
+                } else {
+                    Err(Error::Forwarder("Message offset is missing".to_string()))
+                }
             },
-        );
+        )?;
 
         forward_metrics()
             .read_bytes_total
