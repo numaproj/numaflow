@@ -301,7 +301,7 @@ impl Settings {
                 .sink
                 .as_deref()
                 .ok_or(Error::Config("Sink not found".to_string()))?
-                .log
+                .blackhole
                 .as_deref()
                 .map(|_| BlackholeConfig::default());
 
