@@ -430,6 +430,16 @@ mod tests {
         });
         let ack_request: AckRequest = offset.try_into().unwrap();
         assert_eq!(ack_request.request.unwrap().offset.unwrap().partition_id, 1);
+
+        let offset = Offset::Int(IntOffset::new(42, 1));
+        let result: Result<AckRequest> = offset.try_into();
+
+        // Assert that the conversion results in an error
+        assert!(result.is_err());
+
+        if let Err(e) = result {
+            assert_eq!(e.to_string(), "Source Error - IntOffset not supported");
+        }
     }
 
     #[test]
@@ -633,5 +643,36 @@ mod tests {
         assert_eq!(proto_id.vertex_name, "vertex");
         assert_eq!(proto_id.offset, "123");
         assert_eq!(proto_id.index, 0);
+    }
+
+    #[test]
+    fn test_offset_cases() {
+        let int_offset = IntOffset::new(42, 1);
+        assert_eq!(int_offset.offset, 42);
+        assert_eq!(int_offset.partition_idx, 1);
+        assert_eq!(format!("{}", int_offset), "42-1");
+
+        let string_offset = StringOffset::new("42".to_string(), 1);
+        assert_eq!(string_offset.offset, "42");
+        assert_eq!(string_offset.partition_idx, 1);
+        assert_eq!(format!("{}", string_offset), "42-1");
+
+        let offset_int = Offset::Int(int_offset);
+        assert_eq!(format!("{}", offset_int), "42-1");
+
+        let offset_string = Offset::String(string_offset);
+        assert_eq!(format!("{}", offset_string), "42-1");
+
+        // Test conversion from Offset to AckRequest for StringOffset
+        let offset = Offset::String(StringOffset::new(BASE64_STANDARD.encode("42"), 1));
+        let result: Result<AckRequest> = offset.try_into();
+        assert!(result.is_ok());
+        let ack_request = result.unwrap();
+        assert_eq!(ack_request.request.unwrap().offset.unwrap().partition_id, 1);
+
+        // Test conversion from Offset to AckRequest for IntOffset (should fail)
+        let offset = Offset::Int(IntOffset::new(42, 1));
+        let result: Result<AckRequest> = offset.try_into();
+        assert!(result.is_err());
     }
 }
