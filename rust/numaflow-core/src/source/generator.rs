@@ -1,9 +1,11 @@
 use futures::StreamExt;
 
-use crate::message::{Message, MessageID, Offset};
-use crate::reader;
+use crate::config;
 use crate::source;
-use crate::{config, reader};
+use crate::{
+    message::{Message, Offset},
+    reader,
+};
 
 /// Stream Generator returns a set of messages for every `.next` call. It will throttle itself if
 /// the call exceeds the RPU. It will return a max (batch size, RPU) till the quota for that unit of
@@ -23,7 +25,6 @@ use crate::{config, reader};
 mod stream_generator {
     use bytes::Bytes;
     use futures::Stream;
-    use log::warn;
     use pin_project::pin_project;
     use rand::Rng;
     use std::pin::Pin;
@@ -32,7 +33,7 @@ mod stream_generator {
     use tokio::time::MissedTickBehavior;
 
     use crate::config;
-    use crate::message::{Message, Offset};
+    use crate::message::{Message, MessageID, Offset};
 
     #[pin_project]
     pub(super) struct StreamGenerator {
@@ -46,7 +47,8 @@ mod stream_generator {
         /// remaining = (rpu - used) for that time-period
         used: usize,
 
-        value: i64,
+        value: Option<i64>,
+        msg_size_bytes: u32,
         keys: (Vec<String>, usize),
         jitter: Duration,
 
@@ -56,17 +58,9 @@ mod stream_generator {
 
     impl StreamGenerator {
         // pub(super) fn new(content: Bytes, mut rpu: usize, batch: usize, unit: Duration) -> Self {
-        pub(super) fn new(mut cfg: config::GeneratorConfig, batch_size: usize) -> Self {
+        pub(super) fn new(cfg: config::GeneratorConfig, batch_size: usize) -> Self {
             let mut tick = tokio::time::interval(Duration::from_millis(cfg.duration as u64));
             tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
-
-            if cfg.rpu > 10000 {
-                warn!(
-                    "Capping the rate to 10000 msg/sec. rate has been changed from {} to 10000",
-                    cfg.rpu
-                );
-                cfg.rpu = 10000;
-            }
 
             let keys = (0..cfg.key_count)
                 .map(|i| format!("key-{}-{}", config::config().replica, i))
@@ -80,16 +74,40 @@ mod stream_generator {
                 used: 0,
                 tick,
                 value: cfg.value,
+                msg_size_bytes: cfg.msg_size_bytes,
                 keys: (keys, 0),
                 jitter: cfg.jitter,
             }
         }
 
-        fn msg(
+        // Generates a similar payload as the Go implementation.
+        // This is only needed if the user has not specified `valueBlob` in the generator source configuration in the pipeline
+        fn generate_payload(value: i64, msg_size_bytes: u32) -> Vec<u8> {
+            #[derive(serde::Serialize)]
+            struct Data {
+                value: i64,
+                // only to ensure a desired message size
+                #[serde(skip_serializing_if = "Vec::is_empty")]
+                padding: Vec<u8>,
+            }
+
+            let mut padding = vec![];
+            if msg_size_bytes > 8 {
+                let size = msg_size_bytes - 8;
+                let mut bytes = vec![0; size as usize];
+                rand::thread_rng().fill(&mut bytes[..]);
+                padding = bytes;
+            }
+            let data = Data { value, padding };
+            serde_json::to_vec(&data).unwrap()
+        }
+
+        fn create_message(
             data: Bytes,
             keys: Vec<String>,
+            value: Option<i64>,
+            msg_size_bytes: u32,
             jitter: Duration,
-            rng: &mut rand::rngs::ThreadRng,
         ) -> Message {
             let id = chrono::Utc::now()
                 .timestamp_nanos_opt()
@@ -99,17 +117,30 @@ mod stream_generator {
             // rng.gen_range(0..0) panics with "cannot sample empty range"
             // rng.gen_range(0..1) will always produce 0
             let jitter = jitter.as_secs().max(1);
-            let event_time = chrono::Utc::now() - Duration::from_secs(rng.gen_range(0..jitter));
+            let event_time =
+                chrono::Utc::now() - Duration::from_secs(rand::thread_rng().gen_range(0..jitter));
+            let mut data = data.to_vec();
+            if data.is_empty() {
+                let value = match value {
+                    Some(v) => v,
+                    None => event_time.timestamp_nanos_opt().unwrap_or_default(),
+                };
+                data = Self::generate_payload(value, msg_size_bytes);
+            }
 
             Message {
                 keys,
-                value: data.to_vec(),
+                value: data,
                 offset: Offset {
                     offset: id.clone(),
                     partition_id: 0,
                 },
                 event_time,
-                id,
+                id: MessageID {
+                    vertex_name: Default::default(),
+                    offset: id,
+                    index: Default::default(),
+                },
                 headers: Default::default(),
             }
         }
@@ -124,7 +155,6 @@ mod stream_generator {
         ) -> Poll<Option<Self::Item>> {
             let jitter = self.jitter;
             let mut this = self.as_mut().project();
-            let mut rng = rand::thread_rng();
             match this.tick.poll_tick(cx) {
                 // Poll::Ready means we are ready to send data the whole batch since enough time
                 // has passed.
@@ -140,7 +170,13 @@ mod stream_generator {
                             }
                             None => vec![],
                         };
-                        data.push(Self::msg(this.content.clone(), keys, jitter, &mut rng));
+                        data.push(Self::create_message(
+                            this.content.clone(),
+                            keys,
+                            *this.value,
+                            *this.msg_size_bytes,
+                            jitter,
+                        ));
                     }
                     // reset used quota
                     *this.used = *this.batch;
@@ -166,7 +202,13 @@ mod stream_generator {
                                 }
                                 None => vec![],
                             };
-                            data.push(Self::msg(this.content.clone(), keys, jitter, &mut rng));
+                            data.push(Self::create_message(
+                                this.content.clone(),
+                                keys,
+                                *this.value,
+                                *this.msg_size_bytes,
+                                jitter,
+                            ));
                         }
                         Poll::Ready(Some(data))
                     } else {
@@ -345,11 +387,53 @@ mod tests {
         let messages = generator.read().await.unwrap();
         assert_eq!(messages.len(), batch);
 
+        assert!(messages.first().unwrap().value.eq(&content));
+
         // Verify that each message has the expected structure
 
         // Read the second batch of messages
         let messages = generator.read().await.unwrap();
         assert_eq!(messages.len(), rpu - batch);
+    }
+
+    #[tokio::test]
+    async fn test_generator_read_with_random_data() {
+        // Here we do not provide any content, so the generator will generate random data
+        // Define requests per unit (rpu), batch size, and time unit
+        let rpu = 10;
+        let batch = 5;
+        let cfg = config::GeneratorConfig {
+            content: Bytes::new(),
+            rpu,
+            jitter: Duration::from_millis(0),
+            duration: 100,
+            key_count: 3,
+            msg_size_bytes: 100,
+            ..Default::default()
+        };
+
+        // Create a new Generator
+        let mut generator = GeneratorRead::new(cfg, batch);
+
+        // Read the first batch of messages
+        let messages = generator.read().await.unwrap();
+        let keys = messages
+            .iter()
+            .map(|m| m.keys[0].clone())
+            .collect::<Vec<_>>();
+
+        let expected_keys = vec![
+            "key-0-0".to_string(),
+            "key-0-1".to_string(),
+            "key-0-2".to_string(),
+            "key-0-0".to_string(),
+            "key-0-1".to_string(),
+        ];
+
+        assert_eq!(keys, expected_keys);
+        assert!(messages.first().unwrap().value.len() >= 100);
+
+        assert_eq!(messages.len(), batch);
     }
 
     #[tokio::test]

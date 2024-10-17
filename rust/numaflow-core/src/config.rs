@@ -168,7 +168,7 @@ pub struct GeneratorConfig {
     pub rpu: usize,
     pub content: Bytes,
     pub duration: usize,
-    pub value: i64,
+    pub value: Option<i64>,
     pub key_count: u8,
     pub msg_size_bytes: u32,
     pub jitter: Duration,
@@ -178,9 +178,9 @@ impl Default for GeneratorConfig {
     fn default() -> Self {
         Self {
             rpu: 1,
-            content: bytes::Bytes::from("5"),
+            content: Bytes::new(),
             duration: 1000,
-            value: 0,
+            value: None,
             key_count: 0,
             msg_size_bytes: 8,
             jitter: Duration::from_secs(0),
@@ -348,9 +348,7 @@ impl Settings {
                         }
                     }
 
-                    if let Some(value) = generator_source.value {
-                        config.value = value;
-                    }
+                    config.value = generator_source.value;
 
                     Some(config)
                 }
