@@ -91,7 +91,10 @@ impl SourceTransformer {
             tracker.insert(
                 message.id.to_string(),
                 MessageInfo {
-                    offset: message.offset.clone(),
+                    offset: message
+                        .offset
+                        .clone()
+                        .ok_or(Error::Transformer("Message offset is missing".to_string()))?,
                     headers: message.headers.clone(),
                 },
             );
@@ -173,7 +176,7 @@ impl SourceTransformer {
                     },
                     keys: result.keys,
                     value: result.value,
-                    offset: msg_info.offset.clone(),
+                    offset: None,
                     event_time: utc_from_timestamp(result.event_time),
                     headers: msg_info.headers.clone(),
                 };
@@ -235,7 +238,7 @@ mod tests {
     use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
     use tempfile::TempDir;
 
-    use crate::message::MessageID;
+    use crate::message::{MessageID, StringOffset};
     use crate::shared::utils::create_rpc_channel;
     use crate::transformer::user_defined::SourceTransformHandle;
 
@@ -283,10 +286,10 @@ mod tests {
         let message = crate::message::Message {
             keys: vec!["first".into()],
             value: "hello".into(),
-            offset: crate::message::Offset {
-                partition_id: 0,
-                offset: "0".into(),
-            },
+            offset: Some(crate::message::Offset::String(StringOffset::new(
+                "0".to_string(),
+                0,
+            ))),
             event_time: chrono::Utc::now(),
             id: MessageID {
                 vertex_name: "vertex_name".to_string(),
@@ -362,10 +365,10 @@ mod tests {
         let message = crate::message::Message {
             keys: vec!["second".into()],
             value: "hello".into(),
-            offset: crate::message::Offset {
-                partition_id: 0,
-                offset: "0".into(),
-            },
+            offset: Some(crate::message::Offset::String(StringOffset::new(
+                "0".to_string(),
+                0,
+            ))),
             event_time: chrono::Utc::now(),
             id: MessageID {
                 vertex_name: "vertex_name".to_string(),

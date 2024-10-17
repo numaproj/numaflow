@@ -17,6 +17,7 @@ use tracing::{debug, warn};
 
 use crate::config::jetstream::StreamWriterConfig;
 use crate::error::Error;
+use crate::message::{IntOffset, Offset};
 use crate::Result;
 
 #[derive(Clone, Debug)]
@@ -148,7 +149,7 @@ impl JetstreamWriter {
     /// Writes the message to the JetStream ISB and returns a future which can be
     /// awaited to get the PublishAck. It will do infinite retries until the message
     /// gets published successfully. If it returns an error it means it is fatal error
-    pub(super) async fn write(&self, payload: Vec<u8>, callee_tx: oneshot::Sender<Result<u64>>) {
+    pub(super) async fn write(&self, payload: Vec<u8>, callee_tx: oneshot::Sender<Result<Offset>>) {
         let js_ctx = self.js_ctx.clone();
 
         // loop till we get a PAF, there could be other reasons why PAFs cannot be created.
@@ -241,7 +242,7 @@ impl JetstreamWriter {
 pub(super) struct ResolveAndPublishResult {
     paf: PublishAckFuture,
     payload: Vec<u8>,
-    callee_tx: oneshot::Sender<Result<u64>>,
+    callee_tx: oneshot::Sender<Result<Offset>>,
 }
 
 /// Resolves the PAF from the write call, if not successful it will do a blocking write so that
@@ -265,11 +266,23 @@ impl PafResolverActor {
     /// not successfully resolve, it will do blocking write till write to JetStream succeeds.
     async fn successfully_resolve_paf(&mut self, result: ResolveAndPublishResult) {
         match result.paf.await {
-            Ok(ack) => result.callee_tx.send(Ok(ack.sequence)).unwrap(),
+            Ok(ack) => result
+                .callee_tx
+                .send(Ok(Offset::Int(IntOffset::new(
+                    ack.sequence,
+                    self.js_writer.config.partition_idx,
+                ))))
+                .unwrap(),
             Err(e) => {
                 error!(?e, "Failed to resolve the future, trying blocking write");
                 match self.js_writer.blocking_write(result.payload.clone()).await {
-                    Ok(ack) => result.callee_tx.send(Ok(ack.sequence)).unwrap(),
+                    Ok(ack) => result
+                        .callee_tx
+                        .send(Ok(Offset::Int(IntOffset::new(
+                            ack.sequence,
+                            self.js_writer.config.partition_idx,
+                        ))))
+                        .unwrap(),
                     Err(e) => result.callee_tx.send(Err(e)).unwrap(),
                 }
             }
@@ -324,10 +337,7 @@ mod tests {
         let message = Message {
             keys: vec!["key_0".to_string()],
             value: "message 0".as_bytes().to_vec(),
-            offset: Offset {
-                offset: "offset_0".to_string(),
-                partition_id: 0,
-            },
+            offset: None,
             event_time: Utc::now(),
             id: MessageID {
                 vertex_name: "vertex".to_string(),
@@ -337,7 +347,7 @@ mod tests {
             headers: HashMap::new(),
         };
 
-        let (success_tx, success_rx) = oneshot::channel::<Result<u64>>();
+        let (success_tx, success_rx) = oneshot::channel::<Result<Offset>>();
         writer.write(message.try_into().unwrap(), success_tx).await;
         assert!(success_rx.await.is_ok());
 
@@ -373,10 +383,7 @@ mod tests {
         let message = Message {
             keys: vec!["key_0".to_string()],
             value: "message 0".as_bytes().to_vec(),
-            offset: Offset {
-                offset: "offset_0".to_string(),
-                partition_id: 1,
-            },
+            offset: None,
             event_time: Utc::now(),
             id: MessageID {
                 vertex_name: "vertex".to_string(),
@@ -428,10 +435,7 @@ mod tests {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
                 value: format!("message {}", i).as_bytes().to_vec(),
-                offset: Offset {
-                    offset: format!("offset_{}", i),
-                    partition_id: i,
-                },
+                offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
                     vertex_name: "vertex".to_string(),
@@ -440,7 +444,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
             };
-            let (success_tx, success_rx) = oneshot::channel::<Result<u64>>();
+            let (success_tx, success_rx) = oneshot::channel::<Result<Offset>>();
             writer.write(message.try_into().unwrap(), success_tx).await;
             result_receivers.push(success_rx);
         }
@@ -450,10 +454,7 @@ mod tests {
         let message = Message {
             keys: vec!["key_11".to_string()],
             value: vec![0; 1025],
-            offset: Offset {
-                offset: "offset_11".to_string(),
-                partition_id: 11,
-            },
+            offset: None,
             event_time: Utc::now(),
             id: MessageID {
                 vertex_name: "vertex".to_string(),
@@ -462,7 +463,7 @@ mod tests {
             },
             headers: HashMap::new(),
         };
-        let (success_tx, success_rx) = oneshot::channel::<Result<u64>>();
+        let (success_tx, success_rx) = oneshot::channel::<Result<Offset>>();
         writer.write(message.try_into().unwrap(), success_tx).await;
         result_receivers.push(success_rx);
 

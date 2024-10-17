@@ -149,7 +149,7 @@ impl Forwarder {
         let (offsets, bytes_count): (Vec<Offset>, u64) = messages.iter().fold(
             (Vec::with_capacity(messages.len()), 0),
             |(mut offsets, mut bytes_count), msg| {
-                offsets.push(msg.offset.clone());
+                offsets.push(msg.offset.clone().unwrap());
                 bytes_count += msg.value.len() as u64;
                 (offsets, bytes_count)
             },
@@ -448,7 +448,7 @@ impl Forwarder {
                     // and keep only the failed messages to send again
                     // construct the error map for the failed messages
                     messages_to_send.retain(|msg| {
-                        if let Some(result) = result_map.get(&msg.offset.to_string()) {
+                        if let Some(result) = result_map.get(&msg.id.to_string()) {
                             return match result {
                                 ResponseStatusFromSink::Success => false,
                                 ResponseStatusFromSink::Failed(err_msg) => {
