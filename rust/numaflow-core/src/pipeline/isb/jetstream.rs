@@ -1,12 +1,13 @@
+use async_nats::jetstream::Context;
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
+
 use crate::config::jetstream::StreamWriterConfig;
 use crate::error::Error;
 use crate::message::Message;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::Result;
-use async_nats::jetstream::Context;
-use tokio::sync::mpsc::Receiver;
-use tokio::sync::{mpsc, oneshot};
-use tokio_util::sync::CancellationToken;
 
 /// JetStream Writer is responsible for writing messages to JetStream ISB.
 /// it exposes both sync and async methods to write messages. It has gates
@@ -105,15 +106,17 @@ impl WriterHandle {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::message::{Message, MessageID, Offset};
+    use std::collections::HashMap;
+    use std::time::Duration;
+
     use async_nats::jetstream;
     use async_nats::jetstream::stream;
     use chrono::Utc;
-    use std::collections::HashMap;
-    use std::time::Duration;
     use tokio::sync::oneshot;
     use tokio::time::Instant;
+
+    use super::*;
+    use crate::message::{Message, MessageID, Offset};
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]

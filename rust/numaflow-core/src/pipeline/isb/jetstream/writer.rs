@@ -1,21 +1,23 @@
-use crate::config::jetstream::StreamWriterConfig;
-use crate::error::Error;
-use crate::Result;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
 use async_nats::jetstream::Context;
 use bytes::Bytes;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 use tracing::{debug, warn};
+
+use crate::config::jetstream::StreamWriterConfig;
+use crate::error::Error;
+use crate::Result;
 
 #[derive(Clone, Debug)]
 /// Writes to JetStream ISB. Exposes both write and blocking methods to write messages.
@@ -283,12 +285,15 @@ impl PafResolverActor {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::time::Instant;
+
+    use async_nats::jetstream;
+    use async_nats::jetstream::{consumer, stream};
+    use chrono::Utc;
+
     use super::*;
     use crate::message::{Message, MessageID, Offset};
-    use async_nats::jetstream;
-    use async_nats::jetstream::stream;
-    use chrono::Utc;
-    use std::collections::HashMap;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -485,6 +490,139 @@ mod tests {
             }
         }
 
+        context.delete_stream(stream_name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_fetch_buffer_usage() {
+        let js_url = "localhost:4222";
+        // Create JetStream context
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream_name = "test_fetch_buffer_usage";
+        let _stream = context
+            .get_or_create_stream(stream::Config {
+                name: stream_name.into(),
+                subjects: vec![stream_name.into()],
+                max_messages: 1000,
+                max_message_size: 1024,
+                max_messages_per_subject: 1000,
+                retention: Limits, // Set retention policy to Limits for solid usage
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_strict_on_stream(
+                consumer::Config {
+                    name: Some(stream_name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream_name,
+            )
+            .await
+            .unwrap();
+
+        let max_length = 100;
+
+        // Publish messages to fill the buffer
+        for _ in 0..80 {
+            context
+                .publish(stream_name, Bytes::from("test message"))
+                .await
+                .unwrap();
+        }
+
+        // Fetch buffer usage
+        let (soft_usage, solid_usage) =
+            JetstreamWriter::fetch_buffer_usage(context.clone(), stream_name, max_length)
+                .await
+                .unwrap();
+
+        // Verify the buffer usage metrics
+        assert_eq!(soft_usage, 0.8);
+        assert_eq!(soft_usage, 0.8);
+
+        // Clean up
+        context
+            .delete_consumer_from_stream(stream_name, stream_name)
+            .await
+            .unwrap();
+        context.delete_stream(stream_name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_check_stream_status() {
+        let js_url = "localhost:4222";
+        // Create JetStream context
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let config = StreamWriterConfig {
+            name: "test_check_stream_status".into(),
+            max_length: 100,
+            ..Default::default()
+        };
+        let stream_name = "test_check_stream_status";
+        let _stream = context
+            .get_or_create_stream(stream::Config {
+                name: stream_name.into(),
+                subjects: vec![stream_name.into()],
+                max_messages: 1000,
+                max_message_size: 1024,
+                max_messages_per_subject: 1000,
+                retention: Limits, // Set retention policy to Limits for solid usage
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_strict_on_stream(
+                consumer::Config {
+                    name: Some(stream_name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream_name,
+            )
+            .await
+            .unwrap();
+
+        let cancel_token = CancellationToken::new();
+        let writer = JetstreamWriter::new(config, context.clone(), 500, cancel_token.clone());
+
+        let mut js_writer = writer.clone();
+        // Simulate the stream status check
+        tokio::spawn(async move {
+            js_writer.check_stream_status().await;
+        });
+
+        // Publish messages to fill the buffer, since max_length is 100, we need to publish 80 messages
+        for _ in 0..80 {
+            context
+                .publish(stream_name, Bytes::from("test message"))
+                .await
+                .unwrap();
+        }
+
+        let start_time = Instant::now();
+        while !writer.is_full.load(Ordering::Relaxed) && start_time.elapsed().as_millis() < 1000 {
+            sleep(Duration::from_millis(5)).await;
+        }
+
+        // Verify the is_full flag
+        assert!(
+            writer.is_full.load(Ordering::Relaxed),
+            "Buffer should be full after publishing messages"
+        );
+
+        // Clean up
         context.delete_stream(stream_name).await.unwrap();
     }
 }
