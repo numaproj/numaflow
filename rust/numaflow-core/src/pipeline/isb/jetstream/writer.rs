@@ -159,6 +159,7 @@ impl JetstreamWriter {
                 true => {
                     // FIXME: add metrics
                     debug!(%self.config.name, "buffer is full");
+                    // FIXME: consider buffer-full strategy
                 }
                 false => match js_ctx
                     .publish(self.config.name.clone(), Bytes::from(payload.clone()))
@@ -181,9 +182,8 @@ impl JetstreamWriter {
                 return;
             }
 
-            // FIXME: make it configurable
             // sleep to avoid busy looping
-            sleep(Duration::from_millis(10)).await;
+            sleep(self.config.retry_interval).await;
         };
 
         // send the paf and callee_tx over
