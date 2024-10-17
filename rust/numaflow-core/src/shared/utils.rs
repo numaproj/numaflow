@@ -6,6 +6,9 @@ use axum::http::Uri;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use chrono::{DateTime, TimeZone, Timelike, Utc};
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use prost_types::Timestamp;
 use tokio::net::UnixStream;
 use tokio::task::JoinHandle;
@@ -24,9 +27,6 @@ use crate::monovertex::metrics::{
 use crate::shared::server_info;
 use crate::source::SourceHandle;
 use crate::Error;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 
 pub(crate) async fn check_compatibility(
     cln_token: &CancellationToken,
@@ -208,17 +208,19 @@ pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> Result<Channel, Error
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::shared::server_info::ServerInfo;
-    use crate::shared::utils::create_rpc_channel;
-    use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{sink, source, sourcetransform};
     use std::fs::File;
     use std::io::Write;
+
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source, sourcetransform};
     use tempfile::tempdir;
     use tokio::sync::mpsc;
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
+
+    use super::*;
+    use crate::shared::server_info::ServerInfo;
+    use crate::shared::utils::create_rpc_channel;
 
     async fn write_server_info(file_path: &str, server_info: &ServerInfo) -> error::Result<()> {
         let serialized = serde_json::to_string(server_info).unwrap();

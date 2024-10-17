@@ -1,10 +1,10 @@
+use numaflow_pb::clients::sink::sink_client::SinkClient;
 use tokio::sync::{mpsc, oneshot};
 use tonic::transport::Channel;
+use user_defined::UserDefinedSink;
 
 use crate::config::config;
 use crate::message::{Message, ResponseFromSink};
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use user_defined::UserDefinedSink;
 
 mod log;
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.

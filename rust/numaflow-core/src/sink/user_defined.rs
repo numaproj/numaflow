@@ -1,10 +1,9 @@
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
-
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 
 use crate::error;
 use crate::message::{Message, ResponseFromSink};
@@ -111,18 +110,17 @@ impl Sink for UserDefinedSink {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use chrono::offset::Utc;
     use numaflow::sink;
+    use numaflow_pb::clients::sink::sink_client::SinkClient;
     use tokio::sync::mpsc;
     use tracing::info;
 
+    use super::*;
     use crate::error::Result;
     use crate::message::{Message, MessageID, Offset};
     use crate::shared::utils::create_rpc_channel;
     use crate::sink::user_defined::UserDefinedSink;
-    use numaflow_pb::clients::sink::sink_client::SinkClient;
 
     struct Logger;
     #[tonic::async_trait]

@@ -1,5 +1,9 @@
 use std::collections::HashMap;
 
+use numaflow_pb::clients::sourcetransformer::{
+    self, source_transform_client::SourceTransformClient, SourceTransformRequest,
+    SourceTransformResponse,
+};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
@@ -7,11 +11,6 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::warn;
-
-use numaflow_pb::clients::sourcetransformer::{
-    self, source_transform_client::SourceTransformClient, SourceTransformRequest,
-    SourceTransformResponse,
-};
 
 use crate::config::config;
 use crate::error::{Error, Result};
@@ -232,12 +231,13 @@ mod tests {
     use std::error::Error;
     use std::time::Duration;
 
-    use crate::message::MessageID;
-    use crate::shared::utils::create_rpc_channel;
-    use crate::transformer::user_defined::SourceTransformHandle;
     use numaflow::sourcetransform;
     use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
     use tempfile::TempDir;
+
+    use crate::message::MessageID;
+    use crate::shared::utils::create_rpc_channel;
+    use crate::transformer::user_defined::SourceTransformHandle;
 
     struct NowCat;
 
