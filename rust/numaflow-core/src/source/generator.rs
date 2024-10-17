@@ -23,12 +23,13 @@ use crate::source;
 /// ```
 /// NOTE: The minimum granularity of duration is 10ms.
 mod stream_generator {
-    use bytes::Bytes;
-    use futures::Stream;
-    use pin_project::pin_project;
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use std::time::Duration;
+
+    use bytes::Bytes;
+    use futures::Stream;
+    use pin_project::pin_project;
     use tokio::time::MissedTickBehavior;
 
     #[pin_project]
@@ -109,8 +110,9 @@ mod stream_generator {
 
     #[cfg(test)]
     mod tests {
-        use super::*;
         use futures::StreamExt;
+
+        use super::*;
 
         #[tokio::test]
         async fn test_stream_generator() {
@@ -264,10 +266,11 @@ impl reader::LagReader for GeneratorLagReader {
 
 #[cfg(test)]
 mod tests {
+    use tokio::time::Duration;
+
     use super::*;
     use crate::reader::LagReader;
     use crate::source::{SourceAcker, SourceReader};
-    use tokio::time::Duration;
 
     #[tokio::test]
     async fn test_generator_read() {

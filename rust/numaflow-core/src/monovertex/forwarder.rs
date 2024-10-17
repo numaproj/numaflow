@@ -1,5 +1,11 @@
 use std::collections::HashMap;
 
+use chrono::Utc;
+use log::warn;
+use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, info};
+
 use crate::config::{config, OnFailureStrategy};
 use crate::error;
 use crate::message::{Message, Offset, ResponseStatusFromSink};
@@ -8,12 +14,6 @@ use crate::monovertex::metrics::forward_metrics;
 use crate::sink::SinkHandle;
 use crate::Error;
 use crate::{source::SourceHandle, transformer::user_defined::SourceTransformHandle};
-
-use chrono::Utc;
-use log::warn;
-use tokio::time::sleep;
-use tokio_util::sync::CancellationToken;
-use tracing::{debug, info};
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
@@ -527,14 +527,6 @@ impl Forwarder {
 mod tests {
     use std::collections::HashSet;
 
-    use crate::config::config;
-    use crate::monovertex::forwarder::ForwarderBuilder;
-    use crate::monovertex::SourceType;
-    use crate::shared::utils::create_rpc_channel;
-    use crate::sink::{SinkClientType, SinkHandle};
-    use crate::source::user_defined::new_source;
-    use crate::source::SourceHandle;
-    use crate::transformer::user_defined::SourceTransformHandle;
     use chrono::Utc;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
@@ -544,6 +536,15 @@ mod tests {
     use tokio::sync::mpsc;
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
+
+    use crate::config::config;
+    use crate::monovertex::forwarder::ForwarderBuilder;
+    use crate::monovertex::SourceType;
+    use crate::shared::utils::create_rpc_channel;
+    use crate::sink::{SinkClientType, SinkHandle};
+    use crate::source::user_defined::new_source;
+    use crate::source::SourceHandle;
+    use crate::transformer::user_defined::SourceTransformHandle;
 
     struct SimpleSource {
         yet_to_be_acked: std::sync::RwLock<HashSet<String>>,

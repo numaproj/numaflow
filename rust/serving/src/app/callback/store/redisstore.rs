@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
 use redis::aio::ConnectionManager;
 use redis::RedisError;
 use tokio::sync::Semaphore;
-
-use backoff::retry::Retry;
-use backoff::strategy::fixed;
 
 use super::PayloadToSave;
 use crate::app::callback::CallbackRequest;
@@ -198,11 +197,11 @@ impl super::Store for RedisConnection {
 #[cfg(feature = "redis-tests")]
 #[cfg(test)]
 mod tests {
-    use crate::app::callback::store::LocalStore;
     use axum::body::Bytes;
     use redis::AsyncCommands;
 
     use super::*;
+    use crate::app::callback::store::LocalStore;
 
     #[tokio::test]
     async fn test_redis_store() {

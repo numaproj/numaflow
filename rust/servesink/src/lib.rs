@@ -81,12 +81,14 @@ impl sink::Sinker for ServeSink {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use numaflow::sink::{SinkRequest, Sinker};
     use std::collections::HashMap;
+
+    use numaflow::sink::{SinkRequest, Sinker};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
     use tokio::sync::mpsc;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_serve_sink_without_url_header() {
