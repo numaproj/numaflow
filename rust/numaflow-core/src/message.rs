@@ -610,4 +610,26 @@ mod tests {
         assert_eq!(response.id, "123");
         assert_eq!(response.status, ResponseStatusFromSink::Success);
     }
+
+    #[test]
+    fn test_message_id_from_proto() {
+        let proto_id = MessageId {
+            vertex_name: "vertex".to_string(),
+            offset: "123".to_string(),
+            index: 0,
+        };
+        let message_id: MessageID = proto_id.into();
+        assert_eq!(message_id.vertex_name, "vertex");
+        assert_eq!(message_id.offset, "123");
+        assert_eq!(message_id.index, 0);
+    }
+
+    #[test]
+    fn test_message_id_to_proto() {
+        let message_id = MessageID::new("vertex".to_string(), "123".to_string(), 0);
+        let proto_id: MessageId = message_id.into();
+        assert_eq!(proto_id.vertex_name, "vertex");
+        assert_eq!(proto_id.offset, "123");
+        assert_eq!(proto_id.index, 0);
+    }
 }
