@@ -342,6 +342,7 @@ pub(crate) enum ResponseStatusFromSink {
 }
 
 /// Sink will give a response per [Message].
+#[derive(Debug, PartialEq)]
 pub(crate) struct ResponseFromSink {
     /// Unique id per [Message]. We need to track per [Message] status.
     pub(crate) id: String,

@@ -149,6 +149,7 @@ pub struct Settings {
     pub udsource_config: Option<UDSourceConfig>,
     pub udsink_config: Option<UDSinkConfig>,
     pub logsink_config: Option<()>,
+    pub blackhole_config: Option<BlackholeConfig>,
     pub fallback_config: Option<UDSinkConfig>,
     pub generator_config: Option<GeneratorConfig>,
 }
@@ -231,6 +232,10 @@ impl Default for GeneratorConfig {
     }
 }
 
+/// Configuration for the [BlackholeSink](crate::sink::blackhole::BlackholeSink)
+#[derive(Default, Debug, Clone)]
+pub struct BlackholeConfig {}
+
 impl Default for Settings {
     fn default() -> Self {
         // Create a default retry strategy from defined constants
@@ -259,6 +264,7 @@ impl Default for Settings {
             udsource_config: None,
             udsink_config: Default::default(),
             logsink_config: None,
+            blackhole_config: None,
             fallback_config: None,
             generator_config: None,
         }
@@ -345,6 +351,15 @@ impl Settings {
                 Some(_) => Some(UDSinkConfig::fallback_default()),
                 _ => None,
             };
+
+            settings.blackhole_config = mono_vertex_obj
+                .spec
+                .sink
+                .as_deref()
+                .ok_or(Error::Config("Sink not found".to_string()))?
+                .blackhole
+                .as_deref()
+                .map(|_| BlackholeConfig::default());
 
             settings.generator_config = match mono_vertex_obj
                 .spec
