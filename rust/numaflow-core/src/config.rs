@@ -9,6 +9,7 @@ use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
 
 use crate::Error;
 
+// TODO move constants to a separate module, separate consts for different components
 const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
 const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 const DEFAULT_SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";
@@ -30,6 +31,60 @@ const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
 const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX;
 const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
 const DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY: OnFailureStrategy = OnFailureStrategy::Retry;
+
+/// Jetstream ISB related configurations.
+pub mod jetstream {
+    use std::fmt;
+    use std::time::Duration;
+
+    // jetstream related constants
+    const DEFAULT_PARTITION_IDX: u16 = 0;
+    const DEFAULT_MAX_LENGTH: usize = 30000;
+    const DEFAULT_USAGE_LIMIT: f64 = 0.8;
+    const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
+    const DEFAULT_BUFFER_FULL_STRATEGY: BufferFullStrategy = BufferFullStrategy::RetryUntilSuccess;
+    const DEFAULT_RETRY_TIMEOUT_MILLIS: u64 = 10;
+
+    #[derive(Debug, Clone)]
+    pub(crate) struct StreamWriterConfig {
+        pub name: String,
+        pub partition_idx: u16,
+        pub max_length: usize,
+        pub refresh_interval: Duration,
+        pub usage_limit: f64,
+        pub buffer_full_strategy: BufferFullStrategy,
+        pub retry_timeout: Duration,
+    }
+
+    impl Default for StreamWriterConfig {
+        fn default() -> Self {
+            StreamWriterConfig {
+                name: "default".to_string(),
+                partition_idx: DEFAULT_PARTITION_IDX,
+                max_length: DEFAULT_MAX_LENGTH,
+                usage_limit: DEFAULT_USAGE_LIMIT,
+                refresh_interval: Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS),
+                buffer_full_strategy: DEFAULT_BUFFER_FULL_STRATEGY,
+                retry_timeout: Duration::from_millis(DEFAULT_RETRY_TIMEOUT_MILLIS),
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq)]
+    pub(crate) enum BufferFullStrategy {
+        RetryUntilSuccess,
+        DiscardLatest,
+    }
+
+    impl fmt::Display for BufferFullStrategy {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                BufferFullStrategy::RetryUntilSuccess => write!(f, "retryUntilSuccess"),
+                BufferFullStrategy::DiscardLatest => write!(f, "discardLatest"),
+            }
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum OnFailureStrategy {
