@@ -1,13 +1,12 @@
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
-use tonic::transport::Channel;
-use tonic::{Request, Streaming};
-
 use numaflow_pb::clients::source;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::source::{
     read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
 };
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::transport::Channel;
+use tonic::{Request, Streaming};
 
 use crate::config::config;
 use crate::message::{Message, Offset};
@@ -232,17 +231,16 @@ impl LagReader for UserDefinedSourceLagReader {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use std::collections::HashSet;
-
-    use crate::shared::utils::create_rpc_channel;
-    use numaflow_pb::clients::source::source_client::SourceClient;
 
     use chrono::Utc;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow_pb::clients::source::source_client::SourceClient;
     use tokio::sync::mpsc::Sender;
+
+    use super::*;
+    use crate::shared::utils::create_rpc_channel;
 
     struct SimpleSource {
         num: usize,

@@ -27,9 +27,14 @@ mod stream_generator {
     use futures::Stream;
     use pin_project::pin_project;
     use rand::Rng;
+
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use std::time::Duration;
+
+    use bytes::Bytes;
+    use futures::Stream;
+    use pin_project::pin_project;
     use tokio::time::MissedTickBehavior;
 
     use crate::config;
@@ -227,8 +232,9 @@ mod stream_generator {
 
     #[cfg(test)]
     mod tests {
-        use super::*;
         use futures::StreamExt;
+
+        use super::*;
 
         #[tokio::test]
         async fn test_stream_generator() {

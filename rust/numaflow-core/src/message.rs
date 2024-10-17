@@ -1,6 +1,8 @@
-use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
-use crate::Error;
-use crate::Result;
+use std::cmp::PartialEq;
+use std::collections::HashMap;
+use std::sync::OnceLock;
+use std::{env, fmt};
+
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
 use bytes::Bytes;
@@ -12,10 +14,10 @@ use numaflow_pb::clients::source::{read_response, AckRequest};
 use numaflow_pb::clients::sourcetransformer::SourceTransformRequest;
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
-use std::cmp::PartialEq;
-use std::collections::HashMap;
-use std::sync::OnceLock;
-use std::{env, fmt};
+
+use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
+use crate::Error;
+use crate::Result;
 
 const NUMAFLOW_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
 const NUMAFLOW_VERTEX_NAME: &str = "NUMAFLOW_VERTEX_NAME";
@@ -296,14 +298,16 @@ impl TryFrom<SinkResponse> for ResponseFromSink {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::HashMap;
+
     use chrono::TimeZone;
     use numaflow_pb::clients::sink::sink_response::Result as SinkResult;
     use numaflow_pb::clients::source::Offset as SourceOffset;
     use numaflow_pb::objects::isb::{
         Body, Header, Message as ProtoMessage, MessageId, MessageInfo,
     };
-    use std::collections::HashMap;
+
+    use super::*;
 
     #[test]
     fn test_offset_display() {

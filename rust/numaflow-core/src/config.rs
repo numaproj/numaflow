@@ -7,8 +7,10 @@ use base64::Engine;
 use bytes::Bytes;
 use tracing::warn;
 
-use crate::Error;
 use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
+
+
+use crate::Error;
 
 const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
 const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
