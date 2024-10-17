@@ -65,10 +65,8 @@ impl JetstreamWriter {
         this
     }
 
-    /*
-     * Checks the buffer usage metrics (soft and solid usage) for a given stream.
-     * If the usage is greater than the bufferUsageLimit, it sets the is_full flag to true.
-     */
+    /// Checks the buffer usage metrics (soft and solid usage) for a given stream.
+    /// If the usage is greater than the bufferUsageLimit, it sets the is_full flag to true.
     async fn check_stream_status(&mut self) {
         let mut interval = tokio::time::interval(self.config.refresh_interval);
         loop {
@@ -95,23 +93,20 @@ impl JetstreamWriter {
         }
     }
 
-    /*
-     * Fetches the buffer usage metrics (soft and solid usage) for a given stream.
-     *
-     * Soft Usage:
-     * Formula: (NumPending + NumAckPending) / maxLength
-     * - NumPending: The number of pending messages.
-     * - NumAckPending: The number of messages that are in processing state(yet to be acked).
-     * - maxLength: The maximum length of the buffer.
-     *
-     * Solid Usage:
-     * Formula:
-     * - If the stream's retention policy is LimitsPolicy: solidUsage = softUsage
-     * - Otherwise: solidUsage = State.Msgs / maxLength
-     * - State.Msgs: The total number of messages in the stream.
-     * - maxLength: The maximum length of the buffer.
-     *
-     */
+    /// Fetches the buffer usage metrics (soft and solid usage) for a given stream.
+    ///
+    /// Soft Usage:
+    /// Formula: (NumPending + NumAckPending) / maxLength
+    /// - NumPending: The number of pending messages.
+    /// - NumAckPending: The number of messages that are in processing state(yet to be acked).
+    /// - maxLength: The maximum length of the buffer.
+    ///
+    /// Solid Usage:
+    /// Formula:
+    /// - If the stream's retention policy is LimitsPolicy: solidUsage = softUsage
+    /// - Otherwise: solidUsage = State.Msgs / maxLength
+    /// - State.Msgs: The total number of messages in the stream.
+    /// - maxLength: The maximum length of the buffer.
     async fn fetch_buffer_usage(
         js_ctx: Context,
         stream_name: &str,
