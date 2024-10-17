@@ -318,6 +318,22 @@ impl Settings {
                     if let Some(value_blob) = &generator_source.value_blob {
                         config.content = Bytes::from(value_blob.clone());
                     }
+                    match &generator_source.value_blob {
+                        Some(value) => {
+                            config.content = Bytes::from(value.clone());
+                        }
+                        None => {
+                            if let Some(msg_size) = generator_source.msg_size {
+                                if msg_size < 0 {
+                                    warn!("'msgSize' can not be negative, using default value (8 bytes)");
+                                } else {
+                                    config.msg_size_bytes = msg_size as u32;
+                                }
+                            }
+
+                            config.value = generator_source.value;
+                        }
+                    }
 
                     if let Some(rpu) = generator_source.rpu {
                         config.rpu = rpu as usize;
@@ -340,16 +356,6 @@ impl Settings {
                     if let Some(jitter) = generator_source.jitter {
                         config.jitter = std::time::Duration::from(jitter);
                     }
-
-                    if let Some(msg_size) = generator_source.msg_size {
-                        if msg_size < 0 {
-                            warn!("'msgSize' can not be negative, using default value (8 bytes)");
-                        } else {
-                            config.msg_size_bytes = msg_size as u32;
-                        }
-                    }
-
-                    config.value = generator_source.value;
 
                     Some(config)
                 }

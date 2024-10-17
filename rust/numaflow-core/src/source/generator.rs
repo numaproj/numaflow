@@ -92,13 +92,15 @@ mod stream_generator {
                 padding: Vec<u8>,
             }
 
-            let mut padding = vec![];
-            if msg_size_bytes > 8 {
-                let size = msg_size_bytes - 8;
-                let mut bytes = vec![0; size as usize];
-                rand::thread_rng().fill(&mut bytes[..]);
-                padding = bytes;
-            }
+            let padding: Vec<u8> = (msg_size_bytes > 8)
+                .then(|| {
+                    let size = msg_size_bytes - 8;
+                    let mut bytes = vec![0; size as usize];
+                    rand::thread_rng().fill(&mut bytes[..]);
+                    bytes
+                })
+                .unwrap_or_default();
+
             let data = Data { value, padding };
             serde_json::to_vec(&data).unwrap()
         }
@@ -145,6 +147,35 @@ mod stream_generator {
                 headers: Default::default(),
             }
         }
+
+        fn generate_messages(
+            count: usize,
+            content: Bytes,
+            value: Option<i64>,
+            msg_size_bytes: u32,
+            keys: &mut (Vec<String>, usize),
+            jitter: Duration,
+        ) -> Vec<Message> {
+            let mut data = Vec::with_capacity(count);
+            for _ in 0..count {
+                let idx = keys.1;
+                let keys = match keys.0.get(idx) {
+                    Some(key) => {
+                        keys.1 = (idx + 1) % keys.0.len();
+                        vec![key.clone()]
+                    }
+                    None => vec![],
+                };
+                data.push(Self::create_message(
+                    content.clone(),
+                    keys,
+                    value,
+                    msg_size_bytes,
+                    jitter,
+                ));
+            }
+            data
+        }
     }
 
     impl Stream for StreamGenerator {
@@ -161,24 +192,14 @@ mod stream_generator {
                 // has passed.
                 Poll::Ready(_) => {
                     // generate data that equals to batch data
-                    let mut data = Vec::with_capacity(*this.batch);
-                    for _ in 0..*this.batch {
-                        let idx = this.keys.1;
-                        let keys = match this.keys.0.get(idx) {
-                            Some(key) => {
-                                this.keys.1 = (idx + 1) % this.keys.0.len();
-                                vec![key.clone()]
-                            }
-                            None => vec![],
-                        };
-                        data.push(Self::create_message(
-                            this.content.clone(),
-                            keys,
-                            *this.value,
-                            *this.msg_size_bytes,
-                            jitter,
-                        ));
-                    }
+                    let data = Self::generate_messages(
+                        *this.batch,
+                        this.content.clone(),
+                        *this.value,
+                        *this.msg_size_bytes,
+                        this.keys,
+                        jitter,
+                    );
                     // reset used quota
                     *this.used = *this.batch;
                     Poll::Ready(Some(data))
@@ -192,25 +213,14 @@ mod stream_generator {
 
                         // update the counters
                         *this.used += to_send;
-                        // let data = vec![this.content.clone(); to_send];
-                        let mut data = Vec::with_capacity(to_send);
-                        for _ in 0..to_send {
-                            let idx = this.keys.1;
-                            let keys = match this.keys.0.get(idx) {
-                                Some(key) => {
-                                    this.keys.1 = (idx + 1) % this.keys.0.len();
-                                    vec![key.clone()]
-                                }
-                                None => vec![],
-                            };
-                            data.push(Self::create_message(
-                                this.content.clone(),
-                                keys,
-                                *this.value,
-                                *this.msg_size_bytes,
-                                jitter,
-                            ));
-                        }
+                        let data = Self::generate_messages(
+                            to_send,
+                            this.content.clone(),
+                            *this.value,
+                            *this.msg_size_bytes,
+                            this.keys,
+                            jitter,
+                        );
                         Poll::Ready(Some(data))
                     } else {
                         Poll::Pending
