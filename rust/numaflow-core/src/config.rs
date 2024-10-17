@@ -177,6 +177,7 @@ impl Default for GeneratorConfig {
     }
 }
 
+/// Configuration for the [BlackholeSink](crate::sink::blackhole::BlackholeSink)
 #[derive(Default, Debug, Clone)]
 pub struct BlackholeConfig {}
 

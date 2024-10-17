@@ -1,6 +1,7 @@
 use super::Sink;
 use crate::message::{Message, ResponseFromSink, ResponseStatusFromSink};
 
+/// Blackhole is a sink to emulate /dev/null
 pub struct BlackholeSink;
 
 impl Sink for BlackholeSink {
