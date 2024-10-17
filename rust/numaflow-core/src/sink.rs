@@ -58,6 +58,10 @@ where
     }
 }
 
+/* The actor task managed by this handler will be receiving messages from the sender channel here in an outer `while let Some(msg) = actor.receiver.recv().await` loop. When all copies of the SourceHandle is dropped, the sender channel will be closed. When the sender channel is closed all there are no messages remaining in the channel's buffer, the actor task will exit.
+If an immediate (without waiting for the buffer to be empty) exit is required, we might have to use a cancellation token.
+*/
+#[derive(Clone)]
 pub(crate) struct SinkHandle {
     sender: mpsc::Sender<ActorMessage>,
 }
