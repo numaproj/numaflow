@@ -133,15 +133,16 @@ mod stream_generator {
 
         /// we have a global array of prepopulated keys, we just have to fetch the next in line.
         /// to fetch the next one, we idx++ whenever we fetch.
-        fn next_key_to_be_fetched(&mut self) -> String {
+        /// This will be a single element vector at the most.
+        fn next_key_to_be_fetched(&mut self) -> Vec<String> {
             let idx = self.keys.1;
             // fetches the next key from the predefined set of keys.
             match self.keys.0.get(idx) {
                 Some(key) => {
                     self.keys.1 = (idx + 1) % self.keys.0.len();
-                    key.clone()
+                    vec![key.clone()]
                 }
-                None => panic!("key index {} out of bounds", idx),
+                None => vec![],
             }
         }
 
@@ -169,7 +170,7 @@ mod stream_generator {
             }
 
             Message {
-                keys: vec![self.next_key_to_be_fetched()],
+                keys: self.next_key_to_be_fetched(),
                 value: data,
                 offset: Some(offset.clone()),
                 event_time,
