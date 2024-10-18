@@ -6,10 +6,6 @@ use crate::message::{
 };
 use crate::reader;
 use crate::source;
-use crate::{
-    message::{Message, Offset},
-    reader,
-};
 
 /// Stream Generator returns a set of messages for every `.next` call. It will throttle itself if
 /// the call exceeds the RPU. It will return a max (batch size, RPU) till the quota for that unit of
@@ -38,7 +34,9 @@ mod stream_generator {
     use tokio::time::MissedTickBehavior;
 
     use crate::config;
-    use crate::message::{Message, MessageID, Offset};
+    use crate::message::{
+        get_vertex_name, get_vertex_replica, Message, MessageID, Offset, StringOffset,
+    };
 
     #[pin_project]
     pub(super) struct StreamGenerator {
@@ -121,6 +119,8 @@ mod stream_generator {
                 .unwrap_or_default()
                 .to_string();
 
+            let offset = Offset::String(StringOffset::new(id.clone(), *get_vertex_replica()));
+
             // rng.gen_range(0..0) panics with "cannot sample empty range"
             // rng.gen_range(0..1) will always produce 0
             let jitter = jitter.as_secs().max(1);
@@ -138,14 +138,11 @@ mod stream_generator {
             Message {
                 keys,
                 value: data,
-                offset: Offset {
-                    offset: id.clone(),
-                    partition_id: 0,
-                },
+                offset: Some(offset.clone()),
                 event_time,
                 id: MessageID {
-                    vertex_name: Default::default(),
-                    offset: id,
+                    vertex_name: get_vertex_name().to_string(),
+                    offset: offset.to_string(),
                     index: Default::default(),
                 },
                 headers: Default::default(),
