@@ -48,16 +48,20 @@ mod stream_generator {
         /// the amount of credits used for the current time-period.
         /// remaining = (rpu - used) for that time-period
         used: usize,
-
+        /// const int data to be send in the payload if provided by the user.
+        /// If `content` is present, this will be ignored.
+        /// This is a simple way used by users to test Reduce feature.
         value: Option<i64>,
+        /// total message size to be created, will be padded with random u8. Size is
+        /// only an approximation.
         msg_size_bytes: u32,
+        /// Vary the event-time of the messages to produce some out-of-orderliness. It is in
+        /// seconds granularity.
         jitter: Duration,
-
         /// keys to be used for the messages and the current index in the list
         /// All possible keys are generated in the constructor.
         /// The index is incremented (treating key list as cyclic) when a message is generated.
         keys: (Vec<String>, usize),
-
         #[pin]
         tick: tokio::time::Interval,
     }
@@ -127,19 +131,22 @@ mod stream_generator {
             serde_json::to_vec(&data).unwrap()
         }
 
-        fn next_keys(&mut self) -> Vec<String> {
+        /// we have a global array of prepopulated keys, we just have to fetch the next in line.
+        /// to fetch the next one, we idx++ whenever we fetch.
+        fn next_key_to_be_fetched(&mut self) -> String {
             let idx = self.keys.1;
+            // fetches the next key from the predefined set of keys.
             match self.keys.0.get(idx) {
                 Some(key) => {
                     self.keys.1 = (idx + 1) % self.keys.0.len();
-                    vec![key.clone()]
+                    key.clone()
                 }
-                None => vec![],
+                None => panic!("key index {} out of bounds", idx),
             }
         }
 
+        /// creates a single message that can be returned by the generator.
         fn create_message(&mut self) -> Message {
-            let keys = self.next_keys();
             let id = chrono::Utc::now()
                 .timestamp_nanos_opt()
                 .unwrap_or_default()
@@ -162,7 +169,7 @@ mod stream_generator {
             }
 
             Message {
-                keys,
+                keys: vec![self.next_key_to_be_fetched()],
                 value: data,
                 offset: Some(offset.clone()),
                 event_time,
@@ -175,6 +182,7 @@ mod stream_generator {
             }
         }
 
+        /// generates a set of messages to be returned.
         fn generate_messages(&mut self, count: usize) -> Vec<Message> {
             let mut data = Vec::with_capacity(count);
             for _ in 0..count {
