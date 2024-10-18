@@ -1,9 +1,7 @@
 use futures::StreamExt;
 
 use crate::config;
-use crate::message::{
-    get_vertex_name, get_vertex_replica, Message, MessageID, Offset, StringOffset,
-};
+use crate::message::{Message, Offset};
 use crate::reader;
 use crate::source;
 
@@ -32,6 +30,7 @@ mod stream_generator {
     use pin_project::pin_project;
     use rand::Rng;
     use tokio::time::MissedTickBehavior;
+    use tracing::warn;
 
     use crate::config;
     use crate::message::{
@@ -52,26 +51,47 @@ mod stream_generator {
 
         value: Option<i64>,
         msg_size_bytes: u32,
-        keys: (Vec<String>, usize),
         jitter: Duration,
+
+        /// keys to be used for the messages and the current index in the list
+        /// All possible keys are generated in the constructor.
+        /// The index is incremented (treating key list as cyclic) when a message is generated.
+        keys: (Vec<String>, usize),
 
         #[pin]
         tick: tokio::time::Interval,
     }
 
     impl StreamGenerator {
-        // pub(super) fn new(content: Bytes, mut rpu: usize, batch: usize, unit: Duration) -> Self {
         pub(super) fn new(cfg: config::GeneratorConfig, batch_size: usize) -> Self {
             let mut tick = tokio::time::interval(Duration::from_millis(cfg.duration as u64));
             tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
-            let keys = (0..cfg.key_count)
+            let mut rpu = cfg.rpu;
+            // Key count cannot be more than RPU.
+            // If rpu is not a multiple of the key_count, we floor the rpu to the nearest multiple of key_count
+            // We cap the key_count to u8::MAX in config.rs
+            let key_count = std::cmp::min(cfg.key_count as usize, cfg.rpu) as u8;
+            if key_count != cfg.key_count {
+                warn!(
+                    "Specified KeyCount({}) is higher than RPU ({}). KeyCount is changed to {}",
+                    cfg.key_count, cfg.rpu, key_count
+                );
+            }
+            if key_count > 0 && rpu % key_count as usize != 0 {
+                let new_rpu = rpu - (rpu % key_count as usize);
+                warn!(rpu, key_count, "Specified RPU is not a multiple of the KeyCount. This may lead to uneven distribution of messages across keys. RPUs will be adjusted to {}", new_rpu);
+                rpu = new_rpu;
+            }
+
+            // Generate all possible keys
+            let keys = (0..key_count)
                 .map(|i| format!("key-{}-{}", config::config().replica, i))
                 .collect();
 
             Self {
                 content: cfg.content,
-                rpu: cfg.rpu,
+                rpu,
                 // batch cannot > rpu
                 batch: std::cmp::min(cfg.rpu, batch_size),
                 used: 0,
@@ -83,9 +103,9 @@ mod stream_generator {
             }
         }
 
-        // Generates a similar payload as the Go implementation.
-        // This is only needed if the user has not specified `valueBlob` in the generator source configuration in the pipeline
-        fn generate_payload(value: i64, msg_size_bytes: u32) -> Vec<u8> {
+        /// Generates a similar payload as the Go implementation.
+        /// This is only needed if the user has not specified `valueBlob` in the generator source configuration in the pipeline
+        fn generate_payload(&self, value: i64) -> Vec<u8> {
             #[derive(serde::Serialize)]
             struct Data {
                 value: i64,
@@ -94,9 +114,9 @@ mod stream_generator {
                 padding: Vec<u8>,
             }
 
-            let padding: Vec<u8> = (msg_size_bytes > 8)
+            let padding: Vec<u8> = (self.msg_size_bytes > 8)
                 .then(|| {
-                    let size = msg_size_bytes - 8;
+                    let size = self.msg_size_bytes - 8;
                     let mut bytes = vec![0; size as usize];
                     rand::thread_rng().fill(&mut bytes[..]);
                     bytes
@@ -107,13 +127,19 @@ mod stream_generator {
             serde_json::to_vec(&data).unwrap()
         }
 
-        fn create_message(
-            data: Bytes,
-            keys: Vec<String>,
-            value: Option<i64>,
-            msg_size_bytes: u32,
-            jitter: Duration,
-        ) -> Message {
+        fn next_keys(&mut self) -> Vec<String> {
+            let idx = self.keys.1;
+            match self.keys.0.get(idx) {
+                Some(key) => {
+                    self.keys.1 = (idx + 1) % self.keys.0.len();
+                    vec![key.clone()]
+                }
+                None => vec![],
+            }
+        }
+
+        fn create_message(&mut self) -> Message {
+            let keys = self.next_keys();
             let id = chrono::Utc::now()
                 .timestamp_nanos_opt()
                 .unwrap_or_default()
@@ -123,16 +149,16 @@ mod stream_generator {
 
             // rng.gen_range(0..0) panics with "cannot sample empty range"
             // rng.gen_range(0..1) will always produce 0
-            let jitter = jitter.as_secs().max(1);
+            let jitter = self.jitter.as_secs().max(1);
             let event_time =
                 chrono::Utc::now() - Duration::from_secs(rand::thread_rng().gen_range(0..jitter));
-            let mut data = data.to_vec();
+            let mut data = self.content.to_vec();
             if data.is_empty() {
-                let value = match value {
+                let value = match self.value {
                     Some(v) => v,
                     None => event_time.timestamp_nanos_opt().unwrap_or_default(),
                 };
-                data = Self::generate_payload(value, msg_size_bytes);
+                data = self.generate_payload(value);
             }
 
             Message {
@@ -149,31 +175,10 @@ mod stream_generator {
             }
         }
 
-        fn generate_messages(
-            count: usize,
-            content: Bytes,
-            value: Option<i64>,
-            msg_size_bytes: u32,
-            keys: &mut (Vec<String>, usize),
-            jitter: Duration,
-        ) -> Vec<Message> {
+        fn generate_messages(&mut self, count: usize) -> Vec<Message> {
             let mut data = Vec::with_capacity(count);
             for _ in 0..count {
-                let idx = keys.1;
-                let keys = match keys.0.get(idx) {
-                    Some(key) => {
-                        keys.1 = (idx + 1) % keys.0.len();
-                        vec![key.clone()]
-                    }
-                    None => vec![],
-                };
-                data.push(Self::create_message(
-                    content.clone(),
-                    keys,
-                    value,
-                    msg_size_bytes,
-                    jitter,
-                ));
+                data.push(self.create_message());
             }
             data
         }
@@ -186,23 +191,15 @@ mod stream_generator {
             mut self: Pin<&mut StreamGenerator>,
             cx: &mut Context<'_>,
         ) -> Poll<Option<Self::Item>> {
-            let jitter = self.jitter;
             let mut this = self.as_mut().project();
             match this.tick.poll_tick(cx) {
                 // Poll::Ready means we are ready to send data the whole batch since enough time
                 // has passed.
                 Poll::Ready(_) => {
-                    // generate data that equals to batch data
-                    let data = Self::generate_messages(
-                        *this.batch,
-                        this.content.clone(),
-                        *this.value,
-                        *this.msg_size_bytes,
-                        this.keys,
-                        jitter,
-                    );
-                    // reset used quota
                     *this.used = *this.batch;
+                    let count = self.batch;
+                    let data = self.generate_messages(count);
+                    // reset used quota
                     Poll::Ready(Some(data))
                 }
                 Poll::Pending => {
@@ -214,14 +211,7 @@ mod stream_generator {
 
                         // update the counters
                         *this.used += to_send;
-                        let data = Self::generate_messages(
-                            to_send,
-                            this.content.clone(),
-                            *this.value,
-                            *this.msg_size_bytes,
-                            this.keys,
-                            jitter,
-                        );
+                        let data = self.generate_messages(to_send);
                         Poll::Ready(Some(data))
                     } else {
                         Poll::Pending
@@ -290,6 +280,26 @@ mod stream_generator {
             let size = stream_generator.size_hint();
             assert_eq!(size.0, 4);
             assert_eq!(size.1, Some(rpu));
+        }
+
+        #[tokio::test]
+        async fn test_stream_generator_config() {
+            let cfg = config::GeneratorConfig {
+                rpu: 33,
+                key_count: 7,
+                ..Default::default()
+            };
+
+            let stream_generator = StreamGenerator::new(cfg, 50);
+            assert_eq!(stream_generator.rpu, 28);
+
+            let cfg = config::GeneratorConfig {
+                rpu: 3,
+                key_count: 7,
+                ..Default::default()
+            };
+            let stream_generator = StreamGenerator::new(cfg, 30);
+            assert_eq!(stream_generator.keys.0.len(), 3);
         }
     }
 }
@@ -375,6 +385,7 @@ mod tests {
     use tokio::time::Duration;
 
     use super::*;
+    use crate::message::StringOffset;
     use crate::reader::LagReader;
     use crate::source::{SourceAcker, SourceReader};
 
