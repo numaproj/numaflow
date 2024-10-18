@@ -3,38 +3,33 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
+use crate::config::jetstream::StreamWriterConfig;
 use crate::error::Error;
-use crate::message::Message;
+use crate::message::{Message, Offset};
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::Result;
 
-/// Jetstream Writer is responsible for writing messages to Jetstream ISB.
-/// it exposes both sync and async methods to write messages.
+/// JetStream Writer is responsible for writing messages to JetStream ISB.
+/// it exposes both sync and async methods to write messages. It has gates
+/// to prevent writing into the buffer if the buffer is full. After successful
+/// writes, it will let the callee know the status (or return a non-retryable
+/// exception).
 pub(super) mod writer;
 
 /// ISB Writer accepts an Actor pattern based messages.
 #[derive(Debug)]
 struct ActorMessage {
     /// Write the messages to ISB
-    stream: &'static str,
     message: Message,
     /// once the message has been successfully written, we can let the sender know.
     /// This can be used to trigger Acknowledgement of the message from the Reader.
     // FIXME: concrete type and better name
-    callee_tx: oneshot::Sender<Result<u64>>,
+    callee_tx: oneshot::Sender<Result<Offset>>,
 }
 
 impl ActorMessage {
-    fn new(
-        stream: &'static str,
-        message: Message,
-        callee_tx: oneshot::Sender<Result<u64>>,
-    ) -> Self {
-        Self {
-            stream,
-            message,
-            callee_tx,
-        }
+    fn new(message: Message, callee_tx: oneshot::Sender<Result<Offset>>) -> Self {
+        Self { message, callee_tx }
     }
 }
 
@@ -63,9 +58,7 @@ impl WriterActor {
             .message
             .try_into()
             .expect("message serialization should not fail");
-        self.js_writer
-            .write(msg.stream, payload, msg.callee_tx)
-            .await
+        self.js_writer.write(payload, msg.callee_tx).await
     }
 
     async fn run(&mut self) {
@@ -81,10 +74,15 @@ pub(crate) struct WriterHandle {
 }
 
 impl WriterHandle {
-    pub(super) fn new(js_ctx: Context, batch_size: usize, cancel_token: CancellationToken) -> Self {
+    pub(super) fn new(
+        config: StreamWriterConfig,
+        js_ctx: Context,
+        batch_size: usize,
+        cancel_token: CancellationToken,
+    ) -> Self {
         let (sender, receiver) = mpsc::channel::<ActorMessage>(batch_size);
 
-        let js_writer = JetstreamWriter::new(js_ctx, batch_size, cancel_token.clone());
+        let js_writer = JetstreamWriter::new(config, js_ctx, batch_size, cancel_token.clone());
         let mut actor = WriterActor::new(js_writer.clone(), receiver, cancel_token);
 
         tokio::spawn(async move {
@@ -96,11 +94,10 @@ impl WriterHandle {
 
     pub(crate) async fn write(
         &self,
-        stream: &'static str,
         message: Message,
-    ) -> Result<oneshot::Receiver<Result<u64>>> {
+    ) -> Result<oneshot::Receiver<Result<Offset>>> {
         let (sender, receiver) = oneshot::channel();
-        let msg = ActorMessage::new(stream, message, sender);
+        let msg = ActorMessage::new(message, sender);
         self.sender
             .send(msg)
             .await
@@ -122,7 +119,7 @@ mod tests {
     use tokio::time::Instant;
 
     use super::*;
-    use crate::message::{Message, MessageID, Offset};
+    use crate::message::{Message, MessageID};
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -143,9 +140,14 @@ mod tests {
             .await
             .unwrap();
 
+        let config = StreamWriterConfig {
+            name: stream_name.into(),
+            ..Default::default()
+        };
+
         // Create ISBMessageHandler
         let batch_size = 500;
-        let handler = WriterHandle::new(context.clone(), batch_size, cln_token.clone());
+        let handler = WriterHandle::new(config, context.clone(), batch_size, cln_token.clone());
 
         let mut result_receivers = Vec::new();
         // Publish 500 messages
@@ -153,10 +155,7 @@ mod tests {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
                 value: format!("message {}", i).as_bytes().to_vec(),
-                offset: Offset {
-                    offset: format!("offset_{}", i),
-                    partition_id: i,
-                },
+                offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
                     vertex_name: "vertex".to_string(),
@@ -167,7 +166,6 @@ mod tests {
             };
             let (sender, receiver) = oneshot::channel();
             let msg = ActorMessage {
-                stream: stream_name,
                 message,
                 callee_tx: sender,
             };
@@ -202,8 +200,13 @@ mod tests {
             .await
             .unwrap();
 
+        let config = StreamWriterConfig {
+            name: stream_name.into(),
+            ..Default::default()
+        };
+
         let cancel_token = CancellationToken::new();
-        let handler = WriterHandle::new(context.clone(), 500, cancel_token.clone());
+        let handler = WriterHandle::new(config, context.clone(), 500, cancel_token.clone());
 
         let mut receivers = Vec::new();
         // Publish 100 messages successfully
@@ -211,10 +214,7 @@ mod tests {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
                 value: format!("message {}", i).as_bytes().to_vec(),
-                offset: Offset {
-                    offset: format!("offset_{}", i),
-                    partition_id: 0,
-                },
+                offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
                     vertex_name: "vertex".to_string(),
@@ -223,7 +223,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
             };
-            receivers.push(handler.write(stream_name, message).await.unwrap());
+            receivers.push(handler.write(message).await.unwrap());
         }
 
         // Attempt to publish the 101th message, which should get stuck in the retry loop
@@ -231,10 +231,7 @@ mod tests {
         let message = Message {
             keys: vec!["key_101".to_string()],
             value: vec![0; 1024],
-            offset: Offset {
-                offset: "offset_101".to_string(),
-                partition_id: 0,
-            },
+            offset: None,
             event_time: Utc::now(),
             id: MessageID {
                 vertex_name: "vertex".to_string(),
@@ -243,7 +240,7 @@ mod tests {
             },
             headers: HashMap::new(),
         };
-        let receiver = handler.write(stream_name, message).await.unwrap();
+        let receiver = handler.write(message).await.unwrap();
         receivers.push(receiver);
 
         // Cancel the token to exit the retry loop
@@ -281,8 +278,13 @@ mod tests {
             .await
             .unwrap();
 
+        let config = StreamWriterConfig {
+            name: stream_name.into(),
+            ..Default::default()
+        };
+
         let cancel_token = CancellationToken::new();
-        let handler = WriterHandle::new(context.clone(), 500, cancel_token.clone());
+        let handler = WriterHandle::new(config, context.clone(), 500, cancel_token.clone());
 
         let (tx, mut rx) = mpsc::channel(100);
         let test_start_time = Instant::now();
@@ -297,10 +299,7 @@ mod tests {
                 let message = Message {
                     keys: vec![format!("key_{}", i)],
                     value: format!("message {}", i).as_bytes().to_vec(),
-                    offset: Offset {
-                        offset: format!("offset_{}", i),
-                        partition_id: i,
-                    },
+                    offset: None,
                     event_time: Utc::now(),
                     id: MessageID {
                         vertex_name: "".to_string(),
@@ -309,7 +308,7 @@ mod tests {
                     },
                     headers: HashMap::new(),
                 };
-                tx.send(handler.write(stream_name, message).await.unwrap())
+                tx.send(handler.write(message).await.unwrap())
                     .await
                     .unwrap();
                 sent_count += 1;

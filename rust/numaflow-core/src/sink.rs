@@ -6,6 +6,7 @@ use user_defined::UserDefinedSink;
 use crate::config::config;
 use crate::message::{Message, ResponseFromSink};
 
+mod blackhole;
 mod log;
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -64,6 +65,7 @@ pub(crate) struct SinkHandle {
 
 pub(crate) enum SinkClientType {
     Log,
+    Blackhole,
     UserDefined(SinkClient<Channel>),
 }
 
@@ -75,6 +77,15 @@ impl SinkHandle {
                 let log_sink = log::LogSink;
                 tokio::spawn(async {
                     let mut actor = SinkActor::new(receiver, log_sink);
+                    while let Some(msg) = actor.actor_messages.recv().await {
+                        actor.handle_message(msg).await;
+                    }
+                });
+            }
+            SinkClientType::Blackhole => {
+                let blackhole_sink = blackhole::BlackholeSink;
+                tokio::spawn(async {
+                    let mut actor = SinkActor::new(receiver, blackhole_sink);
                     while let Some(msg) = actor.actor_messages.recv().await {
                         actor.handle_message(msg).await;
                     }

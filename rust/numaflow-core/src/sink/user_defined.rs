@@ -174,10 +174,7 @@ mod tests {
             Message {
                 keys: vec![],
                 value: b"Hello, World!".to_vec(),
-                offset: Offset {
-                    offset: "1".to_string(),
-                    partition_id: 0,
-                },
+                offset: None,
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
@@ -189,10 +186,7 @@ mod tests {
             Message {
                 keys: vec![],
                 value: b"Hello, World!".to_vec(),
-                offset: Offset {
-                    offset: "2".to_string(),
-                    partition_id: 0,
-                },
+                offset: None,
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
