@@ -1,6 +1,10 @@
 use futures::StreamExt;
 
 use crate::config;
+use crate::message::{
+    get_vertex_name, get_vertex_replica, Message, MessageID, Offset, StringOffset,
+};
+use crate::reader;
 use crate::source;
 use crate::{
     message::{Message, Offset},
@@ -468,14 +472,8 @@ mod tests {
 
         // Create a vector of offsets to acknowledge
         let offsets = vec![
-            Offset {
-                offset: "offset1".to_string(),
-                partition_id: 0,
-            },
-            Offset {
-                offset: "offset2".to_string(),
-                partition_id: 1,
-            },
+            Offset::String(StringOffset::new("offset1".to_string(), 0)),
+            Offset::String(StringOffset::new("offset2".to_string(), 0)),
         ];
 
         // Call the ack method and check the result

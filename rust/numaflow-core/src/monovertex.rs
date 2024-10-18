@@ -246,6 +246,10 @@ async fn fetch_sink(
         let log = SinkHandle::new(SinkClientType::Log).await?;
         return Ok((log, fb_sink));
     }
+    if settings.blackhole_config.is_some() {
+        let blackhole = SinkHandle::new(SinkClientType::Blackhole).await?;
+        return Ok((blackhole, fb_sink));
+    }
     Err(Error::Config(
         "No valid Sink configuration found".to_string(),
     ))
