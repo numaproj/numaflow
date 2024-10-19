@@ -1,6 +1,6 @@
 use futures::StreamExt;
 
-use crate::config;
+use crate::config::common::source::GeneratorConfig;
 use crate::message::{Message, Offset};
 use crate::reader;
 use crate::source;
@@ -33,6 +33,7 @@ mod stream_generator {
     use tracing::warn;
 
     use crate::config;
+    use crate::config::common::source::GeneratorConfig;
     use crate::message::{
         get_vertex_name, get_vertex_replica, Message, MessageID, Offset, StringOffset,
     };
@@ -67,7 +68,7 @@ mod stream_generator {
     }
 
     impl StreamGenerator {
-        pub(super) fn new(cfg: config::GeneratorConfig, batch_size: usize) -> Self {
+        pub(super) fn new(cfg: GeneratorConfig, batch_size: usize) -> Self {
             let mut tick = tokio::time::interval(Duration::from_millis(cfg.duration as u64));
             tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
@@ -89,9 +90,7 @@ mod stream_generator {
             }
 
             // Generate all possible keys
-            let keys = (0..key_count)
-                .map(|i| format!("key-{}-{}", config::config().replica, i))
-                .collect();
+            let keys = (0..key_count).map(|i| format!("key-{}", i)).collect();
 
             Self {
                 content: cfg.content,
@@ -249,7 +248,7 @@ mod stream_generator {
             // Define requests per unit (rpu), batch size, and time unit
             let batch = 6;
             let rpu = 10;
-            let cfg = config::GeneratorConfig {
+            let cfg = GeneratorConfig {
                 content: content.clone(),
                 rpu,
                 jitter: Duration::from_millis(0),
@@ -293,7 +292,7 @@ mod stream_generator {
 
         #[tokio::test]
         async fn test_stream_generator_config() {
-            let cfg = config::GeneratorConfig {
+            let cfg = GeneratorConfig {
                 rpu: 33,
                 key_count: 7,
                 ..Default::default()
@@ -302,7 +301,7 @@ mod stream_generator {
             let stream_generator = StreamGenerator::new(cfg, 50);
             assert_eq!(stream_generator.rpu, 28);
 
-            let cfg = config::GeneratorConfig {
+            let cfg = GeneratorConfig {
                 rpu: 3,
                 key_count: 7,
                 ..Default::default()
@@ -318,7 +317,7 @@ mod stream_generator {
 /// source to generate some messages. We mainly use generator for load testing and integration
 /// testing of Numaflow. The load generated is per replica.
 pub(crate) fn new_generator(
-    cfg: config::GeneratorConfig,
+    cfg: GeneratorConfig,
     batch_size: usize,
 ) -> crate::Result<(GeneratorRead, GeneratorAck, GeneratorLagReader)> {
     let gen_read = GeneratorRead::new(cfg, batch_size);
@@ -335,7 +334,7 @@ pub(crate) struct GeneratorRead {
 impl GeneratorRead {
     /// A new [GeneratorRead] is returned. It takes a static content, requests per unit-time, batch size
     /// to return per [source::SourceReader::read], and the unit-time as duration.
-    fn new(cfg: config::GeneratorConfig, batch_size: usize) -> Self {
+    fn new(cfg: GeneratorConfig, batch_size: usize) -> Self {
         let stream_generator = stream_generator::StreamGenerator::new(cfg.clone(), batch_size);
         Self { stream_generator }
     }
@@ -405,7 +404,7 @@ mod tests {
         // Define requests per unit (rpu), batch size, and time unit
         let rpu = 10;
         let batch = 5;
-        let cfg = config::GeneratorConfig {
+        let cfg = GeneratorConfig {
             content: content.clone(),
             rpu,
             jitter: Duration::from_millis(0),
@@ -435,7 +434,7 @@ mod tests {
         // Define requests per unit (rpu), batch size, and time unit
         let rpu = 10;
         let batch = 5;
-        let cfg = config::GeneratorConfig {
+        let cfg = GeneratorConfig {
             content: Bytes::new(),
             rpu,
             jitter: Duration::from_millis(0),
@@ -456,11 +455,11 @@ mod tests {
             .collect::<Vec<_>>();
 
         let expected_keys = vec![
-            "key-0-0".to_string(),
-            "key-0-1".to_string(),
-            "key-0-2".to_string(),
-            "key-0-0".to_string(),
-            "key-0-1".to_string(),
+            "key-0".to_string(),
+            "key-1".to_string(),
+            "key-2".to_string(),
+            "key-0".to_string(),
+            "key-1".to_string(),
         ];
 
         assert_eq!(keys, expected_keys);

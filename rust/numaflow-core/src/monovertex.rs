@@ -10,8 +10,11 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info};
 
-use crate::config::{config, Settings};
+use crate::config::common::{sink, source, transformer};
+use crate::config::mvtxcfg::monovertex::MonovertexConfig;
+use crate::config::{config, CustomResourceType, Settings};
 use crate::error::{self, Error};
+use crate::shared::server_info::check_for_server_compatibility;
 use crate::shared::utils;
 use crate::shared::utils::create_rpc_channel;
 use crate::sink::{SinkClientType, SinkHandle};
@@ -42,13 +45,21 @@ pub async fn mono_vertex() -> error::Result<()> {
         Ok(())
     });
 
-    // Run the forwarder with cancellation token.
-    if let Err(e) = start_forwarder(cln_token, config()).await {
-        error!("Application error: {:?}", e);
+    let crd_type = config().custom_resource_type.clone();
+    match crd_type {
+        CustomResourceType::MonoVertex(config) => {
+            // Run the forwarder with cancellation token.
+            if let Err(e) = start_forwarder(cln_token, &config).await {
+                error!("Application error: {:?}", e);
 
-        // abort the signal handler task since we have an error and we are shutting down
-        if !shutdown_handle.is_finished() {
-            shutdown_handle.abort();
+                // abort the signal handler task since we have an error and we are shutting down
+                if !shutdown_handle.is_finished() {
+                    shutdown_handle.abort();
+                }
+            }
+        }
+        CustomResourceType::Pipeline(_) => {
+            panic!("Pipeline not supported")
         }
     }
 
@@ -87,30 +98,20 @@ pub(crate) enum SourceType {
     Generator(GeneratorRead, GeneratorAck, GeneratorLagReader),
 }
 
-async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> error::Result<()> {
-    // make sure that we have compatibility with the server
-    utils::check_compatibility(
-        &cln_token,
-        config
-            .udsource_config
-            .as_ref()
-            .map(|source_config| source_config.server_info_path.clone().into()),
-        config
-            .udsink_config
-            .as_ref()
-            .map(|sink_config| sink_config.server_info_path.clone().into()),
-        config
-            .transformer_config
-            .as_ref()
-            .map(|transformer_config| transformer_config.server_info_path.clone().into()),
-        config
-            .fallback_config
-            .as_ref()
-            .map(|fallback_config| fallback_config.server_info_path.clone().into()),
-    )
-    .await?;
+async fn start_forwarder(
+    cln_token: CancellationToken,
+    config: &MonovertexConfig,
+) -> error::Result<()> {
+    let mut source_grpc_client = if let source::SourceType::UserDefined(source_config) =
+        &config.source_config.source_type
+    {
+        // do server compatibility check
+        check_for_server_compatibility(
+            source_config.server_info_path.clone().into(),
+            cln_token.clone(),
+        )
+        .await?;
 
-    let mut source_grpc_client = if let Some(source_config) = &config.udsource_config {
         Some(
             SourceClient::new(create_rpc_channel(source_config.socket_path.clone().into()).await?)
                 .max_encoding_message_size(source_config.grpc_max_message_size)
@@ -120,7 +121,16 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
         None
     };
 
-    let mut sink_grpc_client = if let Some(udsink_config) = &config.udsink_config {
+    let mut sink_grpc_client = if let sink::SinkType::UserDefined(udsink_config) =
+        &config.sink_config.sink_type
+    {
+        // do server compatibility check
+        check_for_server_compatibility(
+            udsink_config.server_info_path.clone().into(),
+            cln_token.clone(),
+        )
+        .await?;
+
         Some(
             SinkClient::new(create_rpc_channel(udsink_config.socket_path.clone().into()).await?)
                 .max_encoding_message_size(udsink_config.grpc_max_message_size)
@@ -130,25 +140,50 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
         None
     };
 
-    let mut fb_sink_grpc_client = if let Some(fb_sink_config) = &config.fallback_config {
-        let fb_sink_grpc_client =
-            SinkClient::new(create_rpc_channel(fb_sink_config.socket_path.clone().into()).await?)
-                .max_encoding_message_size(fb_sink_config.grpc_max_message_size)
-                .max_encoding_message_size(fb_sink_config.grpc_max_message_size);
+    let mut fb_sink_grpc_client = if let Some(fb_sink) = &config.fb_sink_config {
+        if let sink::SinkType::UserDefined(fb_sink_config) = &fb_sink.sink_type {
+            // do server compatibility check
+            check_for_server_compatibility(
+                fb_sink_config.server_info_path.clone().into(),
+                cln_token.clone(),
+            )
+            .await?;
 
-        Some(fb_sink_grpc_client.clone())
+            Some(
+                SinkClient::new(
+                    create_rpc_channel(fb_sink_config.socket_path.clone().into()).await?,
+                )
+                .max_encoding_message_size(fb_sink_config.grpc_max_message_size)
+                .max_encoding_message_size(fb_sink_config.grpc_max_message_size),
+            )
+        } else {
+            None
+        }
     } else {
         None
     };
 
-    let mut transformer_grpc_client = if let Some(transformer_config) = &config.transformer_config {
-        let transformer_grpc_client = SourceTransformClient::new(
-            create_rpc_channel(transformer_config.socket_path.clone().into()).await?,
-        )
-        .max_encoding_message_size(transformer_config.grpc_max_message_size)
-        .max_encoding_message_size(transformer_config.grpc_max_message_size);
+    let mut transformer_grpc_client = if let Some(transformer) = &config.transformer_config {
+        if let transformer::TransformerType::UserDefined(transformer_config) =
+            &transformer.transformer_type
+        {
+            // do server compatibility check
+            check_for_server_compatibility(
+                transformer_config.server_info_path.clone().into(),
+                cln_token.clone(),
+            )
+            .await?;
 
-        Some(transformer_grpc_client.clone())
+            let transformer_grpc_client = SourceTransformClient::new(
+                create_rpc_channel(transformer_config.socket_path.clone().into()).await?,
+            )
+            .max_encoding_message_size(transformer_config.grpc_max_message_size)
+            .max_encoding_message_size(transformer_config.grpc_max_message_size);
+
+            Some(transformer_grpc_client.clone())
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -183,10 +218,18 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
 
     // start the metrics server
     // FIXME: what to do with the handle
-    utils::start_metrics_server(metrics_state).await;
+    utils::start_metrics_server(config.metrics_config.clone(), metrics_state).await;
 
-    let source = SourceHandle::new(source_type);
-    start_forwarder_with_source(source, sink, transformer_grpc_client, fb_sink, cln_token).await?;
+    let source = SourceHandle::new(source_type, config.batch_size);
+    start_forwarder_with_source(
+        config.clone(),
+        source,
+        sink,
+        transformer_grpc_client,
+        fb_sink,
+        cln_token,
+    )
+    .await?;
 
     info!("Forwarder stopped gracefully");
     Ok(())
@@ -195,7 +238,7 @@ async fn start_forwarder(cln_token: CancellationToken, config: &Settings) -> err
 // fetch right the source.
 // source_grpc_client can be optional because it is valid only for user-defined source.
 async fn fetch_source(
-    config: &Settings,
+    config: &MonovertexConfig,
     source_grpc_client: &mut Option<SourceClient<Channel>>,
 ) -> crate::Result<SourceType> {
     // check whether the source grpc client is provided, this happens only of the source is a
@@ -203,7 +246,7 @@ async fn fetch_source(
     if let Some(source_grpc_client) = source_grpc_client.clone() {
         let (source_read, source_ack, lag_reader) = new_source(
             source_grpc_client,
-            config.batch_size as usize,
+            config.batch_size,
             config.timeout_in_ms as u16,
         )
         .await?;
@@ -215,7 +258,7 @@ async fn fetch_source(
     }
 
     // now that we know it is not a user-defined source, it has to be a built-in
-    if let Some(generator_config) = &config.generator_config {
+    if let source::SourceType::Generator(generator_config) = &config.source_config.source_type {
         let (source_read, source_ack, lag_reader) =
             new_generator(generator_config.clone(), config.batch_size as usize)?;
         Ok(SourceType::Generator(source_read, source_ack, lag_reader))
@@ -227,27 +270,35 @@ async fn fetch_source(
 // fetch the actor handle for the sink.
 // sink_grpc_client can be optional because it is valid only for user-defined sink.
 async fn fetch_sink(
-    settings: &Settings,
+    settings: &MonovertexConfig,
     sink_grpc_client: Option<SinkClient<Channel>>,
     fallback_sink_grpc_client: Option<SinkClient<Channel>>,
 ) -> crate::Result<(SinkHandle, Option<SinkHandle>)> {
     let fb_sink = match fallback_sink_grpc_client {
-        Some(fallback_sink) => {
-            Some(SinkHandle::new(SinkClientType::UserDefined(fallback_sink)).await?)
-        }
+        Some(fallback_sink) => Some(
+            SinkHandle::new(
+                SinkClientType::UserDefined(fallback_sink),
+                settings.batch_size,
+            )
+            .await?,
+        ),
         None => None,
     };
 
     if let Some(sink_client) = sink_grpc_client {
-        let sink = SinkHandle::new(SinkClientType::UserDefined(sink_client)).await?;
+        let sink = SinkHandle::new(
+            SinkClientType::UserDefined(sink_client),
+            settings.batch_size,
+        )
+        .await?;
         return Ok((sink, fb_sink));
     }
-    if settings.logsink_config.is_some() {
-        let log = SinkHandle::new(SinkClientType::Log).await?;
+    if let sink::SinkType::Log(_) = &settings.sink_config.sink_type {
+        let log = SinkHandle::new(SinkClientType::Log, settings.batch_size).await?;
         return Ok((log, fb_sink));
     }
-    if settings.blackhole_config.is_some() {
-        let blackhole = SinkHandle::new(SinkClientType::Blackhole).await?;
+    if let sink::SinkType::Blackhole(_) = &settings.sink_config.sink_type {
+        let blackhole = SinkHandle::new(SinkClientType::Blackhole, settings.batch_size).await?;
         return Ok((blackhole, fb_sink));
     }
     Err(Error::Config(
@@ -256,17 +307,18 @@ async fn fetch_sink(
 }
 
 async fn start_forwarder_with_source(
+    mvtx_config: MonovertexConfig,
     source: SourceHandle,
     sink: SinkHandle,
-    transformer_client: Option<SourceTransformClient<tonic::transport::Channel>>,
+    transformer_client: Option<SourceTransformClient<Channel>>,
     fallback_sink: Option<SinkHandle>,
     cln_token: CancellationToken,
 ) -> error::Result<()> {
     // start the pending reader to publish pending metrics
-    let pending_reader = utils::create_pending_reader(source.clone()).await;
+    let pending_reader = utils::create_pending_reader(&mvtx_config, source.clone()).await;
     let _pending_reader_handle = pending_reader.start().await;
 
-    let mut forwarder_builder = ForwarderBuilder::new(source, sink, cln_token);
+    let mut forwarder_builder = ForwarderBuilder::new(source, sink, mvtx_config, cln_token);
 
     // add transformer if exists
     if let Some(transformer_client) = transformer_client {
@@ -293,15 +345,15 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
 
+    use crate::config::mvtxcfg::monovertex::MonovertexConfig;
+    use crate::config::{common, Settings};
+    use crate::error;
+    use crate::monovertex::start_forwarder;
+    use crate::shared::server_info::ServerInfo;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source};
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
-
-    use crate::config::{Settings, UDSinkConfig, UDSourceConfig};
-    use crate::error;
-    use crate::monovertex::start_forwarder;
-    use crate::shared::server_info::ServerInfo;
 
     struct SimpleSource;
     #[tonic::async_trait]
@@ -401,17 +453,24 @@ mod tests {
             token_clone.cancel();
         });
 
-        let config = Settings {
-            udsink_config: Some(UDSinkConfig {
-                socket_path: sink_sock_file.to_str().unwrap().to_string(),
-                server_info_path: sink_server_info.to_str().unwrap().to_string(),
-                grpc_max_message_size: 1024,
-            }),
-            udsource_config: Some(UDSourceConfig {
-                socket_path: src_sock_file.to_str().unwrap().to_string(),
-                server_info_path: src_info_file.to_str().unwrap().to_string(),
-                grpc_max_message_size: 1024,
-            }),
+        let config = MonovertexConfig {
+            source_config: common::source::SourceConfig {
+                source_type: common::source::SourceType::UserDefined(
+                    common::source::UserDefinedConfig {
+                        socket_path: src_sock_file.to_str().unwrap().to_string(),
+                        grpc_max_message_size: 1024,
+                        server_info_path: src_info_file.to_str().unwrap().to_string(),
+                    },
+                ),
+            },
+            sink_config: common::sink::SinkConfig {
+                sink_type: common::sink::SinkType::UserDefined(common::sink::UserDefinedConfig {
+                    socket_path: sink_sock_file.to_str().unwrap().to_string(),
+                    grpc_max_message_size: 1024,
+                    server_info_path: sink_server_info.to_str().unwrap().to_string(),
+                }),
+                retry_config: Default::default(),
+            },
             ..Default::default()
         };
 

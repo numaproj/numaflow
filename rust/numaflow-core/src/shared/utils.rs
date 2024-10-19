@@ -2,6 +2,15 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::config::common::Metrics::MetricsConfig;
+use crate::config::mvtxcfg::monovertex::MonovertexConfig;
+use crate::error;
+use crate::monovertex::metrics::{
+    start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
+};
+use crate::shared::server_info;
+use crate::source::SourceHandle;
+use crate::Error;
 use axum::http::Uri;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
@@ -18,15 +27,6 @@ use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tower::service_fn;
 use tracing::{info, warn};
-
-use crate::config::config;
-use crate::error;
-use crate::monovertex::metrics::{
-    start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
-};
-use crate::shared::server_info;
-use crate::source::SourceHandle;
-use crate::Error;
 
 pub(crate) async fn check_compatibility(
     cln_token: &CancellationToken,
@@ -74,11 +74,13 @@ pub(crate) async fn check_compatibility(
 }
 
 pub(crate) async fn start_metrics_server(
+    metrics_config: MetricsConfig,
     metrics_state: UserDefinedContainerState,
 ) -> JoinHandle<()> {
-    tokio::spawn(async {
+    let metrics_port = metrics_config.metrics_server_listen_port.clone();
+    tokio::spawn(async move {
         // Start the metrics server, which server the prometheus metrics.
-        let metrics_addr: SocketAddr = format!("0.0.0.0:{}", &config().metrics_server_listen_port)
+        let metrics_addr: SocketAddr = format!("0.0.0.0:{}", metrics_port)
             .parse()
             .expect("Invalid address");
 
@@ -88,15 +90,25 @@ pub(crate) async fn start_metrics_server(
     })
 }
 
-pub(crate) async fn create_pending_reader(lag_reader_grpc_client: SourceHandle) -> PendingReader {
-    PendingReaderBuilder::new(lag_reader_grpc_client)
-        .lag_checking_interval(Duration::from_secs(
-            config().lag_check_interval_in_secs.into(),
-        ))
-        .refresh_interval(Duration::from_secs(
-            config().lag_refresh_interval_in_secs.into(),
-        ))
-        .build()
+pub(crate) async fn create_pending_reader(
+    mvtx_config: &MonovertexConfig,
+    lag_reader_grpc_client: SourceHandle,
+) -> PendingReader {
+    PendingReaderBuilder::new(
+        mvtx_config.name.clone(),
+        mvtx_config.replica,
+        lag_reader_grpc_client,
+    )
+    .lag_checking_interval(Duration::from_secs(
+        mvtx_config.metrics_config.lag_check_interval_in_secs.into(),
+    ))
+    .refresh_interval(Duration::from_secs(
+        mvtx_config
+            .metrics_config
+            .lag_refresh_interval_in_secs
+            .into(),
+    ))
+    .build()
 }
 
 pub(crate) async fn wait_until_ready(
