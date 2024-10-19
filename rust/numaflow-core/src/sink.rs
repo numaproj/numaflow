@@ -3,7 +3,6 @@ use tokio::sync::{mpsc, oneshot};
 use tonic::transport::Channel;
 use user_defined::UserDefinedSink;
 
-use crate::config::config;
 use crate::message::{Message, ResponseFromSink};
 
 mod blackhole;
@@ -70,8 +69,8 @@ pub(crate) enum SinkClientType {
 }
 
 impl SinkHandle {
-    pub(crate) async fn new(sink_client: SinkClientType) -> crate::Result<Self> {
-        let (sender, receiver) = mpsc::channel(config().batch_size as usize);
+    pub(crate) async fn new(sink_client: SinkClientType, batch_size: usize) -> crate::Result<Self> {
+        let (sender, receiver) = mpsc::channel(batch_size);
         match sink_client {
             SinkClientType::Log => {
                 let log_sink = log::LogSink;

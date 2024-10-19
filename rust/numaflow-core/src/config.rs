@@ -1,130 +1,23 @@
-use std::fmt::Display;
+use std::env;
 use std::sync::OnceLock;
-use std::{env, time::Duration};
 
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
-use bytes::Bytes;
-use tracing::warn;
-
-use numaflow_models::models::{Backoff, MonoVertex, RetryStrategy};
-
+use crate::config::pipeline::PipelineConfig;
 use crate::Error;
+use crate::Result;
+use monovertex::MonovertexConfig;
 
-// TODO move constants to a separate module, separate consts for different components
-const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
-const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
-const DEFAULT_SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";
-const DEFAULT_FB_SINK_SOCKET: &str = "/var/run/numaflow/fb-sink.sock";
-
-const DEFAULT_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/sinker-server-info";
-const DEFAULT_FB_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/fb-sinker-server-info";
-const DEFAULT_TRANSFORMER_SOCKET: &str = "/var/run/numaflow/sourcetransform.sock";
-const DEFAULT_TRANSFORMER_SERVER_INFO_FILE: &str =
-    "/var/run/numaflow/sourcetransformer-server-info";
 const ENV_MONO_VERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
-const ENV_POD_REPLICA: &str = "NUMAFLOW_REPLICA";
-const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
-const DEFAULT_METRICS_PORT: u16 = 2469;
-const DEFAULT_LAG_CHECK_INTERVAL_IN_SECS: u16 = 5;
-const DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS: u16 = 3;
-const DEFAULT_BATCH_SIZE: u64 = 500;
-const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
-const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX;
-const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
-const DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY: OnFailureStrategy = OnFailureStrategy::Retry;
+const ENV_VERTEX_OBJ: &str = "NUMAFLOW_VERTEX_OBJECT";
 
-/// Jetstream ISB related configurations.
-pub mod jetstream {
-    use std::fmt;
-    use std::time::Duration;
+/// Building blocks (Source, Sink, Transformer, FallBack, Metrics, etc.) to build a Pipeline or a
+/// MonoVertex.
+pub(crate) mod components;
+/// MonoVertex specific configs.
+pub(crate) mod monovertex;
+/// Pipeline specific configs.
+pub(crate) mod pipeline;
 
-    // jetstream related constants
-    const DEFAULT_PARTITION_IDX: u16 = 0;
-    const DEFAULT_MAX_LENGTH: usize = 30000;
-    const DEFAULT_USAGE_LIMIT: f64 = 0.8;
-    const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
-    const DEFAULT_BUFFER_FULL_STRATEGY: BufferFullStrategy = BufferFullStrategy::RetryUntilSuccess;
-    const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
-
-    #[derive(Debug, Clone)]
-    pub(crate) struct StreamWriterConfig {
-        pub name: String,
-        pub partition_idx: u16,
-        pub max_length: usize,
-        pub refresh_interval: Duration,
-        pub usage_limit: f64,
-        pub buffer_full_strategy: BufferFullStrategy,
-        pub retry_interval: Duration,
-    }
-
-    impl Default for StreamWriterConfig {
-        fn default() -> Self {
-            StreamWriterConfig {
-                name: "default".to_string(),
-                partition_idx: DEFAULT_PARTITION_IDX,
-                max_length: DEFAULT_MAX_LENGTH,
-                usage_limit: DEFAULT_USAGE_LIMIT,
-                refresh_interval: Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS),
-                buffer_full_strategy: DEFAULT_BUFFER_FULL_STRATEGY,
-                retry_interval: Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS),
-            }
-        }
-    }
-
-    #[derive(Debug, Clone, Eq, PartialEq)]
-    pub(crate) enum BufferFullStrategy {
-        RetryUntilSuccess,
-        DiscardLatest,
-    }
-
-    impl fmt::Display for BufferFullStrategy {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match self {
-                BufferFullStrategy::RetryUntilSuccess => write!(f, "retryUntilSuccess"),
-                BufferFullStrategy::DiscardLatest => write!(f, "discardLatest"),
-            }
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum OnFailureStrategy {
-    Retry,
-    Fallback,
-    Drop,
-}
-
-impl OnFailureStrategy {
-    /// Converts a string slice to an `OnFailureStrategy` enum variant.
-    /// Case insensitivity is considered to enhance usability.
-    ///
-    /// # Arguments
-    /// * `s` - A string slice representing the retry strategy.
-    ///
-    /// # Returns
-    /// An option containing the corresponding enum variant if successful,
-    /// or DefaultStrategy if the input does not match known variants.
-    fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "retry" => Some(OnFailureStrategy::Retry),
-            "fallback" => Some(OnFailureStrategy::Fallback),
-            "drop" => Some(OnFailureStrategy::Drop),
-            _ => Some(DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY),
-        }
-    }
-}
-
-impl Display for OnFailureStrategy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            OnFailureStrategy::Retry => write!(f, "retry"),
-            OnFailureStrategy::Fallback => write!(f, "fallback"),
-            OnFailureStrategy::Drop => write!(f, "drop"),
-        }
-    }
-}
-
+/// Exposes the [Settings] via lazy loading.
 pub fn config() -> &'static Settings {
     static CONF: OnceLock<Settings> = OnceLock::new();
     CONF.get_or_init(|| match Settings::load() {
@@ -135,376 +28,48 @@ pub fn config() -> &'static Settings {
     })
 }
 
-pub struct Settings {
-    pub mono_vertex_name: String,
-    pub replica: u32,
-    pub batch_size: u64,
-    pub timeout_in_ms: u32,
-    pub metrics_server_listen_port: u16,
-    pub lag_check_interval_in_secs: u16,
-    pub lag_refresh_interval_in_secs: u16,
-    pub sink_max_retry_attempts: u16,
-    pub sink_retry_interval_in_ms: u32,
-    pub sink_retry_on_fail_strategy: OnFailureStrategy,
-    pub sink_default_retry_strategy: RetryStrategy,
-    pub transformer_config: Option<TransformerConfig>,
-    pub udsource_config: Option<UDSourceConfig>,
-    pub udsink_config: Option<UDSinkConfig>,
-    pub logsink_config: Option<LogSinkConfig>,
-    pub blackhole_config: Option<BlackholeConfig>,
-    pub fallback_config: Option<UDSinkConfig>,
-    pub generator_config: Option<GeneratorConfig>,
-}
-
 #[derive(Debug, Clone)]
-pub struct TransformerConfig {
-    pub grpc_max_message_size: usize,
-    pub socket_path: String,
-    pub server_info_path: String,
+pub(crate) enum CustomResourceType {
+    MonoVertex(MonovertexConfig),
+    Pipeline(PipelineConfig),
 }
 
-impl Default for TransformerConfig {
-    fn default() -> Self {
-        Self {
-            grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-            socket_path: DEFAULT_TRANSFORMER_SOCKET.to_string(),
-            server_info_path: DEFAULT_TRANSFORMER_SERVER_INFO_FILE.to_string(),
-        }
-    }
-}
-
+/// The CRD and other necessary setting to get the Numaflow pipeline/monovertex running.
 #[derive(Debug, Clone)]
-pub struct UDSourceConfig {
-    pub grpc_max_message_size: usize,
-    pub socket_path: String,
-    pub server_info_path: String,
-}
-
-impl Default for UDSourceConfig {
-    fn default() -> Self {
-        Self {
-            grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-            socket_path: DEFAULT_SOURCE_SOCKET.to_string(),
-            server_info_path: DEFAULT_SOURCE_SERVER_INFO_FILE.to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct LogSinkConfig;
-
-#[derive(Debug, Clone)]
-pub struct UDSinkConfig {
-    pub grpc_max_message_size: usize,
-    pub socket_path: String,
-    pub server_info_path: String,
-}
-
-impl Default for UDSinkConfig {
-    fn default() -> Self {
-        Self {
-            grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-            socket_path: DEFAULT_SINK_SOCKET.to_string(),
-            server_info_path: DEFAULT_SINK_SERVER_INFO_FILE.to_string(),
-        }
-    }
-}
-
-impl UDSinkConfig {
-    fn fallback_default() -> Self {
-        Self {
-            grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-            socket_path: DEFAULT_FB_SINK_SOCKET.to_string(),
-            server_info_path: DEFAULT_FB_SINK_SERVER_INFO_FILE.to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct GeneratorConfig {
-    pub rpu: usize,
-    pub content: Bytes,
-    pub duration: usize,
-    pub value: Option<i64>,
-    pub key_count: u8,
-    pub msg_size_bytes: u32,
-    pub jitter: Duration,
-}
-
-impl Default for GeneratorConfig {
-    fn default() -> Self {
-        Self {
-            rpu: 1,
-            content: Bytes::new(),
-            duration: 1000,
-            value: None,
-            key_count: 0,
-            msg_size_bytes: 8,
-            jitter: Duration::from_secs(0),
-        }
-    }
-}
-
-/// Configuration for the [BlackholeSink](crate::sink::blackhole::BlackholeSink)
-#[derive(Default, Debug, Clone)]
-pub struct BlackholeConfig {}
-
-impl Default for Settings {
-    fn default() -> Self {
-        // Create a default retry strategy from defined constants
-        let default_retry_strategy = RetryStrategy {
-            backoff: Option::from(Box::from(Backoff {
-                interval: Option::from(kube::core::Duration::from(
-                    std::time::Duration::from_millis(DEFAULT_SINK_RETRY_INTERVAL_IN_MS as u64),
-                )),
-                steps: Option::from(DEFAULT_MAX_SINK_RETRY_ATTEMPTS as i64),
-            })),
-            on_failure: Option::from(DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY.to_string()),
-        };
-        Self {
-            mono_vertex_name: "default".to_string(),
-            replica: 0,
-            batch_size: DEFAULT_BATCH_SIZE,
-            timeout_in_ms: DEFAULT_TIMEOUT_IN_MS,
-            metrics_server_listen_port: DEFAULT_METRICS_PORT,
-            lag_check_interval_in_secs: DEFAULT_LAG_CHECK_INTERVAL_IN_SECS,
-            lag_refresh_interval_in_secs: DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS,
-            sink_max_retry_attempts: DEFAULT_MAX_SINK_RETRY_ATTEMPTS,
-            sink_retry_interval_in_ms: DEFAULT_SINK_RETRY_INTERVAL_IN_MS,
-            sink_retry_on_fail_strategy: DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY,
-            sink_default_retry_strategy: default_retry_strategy,
-            transformer_config: None,
-            udsource_config: None,
-            udsink_config: Default::default(),
-            logsink_config: None,
-            blackhole_config: None,
-            fallback_config: None,
-            generator_config: None,
-        }
-    }
+pub(crate) struct Settings {
+    pub(crate) custom_resource_type: CustomResourceType,
 }
 
 impl Settings {
-    fn load() -> Result<Self, Error> {
-        let mut settings = Settings::default();
-        if let Ok(mono_vertex_spec) = env::var(ENV_MONO_VERTEX_OBJ) {
-            // decode the spec it will be base64 encoded
-            let mono_vertex_spec = BASE64_STANDARD
-                .decode(mono_vertex_spec.as_bytes())
-                .map_err(|e| {
-                    Error::Config(format!("Failed to decode mono vertex spec: {:?}", e))
-                })?;
-
-            let mono_vertex_obj: MonoVertex = serde_json::from_slice(&mono_vertex_spec)
-                .map_err(|e| Error::Config(format!("Failed to parse mono vertex spec: {:?}", e)))?;
-
-            settings.batch_size = mono_vertex_obj
-                .spec
-                .limits
-                .clone()
-                .unwrap()
-                .read_batch_size
-                .map(|x| x as u64)
-                .unwrap_or(DEFAULT_BATCH_SIZE);
-
-            settings.timeout_in_ms = mono_vertex_obj
-                .spec
-                .limits
-                .clone()
-                .unwrap()
-                .read_timeout
-                .map(|x| std::time::Duration::from(x).as_millis() as u32)
-                .unwrap_or(DEFAULT_TIMEOUT_IN_MS);
-
-            settings.mono_vertex_name = mono_vertex_obj
-                .metadata
-                .and_then(|metadata| metadata.name)
-                .ok_or_else(|| Error::Config("Mono vertex name not found".to_string()))?;
-
-            settings.transformer_config = match mono_vertex_obj
-                .spec
-                .source
-                .as_deref()
-                .ok_or(Error::Config("Source not found".to_string()))?
-                .transformer
-            {
-                Some(_) => Some(TransformerConfig::default()),
-                _ => None,
-            };
-
-            settings.udsource_config = match mono_vertex_obj
-                .spec
-                .source
-                .as_deref()
-                .ok_or(Error::Config("Source not found".to_string()))?
-                .udsource
-            {
-                Some(_) => Some(UDSourceConfig::default()),
-                _ => None,
-            };
-
-            settings.udsink_config = match mono_vertex_obj
-                .spec
-                .sink
-                .as_deref()
-                .ok_or(Error::Config("Sink not found".to_string()))?
-                .udsink
-            {
-                Some(_) => Some(UDSinkConfig::default()),
-                _ => None,
-            };
-
-            settings.fallback_config = match mono_vertex_obj
-                .spec
-                .sink
-                .as_deref()
-                .ok_or(Error::Config("Sink not found".to_string()))?
-                .fallback
-            {
-                Some(_) => Some(UDSinkConfig::fallback_default()),
-                _ => None,
-            };
-
-            settings.blackhole_config = mono_vertex_obj
-                .spec
-                .sink
-                .as_deref()
-                .ok_or(Error::Config("Sink not found".to_string()))?
-                .blackhole
-                .as_deref()
-                .map(|_| BlackholeConfig::default());
-
-            settings.generator_config = match mono_vertex_obj
-                .spec
-                .source
-                .as_deref()
-                .ok_or(Error::Config("Source not found".to_string()))?
-                .generator
-                .as_deref()
-            {
-                Some(generator_source) => {
-                    let mut config = GeneratorConfig::default();
-
-                    if let Some(value_blob) = &generator_source.value_blob {
-                        config.content = Bytes::from(value_blob.clone());
-                    }
-                    match &generator_source.value_blob {
-                        Some(value) => {
-                            config.content = Bytes::from(value.clone());
-                        }
-                        None => {
-                            if let Some(msg_size) = generator_source.msg_size {
-                                if msg_size < 0 {
-                                    warn!("'msgSize' can not be negative, using default value (8 bytes)");
-                                } else {
-                                    config.msg_size_bytes = msg_size as u32;
-                                }
-                            }
-
-                            config.value = generator_source.value;
-                        }
-                    }
-
-                    if let Some(rpu) = generator_source.rpu {
-                        config.rpu = rpu as usize;
-                    }
-
-                    if let Some(d) = generator_source.duration {
-                        config.duration = std::time::Duration::from(d).as_millis() as usize;
-                    }
-
-                    if let Some(key_count) = generator_source.key_count {
-                        if key_count > u8::MAX as i32 {
-                            warn!(
-                                "Capping the key count to {}, provided value is {key_count}",
-                                u8::MAX
-                            );
-                        }
-                        config.key_count = std::cmp::min(key_count, u8::MAX as i32) as u8;
-                    }
-
-                    if let Some(jitter) = generator_source.jitter {
-                        config.jitter = std::time::Duration::from(jitter);
-                    }
-
-                    Some(config)
-                }
-                None => None,
-            };
-
-            settings.logsink_config = mono_vertex_obj
-                .spec
-                .sink
-                .as_deref()
-                .ok_or(Error::Config("Sink not found".to_string()))?
-                .log
-                .as_deref()
-                .map(|_| LogSinkConfig);
-
-            if let Some(retry_strategy) = mono_vertex_obj
-                .spec
-                .sink
-                .expect("sink should not be empty")
-                .retry_strategy
-            {
-                if let Some(sink_backoff) = retry_strategy.clone().backoff {
-                    // Set the max retry attempts and retry interval using direct reference
-                    settings.sink_retry_interval_in_ms = sink_backoff
-                        .clone()
-                        .interval
-                        .map(|x| std::time::Duration::from(x).as_millis() as u32)
-                        .unwrap_or(DEFAULT_SINK_RETRY_INTERVAL_IN_MS);
-
-                    settings.sink_max_retry_attempts = sink_backoff
-                        .clone()
-                        .steps
-                        .map(|x| x as u16)
-                        .unwrap_or(DEFAULT_MAX_SINK_RETRY_ATTEMPTS);
-
-                    // We do not allow 0 attempts to write to sink
-                    if settings.sink_max_retry_attempts == 0 {
-                        return Err(Error::Config(
-                            "Retry Strategy given with 0 retry attempts".to_string(),
-                        ));
-                    }
-                }
-
-                // Set the retry strategy from the spec or use the default
-                settings.sink_retry_on_fail_strategy = retry_strategy
-                    .on_failure
-                    .clone()
-                    .and_then(|s| OnFailureStrategy::from_str(&s))
-                    .unwrap_or(DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY);
-
-                // check if the sink retry strategy is set to fallback and there is no fallback sink configured
-                // then we should return an error
-                if settings.sink_retry_on_fail_strategy == OnFailureStrategy::Fallback
-                    && settings.fallback_config.is_none()
-                {
-                    return Err(Error::Config(
-                        "Retry Strategy given as fallback but Fallback sink not configured"
-                            .to_string(),
-                    ));
-                }
-            }
+    /// load based on the CRD type, either a pipeline or a monovertex.
+    /// Settings are populated through reading the env vars set via the controller. The main
+    /// CRD is the base64 spec of the CR.  
+    fn load() -> Result<Self> {
+        if let Ok(obj) = env::var(ENV_MONO_VERTEX_OBJ) {
+            let cfg = MonovertexConfig::load(obj)?;
+            return Ok(Settings {
+                custom_resource_type: CustomResourceType::MonoVertex(cfg),
+            });
         }
 
-        settings.replica = env::var(ENV_POD_REPLICA)
-            .unwrap_or_else(|_| "0".to_string())
-            .parse()
-            .map_err(|e| Error::Config(format!("Failed to parse pod replica: {:?}", e)))?;
-
-        Ok(settings)
+        if let Ok(obj) = env::var(ENV_VERTEX_OBJ) {
+            let cfg = PipelineConfig::load(obj)?;
+            return Ok(Settings {
+                custom_resource_type: CustomResourceType::Pipeline(cfg),
+            });
+        }
+        Err(Error::Config("No configuration found".to_string()))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::env;
-
+    use crate::config::components::sink::OnFailureStrategy;
+    use crate::config::{CustomResourceType, Settings, ENV_MONO_VERTEX_OBJ};
+    use base64::prelude::BASE64_STANDARD;
+    use base64::Engine;
     use serde_json::json;
-
-    use super::*;
+    use std::env;
 
     #[test]
     fn test_settings_load_combined() {
@@ -559,7 +124,10 @@ mod tests {
 
             // Execute and verify
             let settings = Settings::load().unwrap();
-            assert_eq!(settings.mono_vertex_name, "simple-mono-vertex");
+            assert!(matches!(
+                settings.custom_resource_type,
+                CustomResourceType::MonoVertex(_)
+            ));
             env::remove_var(ENV_MONO_VERTEX_OBJ);
         }
 
@@ -607,12 +175,28 @@ mod tests {
 
             // Execute and verify
             let settings = Settings::load().unwrap();
+            let mvtx_cfg = match settings.custom_resource_type {
+                CustomResourceType::MonoVertex(cfg) => cfg,
+                _ => panic!("Invalid configuration type"),
+            };
+
             assert_eq!(
-                settings.sink_retry_on_fail_strategy,
-                DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY
+                mvtx_cfg
+                    .sink_config
+                    .retry_config
+                    .clone()
+                    .unwrap()
+                    .sink_max_retry_attempts,
+                5
             );
-            assert_eq!(settings.sink_max_retry_attempts, 5);
-            assert_eq!(settings.sink_retry_interval_in_ms, 1000);
+            assert_eq!(
+                mvtx_cfg
+                    .sink_config
+                    .retry_config
+                    .unwrap()
+                    .sink_retry_interval_in_ms,
+                1000
+            );
             env::remove_var(ENV_MONO_VERTEX_OBJ);
         }
 
@@ -661,15 +245,40 @@ mod tests {
 
             // Execute and verify
             let settings = Settings::load().unwrap();
+            let mvtx_cfg = match settings.custom_resource_type {
+                CustomResourceType::MonoVertex(cfg) => cfg,
+                _ => panic!("Invalid configuration type"),
+            };
+
             assert_eq!(
-                settings.sink_retry_on_fail_strategy,
+                mvtx_cfg
+                    .sink_config
+                    .retry_config
+                    .clone()
+                    .unwrap()
+                    .sink_retry_on_fail_strategy,
                 OnFailureStrategy::Drop
             );
-            assert_eq!(settings.sink_max_retry_attempts, 5);
-            assert_eq!(settings.sink_retry_interval_in_ms, 1000);
+            assert_eq!(
+                mvtx_cfg
+                    .sink_config
+                    .retry_config
+                    .clone()
+                    .unwrap()
+                    .sink_max_retry_attempts,
+                5
+            );
+            assert_eq!(
+                mvtx_cfg
+                    .sink_config
+                    .retry_config
+                    .clone()
+                    .unwrap()
+                    .sink_retry_interval_in_ms,
+                1000
+            );
             env::remove_var(ENV_MONO_VERTEX_OBJ);
         }
-
         {
             // Test Invalid on failure strategy to use default
             let json_data = json!({
@@ -715,159 +324,39 @@ mod tests {
 
             // Execute and verify
             let settings = Settings::load().unwrap();
+            let mvtx_config = match settings.custom_resource_type {
+                CustomResourceType::MonoVertex(cfg) => cfg,
+                _ => panic!("Invalid configuration type"),
+            };
+
             assert_eq!(
-                settings.sink_retry_on_fail_strategy,
-                DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY
+                mvtx_config
+                    .sink_config
+                    .retry_config
+                    .clone()
+                    .unwrap()
+                    .sink_retry_on_fail_strategy,
+                OnFailureStrategy::Retry
             );
-            assert_eq!(settings.sink_max_retry_attempts, 5);
-            assert_eq!(settings.sink_retry_interval_in_ms, 1000);
+            assert_eq!(
+                mvtx_config
+                    .sink_config
+                    .retry_config
+                    .clone()
+                    .unwrap()
+                    .sink_max_retry_attempts,
+                5
+            );
+            assert_eq!(
+                mvtx_config
+                    .sink_config
+                    .retry_config
+                    .clone()
+                    .unwrap()
+                    .sink_retry_interval_in_ms,
+                1000
+            );
             env::remove_var(ENV_MONO_VERTEX_OBJ);
         }
-
-        {
-            // Test Error Case: Retry Strategy Fallback without Fallback Sink
-            let json_data = json!({
-                "metadata": {
-                    "name": "simple-mono-vertex",
-                    "namespace": "default",
-                    "creationTimestamp": null
-                },
-                "spec": {
-                    "replicas": 0,
-                    "source": {
-                        "udsource": {
-                            "container": {
-                                "image": "xxxxxxx",
-                                "resources": {}
-                            }
-                        }
-                    },
-                    "sink": {
-                        "udsink": {
-                            "container": {
-                                "image": "xxxxxx",
-                                "resources": {}
-                            }
-                        },
-                        "retryStrategy": {
-                            "backoff": {
-                                "interval": "1s",
-                                "steps": 5
-                            },
-                            "onFailure": "fallback"
-                        },
-                    },
-                    "limits": {
-                        "readBatchSize": 500,
-                        "readTimeout": "1s"
-                    },
-                }
-            });
-            let json_str = json_data.to_string();
-            let encoded_json = BASE64_STANDARD.encode(json_str);
-            env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
-
-            // Execute and verify
-            assert!(Settings::load().is_err());
-            env::remove_var(ENV_MONO_VERTEX_OBJ);
-        }
-
-        {
-            // Test Error Case: Retry Strategy with 0 Retry Attempts
-            let json_data = json!({
-                "metadata": {
-                    "name": "simple-mono-vertex",
-                    "namespace": "default",
-                    "creationTimestamp": null
-                },
-                "spec": {
-                    "replicas": 0,
-                    "source": {
-                        "udsource": {
-                            "container": {
-                                "image": "xxxxxxx",
-                                "resources": {}
-                            }
-                        }
-                    },
-                    "sink": {
-                        "udsink": {
-                            "container": {
-                                "image": "xxxxxx",
-                                "resources": {}
-                            }
-                        },
-                        "retryStrategy": {
-                            "backoff": {
-                                "interval": "1s",
-                                "steps": 0
-                            },
-                            "onFailure": "retry"
-                        },
-                    },
-                    "limits": {
-                        "readBatchSize": 500,
-                        "readTimeout": "1s"
-                    },
-                }
-            });
-            let json_str = json_data.to_string();
-            let encoded_json = BASE64_STANDARD.encode(json_str);
-            env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
-
-            // Execute and verify
-            assert!(Settings::load().is_err());
-            env::remove_var(ENV_MONO_VERTEX_OBJ);
-        }
-    }
-
-    #[test]
-    fn test_on_failure_enum_from_str_valid_inputs() {
-        assert_eq!(
-            OnFailureStrategy::from_str("retry"),
-            Some(OnFailureStrategy::Retry)
-        );
-        assert_eq!(
-            OnFailureStrategy::from_str("fallback"),
-            Some(OnFailureStrategy::Fallback)
-        );
-        assert_eq!(
-            OnFailureStrategy::from_str("drop"),
-            Some(OnFailureStrategy::Drop)
-        );
-
-        // Testing case insensitivity
-        assert_eq!(
-            OnFailureStrategy::from_str("ReTry"),
-            Some(OnFailureStrategy::Retry)
-        );
-        assert_eq!(
-            OnFailureStrategy::from_str("FALLBACK"),
-            Some(OnFailureStrategy::Fallback)
-        );
-        assert_eq!(
-            OnFailureStrategy::from_str("Drop"),
-            Some(OnFailureStrategy::Drop)
-        );
-    }
-
-    #[test]
-    fn test_on_failure_enum_from_str_invalid_input() {
-        assert_eq!(
-            OnFailureStrategy::from_str("unknown"),
-            Some(DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY)
-        ); // should return None for undefined inputs
-    }
-
-    #[test]
-    fn test_on_failure_enum_to_string() {
-        let retry = OnFailureStrategy::Retry;
-        assert_eq!(retry.to_string(), "retry");
-
-        let fallback = OnFailureStrategy::Fallback;
-        assert_eq!(fallback.to_string(), "fallback");
-
-        let drop = OnFailureStrategy::Drop;
-        assert_eq!(drop.to_string(), "drop");
     }
 }

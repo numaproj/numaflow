@@ -12,7 +12,6 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::warn;
 
-use crate::config::config;
 use crate::error::{Error, Result};
 use crate::message::{get_vertex_name, Message, MessageID, Offset};
 use crate::shared::utils::utc_from_timestamp;
@@ -28,10 +27,11 @@ struct SourceTransformer {
 
 impl SourceTransformer {
     async fn new(
+        batch_size: usize,
         mut client: SourceTransformClient<Channel>,
         actor_messages: mpsc::Receiver<ActorMessage>,
     ) -> Result<Self> {
-        let (read_tx, read_rx) = mpsc::channel(config().batch_size as usize);
+        let (read_tx, read_rx) = mpsc::channel(batch_size);
         let read_stream = ReceiverStream::new(read_rx);
 
         // do a handshake for read with the server before we start sending read requests
@@ -207,9 +207,10 @@ pub(crate) struct SourceTransformHandle {
 }
 
 impl SourceTransformHandle {
-    pub(crate) async fn new(client: SourceTransformClient<Channel>) -> crate::Result<Self> {
-        let (sender, receiver) = mpsc::channel(config().batch_size as usize);
-        let mut client = SourceTransformer::new(client, receiver).await?;
+    pub(crate) async fn new(client: SourceTransformClient<Channel>) -> Result<Self> {
+        let batch_size = 500;
+        let (sender, receiver) = mpsc::channel(batch_size);
+        let mut client = SourceTransformer::new(batch_size, client, receiver).await?;
         tokio::spawn(async move {
             while let Some(msg) = client.actor_messages.recv().await {
                 client.handle_message(msg).await;
@@ -276,7 +277,7 @@ mod tests {
         });
 
         // wait for the server to start
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = SourceTransformHandle::new(SourceTransformClient::new(
             create_rpc_channel(sock_file).await?,
@@ -299,11 +300,8 @@ mod tests {
             headers: Default::default(),
         };
 
-        let resp = tokio::time::timeout(
-            tokio::time::Duration::from_secs(2),
-            client.transform(vec![message]),
-        )
-        .await??;
+        let resp =
+            tokio::time::timeout(Duration::from_secs(2), client.transform(vec![message])).await??;
         assert_eq!(resp.len(), 1);
 
         // we need to drop the client, because if there are any in-flight requests
@@ -355,7 +353,7 @@ mod tests {
         });
 
         // wait for the server to start
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = SourceTransformHandle::new(SourceTransformClient::new(
             create_rpc_channel(sock_file).await?,

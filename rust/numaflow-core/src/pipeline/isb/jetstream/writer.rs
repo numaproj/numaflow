@@ -15,7 +15,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::error;
 use tracing::{debug, warn};
 
-use crate::config::jetstream::StreamWriterConfig;
+use crate::config::pipeline::isb::jetstream::StreamWriterConfig;
 use crate::error::Error;
 use crate::message::{IntOffset, Offset};
 use crate::Result;
