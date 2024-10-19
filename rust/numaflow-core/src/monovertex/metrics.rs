@@ -136,19 +136,19 @@ impl MonoVtxMetrics {
             source_pending: Family::<Vec<(String, String)>, Gauge>::default(),
             // timers
             e2e_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
+                Histogram::new(exponential_buckets(100.0, 6.0, 10))
             }),
             read_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
+                Histogram::new(exponential_buckets(100.0, 6.0 , 10))
             }),
             transform_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
-                || Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10)),
+                || Histogram::new(exponential_buckets(100.0, 6.0 , 10)),
             ),
             ack_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
+                Histogram::new(exponential_buckets(100.0, 6.0 , 10))
             }),
             sink_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(100.0, 60000000.0 * 15.0, 10))
+                Histogram::new(exponential_buckets(100.0, 6.0 , 10))
             }),
         };
 
