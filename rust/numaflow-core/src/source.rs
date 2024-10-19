@@ -106,8 +106,8 @@ pub(crate) struct SourceHandle {
 }
 
 impl SourceHandle {
-    pub(crate) fn new(src_type: SourceType) -> Self {
-        let (sender, receiver) = mpsc::channel(config().batch_size as usize);
+    pub(crate) fn new(src_type: SourceType, batch_size: usize) -> Self {
+        let (sender, receiver) = mpsc::channel(batch_size);
         match src_type {
             SourceType::UserDefinedSource(reader, acker, lag_reader) => {
                 tokio::spawn(async move {

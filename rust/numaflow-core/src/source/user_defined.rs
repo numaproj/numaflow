@@ -8,7 +8,6 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
-use crate::config::config;
 use crate::message::{Message, Offset};
 use crate::reader::LagReader;
 use crate::source::{SourceAcker, SourceReader};
@@ -41,7 +40,7 @@ pub(crate) async fn new_source(
     UserDefinedSourceLagReader,
 )> {
     let src_read = UserDefinedSourceRead::new(client.clone(), num_records, timeout_in_ms).await?;
-    let src_ack = UserDefinedSourceAck::new(client.clone()).await?;
+    let src_ack = UserDefinedSourceAck::new(client.clone(), num_records).await?;
     let lag_reader = UserDefinedSourceLagReader::new(client);
 
     Ok((src_read, src_ack, lag_reader))
@@ -50,23 +49,24 @@ pub(crate) async fn new_source(
 impl UserDefinedSourceRead {
     async fn new(
         mut client: SourceClient<Channel>,
-        num_records: usize,
+        batch_size: usize,
         timeout_in_ms: u16,
     ) -> Result<Self> {
-        let (read_tx, resp_stream) = Self::create_reader(&mut client).await?;
+        let (read_tx, resp_stream) = Self::create_reader(batch_size, &mut client).await?;
 
         Ok(Self {
             read_tx,
             resp_stream,
-            num_records,
+            num_records: batch_size,
             timeout_in_ms,
         })
     }
 
     async fn create_reader(
+        batch_size: usize,
         client: &mut SourceClient<Channel>,
     ) -> Result<(mpsc::Sender<ReadRequest>, Streaming<ReadResponse>)> {
-        let (read_tx, read_rx) = mpsc::channel(config().batch_size as usize);
+        let (read_tx, read_rx) = mpsc::channel(batch_size);
         let read_stream = ReceiverStream::new(read_rx);
 
         // do a handshake for read with the server before we start sending read requests
@@ -139,8 +139,8 @@ impl SourceReader for UserDefinedSourceRead {
 }
 
 impl UserDefinedSourceAck {
-    async fn new(mut client: SourceClient<Channel>) -> Result<Self> {
-        let (ack_tx, ack_resp_stream) = Self::create_acker(&mut client).await?;
+    async fn new(mut client: SourceClient<Channel>, batch_size: usize) -> Result<Self> {
+        let (ack_tx, ack_resp_stream) = Self::create_acker(batch_size, &mut client).await?;
 
         Ok(Self {
             ack_tx,
@@ -149,9 +149,10 @@ impl UserDefinedSourceAck {
     }
 
     async fn create_acker(
+        batch_size: usize,
         client: &mut SourceClient<Channel>,
     ) -> Result<(mpsc::Sender<AckRequest>, Streaming<AckResponse>)> {
-        let (ack_tx, ack_rx) = mpsc::channel(config().batch_size as usize);
+        let (ack_tx, ack_rx) = mpsc::channel(batch_size);
         let ack_stream = ReceiverStream::new(ack_rx);
 
         // do a handshake for ack with the server before we start sending ack requests
