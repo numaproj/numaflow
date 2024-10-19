@@ -282,7 +282,7 @@ pub async fn metrics_handler() -> impl IntoResponse {
     let state = global_registry().registry.lock();
     let mut buffer = String::new();
     encode(&mut buffer, &state).unwrap();
-    debug!("Exposing Metrics: {:?}", buffer);
+    debug!("Exposing metrics: {:?}", buffer);
     Response::builder()
         .status(StatusCode::OK)
         .body(Body::from(buffer))

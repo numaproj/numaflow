@@ -1,72 +1,23 @@
 use std::env;
 use std::sync::OnceLock;
 
-use crate::config::mvtxcfg::monovertex::MonovertexConfig;
-use crate::config::plcfg::pipeline::PipelineConfig;
+use crate::config::pipeline::PipelineConfig;
 use crate::Error;
 use crate::Result;
+use monovertex::MonovertexConfig;
 
 const ENV_MONO_VERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 const ENV_VERTEX_OBJ: &str = "NUMAFLOW_VERTEX_OBJECT";
 
-pub(crate) mod common;
-pub(crate) mod mvtxcfg;
-pub(crate) mod plcfg;
+/// Building blocks (Source, Sink, Transformer, FallBack, Metrics, etc.) to build a Pipeline or a
+/// MonoVertex.
+pub(crate) mod components;
+/// MonoVertex specific configs.
+pub(crate) mod monovertex;
+/// Pipeline specific configs.
+pub(crate) mod pipeline;
 
-/// Jetstream ISB related configurations.
-pub mod jetstream {
-    use std::fmt;
-    use std::time::Duration;
-
-    // jetstream related constants
-    const DEFAULT_PARTITION_IDX: u16 = 0;
-    const DEFAULT_MAX_LENGTH: usize = 30000;
-    const DEFAULT_USAGE_LIMIT: f64 = 0.8;
-    const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
-    const DEFAULT_BUFFER_FULL_STRATEGY: BufferFullStrategy = BufferFullStrategy::RetryUntilSuccess;
-    const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
-
-    #[derive(Debug, Clone)]
-    pub(crate) struct StreamWriterConfig {
-        pub name: String,
-        pub partition_idx: u16,
-        pub max_length: usize,
-        pub refresh_interval: Duration,
-        pub usage_limit: f64,
-        pub buffer_full_strategy: BufferFullStrategy,
-        pub retry_interval: Duration,
-    }
-
-    impl Default for StreamWriterConfig {
-        fn default() -> Self {
-            StreamWriterConfig {
-                name: "default".to_string(),
-                partition_idx: DEFAULT_PARTITION_IDX,
-                max_length: DEFAULT_MAX_LENGTH,
-                usage_limit: DEFAULT_USAGE_LIMIT,
-                refresh_interval: Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS),
-                buffer_full_strategy: DEFAULT_BUFFER_FULL_STRATEGY,
-                retry_interval: Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS),
-            }
-        }
-    }
-
-    #[derive(Debug, Clone, Eq, PartialEq)]
-    pub(crate) enum BufferFullStrategy {
-        RetryUntilSuccess,
-        DiscardLatest,
-    }
-
-    impl fmt::Display for BufferFullStrategy {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match self {
-                BufferFullStrategy::RetryUntilSuccess => write!(f, "retryUntilSuccess"),
-                BufferFullStrategy::DiscardLatest => write!(f, "discardLatest"),
-            }
-        }
-    }
-}
-
+/// Exposes the [Settings] via lazy loading.
 pub fn config() -> &'static Settings {
     static CONF: OnceLock<Settings> = OnceLock::new();
     CONF.get_or_init(|| match Settings::load() {
@@ -83,12 +34,16 @@ pub(crate) enum CustomResourceType {
     Pipeline(PipelineConfig),
 }
 
+/// The CRD and other necessary setting to get the Numaflow pipeline/monovertex running.
 #[derive(Debug, Clone)]
 pub(crate) struct Settings {
-    pub custom_resource_type: CustomResourceType,
+    pub(crate) custom_resource_type: CustomResourceType,
 }
 
 impl Settings {
+    /// load based on the CRD type, either a pipeline or a monovertex.
+    /// Settings are populated through reading the env vars set via the controller. The main
+    /// CRD is the base64 spec of the CR.  
     fn load() -> Result<Self> {
         if let Ok(obj) = env::var(ENV_MONO_VERTEX_OBJ) {
             let cfg = MonovertexConfig::load(obj)?;
@@ -109,7 +64,7 @@ impl Settings {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::common::sink::OnFailureStrategy;
+    use crate::config::components::sink::OnFailureStrategy;
     use crate::config::{CustomResourceType, Settings, ENV_MONO_VERTEX_OBJ};
     use base64::prelude::BASE64_STANDARD;
     use base64::Engine;

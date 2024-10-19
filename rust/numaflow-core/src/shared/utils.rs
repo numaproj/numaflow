@@ -2,8 +2,8 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::config::common::Metrics::MetricsConfig;
-use crate::config::mvtxcfg::monovertex::MonovertexConfig;
+use crate::config::components::metrics::MetricsConfig;
+use crate::config::monovertex::MonovertexConfig;
 use crate::error;
 use crate::monovertex::metrics::{
     start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
@@ -85,7 +85,7 @@ pub(crate) async fn start_metrics_server(
             .expect("Invalid address");
 
         if let Err(e) = start_metrics_https_server(metrics_addr, metrics_state).await {
-            error!("Metrics server error: {:?}", e);
+            error!("metrics server error: {:?}", e);
         }
     })
 }

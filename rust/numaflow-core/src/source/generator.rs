@@ -1,6 +1,6 @@
 use futures::StreamExt;
 
-use crate::config::common::source::GeneratorConfig;
+use crate::config::components::source::GeneratorConfig;
 use crate::message::{Message, Offset};
 use crate::reader;
 use crate::source;
@@ -33,7 +33,7 @@ mod stream_generator {
     use tracing::warn;
 
     use crate::config;
-    use crate::config::common::source::GeneratorConfig;
+    use crate::config::components::source::GeneratorConfig;
     use crate::message::{
         get_vertex_name, get_vertex_replica, Message, MessageID, Offset, StringOffset,
     };

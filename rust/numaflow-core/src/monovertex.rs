@@ -10,8 +10,8 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info};
 
-use crate::config::common::{sink, source, transformer};
-use crate::config::mvtxcfg::monovertex::MonovertexConfig;
+use crate::config::components::{sink, source, transformer};
+use crate::config::monovertex::MonovertexConfig;
 use crate::config::{config, CustomResourceType, Settings};
 use crate::error::{self, Error};
 use crate::shared::server_info::check_for_server_compatibility;
@@ -345,8 +345,8 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
 
-    use crate::config::mvtxcfg::monovertex::MonovertexConfig;
-    use crate::config::{common, Settings};
+    use crate::config::monovertex::MonovertexConfig;
+    use crate::config::{components, Settings};
     use crate::error;
     use crate::monovertex::start_forwarder;
     use crate::shared::server_info::ServerInfo;
@@ -454,21 +454,23 @@ mod tests {
         });
 
         let config = MonovertexConfig {
-            source_config: common::source::SourceConfig {
-                source_type: common::source::SourceType::UserDefined(
-                    common::source::UserDefinedConfig {
+            source_config: components::source::SourceConfig {
+                source_type: components::source::SourceType::UserDefined(
+                    components::source::UserDefinedConfig {
                         socket_path: src_sock_file.to_str().unwrap().to_string(),
                         grpc_max_message_size: 1024,
                         server_info_path: src_info_file.to_str().unwrap().to_string(),
                     },
                 ),
             },
-            sink_config: common::sink::SinkConfig {
-                sink_type: common::sink::SinkType::UserDefined(common::sink::UserDefinedConfig {
-                    socket_path: sink_sock_file.to_str().unwrap().to_string(),
-                    grpc_max_message_size: 1024,
-                    server_info_path: sink_server_info.to_str().unwrap().to_string(),
-                }),
+            sink_config: components::sink::SinkConfig {
+                sink_type: components::sink::SinkType::UserDefined(
+                    components::sink::UserDefinedConfig {
+                        socket_path: sink_sock_file.to_str().unwrap().to_string(),
+                        grpc_max_message_size: 1024,
+                        server_info_path: sink_server_info.to_str().unwrap().to_string(),
+                    },
+                ),
                 retry_config: Default::default(),
             },
             ..Default::default()

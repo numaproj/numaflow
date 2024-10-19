@@ -3,7 +3,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
-use crate::config::jetstream::StreamWriterConfig;
+use crate::config::pipeline::isb::jetstream::StreamWriterConfig;
 use crate::error::Error;
 use crate::message::{Message, Offset};
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;

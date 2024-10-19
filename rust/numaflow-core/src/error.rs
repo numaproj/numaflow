@@ -4,7 +4,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug, Clone)]
 pub enum Error {
-    #[error("Metrics Error - {0}")]
+    #[error("metrics Error - {0}")]
     Metrics(String),
 
     #[error("Source Error - {0}")]

@@ -225,7 +225,7 @@ pub(crate) mod transformer {
     }
 }
 
-pub(crate) mod Metrics {
+pub(crate) mod metrics {
     const DEFAULT_METRICS_PORT: u16 = 2469;
     const DEFAULT_LAG_CHECK_INTERVAL_IN_SECS: u16 = 5;
     const DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS: u16 = 3;

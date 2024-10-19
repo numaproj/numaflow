@@ -6,8 +6,8 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
-use crate::config::common::sink::{OnFailureStrategy, RetryConfig};
-use crate::config::mvtxcfg::monovertex::MonovertexConfig;
+use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+use crate::config::monovertex::MonovertexConfig;
 use crate::error;
 use crate::message::{Message, Offset, ResponseStatusFromSink};
 use crate::monovertex::metrics;
