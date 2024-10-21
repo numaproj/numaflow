@@ -1,9 +1,7 @@
 use tokio::sync::{mpsc, oneshot};
 
-use crate::config::config;
 use crate::{
     message::{Message, Offset},
-    monovertex::SourceType,
     reader::LagReader,
 };
 
@@ -164,4 +162,17 @@ impl SourceHandle {
             .await
             .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
     }
+}
+
+pub(crate) enum SourceType {
+    UserDefinedSource(
+        user_defined::UserDefinedSourceRead,
+        user_defined::UserDefinedSourceAck,
+        user_defined::UserDefinedSourceLagReader,
+    ),
+    Generator(
+        generator::GeneratorRead,
+        generator::GeneratorAck,
+        generator::GeneratorLagReader,
+    ),
 }

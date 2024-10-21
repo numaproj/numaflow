@@ -572,13 +572,12 @@ mod tests {
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
 
-    use crate::config::config;
     use crate::monovertex::forwarder::ForwarderBuilder;
-    use crate::monovertex::SourceType;
     use crate::shared::utils::create_rpc_channel;
     use crate::sink::{SinkClientType, SinkHandle};
     use crate::source::user_defined::new_source;
     use crate::source::SourceHandle;
+    use crate::source::SourceType;
     use crate::transformer::user_defined::SourceTransformHandle;
 
     struct SimpleSource {
@@ -967,7 +966,6 @@ mod tests {
     #[tokio::test]
     async fn test_fb_sink() {
         let batch_size = 100;
-        let timeout_in_ms = 1000;
 
         let (sink_tx, mut sink_rx) = mpsc::channel(10);
 

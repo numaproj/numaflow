@@ -11,6 +11,7 @@ use crate::monovertex::metrics::{
 use crate::shared::server_info;
 use crate::source::SourceHandle;
 use crate::Error;
+use crate::Result;
 use axum::http::Uri;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
@@ -110,67 +111,61 @@ pub(crate) async fn create_pending_reader(
     ))
     .build()
 }
-
-pub(crate) async fn wait_until_ready(
-    cln_token: CancellationToken,
-    source_client: &mut Option<SourceClient<Channel>>,
-    sink_client: &mut Option<SinkClient<Channel>>,
-    transformer_client: &mut Option<SourceTransformClient<Channel>>,
-    fb_sink_client: &mut Option<SinkClient<Channel>>,
-) -> error::Result<()> {
+pub(crate) async fn wait_until_source_ready(
+    cln_token: &CancellationToken,
+    client: &mut SourceClient<Channel>,
+) -> Result<()> {
+    info!("Waiting for source client to be ready...");
     loop {
         if cln_token.is_cancelled() {
             return Err(Error::Forwarder(
                 "Cancellation token is cancelled".to_string(),
             ));
         }
-
-        let source_ready = if let Some(client) = source_client {
-            let ready = client.is_ready(Request::new(())).await.is_ok();
-            if !ready {
-                info!("UDSource is not ready, waiting...");
-            }
-            ready
-        } else {
-            true
-        };
-
-        let sink_ready = if let Some(sink_client) = sink_client {
-            sink_client.is_ready(Request::new(())).await.is_ok()
-        } else {
-            true
-        };
-        if !sink_ready {
-            info!("UDSink is not ready, waiting...");
+        match client.is_ready(Request::new(())).await {
+            Ok(_) => break,
+            Err(_) => sleep(Duration::from_secs(1)).await,
         }
-
-        let transformer_ready = if let Some(client) = transformer_client {
-            let ready = client.is_ready(Request::new(())).await.is_ok();
-            if !ready {
-                info!("UDTransformer is not ready, waiting...");
-            }
-            ready
-        } else {
-            true
-        };
-
-        let fb_sink_ready = if let Some(client) = fb_sink_client {
-            let ready = client.is_ready(Request::new(())).await.is_ok();
-            if !ready {
-                info!("Fallback Sink is not ready, waiting...");
-            }
-            ready
-        } else {
-            true
-        };
-
-        if source_ready && sink_ready && transformer_ready && fb_sink_ready {
-            break;
-        }
-
-        sleep(Duration::from_secs(1)).await;
+        info!("Waiting for source client to be ready...");
     }
+    Ok(())
+}
 
+pub(crate) async fn wait_until_sink_ready(
+    cln_token: &CancellationToken,
+    client: &mut SinkClient<Channel>,
+) -> Result<()> {
+    loop {
+        if cln_token.is_cancelled() {
+            return Err(Error::Forwarder(
+                "Cancellation token is cancelled".to_string(),
+            ));
+        }
+        match client.is_ready(Request::new(())).await {
+            Ok(_) => break,
+            Err(_) => sleep(Duration::from_secs(1)).await,
+        }
+        info!("Waiting for sink client to be ready...");
+    }
+    Ok(())
+}
+
+pub(crate) async fn wait_until_transformer_ready(
+    cln_token: &CancellationToken,
+    client: &mut SourceTransformClient<Channel>,
+) -> Result<()> {
+    loop {
+        if cln_token.is_cancelled() {
+            return Err(Error::Forwarder(
+                "Cancellation token is cancelled".to_string(),
+            ));
+        }
+        match client.is_ready(Request::new(())).await {
+            Ok(_) => break,
+            Err(_) => sleep(Duration::from_secs(1)).await,
+        }
+        info!("Waiting for transformer client to be ready...");
+    }
     Ok(())
 }
 
@@ -202,7 +197,7 @@ pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> crate::error::Re
     Ok(channel)
 }
 
-pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> Result<Channel, Error> {
+pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> Result<Channel> {
     let channel = Endpoint::try_from("http://[::]:50051")
         .map_err(|e| Error::Connection(format!("Failed to create endpoint: {:?}", e)))?
         .connect_with_connector(service_fn(move |_: Uri| {
@@ -406,28 +401,28 @@ mod tests {
         // Wait for the servers to start
         sleep(Duration::from_millis(100)).await;
 
-        let source_grpc_client =
+        let cln_token = CancellationToken::new();
+
+        let mut source_grpc_client =
             SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap());
-        let sink_grpc_client =
+        wait_until_source_ready(&cln_token, &mut source_grpc_client)
+            .await
+            .unwrap();
+
+        let mut sink_grpc_client =
             SinkClient::new(create_rpc_channel(sink_sock_file.clone()).await.unwrap());
+        wait_until_sink_ready(&cln_token, &mut sink_grpc_client)
+            .await
+            .unwrap();
+
         let mut transformer_grpc_client = Some(SourceTransformClient::new(
             create_rpc_channel(transformer_sock_file.clone())
                 .await
                 .unwrap(),
         ));
-
-        let mut fb_sink_grpc_client = None;
-
-        let cln_token = CancellationToken::new();
-        let result = wait_until_ready(
-            cln_token,
-            &mut Some(source_grpc_client),
-            &mut Some(sink_grpc_client),
-            &mut transformer_grpc_client,
-            &mut fb_sink_grpc_client,
-        )
-        .await;
-        assert!(result.is_ok());
+        wait_until_transformer_ready(&cln_token, transformer_grpc_client.as_mut().unwrap())
+            .await
+            .unwrap();
 
         source_shutdown_tx.send(()).unwrap();
         sink_shutdown_tx.send(()).unwrap();

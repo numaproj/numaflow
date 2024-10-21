@@ -27,7 +27,6 @@ use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{debug, error, info};
 
-use crate::config::config;
 use crate::source::SourceHandle;
 use crate::Error;
 
