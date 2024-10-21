@@ -77,12 +77,12 @@ pub(crate) async fn start_metrics_server(
     metrics_config: MetricsConfig,
     metrics_state: UserDefinedContainerState,
 ) -> JoinHandle<()> {
-    let metrics_port = metrics_config.metrics_server_listen_port.clone();
     tokio::spawn(async move {
         // Start the metrics server, which server the prometheus metrics.
-        let metrics_addr: SocketAddr = format!("0.0.0.0:{}", metrics_port)
-            .parse()
-            .expect("Invalid address");
+        let metrics_addr: SocketAddr =
+            format!("0.0.0.0:{}", metrics_config.metrics_server_listen_port)
+                .parse()
+                .expect("Invalid address");
 
         if let Err(e) = start_metrics_https_server(metrics_addr, metrics_state).await {
             error!("metrics server error: {:?}", e);
