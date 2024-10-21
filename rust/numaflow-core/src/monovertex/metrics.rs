@@ -27,7 +27,6 @@ use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{debug, error, info};
 
-use crate::config::config;
 use crate::source::SourceHandle;
 use crate::Error;
 
@@ -37,6 +36,10 @@ const MVTX_NAME_LABEL: &str = "mvtx_name";
 const REPLICA_LABEL: &str = "mvtx_replica";
 const PENDING_PERIOD_LABEL: &str = "period";
 
+// The top-level metric registry is created with the GLOBAL_PREFIX
+const GLOBAL_PREFIX: &str = "monovtx";
+const SINK_REGISTRY_PREFIX: &str = "sink";
+
 // Define the metrics
 // Note: We do not add a suffix to the metric name, as the suffix is inferred through the metric type
 // by the prometheus client library
@@ -44,24 +47,24 @@ const PENDING_PERIOD_LABEL: &str = "period";
 // Note: Please keep consistent with the definitions in MonoVertex daemon
 
 // counters (please note the prefix _total, and read above link)
-const READ_TOTAL: &str = "monovtx_read";
-const READ_BYTES_TOTAL: &str = "monovtx_read_bytes";
-const ACK_TOTAL: &str = "monovtx_ack";
-const SINK_WRITE_TOTAL: &str = "monovtx_sink_write";
-const DROPPED_TOTAL: &str = "monovtx_dropped";
-const FALLBACK_SINK_WRITE_TOTAL: &str = "monovtx_fallback_sink_write";
+const READ_TOTAL: &str = "read";
+const READ_BYTES_TOTAL: &str = "read_bytes";
+const ACK_TOTAL: &str = "ack";
+const SINK_WRITE_TOTAL: &str = "write";
+const DROPPED_TOTAL: &str = "dropped";
+const FALLBACK_SINK_WRITE_TOTAL: &str = "fallback_sink_write";
 
 // pending as gauge
-const SOURCE_PENDING: &str = "monovtx_pending";
+const SOURCE_PENDING: &str = "pending";
 
 // processing times as timers
-const E2E_TIME: &str = "monovtx_processing_time";
-const READ_TIME: &str = "monovtx_read_time";
-const TRANSFORM_TIME: &str = "monovtx_transformer_time";
-const ACK_TIME: &str = "monovtx_ack_time";
-const SINK_TIME: &str = "monovtx_sink_time";
+const E2E_TIME: &str = "processing_time";
+const READ_TIME: &str = "read_time";
+const TRANSFORM_TIME: &str = "transformer_time";
+const ACK_TIME: &str = "ack_time";
+const SINK_TIME: &str = "time";
 
-/// Only used defined functions will have containers since rest
+/// Only user defined functions will have containers since rest
 /// are builtins. We save the gRPC clients to retrieve metrics and also
 /// to do liveness checks. This means, these will be optionals since
 /// we do not require these for builtins.
@@ -75,27 +78,26 @@ pub(crate) struct UserDefinedContainerState {
 
 /// The global register of all metrics.
 #[derive(Default)]
-pub struct GlobalRegistry {
+struct GlobalRegistry {
     // It is okay to use std mutex because we register each metric only one time.
-    pub registry: parking_lot::Mutex<Registry>,
+    registry: parking_lot::Mutex<Registry>,
 }
 
 impl GlobalRegistry {
     fn new() -> Self {
         GlobalRegistry {
             // Create a new registry for the metrics
-            registry: parking_lot::Mutex::new(Registry::default()),
+            registry: parking_lot::Mutex::new(Registry::with_prefix(GLOBAL_PREFIX)),
         }
     }
 }
 
-/// GLOBAL_REGISTER is the static global registry which is initialized
-// only once.
-static GLOBAL_REGISTER: OnceLock<GlobalRegistry> = OnceLock::new();
+/// GLOBAL_REGISTRY is the static global registry which is initialized only once.
+static GLOBAL_REGISTRY: OnceLock<GlobalRegistry> = OnceLock::new();
 
-/// global_registry is a helper function to get the GLOBAL_REGISTER
+/// global_registry is a helper function to get the GLOBAL_REGISTRY
 fn global_registry() -> &'static GlobalRegistry {
-    GLOBAL_REGISTER.get_or_init(GlobalRegistry::new)
+    GLOBAL_REGISTRY.get_or_init(GlobalRegistry::new)
 }
 
 // TODO: let's do sub-registry for forwarder so tomorrow we can add sink and source metrics.
@@ -104,16 +106,16 @@ fn global_registry() -> &'static GlobalRegistry {
 // changing the value of the metrics
 // Each metric is defined as family of metrics, which means that they can be
 // differentiated by their label values assigned.
-// The labels are provided in the form of Vec<(String, String)
+// The labels are provided in the form of Vec<(String, String)>
 // The second argument is the metric kind.
 pub struct MonoVtxMetrics {
     // counters
     pub read_total: Family<Vec<(String, String)>, Counter>,
     pub read_bytes_total: Family<Vec<(String, String)>, Counter>,
     pub ack_total: Family<Vec<(String, String)>, Counter>,
-    pub sink_write_total: Family<Vec<(String, String)>, Counter>,
     pub dropped_total: Family<Vec<(String, String)>, Counter>,
     pub fbsink_write_total: Family<Vec<(String, String)>, Counter>,
+    pub sink: Sink,
 
     // gauge
     pub source_pending: Family<Vec<(String, String)>, Gauge>,
@@ -123,7 +125,12 @@ pub struct MonoVtxMetrics {
     pub read_time: Family<Vec<(String, String)>, Histogram>,
     pub transform_time: Family<Vec<(String, String)>, Histogram>,
     pub ack_time: Family<Vec<(String, String)>, Histogram>,
-    pub sink_time: Family<Vec<(String, String)>, Histogram>,
+}
+
+// Family of metrics for the sink
+pub struct Sink {
+    pub write_total: Family<Vec<(String, String)>, Counter>,
+    pub time: Family<Vec<(String, String)>, Histogram>,
 }
 
 /// Exponential bucket distribution with range.
@@ -154,7 +161,6 @@ impl MonoVtxMetrics {
             read_total: Family::<Vec<(String, String)>, Counter>::default(),
             read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
             ack_total: Family::<Vec<(String, String)>, Counter>::default(),
-            sink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
             dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
             fbsink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
             // gauge
@@ -173,9 +179,13 @@ impl MonoVtxMetrics {
             ack_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
             }),
-            sink_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
-            }),
+
+            sink: Sink {
+                write_total: Family::<Vec<(String, String)>, Counter>::default(),
+                time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+                }),
+            },
         };
 
         let mut registry = global_registry().registry.lock();
@@ -184,11 +194,6 @@ impl MonoVtxMetrics {
             READ_TOTAL,
             "A Counter to keep track of the total number of messages read from the source",
             metrics.read_total.clone(),
-        );
-        registry.register(
-            SINK_WRITE_TOTAL,
-            "A Counter to keep track of the total number of messages written to the sink",
-            metrics.sink_write_total.clone(),
         );
         registry.register(
             ACK_TOTAL,
@@ -240,10 +245,18 @@ impl MonoVtxMetrics {
             "A Histogram to keep track of the total time taken to Ack to the Source, in microseconds",
             metrics.ack_time.clone(),
         );
-        registry.register(
+
+        // Sink metrics
+        let sink_registry = registry.sub_registry_with_prefix(SINK_REGISTRY_PREFIX);
+        sink_registry.register(
+            SINK_WRITE_TOTAL,
+            "A Counter to keep track of the total number of messages written to the sink",
+            metrics.sink.write_total.clone(),
+        );
+        sink_registry.register(
             SINK_TIME,
             "A Histogram to keep track of the total time taken to Write to the Sink, in microseconds",
-            metrics.sink_time.clone(),
+            metrics.sink.time.clone(),
         );
         metrics
     }

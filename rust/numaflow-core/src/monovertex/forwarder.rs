@@ -306,14 +306,16 @@ impl Forwarder {
         }
 
         forward_metrics()
-            .sink_time
+            .sink
+            .time
             .get_or_create(&self.common_labels)
             .observe(start_time_e2e.elapsed().as_micros() as f64);
 
         // update the metric for number of messages written to the sink
         // this included primary and fallback sink
         forward_metrics()
-            .sink_write_total
+            .sink
+            .write_total
             .get_or_create(&self.common_labels)
             .inc_by(msg_count);
         Ok(())
