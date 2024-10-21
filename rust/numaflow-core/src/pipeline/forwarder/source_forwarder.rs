@@ -147,7 +147,7 @@ impl Forwarder {
             for writers in self.buffer_writers.values() {
                 // write to the stream writers in round-robin fashion
                 let writer = &writers[i % writers.len()]; // FIXME: we need to shuffle based on the message id hash
-                let result = writer.write(messages[i].clone());
+                let result = writer.write(messages[i].clone()).await?;
                 results.push(result);
             }
         }
@@ -155,7 +155,9 @@ impl Forwarder {
         // await for all the result futures to complete
         for result in results {
             // we can use the ack to publish watermark etc
-            let _ = result.await?;
+            let x = result
+                .await
+                .map_err(|e| Error::Forwarder(format!("Failed to write to jetstream {:?}", e)))??;
         }
         Ok(())
     }

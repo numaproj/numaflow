@@ -59,7 +59,7 @@ func (s Source) getContainers(req getContainerReq) ([]corev1.Container, error) {
 }
 
 func (s Source) getMainContainer(req getContainerReq) corev1.Container {
-	return containerBuilder{}.init(req).args("processor", "--type="+string(VertexTypeSource), "--isbsvc-type="+string(req.isbSvcType)).build()
+	return containerBuilder{}.init(req).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeSource), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
 }
 
 func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) corev1.Container {

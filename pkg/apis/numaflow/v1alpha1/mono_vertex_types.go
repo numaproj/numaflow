@@ -460,7 +460,7 @@ func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
 
 func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) []corev1.Container {
 	mainContainer := containerBuilder{}.
-		init(req).command(NumaflowRustBinary).args("--monovertex").build()
+		init(req).command(NumaflowRustBinary).args("--rust").build()
 
 	containers := []corev1.Container{mainContainer}
 	if mvspec.Source.UDSource != nil { // Only support UDSource for now.

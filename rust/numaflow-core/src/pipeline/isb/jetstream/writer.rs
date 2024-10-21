@@ -278,7 +278,9 @@ impl PafResolverActor {
                     ack.sequence,
                     self.js_writer.partition_idx,
                 ))))
-                .unwrap(),
+                .unwrap_or_else(|e| {
+                    error!("Failed to send offset: {:?}", e);
+                }),
             Err(e) => {
                 error!(?e, "Failed to resolve the future, trying blocking write");
                 match self.js_writer.blocking_write(result.payload.clone()).await {

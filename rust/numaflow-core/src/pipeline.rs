@@ -1,10 +1,11 @@
 use crate::config::components::source::SourceType;
 use crate::config::pipeline;
 use crate::config::pipeline::PipelineConfig;
+use crate::monovertex::metrics::UserDefinedContainerState;
 use crate::pipeline::isb::jetstream::WriterHandle;
 use crate::shared::server_info::check_for_server_compatibility;
 use crate::shared::utils::{
-    create_rpc_channel, wait_until_source_ready, wait_until_transformer_ready,
+    create_rpc_channel, start_metrics_server, wait_until_source_ready, wait_until_transformer_ready,
 };
 use crate::source::generator::new_generator;
 use crate::source::user_defined::new_source;
@@ -25,6 +26,18 @@ pub(crate) async fn start_forwarder(
     config: &PipelineConfig,
 ) -> Result<()> {
     let js_context = create_js_context(config.js_client_config.clone()).await?;
+    // FIXME: use appropriate clients and the metrics server
+    start_metrics_server(
+        config.metrics_config.clone(),
+        UserDefinedContainerState {
+            source_client: None,
+            sink_client: None,
+            transformer_client: None,
+            fb_sink_client: None,
+        },
+    )
+    .await;
+
     match &config.vertex_config {
         pipeline::VertexType::Source(source) => {
             let buffer_writers =

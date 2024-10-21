@@ -59,6 +59,7 @@ pub async fn run() -> Result<()> {
     let crd_type = config().custom_resource_type.clone();
     match crd_type {
         CustomResourceType::MonoVertex(config) => {
+            info!("Starting monovertex forwarder with config: {:?}", config);
             // Run the forwarder with cancellation token.
             if let Err(e) = monovertex::start_forwarder(cln_token, &config).await {
                 error!("Application error running monovertex: {:?}", e);
@@ -70,6 +71,7 @@ pub async fn run() -> Result<()> {
             }
         }
         CustomResourceType::Pipeline(config) => {
+            info!("Starting pipeline forwarder with config: {:?}", config);
             if let Err(e) = pipeline::start_forwarder(cln_token, &config).await {
                 error!("Application error running pipeline: {:?}", e);
 

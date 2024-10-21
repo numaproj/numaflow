@@ -1,3 +1,4 @@
+use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::source::SourceConfig;
 use crate::config::components::transformer::{TransformerConfig, TransformerType};
@@ -31,6 +32,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) from_vertex_config: Vec<FromVertexConfig>,
     pub(crate) to_vertex_config: Vec<ToVertexConfig>,
     pub(crate) vertex_config: VertexType,
+    pub(crate) metrics_config: MetricsConfig,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -104,15 +106,9 @@ impl PipelineConfig {
             })
             .unwrap_or(DEFAULT_TIMEOUT_IN_MS);
 
-        let from_edges = vertex_obj
-            .spec
-            .from_edges
-            .ok_or_else(|| Error::Config("Missing from_edges in mono vertex spec".to_string()))?;
+        let from_edges = vertex_obj.spec.from_edges.unwrap_or_default();
 
-        let to_edges = vertex_obj
-            .spec
-            .to_edges
-            .ok_or_else(|| Error::Config("Missing to_edges in mono vertex spec".to_string()))?;
+        let to_edges = vertex_obj.spec.to_edges.unwrap_or_default();
 
         let vertex: VertexType = if let Some(source) = vertex_obj.spec.source {
             let transformer_config = source.transformer.as_ref().map(|_| TransformerConfig {
@@ -211,6 +207,7 @@ impl PipelineConfig {
             from_vertex_config,
             to_vertex_config,
             vertex_config: vertex,
+            metrics_config: Default::default(),
         })
     }
 }

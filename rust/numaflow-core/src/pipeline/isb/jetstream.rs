@@ -281,7 +281,7 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream_name = "benchmark_stream";
+        let stream_name = "benchmark_publish";
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -290,11 +290,6 @@ mod tests {
             })
             .await
             .unwrap();
-
-        let config = BufferWriterConfig {
-            name: stream_name.into(),
-            ..Default::default()
-        };
 
         let cancel_token = CancellationToken::new();
         let handler = WriterHandle::new(
@@ -335,7 +330,7 @@ mod tests {
                 i += 1;
 
                 if start_time.elapsed().as_secs() >= 1 {
-                    info!("Messages sent: {}", sent_count);
+                    println!("Messages sent: {}", sent_count);
                     sent_count = 0;
                     start_time = Instant::now();
                 }
@@ -352,7 +347,7 @@ mod tests {
                 }
 
                 if start_time.elapsed().as_secs() >= 1 {
-                    info!("Messages received: {}", count);
+                    println!("Messages received: {}", count);
                     count = 0;
                     start_time = Instant::now();
                 }

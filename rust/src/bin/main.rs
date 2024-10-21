@@ -15,7 +15,7 @@ async fn main() {
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 // TODO: add a better default based on entry point invocation
-                //   e.g., serving/monovertex might need a different default
+                //  e.g., serving/monovertex might need a different default
                 .unwrap_or_else(|_| "info".into()),
         )
         .with(tracing_subscriber::fmt::layer().with_ansi(false))
@@ -30,11 +30,11 @@ async fn main() {
         if let Err(e) = servesink::servesink().await {
             info!("Error running servesink: {}", e);
         }
-    } else if args.contains(&"--monovertex".to_string()) {
-        if let Err(e) = numaflow_core::monovertex::mono_vertex().await {
-            error!("Error running monovertex: {}", e);
+    } else if args.contains(&"--rust".to_string()) {
+        if let Err(e) = numaflow_core::run().await {
+            error!("Error running rust binary: {}", e);
         }
     } else {
-        error!("Invalid argument. Use --serve, --servesink, or --monovertex.");
+        error!("Invalid argument. Use --serve, --servesink, or --rust.");
     }
 }
