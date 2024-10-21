@@ -110,24 +110,24 @@ fn global_registry() -> &'static GlobalRegistry {
 // differentiated by their label values assigned.
 // The labels are provided in the form of Vec<(String, String)>
 // The second argument is the metric kind.
-pub struct MonoVtxMetrics {
+pub(crate) struct MonoVtxMetrics {
     // counters
-    pub read_total: Family<Vec<(String, String)>, Counter>,
-    pub read_bytes_total: Family<Vec<(String, String)>, Counter>,
-    pub ack_total: Family<Vec<(String, String)>, Counter>,
-    pub dropped_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) read_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) read_bytes_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) ack_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
 
     // gauge
-    pub source_pending: Family<Vec<(String, String)>, Gauge>,
+    pub(crate) source_pending: Family<Vec<(String, String)>, Gauge>,
 
     // timers
-    pub e2e_time: Family<Vec<(String, String)>, Histogram>,
-    pub read_time: Family<Vec<(String, String)>, Histogram>,
-    pub ack_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) e2e_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) read_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) ack_time: Family<Vec<(String, String)>, Histogram>,
 
-    pub transformer: TransformerMetrics,
-    pub sink: SinkMetrics,
-    pub fb_sink: FbSinkMetrics,
+    pub(crate) transformer: TransformerMetrics,
+    pub(crate) sink: SinkMetrics,
+    pub(crate) fb_sink: FbSinkMetrics,
 }
 
 // Family of metrics for the sink
