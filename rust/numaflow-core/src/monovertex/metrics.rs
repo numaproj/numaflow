@@ -880,7 +880,10 @@ mod tests {
         let metrics = forward_metrics();
         // Use a fixed set of labels instead of the ones from mvtx_forward_metric_labels() since other test functions may also set it.
         let common_labels = vec![
-            (MVTX_NAME_LABEL.to_string(), "test-monovertex".to_string()),
+            (
+                MVTX_NAME_LABEL.to_string(),
+                "test-monovertex-metric-names".to_string(),
+            ),
             (REPLICA_LABEL.to_string(), "3".to_string()),
         ];
         // Populate all metrics
@@ -916,103 +919,117 @@ mod tests {
         let expected = r#"
 # HELP monovtx_read A Counter to keep track of the total number of messages read from the source.
 # TYPE monovtx_read counter
-monovtx_read_total{mvtx_name="test-monovertex",mvtx_replica="3"} 1
+monovtx_read_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 # HELP monovtx_ack A Counter to keep track of the total number of messages acknowledged by the sink.
 # TYPE monovtx_ack counter
-monovtx_ack_total{mvtx_name="test-monovertex",mvtx_replica="3"} 1
+monovtx_ack_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 # HELP monovtx_read_bytes A Counter to keep track of the total number of bytes read from the source.
 # TYPE monovtx_read_bytes counter
-monovtx_read_bytes_total{mvtx_name="test-monovertex",mvtx_replica="3"} 1
+monovtx_read_bytes_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 # HELP monovtx_dropped A Counter to keep track of the total number of messages dropped by the monovtx.
 # TYPE monovtx_dropped counter
-monovtx_dropped_total{mvtx_name="test-monovertex",mvtx_replica="3"} 1
+monovtx_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 # HELP monovtx_pending A Gauge to keep track of the total number of pending messages for the monovtx.
 # TYPE monovtx_pending gauge
-monovtx_pending{mvtx_name="test-monovertex",mvtx_replica="3"} 10
+monovtx_pending{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 10
 # HELP monovtx_processing_time A Histogram to keep track of the total time taken to forward a chunk, in microseconds.
 # TYPE monovtx_processing_time histogram
-monovtx_processing_time_sum{mvtx_name="test-monovertex",mvtx_replica="3"} 10.0
-monovtx_processing_time_count{mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="100.0",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="+Inf",mvtx_name="test-monovertex",mvtx_replica="3"} 1
+monovtx_processing_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 10.0
+monovtx_processing_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 # HELP monovtx_read_time A Histogram to keep track of the total time taken to Read from the Source, in microseconds.
 # TYPE monovtx_read_time histogram
-monovtx_read_time_sum{mvtx_name="test-monovertex",mvtx_replica="3"} 3.0
-monovtx_read_time_count{mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="100.0",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="+Inf",mvtx_name="test-monovertex",mvtx_replica="3"} 1
+monovtx_read_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 3.0
+monovtx_read_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 # HELP monovtx_ack_time A Histogram to keep track of the total time taken to Ack to the Source, in microseconds.
 # TYPE monovtx_ack_time histogram
-monovtx_ack_time_sum{mvtx_name="test-monovertex",mvtx_replica="3"} 2.0
-monovtx_ack_time_count{mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="100.0",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="+Inf",mvtx_name="test-monovertex",mvtx_replica="3"} 1
+monovtx_ack_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2.0
+monovtx_ack_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 # HELP monovtx_transformer_time A Histogram to keep track of the total time taken to Transform, in microseconds.
 # TYPE monovtx_transformer_time histogram
-monovtx_transformer_time_sum{mvtx_name="test-monovertex",mvtx_replica="3"} 5.0
-monovtx_transformer_time_count{mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="100.0",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="+Inf",mvtx_name="test-monovertex",mvtx_replica="3"} 1
+monovtx_transformer_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0
+monovtx_transformer_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 # HELP monovtx_sink_write A Counter to keep track of the total number of messages written to the sink.
 # TYPE monovtx_sink_write counter
-monovtx_sink_write_total{mvtx_name="test-monovertex",mvtx_replica="3"} 1
+monovtx_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 # HELP monovtx_sink_time A Histogram to keep track of the total time taken to Write to the Sink, in microseconds.
 # TYPE monovtx_sink_time histogram
-monovtx_sink_time_sum{mvtx_name="test-monovertex",mvtx_replica="3"} 4.0
-monovtx_sink_time_count{mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="100.0",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="+Inf",mvtx_name="test-monovertex",mvtx_replica="3"} 1
+monovtx_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 4.0
+monovtx_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 # HELP monovtx_fallback_sink_write A Counter to keep track of the total number of messages written to the fallback sink.
 # TYPE monovtx_fallback_sink_write counter
-monovtx_fallback_sink_write_total{mvtx_name="test-monovertex",mvtx_replica="3"} 1
+monovtx_fallback_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 # EOF
         "#;
 
-        assert_eq!(buffer.trim(), expected.trim());
+        // The registry may contains metrics from other tests also. Extract the ones created from this test using the unique labels we specify.
+        let labels = common_labels
+            .iter()
+            .map(|(k, v)| format!("{}=\"{}\"", k, v))
+            .collect::<Vec<String>>()
+            .join(",");
+
+        let got = buffer
+            .trim()
+            .lines()
+            .filter(|line| line.starts_with('#') || line.contains(&labels))
+            .collect::<Vec<&str>>()
+            .join("\n");
+
+        assert_eq!(got.trim(), expected.trim());
     }
 }
