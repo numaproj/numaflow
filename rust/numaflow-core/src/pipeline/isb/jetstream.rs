@@ -1,13 +1,15 @@
 use async_nats::jetstream::Context;
+use bytes::BytesMut;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
-use crate::config::pipeline::isb::jetstream::StreamWriterConfig;
+use crate::config::pipeline::isb::jetstream::{StreamReaderConfig, StreamWriterConfig};
 use crate::error::Error;
 use crate::message::{Message, Offset};
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::Result;
+use reader::JetstreamReader;
 
 /// JetStream Writer is responsible for writing messages to JetStream ISB.
 /// it exposes both sync and async methods to write messages. It has gates
@@ -15,6 +17,8 @@ use crate::Result;
 /// writes, it will let the callee know the status (or return a non-retryable
 /// exception).
 pub(super) mod writer;
+
+pub(super) mod reader;
 
 /// ISB Writer accepts an Actor pattern based messages.
 #[derive(Debug)]
@@ -54,11 +58,11 @@ impl WriterActor {
     }
 
     async fn handle_message(&mut self, msg: ActorMessage) {
-        let payload: Vec<u8> = msg
+        let payload: BytesMut = msg
             .message
             .try_into()
             .expect("message serialization should not fail");
-        self.js_writer.write(payload, msg.callee_tx).await
+        self.js_writer.write(payload.into(), msg.callee_tx).await
     }
 
     async fn run(&mut self) {
@@ -104,6 +108,65 @@ impl WriterHandle {
             .map_err(|e| Error::ISB(format!("Failed to write message to actor channel: {}", e)))?;
 
         Ok(receiver)
+    }
+}
+
+struct ReaderActorMessage {
+    respond_to: oneshot::Sender<Message>,
+}
+
+struct ReaderActor {
+    handler_messages: mpsc::Receiver<ReaderActorMessage>,
+    messages: mpsc::Receiver<Message>,
+}
+
+impl ReaderActor {
+    async fn new(
+        js_ctx: Context,
+        cfg: StreamReaderConfig,
+        handler_messages: mpsc::Receiver<ReaderActorMessage>,
+    ) -> Self {
+        let (messages_tx, messages_rx) = mpsc::channel(2 * cfg.batch_size);
+        let mut js_reader = JetstreamReader::new(js_ctx, cfg, messages_tx).await;
+        tokio::spawn(async move { js_reader.start().await });
+        Self {
+            messages: messages_rx,
+            handler_messages,
+        }
+    }
+
+    async fn start(&mut self) {
+        while let Some(actor_msg) = self.handler_messages.recv().await {
+            let message = self.messages.recv().await.unwrap();
+            let _ = actor_msg.respond_to.send(message);
+        }
+    }
+
+    async fn read(&mut self) -> Message {
+        self.messages.recv().await.unwrap()
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ReaderHandle {
+    handler_messages: mpsc::Sender<ReaderActorMessage>,
+}
+
+impl ReaderHandle {
+    pub(crate) async fn new(js_ctx: Context, cfg: StreamReaderConfig) -> Self {
+        let (sender, receiver) = mpsc::channel(1);
+        let mut actor = ReaderActor::new(js_ctx, cfg, receiver).await;
+        tokio::spawn(async move { actor.start().await });
+        Self {
+            handler_messages: sender,
+        }
+    }
+
+    pub(crate) async fn read(&self) -> Message {
+        let (sender, receiver) = oneshot::channel();
+        let msg = ReaderActorMessage { respond_to: sender };
+        self.handler_messages.send(msg).await.unwrap();
+        receiver.await.unwrap()
     }
 }
 

@@ -36,6 +36,12 @@ pub mod jetstream {
         }
     }
 
+    #[derive(Debug, Clone)]
+    pub(crate) struct StreamReaderConfig {
+        pub name: String,
+        pub batch_size: usize,
+    }
+
     #[derive(Debug, Clone, Eq, PartialEq)]
     pub(crate) enum BufferFullStrategy {
         RetryUntilSuccess,

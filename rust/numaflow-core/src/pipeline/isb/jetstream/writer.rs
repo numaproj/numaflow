@@ -75,7 +75,7 @@ impl JetstreamWriter {
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    match Self::fetch_buffer_usage(self.js_ctx.clone(), self.config.name.as_str(), self.config.max_length).await {
+                    match self.fetch_buffer_usage().await {
                         Ok((soft_usage, solid_usage)) => {
                             if solid_usage >= self.config.usage_limit && soft_usage >= self.config.usage_limit {
                                 self.is_full.store(true, Ordering::Relaxed);
@@ -110,13 +110,10 @@ impl JetstreamWriter {
     /// - Otherwise: solidUsage = State.Msgs / maxLength
     /// - State.Msgs: The total number of messages in the stream.
     /// - maxLength: The maximum length of the buffer.
-    async fn fetch_buffer_usage(
-        js_ctx: Context,
-        stream_name: &str,
-        max_length: usize,
-    ) -> Result<(f64, f64)> {
-        let mut stream = js_ctx
-            .get_stream(stream_name)
+    async fn fetch_buffer_usage(&mut self) -> Result<(f64, f64)> {
+        let mut stream = self
+            .js_ctx
+            .get_stream(self.config.name.as_str())
             .await
             .map_err(|_| Error::ISB("Failed to get stream".to_string()))?;
 
@@ -125,8 +122,9 @@ impl JetstreamWriter {
             .await
             .map_err(|e| Error::ISB(format!("Failed to get the stream info {:?}", e)))?;
 
-        let mut consumer: PullConsumer = js_ctx
-            .get_consumer_from_stream(stream_name, stream_name)
+        let mut consumer: PullConsumer = self
+            .js_ctx
+            .get_consumer_from_stream(self.config.name.as_str(), self.config.name.as_str())
             .await
             .map_err(|e| Error::ISB(format!("Failed to get the consumer {:?}", e)))?;
 
@@ -136,11 +134,11 @@ impl JetstreamWriter {
             .map_err(|e| Error::ISB(format!("Failed to get the consumer info {:?}", e)))?;
 
         let soft_usage = (consumer_info.num_pending as f64 + consumer_info.num_ack_pending as f64)
-            / max_length as f64;
+            / self.config.max_length as f64;
         let solid_usage = if stream_info.config.retention == Limits {
             soft_usage
         } else {
-            stream_info.state.messages as f64 / max_length as f64
+            stream_info.state.messages as f64 / self.config.max_length as f64
         };
 
         Ok((soft_usage, solid_usage))
@@ -149,7 +147,7 @@ impl JetstreamWriter {
     /// Writes the message to the JetStream ISB and returns a future which can be
     /// awaited to get the PublishAck. It will do infinite retries until the message
     /// gets published successfully. If it returns an error it means it is fatal error
-    pub(super) async fn write(&self, payload: Vec<u8>, callee_tx: oneshot::Sender<Result<Offset>>) {
+    pub(super) async fn write(&self, payload: Bytes, callee_tx: oneshot::Sender<Result<Offset>>) {
         let js_ctx = self.js_ctx.clone();
 
         // loop till we get a PAF, there could be other reasons why PAFs cannot be created.
@@ -162,7 +160,7 @@ impl JetstreamWriter {
                     // FIXME: consider buffer-full strategy
                 }
                 false => match js_ctx
-                    .publish(self.config.name.clone(), Bytes::from(payload.clone()))
+                    .publish(self.config.name.clone(), payload.clone())
                     .await
                 {
                     Ok(paf) => {
@@ -200,12 +198,12 @@ impl JetstreamWriter {
     /// Writes the message to the JetStream ISB and returns the PublishAck. It will do
     /// infinite retries until the message gets published successfully. If it returns
     /// an error it means it is fatal non-retryable error.
-    pub(super) async fn blocking_write(&self, payload: Vec<u8>) -> Result<PublishAck> {
+    pub(super) async fn blocking_write(&self, payload: Bytes) -> Result<PublishAck> {
         let js_ctx = self.js_ctx.clone();
 
         loop {
             match js_ctx
-                .publish(self.config.name.clone(), Bytes::from(payload.clone()))
+                .publish(self.config.name.clone(), payload.clone())
                 .await
             {
                 Ok(paf) => match paf.await {
@@ -241,7 +239,7 @@ impl JetstreamWriter {
 #[derive(Debug)]
 pub(super) struct ResolveAndPublishResult {
     paf: PublishAckFuture,
-    payload: Vec<u8>,
+    payload: Bytes,
     callee_tx: oneshot::Sender<Result<Offset>>,
 }
 
