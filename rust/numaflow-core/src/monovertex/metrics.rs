@@ -103,7 +103,6 @@ fn global_registry() -> &'static GlobalRegistry {
     GLOBAL_REGISTRY.get_or_init(GlobalRegistry::new)
 }
 
-// TODO: let's do sub-registry for forwarder so tomorrow we can add sink and source metrics.
 /// MonoVtxMetrics is a struct which is used for storing the metrics related to MonoVertex
 // These fields are exposed as pub to be used by other modules for
 // changing the value of the metrics
