@@ -11,7 +11,6 @@ use crate::Error;
 pub(super) struct JetstreamReader {
     config: StreamReaderConfig,
     consumer: PullConsumer,
-    error: Option<Error>, // handler_messages: mpsc::Receiver<ReaderActorMessage>,
     messages: mpsc::Sender<Message>,
 }
 
@@ -29,12 +28,11 @@ impl JetstreamReader {
         Self {
             consumer,
             config: cfg,
-            // handler_messages,
-            error: None,
             messages,
         }
     }
 
+    //TODO: Error handling
     pub(super) async fn start(&mut self) {
         loop {
             let mut permit = self
@@ -54,8 +52,7 @@ impl JetstreamReader {
             let mut messages = match messages {
                 Ok(messages) => messages,
                 Err(e) => {
-                    self.error = Some(Error::ISB(e.to_string()));
-                    return;
+                    continue;
                 }
             };
 
@@ -63,15 +60,13 @@ impl JetstreamReader {
                 let message = match message {
                     Ok(message) => message,
                     Err(e) => {
-                        self.error = Some(Error::ISB(e.to_string()));
-                        return;
+                        continue;
                     }
                 };
                 let message: Message = match message.payload.clone().try_into() {
                     Ok(message) => message,
                     Err(e) => {
-                        self.error = Some(Error::ISB(e.to_string()));
-                        return;
+                        continue;
                     }
                 };
                 match permit.next() {
@@ -79,8 +74,7 @@ impl JetstreamReader {
                         permit.send(message);
                     }
                     None => {
-                        self.error = Some(Error::ISB("No permit available".to_string()));
-                        return;
+                        continue;
                     }
                 }
             }
