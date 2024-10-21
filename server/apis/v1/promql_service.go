@@ -168,15 +168,15 @@ func (b *PromQlService) BuildQuery(requestBody MetricsRequestBody) (string, erro
 	}
 	expr, ok := b.Expression[metricName][dimension]
 	if !ok {
-		return query, fmt.Errorf("expr not set for %s dimension of %s metric", dimension, metricName)
+		return query, fmt.Errorf(`expr not set for "%s" dimension of "%s" metric`, dimension, metricName)
 	}
 	placeHolders, ok := b.PlaceHolders[metricName][dimension]
 	if !ok {
-		return query, fmt.Errorf("placeholders not set for %s dimension of %s metric", dimension, metricName)
+		return query, fmt.Errorf(`placeholders not set for "%s" dimension of "%s" metric`, dimension, metricName)
 	}
 
 	if expr == "" || len(placeHolders) == 0 {
-		return query, fmt.Errorf("expr or placeholders do not exist for for %s dimension of %s metric in the config", dimension, metricName)
+		return query, fmt.Errorf(`expr or placeholders do not exist for for "%s" dimension of "%s" metric in the config`, dimension, metricName)
 	}
 	reqMap := b.PopulateReqMap(requestBody)
 	query, err := substitutePlaceHolders(expr, placeHolders, reqMap)

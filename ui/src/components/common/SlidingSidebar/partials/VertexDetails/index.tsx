@@ -16,12 +16,15 @@ import reduceIcon from "../../../../../images/reduce.png";
 import monoVertexIcon from "../../../../../images/monoVertex.svg";
 
 import "./style.css";
+import { Metrics } from "../Metrics";
 
 const PODS_VIEW_TAB_INDEX = 0;
 const SPEC_TAB_INDEX = 1;
 const PROCESSING_RATES_TAB_INDEX = 2;
 const K8S_EVENTS_TAB_INDEX = 3;
-const BUFFERS_TAB_INDEX = 4;
+const METRICS_TAB_INDEX = 4;
+const BUFFERS_TAB_INDEX = 5;
+
 
 export enum VertexType {
   SOURCE,
@@ -238,6 +241,15 @@ export function VertexDetails({
             label="K8s Events"
             data-testid="events-tab"
           />
+          <Tab
+            className={
+              tabValue === METRICS_TAB_INDEX
+                ? "vertex-details-tab-selected"
+                : "vertex-details-tab"
+            }
+            label="Metrics"
+            data-testid="metrics-tab"
+          />
           {buffers && (
             <Tab
               className={
@@ -312,6 +324,19 @@ export function VertexDetails({
             vertexId={type === "monoVertex" ? undefined : vertexId}
             excludeHeader
             square
+          />
+        )}
+      </div>
+      <div
+        className="vertex-details-tab-panel"
+        role="tabpanel"
+        hidden={tabValue !== METRICS_TAB_INDEX}
+      >
+        {tabValue === METRICS_TAB_INDEX && (
+          <Metrics
+            namespaceId={namespaceId}
+            pipelineId={pipelineId}
+            type={type}
           />
         )}
       </div>
