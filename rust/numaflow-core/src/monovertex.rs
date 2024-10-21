@@ -12,7 +12,7 @@ use tracing::{error, info};
 
 use crate::config::components::{sink, source, transformer};
 use crate::config::monovertex::MonovertexConfig;
-use crate::config::{config, CustomResourceType, Settings};
+use crate::config::{config, CustomResourceType};
 use crate::error::{self, Error};
 use crate::shared::server_info::check_for_server_compatibility;
 use crate::shared::utils;
@@ -260,7 +260,7 @@ async fn fetch_source(
     // now that we know it is not a user-defined source, it has to be a built-in
     if let source::SourceType::Generator(generator_config) = &config.source_config.source_type {
         let (source_read, source_ack, lag_reader) =
-            new_generator(generator_config.clone(), config.batch_size as usize)?;
+            new_generator(generator_config.clone(), config.batch_size)?;
         Ok(SourceType::Generator(source_read, source_ack, lag_reader))
     } else {
         Err(Error::Config("No valid source configuration found".into()))
@@ -345,8 +345,8 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
 
+    use crate::config::components;
     use crate::config::monovertex::MonovertexConfig;
-    use crate::config::{components, Settings};
     use crate::error;
     use crate::monovertex::start_forwarder;
     use crate::shared::server_info::ServerInfo;

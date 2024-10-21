@@ -118,7 +118,7 @@ mod tests {
 
     use super::*;
     use crate::error::Result;
-    use crate::message::{Message, MessageID, Offset};
+    use crate::message::{Message, MessageID};
     use crate::shared::utils::create_rpc_channel;
     use crate::sink::user_defined::UserDefinedSink;
 

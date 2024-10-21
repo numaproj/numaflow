@@ -34,6 +34,7 @@ pub enum Error {
     #[error("Proto Error - {0}")]
     Proto(String),
 
+    #[allow(clippy::upper_case_acronyms)]
     #[error("ISB Error - {0}")]
     ISB(String),
 

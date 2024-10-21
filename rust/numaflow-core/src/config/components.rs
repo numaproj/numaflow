@@ -70,8 +70,6 @@ pub(crate) mod sink {
     const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX;
     const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
 
-    use crate::error::Error;
-    use crate::Result;
     use numaflow_models::models::{Backoff, RetryStrategy};
     use std::fmt::Display;
 

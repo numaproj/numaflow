@@ -32,7 +32,6 @@ mod stream_generator {
     use tokio::time::MissedTickBehavior;
     use tracing::warn;
 
-    use crate::config;
     use crate::config::components::source::GeneratorConfig;
     use crate::message::{
         get_vertex_name, get_vertex_replica, Message, MessageID, Offset, StringOffset,
