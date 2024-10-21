@@ -345,8 +345,8 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
 
+    use crate::config::components;
     use crate::config::monovertex::MonovertexConfig;
-    use crate::config::{components, Settings};
     use crate::error;
     use crate::monovertex::start_forwarder;
     use crate::shared::server_info::ServerInfo;
