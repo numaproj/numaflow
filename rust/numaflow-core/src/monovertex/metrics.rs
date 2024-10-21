@@ -40,6 +40,7 @@ const PENDING_PERIOD_LABEL: &str = "period";
 const GLOBAL_PREFIX: &str = "monovtx";
 const SINK_REGISTRY_PREFIX: &str = "sink";
 const FALLBACK_SINK_REGISTRY_PREFIX: &str = "fallback_sink";
+const TRANSFORMER_REGISTRY_PREFIX: &str = "transformer";
 
 // Define the metrics
 // Note: We do not add a suffix to the metric name, as the suffix is inferred through the metric type
@@ -122,9 +123,9 @@ pub struct MonoVtxMetrics {
     // timers
     pub e2e_time: Family<Vec<(String, String)>, Histogram>,
     pub read_time: Family<Vec<(String, String)>, Histogram>,
-    pub transform_time: Family<Vec<(String, String)>, Histogram>,
     pub ack_time: Family<Vec<(String, String)>, Histogram>,
 
+    pub transformer: TransformerMetrics,
     pub sink: SinkMetrics,
     pub fb_sink: FbSinkMetrics,
 }
@@ -137,6 +138,11 @@ pub struct SinkMetrics {
 
 pub struct FbSinkMetrics {
     pub write_total: Family<Vec<(String, String)>, Counter>,
+}
+
+pub struct TransformerMetrics {
+    /// Transformer latency
+    pub time: Family<Vec<(String, String)>, Histogram>,
 }
 
 /// Exponential bucket distribution with range.
@@ -178,12 +184,15 @@ impl MonoVtxMetrics {
             read_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
             }),
-            transform_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
-                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10)),
-            ),
             ack_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
             }),
+
+            transformer: TransformerMetrics {
+                time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+                }),
+            },
 
             sink: SinkMetrics {
                 write_total: Family::<Vec<(String, String)>, Counter>::default(),
@@ -239,14 +248,17 @@ impl MonoVtxMetrics {
             metrics.read_time.clone(),
         );
         registry.register(
-            TRANSFORM_TIME,
-            "A Histogram to keep track of the total time taken to Transform, in microseconds",
-            metrics.transform_time.clone(),
-        );
-        registry.register(
             ACK_TIME,
             "A Histogram to keep track of the total time taken to Ack to the Source, in microseconds",
             metrics.ack_time.clone(),
+        );
+
+        // Transformer metrics
+        let transformer_registry = registry.sub_registry_with_prefix(TRANSFORMER_REGISTRY_PREFIX);
+        transformer_registry.register(
+            TRANSFORM_TIME,
+            "A Histogram to keep track of the total time taken to Transform, in microseconds",
+            metrics.transformer.time.clone(),
         );
 
         // Sink metrics

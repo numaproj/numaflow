@@ -214,7 +214,8 @@ impl Forwarder {
             start_time.elapsed().as_millis()
         );
         forward_metrics()
-            .transform_time
+            .transformer
+            .time
             .get_or_create(&self.common_labels)
             .observe(start_time.elapsed().as_micros() as f64);
 
@@ -575,7 +576,6 @@ mod tests {
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
 
-    use crate::config::config;
     use crate::monovertex::forwarder::ForwarderBuilder;
     use crate::monovertex::SourceType;
     use crate::shared::utils::create_rpc_channel;
