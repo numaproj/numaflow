@@ -39,6 +39,7 @@ const PENDING_PERIOD_LABEL: &str = "period";
 // The top-level metric registry is created with the GLOBAL_PREFIX
 const GLOBAL_PREFIX: &str = "monovtx";
 const SINK_REGISTRY_PREFIX: &str = "sink";
+const FALLBACK_SINK_REGISTRY_PREFIX: &str = "fallback_sink";
 
 // Define the metrics
 // Note: We do not add a suffix to the metric name, as the suffix is inferred through the metric type
@@ -52,7 +53,7 @@ const READ_BYTES_TOTAL: &str = "read_bytes";
 const ACK_TOTAL: &str = "ack";
 const SINK_WRITE_TOTAL: &str = "write";
 const DROPPED_TOTAL: &str = "dropped";
-const FALLBACK_SINK_WRITE_TOTAL: &str = "fallback_sink_write";
+const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
 
 // pending as gauge
 const SOURCE_PENDING: &str = "pending";
@@ -114,8 +115,6 @@ pub struct MonoVtxMetrics {
     pub read_bytes_total: Family<Vec<(String, String)>, Counter>,
     pub ack_total: Family<Vec<(String, String)>, Counter>,
     pub dropped_total: Family<Vec<(String, String)>, Counter>,
-    pub fbsink_write_total: Family<Vec<(String, String)>, Counter>,
-    pub sink: Sink,
 
     // gauge
     pub source_pending: Family<Vec<(String, String)>, Gauge>,
@@ -125,12 +124,19 @@ pub struct MonoVtxMetrics {
     pub read_time: Family<Vec<(String, String)>, Histogram>,
     pub transform_time: Family<Vec<(String, String)>, Histogram>,
     pub ack_time: Family<Vec<(String, String)>, Histogram>,
+
+    pub sink: SinkMetrics,
+    pub fb_sink: FbSinkMetrics,
 }
 
 // Family of metrics for the sink
-pub struct Sink {
+pub struct SinkMetrics {
     pub write_total: Family<Vec<(String, String)>, Counter>,
     pub time: Family<Vec<(String, String)>, Histogram>,
+}
+
+pub struct FbSinkMetrics {
+    pub write_total: Family<Vec<(String, String)>, Counter>,
 }
 
 /// Exponential bucket distribution with range.
@@ -162,7 +168,6 @@ impl MonoVtxMetrics {
             read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
             ack_total: Family::<Vec<(String, String)>, Counter>::default(),
             dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
-            fbsink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
             // gauge
             source_pending: Family::<Vec<(String, String)>, Gauge>::default(),
             // timers
@@ -180,11 +185,15 @@ impl MonoVtxMetrics {
                 Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
             }),
 
-            sink: Sink {
+            sink: SinkMetrics {
                 write_total: Family::<Vec<(String, String)>, Counter>::default(),
                 time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                 }),
+            },
+
+            fb_sink: FbSinkMetrics {
+                write_total: Family::<Vec<(String, String)>, Counter>::default(),
             },
         };
 
@@ -210,12 +219,6 @@ impl MonoVtxMetrics {
             DROPPED_TOTAL,
             "A Counter to keep track of the total number of messages dropped by the monovtx",
             metrics.dropped_total.clone(),
-        );
-
-        registry.register(
-            FALLBACK_SINK_WRITE_TOTAL,
-            "A Counter to keep track of the total number of messages written to the fallback sink",
-            metrics.fbsink_write_total.clone(),
         );
 
         // gauges
@@ -257,6 +260,15 @@ impl MonoVtxMetrics {
             SINK_TIME,
             "A Histogram to keep track of the total time taken to Write to the Sink, in microseconds",
             metrics.sink.time.clone(),
+        );
+
+        // Fallback Sink metrics
+        let fb_sink_registry = registry.sub_registry_with_prefix(FALLBACK_SINK_REGISTRY_PREFIX);
+
+        fb_sink_registry.register(
+            FALLBACK_SINK_WRITE_TOTAL,
+            "A Counter to keep track of the total number of messages written to the fallback sink",
+            metrics.fb_sink.write_total.clone(),
         );
         metrics
     }

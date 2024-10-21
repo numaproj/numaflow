@@ -532,7 +532,8 @@ impl Forwarder {
         }
         // increment the metric for the fallback sink write
         forward_metrics()
-            .fbsink_write_total
+            .fb_sink
+            .write_total
             .get_or_create(&self.common_labels)
             .inc_by(fb_msg_count);
         Ok(())
