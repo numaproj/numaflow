@@ -127,22 +127,24 @@ pub(crate) struct MonoVtxMetrics {
 
     pub(crate) transformer: TransformerMetrics,
     pub(crate) sink: SinkMetrics,
-    pub(crate) fb_sink: FbSinkMetrics,
+    pub(crate) fb_sink: FallbackSinkMetrics,
 }
 
-// Family of metrics for the sink
-pub struct SinkMetrics {
-    pub write_total: Family<Vec<(String, String)>, Counter>,
-    pub time: Family<Vec<(String, String)>, Histogram>,
+/// Family of metrics for the sink
+pub(crate) struct SinkMetrics {
+    pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) time: Family<Vec<(String, String)>, Histogram>,
 }
 
-pub struct FbSinkMetrics {
-    pub write_total: Family<Vec<(String, String)>, Counter>,
+/// Family of metrics for the Fallback Sink
+pub(crate) struct FallbackSinkMetrics {
+    pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
 }
 
-pub struct TransformerMetrics {
+/// Family of metrics for the Transformer
+pub(crate) struct TransformerMetrics {
     /// Transformer latency
-    pub time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) time: Family<Vec<(String, String)>, Histogram>,
 }
 
 /// Exponential bucket distribution with range.
@@ -201,7 +203,7 @@ impl MonoVtxMetrics {
                 }),
             },
 
-            fb_sink: FbSinkMetrics {
+            fb_sink: FallbackSinkMetrics {
                 write_total: Family::<Vec<(String, String)>, Counter>::default(),
             },
         };
