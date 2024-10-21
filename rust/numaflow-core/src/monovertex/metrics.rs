@@ -38,6 +38,7 @@ const PENDING_PERIOD_LABEL: &str = "period";
 
 // The top-level metric registry is created with the GLOBAL_PREFIX
 const GLOBAL_PREFIX: &str = "monovtx";
+// Prefixes for the sub-registries
 const SINK_REGISTRY_PREFIX: &str = "sink";
 const FALLBACK_SINK_REGISTRY_PREFIX: &str = "fallback_sink";
 const TRANSFORMER_REGISTRY_PREFIX: &str = "transformer";
@@ -62,7 +63,7 @@ const SOURCE_PENDING: &str = "pending";
 // processing times as timers
 const E2E_TIME: &str = "processing_time";
 const READ_TIME: &str = "read_time";
-const TRANSFORM_TIME: &str = "transformer_time";
+const TRANSFORM_TIME: &str = "time";
 const ACK_TIME: &str = "ack_time";
 const SINK_TIME: &str = "time";
 

@@ -256,7 +256,7 @@ impl Forwarder {
                         &mut error_map,
                         &mut fallback_msgs,
                         &mut messages_to_send,
-                        &retry_config,
+                        retry_config,
                     )
                     .await;
                 match status {
@@ -285,7 +285,7 @@ impl Forwarder {
                 &mut error_map,
                 &mut fallback_msgs,
                 &mut messages_to_send,
-                &retry_config,
+                retry_config,
             );
 
             match need_retry {
@@ -302,7 +302,7 @@ impl Forwarder {
 
         // If there are fallback messages, write them to the fallback sink
         if !fallback_msgs.is_empty() {
-            self.handle_fallback_messages(fallback_msgs, &retry_config)
+            self.handle_fallback_messages(fallback_msgs, retry_config)
                 .await?;
         }
 
