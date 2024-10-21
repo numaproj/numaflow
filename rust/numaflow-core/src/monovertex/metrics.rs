@@ -878,30 +878,34 @@ mod tests {
     #[test]
     fn test_metric_names() {
         let metrics = forward_metrics();
-        let common_labels = mvtx_forward_metric_labels("test-monovertex".to_string(), 3);
+        // Use a fixed set of labels instead of the ones from mvtx_forward_metric_labels() since other test functions may also set it.
+        let common_labels = vec![
+            (MVTX_NAME_LABEL.to_string(), "test-monovertex".to_string()),
+            (REPLICA_LABEL.to_string(), "3".to_string()),
+        ];
         // Populate all metrics
-        metrics.read_total.get_or_create(common_labels).inc();
-        metrics.read_bytes_total.get_or_create(common_labels).inc();
-        metrics.ack_total.get_or_create(common_labels).inc();
-        metrics.dropped_total.get_or_create(common_labels).inc();
-        metrics.source_pending.get_or_create(common_labels).set(10);
-        metrics.e2e_time.get_or_create(common_labels).observe(10.0);
-        metrics.read_time.get_or_create(common_labels).observe(3.0);
-        metrics.ack_time.get_or_create(common_labels).observe(2.0);
+        metrics.read_total.get_or_create(&common_labels).inc();
+        metrics.read_bytes_total.get_or_create(&common_labels).inc();
+        metrics.ack_total.get_or_create(&common_labels).inc();
+        metrics.dropped_total.get_or_create(&common_labels).inc();
+        metrics.source_pending.get_or_create(&common_labels).set(10);
+        metrics.e2e_time.get_or_create(&common_labels).observe(10.0);
+        metrics.read_time.get_or_create(&common_labels).observe(3.0);
+        metrics.ack_time.get_or_create(&common_labels).observe(2.0);
 
         metrics
             .transformer
             .time
-            .get_or_create(common_labels)
+            .get_or_create(&common_labels)
             .observe(5.0);
 
-        metrics.sink.write_total.get_or_create(common_labels).inc();
-        metrics.sink.time.get_or_create(common_labels).observe(4.0);
+        metrics.sink.write_total.get_or_create(&common_labels).inc();
+        metrics.sink.time.get_or_create(&common_labels).observe(4.0);
 
         metrics
             .fb_sink
             .write_total
-            .get_or_create(common_labels)
+            .get_or_create(&common_labels)
             .inc();
 
         // Validate the metric names
