@@ -214,7 +214,8 @@ impl Forwarder {
             start_time.elapsed().as_millis()
         );
         forward_metrics()
-            .transform_time
+            .transformer
+            .time
             .get_or_create(&self.common_labels)
             .observe(start_time.elapsed().as_micros() as f64);
 
@@ -255,7 +256,7 @@ impl Forwarder {
                         &mut error_map,
                         &mut fallback_msgs,
                         &mut messages_to_send,
-                        &retry_config,
+                        retry_config,
                     )
                     .await;
                 match status {
@@ -284,7 +285,7 @@ impl Forwarder {
                 &mut error_map,
                 &mut fallback_msgs,
                 &mut messages_to_send,
-                &retry_config,
+                retry_config,
             );
 
             match need_retry {
@@ -301,19 +302,21 @@ impl Forwarder {
 
         // If there are fallback messages, write them to the fallback sink
         if !fallback_msgs.is_empty() {
-            self.handle_fallback_messages(fallback_msgs, &retry_config)
+            self.handle_fallback_messages(fallback_msgs, retry_config)
                 .await?;
         }
 
         forward_metrics()
-            .sink_time
+            .sink
+            .time
             .get_or_create(&self.common_labels)
             .observe(start_time_e2e.elapsed().as_micros() as f64);
 
         // update the metric for number of messages written to the sink
         // this included primary and fallback sink
         forward_metrics()
-            .sink_write_total
+            .sink
+            .write_total
             .get_or_create(&self.common_labels)
             .inc_by(msg_count);
         Ok(())
@@ -530,7 +533,8 @@ impl Forwarder {
         }
         // increment the metric for the fallback sink write
         forward_metrics()
-            .fbsink_write_total
+            .fb_sink
+            .write_total
             .get_or_create(&self.common_labels)
             .inc_by(fb_msg_count);
         Ok(())
@@ -572,7 +576,6 @@ mod tests {
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
 
-    use crate::config::config;
     use crate::monovertex::forwarder::ForwarderBuilder;
     use crate::monovertex::SourceType;
     use crate::shared::utils::create_rpc_channel;

@@ -1,6 +1,5 @@
 use tokio::sync::{mpsc, oneshot};
 
-use crate::config::config;
 use crate::{
     message::{Message, Offset},
     monovertex::SourceType,
