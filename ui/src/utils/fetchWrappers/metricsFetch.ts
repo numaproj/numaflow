@@ -2,6 +2,7 @@ import { useEffect, useState, useContext } from "react";
 import { AppContextProps } from "../../types/declarations/app";
 import { AppContext } from "../../App";
 import { getBaseHref } from "../index";
+import { Dayjs } from "dayjs";
 
 
 export interface Filters {
@@ -15,6 +16,8 @@ export interface useMetricsFetchProps {
   duration?: string;
   quantile?: string;
   filters: Filters;
+  startTime?: Dayjs | null;
+  endTime?: Dayjs | null;
 }
 
 export const useMetricsFetch = ({
@@ -22,7 +25,9 @@ export const useMetricsFetch = ({
   dimension,
   duration,
   quantile,
-  filters
+  filters,
+  startTime,
+  endTime, 
 }: useMetricsFetchProps) => {
     const { host } = useContext<AppContextProps>(AppContext);
     const urlPath = `${host}${getBaseHref()}/api/v1/metrics-proxy`;
@@ -46,12 +51,19 @@ export const useMetricsFetch = ({
               filters: filters,
               dimension: dimension,
               duration: duration,
-              quantile: quantile
+              quantile: quantile,
+              start_time: startTime ? startTime.toISOString() : undefined,
+              end_time: endTime ? endTime.toISOString() : undefined, 
             }),
           });
           const data = await response.json();
-          setChartData(data?.data[0]?.values);
-          setError(null);
+          if (data?.data === null){
+            setChartData([]);
+            setError(data?.errMsg);
+          } else {
+            setChartData(data?.data[0]?.values);
+            setError(null);
+          }
         } catch(e){
           console.error("Error fetching data:", e);
           if (e instanceof Error){
@@ -65,7 +77,7 @@ export const useMetricsFetch = ({
         }
       }
       fetchData();
-    }, [metricName, dimension, duration, quantile, filters] )
+    }, [metricName, dimension, duration, quantile, filters, startTime, endTime] )
 
     return {chartData, error, setShouldFetch, isLoading}
 }

@@ -3,7 +3,10 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'r
 import "./style.css";
 import { Filters, useMetricsFetch } from "../../../../../utils/fetchWrappers/metricsFetch";
 import { EmptyChartState } from "../../../EmptyStates";
-import { Box, CircularProgress } from "@mui/material";
+import { Box, CircularProgress, TextField } from "@mui/material";
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DateTimePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import dayjs from "dayjs";
 
 export interface MetricsProps {
     namespaceId: string;
@@ -25,6 +28,8 @@ export function Metrics ({
   const [duration, setDuration] = useState('5m');
   const [quantile, setQuantile] = useState('0.95');
   const [metricName, setMetricName] = useState('monovtx_processing_time_bucket');
+  const [startTime, setStartTime] = useState<dayjs.Dayjs | null>(null);
+  const [endTime, setEndTime] = useState<dayjs.Dayjs | null>(null);
 
   let filters: Filters = {
     "namespace": namespaceId,
@@ -54,35 +59,50 @@ export function Metrics ({
     dimension: dimension,
     filters: filters,
     duration: duration,
-    quantile: quantile
+    quantile: quantile,
+    startTime: startTime,
+    endTime: endTime
   });
 
 
-  if (chartData !== null) {
-    transformedData = chartData?.map(([timestamp, value]) =>{
-      const date = new Date(timestamp * 1000);
-      const hours = date.getHours().toString().padStart(2, '0'); 
-      const minutes = date.getMinutes().toString().padStart(2, '0');
-      const formattedTime = `${hours}:${minutes}`;
-      return{
-        time: formattedTime,
-        value: parseFloat(value), 
-      }
-    })
-  }
+  const handleStartTimeChange = (newValue: dayjs.Dayjs | null) => {
+    if (newValue && newValue.isValid()) { 
+      setStartTime(newValue);
+      setShouldFetch(true); 
+    }
+  };
+
+  const handleEndTimeChange = (newValue: dayjs.Dayjs | null) => {
+    if (newValue && newValue.isValid()) {
+      setEndTime(newValue);
+      setShouldFetch(true); 
+    }
+  };
+
+
+  transformedData = chartData?.map(([timestamp, value]) =>{
+    const date = new Date(timestamp * 1000);
+    const hours = date.getHours().toString().padStart(2, '0'); 
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const formattedTime = `${hours}:${minutes}`;
+    return{
+      time: formattedTime,
+      value: parseFloat(value), 
+    }
+  })
+  
 
   return (
     <div>
 
      { /*Input Controls*/}
-
      <div>
         <label htmlFor="metricName">Metric Name:</label>
         <select 
           id="metricName" 
           value={metricName} 
           onChange={(e) => {
-            setMetricName(e.target.value)
+            setMetricName(e.target.value);
             setShouldFetch(true);
           }}
         >
@@ -146,6 +166,24 @@ export function Metrics ({
           {/* ... more options */}
         </select>
      </div>
+
+
+     <LocalizationProvider dateAdapter={AdapterDayjs}>
+      <div>
+        {/* ... other content */}
+          <DateTimePicker 
+            label="Start Time" 
+            value={startTime} 
+            onChange={handleStartTimeChange}
+          />
+          <DateTimePicker 
+            label="End Time" 
+            value={endTime} 
+            onChange={handleEndTimeChange}
+          />
+      </div>
+    </LocalizationProvider>
+
       {isLoading ? (<Box
           sx={{
             display: "flex",
@@ -155,7 +193,7 @@ export function Metrics ({
           }}
         >
           <CircularProgress />
-        </Box>) : error ? (<EmptyChartState/>) : transformedData?.length > 0 ? (
+        </Box>) : error ? (<EmptyChartState />) : transformedData?.length > 0 ? ( // should have a different error component
         <LineChart width={800} height={300} data={transformedData}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="time" padding={{ left: 30, right: 30 }} />
