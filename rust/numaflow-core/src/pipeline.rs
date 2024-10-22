@@ -1,18 +1,23 @@
+use crate::config::components::sink::SinkType;
 use crate::config::components::source::SourceType;
 use crate::config::pipeline;
 use crate::config::pipeline::PipelineConfig;
 use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
+use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::pipeline::isb::jetstream::WriterHandle;
 use crate::shared::server_info::check_for_server_compatibility;
 use crate::shared::utils::{
-    create_rpc_channel, start_metrics_server, wait_until_source_ready, wait_until_transformer_ready,
+    create_rpc_channel, start_metrics_server, wait_until_sink_ready, wait_until_source_ready,
+    wait_until_transformer_ready,
 };
+use crate::sink::{SinkClientType, SinkHandle, SinkWriter};
 use crate::source::generator::new_generator;
 use crate::source::user_defined::new_source;
 use crate::transformer::user_defined::SourceTransformHandle;
 use crate::{config, error, source, Result};
 use async_nats::jetstream;
 use async_nats::jetstream::Context;
+use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use std::collections::HashMap;
@@ -53,15 +58,39 @@ pub(crate) async fn start_forwarder(
                 source_handle,
                 transformer,
                 buffer_writers,
-                cln_token,
+                cln_token.clone(),
             )
             .build();
             forwarder.start().await?;
         }
-        pipeline::VertexType::Sink(_) => {
+        pipeline::VertexType::Sink(sink) => {
+            // FIXME we will have to create a buffer reader for every partition
+            let buffer_reader =
+                create_buffer_readers(config, js_context.clone(), cln_token.clone()).await?;
+            let (sink_writer, sink_grpc_client) =
+                create_sink_writer(config, sink, cln_token.clone()).await?;
+
+            start_metrics_server(
+                config.metrics_config.clone(),
+                UserDefinedContainerState::Pipeline(PipelineContainerState::Sink((
+                    sink_grpc_client.clone(),
+                    None, // FIXME: create fallback as well
+                ))),
+            )
+            .await;
+
+            let forwarder = forwarder::sink_forwarder::SinkForwarder::new(
+                buffer_reader,
+                sink_writer,
+                cln_token.clone(),
+            )
+            .await;
+
+            forwarder.start().await?;
+
             return Err(error::Error::Config(
                 "Sink vertex is not supported yet".to_string(),
-            ))
+            ));
         }
     }
     Ok(())
@@ -94,6 +123,73 @@ async fn create_buffer_writers(
         buffer_writers.insert(to_vertex.name.clone(), writers);
     }
     Ok(buffer_writers)
+}
+
+async fn create_buffer_readers(
+    config: &PipelineConfig,
+    js_context: Context,
+    cln_token: CancellationToken,
+) -> Result<JetstreamReader> {
+    // TODO: we should create array of readers, one for each partition
+    let reader_config = config
+        .from_vertex_config
+        .get(0)
+        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
+        .reader_config
+        .clone();
+
+    JetstreamReader::new(
+        reader_config.streams[0].0.clone(),
+        reader_config.streams[0].1,
+        js_context,
+        reader_config,
+    )
+    .await
+}
+
+async fn create_sink_writer(
+    config: &PipelineConfig,
+    sink: &pipeline::SinkVtxConfig,
+    cln_token: CancellationToken,
+) -> Result<(SinkWriter, Option<SinkClient<Channel>>)> {
+    let (sink_handle, sink_grpc_client) = match &sink.sink_config.sink_type {
+        SinkType::Log(_) => (
+            SinkHandle::new(SinkClientType::Log, config.batch_size).await?,
+            None,
+        ),
+        SinkType::Blackhole(_) => (
+            SinkHandle::new(SinkClientType::Blackhole, config.batch_size).await?,
+            None,
+        ),
+        SinkType::UserDefined(ud_config) => {
+            // do server compatibility check
+            check_for_server_compatibility(
+                ud_config.server_info_path.clone().into(),
+                cln_token.clone(),
+            )
+            .await?;
+
+            let mut sink_grpc_client =
+                SinkClient::new(create_rpc_channel(ud_config.socket_path.clone().into()).await?)
+                    .max_encoding_message_size(ud_config.grpc_max_message_size)
+                    .max_encoding_message_size(ud_config.grpc_max_message_size);
+
+            wait_until_sink_ready(&cln_token, &mut sink_grpc_client).await?;
+
+            (
+                SinkHandle::new(
+                    SinkClientType::UserDefined(sink_grpc_client.clone()),
+                    config.batch_size,
+                )
+                .await?,
+                Some(sink_grpc_client),
+            )
+        }
+    };
+    Ok((
+        SinkWriter::new(config.batch_size, sink_handle).await?,
+        sink_grpc_client,
+    ))
 }
 
 /// Creates a source type based on the pipeline configuration

@@ -34,7 +34,6 @@ pub(crate) mod jetstream {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct BufferWriterConfig {
-    pub name: String,
     pub streams: Vec<(String, u16)>,
     pub partitions: u16,
     pub max_length: usize,
@@ -47,7 +46,6 @@ pub(crate) struct BufferWriterConfig {
 impl Default for BufferWriterConfig {
     fn default() -> Self {
         BufferWriterConfig {
-            name: "default".to_string(),
             streams: vec![("default-0".to_string(), DEFAULT_PARTITION_IDX)],
             partitions: DEFAULT_PARTITIONS,
             max_length: DEFAULT_MAX_LENGTH,
@@ -76,7 +74,6 @@ impl fmt::Display for BufferFullStrategy {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct BufferReaderConfig {
-    pub(crate) name: String,
     pub(crate) partitions: u16,
     pub(crate) streams: Vec<(String, u16)>,
     pub(crate) batch_size: usize,
@@ -86,7 +83,6 @@ pub(crate) struct BufferReaderConfig {
 impl Default for BufferReaderConfig {
     fn default() -> Self {
         BufferReaderConfig {
-            name: "default".to_string(),
             partitions: DEFAULT_PARTITIONS,
             streams: vec![("default-0".to_string(), DEFAULT_PARTITION_IDX)],
             batch_size: DEFAULT_BATCH_SIZE,

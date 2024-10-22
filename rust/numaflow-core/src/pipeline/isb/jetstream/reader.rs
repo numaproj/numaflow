@@ -1,11 +1,12 @@
 use std::time::Duration;
 
-use async_nats::jetstream::message::StreamMessage;
 use async_nats::jetstream::{
     consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
 };
 use futures::StreamExt;
+use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, warn};
@@ -20,21 +21,20 @@ use crate::Result;
 // The sender end of the channel is not stored in this struct, since the struct is clone-able and the mpsc channel is only closed when all the senders are dropped.
 // Storing the Sender end of channel in this struct would make it difficult to close the channel with `cancel` method.
 #[derive(Clone)]
-pub(super) struct JetstreamReader {
+pub(crate) struct JetstreamReader {
     name: String,
     partition_idx: u16,
     config: BufferReaderConfig,
     consumer: PullConsumer,
-    ctx: CancellationToken,
 }
 
 impl JetstreamReader {
-    pub(super) async fn new(
+    pub(crate) async fn new(
         name: String,
         partition_idx: u16,
         js_ctx: Context,
         config: BufferReaderConfig,
-    ) -> Result<(Self, mpsc::Receiver<ReadMessage>)> {
+    ) -> Result<Self> {
         let mut config = config;
 
         let mut consumer: PullConsumer = js_ctx
@@ -55,127 +55,139 @@ impl JetstreamReader {
         ));
         config.wip_ack_interval = wip_ack_interval;
 
-        let ctx = CancellationToken::new();
         let this = Self {
             name,
             partition_idx,
             config: config.clone(),
             consumer,
-            ctx,
         };
 
-        let (messages_tx, messages_rx) = mpsc::channel(2 * config.batch_size);
-        tokio::spawn({
-            let this = this.clone();
-            async move {
-                this.start(messages_tx).await;
-            }
-        });
-        Ok((this, messages_rx))
+        Ok(this)
     }
-
-    // Stop reading from Jetstream and close the sender end of the channel.
-    pub(crate) async fn cancel(&self) {
-        self.ctx.cancel();
-    }
+    // 1 buffer - multiple streams
 
     // When we encounter an error, we log the error and return from the function. This drops the sender end of the channel.
     // The closing of the channel should propagate to the receiver end and the receiver should exit gracefully.
     // Within the loop, we only consider cancellationToken cancellation during the permit reservation and fetching messages,
     // since rest of the operations should finish immediately.
-    pub(super) async fn start(&self, messages: mpsc::Sender<ReadMessage>) {
-        loop {
-            let permit = tokio::select! {
-                _ = self.ctx.cancelled() => {
-                    warn!("Cancellation token is cancelled. Exiting JetstreamReader");
-                    return;
-                }
-                permit = messages.reserve_many(self.config.batch_size) => permit,
-            };
+    pub(crate) async fn start(
+        &self,
+        cancel_token: CancellationToken,
+    ) -> (Receiver<ReadMessage>, JoinHandle<()>) {
+        let (messages_tx, messages_rx) = mpsc::channel(2 * self.config.batch_size);
 
-            let mut permit = match permit {
-                Ok(permit) => permit,
-                Err(e) => {
-                    // Channel is closed
-                    error!("Error while reserving permits: {:?}", e);
-                    return;
-                }
-            };
+        let handle = tokio::spawn({
+            let this = self.clone();
+            async move {
+                loop {
+                    let permit = tokio::select! {
+                        _ = cancel_token.cancelled() => {
+                            warn!("Cancellation token is cancelled. Exiting JetstreamReader");
+                            return;
+                        }
+                        permit = messages_tx.reserve_many(this.config.batch_size) => permit,
+                    };
 
-            let messages_fut = self
-                .consumer
-                .fetch()
-                .max_messages(self.config.batch_size)
-                .expires(Duration::from_millis(10))
-                .messages();
+                    let mut permit = match permit {
+                        Ok(permit) => permit,
+                        Err(e) => {
+                            // Channel is closed
+                            error!("Error while reserving permits: {:?}", e);
+                            return;
+                        }
+                    };
 
-            let messages = tokio::select! {
-                _ = self.ctx.cancelled() => {
-                    warn!("Cancellation token is cancelled. Exiting JetstreamReader");
-                    return;
-                }
-                messages = messages_fut => messages,
-            };
+                    let messages_fut = this
+                        .consumer
+                        .fetch()
+                        .max_messages(this.config.batch_size)
+                        .expires(Duration::from_millis(10))
+                        .messages();
 
-            let mut messages = match messages {
-                Ok(messages) => messages,
-                Err(e) => {
-                    error!(?e, "Failed to fetch next batch of messages from Jetstream");
-                    return;
-                }
-            };
+                    let messages = tokio::select! {
+                        _ = cancel_token.cancelled() => {
+                            warn!("Cancellation token is cancelled. Exiting JetstreamReader");
+                            return;
+                        }
+                        messages = messages_fut => messages,
+                    };
 
-            while let Some(message) = messages.next().await {
-                let jetstream_message = match message {
-                    Ok(message) => message,
-                    Err(e) => {
-                        error!(?e, "Failed to fetch messages from the Jetstream");
-                        continue;
-                    }
-                };
+                    let mut messages = match messages {
+                        Ok(messages) => messages,
+                        Err(e) => {
+                            error!(?e, "Failed to fetch next batch of messages from Jetstream");
+                            return;
+                        }
+                    };
 
-                let mut message: Message = match jetstream_message.payload.clone().try_into() {
-                    Ok(message) => message,
-                    Err(e) => {
-                        error!(
-                            ?e,
-                            "Failed to parse message payload received from Jetstream"
-                        );
-                        return;
-                    }
-                };
+                    while let Some(message) = messages.next().await {
+                        let jetstream_message = match message {
+                            Ok(message) => {
+                                // info!("Message read from js consumer - {:?}", message);
+                                message
+                            }
+                            Err(e) => {
+                                error!(?e, "Failed to fetch messages from the Jetstream");
+                                continue;
+                            }
+                        };
 
-                // Set the offset of the message to the sequence number of the message and the partition index.
-                let stream_message: StreamMessage =
-                    jetstream_message.clone().message.try_into().unwrap();
-                message.offset = Some(Offset::Int(IntOffset::new(
-                    stream_message.sequence,
-                    self.partition_idx,
-                )));
+                        let mut message: Message =
+                            match jetstream_message.payload.clone().try_into() {
+                                Ok(message) => message,
+                                Err(e) => {
+                                    error!(
+                                        ?e,
+                                        "Failed to parse message payload received from Jetstream"
+                                    );
+                                    return;
+                                }
+                            };
 
-                let (ack_tx, ack_rx) = oneshot::channel();
+                        let msg_info = jetstream_message
+                            .info()
+                            .map_err(|e| {
+                                Error::ISB(format!(
+                                    "Failed to get message info from Jetstream: {}",
+                                    e
+                                ))
+                            })
+                            .unwrap();
 
-                tokio::spawn(start_work_in_progress(
-                    jetstream_message,
-                    ack_rx,
-                    self.config.wip_ack_interval,
-                ));
+                        // Set the offset of the message to the sequence number of the message and the partition index.
+                        message.offset = Some(Offset::Int(IntOffset::new(
+                            msg_info.stream_sequence,
+                            this.partition_idx,
+                        )));
 
-                let read_message = ReadMessage {
-                    message,
-                    ack: ack_tx,
-                };
-                match permit.next() {
-                    Some(permit) => {
-                        permit.send(read_message);
-                    }
-                    None => {
-                        // The number of permits >= number of messages in the batch.
-                        unreachable!("Permits should be reserved for all messages in the batch");
+                        let (ack_tx, ack_rx) = oneshot::channel();
+
+                        tokio::spawn(start_work_in_progress(
+                            jetstream_message,
+                            ack_rx,
+                            this.config.wip_ack_interval,
+                        ));
+
+                        let read_message = ReadMessage {
+                            message,
+                            ack: ack_tx,
+                        };
+                        match permit.next() {
+                            Some(permit) => {
+                                permit.send(read_message);
+                            }
+                            None => {
+                                // The number of permits >= number of messages in the batch.
+                                unreachable!(
+                                    "Permits should be reserved for all messages in the batch"
+                                );
+                            }
+                        }
                     }
                 }
             }
-        }
+        });
+        (messages_rx, handle)
     }
 }
 
