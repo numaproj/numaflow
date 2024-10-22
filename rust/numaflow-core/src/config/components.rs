@@ -3,8 +3,12 @@ pub(crate) mod source {
     const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
     const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
+    use crate::error::Error;
+    use crate::Result;
     use bytes::Bytes;
+    use numaflow_models::models::Source;
     use std::time::Duration;
+    use tracing::warn;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SourceConfig {
@@ -15,6 +19,51 @@ pub(crate) mod source {
     pub(crate) enum SourceType {
         Generator(GeneratorConfig),
         UserDefined(UserDefinedConfig),
+    }
+
+    impl TryFrom<Box<Source>> for SourceType {
+        type Error = Error;
+
+        fn try_from(source: Box<Source>) -> Result<Self> {
+            source
+                .udsource
+                .as_ref()
+                .map(|_| Ok(SourceType::UserDefined(UserDefinedConfig::default())))
+                .or_else(|| {
+                    source.generator.as_ref().map(|generator| {
+                        let mut generator_config = GeneratorConfig::default();
+
+                        if let Some(value_blob) = &generator.value_blob {
+                            generator_config.content = Bytes::from(value_blob.clone());
+                        }
+
+                        if let Some(msg_size) = generator.msg_size {
+                            if msg_size >= 0 {
+                                generator_config.msg_size_bytes = msg_size as u32;
+                            } else {
+                                warn!(
+                                    "'msgSize' cannot be negative, using default value (8 bytes)"
+                                );
+                            }
+                        }
+
+                        generator_config.value = generator.value;
+                        generator_config.rpu = generator.rpu.unwrap_or(1) as usize;
+                        generator_config.duration = generator
+                            .duration
+                            .map_or(1000, |d| std::time::Duration::from(d).as_millis() as usize);
+                        generator_config.key_count = generator
+                            .key_count
+                            .map_or(0, |kc| std::cmp::min(kc, u8::MAX as i32) as u8);
+                        generator_config.jitter = generator
+                            .jitter
+                            .map_or(Duration::from_secs(0), std::time::Duration::from);
+
+                        Ok(SourceType::Generator(generator_config))
+                    })
+                })
+                .ok_or_else(|| Error::Config("Source type not found".to_string()))?
+        }
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -70,7 +119,9 @@ pub(crate) mod sink {
     const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX;
     const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
 
-    use numaflow_models::models::{Backoff, RetryStrategy};
+    use crate::error::Error;
+    use crate::Result;
+    use numaflow_models::models::{Backoff, RetryStrategy, Sink};
     use std::fmt::Display;
 
     #[derive(Debug, Clone, PartialEq)]
@@ -84,6 +135,47 @@ pub(crate) mod sink {
         Log(LogConfig),
         Blackhole(BlackholeConfig),
         UserDefined(UserDefinedConfig),
+    }
+
+    impl TryFrom<Box<Sink>> for SinkType {
+        type Error = Error;
+
+        fn try_from(sink: Box<Sink>) -> Result<Self> {
+            if let Some(fallback) = sink.fallback {
+                fallback
+                    .udsink
+                    .as_ref()
+                    .map(|_| Ok(SinkType::UserDefined(UserDefinedConfig::fallback_default())))
+                    .or_else(|| {
+                        fallback
+                            .log
+                            .as_ref()
+                            .map(|_| Ok(SinkType::Log(LogConfig::default())))
+                    })
+                    .or_else(|| {
+                        fallback
+                            .blackhole
+                            .as_ref()
+                            .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
+                    })
+                    .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
+            } else {
+                sink.udsink
+                    .as_ref()
+                    .map(|_| Ok(SinkType::UserDefined(UserDefinedConfig::default())))
+                    .or_else(|| {
+                        sink.log
+                            .as_ref()
+                            .map(|_| Ok(SinkType::Log(LogConfig::default())))
+                    })
+                    .or_else(|| {
+                        sink.blackhole
+                            .as_ref()
+                            .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
+                    })
+                    .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
+            }
+        }
     }
 
     #[derive(Debug, Clone, PartialEq, Default)]
@@ -161,6 +253,27 @@ pub(crate) mod sink {
                 sink_retry_on_fail_strategy: DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY,
                 sink_default_retry_strategy: default_retry_strategy,
             }
+        }
+    }
+
+    impl From<Box<RetryStrategy>> for RetryConfig {
+        fn from(retry: Box<RetryStrategy>) -> Self {
+            let mut retry_config = RetryConfig::default();
+            if let Some(backoff) = &retry.backoff {
+                if let Some(interval) = backoff.interval {
+                    retry_config.sink_retry_interval_in_ms =
+                        std::time::Duration::from(interval).as_millis() as u32;
+                }
+
+                if let Some(steps) = backoff.steps {
+                    retry_config.sink_max_retry_attempts = steps as u16;
+                }
+            }
+
+            if let Some(strategy) = &retry.on_failure {
+                retry_config.sink_retry_on_fail_strategy = OnFailureStrategy::from_str(strategy);
+            }
+            retry_config
         }
     }
 

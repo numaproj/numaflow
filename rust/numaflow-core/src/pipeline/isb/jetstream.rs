@@ -3,7 +3,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
-use crate::config::pipeline::isb::jetstream::StreamWriterConfig;
+use crate::config::pipeline::isb::BufferWriterConfig;
 use crate::error::Error;
 use crate::message::{Message, Offset};
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
@@ -74,15 +74,24 @@ pub(crate) struct WriterHandle {
 }
 
 impl WriterHandle {
-    pub(super) fn new(
-        config: StreamWriterConfig,
+    pub(crate) fn new(
+        stream_name: String,
+        partition_idx: u16,
+        config: BufferWriterConfig,
         js_ctx: Context,
         batch_size: usize,
         cancel_token: CancellationToken,
     ) -> Self {
         let (sender, receiver) = mpsc::channel::<ActorMessage>(batch_size);
 
-        let js_writer = JetstreamWriter::new(config, js_ctx, batch_size, cancel_token.clone());
+        let js_writer = JetstreamWriter::new(
+            stream_name,
+            partition_idx,
+            config,
+            js_ctx,
+            batch_size,
+            cancel_token.clone(),
+        );
         let mut actor = WriterActor::new(js_writer.clone(), receiver, cancel_token);
 
         tokio::spawn(async move {
@@ -112,14 +121,14 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
 
+    use super::*;
+    use crate::message::{Message, MessageID};
     use async_nats::jetstream;
     use async_nats::jetstream::stream;
     use chrono::Utc;
     use tokio::sync::oneshot;
     use tokio::time::Instant;
-
-    use super::*;
-    use crate::message::{Message, MessageID};
+    use tracing::info;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -140,14 +149,16 @@ mod tests {
             .await
             .unwrap();
 
-        let config = StreamWriterConfig {
-            name: stream_name.into(),
-            ..Default::default()
-        };
-
         // Create ISBMessageHandler
         let batch_size = 500;
-        let handler = WriterHandle::new(config, context.clone(), batch_size, cln_token.clone());
+        let handler = WriterHandle::new(
+            stream_name.to_string(),
+            0,
+            Default::default(),
+            context.clone(),
+            batch_size,
+            cln_token.clone(),
+        );
 
         let mut result_receivers = Vec::new();
         // Publish 500 messages
@@ -200,13 +211,15 @@ mod tests {
             .await
             .unwrap();
 
-        let config = StreamWriterConfig {
-            name: stream_name.into(),
-            ..Default::default()
-        };
-
         let cancel_token = CancellationToken::new();
-        let handler = WriterHandle::new(config, context.clone(), 500, cancel_token.clone());
+        let handler = WriterHandle::new(
+            stream_name.to_string(),
+            0,
+            Default::default(),
+            context.clone(),
+            500,
+            cancel_token.clone(),
+        );
 
         let mut receivers = Vec::new();
         // Publish 100 messages successfully
@@ -268,7 +281,7 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream_name = "benchmark_stream";
+        let stream_name = "benchmark_publish";
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -278,13 +291,15 @@ mod tests {
             .await
             .unwrap();
 
-        let config = StreamWriterConfig {
-            name: stream_name.into(),
-            ..Default::default()
-        };
-
         let cancel_token = CancellationToken::new();
-        let handler = WriterHandle::new(config, context.clone(), 500, cancel_token.clone());
+        let handler = WriterHandle::new(
+            stream_name.to_string(),
+            0,
+            Default::default(),
+            context.clone(),
+            500,
+            cancel_token.clone(),
+        );
 
         let (tx, mut rx) = mpsc::channel(100);
         let test_start_time = Instant::now();
@@ -315,7 +330,7 @@ mod tests {
                 i += 1;
 
                 if start_time.elapsed().as_secs() >= 1 {
-                    println!("Messages sent: {}", sent_count);
+                    info!("Messages sent: {}", sent_count);
                     sent_count = 0;
                     start_time = Instant::now();
                 }
@@ -332,7 +347,7 @@ mod tests {
                 }
 
                 if start_time.elapsed().as_secs() >= 1 {
-                    println!("Messages received: {}", count);
+                    info!("Messages received: {}", count);
                     count = 0;
                     start_time = Instant::now();
                 }
