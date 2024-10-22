@@ -119,6 +119,12 @@ spec:
                 name: numaflow-cmd-params-config
                 key: server.readonly
                 optional: true
+          - name: NUMAFLOW_SERVER_DISABLE_PROMETHEUS_CHARTS
+            valueFrom:
+              configMapKeyRef:
+                name: numaflow-cmd-params-config
+                key: server.disable.prometheus.charts
+                optional: true
           - name: NUMAFLOW_SERVER_DISABLE_AUTH
             valueFrom:
               configMapKeyRef:

@@ -15,7 +15,7 @@ import (
 
 // PrometheusClient interface for the Prometheus HTTP client
 type PrometheusClient interface {
-	// implement client methods here
+	// Do implement client methods here
 	Do(context.Context, *http.Request) (*http.Response, []byte, error)
 }
 
@@ -51,6 +51,7 @@ type PromQl interface {
 	QueryPrometheus(context.Context, string, time.Time, time.Time) (model.Value, error)
 	BuildQuery(MetricsRequestBody) (string, error)
 	PopulateReqMap(MetricsRequestBody) map[string]string
+	GetConfigData() *PrometheusConfig
 }
 
 type PromQlService struct {
@@ -146,7 +147,7 @@ func NewPromQlService(client *Prometheus, config *PrometheusConfig) PromQl {
 	}
 }
 
-// populate map based on req fields
+// PopulateReqMap populate map based on req fields
 func (b *PromQlService) PopulateReqMap(requestBody MetricsRequestBody) map[string]string {
 	reqMap := map[string]string{
 		"$metric_name": requestBody.MetricName,
@@ -158,7 +159,7 @@ func (b *PromQlService) PopulateReqMap(requestBody MetricsRequestBody) map[strin
 	return reqMap
 }
 
-// build constructs the PromQL query string
+// BuildQuery build constructs the PromQL query string
 func (b *PromQlService) BuildQuery(requestBody MetricsRequestBody) (string, error) {
 	var query string
 	var metricName = requestBody.MetricName
@@ -186,7 +187,7 @@ func (b *PromQlService) BuildQuery(requestBody MetricsRequestBody) (string, erro
 	return query, nil
 }
 
-// query prometheus server
+// QueryPrometheus query prometheus server
 func (b *PromQlService) QueryPrometheus(ctx context.Context, promql string, start, end time.Time) (model.Value, error) {
 	if b.Prometheus == nil {
 		return nil, fmt.Errorf("prometheus client is nil")
@@ -198,4 +199,9 @@ func (b *PromQlService) QueryPrometheus(ctx context.Context, promql string, star
 	}
 	result, _, err := b.Prometheus.Api.QueryRange(ctx, promql, r, v1.WithTimeout(5*time.Second))
 	return result, err
+}
+
+// GetConfigData returns the PrometheusConfig
+func (b *PromQlService) GetConfigData() *PrometheusConfig {
+	return b.ConfigData
 }

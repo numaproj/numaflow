@@ -31,11 +31,12 @@ import (
 )
 
 type SystemInfo struct {
-	ManagedNamespace     string `json:"managedNamespace"`
-	Namespaced           bool   `json:"namespaced"`
-	IsReadOnly           bool   `json:"isReadOnly"`
-	Version              string `json:"version"`
-	DaemonClientProtocol string `json:"daemonClientProtocol"`
+	ManagedNamespace        string `json:"managedNamespace"`
+	Namespaced              bool   `json:"namespaced"`
+	IsReadOnly              bool   `json:"isReadOnly"`
+	DisablePrometheusCharts bool   `json:"disablePrometheusCharts"`
+	Version                 string `json:"version"`
+	DaemonClientProtocol    string `json:"daemonClientProtocol"`
 }
 
 type AuthInfo struct {
@@ -167,6 +168,8 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/health", handler.GetMonoVertexHealth)
 	// Get the time series data across different dimensions.
 	r.POST("/metrics-proxy", handler.GetMetricData)
+	// Discover the metrics for a given object type.
+	r.GET("/metrics-discovery/object/:object", handler.GetMetricsDiscovery)
 }
 
 // authMiddleware is the middleware for AuthN/AuthZ.

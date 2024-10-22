@@ -129,6 +129,7 @@ subjects:
 apiVersion: v1
 data:
   server.disable.auth: "true"
+  server.disable.prometheus.charts: "false"
 kind: ConfigMap
 metadata:
   name: numaflow-cmd-params-config
@@ -285,6 +286,12 @@ spec:
           valueFrom:
             configMapKeyRef:
               key: server.readonly
+              name: numaflow-cmd-params-config
+              optional: true
+        - name: NUMAFLOW_SERVER_DISABLE_PROMETHEUS_CHARTS
+          valueFrom:
+            configMapKeyRef:
+              key: server.disable.prometheus.charts
               name: numaflow-cmd-params-config
               optional: true
         - name: NUMAFLOW_SERVER_DISABLE_AUTH

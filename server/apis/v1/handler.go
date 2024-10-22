@@ -1225,6 +1225,54 @@ func (h *handler) GetMetricData(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, result))
 }
 
+// GetMetricsDiscovery is used to provide a metrics list for each
+// dimension along with necessary params and filters for a given object
+func (h *handler) GetMetricsDiscovery(c *gin.Context) {
+	// Get the object for which the metrics are to be discovered
+	// Ex. mono-vertex, pipeline, etc.
+	object := c.Param("object")
+
+	configData := h.promQlService.GetConfigData()
+
+	var discoveredMetrics MetricsDiscoveryResponse
+
+	for _, pattern := range configData.Patterns {
+		if pattern.Object == object {
+			for _, metric := range pattern.Metrics {
+				var requiredFilters []FilterData
+				// Populate the required filters
+				for _, filter := range metric.Filters {
+					requiredFilters = append(requiredFilters, FilterData{
+						Name:     filter,
+						Required: true,
+					})
+				}
+				// Computing dimension data for each metric
+				var dimensionData []Dimensions
+				for _, dimension := range metric.Dimensions {
+					var combinedFilters = requiredFilters
+					// Add the dimension filters
+					for _, filter := range dimension.Filters {
+						combinedFilters = append(combinedFilters, FilterData{
+							Name:     filter.Name,
+							Required: filter.Required,
+						})
+					}
+					dimensionData = append(dimensionData, Dimensions{
+						Name:    dimension.Name,
+						Filters: combinedFilters,
+						Params:  pattern.Params,
+					})
+				}
+
+				discoveredMetrics = append(discoveredMetrics, NewDiscoveryResponse(metric.Name, dimensionData))
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, discoveredMetrics))
+}
+
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
 // except the kube system namespaces
 func getAllNamespaces(h *handler) ([]string, error) {

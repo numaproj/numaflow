@@ -43,6 +43,7 @@ type ParamData struct {
 	Name     string `yaml:"name"`
 	Required bool   `yaml:"required"`
 }
+
 type PatternData struct {
 	Name        string       `yaml:"name" json:"name"`
 	Object      string       `yaml:"object" json:"object"`

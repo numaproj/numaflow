@@ -17,7 +17,7 @@ data:
   #   The configuration has to be: lease.duration > lease.renew.deadline > lease.renew.period
   # controller.leader.election.lease.duration: 15s
   #
-  ### The duration that the acting controlplane will retry refreshing leadership before giving up. 
+  ### The duration that the acting controlplane will retry refreshing leadership before giving up.
   #   Default value is 10 seconds.
   #   The configuration has to be: lease.duration > lease.renew.deadline > lease.renew.period
   # controller.leader.election.lease.renew.deadline: 10s
@@ -38,6 +38,9 @@ data:
   #
   ### Whether to enable read only view for the UX server, defaults to false.
   #  server.readonly: "false"
+  #
+  ### Whether to disable prometheus charts for the UX server, defaults to true.
+  server.disable.prometheus.charts: "false"
   #
   ### Whether to disable authentication and authorization for the UX server, defaults to false.
   server.disable.auth: "true"
