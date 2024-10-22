@@ -336,6 +336,18 @@ mod tests {
             .await
             .unwrap();
 
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream_name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream_name,
+            )
+            .await
+            .unwrap();
+
         let writer = JetstreamWriter::new(
             stream_name.to_string(),
             0,
@@ -382,6 +394,18 @@ mod tests {
                 subjects: vec![stream_name.into()],
                 ..Default::default()
             })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream_name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream_name,
+            )
             .await
             .unwrap();
 
@@ -433,6 +457,18 @@ mod tests {
                 max_message_size: 1024,
                 ..Default::default()
             })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream_name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream_name,
+            )
             .await
             .unwrap();
 
@@ -536,7 +572,18 @@ mod tests {
             .unwrap();
 
         let _consumer = context
-            .create_consumer_strict_on_stream(
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream_name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream_name,
+            )
+            .await;
+
+        let _consumer = context
+            .create_consumer_on_stream(
                 consumer::Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
@@ -598,7 +645,7 @@ mod tests {
             .unwrap();
 
         let _consumer = context
-            .create_consumer_strict_on_stream(
+            .create_consumer_on_stream(
                 consumer::Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
