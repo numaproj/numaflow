@@ -77,4 +77,6 @@ pub(crate) struct BufferReaderConfig {
     pub(crate) name: String,
     pub(crate) partitions: u16,
     pub(crate) streams: Vec<(String, u16)>,
+    pub(crate) batch_size: usize,
+    pub(crate) wip_ack_interval: Duration,
 }
