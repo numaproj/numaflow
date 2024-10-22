@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::{env, fmt};
 
+use async_nats::HeaderValue;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::sink::sink_request::Request;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, Success};
@@ -14,6 +15,7 @@ use numaflow_pb::clients::source::{read_response, AckRequest};
 use numaflow_pb::clients::sourcetransformer::SourceTransformRequest;
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
+use tokio::sync::oneshot;
 
 use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
 use crate::Error;
@@ -77,6 +79,42 @@ impl fmt::Display for Offset {
             Offset::Int(offset) => write!(f, "{}", offset),
             Offset::String(offset) => write!(f, "{}", offset),
         }
+    }
+}
+
+impl TryFrom<async_nats::Message> for Message {
+    type Error = Error;
+
+    fn try_from(message: async_nats::Message) -> std::result::Result<Self, Self::Error> {
+        let payload = message.payload;
+        let headers: HashMap<String, String> = message
+            .headers
+            .unwrap_or_default()
+            .iter()
+            .map(|(key, value)| {
+                (
+                    key.to_string(),
+                    value.first().unwrap_or(&HeaderValue::from("")).to_string(),
+                )
+            })
+            .collect();
+        let keys = message.subject.split('.').map(|s| s.to_string()).collect();
+        let event_time = Utc::now();
+        let offset = None;
+        let id = MessageID {
+            vertex_name: get_vertex_name().to_string(),
+            offset: "0".to_string(),
+            index: 0,
+        };
+
+        Ok(Self {
+            keys,
+            value: payload.into(), // FIXME: use Bytes
+            offset,
+            event_time,
+            id,
+            headers,
+        })
     }
 }
 
@@ -144,6 +182,18 @@ impl fmt::Display for StringOffset {
     }
 }
 
+pub(crate) enum ReadAck {
+    /// Message was successfully processed.
+    Ack,
+    /// Message will not be processed now and processing can move onto the next message, NAK’d message will be retried.
+    Nak,
+}
+
+pub(crate) struct ReadMessage {
+    pub(crate) message: Message,
+    pub(crate) ack: oneshot::Sender<ReadAck>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct MessageID {
     pub(crate) vertex_name: String,
@@ -208,7 +258,7 @@ impl TryFrom<Offset> for AckRequest {
     }
 }
 
-impl TryFrom<Message> for Vec<u8> {
+impl TryFrom<Message> for BytesMut {
     type Error = Error;
 
     fn try_from(message: Message) -> std::result::Result<Self, Self::Error> {
@@ -228,7 +278,7 @@ impl TryFrom<Message> for Vec<u8> {
             }),
         };
 
-        let mut buf = Vec::new();
+        let mut buf = BytesMut::new();
         proto_message
             .encode(&mut buf)
             .map_err(|e| Error::Proto(e.to_string()))?;
@@ -236,11 +286,11 @@ impl TryFrom<Message> for Vec<u8> {
     }
 }
 
-impl TryFrom<Vec<u8>> for Message {
+impl TryFrom<Bytes> for Message {
     type Error = Error;
 
-    fn try_from(bytes: Vec<u8>) -> std::result::Result<Self, Self::Error> {
-        let proto_message = numaflow_pb::objects::isb::Message::decode(Bytes::from(bytes))
+    fn try_from(bytes: Bytes) -> std::result::Result<Self, Self::Error> {
+        let proto_message = numaflow_pb::objects::isb::Message::decode(bytes)
             .map_err(|e| Error::Proto(e.to_string()))?;
 
         let header = proto_message
@@ -461,7 +511,7 @@ mod tests {
             headers: HashMap::new(),
         };
 
-        let result: Result<Vec<u8>> = message.clone().try_into();
+        let result: Result<BytesMut> = message.clone().try_into();
         assert!(result.is_ok());
 
         let proto_message = ProtoMessage {
@@ -507,8 +557,9 @@ mod tests {
             }),
         };
 
-        let mut buf = Vec::new();
+        let mut buf = BytesMut::new();
         prost::Message::encode(&proto_message, &mut buf).unwrap();
+        let buf = buf.freeze();
 
         let result: Result<Message> = buf.try_into();
         assert!(result.is_ok());

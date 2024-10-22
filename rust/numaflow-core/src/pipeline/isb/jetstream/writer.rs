@@ -311,6 +311,7 @@ mod tests {
 
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
+    use bytes::BytesMut;
     use chrono::Utc;
 
     use super::*;
@@ -358,7 +359,8 @@ mod tests {
         };
 
         let (success_tx, success_rx) = oneshot::channel::<Result<Offset>>();
-        writer.write(message.try_into().unwrap(), success_tx).await;
+        let message_bytes: BytesMut = message.try_into().unwrap();
+        writer.write(message_bytes.into(), success_tx).await;
         assert!(success_rx.await.is_ok());
 
         context.delete_stream(stream_name).await.unwrap();
@@ -405,7 +407,8 @@ mod tests {
             headers: HashMap::new(),
         };
 
-        let result = writer.blocking_write(message.try_into().unwrap()).await;
+        let message_bytes: BytesMut = message.try_into().unwrap();
+        let result = writer.blocking_write(message_bytes.into()).await;
         assert!(result.is_ok());
 
         let publish_ack = result.unwrap();
@@ -459,7 +462,8 @@ mod tests {
                 headers: HashMap::new(),
             };
             let (success_tx, success_rx) = oneshot::channel::<Result<Offset>>();
-            writer.write(message.try_into().unwrap(), success_tx).await;
+            let message_bytes: BytesMut = message.try_into().unwrap();
+            writer.write(message_bytes.into(), success_tx).await;
             result_receivers.push(success_rx);
         }
 
@@ -478,7 +482,8 @@ mod tests {
             headers: HashMap::new(),
         };
         let (success_tx, success_rx) = oneshot::channel::<Result<Offset>>();
-        writer.write(message.try_into().unwrap(), success_tx).await;
+        let message_bytes: BytesMut = message.try_into().unwrap();
+        writer.write(message_bytes.into(), success_tx).await;
         result_receivers.push(success_rx);
 
         // Cancel the token to exit the retry loop

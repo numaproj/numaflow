@@ -170,6 +170,8 @@ impl PipelineConfig {
                     name: buffer_name,
                     partitions: partition_count,
                     streams,
+                    batch_size: 100,
+                    wip_ack_interval: Duration::from_millis(10),
                 },
                 partitions: 0,
             });
