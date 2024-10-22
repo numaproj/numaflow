@@ -1,60 +1,80 @@
 /// Jetstream ISB related configurations.
-pub mod jetstream {
-    use std::fmt;
-    use std::time::Duration;
+use std::fmt;
+use std::time::Duration;
 
-    // jetstream related constants
-    const DEFAULT_PARTITION_IDX: u16 = 0;
-    const DEFAULT_MAX_LENGTH: usize = 30000;
-    const DEFAULT_USAGE_LIMIT: f64 = 0.8;
-    const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
-    const DEFAULT_BUFFER_FULL_STRATEGY: BufferFullStrategy = BufferFullStrategy::RetryUntilSuccess;
-    const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
+const DEFAULT_PARTITION_IDX: u16 = 0;
+const DEFAULT_PARTITIONS: u16 = 1;
+const DEFAULT_MAX_LENGTH: usize = 30000;
+const DEFAULT_USAGE_LIMIT: f64 = 0.8;
+const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
+const DEFAULT_BUFFER_FULL_STRATEGY: BufferFullStrategy = BufferFullStrategy::RetryUntilSuccess;
+const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 
-    #[derive(Debug, Clone)]
-    pub(crate) struct StreamWriterConfig {
-        pub name: String,
-        pub partition_idx: u16,
-        pub max_length: usize,
-        pub refresh_interval: Duration,
-        pub usage_limit: f64,
-        pub buffer_full_strategy: BufferFullStrategy,
-        pub retry_interval: Duration,
+pub(crate) mod jetstream {
+    const DEFAULT_URL: &str = "localhost:4222";
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct ClientConfig {
+        pub url: String,
+        pub user: Option<String>,
+        pub password: Option<String>,
     }
 
-    impl Default for StreamWriterConfig {
+    impl Default for ClientConfig {
         fn default() -> Self {
-            StreamWriterConfig {
-                name: "default".to_string(),
-                partition_idx: DEFAULT_PARTITION_IDX,
-                max_length: DEFAULT_MAX_LENGTH,
-                usage_limit: DEFAULT_USAGE_LIMIT,
-                refresh_interval: Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS),
-                buffer_full_strategy: DEFAULT_BUFFER_FULL_STRATEGY,
-                retry_interval: Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS),
+            ClientConfig {
+                url: DEFAULT_URL.to_string(),
+                user: None,
+                password: None,
             }
         }
     }
+}
 
-    #[derive(Debug, Clone)]
-    pub(crate) struct StreamReaderConfig {
-        pub name: String,
-        pub batch_size: usize,
-        pub wip_acks: Duration,
-    }
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct BufferWriterConfig {
+    pub name: String,
+    pub streams: Vec<(String, u16)>,
+    pub partitions: u16,
+    pub max_length: usize,
+    pub refresh_interval: Duration,
+    pub usage_limit: f64,
+    pub buffer_full_strategy: BufferFullStrategy,
+    pub retry_interval: Duration,
+}
 
-    #[derive(Debug, Clone, Eq, PartialEq)]
-    pub(crate) enum BufferFullStrategy {
-        RetryUntilSuccess,
-        DiscardLatest,
-    }
-
-    impl fmt::Display for BufferFullStrategy {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match self {
-                BufferFullStrategy::RetryUntilSuccess => write!(f, "retryUntilSuccess"),
-                BufferFullStrategy::DiscardLatest => write!(f, "discardLatest"),
-            }
+impl Default for BufferWriterConfig {
+    fn default() -> Self {
+        BufferWriterConfig {
+            name: "default".to_string(),
+            streams: vec![("default-0".to_string(), DEFAULT_PARTITION_IDX)],
+            partitions: DEFAULT_PARTITIONS,
+            max_length: DEFAULT_MAX_LENGTH,
+            usage_limit: DEFAULT_USAGE_LIMIT,
+            refresh_interval: Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS),
+            buffer_full_strategy: DEFAULT_BUFFER_FULL_STRATEGY,
+            retry_interval: Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS),
         }
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum BufferFullStrategy {
+    RetryUntilSuccess,
+    DiscardLatest,
+}
+
+impl fmt::Display for BufferFullStrategy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BufferFullStrategy::RetryUntilSuccess => write!(f, "retryUntilSuccess"),
+            BufferFullStrategy::DiscardLatest => write!(f, "discardLatest"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct BufferReaderConfig {
+    pub(crate) name: String,
+    pub(crate) partitions: u16,
+    pub(crate) streams: Vec<(String, u16)>,
 }
