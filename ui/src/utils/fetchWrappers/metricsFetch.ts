@@ -1,9 +1,7 @@
-import { useEffect, useState, useMemo, useContext, useCallback } from "react";
-import { useFetch, Options } from "./fetch";
+import { useEffect, useState, useContext } from "react";
 import { AppContextProps } from "../../types/declarations/app";
 import { AppContext } from "../../App";
 import { getBaseHref } from "../index";
-import { string } from "yaml/dist/schema/common/string";
 
 
 export interface Filters {
@@ -31,13 +29,12 @@ export const useMetricsFetch = ({
     const [chartData, setChartData] = useState([]);
     const [error, setError] = useState<Error | null>(null);
     const [shouldFetch, setShouldFetch] = useState(true);
-    // const [isLoading, setIsLoading] = useState(true);
-
+    const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
       const fetchData = async() => {
-        // setIsLoading(true); 
-        // console.log("loading state 1: ", isLoading) 
+        if (!shouldFetch) return;
+        setIsLoading(true);
         try{
           const response = await fetch(urlPath, {
             method: 'POST',
@@ -53,7 +50,7 @@ export const useMetricsFetch = ({
             }),
           });
           const data = await response.json();
-          setChartData(data.data[0].values);
+          setChartData(data?.data[0]?.values);
           setError(null);
         } catch(e){
           console.error("Error fetching data:", e);
@@ -62,13 +59,13 @@ export const useMetricsFetch = ({
           } else {
             setError(null);
           }
+        } finally{
+          setIsLoading(false);
+          setShouldFetch(false);
         }
       }
-      if (shouldFetch) {
-        fetchData();
-        setShouldFetch(false); 
-      }
+      fetchData();
     }, [metricName, dimension, duration, quantile, filters] )
 
-    return {chartData, error, setShouldFetch}
+    return {chartData, error, setShouldFetch, isLoading}
 }

@@ -1,8 +1,9 @@
-import {  useEffect, useState } from "react";
+import { useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import "./style.css";
 import { Filters, useMetricsFetch } from "../../../../../utils/fetchWrappers/metricsFetch";
 import { EmptyChartState } from "../../../EmptyStates";
+import { Box, CircularProgress } from "@mui/material";
 
 export interface MetricsProps {
     namespaceId: string;
@@ -48,7 +49,7 @@ export function Metrics ({
     "pod": "simple-mono-vertex-mv-0-rilce"
   }
 
-  const {chartData, error, setShouldFetch} = useMetricsFetch({
+  const {chartData, error, setShouldFetch, isLoading} = useMetricsFetch({
     metricName: metricName,
     dimension: dimension,
     filters: filters,
@@ -145,7 +146,16 @@ export function Metrics ({
           {/* ... more options */}
         </select>
      </div>
-      { error ? (<EmptyChartState/>) : transformedData?.length > 0 ? (
+      {isLoading ? (<Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "100%",
+          }}
+        >
+          <CircularProgress />
+        </Box>) : error ? (<EmptyChartState/>) : transformedData?.length > 0 ? (
         <LineChart width={800} height={300} data={transformedData}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="time" padding={{ left: 30, right: 30 }} />
