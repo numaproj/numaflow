@@ -1,4 +1,5 @@
 use async_nats::jetstream::Context;
+use bytes::BytesMut;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -15,6 +16,8 @@ use crate::Result;
 /// writes, it will let the callee know the status (or return a non-retryable
 /// exception).
 pub(super) mod writer;
+
+pub(super) mod reader;
 
 /// ISB Writer accepts an Actor pattern based messages.
 #[derive(Debug)]
@@ -54,11 +57,11 @@ impl WriterActor {
     }
 
     async fn handle_message(&mut self, msg: ActorMessage) {
-        let payload: Vec<u8> = msg
+        let payload: BytesMut = msg
             .message
             .try_into()
             .expect("message serialization should not fail");
-        self.js_writer.write(payload, msg.callee_tx).await
+        self.js_writer.write(payload.into(), msg.callee_tx).await
     }
 
     async fn run(&mut self) {
