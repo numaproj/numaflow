@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use async_nats::jetstream::message::StreamMessage;
 use async_nats::jetstream::{
     consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
 };
@@ -10,14 +11,18 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, warn};
 
 use crate::config::pipeline::isb::BufferReaderConfig;
-use crate::message::{Message, ReadAck, ReadMessage};
+use crate::error::Error;
+use crate::message::{IntOffset, Message, Offset, ReadAck, ReadMessage};
+use crate::Result;
 
-// The JestreamReader is a handle to the background actor that continuously fetches messages from Jetstream.
+// The JetstreamReader is a handle to the background actor that continuously fetches messages from Jetstream.
 // It can be used to cancel the background task and stop reading from Jetstream.
 // The sender end of the channel is not stored in this struct, since the struct is clone-able and the mpsc channel is only closed when all the senders are dropped.
 // Storing the Sender end of channel in this struct would make it difficult to close the channel with `cancel` method.
 #[derive(Clone)]
 pub(super) struct JetstreamReader {
+    name: String,
+    partition_idx: u16,
     config: BufferReaderConfig,
     consumer: PullConsumer,
     ctx: CancellationToken,
@@ -25,29 +30,48 @@ pub(super) struct JetstreamReader {
 
 impl JetstreamReader {
     pub(super) async fn new(
+        name: String,
+        partition_idx: u16,
         js_ctx: Context,
-        cfg: BufferReaderConfig,
-    ) -> (Self, mpsc::Receiver<ReadMessage>) {
-        let consumer: PullConsumer = js_ctx
-            .get_consumer_from_stream(&cfg.name, &cfg.name)
+        config: BufferReaderConfig,
+    ) -> Result<(Self, mpsc::Receiver<ReadMessage>)> {
+        let mut config = config;
+
+        let mut consumer: PullConsumer = js_ctx
+            .get_consumer_from_stream(&name, &name)
             .await
-            .unwrap(); // FIXME:
+            .map_err(|e| Error::ISB(format!("Failed to get consumer for stream {}", e)))?;
+
+        let consumer_info = consumer
+            .info()
+            .await
+            .map_err(|e| Error::ISB(format!("Failed to get consumer info {}", e)))?;
+
+        // Calculate inProgressTickSeconds based on the ack_wait_seconds.
+        let ack_wait_seconds = consumer_info.config.ack_wait.as_secs();
+        let wip_ack_interval = Duration::from_secs(std::cmp::max(
+            config.wip_ack_interval.as_secs(),
+            ack_wait_seconds * 2 / 3,
+        ));
+        config.wip_ack_interval = wip_ack_interval;
 
         let ctx = CancellationToken::new();
         let this = Self {
-            config: cfg.clone(),
+            name,
+            partition_idx,
+            config: config.clone(),
             consumer,
             ctx,
         };
 
-        let (messages_tx, messages_rx) = mpsc::channel(2 * cfg.batch_size);
+        let (messages_tx, messages_rx) = mpsc::channel(2 * config.batch_size);
         tokio::spawn({
             let this = this.clone();
             async move {
                 this.start(messages_tx).await;
             }
         });
-        (this, messages_rx)
+        Ok((this, messages_rx))
     }
 
     // Stop reading from Jetstream and close the sender end of the channel.
@@ -109,7 +133,8 @@ impl JetstreamReader {
                         continue;
                     }
                 };
-                let message: Message = match jetstream_message.payload.clone().try_into() {
+
+                let mut message: Message = match jetstream_message.payload.clone().try_into() {
                     Ok(message) => message,
                     Err(e) => {
                         error!(
@@ -119,6 +144,14 @@ impl JetstreamReader {
                         return;
                     }
                 };
+
+                // Set the offset of the message to the sequence number of the message and the partition index.
+                let stream_message: StreamMessage =
+                    jetstream_message.clone().message.try_into().unwrap();
+                message.offset = Some(Offset::Int(IntOffset::new(
+                    stream_message.sequence,
+                    self.partition_idx,
+                )));
 
                 let (ack_tx, ack_rx) = oneshot::channel();
 

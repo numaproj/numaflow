@@ -3,12 +3,14 @@ use std::fmt;
 use std::time::Duration;
 
 const DEFAULT_PARTITION_IDX: u16 = 0;
+const DEFAULT_BATCH_SIZE: usize = 500;
 const DEFAULT_PARTITIONS: u16 = 1;
 const DEFAULT_MAX_LENGTH: usize = 30000;
 const DEFAULT_USAGE_LIMIT: f64 = 0.8;
 const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
 const DEFAULT_BUFFER_FULL_STRATEGY: BufferFullStrategy = BufferFullStrategy::RetryUntilSuccess;
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
+const DEFAULT_WIP_ACK_INTERVAL_MILLIS: u64 = 1000;
 
 pub(crate) mod jetstream {
     const DEFAULT_URL: &str = "localhost:4222";
@@ -79,4 +81,16 @@ pub(crate) struct BufferReaderConfig {
     pub(crate) streams: Vec<(String, u16)>,
     pub(crate) batch_size: usize,
     pub(crate) wip_ack_interval: Duration,
+}
+
+impl Default for BufferReaderConfig {
+    fn default() -> Self {
+        BufferReaderConfig {
+            name: "default".to_string(),
+            partitions: DEFAULT_PARTITIONS,
+            streams: vec![("default-0".to_string(), DEFAULT_PARTITION_IDX)],
+            batch_size: DEFAULT_BATCH_SIZE,
+            wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
+        }
+    }
 }

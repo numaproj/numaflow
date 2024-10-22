@@ -8,7 +8,6 @@ use crate::error;
 use crate::metrics::{
     start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
 };
-use crate::shared::server_info;
 use crate::source::SourceHandle;
 use crate::Error;
 use crate::Result;
@@ -27,52 +26,7 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tower::service_fn;
-use tracing::{info, warn};
-
-pub(crate) async fn check_compatibility(
-    cln_token: &CancellationToken,
-    source_file_path: Option<PathBuf>,
-    sink_file_path: Option<PathBuf>,
-    transformer_file_path: Option<PathBuf>,
-    fb_sink_file_path: Option<PathBuf>,
-) -> error::Result<()> {
-    if let Some(source_file_path) = source_file_path {
-        server_info::check_for_server_compatibility(source_file_path, cln_token.clone())
-            .await
-            .map_err(|e| {
-                warn!("Error waiting for source server info file: {:?}", e);
-                Error::Forwarder("Error waiting for server info file".to_string())
-            })?;
-    }
-
-    if let Some(sink_file_path) = sink_file_path {
-        server_info::check_for_server_compatibility(sink_file_path, cln_token.clone())
-            .await
-            .map_err(|e| {
-                error!("Error waiting for sink server info file: {:?}", e);
-                Error::Forwarder("Error waiting for server info file".to_string())
-            })?;
-    }
-
-    if let Some(transformer_path) = transformer_file_path {
-        server_info::check_for_server_compatibility(transformer_path, cln_token.clone())
-            .await
-            .map_err(|e| {
-                error!("Error waiting for transformer server info file: {:?}", e);
-                Error::Forwarder("Error waiting for server info file".to_string())
-            })?;
-    }
-
-    if let Some(fb_sink_path) = fb_sink_file_path {
-        server_info::check_for_server_compatibility(fb_sink_path, cln_token.clone())
-            .await
-            .map_err(|e| {
-                warn!("Error waiting for fallback sink server info file: {:?}", e);
-                Error::Forwarder("Error waiting for server info file".to_string())
-            })?;
-    }
-    Ok(())
-}
+use tracing::info;
 
 pub(crate) async fn start_metrics_server(
     metrics_config: MetricsConfig,
@@ -235,77 +189,6 @@ mod tests {
         file.write_all(serialized.as_bytes()).unwrap();
         file.write_all(b"U+005C__END__").unwrap();
         Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_check_compatibility_success() {
-        let dir = tempdir().unwrap();
-        let source_file_path = dir.path().join("sourcer-server-info");
-        let sink_file_path = dir.path().join("sinker-server-info");
-        let transformer_file_path = dir.path().join("sourcetransformer-server-info");
-        let fb_sink_file_path = dir.path().join("fb-sink-server-info");
-
-        let server_info = ServerInfo {
-            protocol: "uds".to_string(),
-            language: "rust".to_string(),
-            minimum_numaflow_version: "0.1.0".to_string(),
-            version: "0.1.0".to_string(),
-            metadata: None,
-        };
-
-        write_server_info(source_file_path.to_str().unwrap(), &server_info)
-            .await
-            .unwrap();
-        write_server_info(sink_file_path.to_str().unwrap(), &server_info)
-            .await
-            .unwrap();
-        write_server_info(transformer_file_path.to_str().unwrap(), &server_info)
-            .await
-            .unwrap();
-        write_server_info(fb_sink_file_path.to_str().unwrap(), &server_info)
-            .await
-            .unwrap();
-
-        let cln_token = CancellationToken::new();
-        let result = check_compatibility(
-            &cln_token,
-            Some(source_file_path),
-            Some(sink_file_path),
-            None,
-            None,
-        )
-        .await;
-
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_check_compatibility_failure() {
-        let cln_token = CancellationToken::new();
-        let dir = tempdir().unwrap();
-        let source_file_path = dir.path().join("source_server_info.json");
-        let sink_file_path = dir.path().join("sink_server_info.json");
-        let transformer_file_path = dir.path().join("transformer_server_info.json");
-        let fb_sink_file_path = dir.path().join("fb_sink_server_info.json");
-
-        // do not write server info files to simulate failure
-        // cancel the token after 100ms to simulate cancellation
-        let token = cln_token.clone();
-        let handle = tokio::spawn(async move {
-            sleep(Duration::from_millis(100)).await;
-            token.cancel();
-        });
-        let result = check_compatibility(
-            &cln_token,
-            Some(source_file_path),
-            Some(sink_file_path),
-            Some(transformer_file_path),
-            Some(fb_sink_file_path),
-        )
-        .await;
-
-        assert!(result.is_err());
-        handle.await.unwrap();
     }
 
     struct SimpleSource {}
