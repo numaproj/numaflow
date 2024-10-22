@@ -330,7 +330,7 @@ mod tests {
                 i += 1;
 
                 if start_time.elapsed().as_secs() >= 1 {
-                    println!("Messages sent: {}", sent_count);
+                    info!("Messages sent: {}", sent_count);
                     sent_count = 0;
                     start_time = Instant::now();
                 }
@@ -347,7 +347,7 @@ mod tests {
                 }
 
                 if start_time.elapsed().as_secs() >= 1 {
-                    println!("Messages received: {}", count);
+                    info!("Messages received: {}", count);
                     count = 0;
                     start_time = Instant::now();
                 }

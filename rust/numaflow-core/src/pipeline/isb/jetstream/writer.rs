@@ -608,7 +608,10 @@ mod tests {
         let writer = JetstreamWriter::new(
             stream_name.to_string(),
             0,
-            Default::default(),
+            BufferWriterConfig {
+                max_length: 100,
+                ..Default::default()
+            },
             context.clone(),
             500,
             cancel_token.clone(),

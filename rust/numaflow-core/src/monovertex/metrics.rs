@@ -36,6 +36,13 @@ const MVTX_NAME_LABEL: &str = "mvtx_name";
 const REPLICA_LABEL: &str = "mvtx_replica";
 const PENDING_PERIOD_LABEL: &str = "period";
 
+// The top-level metric registry is created with the GLOBAL_PREFIX
+const GLOBAL_PREFIX: &str = "monovtx";
+// Prefixes for the sub-registries
+const SINK_REGISTRY_PREFIX: &str = "sink";
+const FALLBACK_SINK_REGISTRY_PREFIX: &str = "fallback_sink";
+const TRANSFORMER_REGISTRY_PREFIX: &str = "transformer";
+
 // Define the metrics
 // Note: We do not add a suffix to the metric name, as the suffix is inferred through the metric type
 // by the prometheus client library
@@ -43,24 +50,24 @@ const PENDING_PERIOD_LABEL: &str = "period";
 // Note: Please keep consistent with the definitions in MonoVertex daemon
 
 // counters (please note the prefix _total, and read above link)
-const READ_TOTAL: &str = "monovtx_read";
-const READ_BYTES_TOTAL: &str = "monovtx_read_bytes";
-const ACK_TOTAL: &str = "monovtx_ack";
-const SINK_WRITE_TOTAL: &str = "monovtx_sink_write";
-const DROPPED_TOTAL: &str = "monovtx_dropped";
-const FALLBACK_SINK_WRITE_TOTAL: &str = "monovtx_fallback_sink_write";
+const READ_TOTAL: &str = "read";
+const READ_BYTES_TOTAL: &str = "read_bytes";
+const ACK_TOTAL: &str = "ack";
+const SINK_WRITE_TOTAL: &str = "write";
+const DROPPED_TOTAL: &str = "dropped";
+const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
 
 // pending as gauge
-const SOURCE_PENDING: &str = "monovtx_pending";
+const SOURCE_PENDING: &str = "pending";
 
 // processing times as timers
-const E2E_TIME: &str = "monovtx_processing_time";
-const READ_TIME: &str = "monovtx_read_time";
-const TRANSFORM_TIME: &str = "monovtx_transformer_time";
-const ACK_TIME: &str = "monovtx_ack_time";
-const SINK_TIME: &str = "monovtx_sink_time";
+const E2E_TIME: &str = "processing_time";
+const READ_TIME: &str = "read_time";
+const TRANSFORM_TIME: &str = "time";
+const ACK_TIME: &str = "ack_time";
+const SINK_TIME: &str = "time";
 
-/// Only used defined functions will have containers since rest
+/// Only user defined functions will have containers since rest
 /// are builtins. We save the gRPC clients to retrieve metrics and also
 /// to do liveness checks. This means, these will be optionals since
 /// we do not require these for builtins.
@@ -74,55 +81,70 @@ pub(crate) struct UserDefinedContainerState {
 
 /// The global register of all metrics.
 #[derive(Default)]
-pub struct GlobalRegistry {
+struct GlobalRegistry {
     // It is okay to use std mutex because we register each metric only one time.
-    pub registry: parking_lot::Mutex<Registry>,
+    registry: parking_lot::Mutex<Registry>,
 }
 
 impl GlobalRegistry {
     fn new() -> Self {
         GlobalRegistry {
             // Create a new registry for the metrics
-            registry: parking_lot::Mutex::new(Registry::default()),
+            registry: parking_lot::Mutex::new(Registry::with_prefix(GLOBAL_PREFIX)),
         }
     }
 }
 
-/// GLOBAL_REGISTER is the static global registry which is initialized
-// only once.
-static GLOBAL_REGISTER: OnceLock<GlobalRegistry> = OnceLock::new();
+/// GLOBAL_REGISTRY is the static global registry which is initialized only once.
+static GLOBAL_REGISTRY: OnceLock<GlobalRegistry> = OnceLock::new();
 
-/// global_registry is a helper function to get the GLOBAL_REGISTER
+/// global_registry is a helper function to get the GLOBAL_REGISTRY
 fn global_registry() -> &'static GlobalRegistry {
-    GLOBAL_REGISTER.get_or_init(GlobalRegistry::new)
+    GLOBAL_REGISTRY.get_or_init(GlobalRegistry::new)
 }
 
-// TODO: let's do sub-registry for forwarder so tomorrow we can add sink and source metrics.
 /// MonoVtxMetrics is a struct which is used for storing the metrics related to MonoVertex
 // These fields are exposed as pub to be used by other modules for
 // changing the value of the metrics
 // Each metric is defined as family of metrics, which means that they can be
 // differentiated by their label values assigned.
-// The labels are provided in the form of Vec<(String, String)
+// The labels are provided in the form of Vec<(String, String)>
 // The second argument is the metric kind.
-pub struct MonoVtxMetrics {
+pub(crate) struct MonoVtxMetrics {
     // counters
-    pub read_total: Family<Vec<(String, String)>, Counter>,
-    pub read_bytes_total: Family<Vec<(String, String)>, Counter>,
-    pub ack_total: Family<Vec<(String, String)>, Counter>,
-    pub sink_write_total: Family<Vec<(String, String)>, Counter>,
-    pub dropped_total: Family<Vec<(String, String)>, Counter>,
-    pub fbsink_write_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) read_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) read_bytes_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) ack_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
 
     // gauge
-    pub source_pending: Family<Vec<(String, String)>, Gauge>,
+    pub(crate) source_pending: Family<Vec<(String, String)>, Gauge>,
 
     // timers
-    pub e2e_time: Family<Vec<(String, String)>, Histogram>,
-    pub read_time: Family<Vec<(String, String)>, Histogram>,
-    pub transform_time: Family<Vec<(String, String)>, Histogram>,
-    pub ack_time: Family<Vec<(String, String)>, Histogram>,
-    pub sink_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) e2e_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) read_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) ack_time: Family<Vec<(String, String)>, Histogram>,
+
+    pub(crate) transformer: TransformerMetrics,
+    pub(crate) sink: SinkMetrics,
+    pub(crate) fb_sink: FallbackSinkMetrics,
+}
+
+/// Family of metrics for the sink
+pub(crate) struct SinkMetrics {
+    pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) time: Family<Vec<(String, String)>, Histogram>,
+}
+
+/// Family of metrics for the Fallback Sink
+pub(crate) struct FallbackSinkMetrics {
+    pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
+}
+
+/// Family of metrics for the Transformer
+pub(crate) struct TransformerMetrics {
+    /// Transformer latency
+    pub(crate) time: Family<Vec<(String, String)>, Histogram>,
 }
 
 /// Exponential bucket distribution with range.
@@ -153,9 +175,7 @@ impl MonoVtxMetrics {
             read_total: Family::<Vec<(String, String)>, Counter>::default(),
             read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
             ack_total: Family::<Vec<(String, String)>, Counter>::default(),
-            sink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
             dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
-            fbsink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
             // gauge
             source_pending: Family::<Vec<(String, String)>, Gauge>::default(),
             // timers
@@ -166,15 +186,26 @@ impl MonoVtxMetrics {
             read_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
             }),
-            transform_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
-                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10)),
-            ),
             ack_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                 Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
             }),
-            sink_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
-            }),
+
+            transformer: TransformerMetrics {
+                time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+                }),
+            },
+
+            sink: SinkMetrics {
+                write_total: Family::<Vec<(String, String)>, Counter>::default(),
+                time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+                }),
+            },
+
+            fb_sink: FallbackSinkMetrics {
+                write_total: Family::<Vec<(String, String)>, Counter>::default(),
+            },
         };
 
         let mut registry = global_registry().registry.lock();
@@ -183,11 +214,6 @@ impl MonoVtxMetrics {
             READ_TOTAL,
             "A Counter to keep track of the total number of messages read from the source",
             metrics.read_total.clone(),
-        );
-        registry.register(
-            SINK_WRITE_TOTAL,
-            "A Counter to keep track of the total number of messages written to the sink",
-            metrics.sink_write_total.clone(),
         );
         registry.register(
             ACK_TOTAL,
@@ -204,12 +230,6 @@ impl MonoVtxMetrics {
             DROPPED_TOTAL,
             "A Counter to keep track of the total number of messages dropped by the monovtx",
             metrics.dropped_total.clone(),
-        );
-
-        registry.register(
-            FALLBACK_SINK_WRITE_TOTAL,
-            "A Counter to keep track of the total number of messages written to the fallback sink",
-            metrics.fbsink_write_total.clone(),
         );
 
         // gauges
@@ -230,19 +250,39 @@ impl MonoVtxMetrics {
             metrics.read_time.clone(),
         );
         registry.register(
-            TRANSFORM_TIME,
-            "A Histogram to keep track of the total time taken to Transform, in microseconds",
-            metrics.transform_time.clone(),
-        );
-        registry.register(
             ACK_TIME,
             "A Histogram to keep track of the total time taken to Ack to the Source, in microseconds",
             metrics.ack_time.clone(),
         );
-        registry.register(
+
+        // Transformer metrics
+        let transformer_registry = registry.sub_registry_with_prefix(TRANSFORMER_REGISTRY_PREFIX);
+        transformer_registry.register(
+            TRANSFORM_TIME,
+            "A Histogram to keep track of the total time taken to Transform, in microseconds",
+            metrics.transformer.time.clone(),
+        );
+
+        // Sink metrics
+        let sink_registry = registry.sub_registry_with_prefix(SINK_REGISTRY_PREFIX);
+        sink_registry.register(
+            SINK_WRITE_TOTAL,
+            "A Counter to keep track of the total number of messages written to the sink",
+            metrics.sink.write_total.clone(),
+        );
+        sink_registry.register(
             SINK_TIME,
             "A Histogram to keep track of the total time taken to Write to the Sink, in microseconds",
-            metrics.sink_time.clone(),
+            metrics.sink.time.clone(),
+        );
+
+        // Fallback Sink metrics
+        let fb_sink_registry = registry.sub_registry_with_prefix(FALLBACK_SINK_REGISTRY_PREFIX);
+
+        fb_sink_registry.register(
+            FALLBACK_SINK_WRITE_TOTAL,
+            "A Counter to keep track of the total number of messages written to the fallback sink",
+            metrics.fb_sink.write_total.clone(),
         );
         metrics
     }
@@ -835,5 +875,163 @@ mod tests {
     #[should_panic(expected = "ExponentialBucketsRange min needs to be greater than 0")]
     fn test_exponential_buckets_range_negative_min() {
         let _ = exponential_buckets_range(-1.0, 100.0, 10).collect::<Vec<f64>>();
+    }
+
+    #[test]
+    fn test_metric_names() {
+        let metrics = forward_metrics();
+        // Use a fixed set of labels instead of the ones from mvtx_forward_metric_labels() since other test functions may also set it.
+        let common_labels = vec![
+            (
+                MVTX_NAME_LABEL.to_string(),
+                "test-monovertex-metric-names".to_string(),
+            ),
+            (REPLICA_LABEL.to_string(), "3".to_string()),
+        ];
+        // Populate all metrics
+        metrics.read_total.get_or_create(&common_labels).inc();
+        metrics.read_bytes_total.get_or_create(&common_labels).inc();
+        metrics.ack_total.get_or_create(&common_labels).inc();
+        metrics.dropped_total.get_or_create(&common_labels).inc();
+        metrics.source_pending.get_or_create(&common_labels).set(10);
+        metrics.e2e_time.get_or_create(&common_labels).observe(10.0);
+        metrics.read_time.get_or_create(&common_labels).observe(3.0);
+        metrics.ack_time.get_or_create(&common_labels).observe(2.0);
+
+        metrics
+            .transformer
+            .time
+            .get_or_create(&common_labels)
+            .observe(5.0);
+
+        metrics.sink.write_total.get_or_create(&common_labels).inc();
+        metrics.sink.time.get_or_create(&common_labels).observe(4.0);
+
+        metrics
+            .fb_sink
+            .write_total
+            .get_or_create(&common_labels)
+            .inc();
+
+        // Validate the metric names
+        let state = global_registry().registry.lock();
+        let mut buffer = String::new();
+        encode(&mut buffer, &state).unwrap();
+
+        let expected = r#"
+# HELP monovtx_read A Counter to keep track of the total number of messages read from the source.
+# TYPE monovtx_read counter
+monovtx_read_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+# HELP monovtx_ack A Counter to keep track of the total number of messages acknowledged by the sink.
+# TYPE monovtx_ack counter
+monovtx_ack_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+# HELP monovtx_read_bytes A Counter to keep track of the total number of bytes read from the source.
+# TYPE monovtx_read_bytes counter
+monovtx_read_bytes_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+# HELP monovtx_dropped A Counter to keep track of the total number of messages dropped by the monovtx.
+# TYPE monovtx_dropped counter
+monovtx_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+# HELP monovtx_pending A Gauge to keep track of the total number of pending messages for the monovtx.
+# TYPE monovtx_pending gauge
+monovtx_pending{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 10
+# HELP monovtx_processing_time A Histogram to keep track of the total time taken to forward a chunk, in microseconds.
+# TYPE monovtx_processing_time histogram
+monovtx_processing_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 10.0
+monovtx_processing_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_processing_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+# HELP monovtx_read_time A Histogram to keep track of the total time taken to Read from the Source, in microseconds.
+# TYPE monovtx_read_time histogram
+monovtx_read_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 3.0
+monovtx_read_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_read_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+# HELP monovtx_ack_time A Histogram to keep track of the total time taken to Ack to the Source, in microseconds.
+# TYPE monovtx_ack_time histogram
+monovtx_ack_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2.0
+monovtx_ack_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_ack_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+# HELP monovtx_transformer_time A Histogram to keep track of the total time taken to Transform, in microseconds.
+# TYPE monovtx_transformer_time histogram
+monovtx_transformer_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0
+monovtx_transformer_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_transformer_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+# HELP monovtx_sink_write A Counter to keep track of the total number of messages written to the sink.
+# TYPE monovtx_sink_write counter
+monovtx_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+# HELP monovtx_sink_time A Histogram to keep track of the total time taken to Write to the Sink, in microseconds.
+# TYPE monovtx_sink_time histogram
+monovtx_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 4.0
+monovtx_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+monovtx_sink_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+# HELP monovtx_fallback_sink_write A Counter to keep track of the total number of messages written to the fallback sink.
+# TYPE monovtx_fallback_sink_write counter
+monovtx_fallback_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
+# EOF
+        "#;
+
+        // The registry may contains metrics from other tests also. Extract the ones created from this test using the unique labels we specify.
+        let labels = common_labels
+            .iter()
+            .map(|(k, v)| format!("{}=\"{}\"", k, v))
+            .collect::<Vec<String>>()
+            .join(",");
+
+        let got = buffer
+            .trim()
+            .lines()
+            .filter(|line| line.starts_with('#') || line.contains(&labels))
+            .collect::<Vec<&str>>()
+            .join("\n");
+
+        assert_eq!(got.trim(), expected.trim());
     }
 }
