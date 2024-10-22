@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::monovertex::MonovertexConfig;
 use crate::error;
-use crate::monovertex::metrics::{
+use crate::metrics::{
     start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
 };
 use crate::shared::server_info;

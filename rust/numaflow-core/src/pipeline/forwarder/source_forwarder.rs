@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
+/// Simple source forwarder that reads messages from the source, applies transformation if present
+/// and writes to the messages to ISB.
 pub(crate) struct Forwarder {
     source_reader: SourceHandle,
     transformer: Option<SourceTransformHandle>,
@@ -118,6 +120,7 @@ impl Forwarder {
         Ok(msg_count as usize)
     }
 
+    /// Applies the transformer to the messages.
     async fn apply_transformer(&mut self, messages: Vec<Message>) -> error::Result<Vec<Message>> {
         let Some(client) = &mut self.transformer else {
             // return early if there is no transformer
@@ -135,6 +138,7 @@ impl Forwarder {
         Ok(results)
     }
 
+    /// Writes messages to the jetstream, it writes to all the downstream buffers.
     async fn write_to_jetstream(&mut self, messages: Vec<Message>) -> Result<(), Error> {
         if messages.is_empty() {
             return Ok(());
@@ -155,7 +159,7 @@ impl Forwarder {
         // await for all the result futures to complete
         for result in results {
             // we can use the ack to publish watermark etc
-            let x = result
+            result
                 .await
                 .map_err(|e| Error::Forwarder(format!("Failed to write to jetstream {:?}", e)))??;
         }

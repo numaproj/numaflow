@@ -28,7 +28,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) replica: u16,
     pub(crate) batch_size: usize,
     pub(crate) timeout_in_ms: u64,
-    pub(crate) js_client_config: isb::jetstream::ClientConfig, // this should be enum isb_client_config(jetstream, redis etc)
+    pub(crate) js_client_config: isb::jetstream::ClientConfig, // TODO: make it enum, since we can have different ISB implementations
     pub(crate) from_vertex_config: Vec<FromVertexConfig>,
     pub(crate) to_vertex_config: Vec<ToVertexConfig>,
     pub(crate) vertex_config: VertexType,
