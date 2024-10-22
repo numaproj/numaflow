@@ -10,8 +10,8 @@ use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
 use crate::config::monovertex::MonovertexConfig;
 use crate::error;
 use crate::message::{Message, Offset, ResponseStatusFromSink};
-use crate::monovertex::metrics;
-use crate::monovertex::metrics::forward_metrics;
+use crate::metrics;
+use crate::metrics::forward_mvtx_metrics;
 use crate::sink::SinkHandle;
 use crate::Error;
 use crate::{source::SourceHandle, transformer::user_defined::SourceTransformHandle};
@@ -117,7 +117,7 @@ impl Forwarder {
                 last_forwarded_at = std::time::Instant::now();
             }
 
-            forward_metrics()
+            forward_mvtx_metrics()
                 .e2e_time
                 .get_or_create(&self.common_labels)
                 .observe(start_time.elapsed().as_micros() as f64);
@@ -140,7 +140,7 @@ impl Forwarder {
             start_time.elapsed().as_millis()
         );
 
-        forward_metrics()
+        forward_mvtx_metrics()
             .read_time
             .get_or_create(&self.common_labels)
             .observe(start_time.elapsed().as_micros() as f64);
@@ -151,7 +151,7 @@ impl Forwarder {
         }
 
         let msg_count = messages.len() as u64;
-        forward_metrics()
+        forward_mvtx_metrics()
             .read_total
             .get_or_create(&self.common_labels)
             .inc_by(msg_count);
@@ -169,7 +169,7 @@ impl Forwarder {
             },
         )?;
 
-        forward_metrics()
+        forward_mvtx_metrics()
             .read_bytes_total
             .get_or_create(&self.common_labels)
             .inc_by(bytes_count);
@@ -213,7 +213,7 @@ impl Forwarder {
             "Transformer latency - {}ms",
             start_time.elapsed().as_millis()
         );
-        forward_metrics()
+        forward_mvtx_metrics()
             .transformer
             .time
             .get_or_create(&self.common_labels)
@@ -306,7 +306,7 @@ impl Forwarder {
                 .await?;
         }
 
-        forward_metrics()
+        forward_mvtx_metrics()
             .sink
             .time
             .get_or_create(&self.common_labels)
@@ -314,7 +314,7 @@ impl Forwarder {
 
         // update the metric for number of messages written to the sink
         // this included primary and fallback sink
-        forward_metrics()
+        forward_mvtx_metrics()
             .sink
             .write_total
             .get_or_create(&self.common_labels)
@@ -355,7 +355,7 @@ impl Forwarder {
                     attempts, error_map
                 );
                 // update the metrics
-                forward_metrics()
+                forward_mvtx_metrics()
                     .dropped_total
                     .get_or_create(&self.common_labels)
                     .inc_by(messages_to_send.len() as u64);
@@ -532,7 +532,7 @@ impl Forwarder {
             )));
         }
         // increment the metric for the fallback sink write
-        forward_metrics()
+        forward_mvtx_metrics()
             .fb_sink
             .write_total
             .get_or_create(&self.common_labels)
@@ -549,12 +549,12 @@ impl Forwarder {
 
         debug!("Ack latency - {}ms", start_time.elapsed().as_millis());
 
-        forward_metrics()
+        forward_mvtx_metrics()
             .ack_time
             .get_or_create(&self.common_labels)
             .observe(start_time.elapsed().as_micros() as f64);
 
-        forward_metrics()
+        forward_mvtx_metrics()
             .ack_total
             .get_or_create(&self.common_labels)
             .inc_by(n as u64);

@@ -1,7 +1,7 @@
 use crate::config::components::source::SourceType;
 use crate::config::pipeline;
 use crate::config::pipeline::PipelineConfig;
-use crate::monovertex::metrics::UserDefinedContainerState;
+use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::isb::jetstream::WriterHandle;
 use crate::shared::server_info::check_for_server_compatibility;
 use crate::shared::utils::{
@@ -17,34 +17,38 @@ use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use std::collections::HashMap;
 use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
 
 mod forwarder;
 mod isb;
 
+/// Starts the appropriate forwarder based on the pipeline configuration.
 pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: &PipelineConfig,
 ) -> Result<()> {
     let js_context = create_js_context(config.js_client_config.clone()).await?;
-    // FIXME: use appropriate clients and the metrics server
-    start_metrics_server(
-        config.metrics_config.clone(),
-        UserDefinedContainerState {
-            source_client: None,
-            sink_client: None,
-            transformer_client: None,
-            fb_sink_client: None,
-        },
-    )
-    .await;
 
     match &config.vertex_config {
         pipeline::VertexType::Source(source) => {
             let buffer_writers =
                 create_buffer_writers(config, js_context.clone(), cln_token.clone()).await?;
-            let source_type = create_source_type(source, config, cln_token.clone()).await?;
+
+            let (source_type, source_grpc_client) =
+                create_source_type(&source, config, cln_token.clone()).await?;
+            let (transformer, transformer_grpc_client) =
+                create_transformer(&source, cln_token.clone()).await?;
+
+            start_metrics_server(
+                config.metrics_config.clone(),
+                UserDefinedContainerState::Pipeline(PipelineContainerState::Source((
+                    source_grpc_client.clone(),
+                    transformer_grpc_client.clone(),
+                ))),
+            )
+            .await;
+
             let source_handle = source::SourceHandle::new(source_type, config.batch_size);
-            let transformer = create_transformer(source, cln_token.clone()).await?;
             let mut forwarder = forwarder::source_forwarder::ForwarderBuilder::new(
                 source_handle,
                 transformer,
@@ -63,6 +67,8 @@ pub(crate) async fn start_forwarder(
     Ok(())
 }
 
+/// Creates the required buffer writers based on the pipeline configuration, it creates a map
+/// of vertex name to a list of writer handles.
 async fn create_buffer_writers(
     config: &PipelineConfig,
     js_context: Context,
@@ -90,19 +96,19 @@ async fn create_buffer_writers(
     Ok(buffer_writers)
 }
 
+/// Creates a source type based on the pipeline configuration
 async fn create_source_type(
     source: &pipeline::SourceVtxConfig,
     config: &PipelineConfig,
     cln_token: CancellationToken,
-) -> Result<source::SourceType> {
+) -> Result<(source::SourceType, Option<SourceClient<Channel>>)> {
     match &source.source_config.source_type {
         SourceType::Generator(generator_config) => {
             let (generator_read, generator_ack, generator_lag) =
                 new_generator(generator_config.clone(), config.batch_size)?;
-            Ok(source::SourceType::Generator(
-                generator_read,
-                generator_ack,
-                generator_lag,
+            Ok((
+                source::SourceType::Generator(generator_read, generator_ack, generator_lag),
+                None,
             ))
         }
         SourceType::UserDefined(udsource_config) => {
@@ -118,22 +124,26 @@ async fn create_source_type(
             .max_encoding_message_size(udsource_config.grpc_max_message_size);
             wait_until_source_ready(&cln_token, &mut source_grpc_client).await?;
             let (ud_read, ud_ack, ud_lag) = new_source(
-                source_grpc_client,
+                source_grpc_client.clone(),
                 config.batch_size,
                 config.timeout_in_ms as u16,
             )
             .await?;
-            Ok(source::SourceType::UserDefinedSource(
-                ud_read, ud_ack, ud_lag,
+            Ok((
+                source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
+                Some(source_grpc_client),
             ))
         }
     }
 }
-
+/// Creates a transformer if it is configured in the pipeline
 async fn create_transformer(
     source: &pipeline::SourceVtxConfig,
     cln_token: CancellationToken,
-) -> Result<Option<SourceTransformHandle>> {
+) -> Result<(
+    Option<SourceTransformHandle>,
+    Option<SourceTransformClient<Channel>>,
+)> {
     if let Some(transformer_config) = &source.transformer_config {
         if let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
             &transformer_config.transformer_type
@@ -149,14 +159,16 @@ async fn create_transformer(
             .max_encoding_message_size(ud_transformer.grpc_max_message_size)
             .max_encoding_message_size(ud_transformer.grpc_max_message_size);
             wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
-            return Ok(Some(
-                SourceTransformHandle::new(transformer_grpc_client).await?,
+            return Ok((
+                Some(SourceTransformHandle::new(transformer_grpc_client.clone()).await?),
+                Some(transformer_grpc_client),
             ));
         }
     }
-    Ok(None)
+    Ok((None, None))
 }
 
+/// Creates a jetstream context based on the provided configuration
 async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Result<Context> {
     let js_client = match (config.user, config.password) {
         (Some(user), Some(password)) => {

@@ -40,6 +40,7 @@ mod transformer;
 /// Reads from a stream.
 mod reader;
 
+pub(crate) mod metrics;
 /// [Pipeline]
 ///
 /// [Pipeline]: https://numaflow.numaproj.io/core-concepts/pipeline/

@@ -1,5 +1,4 @@
 use forwarder::ForwarderBuilder;
-use metrics::UserDefinedContainerState;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -11,6 +10,7 @@ use tracing::info;
 use crate::config::components::{sink, source, transformer};
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self, Error};
+use crate::metrics;
 use crate::shared::server_info::check_for_server_compatibility;
 use crate::shared::utils;
 use crate::shared::utils::{
@@ -30,7 +30,6 @@ use crate::transformer::user_defined::SourceTransformHandle;
 /// - Calls the Sinker to write the batch to the Sink
 /// - Send Acknowledgement back to the Source
 mod forwarder;
-pub(crate) mod metrics;
 
 pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
@@ -139,12 +138,13 @@ pub(crate) async fn start_forwarder(
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
     // joined.
-    let metrics_state = UserDefinedContainerState {
-        source_client: source_grpc_client.clone(),
-        sink_client: sink_grpc_client.clone(),
-        transformer_client: transformer_grpc_client.clone(),
-        fb_sink_client: fb_sink_grpc_client.clone(),
-    };
+    let metrics_state =
+        metrics::UserDefinedContainerState::Monovertex(metrics::MonovertexContainerState {
+            source_client: source_grpc_client.clone(),
+            sink_client: sink_grpc_client.clone(),
+            transformer_client: transformer_grpc_client.clone(),
+            fb_sink_client: fb_sink_grpc_client.clone(),
+        });
 
     // start the metrics server
     // FIXME: what to do with the handle
