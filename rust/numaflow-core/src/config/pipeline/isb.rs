@@ -40,6 +40,7 @@ pub mod jetstream {
     pub(crate) struct StreamReaderConfig {
         pub name: String,
         pub batch_size: usize,
+        pub wip_acks: Duration,
     }
 
     #[derive(Debug, Clone, Eq, PartialEq)]

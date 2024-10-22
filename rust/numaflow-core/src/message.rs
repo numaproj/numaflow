@@ -15,6 +15,7 @@ use numaflow_pb::clients::source::{read_response, AckRequest};
 use numaflow_pb::clients::sourcetransformer::SourceTransformRequest;
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
+use tokio::sync::oneshot;
 
 use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
 use crate::Error;
@@ -179,6 +180,18 @@ impl fmt::Display for StringOffset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}-{}", self.offset, self.partition_idx)
     }
+}
+
+pub(crate) enum ReadAck {
+    /// Message was successfully processed.
+    Ack,
+    /// Message will not be processed now and processing can move onto the next message, NAK’d message will be retried.
+    Nak,
+}
+
+pub(crate) struct ReadMessage {
+    pub(crate) message: Message,
+    pub(crate) ack: oneshot::Sender<ReadAck>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
