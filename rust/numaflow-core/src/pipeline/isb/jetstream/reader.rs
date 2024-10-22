@@ -279,10 +279,14 @@ mod tests {
             batch_size: 2,
             wip_ack_interval: Duration::from_millis(5),
         };
-        let (js_reader_handle, mut js_reader_rx) =
-            JetstreamReader::new(context.clone(), buf_reader_config)
-                .await
-                .unwrap();
+        let (js_reader_handle, mut js_reader_rx) = JetstreamReader::new(
+            stream_name.to_string(),
+            0,
+            context.clone(),
+            buf_reader_config,
+        )
+        .await
+        .unwrap();
 
         let cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
