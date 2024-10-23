@@ -11,6 +11,7 @@ const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
 const DEFAULT_BUFFER_FULL_STRATEGY: BufferFullStrategy = BufferFullStrategy::RetryUntilSuccess;
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 const DEFAULT_WIP_ACK_INTERVAL_MILLIS: u64 = 1000;
+const DEFAULT_READ_TIMEOUT_MILLIS: u64 = 1000;
 
 pub(crate) mod jetstream {
     const DEFAULT_URL: &str = "localhost:4222";
@@ -77,6 +78,7 @@ pub(crate) struct BufferReaderConfig {
     pub(crate) partitions: u16,
     pub(crate) streams: Vec<(String, u16)>,
     pub(crate) batch_size: usize,
+    pub(crate) read_timeout: Duration,
     pub(crate) wip_ack_interval: Duration,
 }
 
@@ -87,6 +89,7 @@ impl Default for BufferReaderConfig {
             streams: vec![("default-0".to_string(), DEFAULT_PARTITION_IDX)],
             batch_size: DEFAULT_BATCH_SIZE,
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
+            read_timeout: Duration::from_millis(DEFAULT_READ_TIMEOUT_MILLIS),
         }
     }
 }

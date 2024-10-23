@@ -96,7 +96,7 @@ impl JetstreamReader {
                         .consumer
                         .fetch()
                         .max_messages(this.config.batch_size)
-                        .expires(Duration::from_millis(10))
+                        .expires(this.config.read_timeout)
                         .messages();
 
                     let messages = tokio::select! {
@@ -117,14 +117,22 @@ impl JetstreamReader {
 
                     while let Some(message) = messages.next().await {
                         let jetstream_message = match message {
-                            Ok(message) => {
-                                message
-                            }
+                            Ok(message) => message,
                             Err(e) => {
                                 error!(?e, "Failed to fetch messages from the Jetstream");
                                 continue;
                             }
                         };
+
+                        let msg_info = jetstream_message
+                            .info()
+                            .map_err(|e| {
+                                Error::ISB(format!(
+                                    "Failed to get message info from Jetstream: {}",
+                                    e
+                                ))
+                            })
+                            .unwrap();
 
                         let mut message: Message =
                             match jetstream_message.payload.clone().try_into() {
@@ -137,16 +145,6 @@ impl JetstreamReader {
                                     return;
                                 }
                             };
-
-                        let msg_info = jetstream_message
-                            .info()
-                            .map_err(|e| {
-                                Error::ISB(format!(
-                                    "Failed to get message info from Jetstream: {}",
-                                    e
-                                ))
-                            })
-                            .unwrap();
 
                         // Set the offset of the message to the sequence number of the message and the partition index.
                         message.offset = Some(Offset::Int(IntOffset::new(
@@ -282,6 +280,7 @@ mod tests {
             partitions: 0,
             streams: vec![],
             batch_size: 2,
+            read_timeout: Duration::from_millis(1000),
             wip_ack_interval: Duration::from_millis(5),
         };
         let js_reader = JetstreamReader::new(
@@ -290,8 +289,8 @@ mod tests {
             context.clone(),
             buf_reader_config,
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
         let reader_cancel_token = CancellationToken::new();
         let (mut js_reader_rx, js_reader_task) = js_reader.start(reader_cancel_token.clone()).await;
 
@@ -308,7 +307,7 @@ mod tests {
         for i in 0..10 {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
-                value: format!("message {}", i).as_bytes().to_vec(),
+                value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
@@ -327,7 +326,7 @@ mod tests {
         writer_cancel_token.cancel();
 
         let mut buffer = vec![];
-        for i in 0..10 {
+        for _ in 0..10 {
             let Some(val) = js_reader_rx.recv().await else {
                 break;
             };

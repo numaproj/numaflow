@@ -53,7 +53,7 @@ pub(crate) struct Message {
     /// keys of the message
     pub(crate) keys: Vec<String>,
     /// actual payload of the message
-    pub(crate) value: Vec<u8>,
+    pub(crate) value: Bytes,
     /// offset of the message, it is optional because offset is only
     /// available when we read the message, and we don't persist the
     /// offset in the ISB.
@@ -274,7 +274,7 @@ impl TryFrom<Message> for BytesMut {
                 headers: message.headers.clone(),
             }),
             body: Some(numaflow_pb::objects::isb::Body {
-                payload: message.value.clone(),
+                payload: message.value.to_vec(),
             }),
         };
 
@@ -306,7 +306,7 @@ impl TryFrom<Bytes> for Message {
 
         Ok(Message {
             keys: header.keys,
-            value: body.payload,
+            value: body.payload.into(),
             offset: None,
             event_time: utc_from_timestamp(message_info.event_time),
             id: id.into(),
@@ -323,7 +323,7 @@ impl From<Message> for SourceTransformRequest {
                 numaflow_pb::clients::sourcetransformer::source_transform_request::Request {
                     id: message.id.to_string(),
                     keys: message.keys,
-                    value: message.value,
+                    value: message.value.to_vec(),
                     event_time: prost_timestamp_from_utc(message.event_time),
                     watermark: None,
                     headers: message.headers,
@@ -349,7 +349,7 @@ impl TryFrom<read_response::Result> for Message {
 
         Ok(Message {
             keys: result.keys,
-            value: result.payload,
+            value: result.payload.into(),
             offset: Some(source_offset.clone()),
             event_time: utc_from_timestamp(result.event_time),
             id: MessageID {
@@ -368,7 +368,7 @@ impl From<Message> for SinkRequest {
         Self {
             request: Some(Request {
                 keys: message.keys,
-                value: message.value,
+                value: message.value.to_vec(),
                 event_time: prost_timestamp_from_utc(message.event_time),
                 watermark: None,
                 id: message.id.to_string(),
@@ -497,7 +497,7 @@ mod tests {
     fn test_message_to_vec_u8() {
         let message = Message {
             keys: vec!["key1".to_string()],
-            value: vec![1, 2, 3],
+            value: vec![1, 2, 3].into(),
             offset: Some(Offset::String(StringOffset {
                 offset: "123".to_string(),
                 partition_idx: 0,
@@ -526,7 +526,7 @@ mod tests {
                 headers: message.headers.clone(),
             }),
             body: Some(Body {
-                payload: message.value.clone(),
+                payload: message.value.clone().into(),
             }),
         };
 
@@ -577,7 +577,7 @@ mod tests {
     fn test_message_to_source_transform_request() {
         let message = Message {
             keys: vec!["key1".to_string()],
-            value: vec![1, 2, 3],
+            value: vec![1, 2, 3].into(),
             offset: Some(Offset::String(StringOffset {
                 offset: "123".to_string(),
                 partition_idx: 0,
@@ -626,7 +626,7 @@ mod tests {
     fn test_message_to_sink_request() {
         let message = Message {
             keys: vec!["key1".to_string()],
-            value: vec![1, 2, 3],
+            value: vec![1, 2, 3].into(),
             offset: Some(Offset::String(StringOffset {
                 offset: "123".to_string(),
                 partition_idx: 0,

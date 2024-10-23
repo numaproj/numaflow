@@ -40,9 +40,9 @@ pub(crate) async fn start_forwarder(
                 create_buffer_writers(config, js_context.clone(), cln_token.clone()).await?;
 
             let (source_type, source_grpc_client) =
-                create_source_type(&source, config, cln_token.clone()).await?;
+                create_source_type(source, config, cln_token.clone()).await?;
             let (transformer, transformer_grpc_client) =
-                create_transformer(&source, cln_token.clone()).await?;
+                create_transformer(source, cln_token.clone()).await?;
 
             start_metrics_server(
                 config.metrics_config.clone(),
@@ -65,8 +65,7 @@ pub(crate) async fn start_forwarder(
         }
         pipeline::VertexType::Sink(sink) => {
             // FIXME we will have to create a buffer reader for every partition
-            let buffer_reader =
-                create_buffer_readers(config, js_context.clone(), cln_token.clone()).await?;
+            let buffer_reader = create_buffer_readers(config, js_context.clone()).await?;
             let (sink_writer, sink_grpc_client) =
                 create_sink_writer(config, sink, cln_token.clone()).await?;
 
@@ -80,7 +79,12 @@ pub(crate) async fn start_forwarder(
             .await;
 
             let forwarder = forwarder::sink_forwarder::SinkForwarder::new(
-                buffer_reader,
+                buffer_reader
+                    .first()
+                    .ok_or_else(|| {
+                        error::Error::Config("No buffer reader found for sink".to_string())
+                    })?
+                    .to_owned(),
                 sink_writer,
                 cln_token.clone(),
             )
@@ -128,23 +132,29 @@ async fn create_buffer_writers(
 async fn create_buffer_readers(
     config: &PipelineConfig,
     js_context: Context,
-    cln_token: CancellationToken,
-) -> Result<JetstreamReader> {
-    // TODO: we should create array of readers, one for each partition
+) -> Result<Vec<JetstreamReader>> {
+    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
+    // to a common buffer, in the case of a join.
     let reader_config = config
         .from_vertex_config
-        .get(0)
+        .first()
         .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
         .reader_config
         .clone();
 
-    JetstreamReader::new(
-        reader_config.streams[0].0.clone(),
-        reader_config.streams[0].1,
-        js_context,
-        reader_config,
-    )
-    .await
+    let mut readers = Vec::new();
+    for stream in &reader_config.streams {
+        let reader = JetstreamReader::new(
+            stream.0.clone(),
+            stream.1,
+            js_context.clone(),
+            reader_config.clone(),
+        )
+        .await?;
+        readers.push(reader);
+    }
+
+    Ok(readers)
 }
 
 async fn create_sink_writer(

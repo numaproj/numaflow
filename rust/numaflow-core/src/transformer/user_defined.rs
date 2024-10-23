@@ -175,7 +175,7 @@ impl SourceTransformer {
                         offset: msg_info.offset.to_string(),
                     },
                     keys: result.keys,
-                    value: result.value,
+                    value: result.value.into(),
                     offset: None,
                     event_time: utc_from_timestamp(result.event_time),
                     headers: msg_info.headers.clone(),

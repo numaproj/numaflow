@@ -359,7 +359,7 @@ mod tests {
 
         let message = Message {
             keys: vec!["key_0".to_string()],
-            value: "message 0".as_bytes().to_vec(),
+            value: "message 0".as_bytes().to_vec().into(),
             offset: None,
             event_time: Utc::now(),
             id: MessageID {
@@ -420,7 +420,7 @@ mod tests {
 
         let message = Message {
             keys: vec!["key_0".to_string()],
-            value: "message 0".as_bytes().to_vec(),
+            value: "message 0".as_bytes().to_vec().into(),
             offset: None,
             event_time: Utc::now(),
             id: MessageID {
@@ -487,7 +487,7 @@ mod tests {
         for i in 0..10 {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
-                value: format!("message {}", i).as_bytes().to_vec(),
+                value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
@@ -507,7 +507,7 @@ mod tests {
         // so that it fails and sync write will be attempted and it will be blocked
         let message = Message {
             keys: vec!["key_11".to_string()],
-            value: vec![0; 1025],
+            value: vec![0; 1025].into(),
             offset: None,
             event_time: Utc::now(),
             id: MessageID {
@@ -605,7 +605,7 @@ mod tests {
         }
 
         // Fetch buffer usage
-        let (soft_usage, solid_usage) =
+        let (soft_usage, _) =
             JetstreamWriter::fetch_buffer_usage(context.clone(), stream_name, max_length)
                 .await
                 .unwrap();

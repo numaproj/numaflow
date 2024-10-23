@@ -168,7 +168,7 @@ mod tests {
         for i in 0..500 {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
-                value: format!("message {}", i).as_bytes().to_vec(),
+                value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
@@ -229,7 +229,7 @@ mod tests {
         for i in 0..100 {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
-                value: format!("message {}", i).as_bytes().to_vec(),
+                value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
@@ -246,7 +246,7 @@ mod tests {
         // because the max message size is set to 1024
         let message = Message {
             keys: vec!["key_101".to_string()],
-            value: vec![0; 1024],
+            value: vec![0; 1024].into(),
             offset: None,
             event_time: Utc::now(),
             id: MessageID {
@@ -316,7 +316,7 @@ mod tests {
             while Instant::now().duration_since(test_start_time) < duration {
                 let message = Message {
                     keys: vec![format!("key_{}", i)],
-                    value: format!("message {}", i).as_bytes().to_vec(),
+                    value: format!("message {}", i).as_bytes().to_vec().into(),
                     offset: None,
                     event_time: Utc::now(),
                     id: MessageID {

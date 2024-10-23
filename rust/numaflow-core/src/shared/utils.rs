@@ -174,7 +174,6 @@ mod tests {
 
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
-    use tempfile::tempdir;
     use tokio::sync::mpsc;
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;

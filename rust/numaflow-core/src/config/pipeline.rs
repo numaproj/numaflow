@@ -122,7 +122,7 @@ impl PipelineConfig {
                 transformer_config,
             })
         } else if let Some(sink) = vertex_obj.spec.sink {
-            let fb_sink_config = if let Some(_) = sink.fallback.as_ref() {
+            let fb_sink_config = if sink.fallback.as_ref().is_some() {
                 Some(SinkConfig {
                     sink_type: sink.clone().try_into()?,
                     retry_config: None,
