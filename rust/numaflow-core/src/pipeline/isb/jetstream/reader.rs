@@ -22,7 +22,6 @@ use crate::Result;
 // Storing the Sender end of channel in this struct would make it difficult to close the channel with `cancel` method.
 #[derive(Clone)]
 pub(crate) struct JetstreamReader {
-    name: String,
     partition_idx: u16,
     config: BufferReaderConfig,
     consumer: PullConsumer,
@@ -30,7 +29,7 @@ pub(crate) struct JetstreamReader {
 
 impl JetstreamReader {
     pub(crate) async fn new(
-        name: String,
+        stream_name: String,
         partition_idx: u16,
         js_ctx: Context,
         config: BufferReaderConfig,
@@ -38,7 +37,7 @@ impl JetstreamReader {
         let mut config = config;
 
         let mut consumer: PullConsumer = js_ctx
-            .get_consumer_from_stream(&name, &name)
+            .get_consumer_from_stream(&stream_name, &stream_name)
             .await
             .map_err(|e| Error::ISB(format!("Failed to get consumer for stream {}", e)))?;
 
@@ -55,26 +54,11 @@ impl JetstreamReader {
         ));
         config.wip_ack_interval = wip_ack_interval;
 
-        let this = Self {
-            name,
+        Ok(Self {
             partition_idx,
             config: config.clone(),
             consumer,
-        };
-
-        let (messages_tx, messages_rx) = mpsc::channel(2 * config.batch_size);
-        tokio::spawn({
-            let this = this.clone();
-            async move {
-                this.start(messages_tx).await;
-            }
-        });
-        Ok((this, messages_rx))
-    }
-
-    // Stop reading from Jetstream and close the sender end of the channel.
-    pub(crate) fn cancel(&self) {
-        self.ctx.cancel();
+        })
     }
 
     // When we encounter an error, we log the error and return from the function. This drops the sender end of the channel.
@@ -134,7 +118,6 @@ impl JetstreamReader {
                     while let Some(message) = messages.next().await {
                         let jetstream_message = match message {
                             Ok(message) => {
-                                // info!("Message read from js consumer - {:?}", message);
                                 message
                             }
                             Err(e) => {
@@ -296,29 +279,30 @@ mod tests {
             .unwrap();
 
         let buf_reader_config = BufferReaderConfig {
-            name: stream_name.to_string(),
             partitions: 0,
             streams: vec![],
             batch_size: 2,
             wip_ack_interval: Duration::from_millis(5),
         };
-        let (js_reader_handle, mut js_reader_rx) = JetstreamReader::new(
+        let js_reader = JetstreamReader::new(
             stream_name.to_string(),
             0,
             context.clone(),
             buf_reader_config,
         )
-        .await
-        .unwrap();
+            .await
+            .unwrap();
+        let reader_cancel_token = CancellationToken::new();
+        let (mut js_reader_rx, js_reader_task) = js_reader.start(reader_cancel_token.clone()).await;
 
-        let cancel_token = CancellationToken::new();
+        let writer_cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
             stream_name.to_string(),
             0,
             Default::default(),
             context.clone(),
             500,
-            cancel_token.clone(),
+            writer_cancel_token.clone(),
         );
 
         for i in 0..10 {
@@ -340,7 +324,7 @@ mod tests {
             success_rx.await.unwrap().unwrap();
         }
         // Cancel the token to exit the retry loop
-        cancel_token.cancel();
+        writer_cancel_token.cancel();
 
         let mut buffer = vec![];
         for i in 0..10 {
@@ -354,9 +338,9 @@ mod tests {
             10,
             "Expected 10 messages from the Jestream reader"
         );
-        js_reader_handle.cancel();
 
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        reader_cancel_token.cancel();
+        js_reader_task.await.unwrap();
         assert!(js_reader_rx.is_closed());
 
         context.delete_stream(stream_name).await.unwrap();
