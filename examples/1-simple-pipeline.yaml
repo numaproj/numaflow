@@ -3,6 +3,8 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
+  limits:
+    readBatchSize: 1000
   vertices:
     - name: in
       scale:
@@ -10,8 +12,8 @@ spec:
       # A self data generating source
       source:
         generator:
-          rpu: 50000
-          msgSize: 1000
+          rpu: 100
+          msgSize: 100
           duration: 1s
 
     - name: out

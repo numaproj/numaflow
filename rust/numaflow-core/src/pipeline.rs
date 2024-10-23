@@ -198,7 +198,7 @@ async fn create_sink_writer(
         }
     };
     Ok((
-        SinkWriter::new(config.batch_size, sink_handle).await?,
+        SinkWriter::new(config.batch_size, sink_handle, config.clone()).await?,
         sink_grpc_client,
     ))
 }
