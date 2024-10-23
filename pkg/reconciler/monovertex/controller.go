@@ -41,6 +41,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	mvtxscaling "github.com/numaproj/numaflow/pkg/reconciler/monovertex/scaling"
+	"github.com/numaproj/numaflow/pkg/reconciler/validator"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
@@ -118,6 +119,12 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 	monoVtx.Status.SetObservedGeneration(monoVtx.Generation)
 	if monoVtx.Scalable() {
 		mr.scaler.StartWatching(mVtxKey)
+	}
+
+	if err := validator.ValidateMonoVertex(monoVtx); err != nil {
+		mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "ValidateMonoVertexFailed", "Invalid mvtx: %s", err.Error())
+		monoVtx.Status.MarkDeployFailed("InvalidSpec", err.Error())
+		return ctrl.Result{}, err
 	}
 
 	if err := mr.orchestrateFixedResources(ctx, monoVtx); err != nil {
