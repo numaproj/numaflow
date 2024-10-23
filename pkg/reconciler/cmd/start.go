@@ -62,13 +62,19 @@ func Start(namespaced bool, managedNamespace string) {
 		logger.Fatalf("ENV %s not found", dfv1.EnvImage)
 	}
 
+	leaderElectionID := "numaflow-controller-lock"
+	nomalizedInstance := sharedutil.DNS1035(config.GetInstance())
+	if len(nomalizedInstance) > 0 {
+		leaderElectionID = leaderElectionID + "-" + nomalizedInstance
+	}
+
 	opts := ctrl.Options{
 		Metrics: metricsserver.Options{
 			BindAddress: ":9090",
 		},
 		HealthProbeBindAddress: ":8081",
 		LeaderElection:         true,
-		LeaderElectionID:       "numaflow-controller-lock",
+		LeaderElectionID:       leaderElectionID,
 	}
 
 	if sharedutil.LookupEnvStringOr(dfv1.EnvLeaderElectionDisabled, "false") == "true" {
