@@ -82,6 +82,7 @@ const logColor = (log: string, colorMode: string): string => {
 
 export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
   const [logs, setLogs] = useState<string[]>([]);
+  const [previousLogs, setPreviousLogs] = useState<string[]>([]);
   const [filteredLogs, setFilteredLogs] = useState<string[]>([]);
   const [logRequestKey, setLogRequestKey] = useState<string>("");
   const [reader, setReader] = useState<
@@ -92,6 +93,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
   const [paused, setPaused] = useState<boolean>(false);
   const [colorMode, setColorMode] = useState<string>("light");
   const [logsOrder, setLogsOrder] = useState<string>("desc");
+  const [showPreviousLogs, setShowPreviousLogs] = useState(false);
   const { host } = useContext<AppContextProps>(AppContext);
 
   useEffect(() => {
@@ -149,6 +151,45 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
       })
       .catch(console.error);
   }, [namespaceId, podName, containerName, reader, paused, host]);
+
+
+
+  useEffect(() => {
+    if (showPreviousLogs) {
+      setPreviousLogs([]);
+      const url = `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pods/${podName}/logs?container=${containerName}&follow=true&tailLines=${MAX_LOGS}&previous=true`;
+      fetch(url)
+        .then((response) => {
+          if (response && response.body) {
+            const reader = response.body
+              .pipeThrough(new TextDecoderStream())
+              .getReader();
+
+            reader.read().then(function process({ done, value }) {
+              if (done) {
+                return;
+              }
+              if (value) {
+                setPreviousLogs((prevLogs) => {
+                  const latestLogs = parsePodLogs(value);
+                  let updated = [...prevLogs, ...latestLogs];
+                  if (updated.length > MAX_LOGS) {
+                    updated = updated.slice(updated.length - MAX_LOGS);
+                  }
+                  return updated;
+                });
+              }
+              return reader.read().then(process);
+            });
+          }
+        })
+        .catch(console.error);
+    } else {
+      // Clear previous logs when the checkbox is unchecked
+      setPreviousLogs([]);
+    }
+  }, [showPreviousLogs, namespaceId, podName, containerName, host]);
+
 
   useEffect(() => {
     if (!search) {
@@ -291,6 +332,21 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
           </IconButton>
         </Tooltip>
       </Box>
+      <FormControlLabel
+        control={
+          <Checkbox
+            data-testid="previous-logs"
+            checked={showPreviousLogs}
+            onChange={(event) => setShowPreviousLogs(event.target.checked)}
+            sx={{ "& .MuiSvgIcon-root": { fontSize: 24 } }}
+          />
+        }
+        label={
+          <Typography sx={{ fontSize: "1.6rem" }}>
+            Show previous terminated container logs
+          </Typography>
+        }
+      />
       <Box
         sx={{
           backgroundColor: `${colorMode === "light" ? "whitesmoke" : "black"}`,
@@ -304,6 +360,15 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
           height: "40rem",
         }}
       >
+        {showPreviousLogs ? (
+          <div>
+            {/* <h2>Previous Terminated Container Logs:</h2> */}
+            {previousLogs.map((log, index) => (
+              <p key={index}>{log}</p>
+            ))}
+          </div>
+        ) : ( // Else, render the current container logs
+          <>
         {logsOrder === "asc" &&
           filteredLogs.map((l: string, idx) => (
             <Box
@@ -355,6 +420,8 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
                 />
               </Box>
             ))}
+          </>
+        )}
       </Box>
     </Box>
   );

@@ -933,6 +933,7 @@ func (h *handler) PodLogs(c *gin.Context) {
 		Container: c.Query("container"),
 		Follow:    c.Query("follow") == "true",
 		TailLines: tailLines,
+		Previous:  c.Query("previous") == "true",
 	}
 
 	stream, err := h.kubeClient.CoreV1().Pods(ns).GetLogs(pod, logOptions).Stream(c)
