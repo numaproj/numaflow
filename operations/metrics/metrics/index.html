@@ -2787,7 +2787,7 @@
 </tbody>
 </table>
 <h3 id="errors">Errors<a class="headerlink" href="#errors" title="Permanent link">&para;</a></h3>
-<p>These metrics can be used to determine if there are any errors in the pipeline</p>
+<p>These metrics can be used to determine if there are any errors in the pipeline.</p>
 <table>
 <thead>
 <tr>
@@ -2803,6 +2803,24 @@
 <td>Gauge</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code></td>
 <td>Pipeline data processing health status. 1: Healthy, 0: Unknown, -1: Warning, -2: Critical</td>
+</tr>
+<tr>
+<td><code>controller_isbsvc_health</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>isbsvc=&lt;isbsvc-name&gt;</code></td>
+<td>A metric to indicate whether the ISB Service is healthy. '1' means healthy, '0' means unhealthy</td>
+</tr>
+<tr>
+<td><code>controller_pipeline_health</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>pipeline=&lt;pipeline-name&gt;</code></td>
+<td>A metric to indicate whether the Pipeline is healthy. '1' means healthy, '0' means unhealthy</td>
+</tr>
+<tr>
+<td><code>controller_monovtx_health</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>mvtx_name=&lt;mvtx-name&gt;</code></td>
+<td>A metric to indicate whether the MonoVertex is healthy. '1' means healthy, '0' means unhealthy</td>
 </tr>
 <tr>
 <td><code>forwarder_platform_error_total</code></td>
