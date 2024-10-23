@@ -229,7 +229,7 @@ func TestNeedsFinalizer(t *testing.T) {
 
 	t.Run("needs finalizer jetstream", func(t *testing.T) {
 		testStorageClass := "test"
-		testIsbs := testJetStreamIsbs.DeepCopy()
+		testIsbs := jetStreamIsbs.DeepCopy()
 		testIsbs.Spec.JetStream.Persistence = &dfv1.PersistenceStrategy{
 			StorageClassName: &testStorageClass,
 		}

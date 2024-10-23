@@ -46,6 +46,7 @@ import (
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reconciler"
+	"github.com/numaproj/numaflow/pkg/reconciler/validator"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
@@ -157,7 +158,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	if !controllerutil.ContainsFinalizer(pl, finalizerName) {
 		controllerutil.AddFinalizer(pl, finalizerName)
 	}
-	if err := ValidatePipeline(pl); err != nil {
+	if err := validator.ValidatePipeline(pl); err != nil {
 		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ValidatePipelineFailed", "Invalid pipeline: %s", err.Error())
 		pl.Status.MarkNotConfigured("InvalidSpec", err.Error())
 		return ctrl.Result{}, err

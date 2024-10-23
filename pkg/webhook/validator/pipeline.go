@@ -26,7 +26,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
-	pipelinecontroller "github.com/numaproj/numaflow/pkg/reconciler/pipeline"
+	"github.com/numaproj/numaflow/pkg/reconciler/validator"
 )
 
 type pipelineValidator struct {
@@ -45,7 +45,7 @@ func NewPipelineValidator(isbClient v1alpha1.InterStepBufferServiceInterface, ol
 }
 
 func (v *pipelineValidator) ValidateCreate(ctx context.Context) *admissionv1.AdmissionResponse {
-	if err := pipelinecontroller.ValidatePipeline(v.newPipeline); err != nil {
+	if err := validator.ValidatePipeline(v.newPipeline); err != nil {
 		return DeniedResponse(err.Error())
 	}
 	// check that the ISB service exists
@@ -66,7 +66,7 @@ func (v *pipelineValidator) ValidateUpdate(_ context.Context) *admissionv1.Admis
 		return DeniedResponse("old pipeline spec is nil")
 	}
 	// check that the new pipeline spec is valid
-	if err := pipelinecontroller.ValidatePipeline(v.newPipeline); err != nil {
+	if err := validator.ValidatePipeline(v.newPipeline); err != nil {
 		return DeniedResponse(fmt.Sprintf("new pipeline spec is invalid: %s", err.Error()))
 	}
 	// check that the update is valid
