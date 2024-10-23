@@ -1,3 +1,5 @@
+use crate::config::pipeline::PipelineConfig;
+use crate::metrics::{forward_pipeline_metrics, pipeline_forward_read_metric_labels};
 use crate::Result;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use tokio::sync::mpsc::Receiver;
@@ -123,13 +125,19 @@ impl SinkHandle {
 pub(super) struct SinkWriter {
     batch_size: usize,
     sink_handle: SinkHandle,
+    config: PipelineConfig,
 }
 
 impl SinkWriter {
-    pub(super) async fn new(batch_size: usize, sink_handle: SinkHandle) -> Result<Self> {
+    pub(super) async fn new(
+        batch_size: usize,
+        sink_handle: SinkHandle,
+        config: PipelineConfig,
+    ) -> Result<Self> {
         Ok(Self {
             batch_size,
             sink_handle,
+            config,
         })
     }
 
@@ -139,12 +147,43 @@ impl SinkWriter {
     ) -> Result<JoinHandle<()>> {
         let handle: JoinHandle<()> = tokio::spawn({
             let this = self.clone();
+
+            // let partition_name = format!(
+            //     "default-{}-{}-{}",
+            //     self.config.pipeline_name, self.config.vertex_name, self.config.replica
+            // );
+
+            // FIXME:
+            let partition: &str = self
+                .config
+                .from_vertex_config
+                .first()
+                .unwrap()
+                .reader_config
+                .streams
+                .first()
+                .unwrap()
+                .0
+                .as_ref();
+
+            let labels = pipeline_forward_read_metric_labels(
+                self.config.pipeline_name.as_ref(),
+                partition,
+                self.config.vertex_name.as_ref(),
+                "Sink",
+                self.config.replica,
+            );
             async move {
                 loop {
                     let mut batch = Vec::with_capacity(this.batch_size);
                     for _ in 0..this.batch_size {
                         if let Some(read_message) = messages_rx.recv().await {
                             batch.push(read_message);
+                            forward_pipeline_metrics()
+                                .forwarder
+                                .data_read
+                                .get_or_create(labels)
+                                .inc();
                         }
                     }
 
