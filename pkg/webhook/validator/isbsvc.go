@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	isbsvccontroller "github.com/numaproj/numaflow/pkg/reconciler/isbsvc"
+	"github.com/numaproj/numaflow/pkg/reconciler/validator"
 )
 
 type isbsvcValidator struct {
@@ -36,7 +36,7 @@ func NewISBServiceValidator(old, new *dfv1.InterStepBufferService) Validator {
 }
 
 func (v *isbsvcValidator) ValidateCreate(_ context.Context) *admissionv1.AdmissionResponse {
-	if err := isbsvccontroller.ValidateInterStepBufferService(v.newISBService); err != nil {
+	if err := validator.ValidateInterStepBufferService(v.newISBService); err != nil {
 		return DeniedResponse(err.Error())
 	}
 	return AllowedResponse()
@@ -44,7 +44,7 @@ func (v *isbsvcValidator) ValidateCreate(_ context.Context) *admissionv1.Admissi
 
 func (v *isbsvcValidator) ValidateUpdate(_ context.Context) *admissionv1.AdmissionResponse {
 	// check the new ISB Service is valid
-	if err := isbsvccontroller.ValidateInterStepBufferService(v.newISBService); err != nil {
+	if err := validator.ValidateInterStepBufferService(v.newISBService); err != nil {
 		return DeniedResponse(err.Error())
 	}
 	// chck if the instance annotation is changed

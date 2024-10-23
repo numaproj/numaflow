@@ -63,9 +63,9 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	leaderElectionID := "numaflow-controller-lock"
-	nomalizedInstance := sharedutil.DNS1035(config.GetInstance())
-	if len(nomalizedInstance) > 0 {
-		leaderElectionID = leaderElectionID + "-" + nomalizedInstance
+	normalizedInstance := sharedutil.DNS1035(config.GetInstance())
+	if len(normalizedInstance) > 0 {
+		leaderElectionID = leaderElectionID + "-" + normalizedInstance
 	}
 
 	opts := ctrl.Options{
