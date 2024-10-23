@@ -36,8 +36,14 @@ const MVTX_NAME_LABEL: &str = "mvtx_name";
 const REPLICA_LABEL: &str = "mvtx_replica";
 const PENDING_PERIOD_LABEL: &str = "period";
 
+const PIPELINE_NAME_LABEL: &str = "pipeline";
+const PIPELINE_REPLICA_LABEL: &str = "replica";
+const PIPELINE_PARTITION_NAME_LABEL: &str = "partition_name";
+const PIPELINE_VERTEX_LABEL: &str = "vertex";
+const PIPELINE_VERTEX_TYPE_LABEL: &str = "vertex_type";
+
 // The top-level metric registry is created with the GLOBAL_PREFIX
-const GLOBAL_PREFIX: &str = "monovtx";
+const MVTX_REGISTRY_GLOBAL_PREFIX: &str = "monovtx";
 // Prefixes for the sub-registries
 const SINK_REGISTRY_PREFIX: &str = "sink";
 const FALLBACK_SINK_REGISTRY_PREFIX: &str = "fallback_sink";
@@ -66,6 +72,8 @@ const READ_TIME: &str = "read_time";
 const TRANSFORM_TIME: &str = "time";
 const ACK_TIME: &str = "ack_time";
 const SINK_TIME: &str = "time";
+
+const PIPELINE_FORWARDER_READ_TOTAL: &str = "data_read";
 
 /// Only user defined functions will have containers since rest
 /// are builtins. We save the gRPC clients to retrieve metrics and also
@@ -112,7 +120,7 @@ impl GlobalRegistry {
     fn new() -> Self {
         GlobalRegistry {
             // Create a new registry for the metrics
-            registry: parking_lot::Mutex::new(Registry::with_prefix(GLOBAL_PREFIX)),
+            registry: parking_lot::Mutex::new(Registry::default()),
         }
     }
 }
@@ -154,7 +162,9 @@ pub(crate) struct MonoVtxMetrics {
 
 /// PipelineMetrics is a struct which is used for storing the metrics related to the Pipeline
 // TODO: Add the metrics for the pipeline
-pub(crate) struct PipelineMetrics {}
+pub(crate) struct PipelineMetrics {
+    pub(crate) forwarder: PipelineForwarderMetrics,
+}
 
 /// Family of metrics for the sink
 pub(crate) struct SinkMetrics {
@@ -171,6 +181,10 @@ pub(crate) struct FallbackSinkMetrics {
 pub(crate) struct TransformerMetrics {
     /// Transformer latency
     pub(crate) time: Family<Vec<(String, String)>, Histogram>,
+}
+
+pub(crate) struct PipelineForwarderMetrics {
+    pub(crate) data_read: Family<Vec<(String, String)>, Counter>,
 }
 
 /// Exponential bucket distribution with range.
@@ -235,6 +249,7 @@ impl MonoVtxMetrics {
         };
 
         let mut registry = global_registry().registry.lock();
+        let registry = registry.sub_registry_with_prefix(MVTX_REGISTRY_GLOBAL_PREFIX);
         // Register all the metrics to the global registry
         registry.register(
             READ_TOTAL,
@@ -314,6 +329,26 @@ impl MonoVtxMetrics {
     }
 }
 
+impl PipelineMetrics {
+    fn new() -> Self {
+        let metrics = Self {
+            forwarder: PipelineForwarderMetrics {
+                data_read: Default::default(),
+            },
+        };
+        let mut registry = global_registry().registry.lock();
+
+        // Pipeline forwarder sub-registry
+        let forwarder_registry = registry.sub_registry_with_prefix("forwarder");
+        forwarder_registry.register(
+            PIPELINE_FORWARDER_READ_TOTAL,
+            "Total number of Data Messages Read",
+            metrics.forwarder.data_read.clone(),
+        );
+        metrics
+    }
+}
+
 /// MONOVTX_METRICS is the MonoVtxMetrics object which stores the metrics
 static MONOVTX_METRICS: OnceLock<MonoVtxMetrics> = OnceLock::new();
 
@@ -329,7 +364,7 @@ static PIPELINE_METRICS: OnceLock<PipelineMetrics> = OnceLock::new();
 // forward_pipeline_metrics is a helper function used to fetch the
 // PipelineMetrics object
 pub(crate) fn forward_pipeline_metrics() -> &'static PipelineMetrics {
-    PIPELINE_METRICS.get_or_init(|| PipelineMetrics {})
+    PIPELINE_METRICS.get_or_init(PipelineMetrics::new)
 }
 
 /// MONOVTX_METRICS_LABELS are used to store the common labels used in the metrics
@@ -350,6 +385,32 @@ pub(crate) fn mvtx_forward_metric_labels(
     })
 }
 
+static PIPELINE_READ_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
+
+pub(crate) fn pipeline_forward_read_metric_labels(
+    pipeline_name: &str,
+    partition_name: &str,
+    vertex_name: &str,
+    vertex_type: &str,
+    replica: u16,
+) -> &'static Vec<(String, String)> {
+    PIPELINE_READ_METRICS_LABELS.get_or_init(|| {
+        vec![
+            (PIPELINE_NAME_LABEL.to_string(), pipeline_name.to_string()),
+            (PIPELINE_REPLICA_LABEL.to_string(), replica.to_string()),
+            (
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                partition_name.to_string(),
+            ),
+            (
+                PIPELINE_VERTEX_TYPE_LABEL.to_string(),
+                vertex_type.to_string(),
+            ),
+            (PIPELINE_VERTEX_LABEL.to_string(), vertex_name.to_string()),
+        ]
+    })
+}
+
 // metrics_handler is used to generate and return a snapshot of the
 // current state of the metrics in the global registry
 pub async fn metrics_handler() -> impl IntoResponse {
@@ -359,6 +420,10 @@ pub async fn metrics_handler() -> impl IntoResponse {
     debug!("Exposing metrics: {:?}", buffer);
     Response::builder()
         .status(StatusCode::OK)
+        .header(
+            axum::http::header::CONTENT_TYPE,
+            "application/openmetrics-text; version=1.0.0; charset=utf-8",
+        )
         .body(Body::from(buffer))
         .unwrap()
 }
