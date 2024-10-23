@@ -17,7 +17,7 @@ use crate::Result;
 /// exception).
 pub(super) mod writer;
 
-pub(super) mod reader;
+pub(crate) mod reader;
 
 /// ISB Writer accepts an Actor pattern based messages.
 #[derive(Debug)]

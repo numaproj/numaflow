@@ -167,7 +167,6 @@ impl PipelineConfig {
             from_vertex_config.push(FromVertexConfig {
                 name: edge.from,
                 reader_config: BufferReaderConfig {
-                    name: buffer_name,
                     partitions: partition_count,
                     streams,
                     ..Default::default()
@@ -188,7 +187,6 @@ impl PipelineConfig {
             to_vertex_config.push(ToVertexConfig {
                 name: edge.to,
                 writer_config: BufferWriterConfig {
-                    name: buffer_name,
                     streams,
                     partitions: partition_count,
                     ..Default::default()

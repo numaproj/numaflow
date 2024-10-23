@@ -10,21 +10,15 @@ spec:
       # A self data generating source
       source:
         generator:
-          rpu: 5
+          rpu: 50000
+          msgSize: 1000
           duration: 1s
-    - name: cat
-      scale:
-        min: 1
-      udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message
+
     - name: out
       scale:
         min: 1
       sink:
-        log: {}
+        blackhole: {}
   edges:
     - from: in
-      to: cat
-    - from: cat
       to: out

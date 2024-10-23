@@ -1,9 +1,13 @@
+use crate::Result;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
+use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 use tonic::transport::Channel;
+use tracing::error;
 use user_defined::UserDefinedSink;
 
-use crate::message::{Message, ResponseFromSink};
+use crate::message::{Message, ReadAck, ReadMessage, ResponseFromSink, ResponseStatusFromSink};
 
 mod blackhole;
 mod log;
@@ -58,6 +62,7 @@ where
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct SinkHandle {
     sender: mpsc::Sender<ActorMessage>,
 }
@@ -69,7 +74,7 @@ pub(crate) enum SinkClientType {
 }
 
 impl SinkHandle {
-    pub(crate) async fn new(sink_client: SinkClientType, batch_size: usize) -> crate::Result<Self> {
+    pub(crate) async fn new(sink_client: SinkClientType, batch_size: usize) -> Result<Self> {
         let (sender, receiver) = mpsc::channel(batch_size);
         match sink_client {
             SinkClientType::Log => {
@@ -103,10 +108,7 @@ impl SinkHandle {
         Ok(Self { sender })
     }
 
-    pub(crate) async fn sink(
-        &self,
-        messages: Vec<Message>,
-    ) -> crate::Result<Vec<ResponseFromSink>> {
+    pub(crate) async fn sink(&self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
         let (tx, rx) = oneshot::channel();
         let msg = ActorMessage::Sink {
             messages,
@@ -114,5 +116,63 @@ impl SinkHandle {
         };
         let _ = self.sender.send(msg).await;
         rx.await.unwrap()
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct SinkWriter {
+    batch_size: usize,
+    sink_handle: SinkHandle,
+}
+
+impl SinkWriter {
+    pub(super) async fn new(batch_size: usize, sink_handle: SinkHandle) -> Result<Self> {
+        Ok(Self {
+            batch_size,
+            sink_handle,
+        })
+    }
+
+    pub(super) async fn start(
+        &self,
+        mut messages_rx: Receiver<ReadMessage>,
+    ) -> Result<JoinHandle<()>> {
+        let handle: JoinHandle<()> = tokio::spawn({
+            let this = self.clone();
+            async move {
+                loop {
+                    let mut batch = Vec::with_capacity(this.batch_size);
+                    for _ in 0..this.batch_size {
+                        if let Some(read_message) = messages_rx.recv().await {
+                            batch.push(read_message);
+                        }
+                    }
+
+                    if batch.is_empty() {
+                        continue;
+                    }
+
+                    let messages: Vec<Message> =
+                        batch.iter().map(|rm| rm.message.clone()).collect();
+                    let responses = match this.sink_handle.sink(messages).await {
+                        Ok(responses) => responses,
+                        Err(e) => {
+                            error!("Failed to send messages to sink: {:?}", e);
+                            continue;
+                        }
+                    };
+
+                    for (read_message, response) in batch.into_iter().zip(responses) {
+                        let ack = if let ResponseStatusFromSink::Success = response.status {
+                            ReadAck::Ack
+                        } else {
+                            ReadAck::Nak
+                        };
+                        let _ = read_message.ack.send(ack);
+                    }
+                }
+            }
+        });
+        Ok(handle)
     }
 }
