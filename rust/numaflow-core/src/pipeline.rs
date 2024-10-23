@@ -59,6 +59,7 @@ pub(crate) async fn start_forwarder(
                 transformer,
                 buffer_writers,
                 cln_token.clone(),
+                config.clone(),
             )
             .build();
             forwarder.start().await?;
