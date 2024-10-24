@@ -179,6 +179,7 @@ func (r *Rater) getPodReadCounts(podName string) *PodReadCount {
 		// from the results safely.
 		// We use Untyped here as the counter metric family shows up as untyped from the rust client
 		// TODO(MonoVertex): Check further on this to understand why not type is counter
+		// https://github.com/prometheus/client_rust/issues/194
 		podReadCount := &PodReadCount{podName, metricsList[0].Untyped.GetValue()}
 		return podReadCount
 	} else {

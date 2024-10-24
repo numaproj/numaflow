@@ -1,6 +1,8 @@
+use crate::config::pipeline::PipelineConfig;
+use crate::message::{Message, ReadAck, ReadMessage, ResponseFromSink, ResponseStatusFromSink};
+use crate::metrics::{forward_pipeline_metrics, pipeline_forward_read_metric_labels};
 use crate::Result;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
-use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -8,8 +10,6 @@ use tokio::{pin, time};
 use tonic::transport::Channel;
 use tracing::error;
 use user_defined::UserDefinedSink;
-
-use crate::message::{Message, ReadAck, ReadMessage, ResponseFromSink, ResponseStatusFromSink};
 
 mod blackhole;
 mod log;
@@ -123,20 +123,14 @@ impl SinkHandle {
 
 #[derive(Clone)]
 pub(super) struct SinkWriter {
-    batch_size: usize,
-    timeout: Duration,
+    config: PipelineConfig,
     sink_handle: SinkHandle,
 }
 
 impl SinkWriter {
-    pub(super) async fn new(
-        batch_size: usize,
-        timeout: Duration,
-        sink_handle: SinkHandle,
-    ) -> Result<Self> {
+    pub(super) async fn new(config: PipelineConfig, sink_handle: SinkHandle) -> Result<Self> {
         Ok(Self {
-            timeout,
-            batch_size,
+            config,
             sink_handle,
         })
     }
@@ -145,21 +139,45 @@ impl SinkWriter {
         &self,
         mut messages_rx: Receiver<ReadMessage>,
     ) -> Result<JoinHandle<()>> {
+        // FIXME:
+        let partition: &str = self
+            .config
+            .from_vertex_config
+            .first()
+            .unwrap()
+            .reader_config
+            .streams
+            .first()
+            .unwrap()
+            .0
+            .as_ref();
+
+        let labels = pipeline_forward_read_metric_labels(
+            self.config.pipeline_name.as_ref(),
+            partition,
+            self.config.vertex_name.as_ref(),
+            "Sink",
+            self.config.replica,
+        );
+
         let handle: JoinHandle<()> = tokio::spawn({
             let this = self.clone();
             async move {
-                let timeout_duration = Duration::from_secs(5); // Set your desired timeout duration here
-
                 loop {
-                    let mut batch = Vec::with_capacity(this.batch_size);
-                    let timeout = time::sleep(timeout_duration);
+                    let mut batch = Vec::with_capacity(this.config.batch_size);
+                    let timeout = time::sleep(this.config.read_timeout);
                     pin!(timeout);
 
                     loop {
                         tokio::select! {
                             Some(read_message) = messages_rx.recv() => {
                                 batch.push(read_message);
-                                if batch.len() >= this.batch_size {
+                                forward_pipeline_metrics()
+                                .forwarder
+                                .data_read
+                                .get_or_create(labels)
+                                .inc();
+                                if batch.len() >= this.config.batch_size {
                                     break;
                                 }
                             }
