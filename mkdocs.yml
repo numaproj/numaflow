@@ -127,6 +127,7 @@ nav:
           - operations/metrics/metrics.md
           - operations/grafana.md
       - Security: operations/security.md
+      - Best Practices: operations/best-practices.md
   - Contributor Guide:
       - development/development.md
       - Specifications:
