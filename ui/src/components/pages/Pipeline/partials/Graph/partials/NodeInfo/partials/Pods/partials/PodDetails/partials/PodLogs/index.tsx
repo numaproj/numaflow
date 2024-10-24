@@ -361,12 +361,57 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
         }}
       >
         {showPreviousLogs ? (
-          <div>
-            {/* <h2>Previous Terminated Container Logs:</h2> */}
-            {previousLogs.map((log, index) => (
-              <p key={index}>{log}</p>
+          <>
+          {logsOrder === "asc" && previousLogs.map((l: string, idx) => (
+            <Box
+              key={`${idx}-${podName}-logs`}
+              component="span"
+              sx={{
+                whiteSpace: "nowrap",
+                paddingTop: "0.8rem",
+              }}
+            >
+              <Highlighter
+                searchWords={[search]}
+                autoEscape={true}
+                textToHighlight={l}
+                style={{ color: logColor(l, colorMode) }}
+                highlightStyle={{
+                  color: `${colorMode === "light" ? "white" : "black"}`,
+                  backgroundColor: `${
+                    colorMode === "light" ? "black" : "white"
+                  }`,
+                }}
+              />
+            </Box>
+          ))}
+        {logsOrder === "desc" && previousLogs
+            .slice()
+            .reverse()
+            .map((l: string, idx) => (
+              <Box
+                key={`${idx}-${podName}-logs`}
+                component="span"
+                sx={{
+                  whiteSpace: "nowrap",
+                  paddingTop: "0.8rem",
+                }}
+              >
+                <Highlighter
+                  searchWords={[search]}
+                  autoEscape={true}
+                  textToHighlight={l}
+                  style={{ color: logColor(l, colorMode) }}
+                  highlightStyle={{
+                    color: `${colorMode === "light" ? "white" : "black"}`,
+                    backgroundColor: `${
+                      colorMode === "light" ? "black" : "white"
+                    }`,
+                  }}
+                />
+              </Box>
             ))}
-          </div>
+          </>
         ) : ( // Else, render the current container logs
           <>
         {logsOrder === "asc" &&
