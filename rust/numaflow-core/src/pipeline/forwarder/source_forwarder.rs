@@ -1,6 +1,8 @@
+use crate::config::pipeline::PipelineConfig;
 use crate::error;
 use crate::error::Error;
 use crate::message::{Message, Offset};
+use crate::metrics::{forward_pipeline_metrics, pipeline_forward_read_metric_labels};
 use crate::pipeline::isb::jetstream::WriterHandle;
 use crate::source::SourceHandle;
 use crate::transformer::user_defined::SourceTransformHandle;
@@ -16,6 +18,7 @@ pub(crate) struct Forwarder {
     transformer: Option<SourceTransformHandle>,
     buffer_writers: HashMap<String, Vec<WriterHandle>>,
     cln_token: CancellationToken,
+    config: PipelineConfig,
 }
 
 pub(crate) struct ForwarderBuilder {
@@ -23,6 +26,7 @@ pub(crate) struct ForwarderBuilder {
     transformer: Option<SourceTransformHandle>,
     buffer_writers: HashMap<String, Vec<WriterHandle>>,
     cln_token: CancellationToken,
+    config: PipelineConfig,
 }
 
 impl ForwarderBuilder {
@@ -31,12 +35,14 @@ impl ForwarderBuilder {
         transformer: Option<SourceTransformHandle>,
         buffer_writers: HashMap<String, Vec<WriterHandle>>,
         cln_token: CancellationToken,
+        config: PipelineConfig,
     ) -> Self {
         Self {
             source_reader,
             transformer,
             buffer_writers,
             cln_token,
+            config,
         }
     }
 
@@ -46,6 +52,7 @@ impl ForwarderBuilder {
             transformer: self.transformer,
             buffer_writers: self.buffer_writers,
             cln_token: self.cln_token,
+            config: self.config,
         }
     }
 }
@@ -86,6 +93,19 @@ impl Forwarder {
             messages.len(),
             start_time.elapsed().as_millis()
         );
+
+        let labels = pipeline_forward_read_metric_labels(
+            self.config.pipeline_name.as_ref(),
+            self.config.vertex_name.as_ref(),
+            self.config.vertex_name.as_ref(),
+            "Source",
+            self.config.replica,
+        );
+        forward_pipeline_metrics()
+            .forwarder
+            .data_read
+            .get_or_create(labels)
+            .inc_by(messages.len() as u64);
 
         if messages.is_empty() {
             return Ok(0);

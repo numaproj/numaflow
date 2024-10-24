@@ -59,6 +59,7 @@ pub(crate) async fn start_forwarder(
                 transformer,
                 buffer_writers,
                 cln_token.clone(),
+                config.clone(),
             )
             .build();
             forwarder.start().await?;
@@ -197,7 +198,7 @@ async fn create_sink_writer(
         }
     };
     Ok((
-        SinkWriter::new(config.batch_size, sink_handle).await?,
+        SinkWriter::new(config.batch_size, sink_handle, config.clone()).await?,
         sink_grpc_client,
     ))
 }
