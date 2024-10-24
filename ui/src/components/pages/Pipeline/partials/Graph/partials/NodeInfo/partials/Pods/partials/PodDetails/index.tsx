@@ -19,12 +19,14 @@ export function PodDetail({ namespaceId, containerName, pod }: PodDetailProps) {
         marginTop: "1.6rem",
       }}
     >
-      <Box sx={headerSx}>Container Logs</Box>
-      <PodLogs
-        namespaceId={namespaceId}
-        podName={pod.name}
-        containerName={containerName}
-      />
+      <Box sx={{ p: "1.6rem" }}>
+        <Box sx={headerSx}>Container Logs</Box>
+        <PodLogs
+          namespaceId={namespaceId}
+          podName={pod.name}
+          containerName={containerName}
+        />
+      </Box>
     </Box>
   );
 }

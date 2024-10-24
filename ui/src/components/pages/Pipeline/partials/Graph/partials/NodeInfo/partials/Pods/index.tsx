@@ -1,6 +1,13 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
-import { useState, useEffect, useMemo, useCallback, ChangeEvent, useContext } from "react";
+import {
+  ChangeEvent,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -14,14 +21,12 @@ import { ContainerInfo } from "./partials/PodDetails/partials/ContainerInfo";
 import { PodInfoNew } from "./partials/PodDetails/partials/PodInfoNew";
 import { usePodsViewFetch } from "../../../../../../../../../utils/fetcherHooks/podsViewFetch";
 import { notifyError } from "../../../../../../../../../utils/error";
-import { AppContextProps } from "../../../../../../../../../App";
-import { AppContext } from "../../../../../../../../../App";
-import { getBaseHref, quantityToScalar } from "../../../../../../../../../utils/index";
+import { AppContext, AppContextProps } from "../../../../../../../../../App";
+import { getBaseHref } from "../../../../../../../../../utils/index";
 import {
   ContainerInfoProps,
   Hexagon,
   Pod,
-  PodInfoProps,
   PodSpecificInfoProps,
   PodsProps,
 } from "../../../../../../../../../types/declarations/pods";
@@ -53,41 +58,44 @@ export function Pods(props: PodsProps) {
       setSelectedContainer
     );
 
-  // api call to fetch pod info/container info
-
-  const [containerInfo, setContainerInfo] = useState<ContainerInfoProps | undefined>(undefined);
-  const [podSpecificInfo, setPodSpecificInfo] = useState<PodSpecificInfoProps | undefined>(undefined);
+  const [containerInfo, setContainerInfo] = useState<
+    ContainerInfoProps | undefined
+  >(undefined);
+  const [podSpecificInfo, setPodSpecificInfo] = useState<
+    PodSpecificInfoProps | undefined
+  >(undefined);
   const { host } = useContext<AppContextProps>(AppContext);
 
-  function getContainerInfo(podsData, podName, containerName) {
-    const selectedPod = podsData.find(pod => pod.Name === podName);
+  const getContainerInfo = useCallback((podsData, podName, containerName) => {
+    const selectedPod = podsData?.find((pod) => pod?.Name === podName);
     if (selectedPod) {
-      const containerInfo = selectedPod.ContainerDetailsMap[containerName];
-      return containerInfo;
+      return selectedPod?.ContainerDetailsMap[containerName];
     } else {
-      return null; 
+      return null;
     }
-  }
+  }, []);
 
-  function getPodSpecificInfo(podsData, podName) {
-    const podSpecificInfo: PodSpecificInfoProps={}
-    const selectedPod = podsData.find(pod => pod.Name === podName);
+  const getPodSpecificInfo = useCallback((podsData, podName) => {
+    const podSpecificInfo: PodSpecificInfoProps = {};
+    const selectedPod = podsData?.find((pod) => pod?.Name === podName);
     if (selectedPod) {
       podSpecificInfo.Condition = selectedPod?.Condition;
       podSpecificInfo.Name = selectedPod?.Name;
       podSpecificInfo.Reason = selectedPod?.Reason;
-      podSpecificInfo.Status = selectedPod?.Status;  
+      podSpecificInfo.Status = selectedPod?.Status;
       podSpecificInfo.Message = selectedPod?.Message;
-      let restartCount = 0; 
-      for (const container in selectedPod.ContainerDetailsMap) {
-        restartCount += selectedPod.ContainerDetailsMap[container].RestartCount;
+      let restartCount = 0;
+      for (const container in selectedPod?.ContainerDetailsMap) {
+        restartCount +=
+          selectedPod?.ContainerDetailsMap?.[container].RestartCount;
       }
       podSpecificInfo.RestartCount = restartCount;
-      podSpecificInfo.ContainerCount = Object.keys(selectedPod.ContainerDetailsMap).length;
-    } 
-    return podSpecificInfo
-  }
-
+      podSpecificInfo.ContainerCount = Object.keys(
+        selectedPod?.ContainerDetailsMap
+      ).length;
+    }
+    return podSpecificInfo;
+  }, []);
 
   useEffect(() => {
     const fetchPodInfo = async () => {
@@ -98,13 +106,19 @@ export function Pods(props: PodsProps) {
         if (!response.ok) {
           throw new Error("Failed to fetch pod details");
         }
-        const data = await response.json(); 
-        const containerInfo = getContainerInfo(data?.data, selectedPod?.name, selectedContainer);
-        const podSpecificInfo = getPodSpecificInfo(data?.data, selectedPod?.name)
+        const data = await response.json();
+        const containerInfo = getContainerInfo(
+          data?.data,
+          selectedPod?.name,
+          selectedContainer
+        );
+        const podSpecificInfo = getPodSpecificInfo(
+          data?.data,
+          selectedPod?.name
+        );
         setContainerInfo(containerInfo);
         setPodSpecificInfo(podSpecificInfo);
       } catch (error) {
-        console.error("Error fetching pod info:", error);
         setContainerInfo({ error: "Failed to fetch pod details" });
       }
     };
@@ -150,10 +164,7 @@ export function Pods(props: PodsProps) {
   const podDetail = useMemo(() => {
     const selectedPodDetails = podsDetails?.get(selectedPod?.name);
     return (
-      <Box
-        data-testid={"pods-poddetails"}
-        sx={{ mt: 2, border: "1px solid #E0E0E0", padding: "1.6rem" }}
-      >
+      <Box data-testid={"pods-poddetails"} sx={{ border: "1px solid #E0E0E0" }}>
         <PodDetail
           namespaceId={namespaceId}
           containerName={selectedContainer}
@@ -183,7 +194,13 @@ export function Pods(props: PodsProps) {
   }, [pods]);
 
   const podSearchDetails = (
-    <Box sx={{ display: "flex", flexDirection: "row" }}>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "row",
+        justifyContent: "space-between",
+      }}
+    >
       <Box sx={{ fontWeight: "600", width: "12.8rem" }}>
         <span>Select a pod by name</span>
       </Box>
@@ -194,9 +211,10 @@ export function Pods(props: PodsProps) {
           flexDirection: "row",
           mb: 2,
           justifyContent: "space-between",
+          flexGrow: 1,
         }}
       >
-        <Box sx={{ paddingBottom: "1rem" }}>
+        <Box sx={{ paddingBottom: "1rem", width: "100%" }}>
           {pods && selectedPod && (
             <Autocomplete
               {...defaultProps}
@@ -207,7 +225,7 @@ export function Pods(props: PodsProps) {
                 sx: { fontSize: "1.6rem" },
               }}
               sx={{
-                width: 300,
+                width: "100%",
                 border: "1px solid #E0E0E0",
                 "& .MuiOutlinedInput-root": {
                   borderRadius: "0",
@@ -260,61 +278,70 @@ export function Pods(props: PodsProps) {
 
   return (
     <Paper square elevation={0} sx={{ padding: "1.6rem" }}>
-      <Box sx={{ display: "flex", flexDirection: "row" }}>
+      <Box sx={{ display: "flex" }}>
         <Box
           sx={{
-            width: "70%",
-            border: "1px solid #E0E0E0",
-            marginRight: "1.6rem",
             display: "flex",
             flexDirection: "column",
-            padding: "1.6rem",
-            justifyContent: "space-evenly",
+            width: "40%",
           }}
-          data-testid={"pods-searchablePodsHeatMap"}
         >
-          {podSearchDetails}
-          <SearchablePodsHeatMap
-            pods={pods}
-            podsDetailsMap={podsDetails}
-            onPodClick={handlePodClick}
-            selectedPod={selectedPod}
-          />
-          {containerSelector}
-        </Box>
-        <Box sx={{ width: "20%", border: "1px solid #E0E0E0" }}>
           <Box
             sx={{
+              border: "1px solid #E0E0E0",
               display: "flex",
               flexDirection: "column",
               width: "100%",
-              marginTop: "1.6rem",
+              justifyContent: "space-evenly",
+              mb: "1rem",
             }}
+            data-testid={"pods-searchablePodsHeatMap"}
           >
-            <PodInfoNew
-               podSpecificInfo={podSpecificInfo}
-            />
+            <Box sx={{ mt: "1.6rem" }}>
+              <Box sx={{ p: "1.6rem" }}>
+                {podSearchDetails}
+                <SearchablePodsHeatMap
+                  pods={pods}
+                  podsDetailsMap={podsDetails}
+                  onPodClick={handlePodClick}
+                  selectedPod={selectedPod}
+                />
+                {containerSelector}
+              </Box>
+            </Box>
+          </Box>
+          <Box sx={{ width: "100%", border: "1px solid #E0E0E0", mb: "1rem" }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                width: "100%",
+                marginTop: "1.6rem",
+              }}
+            >
+              <PodInfoNew podSpecificInfo={podSpecificInfo} />
+            </Box>
+          </Box>
+          <Box sx={{ width: "100%", border: "1px solid #E0E0E0" }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                width: "100%",
+                marginTop: "1.6rem",
+              }}
+            >
+              <ContainerInfo
+                pod={selectedPod}
+                podDetails={selectedPodDetails}
+                containerName={selectedContainer}
+                containerInfo={containerInfo}
+              />
+            </Box>
           </Box>
         </Box>
-        <Box sx={{ width: "20%", border: "1px solid #E0E0E0" }}>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              width: "100%",
-              marginTop: "1.6rem",
-            }}
-          >
-            <ContainerInfo
-              pod={selectedPod}
-              podDetails={selectedPodDetails}
-              containerName={selectedContainer}
-              containerInfo={containerInfo}
-            />
-          </Box>
-        </Box>
+        <Box sx={{ width: "60%", ml: "1rem" }}>{podDetail}</Box>
       </Box>
-      {podDetail}
     </Paper>
   );
 }
