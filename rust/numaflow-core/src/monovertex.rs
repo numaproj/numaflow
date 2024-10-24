@@ -174,12 +174,8 @@ async fn fetch_source(
     // check whether the source grpc client is provided, this happens only of the source is a
     // user defined source
     if let Some(source_grpc_client) = source_grpc_client.clone() {
-        let (source_read, source_ack, lag_reader) = new_source(
-            source_grpc_client,
-            config.batch_size,
-            config.timeout_in_ms as u16,
-        )
-        .await?;
+        let (source_read, source_ack, lag_reader) =
+            new_source(source_grpc_client, config.batch_size, config.read_timeout).await?;
         return Ok(SourceType::UserDefinedSource(
             source_read,
             source_ack,

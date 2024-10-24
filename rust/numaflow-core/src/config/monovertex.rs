@@ -21,7 +21,7 @@ const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
 pub(crate) struct MonovertexConfig {
     pub(crate) name: String,
     pub(crate) batch_size: usize,
-    pub(crate) timeout_in_ms: u64,
+    pub(crate) read_timeout: Duration,
     pub(crate) replica: u16,
     pub(crate) source_config: SourceConfig,
     pub(crate) sink_config: SinkConfig,
@@ -35,7 +35,7 @@ impl Default for MonovertexConfig {
         MonovertexConfig {
             name: "".to_string(),
             batch_size: DEFAULT_BATCH_SIZE as usize,
-            timeout_in_ms: DEFAULT_TIMEOUT_IN_MS as u64,
+            read_timeout: Duration::from_millis(DEFAULT_TIMEOUT_IN_MS as u64),
             replica: 0,
             source_config: SourceConfig {
                 source_type: source::SourceType::Generator(GeneratorConfig::default()),
@@ -129,7 +129,7 @@ impl MonovertexConfig {
             name: mono_vertex_name,
             replica: *get_vertex_replica(),
             batch_size: batch_size as usize,
-            timeout_in_ms: timeout_in_ms as u64,
+            read_timeout: Duration::from_millis(timeout_in_ms as u64),
             metrics_config: MetricsConfig::default(),
             source_config,
             sink_config,
@@ -182,7 +182,7 @@ mod tests {
 
         assert_eq!(config.name, "test_vertex");
         assert_eq!(config.batch_size, 1000);
-        assert_eq!(config.timeout_in_ms, 2000);
+        assert_eq!(config.read_timeout.as_millis(), 2000);
         assert!(matches!(
             config.source_config.source_type,
             SourceType::UserDefined(_)

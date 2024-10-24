@@ -17,6 +17,7 @@ use crate::transformer::user_defined::SourceTransformHandle;
 use crate::{config, error, source, Result};
 use async_nats::jetstream;
 use async_nats::jetstream::Context;
+use futures::future::try_join_all;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -64,37 +65,47 @@ pub(crate) async fn start_forwarder(
             forwarder.start().await?;
         }
         pipeline::VertexType::Sink(sink) => {
-            // FIXME we will have to create a buffer reader for every partition
-            let buffer_reader = create_buffer_readers(config, js_context.clone()).await?;
-            let (sink_writer, sink_grpc_client) =
-                create_sink_writer(config, sink, cln_token.clone()).await?;
+            // Create buffer readers for each partition
+            let buffer_readers = create_buffer_readers(config, js_context.clone()).await?;
 
-            start_metrics_server(
-                config.metrics_config.clone(),
-                UserDefinedContainerState::Pipeline(PipelineContainerState::Sink((
-                    sink_grpc_client.clone(),
-                    None, // FIXME: create fallback as well
-                ))),
-            )
-            .await;
+            // Create sink writers and clients
+            let mut sink_writers = Vec::new();
+            for _ in &buffer_readers {
+                let (sink_writer, sink_grpc_client) =
+                    create_sink_writer(config, sink, cln_token.clone()).await?;
+                sink_writers.push((sink_writer, sink_grpc_client));
+            }
 
-            let forwarder = forwarder::sink_forwarder::SinkForwarder::new(
-                buffer_reader
-                    .first()
-                    .ok_or_else(|| {
-                        error::Error::Config("No buffer reader found for sink".to_string())
-                    })?
-                    .to_owned(),
-                sink_writer,
-                cln_token.clone(),
-            )
-            .await;
+            // Start the metrics server with one of the clients
+            if let Some((_, sink)) = sink_writers.first() {
+                start_metrics_server(
+                    config.metrics_config.clone(),
+                    UserDefinedContainerState::Pipeline(PipelineContainerState::Sink((
+                        sink.clone(),
+                        None, // FIXME: create fallback as well
+                    ))),
+                )
+                .await;
+            }
 
-            forwarder.start().await?;
+            // Start a new forwarder for each buffer reader
+            let mut forwarder_tasks = Vec::new();
+            for (buffer_reader, (sink_writer, _)) in buffer_readers.into_iter().zip(sink_writers) {
+                let forwarder = forwarder::sink_forwarder::SinkForwarder::new(
+                    buffer_reader,
+                    sink_writer,
+                    cln_token.clone(),
+                )
+                .await;
 
-            return Err(error::Error::Config(
-                "Sink vertex is not supported yet".to_string(),
-            ));
+                let task = tokio::spawn(async move { forwarder.start().await });
+
+                forwarder_tasks.push(task);
+            }
+
+            try_join_all(forwarder_tasks)
+                .await
+                .map_err(|e| error::Error::Forwarder(e.to_string()))?;
         }
     }
     Ok(())
@@ -197,7 +208,7 @@ async fn create_sink_writer(
         }
     };
     Ok((
-        SinkWriter::new(config.batch_size, sink_handle).await?,
+        SinkWriter::new(config.batch_size, config.read_timeout, sink_handle).await?,
         sink_grpc_client,
     ))
 }
@@ -232,7 +243,7 @@ async fn create_source_type(
             let (ud_read, ud_ack, ud_lag) = new_source(
                 source_grpc_client.clone(),
                 config.batch_size,
-                config.timeout_in_ms as u16,
+                config.read_timeout,
             )
             .await?;
             Ok((

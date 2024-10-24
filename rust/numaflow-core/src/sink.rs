@@ -1,8 +1,10 @@
 use crate::Result;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
+use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
+use tokio::{pin, time};
 use tonic::transport::Channel;
 use tracing::error;
 use user_defined::UserDefinedSink;
@@ -23,13 +25,13 @@ mod user_defined;
 #[allow(unused)]
 pub(crate) trait LocalSink {
     /// Write the messages to the Sink.
-    async fn sink(&mut self, messages: Vec<Message>) -> crate::Result<Vec<ResponseFromSink>>;
+    async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>>;
 }
 
 enum ActorMessage {
     Sink {
         messages: Vec<Message>,
-        respond_to: oneshot::Sender<crate::Result<Vec<ResponseFromSink>>>,
+        respond_to: oneshot::Sender<Result<Vec<ResponseFromSink>>>,
     },
 }
 
@@ -122,12 +124,18 @@ impl SinkHandle {
 #[derive(Clone)]
 pub(super) struct SinkWriter {
     batch_size: usize,
+    timeout: Duration,
     sink_handle: SinkHandle,
 }
 
 impl SinkWriter {
-    pub(super) async fn new(batch_size: usize, sink_handle: SinkHandle) -> Result<Self> {
+    pub(super) async fn new(
+        batch_size: usize,
+        timeout: Duration,
+        sink_handle: SinkHandle,
+    ) -> Result<Self> {
         Ok(Self {
+            timeout,
             batch_size,
             sink_handle,
         })
@@ -140,11 +148,24 @@ impl SinkWriter {
         let handle: JoinHandle<()> = tokio::spawn({
             let this = self.clone();
             async move {
+                let timeout_duration = Duration::from_secs(5); // Set your desired timeout duration here
+
                 loop {
                     let mut batch = Vec::with_capacity(this.batch_size);
-                    for _ in 0..this.batch_size {
-                        if let Some(read_message) = messages_rx.recv().await {
-                            batch.push(read_message);
+                    let timeout = time::sleep(timeout_duration);
+                    pin!(timeout);
+
+                    loop {
+                        tokio::select! {
+                            Some(read_message) = messages_rx.recv() => {
+                                batch.push(read_message);
+                                if batch.len() >= this.batch_size {
+                                    break;
+                                }
+                            }
+                            _ = &mut timeout => {
+                                break;
+                            }
                         }
                     }
 

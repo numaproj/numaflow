@@ -564,14 +564,14 @@ impl Forwarder {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use chrono::Utc;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
     use numaflow_pb::clients::sink::sink_client::SinkClient;
     use numaflow_pb::clients::source::source_client::SourceClient;
     use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+    use std::collections::HashSet;
+    use std::time::Duration;
     use tokio::sync::mpsc;
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
@@ -767,7 +767,7 @@ mod tests {
         let (source_read, source_ack, source_lag_reader) = new_source(
             SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap()),
             batch_size,
-            timeout_in_ms,
+            Duration::from_millis(timeout_in_ms),
         )
         .await
         .expect("failed to connect to source server");
@@ -904,7 +904,7 @@ mod tests {
         let (source_read, source_ack, lag_reader) = new_source(
             SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap()),
             batch_size,
-            timeout_in_ms,
+            Duration::from_millis(timeout_in_ms),
         )
         .await
         .expect("failed to connect to source server");
@@ -1025,14 +1025,14 @@ mod tests {
         });
 
         // Wait for the servers to start
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let cln_token = CancellationToken::new();
 
         let (source_read, source_ack, source_lag_reader) = new_source(
             SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap()),
             500,
-            100,
+            Duration::from_millis(100),
         )
         .await
         .expect("failed to connect to source server");

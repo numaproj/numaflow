@@ -136,7 +136,7 @@ pub(crate) fn prost_timestamp_from_utc(t: DateTime<Utc>) -> Option<Timestamp> {
     })
 }
 
-pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> crate::error::Result<Channel> {
+pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> Result<Channel> {
     const RECONNECT_INTERVAL: u64 = 1000;
     const MAX_RECONNECT_ATTEMPTS: usize = 5;
 
@@ -182,7 +182,7 @@ mod tests {
     use crate::shared::server_info::ServerInfo;
     use crate::shared::utils::create_rpc_channel;
 
-    async fn write_server_info(file_path: &str, server_info: &ServerInfo) -> error::Result<()> {
+    async fn write_server_info(file_path: &str, server_info: &ServerInfo) -> Result<()> {
         let serialized = serde_json::to_string(server_info).unwrap();
         let mut file = File::create(file_path).unwrap();
         file.write_all(serialized.as_bytes()).unwrap();
