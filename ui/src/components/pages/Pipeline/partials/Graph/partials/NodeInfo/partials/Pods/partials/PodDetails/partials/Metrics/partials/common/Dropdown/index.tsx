@@ -50,19 +50,31 @@ const Dropdown = ({
     switch (field) {
       case "dimension":
         return metric?.dimensions?.map((dimension: any) => (
-          <MenuItem key={`dropdown-${dimension?.name}`} value={dimension?.name}>
+          <MenuItem
+            key={`dropdown-${dimension?.name}`}
+            value={dimension?.name}
+            sx={{ fontSize: "1.4rem" }}
+          >
             {dimensionMap[dimension?.name]}
           </MenuItem>
         ));
       case "quantile":
         return quantileOptions?.map((quantile: string) => (
-          <MenuItem key={`dropdown-${quantile}`} value={quantile}>
+          <MenuItem
+            key={`dropdown-${quantile}`}
+            value={quantile}
+            sx={{ fontSize: "1.4rem" }}
+          >
             {quantileMap[quantile]}
           </MenuItem>
         ));
       case "duration":
         return durationOptions?.map((duration: string) => (
-          <MenuItem key={`dropdown-${duration}`} value={duration}>
+          <MenuItem
+            key={`dropdown-${duration}`}
+            value={duration}
+            sx={{ fontSize: "1.4rem" }}
+          >
             {durationMap[duration]}
           </MenuItem>
         ));
