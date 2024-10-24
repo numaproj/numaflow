@@ -96,11 +96,31 @@ export interface PodDetailProps {
   pod: Pod;
   podDetails: PodDetail;
 }
+export interface ContainerInfoProps{
+  State: string;
+  RestartCount: number;
+  LastTerminationReason: string;
+  LastTerminationMessage:string;
+  WaitingReason: string;
+  WaitingMessage: string;
+}
 
+export interface PodSpecificInfoProps {
+  podSpecificInfo:{
+    Name: string;
+    Status: string;
+    Condition: string;
+    Message: string;
+    Reason: string;
+    RestartCount: number;
+    ContainerCount: number;
+  };
+}
 export interface PodInfoProps {
   pod: Pod;
   podDetails: PodDetail;
   containerName: string;
+  containerInfo: ContainerInfoProps;
 }
 
 export interface PodLogsProps {

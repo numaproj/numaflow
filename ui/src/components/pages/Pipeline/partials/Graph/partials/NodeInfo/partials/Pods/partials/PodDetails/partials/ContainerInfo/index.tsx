@@ -8,7 +8,7 @@ import TableContainer from "@mui/material/TableContainer";
 import { getPodContainerUsePercentages } from "../../../../../../../../../../../../../utils";
 import { PodInfoProps } from "../../../../../../../../../../../../../types/declarations/pods";
 
-export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
+export function ContainerInfo({ pod, podDetails, containerName, containerInfo }: PodInfoProps) {
   const resourceUsage = getPodContainerUsePercentages(
     pod,
     podDetails,
@@ -91,12 +91,36 @@ export function PodInfo({ pod, podDetails, containerName }: PodInfoProps) {
                 <TableCell>{`${usedCPU} / ${specCPU}`}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>MEMORY %</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Memory %</TableCell>
                 <TableCell>{memPercent}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>MEMORY</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Memory</TableCell>
                 <TableCell>{`${usedMem} / ${specMem}`}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>State</TableCell>
+                <TableCell>{containerInfo?.State}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Restart Count: </TableCell>
+                <TableCell>{containerInfo?.RestartCount || "0"}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Last Termination Reason: </TableCell>
+                <TableCell>{containerInfo?.LastTerminationReason || "N/A"}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Last Termination Message:</TableCell>
+                <TableCell>{containerInfo?.LastTerminationMessage || "N/A"}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Waiting Reason</TableCell>
+                <TableCell>{containerInfo?.WaitingReason ||  "N/A"}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Waiting Message</TableCell>
+                <TableCell>{containerInfo?.WaitingMessage || "N/A"}</TableCell>
               </TableRow>
             </TableBody>
           </Table>

@@ -51,7 +51,7 @@ export function Metrics ({
   // conditionally add filters based on Discovery API
   filters = {
     ...filters,
-    "pod": "simple-mono-vertex-mv-0-rilce"
+    "pod": "simple-mono-vertex-mv-0-usneq"
   }
 
   const {chartData, error, setShouldFetch, isLoading} = useMetricsFetch({

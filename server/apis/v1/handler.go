@@ -947,6 +947,82 @@ func (h *handler) PodLogs(c *gin.Context) {
 	h.streamLogs(c, stream)
 }
 
+func (h *handler) GetContainerStatus(state corev1.ContainerState) string {
+	if state.Running != nil {
+		return "Running"
+	} else if state.Waiting != nil {
+		return "Waiting"
+	} else if state.Terminated != nil {
+		return "Terminated"
+	} else {
+		return "Unknown"
+	}
+}
+func (h *handler) GetContainerDetails(pod corev1.Pod) map[string]ContainerDetails {
+	var containerDetailsMap = make(map[string]ContainerDetails)
+	for _, status := range pod.Status.ContainerStatuses {
+		containerName := status.Name
+		details := ContainerDetails{
+			Name:         status.Name,
+			ID:           status.ContainerID,
+			State:        h.GetContainerStatus(status.State),
+			RestartCount: status.RestartCount,
+		}
+		if status.State.Waiting != nil {
+			details.WaitingReason = status.State.Waiting.Reason
+			details.WaitingMessage = status.State.Waiting.Message
+		}
+		if status.LastTerminationState.Terminated != nil {
+			details.LastTerminationReason = status.LastTerminationState.Terminated.Reason
+			details.LastTerminationMessage = status.LastTerminationState.Terminated.Message
+		}
+		containerDetailsMap[containerName] = details
+	}
+	return containerDetailsMap
+}
+
+func (h *handler) GetPodDetails(client kubernetes.Interface, ns string, pod corev1.Pod) (PodDetails, error) {
+	podDetails := PodDetails{
+		Name:   pod.Name,
+		Status: string(pod.Status.Phase),
+	}
+
+	containerDetails := h.GetContainerDetails(pod)
+	podDetails.ContainerDetailsMap = containerDetails
+
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady || condition.Type == corev1.PodScheduled || condition.Type == corev1.PodInitialized {
+			podDetails.Condition = string(condition.Type)
+			podDetails.Message = condition.Message
+			podDetails.Reason = condition.Reason
+			break
+		}
+	}
+	return podDetails, nil
+}
+
+func (h *handler) GetPodInfo(c *gin.Context) {
+	var items = make([]PodDetails, 0)
+	ns := c.Param("namespace")
+
+	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{})
+
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Error getting pods: %v", err))
+		return
+	}
+
+	for _, pod := range pods.Items {
+		podDetails, err := h.GetPodDetails(h.kubeClient, ns, pod)
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("Error getting pod details: %v", err))
+			return
+		} else {
+			items = append(items, podDetails)
+		}
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, items))
+}
 func (h *handler) parseTailLines(query string) *int64 {
 	if query == "" {
 		return nil
