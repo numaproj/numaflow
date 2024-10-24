@@ -42,7 +42,7 @@ const TimeRange = ({ field, setMetricReq }: MetricTimeRangeProps) => {
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <Box>
         <DateTimePicker
-          label="Start Time"
+          label={field === "start_time" ? "Start Time" : "End Time"}
           value={time}
           onChange={handleTimeChange}
           sx={{
