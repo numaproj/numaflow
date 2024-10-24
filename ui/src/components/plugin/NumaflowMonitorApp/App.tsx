@@ -215,6 +215,7 @@ function App(props: AppProps) {
           namespace,
           isPlugin: true,
           isReadOnly: systemInfo?.isReadOnly || false,
+          disablePrometheusCharts: systemInfo?.disablePrometheusCharts ?? true,
           sidebarProps,
           setSidebarProps,
           errors,

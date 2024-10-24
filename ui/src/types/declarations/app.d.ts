@@ -22,6 +22,7 @@ export interface AppContextProps {
   namespace: string;
   isPlugin: boolean;
   isReadOnly: boolean;
+  disablePrometheusCharts: boolean;
   sidebarProps?: SlidingSideBarProps;
   setSidebarProps: (props: SlidingSideBarProps | undefined) => void;
   errors: AppError[];
