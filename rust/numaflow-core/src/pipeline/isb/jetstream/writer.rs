@@ -12,8 +12,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use tracing::error;
-use tracing::{debug, warn};
+use tracing::{error, info, warn};
 
 use crate::config::pipeline::isb::BufferWriterConfig;
 use crate::error::Error;
@@ -41,11 +40,11 @@ impl JetstreamWriter {
         partition_idx: u16,
         config: BufferWriterConfig,
         js_ctx: Context,
-        batch_size: usize,
+        paf_batch_size: usize,
         cancel_token: CancellationToken,
     ) -> Self {
         let (paf_resolver_tx, paf_resolver_rx) =
-            mpsc::channel::<ResolveAndPublishResult>(batch_size);
+            mpsc::channel::<ResolveAndPublishResult>(paf_batch_size);
 
         let this = Self {
             stream_name,
@@ -164,7 +163,7 @@ impl JetstreamWriter {
             match self.is_full.load(Ordering::Relaxed) {
                 true => {
                     // FIXME: add metrics
-                    debug!(%self.stream_name, "stream is full");
+                    info!(%self.stream_name, "stream is full");
                     // FIXME: consider buffer-full strategy
                 }
                 false => match js_ctx

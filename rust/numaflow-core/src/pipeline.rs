@@ -132,6 +132,7 @@ async fn create_buffer_writers(
                     to_vertex.writer_config.clone(),
                     js_context.clone(),
                     config.batch_size,
+                    config.paf_batch_size,
                     cln_token.clone(),
                 )
             })
@@ -157,6 +158,7 @@ async fn create_buffer_readers(
     let mut readers = Vec::new();
     for stream in &reader_config.streams {
         let reader = JetstreamReader::new(
+            config.clone(),
             stream.0.clone(),
             stream.1,
             js_context.clone(),

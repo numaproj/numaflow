@@ -13,8 +13,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, warn};
 
 use crate::config::pipeline::isb::BufferReaderConfig;
+use crate::config::pipeline::PipelineConfig;
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset, ReadAck, ReadMessage};
+use crate::metrics::{forward_pipeline_metrics, pipeline_forward_read_metric_labels};
 use crate::Result;
 
 // The JetstreamReader is a handle to the background actor that continuously fetches messages from Jetstream.
@@ -23,6 +25,7 @@ use crate::Result;
 // Storing the Sender end of channel in this struct would make it difficult to close the channel with `cancel` method.
 #[derive(Clone)]
 pub(crate) struct JetstreamReader {
+    pipeline_config: PipelineConfig,
     partition_idx: u16,
     config: BufferReaderConfig,
     consumer: PullConsumer,
@@ -30,6 +33,7 @@ pub(crate) struct JetstreamReader {
 
 impl JetstreamReader {
     pub(crate) async fn new(
+        pipeline_config: PipelineConfig,
         stream_name: String,
         partition_idx: u16,
         js_ctx: Context,
@@ -56,6 +60,7 @@ impl JetstreamReader {
         config.wip_ack_interval = wip_ack_interval;
 
         Ok(Self {
+            pipeline_config,
             partition_idx,
             config: config.clone(),
             consumer,
@@ -72,11 +77,32 @@ impl JetstreamReader {
     ) -> Result<(Receiver<ReadMessage>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.config.batch_size);
 
+        // FIXME:
+        let partition: &str = self
+            .pipeline_config
+            .from_vertex_config
+            .first()
+            .unwrap()
+            .reader_config
+            .streams
+            .first()
+            .unwrap()
+            .0
+            .as_ref();
+
+        let labels = pipeline_forward_read_metric_labels(
+            self.pipeline_config.pipeline_name.as_ref(),
+            partition,
+            self.pipeline_config.vertex_name.as_ref(),
+            "Sink",
+            self.pipeline_config.replica,
+        );
+
         let handle = tokio::spawn({
             let this = self.clone();
             async move {
                 loop {
-                    let start_time = tokio::time::Instant::now();
+                    let start_time = Instant::now();
                     let permit = tokio::select! {
                         _ = cancel_token.cancelled() => {
                             warn!("Cancellation token is cancelled. Exiting JetstreamReader");
@@ -171,8 +197,14 @@ impl JetstreamReader {
                             message,
                             ack: ack_tx,
                         };
+
                         match permit.next() {
                             Some(permit) => {
+                                forward_pipeline_metrics()
+                                    .forwarder
+                                    .data_read
+                                    .get_or_create(labels)
+                                    .inc();
                                 permit.send(read_message);
                             }
                             None => {
@@ -183,6 +215,7 @@ impl JetstreamReader {
                             }
                         }
                     }
+
                     info!(
                         "Read batch size: {} and latency - {}ms",
                         count,

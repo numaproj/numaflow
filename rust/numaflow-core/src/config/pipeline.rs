@@ -27,6 +27,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) vertex_name: String,
     pub(crate) replica: u16,
     pub(crate) batch_size: usize,
+    pub(crate) paf_batch_size: usize,
     pub(crate) read_timeout: Duration,
     pub(crate) js_client_config: isb::jetstream::ClientConfig, // TODO: make it enum, since we can have different ISB implementations
     pub(crate) from_vertex_config: Vec<FromVertexConfig>,
@@ -198,6 +199,10 @@ impl PipelineConfig {
 
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
+            paf_batch_size: env::var("PAF_BATCH_SIZE")
+                .unwrap_or("30000".to_string())
+                .parse()
+                .unwrap(),
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
             pipeline_name,
             vertex_name,

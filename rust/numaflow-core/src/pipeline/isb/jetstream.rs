@@ -83,6 +83,7 @@ impl WriterHandle {
         config: BufferWriterConfig,
         js_ctx: Context,
         batch_size: usize,
+        paf_batch_size: usize,
         cancel_token: CancellationToken,
     ) -> Self {
         let (sender, receiver) = mpsc::channel::<ActorMessage>(batch_size);
@@ -92,7 +93,7 @@ impl WriterHandle {
             partition_idx,
             config,
             js_ctx,
-            batch_size,
+            paf_batch_size,
             cancel_token.clone(),
         );
         let mut actor = WriterActor::new(js_writer.clone(), receiver, cancel_token);
@@ -160,6 +161,7 @@ mod tests {
             Default::default(),
             context.clone(),
             batch_size,
+            1000,
             cln_token.clone(),
         );
 
@@ -221,6 +223,7 @@ mod tests {
             Default::default(),
             context.clone(),
             500,
+            1000,
             cancel_token.clone(),
         );
 
@@ -301,6 +304,7 @@ mod tests {
             Default::default(),
             context.clone(),
             500,
+            1000,
             cancel_token.clone(),
         );
 

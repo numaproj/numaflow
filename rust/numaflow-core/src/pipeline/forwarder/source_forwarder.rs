@@ -160,8 +160,6 @@ impl Forwarder {
 
     /// Writes messages to the jetstream, it writes to all the downstream buffers.
     async fn write_to_jetstream(&mut self, messages: Vec<Message>) -> Result<(), Error> {
-        let start_time = tokio::time::Instant::now();
-        let n = messages.len();
         if messages.is_empty() {
             return Ok(());
         }
@@ -185,11 +183,6 @@ impl Forwarder {
                 .await
                 .map_err(|e| Error::Forwarder(format!("Failed to write to jetstream {:?}", e)))??;
         }
-        info!(
-            "Wrote {} messages to jetstream in {}ms",
-            n,
-            start_time.elapsed().as_millis()
-        );
         Ok(())
     }
 }
