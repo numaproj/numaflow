@@ -1,4 +1,3 @@
-use crate::config::components::sink::SinkType;
 use crate::config::components::source::SourceType;
 use crate::config::pipeline;
 use crate::config::pipeline::PipelineConfig;
@@ -6,11 +5,11 @@ use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::pipeline::isb::jetstream::WriterHandle;
 use crate::shared::server_info::check_for_server_compatibility;
+use crate::shared::utils;
 use crate::shared::utils::{
-    create_rpc_channel, start_metrics_server, wait_until_sink_ready, wait_until_source_ready,
-    wait_until_transformer_ready,
+    create_rpc_channel, start_metrics_server, wait_until_source_ready, wait_until_transformer_ready,
 };
-use crate::sink::{SinkClientType, SinkHandle, SinkWriter};
+use crate::sink::SinkWriter;
 use crate::source::generator::new_generator;
 use crate::source::user_defined::new_source;
 use crate::transformer::user_defined::SourceTransformHandle;
@@ -72,18 +71,18 @@ pub(crate) async fn start_forwarder(
             // Create sink writers and clients
             let mut sink_writers = Vec::new();
             for _ in &buffer_readers {
-                let (sink_writer, sink_grpc_client) =
+                let (sink_writer, sink_grpc_client, fb_sink_grpc_client) =
                     create_sink_writer(config, sink, cln_token.clone()).await?;
-                sink_writers.push((sink_writer, sink_grpc_client));
+                sink_writers.push((sink_writer, sink_grpc_client, fb_sink_grpc_client));
             }
 
             // Start the metrics server with one of the clients
-            if let Some((_, sink)) = sink_writers.first() {
+            if let Some((_, sink, fb_sink)) = sink_writers.first() {
                 start_metrics_server(
                     config.metrics_config.clone(),
                     UserDefinedContainerState::Pipeline(PipelineContainerState::Sink((
                         sink.clone(),
-                        None, // FIXME: create fallback as well
+                        fb_sink.clone(),
                     ))),
                 )
                 .await;
@@ -91,7 +90,8 @@ pub(crate) async fn start_forwarder(
 
             // Start a new forwarder for each buffer reader
             let mut forwarder_tasks = Vec::new();
-            for (buffer_reader, (sink_writer, _)) in buffer_readers.into_iter().zip(sink_writers) {
+            for (buffer_reader, (sink_writer, _, _)) in buffer_readers.into_iter().zip(sink_writers)
+            {
                 let forwarder = forwarder::sink_forwarder::SinkForwarder::new(
                     buffer_reader,
                     sink_writer,
@@ -169,48 +169,43 @@ async fn create_buffer_readers(
     Ok(readers)
 }
 
+// Creates a sink writer based on the pipeline configuration
 async fn create_sink_writer(
     config: &PipelineConfig,
-    sink: &pipeline::SinkVtxConfig,
+    sink_vtx_config: &pipeline::SinkVtxConfig,
     cln_token: CancellationToken,
-) -> Result<(SinkWriter, Option<SinkClient<Channel>>)> {
-    let (sink_handle, sink_grpc_client) = match &sink.sink_config.sink_type {
-        SinkType::Log(_) => (
-            SinkHandle::new(SinkClientType::Log, config.batch_size).await?,
-            None,
-        ),
-        SinkType::Blackhole(_) => (
-            SinkHandle::new(SinkClientType::Blackhole, config.batch_size).await?,
-            None,
-        ),
-        SinkType::UserDefined(ud_config) => {
-            // do server compatibility check
-            check_for_server_compatibility(
-                ud_config.server_info_path.clone().into(),
-                cln_token.clone(),
-            )
-            .await?;
-
-            let mut sink_grpc_client =
-                SinkClient::new(create_rpc_channel(ud_config.socket_path.clone().into()).await?)
-                    .max_encoding_message_size(ud_config.grpc_max_message_size)
-                    .max_encoding_message_size(ud_config.grpc_max_message_size);
-
-            wait_until_sink_ready(&cln_token, &mut sink_grpc_client).await?;
-
-            (
-                SinkHandle::new(
-                    SinkClientType::UserDefined(sink_grpc_client.clone()),
-                    config.batch_size,
-                )
-                .await?,
-                Some(sink_grpc_client),
-            )
+) -> Result<(
+    SinkWriter,
+    Option<SinkClient<Channel>>,
+    Option<SinkClient<Channel>>,
+)> {
+    let (sink_handle, sink_grpc_client) = utils::create_sink_handle(
+        config.batch_size,
+        &sink_vtx_config.sink_config.sink_type,
+        &cln_token,
+    )
+    .await?;
+    let (fb_sink_handle, fb_sink_grpc_client) = match &sink_vtx_config.fb_sink_config {
+        None => (None, None),
+        Some(fb_sink_config) => {
+            let (handle, client) =
+                utils::create_sink_handle(config.batch_size, &fb_sink_config.sink_type, &cln_token)
+                    .await?;
+            (Some(handle), client)
         }
     };
+
     Ok((
-        SinkWriter::new(config.clone(), sink_handle).await?,
+        SinkWriter::new(
+            config.batch_size,
+            config.read_timeout,
+            sink_vtx_config.clone(),
+            sink_handle,
+            fb_sink_handle,
+        )
+        .await?,
         sink_grpc_client,
+        fb_sink_grpc_client,
     ))
 }
 

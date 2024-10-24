@@ -3,11 +3,14 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::config::components::metrics::MetricsConfig;
+use crate::config::components::sink::SinkType;
 use crate::config::monovertex::MonovertexConfig;
 use crate::error;
 use crate::metrics::{
     start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
 };
+use crate::shared::server_info::check_for_server_compatibility;
+use crate::sink::{SinkClientType, SinkHandle};
 use crate::source::SourceHandle;
 use crate::Error;
 use crate::Result;
@@ -165,6 +168,43 @@ pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> Result<Channel> {
         .await
         .map_err(|e| Error::Connection(format!("Failed to connect: {:?}", e)))?;
     Ok(channel)
+}
+
+pub(crate) async fn create_sink_handle(
+    batch_size: usize,
+    sink_type: &SinkType,
+    cln_token: &CancellationToken,
+) -> Result<(SinkHandle, Option<SinkClient<Channel>>)> {
+    match sink_type {
+        SinkType::Log(_) => Ok((
+            SinkHandle::new(SinkClientType::Log, batch_size).await?,
+            None,
+        )),
+        SinkType::Blackhole(_) => Ok((
+            SinkHandle::new(SinkClientType::Blackhole, batch_size).await?,
+            None,
+        )),
+        SinkType::UserDefined(ud_config) => {
+            check_for_server_compatibility(
+                ud_config.server_info_path.clone().into(),
+                cln_token.clone(),
+            )
+            .await?;
+            let mut sink_grpc_client =
+                SinkClient::new(create_rpc_channel(ud_config.socket_path.clone().into()).await?)
+                    .max_encoding_message_size(ud_config.grpc_max_message_size)
+                    .max_encoding_message_size(ud_config.grpc_max_message_size);
+            wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
+            Ok((
+                SinkHandle::new(
+                    SinkClientType::UserDefined(sink_grpc_client.clone()),
+                    batch_size,
+                )
+                .await?,
+                Some(sink_grpc_client),
+            ))
+        }
+    }
 }
 
 #[cfg(test)]

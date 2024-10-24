@@ -272,25 +272,35 @@ impl PafResolverActor {
     /// not successfully resolve, it will do blocking write till write to JetStream succeeds.
     async fn successfully_resolve_paf(&mut self, result: ResolveAndPublishResult) {
         match result.paf.await {
-            Ok(ack) => result
-                .callee_tx
-                .send(Ok(Offset::Int(IntOffset::new(
-                    ack.sequence,
-                    self.js_writer.partition_idx,
-                ))))
-                .unwrap_or_else(|e| {
-                    error!("Failed to send offset: {:?}", e);
-                }),
+            Ok(ack) => {
+                if ack.duplicate {
+                    warn!("Duplicate message detected, ignoring {:?}", ack);
+                }
+                result
+                    .callee_tx
+                    .send(Ok(Offset::Int(IntOffset::new(
+                        ack.sequence,
+                        self.js_writer.partition_idx,
+                    ))))
+                    .unwrap_or_else(|e| {
+                        error!("Failed to send offset: {:?}", e);
+                    })
+            }
             Err(e) => {
                 error!(?e, "Failed to resolve the future, trying blocking write");
                 match self.js_writer.blocking_write(result.payload.clone()).await {
-                    Ok(ack) => result
-                        .callee_tx
-                        .send(Ok(Offset::Int(IntOffset::new(
-                            ack.sequence,
-                            self.js_writer.partition_idx,
-                        ))))
-                        .unwrap(),
+                    Ok(ack) => {
+                        if ack.duplicate {
+                            warn!("Duplicate message detected, ignoring {:?}", ack);
+                        }
+                        result
+                            .callee_tx
+                            .send(Ok(Offset::Int(IntOffset::new(
+                                ack.sequence,
+                                self.js_writer.partition_idx,
+                            ))))
+                            .unwrap()
+                    }
                     Err(e) => result.callee_tx.send(Err(e)).unwrap(),
                 }
             }

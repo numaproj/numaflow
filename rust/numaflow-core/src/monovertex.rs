@@ -196,7 +196,7 @@ async fn fetch_source(
 // fetch the actor handle for the sink.
 // sink_grpc_client can be optional because it is valid only for user-defined sink.
 async fn fetch_sink(
-    settings: &MonovertexConfig,
+    config: &MonovertexConfig,
     sink_grpc_client: Option<SinkClient<Channel>>,
     fallback_sink_grpc_client: Option<SinkClient<Channel>>,
 ) -> crate::Result<(SinkHandle, Option<SinkHandle>)> {
@@ -204,27 +204,41 @@ async fn fetch_sink(
         Some(fallback_sink) => Some(
             SinkHandle::new(
                 SinkClientType::UserDefined(fallback_sink),
-                settings.batch_size,
+                config.batch_size,
             )
             .await?,
         ),
-        None => None,
+        None => {
+            if let Some(fb_sink_config) = &config.fb_sink_config {
+                if let sink::SinkType::Log(_) = &fb_sink_config.sink_type {
+                    let log = SinkHandle::new(SinkClientType::Log, config.batch_size).await?;
+                    return Ok((log, None));
+                }
+                if let sink::SinkType::Blackhole(_) = &fb_sink_config.sink_type {
+                    let blackhole =
+                        SinkHandle::new(SinkClientType::Blackhole, config.batch_size).await?;
+                    return Ok((blackhole, None));
+                }
+                return Err(Error::Config(
+                    "No valid Fallback Sink configuration found".to_string(),
+                ));
+            }
+
+            None
+        }
     };
 
     if let Some(sink_client) = sink_grpc_client {
-        let sink = SinkHandle::new(
-            SinkClientType::UserDefined(sink_client),
-            settings.batch_size,
-        )
-        .await?;
+        let sink =
+            SinkHandle::new(SinkClientType::UserDefined(sink_client), config.batch_size).await?;
         return Ok((sink, fb_sink));
     }
-    if let sink::SinkType::Log(_) = &settings.sink_config.sink_type {
-        let log = SinkHandle::new(SinkClientType::Log, settings.batch_size).await?;
+    if let sink::SinkType::Log(_) = &config.sink_config.sink_type {
+        let log = SinkHandle::new(SinkClientType::Log, config.batch_size).await?;
         return Ok((log, fb_sink));
     }
-    if let sink::SinkType::Blackhole(_) = &settings.sink_config.sink_type {
-        let blackhole = SinkHandle::new(SinkClientType::Blackhole, settings.batch_size).await?;
+    if let sink::SinkType::Blackhole(_) = &config.sink_config.sink_type {
+        let blackhole = SinkHandle::new(SinkClientType::Blackhole, config.batch_size).await?;
         return Ok((blackhole, fb_sink));
     }
     Err(Error::Config(

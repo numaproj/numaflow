@@ -4,6 +4,7 @@ use async_nats::jetstream::{
     consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
 };
 use futures::StreamExt;
+use log::info;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -68,17 +69,18 @@ impl JetstreamReader {
     pub(crate) async fn start(
         &self,
         cancel_token: CancellationToken,
-    ) -> (Receiver<ReadMessage>, JoinHandle<()>) {
+    ) -> Result<(Receiver<ReadMessage>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.config.batch_size);
 
         let handle = tokio::spawn({
             let this = self.clone();
             async move {
                 loop {
+                    let start_time = tokio::time::Instant::now();
                     let permit = tokio::select! {
                         _ = cancel_token.cancelled() => {
                             warn!("Cancellation token is cancelled. Exiting JetstreamReader");
-                            return;
+                            return Ok(());
                         }
                         permit = messages_tx.reserve_many(this.config.batch_size) => permit,
                     };
@@ -88,7 +90,10 @@ impl JetstreamReader {
                         Err(e) => {
                             // Channel is closed
                             error!("Error while reserving permits: {:?}", e);
-                            return;
+                            return Err(Error::ISB(format!(
+                                "Error while reserving permits: {:?}",
+                                e
+                            )));
                         }
                     };
 
@@ -102,7 +107,7 @@ impl JetstreamReader {
                     let messages = tokio::select! {
                         _ = cancel_token.cancelled() => {
                             warn!("Cancellation token is cancelled. Exiting JetstreamReader");
-                            return;
+                            return Ok(());
                         }
                         messages = messages_fut => messages,
                     };
@@ -111,11 +116,16 @@ impl JetstreamReader {
                         Ok(messages) => messages,
                         Err(e) => {
                             error!(?e, "Failed to fetch next batch of messages from Jetstream");
-                            return;
+                            return Err(Error::ISB(format!(
+                                "Failed to fetch next batch of messages from Jetstream: {:?}",
+                                e
+                            )));
                         }
                     };
 
+                    let mut count = 0;
                     while let Some(message) = messages.next().await {
+                        count += 1;
                         let jetstream_message = match message {
                             Ok(message) => message,
                             Err(e) => {
@@ -124,15 +134,9 @@ impl JetstreamReader {
                             }
                         };
 
-                        let msg_info = jetstream_message
-                            .info()
-                            .map_err(|e| {
-                                Error::ISB(format!(
-                                    "Failed to get message info from Jetstream: {}",
-                                    e
-                                ))
-                            })
-                            .unwrap();
+                        let msg_info = jetstream_message.info().map_err(|e| {
+                            Error::ISB(format!("Failed to get message info from Jetstream: {}", e))
+                        })?;
 
                         let mut message: Message =
                             match jetstream_message.payload.clone().try_into() {
@@ -142,7 +146,10 @@ impl JetstreamReader {
                                         ?e,
                                         "Failed to parse message payload received from Jetstream"
                                     );
-                                    return;
+                                    return Err(Error::ISB(format!(
+                                    "Failed to parse message payload received from Jetstream: {:?}",
+                                    e
+                                )));
                                 }
                             };
 
@@ -176,10 +183,15 @@ impl JetstreamReader {
                             }
                         }
                     }
+                    info!(
+                        "Read batch size: {} and latency - {}ms",
+                        count,
+                        start_time.elapsed().as_millis()
+                    );
                 }
             }
         });
-        (messages_rx, handle)
+        Ok((messages_rx, handle))
     }
 }
 
@@ -292,7 +304,8 @@ mod tests {
         .await
         .unwrap();
         let reader_cancel_token = CancellationToken::new();
-        let (mut js_reader_rx, js_reader_task) = js_reader.start(reader_cancel_token.clone()).await;
+        let (mut js_reader_rx, js_reader_task) =
+            js_reader.start(reader_cancel_token.clone()).await.unwrap();
 
         let writer_cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(

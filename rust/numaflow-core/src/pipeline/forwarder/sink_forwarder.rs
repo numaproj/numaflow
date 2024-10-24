@@ -24,24 +24,29 @@ impl SinkForwarder {
     }
 
     pub(crate) async fn start(&self) -> Result<()> {
-        // create a child cancellation token only for reader so that we can exit the reader first
+        // Create a child cancellation token only for the reader so that we can exit the reader first
         let reader_cancellation_token = self.cln_token.child_token();
         let (read_messages_rx, reader_handle) = self
             .jetstream_reader
             .start(reader_cancellation_token.clone())
-            .await;
+            .await?;
 
-        let sink_writer_handle = self.sink_writer.start(read_messages_rx).await?;
+        let sink_writer_handle = self
+            .sink_writer
+            .start(read_messages_rx, self.cln_token.clone())
+            .await?;
 
-        // join the reader and sink writer
-        // TODO:: handle the error
-        tokio::try_join!(reader_handle, sink_writer_handle).map_err(|e| {
-            Error::Forwarder(format!(
+        // Join the reader and sink writer
+        match tokio::try_join!(reader_handle, sink_writer_handle) {
+            Ok((reader_result, sink_writer_result)) => {
+                reader_result?;
+                sink_writer_result?;
+                Ok(())
+            }
+            Err(e) => Err(Error::Forwarder(format!(
                 "Error while joining reader and sink writer: {:?}",
                 e
-            ))
-        })?;
-
-        Ok(())
+            ))),
+        }
     }
 }
