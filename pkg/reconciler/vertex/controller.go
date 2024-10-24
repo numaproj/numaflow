@@ -19,6 +19,7 @@ package vertex
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -215,11 +216,11 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 		vertex.Status.UpdatedReadyReplicas = 0
 	}
 
-	// Manually or automatically scaled down
+	// Manually or automatically scaled down, in this case, we need to clean up extra pods if there's any
+	if err := r.cleanUpPodsFromTo(ctx, vertex, desiredReplicas, math.MaxInt); err != nil {
+		return fmt.Errorf("failed to clean up vertex pods [%v, ): %w", desiredReplicas, err)
+	}
 	if currentReplicas := int(vertex.Status.Replicas); currentReplicas > desiredReplicas {
-		if err := r.cleanUpPodsFromTo(ctx, vertex, desiredReplicas, currentReplicas); err != nil {
-			return fmt.Errorf("failed to clean up vertex pods [%v, %v): %w", desiredReplicas, currentReplicas, err)
-		}
 		vertex.Status.Replicas = uint32(desiredReplicas)
 	}
 	updatedReplicas := int(vertex.Status.UpdatedReplicas)

@@ -19,6 +19,7 @@ package monovertex
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -201,11 +202,11 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 		monoVtx.Status.UpdatedReadyReplicas = 0
 	}
 
-	// Manually or automatically scaled down
+	// Manually or automatically scaled down, in this case, we need to clean up extra pods if there's any
+	if err := mr.cleanUpPodsFromTo(ctx, monoVtx, desiredReplicas, math.MaxInt); err != nil {
+		return fmt.Errorf("failed to clean up mono vertex pods [%v, ): %w", desiredReplicas, err)
+	}
 	if currentReplicas := int(monoVtx.Status.Replicas); currentReplicas > desiredReplicas {
-		if err := mr.cleanUpPodsFromTo(ctx, monoVtx, desiredReplicas, currentReplicas); err != nil {
-			return fmt.Errorf("failed to clean up mono vertex pods [%v, %v): %w", desiredReplicas, currentReplicas, err)
-		}
 		monoVtx.Status.Replicas = uint32(desiredReplicas)
 	}
 	updatedReplicas := int(monoVtx.Status.UpdatedReplicas)
