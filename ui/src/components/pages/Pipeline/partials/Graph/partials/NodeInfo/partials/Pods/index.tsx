@@ -32,6 +32,7 @@ import {
 } from "../../../../../../../../../types/declarations/pods";
 
 export function Pods(props: PodsProps) {
+  const { host } = useContext<AppContextProps>(AppContext);
   const { namespaceId, pipelineId, vertexId, type } = props;
 
   if (!namespaceId || !pipelineId || !vertexId) {
@@ -64,7 +65,6 @@ export function Pods(props: PodsProps) {
   const [podSpecificInfo, setPodSpecificInfo] = useState<
     PodSpecificInfoProps | undefined
   >(undefined);
-  const { host } = useContext<AppContextProps>(AppContext);
 
   const getContainerInfo = useCallback((podsData, podName, containerName) => {
     const selectedPod = podsData?.find((pod) => pod?.Name === podName);
@@ -167,6 +167,8 @@ export function Pods(props: PodsProps) {
       <Box data-testid={"pods-poddetails"} sx={{ border: "1px solid #E0E0E0" }}>
         <PodDetail
           namespaceId={namespaceId}
+          pipelineId={pipelineId}
+          type={type}
           containerName={selectedContainer}
           pod={selectedPod}
           podDetails={selectedPodDetails}

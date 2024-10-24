@@ -5,7 +5,7 @@ import { Accordion, AccordionDetails, AccordionSummary } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 import LineChartComponent from "./partials/LineChart";
-import { useMetricsDiscoveryDataFetch } from "../../../../../utils/fetchWrappers/metricsDiscoveryDataFetch";
+import { useMetricsDiscoveryDataFetch } from "../../../../../../../../../../../../../utils/fetchWrappers/metricsDiscoveryDataFetch";
 import { dimensionReverseMap, metricNameMap } from "./utils/constants";
 
 import "./style.css";

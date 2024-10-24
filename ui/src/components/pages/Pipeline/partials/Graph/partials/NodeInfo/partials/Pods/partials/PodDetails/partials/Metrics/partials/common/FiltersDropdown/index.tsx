@@ -16,9 +16,9 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
-import { AppContextProps } from "../../../../../../../../types/declarations/app";
-import { AppContext } from "../../../../../../../../App";
-import { getBaseHref } from "../../../../../../../../utils";
+import { AppContextProps } from "../../../../../../../../../../../../../../../../types/declarations/app";
+import { AppContext } from "../../../../../../../../../../../../../../../../App";
+import { getBaseHref } from "../../../../../../../../../../../../../../../../utils";
 
 export interface FiltersDropdownProps {
   items: any;
@@ -40,7 +40,6 @@ const FiltersDropdown = ({
   const [selectedFilters, setSelectedFilters] = useState<any[]>([]);
   const [activeFilters, setActiveFilters] = useState<any[]>([]);
   const [podsData, setPodsData] = useState<any[]>([]);
-  console.log(selectedFilters);
 
   useEffect(() => {
     const filtersMap = selectedFilters.reduce((acc, filter) => {

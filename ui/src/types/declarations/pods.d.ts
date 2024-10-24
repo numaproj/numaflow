@@ -92,21 +92,23 @@ export interface HexagonHeatMapProps {
 
 export interface PodDetailProps {
   namespaceId: string;
+  pipelineId: string;
+  type: string;
   containerName: string;
   pod: Pod;
   podDetails: PodDetail;
 }
-export interface ContainerInfoProps{
+export interface ContainerInfoProps {
   State: string;
   RestartCount: number;
   LastTerminationReason: string;
-  LastTerminationMessage:string;
+  LastTerminationMessage: string;
   WaitingReason: string;
   WaitingMessage: string;
 }
 
 export interface PodSpecificInfoProps {
-  podSpecificInfo:{
+  podSpecificInfo: {
     Name: string;
     Status: string;
     Condition: string;

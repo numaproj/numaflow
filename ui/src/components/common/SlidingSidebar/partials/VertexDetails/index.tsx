@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
@@ -12,7 +6,6 @@ import { VertexUpdate } from "./partials/VertexUpdate";
 import { ProcessingRates } from "./partials/ProcessingRates";
 import { K8sEvents } from "../K8sEvents";
 import { Buffers } from "./partials/Buffers";
-import { Metrics } from "../Metrics";
 import { Pods } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods";
 import { SpecEditorModalProps } from "../..";
 import { CloseModal } from "../CloseModal";
@@ -21,8 +14,6 @@ import sinkIcon from "../../../../../images/sink.png";
 import mapIcon from "../../../../../images/map.png";
 import reduceIcon from "../../../../../images/reduce.png";
 import monoVertexIcon from "../../../../../images/monoVertex.svg";
-import { AppContext } from "../../../../../App";
-import { AppContextProps } from "../../../../../types/declarations/app";
 
 import "./style.css";
 
@@ -30,8 +21,7 @@ const PODS_VIEW_TAB_INDEX = 0;
 const SPEC_TAB_INDEX = 1;
 const PROCESSING_RATES_TAB_INDEX = 2;
 const K8S_EVENTS_TAB_INDEX = 3;
-const METRICS_TAB_INDEX = 4;
-const BUFFERS_TAB_INDEX = 5;
+const BUFFERS_TAB_INDEX = 4;
 
 export enum VertexType {
   SOURCE,
@@ -64,7 +54,6 @@ export function VertexDetails({
   setModalOnClose,
   refresh,
 }: VertexDetailsProps) {
-  const { disablePrometheusCharts } = useContext<AppContextProps>(AppContext);
   const [vertexSpec, setVertexSpec] = useState<any>();
   const [vertexType, setVertexType] = useState<VertexType | undefined>();
   const [tabValue, setTabValue] = useState(PODS_VIEW_TAB_INDEX);
@@ -249,17 +238,6 @@ export function VertexDetails({
             label="K8s Events"
             data-testid="events-tab"
           />
-          {!disablePrometheusCharts && type === "monoVertex" && (
-            <Tab
-              className={
-                tabValue === METRICS_TAB_INDEX
-                  ? "vertex-details-tab-selected"
-                  : "vertex-details-tab"
-              }
-              label="Metrics"
-              data-testid="metrics-tab"
-            />
-          )}
           {buffers && (
             <Tab
               className={
@@ -337,21 +315,6 @@ export function VertexDetails({
           />
         )}
       </div>
-      {!disablePrometheusCharts && type === "monoVertex" && (
-        <div
-          className="vertex-details-tab-panel"
-          role="tabpanel"
-          hidden={tabValue !== METRICS_TAB_INDEX}
-        >
-          {tabValue === METRICS_TAB_INDEX && (
-            <Metrics
-              namespaceId={namespaceId}
-              pipelineId={pipelineId}
-              type={type}
-            />
-          )}
-        </div>
-      )}
       {buffers && (
         <div
           className="vertex-details-tab-panel"

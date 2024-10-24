@@ -15,7 +15,7 @@ import Dropdown from "../common/Dropdown";
 import TimeRange from "../common/TimeRange";
 import FiltersDropdown from "../common/FiltersDropdown";
 import EmptyChart from "../EmptyChart";
-import { useMetricsFetch } from "../../../../../../../utils/fetchWrappers/metricsFetch";
+import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
 
 // TODO have a check for metricReq against metric object to ensure required fields are passed
 const LineChartComponent = ({ namespaceId, pipelineId, type, metric }: any) => {
