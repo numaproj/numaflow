@@ -10,6 +10,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio::{pin, time};
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{debug, error, warn};
@@ -153,15 +154,18 @@ impl SinkWriter {
 
     pub(super) async fn start(
         &self,
-        mut messages_rx: Receiver<ReadMessage>,
+        messages_rx: Receiver<ReadMessage>,
         cancellation_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let mut this = self.clone();
             async move {
-                while !messages_rx.is_closed() {
-                    let batch = this.collect_batch(&mut messages_rx).await;
+                let chunk_stream = tokio_stream::wrappers::ReceiverStream::new(messages_rx)
+                    .chunks_timeout(this.batch_size, this.read_timeout);
 
+                pin!(chunk_stream);
+
+                while let Some(batch) = chunk_stream.next().await {
                     if batch.is_empty() {
                         continue;
                     }
@@ -175,22 +179,23 @@ impl SinkWriter {
                     {
                         Ok(_) => {
                             for rm in batch {
-                                rm.ack.send(ReadAck::Ack).map_err(|_| {
-                                    Error::Sink("Error sending ack to source".to_string())
-                                })?;
+                                let _ = rm.ack.send(ReadAck::Ack);
                             }
                         }
                         Err(e) => {
                             error!(?e, "Error writing to sink");
                             for rm in batch {
-                                rm.ack.send(ReadAck::Nak).map_err(|_| {
-                                    Error::Sink("Error sending nak to source".to_string())
-                                })?;
+                                let _ = rm.ack.send(ReadAck::Nak);
                             }
-                            return Err(e);
                         }
                     }
+
+                    if cancellation_token.is_cancelled() {
+                        warn!("Cancellation token is cancelled. Exiting SinkWriter");
+                        break;
+                    }
                 }
+
                 Ok(())
             }
         });

@@ -3,12 +3,12 @@ use std::time::Duration;
 use async_nats::jetstream::{
     consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
 };
-use futures::StreamExt;
 use log::info;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, warn};
 
@@ -77,7 +77,6 @@ impl JetstreamReader {
     ) -> Result<(Receiver<ReadMessage>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.config.batch_size);
 
-        // FIXME:
         let partition: &str = self
             .pipeline_config
             .from_vertex_config
@@ -98,60 +97,27 @@ impl JetstreamReader {
             self.pipeline_config.replica,
         );
 
-        let handle = tokio::spawn({
+        let handle: JoinHandle<Result<()>> = tokio::spawn({
             let this = self.clone();
             async move {
-                loop {
-                    let start_time = Instant::now();
-                    let permit = tokio::select! {
-                        _ = cancel_token.cancelled() => {
-                            warn!("Cancellation token is cancelled. Exiting JetstreamReader");
-                            return Ok(());
-                        }
-                        permit = messages_tx.reserve_many(this.config.batch_size) => permit,
-                    };
+                let chunk_stream = this
+                    .consumer
+                    .messages()
+                    .await
+                    .unwrap()
+                    .chunks_timeout(this.config.batch_size, this.config.read_timeout);
 
-                    let mut permit = match permit {
-                        Ok(permit) => permit,
-                        Err(e) => {
-                            // Channel is closed
-                            error!("Error while reserving permits: {:?}", e);
-                            return Err(Error::ISB(format!(
-                                "Error while reserving permits: {:?}",
-                                e
-                            )));
-                        }
-                    };
+                tokio::pin!(chunk_stream);
 
-                    let messages_fut = this
-                        .consumer
-                        .fetch()
-                        .max_messages(this.config.batch_size)
-                        .expires(this.config.read_timeout)
-                        .messages();
+                let mut read_time = Instant::now();
+                let mut count = 0;
 
-                    let messages = tokio::select! {
-                        _ = cancel_token.cancelled() => {
-                            warn!("Cancellation token is cancelled. Exiting JetstreamReader");
-                            return Ok(());
-                        }
-                        messages = messages_fut => messages,
-                    };
-
-                    let mut messages = match messages {
-                        Ok(messages) => messages,
-                        Err(e) => {
-                            error!(?e, "Failed to fetch next batch of messages from Jetstream");
-                            return Err(Error::ISB(format!(
-                                "Failed to fetch next batch of messages from Jetstream: {:?}",
-                                e
-                            )));
-                        }
-                    };
-
-                    let mut count = 0;
-                    while let Some(message) = messages.next().await {
-                        count += 1;
+                let mut chunk_time = Instant::now();
+                let mut total_count = 0;
+                while let Some(messages) = chunk_stream.next().await {
+                    let labels = labels.clone();
+                    let this = this.clone();
+                    for message in messages {
                         let jetstream_message = match message {
                             Ok(message) => message,
                             Err(e) => {
@@ -160,9 +126,13 @@ impl JetstreamReader {
                             }
                         };
 
-                        let msg_info = jetstream_message.info().map_err(|e| {
-                            Error::ISB(format!("Failed to get message info from Jetstream: {}", e))
-                        })?;
+                        let msg_info = match jetstream_message.info() {
+                            Ok(info) => info,
+                            Err(e) => {
+                                error!(?e, "Failed to get message info from Jetstream");
+                                continue;
+                            }
+                        };
 
                         let mut message: Message =
                             match jetstream_message.payload.clone().try_into() {
@@ -172,14 +142,10 @@ impl JetstreamReader {
                                         ?e,
                                         "Failed to parse message payload received from Jetstream"
                                     );
-                                    return Err(Error::ISB(format!(
-                                    "Failed to parse message payload received from Jetstream: {:?}",
-                                    e
-                                )));
+                                    continue;
                                 }
                             };
 
-                        // Set the offset of the message to the sequence number of the message and the partition index.
                         message.offset = Some(Offset::Int(IntOffset::new(
                             msg_info.stream_sequence,
                             this.partition_idx,
@@ -187,7 +153,7 @@ impl JetstreamReader {
 
                         let (ack_tx, ack_rx) = oneshot::channel();
 
-                        tokio::spawn(start_work_in_progress(
+                        tokio::spawn(Self::start_work_in_progress(
                             jetstream_message,
                             ack_rx,
                             this.config.wip_ack_interval,
@@ -198,81 +164,94 @@ impl JetstreamReader {
                             ack: ack_tx,
                         };
 
-                        match permit.next() {
-                            Some(permit) => {
-                                forward_pipeline_metrics()
-                                    .forwarder
-                                    .data_read
-                                    .get_or_create(labels)
-                                    .inc();
-                                permit.send(read_message);
-                            }
-                            None => {
-                                // The number of permits >= number of messages in the batch.
-                                unreachable!(
-                                    "Permits should be reserved for all messages in the batch"
-                                );
-                            }
+                        if messages_tx.send(read_message).await.is_err() {
+                            error!("Failed to send message to the channel");
+                            return Ok(());
                         }
+
+                        forward_pipeline_metrics()
+                            .forwarder
+                            .data_read
+                            .get_or_create(&labels)
+                            .inc();
+                        count += 1;
+                        total_count += 1;
+                    }
+                    if cancel_token.is_cancelled() {
+                        warn!("Cancellation token is cancelled. Exiting JetstreamReader");
+                        break;
                     }
 
                     info!(
-                        "Read batch size: {} and latency - {}ms",
+                        "Read {} messages from Jetstream in {}ms",
                         count,
-                        start_time.elapsed().as_millis()
+                        read_time.elapsed().as_millis()
                     );
+                    read_time = Instant::now();
+                    count = 0;
+
+                    if chunk_time.elapsed().as_millis() >= 1000 {
+                        info!(
+                            "Total {} messages read from Jetstream in {}ms",
+                            total_count,
+                            chunk_time.elapsed().as_millis()
+                        );
+                        chunk_time = Instant::now();
+                        total_count = 0;
+                    }
                 }
+                Ok(())
             }
         });
         Ok((messages_rx, handle))
     }
-}
 
-// Intended to be run as background task which will continuously send InProgress acks to Jetstream.
-// We will continuously retry if there is an error in acknowledging the message as work-in-progress.
-// If the sender end of the ack_rx channel was dropped before sending a final Ack or Nak (due to some unhandled/unknown failure), we will send a Nak to Jetstream.
-async fn start_work_in_progress(
-    msg: JetstreamMessage,
-    mut ack_rx: oneshot::Receiver<ReadAck>,
-    tick: Duration,
-) {
-    let mut interval = time::interval_at(Instant::now() + tick, tick);
+    // Intended to be run as background task which will continuously send InProgress acks to Jetstream.
+    // We will continuously retry if there is an error in acknowledging the message as work-in-progress.
+    // If the sender end of the ack_rx channel was dropped before sending a final Ack or Nak (due to some unhandled/unknown failure), we will send a Nak to Jetstream.
+    async fn start_work_in_progress(
+        msg: JetstreamMessage,
+        mut ack_rx: oneshot::Receiver<ReadAck>,
+        tick: Duration,
+    ) {
+        let mut interval = time::interval_at(Instant::now() + tick, tick);
 
-    loop {
-        let wip = async {
-            interval.tick().await;
-            let ack_result = msg.ack_with(AckKind::Progress).await;
-            if let Err(e) = ack_result {
-                // We expect that the ack in the next iteration will be successful.
-                // If its some unrecoverable Jetstream error, the fetching messages in the JestreamReader implementation should also fail and cause the system to shut down.
-                error!(?e, "Failed to send InProgress Ack to Jetstream for message");
-            }
-        };
-
-        let ack = tokio::select! {
-            ack = &mut ack_rx => ack,
-            _ = wip => continue,
-        };
-
-        let ack = ack.unwrap_or_else(|e| {
-            error!(?e, "Received error while waiting for Ack oneshot channel");
-            ReadAck::Nak
-        });
-
-        match ack {
-            ReadAck::Ack => {
-                let ack_result = msg.ack().await;
+        loop {
+            let wip = async {
+                interval.tick().await;
+                let ack_result = msg.ack_with(AckKind::Progress).await;
                 if let Err(e) = ack_result {
-                    error!(?e, "Failed to send Ack to Jetstream for message");
+                    // We expect that the ack in the next iteration will be successful.
+                    // If its some unrecoverable Jetstream error, the fetching messages in the JestreamReader implementation should also fail and cause the system to shut down.
+                    error!(?e, "Failed to send InProgress Ack to Jetstream for message");
                 }
-                return;
-            }
-            ReadAck::Nak => {
-                let ack_result = msg.ack_with(AckKind::Nak(None)).await;
-                if let Err(e) = ack_result {
-                    error!(?e, "Failed to send Nak to Jetstream for message");
+            };
+
+            let ack = tokio::select! {
+                ack = &mut ack_rx => ack,
+                _ = wip => continue,
+            };
+
+            let ack = ack.unwrap_or_else(|e| {
+                error!(?e, "Received error while waiting for Ack oneshot channel");
+                ReadAck::Nak
+            });
+
+            match ack {
+                ReadAck::Ack => {
+                    let ack_result = msg.ack().await;
+                    if let Err(e) = ack_result {
+                        error!(?e, "Failed to send Ack to Jetstream for message");
+                    }
+                    return;
                 }
-                return;
+                ReadAck::Nak => {
+                    let ack_result = msg.ack_with(AckKind::Nak(None)).await;
+                    if let Err(e) = ack_result {
+                        error!(?e, "Failed to send Nak to Jetstream for message");
+                    }
+                    return;
+                }
             }
         }
     }
@@ -329,6 +308,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let js_reader = JetstreamReader::new(
+            Default::default(),
             stream_name.to_string(),
             0,
             context.clone(),

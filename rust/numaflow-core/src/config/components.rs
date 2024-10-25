@@ -15,6 +15,14 @@ pub(crate) mod source {
         pub(crate) source_type: SourceType,
     }
 
+    impl Default for SourceConfig {
+        fn default() -> Self {
+            Self {
+                source_type: SourceType::Generator(GeneratorConfig::default()),
+            }
+        }
+    }
+
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) enum SourceType {
         Generator(GeneratorConfig),
