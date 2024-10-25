@@ -10,7 +10,7 @@ use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use numaflow_models::models::{ForwardConditions, Vertex};
 use serde_json::from_slice;
-use std::env;
+use std::collections::HashMap;
 use std::time::Duration;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
@@ -79,6 +79,15 @@ pub(crate) enum VertexType {
     Sink(SinkVtxConfig),
 }
 
+impl std::fmt::Display for VertexType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        match self {
+            VertexType::Source(_) => write!(f, "Source"),
+            VertexType::Sink(_) => write!(f, "Sink"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct FromVertexConfig {
     pub(crate) name: String,
@@ -95,7 +104,11 @@ pub(crate) struct ToVertexConfig {
 }
 
 impl PipelineConfig {
-    pub fn load(pipeline_spec_obj: String) -> Result<Self> {
+    pub fn load(
+        pipeline_spec_obj: String,
+        // env_vars: impl IntoIterator<Item = (&'a str, &'a str)>,
+        env_vars: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
+    ) -> Result<Self> {
         // controller sets this env var.
         let decoded_spec = BASE64_STANDARD
             .decode(pipeline_spec_obj.as_bytes())
@@ -170,15 +183,27 @@ impl PipelineConfig {
             ));
         };
 
+        let env_vars: HashMap<String, String> = env_vars
+            .into_iter()
+            .map(|(key, val)| (key.into(), val.into()))
+            .filter(|(key, _val)| {
+                key == "ENV_NUMAFLOW_SERVING_JETSTREAM_URL"
+                    || key == "ENV_NUMAFLOW_SERVING_JETSTREAM_USER"
+                    || key == "ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD"
+            })
+            .collect();
+
+        let get_var = |var: &str| -> Result<String> {
+            Ok(env_vars
+                .get(var)
+                .ok_or_else(|| Error::Config(format!("Environment variable {var} is set")))?
+                .to_string())
+        };
+
         let js_client_config = isb::jetstream::ClientConfig {
-            url: env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_URL).map_err(|e| {
-                Error::Config(format!(
-                    "Failed to get Jetstream URL from environment variable: {:?}",
-                    e
-                ))
-            })?,
-            user: env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_USER).ok(),
-            password: env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD).ok(),
+            url: get_var(ENV_NUMAFLOW_SERVING_JETSTREAM_URL)?,
+            user: get_var(ENV_NUMAFLOW_SERVING_JETSTREAM_USER).ok(),
+            password: get_var(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD).ok(),
         };
 
         let mut from_vertex_config = vec![];

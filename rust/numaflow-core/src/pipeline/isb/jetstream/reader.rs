@@ -74,6 +74,7 @@ impl JetstreamReader {
     pub(crate) async fn start(
         &self,
         cancel_token: CancellationToken,
+        pipeline_config: &PipelineConfig,
     ) -> Result<(Receiver<ReadMessage>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.config.batch_size);
 
@@ -99,6 +100,27 @@ impl JetstreamReader {
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let this = self.clone();
+
+            // FIXME:
+            let partition: &str = pipeline_config
+                .from_vertex_config
+                .first()
+                .unwrap()
+                .reader_config
+                .streams
+                .first()
+                .unwrap()
+                .0
+                .as_ref();
+
+            let labels = pipeline_forward_read_metric_labels(
+                pipeline_config.pipeline_name.as_ref(),
+                partition,
+                pipeline_config.vertex_name.as_ref(),
+                pipeline_config.vertex_config.to_string().as_ref(),
+                pipeline_config.replica,
+            );
+
             async move {
                 let chunk_stream = this
                     .consumer
@@ -316,9 +338,16 @@ mod tests {
         )
         .await
         .unwrap();
+
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW91dCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im91dCIsInNpbmsiOnsiYmxhY2tob2xlIjp7fSwicmV0cnlTdHJhdGVneSI6eyJvbkZhaWx1cmUiOiJyZXRyeSJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoib3V0IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==".to_string();
+
+        let env_vars = [("ENV_NUMAFLOW_SERVING_JETSTREAM_URL", "localhost:4222")];
+        let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
         let reader_cancel_token = CancellationToken::new();
-        let (mut js_reader_rx, js_reader_task) =
-            js_reader.start(reader_cancel_token.clone()).await.unwrap();
+        let (mut js_reader_rx, js_reader_task) = js_reader
+            .start(reader_cancel_token.clone(), &pipeline_config)
+            .await
+            .unwrap();
 
         let writer_cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
@@ -365,7 +394,7 @@ mod tests {
         );
 
         reader_cancel_token.cancel();
-        js_reader_task.await.unwrap();
+        js_reader_task.await.unwrap().unwrap();
         assert!(js_reader_rx.is_closed());
 
         context.delete_stream(stream_name).await.unwrap();

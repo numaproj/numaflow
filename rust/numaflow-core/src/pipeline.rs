@@ -99,7 +99,10 @@ pub(crate) async fn start_forwarder(
                 )
                 .await;
 
-                let task = tokio::spawn(async move { forwarder.start().await });
+                let task = tokio::spawn({
+                    let config = config.clone();
+                    async move { forwarder.start(config.clone()).await }
+                });
 
                 forwarder_tasks.push(task);
             }

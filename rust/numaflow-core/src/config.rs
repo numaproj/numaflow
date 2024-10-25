@@ -53,7 +53,7 @@ impl Settings {
         }
 
         if let Ok(obj) = env::var(ENV_VERTEX_OBJ) {
-            let cfg = PipelineConfig::load(obj)?;
+            let cfg = PipelineConfig::load(obj, env::vars())?;
             return Ok(Settings {
                 custom_resource_type: CustomResourceType::Pipeline(cfg),
             });
