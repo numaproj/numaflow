@@ -187,9 +187,9 @@ impl PipelineConfig {
             .into_iter()
             .map(|(key, val)| (key.into(), val.into()))
             .filter(|(key, _val)| {
-                key == "ENV_NUMAFLOW_SERVING_JETSTREAM_URL"
-                    || key == "ENV_NUMAFLOW_SERVING_JETSTREAM_USER"
-                    || key == "ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD"
+                key == ENV_NUMAFLOW_SERVING_JETSTREAM_URL
+                    || key == ENV_NUMAFLOW_SERVING_JETSTREAM_USER
+                    || key == ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD
             })
             .collect();
 
