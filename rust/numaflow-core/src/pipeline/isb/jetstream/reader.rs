@@ -275,7 +275,6 @@ mod tests {
     use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 
     #[cfg(feature = "nats-tests")]
-    #[tracing_test::traced_test]
     #[tokio::test]
     async fn test_jetstream_read() {
         let js_url = "localhost:4222";
