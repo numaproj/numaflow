@@ -30,6 +30,8 @@ pub struct KafkaSource {
     pub tls: Option<Box<crate::models::Tls>>,
     #[serde(rename = "topic")]
     pub topic: String,
+    #[serde(rename = "kafkaVersion")]
+    pub kafkaVersion: String,
 }
 
 impl KafkaSource {
@@ -41,6 +43,7 @@ impl KafkaSource {
             sasl: None,
             tls: None,
             topic,
+            config: None,
         }
     }
 }
