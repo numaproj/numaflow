@@ -43,7 +43,7 @@ impl KafkaSource {
             sasl: None,
             tls: None,
             topic,
-            config: None,
+            kafkaVersion: None,
         }
     }
 }
