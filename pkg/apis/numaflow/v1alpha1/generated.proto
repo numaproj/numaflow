@@ -863,6 +863,8 @@ message KafkaSource {
   // SASL.enable=true default for SASL.
   // +optional
   optional SASL sasl = 6;
+
+  optional string KafkaVersion = 7;
 }
 
 message Lifecycle {
