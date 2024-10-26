@@ -3,12 +3,14 @@ pub(crate) mod source {
     const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
     const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
-    use crate::error::Error;
-    use crate::Result;
+    use std::time::Duration;
+
     use bytes::Bytes;
     use numaflow_models::models::Source;
-    use std::time::Duration;
     use tracing::warn;
+
+    use crate::error::Error;
+    use crate::Result;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SourceConfig {
@@ -128,10 +130,12 @@ pub(crate) mod sink {
     const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX;
     const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
 
+    use std::fmt::Display;
+
+    use numaflow_models::models::{Backoff, RetryStrategy, Sink};
+
     use crate::error::Error;
     use crate::Result;
-    use numaflow_models::models::{Backoff, RetryStrategy, Sink};
-    use std::fmt::Display;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SinkConfig {
@@ -371,9 +375,11 @@ pub(crate) mod metrics {
 
 #[cfg(test)]
 mod source_tests {
-    use super::source::{GeneratorConfig, SourceConfig, SourceType, UserDefinedConfig};
-    use bytes::Bytes;
     use std::time::Duration;
+
+    use bytes::Bytes;
+
+    use super::source::{GeneratorConfig, SourceConfig, SourceType, UserDefinedConfig};
 
     #[test]
     fn test_default_generator_config() {
@@ -427,11 +433,12 @@ mod source_tests {
 
 #[cfg(test)]
 mod sink_tests {
+    use numaflow_models::models::{Backoff, RetryStrategy};
+
     use super::sink::{
         BlackholeConfig, LogConfig, OnFailureStrategy, RetryConfig, SinkConfig, SinkType,
         UserDefinedConfig,
     };
-    use numaflow_models::models::{Backoff, RetryStrategy};
 
     #[test]
     fn test_default_log_config() {

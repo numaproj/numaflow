@@ -2,18 +2,6 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::config::components::metrics::MetricsConfig;
-use crate::config::components::sink::SinkType;
-use crate::config::monovertex::MonovertexConfig;
-use crate::error;
-use crate::metrics::{
-    start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
-};
-use crate::shared::server_info::check_for_server_compatibility;
-use crate::sink::{SinkClientType, SinkHandle};
-use crate::source::SourceHandle;
-use crate::Error;
-use crate::Result;
 use axum::http::Uri;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
@@ -30,6 +18,19 @@ use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tower::service_fn;
 use tracing::info;
+
+use crate::config::components::metrics::MetricsConfig;
+use crate::config::components::sink::SinkType;
+use crate::config::monovertex::MonovertexConfig;
+use crate::error;
+use crate::metrics::{
+    start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
+};
+use crate::shared::server_info::check_for_server_compatibility;
+use crate::sink::{SinkClientType, SinkHandle};
+use crate::source::SourceHandle;
+use crate::Error;
+use crate::Result;
 
 pub(crate) async fn start_metrics_server(
     metrics_config: MetricsConfig,

@@ -1,9 +1,10 @@
+use std::time::Duration;
+
 use numaflow_pb::clients::source;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::source::{
     read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
 };
-use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;

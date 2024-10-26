@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use numaflow_models::models::{ForwardConditions, Vertex};
 use serde_json::from_slice;
 
 use crate::config::components::metrics::MetricsConfig;
@@ -14,7 +15,6 @@ use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
 use crate::error::Error;
 use crate::message::get_vertex_replica;
 use crate::Result;
-use numaflow_models::models::{ForwardConditions, Vertex};
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;

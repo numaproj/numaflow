@@ -1,9 +1,10 @@
+use tokio_util::sync::CancellationToken;
+
 use crate::config::pipeline::PipelineConfig;
 use crate::error::Error;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::sink::SinkWriter;
 use crate::Result;
-use tokio_util::sync::CancellationToken;
 
 /// Sink forwarder reads messages from the jetstream and writes to the sink.
 pub(crate) struct SinkForwarder {

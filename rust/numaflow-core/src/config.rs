@@ -1,10 +1,11 @@
 use std::env;
 use std::sync::OnceLock;
 
+use monovertex::MonovertexConfig;
+
 use crate::config::pipeline::PipelineConfig;
 use crate::Error;
 use crate::Result;
-use monovertex::MonovertexConfig;
 
 const ENV_MONO_VERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 const ENV_VERTEX_OBJ: &str = "NUMAFLOW_VERTEX_OBJECT";
@@ -64,12 +65,14 @@ impl Settings {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::components::sink::OnFailureStrategy;
-    use crate::config::{CustomResourceType, Settings, ENV_MONO_VERTEX_OBJ};
+    use std::env;
+
     use base64::prelude::BASE64_STANDARD;
     use base64::Engine;
     use serde_json::json;
-    use std::env;
+
+    use crate::config::components::sink::OnFailureStrategy;
+    use crate::config::{CustomResourceType, Settings, ENV_MONO_VERTEX_OBJ};
 
     #[test]
     fn test_settings_load_combined() {

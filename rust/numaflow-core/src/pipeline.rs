@@ -1,3 +1,14 @@
+use std::collections::HashMap;
+
+use async_nats::jetstream;
+use async_nats::jetstream::Context;
+use futures::future::try_join_all;
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
+
 use crate::config::components::source::SourceType;
 use crate::config::pipeline;
 use crate::config::pipeline::PipelineConfig;
@@ -14,15 +25,6 @@ use crate::source::generator::new_generator;
 use crate::source::user_defined::new_source;
 use crate::transformer::user_defined::SourceTransformHandle;
 use crate::{config, error, source, Result};
-use async_nats::jetstream;
-use async_nats::jetstream::Context;
-use futures::future::try_join_all;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use std::collections::HashMap;
-use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
 
 mod forwarder;
 mod isb;

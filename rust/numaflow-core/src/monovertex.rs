@@ -2,7 +2,6 @@ use forwarder::ForwarderBuilder;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::info;
@@ -285,15 +284,16 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
 
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source};
+    use tokio::sync::mpsc::Sender;
+    use tokio_util::sync::CancellationToken;
+
     use crate::config::components;
     use crate::config::monovertex::MonovertexConfig;
     use crate::error;
     use crate::monovertex::start_forwarder;
     use crate::shared::server_info::ServerInfo;
-    use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{sink, source};
-    use tokio::sync::mpsc::Sender;
-    use tokio_util::sync::CancellationToken;
 
     struct SimpleSource;
     #[tonic::async_trait]

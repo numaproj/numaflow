@@ -98,6 +98,7 @@ impl TryFrom<async_nats::Message> for Message {
                 )
             })
             .collect();
+        // FIXME(cr): we should not be using subject. keys are in the payload
         let keys = message.subject.split('.').map(|s| s.to_string()).collect();
         let event_time = Utc::now();
         let offset = None;

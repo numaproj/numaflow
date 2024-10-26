@@ -119,14 +119,15 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
 
-    use super::*;
-    use crate::message::{Message, MessageID};
     use async_nats::jetstream;
     use async_nats::jetstream::stream;
     use chrono::Utc;
     use tokio::sync::oneshot;
     use tokio::time::Instant;
     use tracing::info;
+
+    use super::*;
+    use crate::message::{Message, MessageID};
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]

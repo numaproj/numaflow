@@ -1,8 +1,9 @@
+use tokio::sync::{mpsc, oneshot};
+
 use crate::{
     message::{Message, Offset},
     reader::LagReader,
 };
-use tokio::sync::{mpsc, oneshot};
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///

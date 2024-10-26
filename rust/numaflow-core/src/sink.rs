@@ -1,10 +1,6 @@
-use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
-use crate::config::pipeline::SinkVtxConfig;
-use crate::error::Error;
-use crate::message::{Message, ReadAck, ReadMessage, ResponseFromSink, ResponseStatusFromSink};
-use crate::Result;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
 use std::collections::HashMap;
+
+use numaflow_pb::clients::sink::sink_client::SinkClient;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -15,6 +11,12 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{debug, error, warn};
 use user_defined::UserDefinedSink;
+
+use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+use crate::config::pipeline::SinkVtxConfig;
+use crate::error::Error;
+use crate::message::{Message, ReadAck, ReadMessage, ResponseFromSink, ResponseStatusFromSink};
+use crate::Result;
 
 mod blackhole;
 mod log;
