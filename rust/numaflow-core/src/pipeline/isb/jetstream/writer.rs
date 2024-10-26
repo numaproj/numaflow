@@ -16,7 +16,7 @@ use tracing::{error, info, warn};
 
 use crate::config::pipeline::isb::BufferWriterConfig;
 use crate::error::Error;
-use crate::message::{IntOffset, Offset};
+use crate::message::{ Offset};
 use crate::Result;
 
 #[derive(Clone, Debug)]
@@ -269,7 +269,7 @@ impl PafResolverActor {
     /// Tries to the resolve the original PAF from the write call. If it is successful, will send
     /// the successful result to the top-level callee's oneshot channel. If the original PAF does
     /// not successfully resolve, it will do blocking write till write to JetStream succeeds.
-    async fn successfully_resolve_paf(&mut self, result: ResolveAndPublishResult) {
+    async fn successfully_resolve_paf(&mut self, _result: ResolveAndPublishResult) {
         // result
         //     .callee_tx
         //     .send(Ok(Offset::Int(IntOffset::new(

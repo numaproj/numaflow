@@ -230,14 +230,10 @@ impl SinkWriter {
         messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
-        let msg_count = messages.len() as u64;
 
         if messages.is_empty() {
             return Ok(());
         }
-
-        // this start time is for tracking the total time taken
-        let start_time_e2e = tokio::time::Instant::now();
 
         let mut attempts = 0;
         let mut error_map = HashMap::new();
@@ -441,7 +437,6 @@ impl SinkWriter {
         // start with the original set of message to be sent.
         // we will overwrite this vec with failed messages and will keep retrying.
         let mut messages_to_send = fallback_msgs;
-        let fb_msg_count = messages_to_send.len() as u64;
 
         let default_retry = retry_config
             .sink_default_retry_strategy

@@ -101,10 +101,10 @@ mod jetstream_client_config {
     #[test]
     fn test_default_client_config() {
         let expected_config = ClientConfig {
-                url: "localhost:4222".to_string(),
-                user: None,
-                password: None,
-            };
+            url: "localhost:4222".to_string(),
+            user: None,
+            password: None,
+        };
         let config = ClientConfig::default();
         assert_eq!(config, expected_config);
     }

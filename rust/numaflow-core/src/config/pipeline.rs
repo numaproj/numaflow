@@ -109,7 +109,6 @@ pub(crate) struct ToVertexConfig {
 impl PipelineConfig {
     pub fn load(
         pipeline_spec_obj: String,
-        // env_vars: impl IntoIterator<Item = (&'a str, &'a str)>,
         env_vars: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
     ) -> Result<Self> {
         // controller sets this env var.
@@ -266,5 +265,103 @@ impl PipelineConfig {
             vertex_config: vertex,
             metrics_config: Default::default(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::components::sink::{BlackholeConfig, LogConfig, SinkType};
+
+    #[test]
+    fn test_default_pipeline_config() {
+        let expected = PipelineConfig {
+            pipeline_name: "".to_string(),
+            vertex_name: "".to_string(),
+            replica: 0,
+            batch_size: 0,
+            paf_batch_size: 0,
+            read_timeout: Duration::from_secs(0),
+            js_client_config: isb::jetstream::ClientConfig {
+                url: "".to_string(),
+                user: None,
+                password: None,
+            },
+            from_vertex_config: vec![],
+            to_vertex_config: vec![],
+            vertex_config: VertexType::Source(SourceVtxConfig {
+                source_config: Default::default(),
+                transformer_config: None,
+            }),
+            metrics_config: Default::default(),
+        };
+
+        let config = PipelineConfig::default();
+        assert_eq!(config, expected);
+    }
+
+    #[test]
+    fn test_vertex_type_display() {
+        let src_type = VertexType::Source(SourceVtxConfig {
+            source_config: SourceConfig::default(),
+            transformer_config: None,
+        });
+        assert_eq!(src_type.to_string(), "Source");
+
+        let sink_type = VertexType::Sink(SinkVtxConfig {
+            sink_config: SinkConfig {
+                sink_type: SinkType::Log(LogConfig {}),
+                retry_config: None,
+            },
+            fb_sink_config: None,
+        });
+        assert_eq!(sink_type.to_string(), "Sink");
+    }
+
+    #[test]
+    fn test_pipeline_config_load_sink_vertex() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW91dCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im91dCIsInNpbmsiOnsiYmxhY2tob2xlIjp7fSwicmV0cnlTdHJhdGVneSI6eyJvbkZhaWx1cmUiOiJyZXRyeSJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoib3V0IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==".to_string();
+
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
+
+        let expected = PipelineConfig {
+            pipeline_name: "simple-pipeline".to_string(),
+            vertex_name: "out".to_string(),
+            replica: 0,
+            batch_size: 500,
+            paf_batch_size: 30000,
+            read_timeout: Duration::from_secs(1),
+            js_client_config: isb::jetstream::ClientConfig {
+                url: "localhost:4222".to_string(),
+                user: None,
+                password: None,
+            },
+            from_vertex_config: vec![FromVertexConfig {
+                name: "in".to_string(),
+                reader_config: BufferReaderConfig {
+                    partitions: 1,
+                    streams: vec![("default-simple-pipeline-out-0".into(), 0)],
+                    batch_size: 500,
+                    read_timeout: Duration::from_secs(1),
+                    wip_ack_interval: Duration::from_secs(1),
+                },
+                partitions: 0,
+            }],
+            to_vertex_config: vec![],
+            vertex_config: VertexType::Sink(SinkVtxConfig {
+                sink_config: SinkConfig {
+                    sink_type: SinkType::Blackhole(BlackholeConfig {}),
+                    retry_config: None,
+                },
+                fb_sink_config: None,
+            }),
+            metrics_config: MetricsConfig {
+                metrics_server_listen_port: 2469,
+                lag_check_interval_in_secs: 5,
+                lag_refresh_interval_in_secs: 3,
+            },
+        };
+        assert_eq!(pipeline_config, expected);
     }
 }
