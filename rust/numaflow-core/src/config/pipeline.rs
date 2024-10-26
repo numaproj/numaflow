@@ -1,3 +1,11 @@
+use std::collections::HashMap;
+use std::env;
+use std::time::Duration;
+
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use serde_json::from_slice;
+
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::source::SourceConfig;
@@ -6,12 +14,7 @@ use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
 use crate::error::Error;
 use crate::message::get_vertex_replica;
 use crate::Result;
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
 use numaflow_models::models::{ForwardConditions, Vertex};
-use serde_json::from_slice;
-use std::collections::HashMap;
-use std::time::Duration;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
@@ -196,7 +199,7 @@ impl PipelineConfig {
         let get_var = |var: &str| -> Result<String> {
             Ok(env_vars
                 .get(var)
-                .ok_or_else(|| Error::Config(format!("Environment variable {var} is set")))?
+                .ok_or_else(|| Error::Config(format!("Environment variable {var} is not set")))?
                 .to_string())
         };
 

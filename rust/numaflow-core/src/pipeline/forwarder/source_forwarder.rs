@@ -1,3 +1,9 @@
+use std::collections::HashMap;
+
+use chrono::Utc;
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, info};
+
 use crate::config::pipeline::PipelineConfig;
 use crate::error;
 use crate::error::Error;
@@ -6,10 +12,6 @@ use crate::metrics::{forward_pipeline_metrics, pipeline_forward_read_metric_labe
 use crate::pipeline::isb::jetstream::WriterHandle;
 use crate::source::SourceHandle;
 use crate::transformer::user_defined::SourceTransformHandle;
-use chrono::Utc;
-use std::collections::HashMap;
-use tokio_util::sync::CancellationToken;
-use tracing::{debug, info};
 
 /// Simple source forwarder that reads messages from the source, applies transformation if present
 /// and writes to the messages to ISB.
