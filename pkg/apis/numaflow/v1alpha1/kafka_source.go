@@ -30,5 +30,5 @@ type KafkaSource struct {
 	// SASL.enable=true default for SASL.
 	// +optional
 	SASL         *SASL  `json:"sasl" protobuf:"bytes,6,opt,name=sasl"`
-	KafkaVersion string `json:"kafkaVersion,omitempty" protobuf:"bytes,5,opt,name=kafkaVersion"`
+	KafkaVersion string `json:"kafkaVersion,omitempty" protobuf:"bytes,7,opt,name=kafkaVersion"`
 }
