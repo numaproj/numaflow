@@ -30,7 +30,7 @@ pub struct KafkaSource {
     pub tls: Option<Box<crate::models::Tls>>,
     #[serde(rename = "topic")]
     pub topic: String,
-    #[serde(rename = "kafkaVersion")]
+    #[serde(rename = "kafkaVersion"), skip_serializing_if = "Option::is_none")]
     pub kafkaVersion: String,
 }
 
