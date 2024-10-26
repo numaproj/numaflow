@@ -20912,7 +20912,7 @@
         },
         "kafkaVersion": {
           "type": "string"
-        },
+        }
       },
       "required": [
         "topic"
