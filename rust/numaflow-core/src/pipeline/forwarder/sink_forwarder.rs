@@ -1,3 +1,4 @@
+use crate::config::pipeline::PipelineConfig;
 use crate::error::Error;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::sink::SinkWriter;
@@ -23,12 +24,12 @@ impl SinkForwarder {
         }
     }
 
-    pub(crate) async fn start(&self) -> Result<()> {
+    pub(crate) async fn start(&self, pipeline_config: PipelineConfig) -> Result<()> {
         // Create a child cancellation token only for the reader so that we can exit the reader first
         let reader_cancellation_token = self.cln_token.child_token();
         let (read_messages_rx, reader_handle) = self
             .jetstream_reader
-            .start(reader_cancellation_token.clone())
+            .start(reader_cancellation_token.clone(), &pipeline_config)
             .await?;
 
         let sink_writer_handle = self

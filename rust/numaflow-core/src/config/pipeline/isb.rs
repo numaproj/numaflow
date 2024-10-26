@@ -93,3 +93,62 @@ impl Default for BufferReaderConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod jetstream_client_config {
+    use super::jetstream::*;
+
+    #[test]
+    fn test_default_client_config() {
+        let expected_config = ClientConfig {
+            url: "localhost:4222".to_string(),
+            user: None,
+            password: None,
+        };
+        let config = ClientConfig::default();
+        assert_eq!(config, expected_config);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_buffer_writer_config() {
+        let expected = BufferWriterConfig {
+            streams: vec![("default-0".to_string(), DEFAULT_PARTITION_IDX)],
+            partitions: DEFAULT_PARTITIONS,
+            max_length: DEFAULT_MAX_LENGTH,
+            usage_limit: DEFAULT_USAGE_LIMIT,
+            refresh_interval: Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS),
+            buffer_full_strategy: DEFAULT_BUFFER_FULL_STRATEGY,
+            retry_interval: Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS),
+        };
+        let config = BufferWriterConfig::default();
+
+        assert_eq!(config, expected);
+    }
+
+    #[test]
+    fn test_buffer_full_strategy_display() {
+        let val = BufferFullStrategy::RetryUntilSuccess;
+        assert_eq!(val.to_string(), "retryUntilSuccess");
+
+        let val = BufferFullStrategy::DiscardLatest;
+        assert_eq!(val.to_string(), "discardLatest");
+    }
+
+    #[test]
+    fn test_default_buffer_reader_config() {
+        let expected = BufferReaderConfig {
+            partitions: DEFAULT_PARTITIONS,
+            streams: vec![("default-0".to_string(), DEFAULT_PARTITION_IDX)],
+            batch_size: DEFAULT_BATCH_SIZE,
+            wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
+            read_timeout: Duration::from_millis(DEFAULT_READ_TIMEOUT_MILLIS),
+        };
+        let config = BufferReaderConfig::default();
+        assert_eq!(config, expected);
+    }
+}
