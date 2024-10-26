@@ -202,35 +202,12 @@ impl SinkWriter {
         Ok(handle)
     }
 
-    async fn collect_batch(&self, messages_rx: &mut Receiver<ReadMessage>) -> Vec<ReadMessage> {
-        let mut batch = Vec::with_capacity(self.batch_size);
-        let timeout = time::sleep(self.read_timeout);
-        pin!(timeout);
-
-        loop {
-            tokio::select! {
-                Some(read_message) = messages_rx.recv() => {
-                    batch.push(read_message);
-                    if batch.len() >= self.batch_size {
-                        break;
-                    }
-                }
-                _ = &mut timeout => {
-                    break;
-                }
-            }
-        }
-
-        batch
-    }
-
     // Writes the messages to the sink and handles fallback messages if present
     async fn write_to_sink(
         &mut self,
         messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<()> {
-
         if messages.is_empty() {
             return Ok(());
         }

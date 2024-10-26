@@ -209,9 +209,6 @@ pub(crate) async fn create_sink_handle(
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
-    use std::io::Write;
-
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
     use tokio::sync::mpsc;
@@ -219,16 +216,7 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use super::*;
-    use crate::shared::server_info::ServerInfo;
     use crate::shared::utils::create_rpc_channel;
-
-    async fn write_server_info(file_path: &str, server_info: &ServerInfo) -> Result<()> {
-        let serialized = serde_json::to_string(server_info).unwrap();
-        let mut file = File::create(file_path).unwrap();
-        file.write_all(serialized.as_bytes()).unwrap();
-        file.write_all(b"U+005C__END__").unwrap();
-        Ok(())
-    }
 
     struct SimpleSource {}
 

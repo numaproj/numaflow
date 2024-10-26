@@ -61,6 +61,7 @@ impl Default for BufferWriterConfig {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum BufferFullStrategy {
     RetryUntilSuccess,
+    #[allow(dead_code)]
     DiscardLatest,
 }
 

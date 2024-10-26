@@ -106,7 +106,6 @@ pub(crate) enum PipelineContainerState {
         ),
     ),
     Sink((Option<SinkClient<Channel>>, Option<SinkClient<Channel>>)),
-    None,
 }
 
 /// The global register of all metrics.
@@ -523,7 +522,6 @@ async fn sidecar_livez(State(state): State<UserDefinedContainerState>) -> impl I
                     }
                 }
             }
-            PipelineContainerState::None => {}
         },
     }
     StatusCode::NO_CONTENT

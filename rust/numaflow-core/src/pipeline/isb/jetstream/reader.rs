@@ -3,7 +3,6 @@ use std::time::Duration;
 use async_nats::jetstream::{
     consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
 };
-use log::info;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -25,7 +24,6 @@ use crate::Result;
 // Storing the Sender end of channel in this struct would make it difficult to close the channel with `cancel` method.
 #[derive(Clone)]
 pub(crate) struct JetstreamReader {
-    pipeline_config: PipelineConfig,
     partition_idx: u16,
     config: BufferReaderConfig,
     consumer: PullConsumer,
@@ -33,7 +31,6 @@ pub(crate) struct JetstreamReader {
 
 impl JetstreamReader {
     pub(crate) async fn new(
-        pipeline_config: PipelineConfig,
         stream_name: String,
         partition_idx: u16,
         js_ctx: Context,
@@ -60,7 +57,6 @@ impl JetstreamReader {
         config.wip_ack_interval = wip_ack_interval;
 
         Ok(Self {
-            pipeline_config,
             partition_idx,
             config: config.clone(),
             consumer,
@@ -112,11 +108,6 @@ impl JetstreamReader {
 
                 tokio::pin!(chunk_stream);
 
-                let mut read_time = Instant::now();
-                let mut count = 0;
-
-                let mut chunk_time = Instant::now();
-                let mut total_count = 0;
                 // The .next() call will not return if there is no data even if read_timeout is
                 // reached.
                 while let Some(messages) = chunk_stream.next().await {
@@ -175,32 +166,12 @@ impl JetstreamReader {
                         forward_pipeline_metrics()
                             .forwarder
                             .data_read
-                            .get_or_create(&labels)
+                            .get_or_create(labels)
                             .inc();
-                        count += 1;
-                        total_count += 1;
                     }
                     if cancel_token.is_cancelled() {
                         warn!("Cancellation token is cancelled. Exiting JetstreamReader");
                         break;
-                    }
-
-                    info!(
-                        "Read {} messages from Jetstream in {}ms",
-                        count,
-                        read_time.elapsed().as_millis()
-                    );
-                    read_time = Instant::now();
-                    count = 0;
-
-                    if chunk_time.elapsed().as_millis() >= 1000 {
-                        info!(
-                            "Total {} messages read from Jetstream in {}ms",
-                            total_count,
-                            chunk_time.elapsed().as_millis()
-                        );
-                        chunk_time = Instant::now();
-                        total_count = 0;
                     }
                 }
                 Ok(())
@@ -313,7 +284,6 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let js_reader = JetstreamReader::new(
-            Default::default(),
             stream_name.to_string(),
             0,
             context.clone(),
@@ -358,8 +328,7 @@ mod tests {
             let (success_tx, success_rx) = oneshot::channel::<Result<Offset>>();
             let message_bytes: BytesMut = message.try_into().unwrap();
             writer.write(message_bytes.into(), success_tx).await;
-            // FIXME: Uncomment when we start awaiting for PAFs
-            // success_rx.await.unwrap().unwrap();
+            success_rx.await.unwrap().unwrap();
         }
         info!("Sent 10 messages");
         // Cancel the token to exit the retry loop

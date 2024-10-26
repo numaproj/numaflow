@@ -161,7 +161,6 @@ async fn create_buffer_readers(
     let mut readers = Vec::new();
     for stream in &reader_config.streams {
         let reader = JetstreamReader::new(
-            config.clone(),
             stream.0.clone(),
             stream.1,
             js_context.clone(),

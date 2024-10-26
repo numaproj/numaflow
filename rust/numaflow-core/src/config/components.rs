@@ -57,9 +57,10 @@ pub(crate) mod source {
 
                         generator_config.value = generator.value;
                         generator_config.rpu = generator.rpu.unwrap_or(1) as usize;
-                        generator_config.duration = generator
-                            .duration
-                            .map_or(1000, |d| std::time::Duration::from(d).as_millis() as usize);
+                        generator_config.duration =
+                            generator.duration.map_or(Duration::from_millis(1000), |d| {
+                                std::time::Duration::from(d)
+                            });
                         generator_config.key_count = generator
                             .key_count
                             .map_or(0, |kc| std::cmp::min(kc, u8::MAX as i32) as u8);
@@ -78,7 +79,7 @@ pub(crate) mod source {
     pub(crate) struct GeneratorConfig {
         pub rpu: usize,
         pub content: Bytes,
-        pub duration: usize,
+        pub duration: Duration,
         pub value: Option<i64>,
         pub key_count: u8,
         pub msg_size_bytes: u32,
@@ -90,7 +91,7 @@ pub(crate) mod source {
             Self {
                 rpu: 1,
                 content: Bytes::new(),
-                duration: 1000,
+                duration: Duration::from_millis(1000),
                 value: None,
                 key_count: 0,
                 msg_size_bytes: 8,
@@ -319,6 +320,7 @@ pub(crate) mod transformer {
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) enum TransformerType {
+        #[allow(dead_code)]
         Noop(NoopConfig), // will add built-in transformers
         UserDefined(UserDefinedConfig),
     }
@@ -378,7 +380,7 @@ mod source_tests {
         let default_config = GeneratorConfig::default();
         assert_eq!(default_config.rpu, 1);
         assert_eq!(default_config.content, Bytes::new());
-        assert_eq!(default_config.duration, 1000);
+        assert_eq!(default_config.duration.as_millis(), 1000);
         assert_eq!(default_config.value, None);
         assert_eq!(default_config.key_count, 0);
         assert_eq!(default_config.msg_size_bytes, 8);

@@ -237,12 +237,28 @@ impl PipelineConfig {
                 .map(|i| (format!("{}-{}", buffer_name, i), i))
                 .collect();
 
+            let default_writer_config = BufferWriterConfig::default();
             to_vertex_config.push(ToVertexConfig {
                 name: edge.to,
                 writer_config: BufferWriterConfig {
                     streams,
                     partitions: partition_count,
-                    ..Default::default()
+                    max_length: vertex_obj
+                        .spec
+                        .limits
+                        .as_ref()
+                        .and_then(|l| l.buffer_max_length)
+                        .unwrap_or(default_writer_config.max_length as i64)
+                        as usize,
+                    usage_limit: vertex_obj
+                        .spec
+                        .limits
+                        .as_ref()
+                        .and_then(|l| l.buffer_usage_limit)
+                        .unwrap_or(default_writer_config.usage_limit as i64)
+                        as f64
+                        / 100.0,
+                    ..default_writer_config
                 },
                 partitions: edge.to_vertex_partition_count.unwrap_or_default() as u16,
                 conditions: None,
@@ -272,6 +288,7 @@ impl PipelineConfig {
 mod tests {
     use super::*;
     use crate::config::components::sink::{BlackholeConfig, LogConfig, SinkType};
+    use crate::config::components::source::{GeneratorConfig, SourceType};
 
     #[test]
     fn test_default_pipeline_config() {
@@ -362,6 +379,59 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
             },
         };
+        assert_eq!(pipeline_config, expected);
+    }
+
+    #[test]
+    fn test_pipeline_config_load_all() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLWluIiwibmFtZXNwYWNlIjoiZGVmYXVsdCIsImNyZWF0aW9uVGltZXN0YW1wIjpudWxsfSwic3BlYyI6eyJuYW1lIjoiaW4iLCJzb3VyY2UiOnsiZ2VuZXJhdG9yIjp7InJwdSI6MTAwMDAwLCJkdXJhdGlvbiI6IjFzIiwibXNnU2l6ZSI6OCwiaml0dGVyIjoiMHMifX0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImVudiI6W3sibmFtZSI6IlBBRl9CQVRDSF9TSVpFIiwidmFsdWUiOiIxMDAwMDAifV19LCJsaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6MTAwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MTUwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4NX0sInNjYWxlIjp7Im1pbiI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fSwicGlwZWxpbmVOYW1lIjoic2ltcGxlLXBpcGVsaW5lIiwiaW50ZXJTdGVwQnVmZmVyU2VydmljZU5hbWUiOiIiLCJyZXBsaWNhcyI6MCwidG9FZGdlcyI6W3siZnJvbSI6ImluIiwidG8iOiJvdXQiLCJjb25kaXRpb25zIjpudWxsLCJmcm9tVmVydGV4VHlwZSI6IlNvdXJjZSIsImZyb21WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwiZnJvbVZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjoxMDAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjoxNTAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjg1fSwidG9WZXJ0ZXhUeXBlIjoiU2luayIsInRvVmVydGV4UGFydGl0aW9uQ291bnQiOjEsInRvVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjEwMDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjE1MDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODV9fV0sIndhdGVybWFyayI6eyJkaXNhYmxlZCI6dHJ1ZSwibWF4RGVsYXkiOiIwcyJ9fSwic3RhdHVzIjp7InBoYXNlIjoiIiwicmVwbGljYXMiOjAsImRlc2lyZWRSZXBsaWNhcyI6MCwibGFzdFNjYWxlZEF0IjpudWxsfX0=";
+
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let pipeline_config =
+            PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        let expected = PipelineConfig {
+            pipeline_name: "simple-pipeline".to_string(),
+            vertex_name: "in".to_string(),
+            replica: 0,
+            batch_size: 1000,
+            paf_batch_size: 30000,
+            read_timeout: Duration::from_secs(1),
+            js_client_config: isb::jetstream::ClientConfig {
+                url: "localhost:4222".to_string(),
+                user: None,
+                password: None,
+            },
+            from_vertex_config: vec![],
+            to_vertex_config: vec![ToVertexConfig {
+                name: "out".to_string(),
+                writer_config: BufferWriterConfig {
+                    streams: vec![("default-simple-pipeline-out-0".to_string(), 0)],
+                    partitions: 1,
+                    max_length: 150000,
+                    usage_limit: 0.85,
+                    ..Default::default()
+                },
+                partitions: 1,
+                conditions: None,
+            }],
+            vertex_config: VertexType::Source(SourceVtxConfig {
+                source_config: SourceConfig {
+                    source_type: SourceType::Generator(GeneratorConfig {
+                        rpu: 100000,
+                        content: Default::default(),
+                        duration: Duration::from_millis(1000),
+                        value: None,
+                        key_count: 0,
+                        msg_size_bytes: 8,
+                        jitter: Duration::from_secs(0),
+                    }),
+                },
+                transformer_config: None,
+            }),
+            metrics_config: Default::default(),
+        };
+
         assert_eq!(pipeline_config, expected);
     }
 }

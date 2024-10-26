@@ -179,12 +179,13 @@ impl Forwarder {
         }
 
         // await for all the result futures to complete
-        // for result in results {
-        //     // we can use the ack to publish watermark etc
-        //     result
-        //         .await
-        //         .map_err(|e| Error::Forwarder(format!("Failed to write to jetstream {:?}", e)))??;
-        // }
+        // FIXME: we should not await for the results to complete, that will make it sequential
+        for result in results {
+            // we can use the ack to publish watermark etc
+            result
+                .await
+                .map_err(|e| Error::Forwarder(format!("Failed to write to jetstream {:?}", e)))??;
+        }
         Ok(())
     }
 }

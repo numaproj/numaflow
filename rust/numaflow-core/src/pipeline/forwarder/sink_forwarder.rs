@@ -5,6 +5,7 @@ use crate::sink::SinkWriter;
 use crate::Result;
 use tokio_util::sync::CancellationToken;
 
+/// Sink forwarder reads messages from the jetstream and writes to the sink.
 pub(crate) struct SinkForwarder {
     jetstream_reader: JetstreamReader,
     sink_writer: SinkWriter,
@@ -25,7 +26,7 @@ impl SinkForwarder {
     }
 
     pub(crate) async fn start(&self, pipeline_config: PipelineConfig) -> Result<()> {
-        // Create a child cancellation token only for the reader so that we can exit the reader first
+        // Create a child cancellation token only for the reader so that we can stop the reader first
         let reader_cancellation_token = self.cln_token.child_token();
         let (read_messages_rx, reader_handle) = self
             .jetstream_reader

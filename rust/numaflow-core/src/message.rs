@@ -109,7 +109,7 @@ impl TryFrom<async_nats::Message> for Message {
 
         Ok(Self {
             keys,
-            value: payload.into(), // FIXME: use Bytes
+            value: payload, // FIXME: use Bytes
             offset,
             event_time,
             id,
@@ -134,16 +134,6 @@ impl IntOffset {
     }
 }
 
-impl IntOffset {
-    fn sequence(&self) -> Result<u64> {
-        Ok(self.offset)
-    }
-
-    fn partition_idx(&self) -> u16 {
-        self.partition_idx
-    }
-}
-
 impl fmt::Display for IntOffset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}-{}", self.offset, self.partition_idx)
@@ -163,16 +153,6 @@ impl StringOffset {
             offset: seq,
             partition_idx,
         }
-    }
-}
-
-impl StringOffset {
-    fn sequence(&self) -> Result<u64> {
-        Ok(self.offset.parse().unwrap())
-    }
-
-    fn partition_idx(&self) -> u16 {
-        self.partition_idx
     }
 }
 
@@ -199,16 +179,6 @@ pub(crate) struct MessageID {
     pub(crate) vertex_name: String,
     pub(crate) offset: String,
     pub(crate) index: i32,
-}
-
-impl MessageID {
-    fn new(vertex_name: String, offset: String, index: i32) -> Self {
-        Self {
-            vertex_name,
-            offset,
-            index,
-        }
-    }
 }
 
 impl From<numaflow_pb::objects::isb::MessageId> for MessageID {
@@ -690,7 +660,11 @@ mod tests {
 
     #[test]
     fn test_message_id_to_proto() {
-        let message_id = MessageID::new("vertex".to_string(), "123".to_string(), 0);
+        let message_id = MessageID {
+            vertex_name: "vertex".to_string(),
+            offset: "123".to_string(),
+            index: 0,
+        };
         let proto_id: MessageId = message_id.into();
         assert_eq!(proto_id.vertex_name, "vertex");
         assert_eq!(proto_id.offset, "123");

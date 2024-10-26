@@ -40,19 +40,13 @@ impl ActorMessage {
 struct WriterActor {
     js_writer: JetstreamWriter,
     receiver: Receiver<ActorMessage>,
-    cancel_token: CancellationToken,
 }
 
 impl WriterActor {
-    fn new(
-        js_writer: JetstreamWriter,
-        receiver: Receiver<ActorMessage>,
-        cancel_token: CancellationToken,
-    ) -> Self {
+    fn new(js_writer: JetstreamWriter, receiver: Receiver<ActorMessage>) -> Self {
         Self {
             js_writer,
             receiver,
-            cancel_token,
         }
     }
 
@@ -96,7 +90,7 @@ impl WriterHandle {
             paf_batch_size,
             cancel_token.clone(),
         );
-        let mut actor = WriterActor::new(js_writer.clone(), receiver, cancel_token);
+        let mut actor = WriterActor::new(js_writer.clone(), receiver);
 
         tokio::spawn(async move {
             actor.run().await;
