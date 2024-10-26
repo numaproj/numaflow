@@ -29,6 +29,7 @@ pub fn config() -> &'static Settings {
     })
 }
 
+/// CustomResources supported by Numaflow.
 #[derive(Debug, Clone)]
 pub(crate) enum CustomResourceType {
     MonoVertex(MonovertexConfig),

@@ -153,6 +153,10 @@ pub(crate) mod sink {
     impl TryFrom<Box<Sink>> for SinkType {
         type Error = Error;
 
+        // FIXME(cr): why is sink.fallback Box<AbstrackSink> vs. sink Box<Sink>. This is coming from
+        //   numaflow-models. Problem is, golang has embedded structures and rust does not. We might
+        //   have to AbstractSink for sink-configs while Sink for real sink types.
+        //   NOTE: I do not see this problem with Source?
         fn try_from(sink: Box<Sink>) -> Result<Self> {
             if let Some(fallback) = sink.fallback {
                 fallback

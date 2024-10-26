@@ -30,6 +30,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) vertex_name: String,
     pub(crate) replica: u16,
     pub(crate) batch_size: usize,
+    // FIXME(cr): we cannot leak this as a paf, we need to use a different terminology.
     pub(crate) paf_batch_size: usize,
     pub(crate) read_timeout: Duration,
     pub(crate) js_client_config: isb::jetstream::ClientConfig, // TODO: make it enum, since we can have different ISB implementations
@@ -45,6 +46,7 @@ impl Default for PipelineConfig {
             pipeline_name: "".to_string(),
             vertex_name: "".to_string(),
             replica: 0,
+            // FIXME(cr): shouldn't defaults generally match the default spec we have? e.g., batch_size = 500?
             batch_size: 0,
             paf_batch_size: 0,
             read_timeout: Duration::from_secs(0),
@@ -107,17 +109,17 @@ pub(crate) struct ToVertexConfig {
 }
 
 impl PipelineConfig {
-    pub fn load(
+    pub(crate) fn load(
         pipeline_spec_obj: String,
         env_vars: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
     ) -> Result<Self> {
         // controller sets this env var.
         let decoded_spec = BASE64_STANDARD
             .decode(pipeline_spec_obj.as_bytes())
-            .map_err(|e| Error::Config(format!("Failed to decode mono vertex spec: {:?}", e)))?;
+            .map_err(|e| Error::Config(format!("Failed to decode pipeline spec: {:?}", e)))?;
 
         let vertex_obj: Vertex = from_slice(&decoded_spec)
-            .map_err(|e| Error::Config(format!("Failed to parse mono vertex spec: {:?}", e)))?;
+            .map_err(|e| Error::Config(format!("Failed to parse pipeline spec: {:?}", e)))?;
 
         let pipeline_name = vertex_obj.spec.pipeline_name;
         let vertex_name = vertex_obj.spec.name;
@@ -147,6 +149,7 @@ impl PipelineConfig {
             })
             .unwrap_or(DEFAULT_TIMEOUT_IN_MS);
 
+        // FIXME(cr): how is the unwrap_or_default working here?
         let from_edges = vertex_obj.spec.from_edges.unwrap_or_default();
 
         let to_edges = vertex_obj.spec.to_edges.unwrap_or_default();
@@ -189,6 +192,7 @@ impl PipelineConfig {
             .into_iter()
             .map(|(key, val)| (key.into(), val.into()))
             .filter(|(key, _val)| {
+                // FIXME(cr): this filter is non-exhaustive, should we invert?
                 key == ENV_NUMAFLOW_SERVING_JETSTREAM_URL
                     || key == ENV_NUMAFLOW_SERVING_JETSTREAM_USER
                     || key == ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD
