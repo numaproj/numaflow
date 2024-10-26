@@ -20909,9 +20909,6 @@
         },
         "topic": {
           "type": "string"
-        },
-        "kafkaVersion": {
-          "type": "string"
         }
       },
       "required": [
