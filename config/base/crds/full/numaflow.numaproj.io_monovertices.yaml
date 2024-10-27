@@ -4651,6 +4651,8 @@ spec:
                         type: string
                       consumerGroup:
                         type: string
+                      kafkaVersion:
+                        type: string
                       sasl:
                         properties:
                           gssapi:

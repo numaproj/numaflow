@@ -5439,6 +5439,19 @@ default for SASL.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>kafkaVersion</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>

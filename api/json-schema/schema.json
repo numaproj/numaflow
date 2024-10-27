@@ -20899,6 +20899,9 @@
         "consumerGroup": {
           "type": "string"
         },
+        "kafkaVersion": {
+          "type": "string"
+        },
         "sasl": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASL",
           "description": "SASL user to configure SASL connection for kafka broker SASL.enable=true default for SASL."
