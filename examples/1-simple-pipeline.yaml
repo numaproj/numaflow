@@ -1,29 +1,30 @@
-# FIXME(cr): revert the changes
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
-  watermark:
-    disabled: true
-  limits:
-    readBatchSize: 1000
   vertices:
     - name: in
       scale:
         min: 1
+      # A self data generating source
       source:
         generator:
-          rpu: 100000
-          msgSize: 300
+          rpu: 5
           duration: 1s
-
-    - name: out
-      partitions: 5
+    - name: cat
       scale:
-        min: 5
+        min: 1
+      udf:
+        builtin:
+          name: cat # A built-in UDF which simply cats the message
+    - name: out
+      scale:
+        min: 1
       sink:
-        blackhole: {}
+        log: {}
   edges:
     - from: in
+      to: cat
+    - from: cat
       to: out

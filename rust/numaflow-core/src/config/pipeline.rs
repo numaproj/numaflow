@@ -43,18 +43,13 @@ pub(crate) struct PipelineConfig {
 impl Default for PipelineConfig {
     fn default() -> Self {
         PipelineConfig {
-            pipeline_name: "".to_string(),
-            vertex_name: "".to_string(),
+            pipeline_name: "default-pl".to_string(),
+            vertex_name: "default-vtx".to_string(),
             replica: 0,
-            // FIXME(cr): shouldn't defaults generally match the default spec we have? e.g., batch_size = 500?
-            batch_size: 0,
-            paf_batch_size: 0,
-            read_timeout: Duration::from_secs(0),
-            js_client_config: isb::jetstream::ClientConfig {
-                url: "".to_string(),
-                user: None,
-                password: None,
-            },
+            batch_size: DEFAULT_BATCH_SIZE as usize,
+            paf_batch_size: (DEFAULT_BATCH_SIZE * 2) as usize,
+            read_timeout: Duration::from_secs(DEFAULT_TIMEOUT_IN_MS as u64),
+            js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
             to_vertex_config: vec![],
             vertex_config: VertexType::Source(SourceVtxConfig {
@@ -149,7 +144,6 @@ impl PipelineConfig {
             })
             .unwrap_or(DEFAULT_TIMEOUT_IN_MS);
 
-        // FIXME(cr): how is the unwrap_or_default working here?
         let from_edges = vertex_obj.spec.from_edges.unwrap_or_default();
 
         let to_edges = vertex_obj.spec.to_edges.unwrap_or_default();
