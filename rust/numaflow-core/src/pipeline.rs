@@ -437,7 +437,7 @@ mod tests {
         // Wait for a few messages to be forwarded
         tokio::time::sleep(Duration::from_secs(2)).await;
         cancellation_token.cancel();
-        forwarder_task.abort();
+        forwarder_task.await.unwrap();
 
         for (stream_name, stream_consumer) in consumers {
             let messages: Vec<async_nats::jetstream::Message> = stream_consumer
