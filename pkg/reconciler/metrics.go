@@ -43,7 +43,7 @@ var (
 		Subsystem: "controller",
 		Name:      "pipeline_health",
 		Help:      "A metric to indicate whether the Pipeline is healthy. '1' means healthy, '0' means unhealthy",
-	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
+	}, []string{metrics.LabelNamespace, metrics.LabelPipeline})
 
 	MonoVertexHealth = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",

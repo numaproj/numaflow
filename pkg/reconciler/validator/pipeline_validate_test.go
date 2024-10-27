@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package pipeline
+package validator
 
 import (
 	"testing"
@@ -1212,7 +1212,7 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.sink.RetryStrategy = tt.strategy
-			ok := HasValidSinkRetryStrategy(tt.sink)
+			ok := hasValidSinkRetryStrategy(tt.sink)
 			if (!ok) != tt.wantErr {
 				t.Errorf("isValidSinkRetryStrategy() got = %v, want %v", ok, tt.wantErr)
 			}

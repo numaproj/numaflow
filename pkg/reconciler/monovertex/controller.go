@@ -19,6 +19,7 @@ package monovertex
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -41,6 +42,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	mvtxscaling "github.com/numaproj/numaflow/pkg/reconciler/monovertex/scaling"
+	"github.com/numaproj/numaflow/pkg/reconciler/validator"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
@@ -120,6 +122,12 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 		mr.scaler.StartWatching(mVtxKey)
 	}
 
+	if err := validator.ValidateMonoVertex(monoVtx); err != nil {
+		mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "ValidateMonoVertexFailed", "Invalid mvtx: %s", err.Error())
+		monoVtx.Status.MarkDeployFailed("InvalidSpec", err.Error())
+		return ctrl.Result{}, err
+	}
+
 	if err := mr.orchestrateFixedResources(ctx, monoVtx); err != nil {
 		monoVtx.Status.MarkDeployFailed("OrchestrateFixedResourcesFailed", err.Error())
 		mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "OrchestrateFixedResourcesFailed", "OrchestrateFixedResourcesFailed: %s", err.Error())
@@ -194,11 +202,11 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 		monoVtx.Status.UpdatedReadyReplicas = 0
 	}
 
-	// Manually or automatically scaled down
+	// Manually or automatically scaled down, in this case, we need to clean up extra pods if there's any
+	if err := mr.cleanUpPodsFromTo(ctx, monoVtx, desiredReplicas, math.MaxInt); err != nil {
+		return fmt.Errorf("failed to clean up mono vertex pods [%v, ∞): %w", desiredReplicas, err)
+	}
 	if currentReplicas := int(monoVtx.Status.Replicas); currentReplicas > desiredReplicas {
-		if err := mr.cleanUpPodsFromTo(ctx, monoVtx, desiredReplicas, currentReplicas); err != nil {
-			return fmt.Errorf("failed to clean up mono vertex pods [%v, %v): %w", desiredReplicas, currentReplicas, err)
-		}
 		monoVtx.Status.Replicas = uint32(desiredReplicas)
 	}
 	updatedReplicas := int(monoVtx.Status.UpdatedReplicas)

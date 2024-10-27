@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package pipeline
+package validator
 
 import (
 	"fmt"
@@ -42,10 +42,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	}
 	names := make(map[string]bool)
 	sources := make(map[string]dfv1.AbstractVertex)
-	udTransformers := make(map[string]dfv1.AbstractVertex)
 	sinks := make(map[string]dfv1.AbstractVertex)
-	mapUdfs := make(map[string]dfv1.AbstractVertex)
-	reduceUdfs := make(map[string]dfv1.AbstractVertex)
 	for _, v := range pl.Spec.Vertices {
 		if names[v.Name] {
 			return fmt.Errorf("duplicate vertex name %q", v.Name)
@@ -63,9 +60,6 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 				return fmt.Errorf("invalid vertex %q, source must have 0 from edges and at least 1 to edge", v.Name)
 			}
 			sources[v.Name] = v
-			if v.Source.UDTransformer != nil {
-				udTransformers[v.Name] = v
-			}
 		}
 		if v.Sink != nil {
 			if v.Source != nil || v.UDF != nil {
@@ -83,11 +77,6 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 			if len(pl.GetToEdges(v.Name)) == 0 || len(pl.GetFromEdges(v.Name)) == 0 {
 				return fmt.Errorf("invalid vertex %q, UDF must have to and from edges", v.Name)
 			}
-			if v.UDF.GroupBy != nil {
-				reduceUdfs[v.Name] = v
-			} else {
-				mapUdfs[v.Name] = v
-			}
 		}
 	}
 
@@ -97,56 +86,6 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 
 	if len(sinks) == 0 {
 		return fmt.Errorf("pipeline has no sink, at least one vertex with 'sink' defined is required")
-	}
-
-	for k, s := range sources {
-		if s.IsUDSource() {
-			if s.Source.UDSource.Container == nil || s.Source.UDSource.Container.Image == "" {
-				return fmt.Errorf("invalid user-defined source vertex %q, a customized image is required", k)
-			}
-			if s.Source.HTTP != nil || s.Source.Kafka != nil || s.Source.Nats != nil || s.Source.Generator != nil {
-				return fmt.Errorf("invalid user-defined source vertex %q, only one of 'http', 'kafka', 'nats', 'generator' and 'udSource' can be specified", k)
-			}
-		}
-	}
-
-	for k, t := range udTransformers {
-		transformer := t.Source.UDTransformer
-		if transformer.Container != nil {
-			if transformer.Container.Image == "" && transformer.Builtin == nil {
-				return fmt.Errorf("invalid source vertex %q, either specify a builtin transformer, or a customized image", k)
-			}
-			if transformer.Container.Image != "" && transformer.Builtin != nil {
-				return fmt.Errorf("invalid source vertex %q, can not specify both builtin transformer, and a customized image", k)
-			}
-		} else if transformer.Builtin == nil {
-			return fmt.Errorf("invalid source vertex %q, either specify a builtin transformer, or a customized image", k)
-		}
-	}
-
-	for k, u := range mapUdfs {
-		if u.UDF.Container != nil {
-			if u.UDF.Container.Image == "" && u.UDF.Builtin == nil {
-				return fmt.Errorf("invalid vertex %q, either specify a builtin function, or a customized image", k)
-			}
-			if u.UDF.Container.Image != "" && u.UDF.Builtin != nil {
-				return fmt.Errorf("invalid vertex %q, can not specify both builtin function, and a customized image", k)
-			}
-		} else if u.UDF.Builtin == nil {
-			return fmt.Errorf("invalid vertex %q, either specify a builtin function, or a customized image", k)
-		}
-	}
-
-	for k, u := range reduceUdfs {
-		if u.UDF.Builtin != nil {
-			// No builtin function supported for reduce vertices.
-			return fmt.Errorf("invalid vertex %q, there's no buildin function support in reduce vertices", k)
-		}
-		if u.UDF.Container != nil {
-			if u.UDF.Container.Image == "" {
-				return fmt.Errorf("invalid vertex %q, a customized image is required", k)
-			}
-		}
 	}
 
 	namesInEdges := make(map[string]bool)
@@ -261,7 +200,7 @@ func validateVertex(v dfv1.AbstractVertex) error {
 	maxUvail := v.UpdateStrategy.GetRollingUpdateStrategy().GetMaxUnavailable()
 	_, err := intstr.GetScaledValueFromIntOrPercent(&maxUvail, 1, true) // maxUnavailable should be an interger or a percentage in string
 	if err != nil {
-		return fmt.Errorf("vertex %q: invalid maxUnavailable: %v", v.Name, err)
+		return fmt.Errorf("vertex %q: invalid maxUnavailable: %w", v.Name, err)
 	}
 
 	for _, ic := range v.InitContainers {
@@ -277,62 +216,106 @@ func validateVertex(v dfv1.AbstractVertex) error {
 			return fmt.Errorf("vertex %q: sidecar container name %q is reserved for containers created by numaflow", v.Name, sc.Name)
 		}
 	}
+	if v.Source != nil {
+		if err := validateSource(*v.Source); err != nil {
+			return fmt.Errorf("invalid vertex %q: %w", v.Name, err)
+		}
+		return nil
+	}
+
 	if v.UDF != nil {
-		return validateUDF(*v.UDF)
+		if err := validateUDF(*v.UDF); err != nil {
+			return fmt.Errorf("invalid vertex %q: %w", v.Name, err)
+		}
+		return nil
 	}
 
 	if v.Sink != nil {
-		return validateSink(*v.Sink)
+		if err := validateSink(*v.Sink); err != nil {
+			return fmt.Errorf("invalid vertex %q: %w", v.Name, err)
+		}
+		return nil
 	}
 	return nil
 }
 
 func validateUDF(udf dfv1.UDF) error {
 	if udf.GroupBy != nil {
-		f := udf.GroupBy.Window.Fixed
-		s := udf.GroupBy.Window.Sliding
-		ss := udf.GroupBy.Window.Session
-		storage := udf.GroupBy.Storage
-		if f == nil && s == nil && ss == nil {
-			return fmt.Errorf(`invalid "groupBy.window", no windowing strategy specified`)
+		return validateReduceUDF(udf)
+	} else {
+		return validateMapUDF(udf)
+	}
+}
+
+func validateMapUDF(udf dfv1.UDF) error {
+	if udf.Container != nil {
+		if udf.Container.Image == "" && udf.Builtin == nil {
+			return fmt.Errorf("invalid udf spec, either specify a builtin function, or a customized image")
 		}
-		if f != nil && s != nil {
-			return fmt.Errorf(`invalid "groupBy.window", either fixed or sliding is allowed, not both`)
+		if udf.Container.Image != "" && udf.Builtin != nil {
+			return fmt.Errorf("invalid udf, can not specify both builtin function, and a customized image")
 		}
-		if f != nil && ss != nil {
-			return fmt.Errorf(`invalid "groupBy.window", either fixed or session is allowed, not both`)
-		}
-		if s != nil && ss != nil {
-			return fmt.Errorf(`invalid "groupBy.window", either sliding or session is allowed, not both`)
-		}
-		if f != nil && f.Length == nil {
-			return fmt.Errorf(`invalid "groupBy.window.fixed", "length" is missing`)
-		}
-		if s != nil && (s.Length == nil) {
-			return fmt.Errorf(`invalid "groupBy.window.sliding", "length" is missing`)
-		}
-		if s != nil && (s.Slide == nil) {
-			return fmt.Errorf(`invalid "groupBy.window.sliding", "slide" is missing`)
-		}
-		if ss != nil && ss.Timeout == nil {
-			return fmt.Errorf(`invalid "groupBy.window.session", "timeout" is missing`)
-		}
-		if storage == nil {
-			return fmt.Errorf(`invalid "groupBy", "storage" is missing`)
-		}
-		if storage.PersistentVolumeClaim == nil && storage.EmptyDir == nil && storage.NoStore == nil {
-			return fmt.Errorf(`invalid "groupBy.storage", type of storage to use is missing`)
-		}
-		if storage.PersistentVolumeClaim != nil && storage.EmptyDir != nil {
-			return fmt.Errorf(`invalid "groupBy.storage", either emptyDir or persistentVolumeClaim is allowed, not both`)
-		}
-		if storage.PersistentVolumeClaim != nil && storage.NoStore != nil {
-			return fmt.Errorf(`invalid "groupBy.storage", either none or persistentVolumeClaim is allowed, not both`)
-		}
-		if storage.EmptyDir != nil && storage.NoStore != nil {
-			return fmt.Errorf(`invalid "groupBy.storage", either none or emptyDir is allowed, not both`)
+	} else if udf.Builtin == nil {
+		return fmt.Errorf("invalid udf, either specify a builtin function, or a customized image")
+	}
+	return nil
+}
+
+func validateReduceUDF(udf dfv1.UDF) error {
+	if udf.Builtin != nil {
+		// No builtin function supported for reduce vertices.
+		return fmt.Errorf("invalid udf, there's no buildin function support in reduce vertices")
+	}
+	if udf.Container != nil {
+		if udf.Container.Image == "" {
+			return fmt.Errorf("invalid udf spec, a customized image is required")
 		}
 	}
+
+	f := udf.GroupBy.Window.Fixed
+	s := udf.GroupBy.Window.Sliding
+	ss := udf.GroupBy.Window.Session
+	storage := udf.GroupBy.Storage
+	if f == nil && s == nil && ss == nil {
+		return fmt.Errorf(`invalid "groupBy.window", no windowing strategy specified`)
+	}
+	if f != nil && s != nil {
+		return fmt.Errorf(`invalid "groupBy.window", either fixed or sliding is allowed, not both`)
+	}
+	if f != nil && ss != nil {
+		return fmt.Errorf(`invalid "groupBy.window", either fixed or session is allowed, not both`)
+	}
+	if s != nil && ss != nil {
+		return fmt.Errorf(`invalid "groupBy.window", either sliding or session is allowed, not both`)
+	}
+	if f != nil && f.Length == nil {
+		return fmt.Errorf(`invalid "groupBy.window.fixed", "length" is missing`)
+	}
+	if s != nil && (s.Length == nil) {
+		return fmt.Errorf(`invalid "groupBy.window.sliding", "length" is missing`)
+	}
+	if s != nil && (s.Slide == nil) {
+		return fmt.Errorf(`invalid "groupBy.window.sliding", "slide" is missing`)
+	}
+	if ss != nil && ss.Timeout == nil {
+		return fmt.Errorf(`invalid "groupBy.window.session", "timeout" is missing`)
+	}
+	if storage == nil {
+		return fmt.Errorf(`invalid "groupBy", "storage" is missing`)
+	}
+	if storage.PersistentVolumeClaim == nil && storage.EmptyDir == nil && storage.NoStore == nil {
+		return fmt.Errorf(`invalid "groupBy.storage", type of storage to use is missing`)
+	}
+	if storage.PersistentVolumeClaim != nil && storage.EmptyDir != nil {
+		return fmt.Errorf(`invalid "groupBy.storage", either emptyDir or persistentVolumeClaim is allowed, not both`)
+	}
+	if storage.PersistentVolumeClaim != nil && storage.NoStore != nil {
+		return fmt.Errorf(`invalid "groupBy.storage", either none or persistentVolumeClaim is allowed, not both`)
+	}
+	if storage.EmptyDir != nil && storage.NoStore != nil {
+		return fmt.Errorf(`invalid "groupBy.storage", either none or emptyDir is allowed, not both`)
+	}
+
 	return nil
 }
 
@@ -543,7 +526,6 @@ func isAForest(pl *dfv1.Pipeline) bool {
 // buildVisitedMap is a helper function that traverses the pipeline using DFS
 // This is a recursive function. Each iteration we are building our visited map to check in the parent function.
 func buildVisitedMap(vtxName string, visited map[string]struct{}, pl *dfv1.Pipeline) {
-
 	visited[vtxName] = struct{}{}
 
 	// construct list of all to and from vertices
@@ -566,18 +548,44 @@ func buildVisitedMap(vtxName string, visited map[string]struct{}, pl *dfv1.Pipel
 
 }
 
-// validateSink initiates the validation of the sink spec for a pipeline
+func validateSource(source dfv1.Source) error {
+	if transformer := source.UDTransformer; transformer != nil {
+		if transformer.Container != nil {
+			if transformer.Container.Image == "" && transformer.Builtin == nil {
+				return fmt.Errorf("invalid source transformer, either specify a builtin transformer, or a customized image")
+			}
+			if transformer.Container.Image != "" && transformer.Builtin != nil {
+				return fmt.Errorf("invalid source transformer, can not specify both builtin transformer, and a customized image")
+			}
+		} else if transformer.Builtin == nil {
+			return fmt.Errorf("invalid source transformer, either specify a builtin transformer, or a customized image")
+		}
+	}
+	// TODO: add more validations for each source type
+	if source.UDSource != nil {
+		if source.UDSource.Container == nil || source.UDSource.Container.Image == "" {
+			return fmt.Errorf("invalid user-defined source spec, a customized image is required")
+		}
+		if source.HTTP != nil || source.Kafka != nil || source.Nats != nil || source.Generator != nil {
+			return fmt.Errorf("invalid user-defined source spec, only one of 'http', 'kafka', 'nats', 'generator' and 'udSource' can be specified")
+		}
+	}
+	return nil
+}
+
+// validateSink initiates the validation of the sink spec
 func validateSink(sink dfv1.Sink) error {
 	// check the sinks retry strategy validity.
-	if ok := HasValidSinkRetryStrategy(sink); !ok {
+	if ok := hasValidSinkRetryStrategy(sink); !ok {
 		return fmt.Errorf("given OnFailure strategy is fallback but fallback sink is not provided")
 	}
+	// TODO: add more validations for each sink type
 	return nil
 }
 
 // HasValidSinkRetryStrategy checks if the provided RetryStrategy is valid based on the sink's configuration.
 // This validation ensures that the retry strategy is compatible with the sink's current setup
-func HasValidSinkRetryStrategy(s dfv1.Sink) bool {
+func hasValidSinkRetryStrategy(s dfv1.Sink) bool {
 	// If the OnFailure strategy is set to fallback, but no fallback sink is provided in the Sink struct,
 	// we return an error
 	if s.RetryStrategy.OnFailure != nil && *s.RetryStrategy.OnFailure == dfv1.OnFailureFallback && !hasValidFallbackSink(&s) {

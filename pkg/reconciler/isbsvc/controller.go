@@ -36,6 +36,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/numaproj/numaflow/pkg/reconciler/isbsvc/installer"
+	"github.com/numaproj/numaflow/pkg/reconciler/validator"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -122,7 +123,7 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 
 	isbSvc.Status.InitConditions()
 	isbSvc.Status.SetObservedGeneration(isbSvc.Generation)
-	if err := ValidateInterStepBufferService(isbSvc); err != nil {
+	if err := validator.ValidateInterStepBufferService(isbSvc); err != nil {
 		log.Errorw("Validation failed", zap.Error(err))
 		isbSvc.Status.MarkNotConfigured("InvalidSpec", err.Error())
 		return err
