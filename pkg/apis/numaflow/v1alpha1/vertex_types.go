@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/env"
 	"k8s.io/utils/ptr"
 )
 
@@ -240,15 +241,17 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		},
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
-
+	executeRustBinary, _ := env.GetBool(EnvExecuteRustBinary, false)
 	containers, err := v.Spec.getType().getContainers(getContainerReq{
-		isbSvcType:      req.ISBSvcType,
-		env:             envVars,
-		image:           req.Image,
-		imagePullPolicy: req.PullPolicy,
-		resources:       req.DefaultResources,
-		volumeMounts:    volumeMounts,
+		isbSvcType:        req.ISBSvcType,
+		env:               envVars,
+		image:             req.Image,
+		imagePullPolicy:   req.PullPolicy,
+		resources:         req.DefaultResources,
+		volumeMounts:      volumeMounts,
+		executeRustBinary: executeRustBinary,
 	})
+
 	if err != nil {
 		return nil, err
 	}

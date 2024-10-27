@@ -173,7 +173,7 @@ mod tests {
         let messages = vec![
             Message {
                 keys: vec![],
-                value: b"Hello, World!".to_vec(),
+                value: b"Hello, World!".to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 headers: Default::default(),
@@ -185,7 +185,7 @@ mod tests {
             },
             Message {
                 keys: vec![],
-                value: b"Hello, World!".to_vec(),
+                value: b"Hello, World!".to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 headers: Default::default(),
