@@ -74,7 +74,7 @@ pub async fn run() -> Result<()> {
         }
         CustomResourceType::Pipeline(config) => {
             info!("Starting pipeline forwarder with config: {:?}", config);
-            if let Err(e) = pipeline::start_forwarder(cln_token, &config).await {
+            if let Err(e) = pipeline::start_forwarder(cln_token, config).await {
                 error!("Application error running pipeline: {:?}", e);
 
                 // abort the signal handler task since we have an error and we are shutting down
