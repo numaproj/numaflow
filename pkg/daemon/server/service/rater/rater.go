@@ -248,7 +248,13 @@ func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
 			if partitionName == "" {
 				r.log.Warnf("[vertex name %s, pod name %s]: Partition name is not found for metric %s", vertexName, podName, readTotalMetricName)
 			} else {
-				partitionReadCount[partitionName] = ele.Counter.GetValue()
+				// https://github.com/prometheus/client_rust/issues/194
+				counterVal := ele.Counter.GetValue()
+				untypedVal := ele.Untyped.GetValue()
+				if counterVal == 0 && untypedVal != 0 {
+					counterVal = untypedVal
+				}
+				partitionReadCount[partitionName] = counterVal
 			}
 		}
 		podReadCount := &PodReadCount{podName, partitionReadCount}

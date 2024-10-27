@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use numaflow_pb::clients::source;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::source::{
@@ -19,7 +21,7 @@ pub(crate) struct UserDefinedSourceRead {
     read_tx: mpsc::Sender<ReadRequest>,
     resp_stream: Streaming<ReadResponse>,
     num_records: usize,
-    timeout_in_ms: u16,
+    timeout: Duration,
 }
 
 /// User-Defined Source to operative on custom sources.
@@ -33,13 +35,13 @@ pub(crate) struct UserDefinedSourceAck {
 pub(crate) async fn new_source(
     client: SourceClient<Channel>,
     num_records: usize,
-    timeout_in_ms: u16,
+    read_timeout: Duration,
 ) -> Result<(
     UserDefinedSourceRead,
     UserDefinedSourceAck,
     UserDefinedSourceLagReader,
 )> {
-    let src_read = UserDefinedSourceRead::new(client.clone(), num_records, timeout_in_ms).await?;
+    let src_read = UserDefinedSourceRead::new(client.clone(), num_records, read_timeout).await?;
     let src_ack = UserDefinedSourceAck::new(client.clone(), num_records).await?;
     let lag_reader = UserDefinedSourceLagReader::new(client);
 
@@ -50,7 +52,7 @@ impl UserDefinedSourceRead {
     async fn new(
         mut client: SourceClient<Channel>,
         batch_size: usize,
-        timeout_in_ms: u16,
+        timeout: Duration,
     ) -> Result<Self> {
         let (read_tx, resp_stream) = Self::create_reader(batch_size, &mut client).await?;
 
@@ -58,7 +60,7 @@ impl UserDefinedSourceRead {
             read_tx,
             resp_stream,
             num_records: batch_size,
-            timeout_in_ms,
+            timeout,
         })
     }
 
@@ -107,7 +109,7 @@ impl SourceReader for UserDefinedSourceRead {
         let request = ReadRequest {
             request: Some(read_request::Request {
                 num_records: self.num_records as u64,
-                timeout_in_ms: self.timeout_in_ms as u32,
+                timeout_in_ms: self.timeout.as_millis() as u32,
             }),
             handshake: None,
         };
@@ -319,14 +321,15 @@ mod tests {
 
         // wait for the server to start
         // TODO: flaky
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
 
-        let (mut src_read, mut src_ack, mut lag_reader) = new_source(client, 5, 1000)
-            .await
-            .map_err(|e| panic!("failed to create source reader: {:?}", e))
-            .unwrap();
+        let (mut src_read, mut src_ack, mut lag_reader) =
+            new_source(client, 5, Duration::from_millis(1000))
+                .await
+                .map_err(|e| panic!("failed to create source reader: {:?}", e))
+                .unwrap();
 
         let messages = src_read.read().await.unwrap();
         assert_eq!(messages.len(), 5);

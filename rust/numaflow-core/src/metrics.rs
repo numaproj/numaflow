@@ -36,8 +36,14 @@ const MVTX_NAME_LABEL: &str = "mvtx_name";
 const REPLICA_LABEL: &str = "mvtx_replica";
 const PENDING_PERIOD_LABEL: &str = "period";
 
+const PIPELINE_NAME_LABEL: &str = "pipeline";
+const PIPELINE_REPLICA_LABEL: &str = "replica";
+const PIPELINE_PARTITION_NAME_LABEL: &str = "partition_name";
+const PIPELINE_VERTEX_LABEL: &str = "vertex";
+const PIPELINE_VERTEX_TYPE_LABEL: &str = "vertex_type";
+
 // The top-level metric registry is created with the GLOBAL_PREFIX
-const GLOBAL_PREFIX: &str = "monovtx";
+const MVTX_REGISTRY_GLOBAL_PREFIX: &str = "monovtx";
 // Prefixes for the sub-registries
 const SINK_REGISTRY_PREFIX: &str = "sink";
 const FALLBACK_SINK_REGISTRY_PREFIX: &str = "fallback_sink";
@@ -67,16 +73,39 @@ const TRANSFORM_TIME: &str = "time";
 const ACK_TIME: &str = "ack_time";
 const SINK_TIME: &str = "time";
 
+const PIPELINE_FORWARDER_READ_TOTAL: &str = "data_read";
+
 /// Only user defined functions will have containers since rest
 /// are builtins. We save the gRPC clients to retrieve metrics and also
-/// to do liveness checks. This means, these will be optionals since
+/// to do liveness checks.
+#[derive(Clone)]
+pub(crate) enum UserDefinedContainerState {
+    Monovertex(MonovertexContainerState),
+    Pipeline(PipelineContainerState),
+}
+
+/// MonovertexContainerState is used to store the gRPC clients for the
+/// monovtx. These will be optionals since
 /// we do not require these for builtins.
 #[derive(Clone)]
-pub(crate) struct UserDefinedContainerState {
+pub(crate) struct MonovertexContainerState {
     pub source_client: Option<SourceClient<Channel>>,
     pub sink_client: Option<SinkClient<Channel>>,
     pub transformer_client: Option<SourceTransformClient<Channel>>,
     pub fb_sink_client: Option<SinkClient<Channel>>,
+}
+
+/// PipelineContainerState is used to store the gRPC clients for the
+/// pipeline.
+#[derive(Clone)]
+pub(crate) enum PipelineContainerState {
+    Source(
+        (
+            Option<SourceClient<Channel>>,
+            Option<SourceTransformClient<Channel>>,
+        ),
+    ),
+    Sink((Option<SinkClient<Channel>>, Option<SinkClient<Channel>>)),
 }
 
 /// The global register of all metrics.
@@ -90,7 +119,7 @@ impl GlobalRegistry {
     fn new() -> Self {
         GlobalRegistry {
             // Create a new registry for the metrics
-            registry: parking_lot::Mutex::new(Registry::with_prefix(GLOBAL_PREFIX)),
+            registry: parking_lot::Mutex::new(Registry::default()),
         }
     }
 }
@@ -130,6 +159,12 @@ pub(crate) struct MonoVtxMetrics {
     pub(crate) fb_sink: FallbackSinkMetrics,
 }
 
+/// PipelineMetrics is a struct which is used for storing the metrics related to the Pipeline
+// TODO: Add the metrics for the pipeline
+pub(crate) struct PipelineMetrics {
+    pub(crate) forwarder: PipelineForwarderMetrics,
+}
+
 /// Family of metrics for the sink
 pub(crate) struct SinkMetrics {
     pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
@@ -145,6 +180,10 @@ pub(crate) struct FallbackSinkMetrics {
 pub(crate) struct TransformerMetrics {
     /// Transformer latency
     pub(crate) time: Family<Vec<(String, String)>, Histogram>,
+}
+
+pub(crate) struct PipelineForwarderMetrics {
+    pub(crate) data_read: Family<Vec<(String, String)>, Counter>,
 }
 
 /// Exponential bucket distribution with range.
@@ -209,6 +248,7 @@ impl MonoVtxMetrics {
         };
 
         let mut registry = global_registry().registry.lock();
+        let registry = registry.sub_registry_with_prefix(MVTX_REGISTRY_GLOBAL_PREFIX);
         // Register all the metrics to the global registry
         registry.register(
             READ_TOTAL,
@@ -288,13 +328,42 @@ impl MonoVtxMetrics {
     }
 }
 
+impl PipelineMetrics {
+    fn new() -> Self {
+        let metrics = Self {
+            forwarder: PipelineForwarderMetrics {
+                data_read: Default::default(),
+            },
+        };
+        let mut registry = global_registry().registry.lock();
+
+        // Pipeline forwarder sub-registry
+        let forwarder_registry = registry.sub_registry_with_prefix("forwarder");
+        forwarder_registry.register(
+            PIPELINE_FORWARDER_READ_TOTAL,
+            "Total number of Data Messages Read",
+            metrics.forwarder.data_read.clone(),
+        );
+        metrics
+    }
+}
+
 /// MONOVTX_METRICS is the MonoVtxMetrics object which stores the metrics
 static MONOVTX_METRICS: OnceLock<MonoVtxMetrics> = OnceLock::new();
 
 // forward_metrics is a helper function used to fetch the
 // MonoVtxMetrics object
-pub(crate) fn forward_metrics() -> &'static MonoVtxMetrics {
+pub(crate) fn forward_mvtx_metrics() -> &'static MonoVtxMetrics {
     MONOVTX_METRICS.get_or_init(MonoVtxMetrics::new)
+}
+
+/// PIPELINE_METRICS is the PipelineMetrics object which stores the metrics
+static PIPELINE_METRICS: OnceLock<PipelineMetrics> = OnceLock::new();
+
+// forward_pipeline_metrics is a helper function used to fetch the
+// PipelineMetrics object
+pub(crate) fn forward_pipeline_metrics() -> &'static PipelineMetrics {
+    PIPELINE_METRICS.get_or_init(PipelineMetrics::new)
 }
 
 /// MONOVTX_METRICS_LABELS are used to store the common labels used in the metrics
@@ -315,6 +384,32 @@ pub(crate) fn mvtx_forward_metric_labels(
     })
 }
 
+static PIPELINE_READ_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
+
+pub(crate) fn pipeline_forward_read_metric_labels(
+    pipeline_name: &str,
+    partition_name: &str,
+    vertex_name: &str,
+    vertex_type: &str,
+    replica: u16,
+) -> &'static Vec<(String, String)> {
+    PIPELINE_READ_METRICS_LABELS.get_or_init(|| {
+        vec![
+            (PIPELINE_NAME_LABEL.to_string(), pipeline_name.to_string()),
+            (PIPELINE_REPLICA_LABEL.to_string(), replica.to_string()),
+            (
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                partition_name.to_string(),
+            ),
+            (
+                PIPELINE_VERTEX_TYPE_LABEL.to_string(),
+                vertex_type.to_string(),
+            ),
+            (PIPELINE_VERTEX_LABEL.to_string(), vertex_name.to_string()),
+        ]
+    })
+}
+
 // metrics_handler is used to generate and return a snapshot of the
 // current state of the metrics in the global registry
 pub async fn metrics_handler() -> impl IntoResponse {
@@ -324,6 +419,10 @@ pub async fn metrics_handler() -> impl IntoResponse {
     debug!("Exposing metrics: {:?}", buffer);
     Response::builder()
         .status(StatusCode::OK)
+        .header(
+            axum::http::header::CONTENT_TYPE,
+            "application/openmetrics-text; version=1.0.0; charset=utf-8",
+        )
         .body(Body::from(buffer))
         .unwrap()
 }
@@ -367,29 +466,63 @@ async fn livez() -> impl IntoResponse {
 }
 
 async fn sidecar_livez(State(state): State<UserDefinedContainerState>) -> impl IntoResponse {
-    if let Some(mut source_client) = state.source_client {
-        if source_client.is_ready(Request::new(())).await.is_err() {
-            error!("Source client is not available");
-            return StatusCode::SERVICE_UNAVAILABLE;
+    match state {
+        UserDefinedContainerState::Monovertex(monovertex_state) => {
+            if let Some(mut source_client) = monovertex_state.source_client {
+                if source_client.is_ready(Request::new(())).await.is_err() {
+                    error!("Monovertex source client is not ready");
+                    return StatusCode::INTERNAL_SERVER_ERROR;
+                }
+            }
+            if let Some(mut sink_client) = monovertex_state.sink_client {
+                if sink_client.is_ready(Request::new(())).await.is_err() {
+                    error!("Monovertex sink client is not ready");
+                    return StatusCode::INTERNAL_SERVER_ERROR;
+                }
+            }
+            if let Some(mut transformer_client) = monovertex_state.transformer_client {
+                if transformer_client.is_ready(Request::new(())).await.is_err() {
+                    error!("Monovertex transformer client is not ready");
+                    return StatusCode::INTERNAL_SERVER_ERROR;
+                }
+            }
+            if let Some(mut fb_sink_client) = monovertex_state.fb_sink_client {
+                if fb_sink_client.is_ready(Request::new(())).await.is_err() {
+                    error!("Monovertex fallback sink client is not ready");
+                    return StatusCode::INTERNAL_SERVER_ERROR;
+                }
+            }
         }
-    }
-    if let Some(mut sink_client) = state.sink_client {
-        if sink_client.is_ready(Request::new(())).await.is_err() {
-            error!("Sink client is not available");
-            return StatusCode::SERVICE_UNAVAILABLE;
-        }
-    }
-    if let Some(mut transformer_client) = state.transformer_client {
-        if transformer_client.is_ready(Request::new(())).await.is_err() {
-            error!("Transformer client is not available");
-            return StatusCode::SERVICE_UNAVAILABLE;
-        }
-    }
-    if let Some(mut fb_sink_client) = state.fb_sink_client {
-        if fb_sink_client.is_ready(Request::new(())).await.is_err() {
-            error!("Fallback sink client is not available");
-            return StatusCode::SERVICE_UNAVAILABLE;
-        }
+        UserDefinedContainerState::Pipeline(pipeline_state) => match pipeline_state {
+            PipelineContainerState::Source((source_client, transformer_client)) => {
+                if let Some(mut source_client) = source_client {
+                    if source_client.is_ready(Request::new(())).await.is_err() {
+                        error!("Pipeline source client is not ready");
+                        return StatusCode::INTERNAL_SERVER_ERROR;
+                    }
+                }
+                if let Some(mut transformer_client) = transformer_client {
+                    if transformer_client.is_ready(Request::new(())).await.is_err() {
+                        error!("Pipeline transformer client is not ready");
+                        return StatusCode::INTERNAL_SERVER_ERROR;
+                    }
+                }
+            }
+            PipelineContainerState::Sink((sink_client, fb_sink_client)) => {
+                if let Some(mut sink_client) = sink_client {
+                    if sink_client.is_ready(Request::new(())).await.is_err() {
+                        error!("Pipeline sink client is not ready");
+                        return StatusCode::INTERNAL_SERVER_ERROR;
+                    }
+                }
+                if let Some(mut fb_sink_client) = fb_sink_client {
+                    if fb_sink_client.is_ready(Request::new(())).await.is_err() {
+                        error!("Pipeline fallback sink client is not ready");
+                        return StatusCode::INTERNAL_SERVER_ERROR;
+                    }
+                }
+            }
+        },
     }
     StatusCode::NO_CONTENT
 }
@@ -566,7 +699,7 @@ async fn expose_pending_metrics(
                     mvtx_forward_metric_labels(mvtx_name.clone(), replica).clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
                 pending_info.insert(label, pending);
-                forward_metrics()
+                forward_mvtx_metrics()
                     .source_pending
                     .get_or_create(&metric_labels)
                     .set(pending);
@@ -617,7 +750,6 @@ mod tests {
     use tokio::sync::mpsc::Sender;
 
     use super::*;
-    use crate::monovertex::metrics::UserDefinedContainerState;
     use crate::shared::utils::create_rpc_channel;
 
     struct SimpleSource;
@@ -726,7 +858,7 @@ mod tests {
         // wait for the servers to start
         // FIXME: we need to have a better way, this is flaky
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        let metrics_state = UserDefinedContainerState {
+        let metrics_state = UserDefinedContainerState::Monovertex(MonovertexContainerState {
             source_client: Some(SourceClient::new(
                 create_rpc_channel(src_sock_file).await.unwrap(),
             )),
@@ -739,7 +871,7 @@ mod tests {
             fb_sink_client: Some(SinkClient::new(
                 create_rpc_channel(fb_sink_sock_file).await.unwrap(),
             )),
-        };
+        });
 
         let addr: SocketAddr = "127.0.0.1:9091".parse().unwrap();
         let metrics_state_clone = metrics_state.clone();
@@ -818,7 +950,7 @@ mod tests {
             for (i, (label, _)) in LOOKBACK_SECONDS_MAP.iter().enumerate() {
                 let mut metric_labels = mvtx_forward_metric_labels("test".to_string(), 0).clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
-                let guage = forward_metrics()
+                let guage = forward_mvtx_metrics()
                     .source_pending
                     .get_or_create(&metric_labels)
                     .get();
@@ -879,7 +1011,7 @@ mod tests {
 
     #[test]
     fn test_metric_names() {
-        let metrics = forward_metrics();
+        let metrics = forward_mvtx_metrics();
         // Use a fixed set of labels instead of the ones from mvtx_forward_metric_labels() since other test functions may also set it.
         let common_labels = vec![
             (

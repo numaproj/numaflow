@@ -50,7 +50,7 @@ mod tests {
         let messages = vec![
             Message {
                 keys: vec![],
-                value: b"Hello, World!".to_vec(),
+                value: b"Hello, World!".to_vec().into(),
                 offset: Some(Offset::Int(IntOffset::new(1, 0))),
                 event_time: Utc::now(),
                 headers: Default::default(),
@@ -62,7 +62,7 @@ mod tests {
             },
             Message {
                 keys: vec![],
-                value: b"Hello, World!".to_vec(),
+                value: b"Hello, World!".to_vec().into(),
                 offset: Some(Offset::Int(IntOffset::new(1, 0))),
                 event_time: Utc::now(),
                 headers: Default::default(),

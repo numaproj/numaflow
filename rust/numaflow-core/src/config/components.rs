@@ -3,12 +3,26 @@ pub(crate) mod source {
     const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
     const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
-    use bytes::Bytes;
     use std::time::Duration;
+
+    use bytes::Bytes;
+    use numaflow_models::models::Source;
+    use tracing::warn;
+
+    use crate::error::Error;
+    use crate::Result;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SourceConfig {
         pub(crate) source_type: SourceType,
+    }
+
+    impl Default for SourceConfig {
+        fn default() -> Self {
+            Self {
+                source_type: SourceType::Generator(GeneratorConfig::default()),
+            }
+        }
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -17,11 +31,57 @@ pub(crate) mod source {
         UserDefined(UserDefinedConfig),
     }
 
+    impl TryFrom<Box<Source>> for SourceType {
+        type Error = Error;
+
+        fn try_from(source: Box<Source>) -> Result<Self> {
+            source
+                .udsource
+                .as_ref()
+                .map(|_| Ok(SourceType::UserDefined(UserDefinedConfig::default())))
+                .or_else(|| {
+                    source.generator.as_ref().map(|generator| {
+                        let mut generator_config = GeneratorConfig::default();
+
+                        if let Some(value_blob) = &generator.value_blob {
+                            generator_config.content = Bytes::from(value_blob.clone());
+                        }
+
+                        if let Some(msg_size) = generator.msg_size {
+                            if msg_size >= 0 {
+                                generator_config.msg_size_bytes = msg_size as u32;
+                            } else {
+                                warn!(
+                                    "'msgSize' cannot be negative, using default value (8 bytes)"
+                                );
+                            }
+                        }
+
+                        generator_config.value = generator.value;
+                        generator_config.rpu = generator.rpu.unwrap_or(1) as usize;
+                        generator_config.duration =
+                            generator.duration.map_or(Duration::from_millis(1000), |d| {
+                                std::time::Duration::from(d)
+                            });
+                        generator_config.key_count = generator
+                            .key_count
+                            .map_or(0, |kc| std::cmp::min(kc, u8::MAX as i32) as u8);
+                        generator_config.jitter = generator
+                            .jitter
+                            .map_or(Duration::from_secs(0), std::time::Duration::from);
+
+                        Ok(SourceType::Generator(generator_config))
+                    })
+                })
+                .ok_or_else(|| Error::Config("Source type not found".to_string()))?
+        }
+    }
+
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct GeneratorConfig {
         pub rpu: usize,
         pub content: Bytes,
-        pub duration: usize,
+        pub duration: Duration,
         pub value: Option<i64>,
         pub key_count: u8,
         pub msg_size_bytes: u32,
@@ -33,7 +93,7 @@ pub(crate) mod source {
             Self {
                 rpu: 1,
                 content: Bytes::new(),
-                duration: 1000,
+                duration: Duration::from_millis(1000),
                 value: None,
                 key_count: 0,
                 msg_size_bytes: 8,
@@ -70,8 +130,12 @@ pub(crate) mod sink {
     const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX;
     const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
 
-    use numaflow_models::models::{Backoff, RetryStrategy};
     use std::fmt::Display;
+
+    use numaflow_models::models::{Backoff, RetryStrategy, Sink};
+
+    use crate::error::Error;
+    use crate::Result;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SinkConfig {
@@ -84,6 +148,51 @@ pub(crate) mod sink {
         Log(LogConfig),
         Blackhole(BlackholeConfig),
         UserDefined(UserDefinedConfig),
+    }
+
+    impl TryFrom<Box<Sink>> for SinkType {
+        type Error = Error;
+
+        // FIXME(cr): why is sink.fallback Box<AbstrackSink> vs. sink Box<Sink>. This is coming from
+        //   numaflow-models. Problem is, golang has embedded structures and rust does not. We might
+        //   have to AbstractSink for sink-configs while Sink for real sink types.
+        //   NOTE: I do not see this problem with Source?
+        fn try_from(sink: Box<Sink>) -> Result<Self> {
+            if let Some(fallback) = sink.fallback {
+                fallback
+                    .udsink
+                    .as_ref()
+                    .map(|_| Ok(SinkType::UserDefined(UserDefinedConfig::fallback_default())))
+                    .or_else(|| {
+                        fallback
+                            .log
+                            .as_ref()
+                            .map(|_| Ok(SinkType::Log(LogConfig::default())))
+                    })
+                    .or_else(|| {
+                        fallback
+                            .blackhole
+                            .as_ref()
+                            .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
+                    })
+                    .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
+            } else {
+                sink.udsink
+                    .as_ref()
+                    .map(|_| Ok(SinkType::UserDefined(UserDefinedConfig::default())))
+                    .or_else(|| {
+                        sink.log
+                            .as_ref()
+                            .map(|_| Ok(SinkType::Log(LogConfig::default())))
+                    })
+                    .or_else(|| {
+                        sink.blackhole
+                            .as_ref()
+                            .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
+                    })
+                    .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
+            }
+        }
     }
 
     #[derive(Debug, Clone, PartialEq, Default)]
@@ -164,6 +273,27 @@ pub(crate) mod sink {
         }
     }
 
+    impl From<Box<RetryStrategy>> for RetryConfig {
+        fn from(retry: Box<RetryStrategy>) -> Self {
+            let mut retry_config = RetryConfig::default();
+            if let Some(backoff) = &retry.backoff {
+                if let Some(interval) = backoff.interval {
+                    retry_config.sink_retry_interval_in_ms =
+                        std::time::Duration::from(interval).as_millis() as u32;
+                }
+
+                if let Some(steps) = backoff.steps {
+                    retry_config.sink_max_retry_attempts = steps as u16;
+                }
+            }
+
+            if let Some(strategy) = &retry.on_failure {
+                retry_config.sink_retry_on_fail_strategy = OnFailureStrategy::from_str(strategy);
+            }
+            retry_config
+        }
+    }
+
     impl Default for UserDefinedConfig {
         fn default() -> Self {
             Self {
@@ -198,6 +328,7 @@ pub(crate) mod transformer {
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) enum TransformerType {
+        #[allow(dead_code)]
         Noop(NoopConfig), // will add built-in transformers
         UserDefined(UserDefinedConfig),
     }
@@ -248,16 +379,18 @@ pub(crate) mod metrics {
 
 #[cfg(test)]
 mod source_tests {
-    use super::source::{GeneratorConfig, SourceConfig, SourceType, UserDefinedConfig};
-    use bytes::Bytes;
     use std::time::Duration;
+
+    use bytes::Bytes;
+
+    use super::source::{GeneratorConfig, SourceConfig, SourceType, UserDefinedConfig};
 
     #[test]
     fn test_default_generator_config() {
         let default_config = GeneratorConfig::default();
         assert_eq!(default_config.rpu, 1);
         assert_eq!(default_config.content, Bytes::new());
-        assert_eq!(default_config.duration, 1000);
+        assert_eq!(default_config.duration.as_millis(), 1000);
         assert_eq!(default_config.value, None);
         assert_eq!(default_config.key_count, 0);
         assert_eq!(default_config.msg_size_bytes, 8);
@@ -304,11 +437,12 @@ mod source_tests {
 
 #[cfg(test)]
 mod sink_tests {
+    use numaflow_models::models::{Backoff, RetryStrategy};
+
     use super::sink::{
         BlackholeConfig, LogConfig, OnFailureStrategy, RetryConfig, SinkConfig, SinkType,
         UserDefinedConfig,
     };
-    use numaflow_models::models::{Backoff, RetryStrategy};
 
     #[test]
     fn test_default_log_config() {

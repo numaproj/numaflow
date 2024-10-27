@@ -151,15 +151,17 @@ const (
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
 	EnvServingStoreTTL                  = "NUMAFLOW_SERVING_STORE_TTL"
-	PathVarRun                          = "/var/run/numaflow"
-	VertexMetricsPort                   = 2469
-	VertexMetricsPortName               = "metrics"
-	VertexHTTPSPort                     = 8443
-	VertexHTTPSPortName                 = "https"
-	DaemonServicePort                   = 4327
-	MonoVertexMetricsPort               = 2469
-	MonoVertexMetricsPortName           = "metrics"
-	MonoVertexDaemonServicePort         = 4327
+	EnvExecuteRustBinary                = "NUMAFLOW_EXECUTE_RUST_BINARY"
+
+	PathVarRun                  = "/var/run/numaflow"
+	VertexMetricsPort           = 2469
+	VertexMetricsPortName       = "metrics"
+	VertexHTTPSPort             = 8443
+	VertexHTTPSPortName         = "https"
+	DaemonServicePort           = 4327
+	MonoVertexMetricsPort       = 2469
+	MonoVertexMetricsPortName   = "metrics"
+	MonoVertexDaemonServicePort = 4327
 
 	DefaultRequeueAfter = 10 * time.Second
 
