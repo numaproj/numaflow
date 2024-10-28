@@ -95,6 +95,13 @@ func NewKafkaSource(ctx context.Context, vertexInstance *dfv1.VertexInstance, ha
 			config.Net.SASL = *sasl
 		}
 	}
+	if v := source.KafkaVersion; v != "" {
+		if version, err := sarama.ParseKafkaVersion(source.KafkaVersion); err != nil {
+			return nil, err
+		} else {
+			config.Version = version
+		}
+	}
 
 	sarama.Logger = zap.NewStdLog(ks.logger.Desugar())
 

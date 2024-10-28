@@ -7837,6 +7837,8 @@ spec:
                         type: string
                       consumerGroup:
                         type: string
+                      kafkaVersion:
+                        type: string
                       sasl:
                         properties:
                           gssapi:
@@ -19066,6 +19068,8 @@ spec:
                               type: string
                             consumerGroup:
                               type: string
+                            kafkaVersion:
+                              type: string
                             sasl:
                               properties:
                                 gssapi:
@@ -25473,6 +25477,8 @@ spec:
                       config:
                         type: string
                       consumerGroup:
+                        type: string
+                      kafkaVersion:
                         type: string
                       sasl:
                         properties:
