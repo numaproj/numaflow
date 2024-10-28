@@ -10,17 +10,18 @@ use crate::config::components::{sink, source, transformer};
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self, Error};
 use crate::metrics;
+use crate::monovertex::streaming_forwarder::StreamingForwarderBuilder;
 use crate::shared::server_info::check_for_server_compatibility;
 use crate::shared::utils;
 use crate::shared::utils::{
     create_rpc_channel, wait_until_sink_ready, wait_until_source_ready,
     wait_until_transformer_ready,
 };
-use crate::sink::{SinkClientType, SinkHandle};
+use crate::sink::{SinkClientType, SinkHandle, StreamingSink};
 use crate::source::generator::new_generator;
 use crate::source::user_defined::new_source;
-use crate::source::{SourceHandle, SourceType};
-use crate::transformer::user_defined::SourceTransformHandle;
+use crate::source::{SourceHandle, SourceType, StreamingSource};
+use crate::transformer::{SourceTransformHandle, StreamingTransformer};
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
@@ -29,6 +30,7 @@ use crate::transformer::user_defined::SourceTransformHandle;
 /// - Calls the Sinker to write the batch to the Sink
 /// - Send Acknowledgement back to the Source
 mod forwarder;
+mod streaming_forwarder;
 
 pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
@@ -149,16 +151,48 @@ pub(crate) async fn start_forwarder(
     // FIXME: what to do with the handle
     utils::start_metrics_server(config.metrics_config.clone(), metrics_state).await;
 
-    let source = SourceHandle::new(source_type, config.batch_size);
-    start_forwarder_with_source(
-        config.clone(),
-        source,
-        sink,
-        transformer_grpc_client,
-        fb_sink,
-        cln_token,
-    )
-    .await?;
+    if std::env::var("NUMAFLOW_MVTX_STREAMING").is_ok() {
+        let streaming_source =
+            StreamingSource::new(source_type, config.batch_size, config.read_timeout);
+        let streaming_sink = StreamingSink::new(
+            config.batch_size,
+            config.read_timeout,
+            config.sink_config.clone(),
+            sink,
+            fb_sink,
+        )?;
+        let streaming_transformer = match transformer_grpc_client {
+            Some(transformer_client) => {
+                let transformer = StreamingTransformer::new(
+                    config.batch_size,
+                    config.read_timeout,
+                    transformer_client,
+                )
+                .await?;
+                Some(transformer)
+            }
+            None => None,
+        };
+        start_streaming_forwarder_with_source(
+            config.clone(),
+            streaming_source,
+            streaming_sink,
+            streaming_transformer,
+            cln_token,
+        )
+        .await?;
+    } else {
+        let source = SourceHandle::new(source_type, config.batch_size, config.read_timeout);
+        start_forwarder_with_source(
+            config.clone(),
+            source,
+            sink,
+            transformer_grpc_client,
+            fb_sink,
+            cln_token,
+        )
+        .await?;
+    }
 
     info!("Forwarder stopped gracefully");
     Ok(())
@@ -243,6 +277,31 @@ async fn fetch_sink(
     Err(Error::Config(
         "No valid Sink configuration found".to_string(),
     ))
+}
+
+async fn start_streaming_forwarder_with_source(
+    mvtx_config: MonovertexConfig,
+    source: StreamingSource,
+    sink: StreamingSink,
+    transformer: Option<StreamingTransformer>,
+    cln_token: CancellationToken,
+) -> error::Result<()> {
+    let mut forwarder_builder =
+        StreamingForwarderBuilder::new(source, sink, mvtx_config, cln_token);
+
+    // add transformer if exists
+    if let Some(transformer_client) = transformer {
+        forwarder_builder = forwarder_builder.streaming_transformer(transformer_client);
+    }
+
+    // build the final forwarder
+    let forwarder = forwarder_builder.build();
+
+    // start the forwarder, it will return only on Signal
+    forwarder.start().await?;
+
+    info!("Streaming Forwarder stopped gracefully");
+    Ok(())
 }
 
 async fn start_forwarder_with_source(

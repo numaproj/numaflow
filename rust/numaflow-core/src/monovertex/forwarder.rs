@@ -13,8 +13,9 @@ use crate::message::{Message, Offset, ResponseStatusFromSink};
 use crate::metrics;
 use crate::metrics::forward_mvtx_metrics;
 use crate::sink::SinkHandle;
+use crate::source::SourceHandle;
+use crate::transformer::SourceTransformHandle;
 use crate::Error;
-use crate::{source::SourceHandle, transformer::user_defined::SourceTransformHandle};
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
@@ -583,7 +584,7 @@ mod tests {
     use crate::source::user_defined::new_source;
     use crate::source::SourceHandle;
     use crate::source::SourceType;
-    use crate::transformer::user_defined::SourceTransformHandle;
+    use crate::transformer::SourceTransformHandle;
 
     struct SimpleSource {
         yet_to_be_acked: std::sync::RwLock<HashSet<String>>,

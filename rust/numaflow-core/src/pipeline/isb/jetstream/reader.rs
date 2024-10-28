@@ -7,6 +7,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, warn};
@@ -67,11 +68,11 @@ impl JetstreamReader {
     // The closing of the channel should propagate to the receiver end and the receiver should exit gracefully.
     // Within the loop, we only consider cancellationToken cancellation during the permit reservation and fetching messages,
     // since rest of the operations should finish immediately.
-    pub(crate) async fn start(
+    pub(crate) async fn start_streaming(
         &self,
         cancel_token: CancellationToken,
         pipeline_config: &PipelineConfig,
-    ) -> Result<(Receiver<ReadMessage>, JoinHandle<Result<()>>)> {
+    ) -> Result<(ReceiverStream<ReadMessage>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.config.batch_size);
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
@@ -177,7 +178,7 @@ impl JetstreamReader {
                 Ok(())
             }
         });
-        Ok((messages_rx, handle))
+        Ok((ReceiverStream::new(messages_rx), handle))
     }
 
     // Intended to be run as background task which will continuously send InProgress acks to Jetstream.
@@ -298,7 +299,7 @@ mod tests {
         let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
         let reader_cancel_token = CancellationToken::new();
         let (mut js_reader_rx, js_reader_task) = js_reader
-            .start(reader_cancel_token.clone(), &pipeline_config)
+            .start_streaming(reader_cancel_token.clone(), &pipeline_config)
             .await
             .unwrap();
 

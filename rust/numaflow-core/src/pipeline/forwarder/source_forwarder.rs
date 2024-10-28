@@ -11,7 +11,7 @@ use crate::message::{Message, Offset};
 use crate::metrics::{forward_pipeline_metrics, pipeline_forward_read_metric_labels};
 use crate::pipeline::isb::jetstream::WriterHandle;
 use crate::source::SourceHandle;
-use crate::transformer::user_defined::SourceTransformHandle;
+use crate::transformer::SourceTransformHandle;
 
 /// Simple source forwarder that reads messages from the source, applies transformation if present
 /// and writes to the messages to ISB.

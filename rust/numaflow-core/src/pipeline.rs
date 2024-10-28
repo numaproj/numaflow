@@ -9,6 +9,7 @@ use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTran
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 
+use crate::config::components::sink::SinkConfig;
 use crate::config::components::source::SourceType;
 use crate::config::pipeline;
 use crate::config::pipeline::PipelineConfig;
@@ -20,10 +21,10 @@ use crate::shared::utils;
 use crate::shared::utils::{
     create_rpc_channel, start_metrics_server, wait_until_source_ready, wait_until_transformer_ready,
 };
-use crate::sink::SinkWriter;
+use crate::sink::StreamingSink;
 use crate::source::generator::new_generator;
 use crate::source::user_defined::new_source;
-use crate::transformer::user_defined::SourceTransformHandle;
+use crate::transformer::SourceTransformHandle;
 use crate::{config, error, source, Result};
 
 mod forwarder;
@@ -55,7 +56,8 @@ pub(crate) async fn start_forwarder(
             )
             .await;
 
-            let source_handle = source::SourceHandle::new(source_type, config.batch_size);
+            let source_handle =
+                source::SourceHandle::new(source_type, config.batch_size, config.read_timeout);
             let mut forwarder = forwarder::source_forwarder::ForwarderBuilder::new(
                 source_handle,
                 transformer,
@@ -73,8 +75,13 @@ pub(crate) async fn start_forwarder(
             // Create sink writers and clients
             let mut sink_writers = Vec::new();
             for _ in &buffer_readers {
-                let (sink_writer, sink_grpc_client, fb_sink_grpc_client) =
-                    create_sink_writer(&config, sink, cln_token.clone()).await?;
+                let (sink_writer, sink_grpc_client, fb_sink_grpc_client) = create_sink_writer(
+                    &config,
+                    &sink.sink_config,
+                    &sink.fb_sink_config,
+                    cln_token.clone(),
+                )
+                .await?;
                 sink_writers.push((sink_writer, sink_grpc_client, fb_sink_grpc_client));
             }
 
@@ -178,20 +185,17 @@ async fn create_buffer_readers(
 // Creates a sink writer based on the pipeline configuration
 async fn create_sink_writer(
     config: &PipelineConfig,
-    sink_vtx_config: &pipeline::SinkVtxConfig,
+    sink_config: &SinkConfig,
+    fb_sink_config: &Option<SinkConfig>,
     cln_token: CancellationToken,
 ) -> Result<(
-    SinkWriter,
+    StreamingSink,
     Option<SinkClient<Channel>>,
     Option<SinkClient<Channel>>,
 )> {
-    let (sink_handle, sink_grpc_client) = utils::create_sink_handle(
-        config.batch_size,
-        &sink_vtx_config.sink_config.sink_type,
-        &cln_token,
-    )
-    .await?;
-    let (fb_sink_handle, fb_sink_grpc_client) = match &sink_vtx_config.fb_sink_config {
+    let (sink_handle, sink_grpc_client) =
+        utils::create_sink_handle(config.batch_size, &sink_config.sink_type, &cln_token).await?;
+    let (fb_sink_handle, fb_sink_grpc_client) = match fb_sink_config {
         None => (None, None),
         Some(fb_sink_config) => {
             let (handle, client) =
@@ -202,14 +206,13 @@ async fn create_sink_writer(
     };
 
     Ok((
-        SinkWriter::new(
+        StreamingSink::new(
             config.batch_size,
             config.read_timeout,
-            sink_vtx_config.clone(),
+            sink_config.clone(),
             sink_handle,
             fb_sink_handle,
-        )
-        .await?,
+        )?,
         sink_grpc_client,
         fb_sink_grpc_client,
     ))

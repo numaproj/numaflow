@@ -6,13 +6,14 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio::{pin, time};
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 use user_defined::UserDefinedSink;
 
-use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+use crate::config::components::sink::{OnFailureStrategy, RetryConfig, SinkConfig};
 use crate::config::pipeline::SinkVtxConfig;
 use crate::error::Error;
 use crate::message::{Message, ReadAck, ReadMessage, ResponseFromSink, ResponseStatusFromSink};
@@ -51,7 +52,7 @@ impl<T> SinkActor<T>
 where
     T: Sink,
 {
-    fn new(actor_messages: mpsc::Receiver<ActorMessage>, sink: T) -> Self {
+    fn new(actor_messages: Receiver<ActorMessage>, sink: T) -> Self {
         Self {
             actor_messages,
             sink,
@@ -129,19 +130,19 @@ impl SinkHandle {
 }
 
 #[derive(Clone)]
-pub(super) struct SinkWriter {
+pub(super) struct StreamingSink {
     batch_size: usize,
     read_timeout: time::Duration,
-    config: SinkVtxConfig,
+    config: SinkConfig,
     sink_handle: SinkHandle,
     fb_sink_handle: Option<SinkHandle>,
 }
 
-impl SinkWriter {
-    pub(super) async fn new(
+impl StreamingSink {
+    pub(super) fn new(
         batch_size: usize,
         read_timeout: time::Duration,
-        config: SinkVtxConfig,
+        config: SinkConfig,
         sink_handle: SinkHandle,
         fb_sink_handle: Option<SinkHandle>,
     ) -> Result<Self> {
@@ -154,23 +155,36 @@ impl SinkWriter {
         })
     }
 
-    pub(super) async fn start(
+    pub(super) async fn start_streaming(
         &self,
-        messages_rx: Receiver<ReadMessage>,
+        messages_stream: ReceiverStream<ReadMessage>,
         cancellation_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let mut this = self.clone();
             async move {
-                let chunk_stream = tokio_stream::wrappers::ReceiverStream::new(messages_rx)
-                    .chunks_timeout(this.batch_size, this.read_timeout);
+                let chunk_stream =
+                    messages_stream.chunks_timeout(this.batch_size, this.read_timeout);
 
                 pin!(chunk_stream);
 
-                while let Some(batch) = chunk_stream.next().await {
+                let mut processed_msgs_count: usize = 0;
+                let mut last_logged_at = std::time::Instant::now();
+
+                let mut start_time = std::time::Instant::now();
+                loop {
+                    let chunk_time = std::time::Instant::now();
+                    let batch = match chunk_stream.next().await {
+                        Some(batch) => batch,
+                        None => break,
+                    };
+                    // info!("Chunking latency - {}ms", chunk_time.elapsed().as_millis());
+                    let start = std::time::Instant::now();
                     if batch.is_empty() {
                         continue;
                     }
+
+                    let n = batch.len();
 
                     let messages: Vec<Message> =
                         batch.iter().map(|rm| rm.message.clone()).collect();
@@ -192,10 +206,32 @@ impl SinkWriter {
                         }
                     }
 
+                    processed_msgs_count += n;
+
+                    if last_logged_at.elapsed().as_millis() >= 1000 {
+                        info!(
+                            "Processed {} messages at {:?}",
+                            processed_msgs_count,
+                            std::time::Instant::now()
+                        );
+                        processed_msgs_count = 0;
+                        last_logged_at = std::time::Instant::now();
+                    }
+
                     if cancellation_token.is_cancelled() {
                         warn!("Cancellation token is cancelled. Exiting SinkWriter");
                         break;
                     }
+                    // info!(
+                    //     "Sink processing latency - {}ms",
+                    //     start.elapsed().as_millis()
+                    // );
+                    // info!(
+                    //     "Sink latency for {} messages - {}ms",
+                    //     n,
+                    //     start_time.elapsed().as_millis()
+                    // );
+                    start_time = std::time::Instant::now();
                 }
 
                 Ok(())
@@ -223,12 +259,7 @@ impl SinkWriter {
 
         // only breaks out of this loop based on the retry strategy unless all the messages have been written to sink
         // successfully.
-        let retry_config = &self
-            .config
-            .sink_config
-            .retry_config
-            .clone()
-            .unwrap_or_default();
+        let retry_config = &self.config.retry_config.clone().unwrap_or_default();
 
         loop {
             while attempts < retry_config.sink_max_retry_attempts {

@@ -3,20 +3,20 @@ use tokio_util::sync::CancellationToken;
 use crate::config::pipeline::PipelineConfig;
 use crate::error::Error;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
-use crate::sink::SinkWriter;
+use crate::sink::StreamingSink;
 use crate::Result;
 
 /// Sink forwarder reads messages from the jetstream and writes to the sink.
 pub(crate) struct SinkForwarder {
     jetstream_reader: JetstreamReader,
-    sink_writer: SinkWriter,
+    sink_writer: StreamingSink,
     cln_token: CancellationToken,
 }
 
 impl SinkForwarder {
     pub(crate) async fn new(
         jetstream_reader: JetstreamReader,
-        sink_writer: SinkWriter,
+        sink_writer: StreamingSink,
         cln_token: CancellationToken,
     ) -> Self {
         Self {
@@ -31,12 +31,12 @@ impl SinkForwarder {
         let reader_cancellation_token = self.cln_token.child_token();
         let (read_messages_rx, reader_handle) = self
             .jetstream_reader
-            .start(reader_cancellation_token.clone(), &pipeline_config)
+            .start_streaming(reader_cancellation_token.clone(), &pipeline_config)
             .await?;
 
         let sink_writer_handle = self
             .sink_writer
-            .start(read_messages_rx, self.cln_token.clone())
+            .start_streaming(read_messages_rx, self.cln_token.clone())
             .await?;
 
         // Join the reader and sink writer

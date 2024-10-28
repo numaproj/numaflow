@@ -15,21 +15,20 @@ use tracing::warn;
 use crate::error::{Error, Result};
 use crate::message::{get_vertex_name, Message, MessageID, Offset};
 use crate::shared::utils::utc_from_timestamp;
+use crate::transformer::ActorMessage;
 
 const DROP: &str = "U+005C__DROP__";
 
 /// TransformerClient is a client to interact with the transformer server.
-struct SourceTransformer {
-    actor_messages: mpsc::Receiver<ActorMessage>,
+pub(crate) struct SourceTransformer {
     read_tx: mpsc::Sender<SourceTransformRequest>,
     resp_stream: Streaming<SourceTransformResponse>,
 }
 
 impl SourceTransformer {
-    async fn new(
+    pub(crate) async fn new(
         batch_size: usize,
         mut client: SourceTransformClient<Channel>,
-        actor_messages: mpsc::Receiver<ActorMessage>,
     ) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let read_stream = ReceiverStream::new(read_rx);
@@ -61,13 +60,12 @@ impl SourceTransformer {
         }
 
         Ok(Self {
-            actor_messages,
             read_tx,
             resp_stream,
         })
     }
 
-    async fn handle_message(&mut self, message: ActorMessage) {
+    pub(crate) async fn handle_message(&mut self, message: ActorMessage) {
         match message {
             ActorMessage::Transform {
                 messages,
@@ -194,42 +192,6 @@ impl SourceTransformer {
     }
 }
 
-enum ActorMessage {
-    Transform {
-        messages: Vec<Message>,
-        respond_to: oneshot::Sender<Result<Vec<Message>>>,
-    },
-}
-
-#[derive(Clone)]
-pub(crate) struct SourceTransformHandle {
-    sender: mpsc::Sender<ActorMessage>,
-}
-
-impl SourceTransformHandle {
-    pub(crate) async fn new(client: SourceTransformClient<Channel>) -> Result<Self> {
-        let batch_size = 500;
-        let (sender, receiver) = mpsc::channel(batch_size);
-        let mut client = SourceTransformer::new(batch_size, client, receiver).await?;
-        tokio::spawn(async move {
-            while let Some(msg) = client.actor_messages.recv().await {
-                client.handle_message(msg).await;
-            }
-        });
-        Ok(Self { sender })
-    }
-
-    pub(crate) async fn transform(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
-        let (sender, receiver) = oneshot::channel();
-        let msg = ActorMessage::Transform {
-            messages,
-            respond_to: sender,
-        };
-        let _ = self.sender.send(msg).await;
-        receiver.await.unwrap()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::error::Error;
@@ -241,7 +203,7 @@ mod tests {
 
     use crate::message::{MessageID, StringOffset};
     use crate::shared::utils::create_rpc_channel;
-    use crate::transformer::user_defined::SourceTransformHandle;
+    use crate::transformer::SourceTransformHandle;
 
     struct NowCat;
 
