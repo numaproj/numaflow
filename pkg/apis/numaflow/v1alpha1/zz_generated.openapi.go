@@ -2947,6 +2947,12 @@ func schema_pkg_apis_numaflow_v1alpha1_KafkaSource(ref common.ReferenceCallback)
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL"),
 						},
 					},
+					"kafkaVersion": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 				},
 				Required: []string{"topic"},
 			},
