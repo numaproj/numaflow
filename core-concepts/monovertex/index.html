@@ -13,7 +13,7 @@
     
     
       
-        <title>Vertex - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>MonoVertex - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#vertex" class="md-skip">
+        <a href="#monovertex" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Vertex
+              MonoVertex
             
           </span>
         </div>
@@ -478,6 +478,20 @@
               
   
   
+  
+    <li class="md-nav__item">
+      <a href="../vertex/" class="md-nav__link">
+        Vertex
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
     
   
   
@@ -489,24 +503,75 @@
         
       
       
-      <a href="./" class="md-nav__link md-nav__link--active">
-        Vertex
-      </a>
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          MonoVertex
+          <span class="md-nav__icon md-icon"></span>
+        </label>
       
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../monovertex/" class="md-nav__link">
+      <a href="./" class="md-nav__link md-nav__link--active">
         MonoVertex
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#use-cases-of-monovertex" class="md-nav__link">
+    Use cases of MonoVertex
+  </a>
+  
+    <nav class="md-nav" aria-label="Use cases of MonoVertex">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-brief-history" class="md-nav__link">
+    A Brief History
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-not-to-use-monovertex" class="md-nav__link">
+    When not to use MonoVertex
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#anatomy-of-monovertex" class="md-nav__link">
+    Anatomy of MonoVertex
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    Example
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2262,6 +2327,55 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#use-cases-of-monovertex" class="md-nav__link">
+    Use cases of MonoVertex
+  </a>
+  
+    <nav class="md-nav" aria-label="Use cases of MonoVertex">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-brief-history" class="md-nav__link">
+    A Brief History
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-not-to-use-monovertex" class="md-nav__link">
+    When not to use MonoVertex
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#anatomy-of-monovertex" class="md-nav__link">
+    Anatomy of MonoVertex
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    Example
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2272,25 +2386,76 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/core-concepts/vertex.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/core-concepts/monovertex.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="vertex">Vertex<a class="headerlink" href="#vertex" title="Permanent link">&para;</a></h1>
-<p>The <code>Vertex</code> is a key component of Numaflow <code>Pipeline</code> where the data processing happens. <code>Vertex</code> is defined as a list in the <a href="../pipeline/">pipeline</a> spec, each representing a data processing task.</p>
-<p>There are 3 types of <code>Vertex</code> in Numaflow today:</p>
-<ol>
-<li><code>Source</code> - To ingest data from sources.</li>
-<li><code>Sink</code> - To forward processed data to sinks.</li>
-<li><code>UDF</code> - User-defined Function, which is used to define data processing logic.</li>
-</ol>
-<p>We have defined a <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Kubernetes Custom Resource</a> for <code>Vertex</code>. A <code>Pipeline</code> containing multiple vertices will automatically generate multiple <code>Vertex</code> objects by the controller. As a user, you should NOT create a <code>Vertex</code> object directly.</p>
-<p>In a <code>Pipeline</code>, the vertices are not connected directly, but through <a href="../inter-step-buffer/">Inter-Step Buffers</a>.</p>
-<p>To query <code>Vertex</code> objects with <code>kubectl</code>:</p>
-<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>vertex<span class="w"> </span><span class="c1"># or &quot;vtx&quot; as a short name</span>
+<h1 id="monovertex">MonoVertex<a class="headerlink" href="#monovertex" title="Permanent link">&para;</a></h1>
+<p>MonoVertex is a simplified version of the <a href="../pipeline/">Pipeline</a>. The major design idea behind MonoVertex is to simplify data-processing
+in those cases where independently autoscaling vertices are not required. This means there will only be a single vertex 
+called the MonoVertex, which is capable of running the <a href="../../user-guide/sources/overview/">Source</a>, the <a href="../../user-guide/sinks/overview/">Sink</a>
+(with <a href="../../user-guide/sinks/fallback/">Fallback Sink</a> if need be), and optionally the <a href="../../user-guide/sources/transformer/overview/">Transformer</a> 
+together. There is no concept of Edges in MonoVertex since there is only one <a href="../vertex/">Vertex</a>. The MonoVertex runs the same containers run by the 
+<a href="../pipeline/">Pipeline</a>, this means the users can switch between MonoVertex and <a href="../pipeline/">Pipeline</a> by just 
+changing the spec. MonoVertex’s <a href="../../specifications/autoscaling/">autoscaling</a> is similar to the Source vertex of a <a href="../pipeline/">Pipeline</a>, 
+where the vertex scales out if the pending at the Source is increasing, and scales down when the pending at the Source drops.</p>
+<p>The major benefits of MonoVertex are as follows:</p>
+<ul>
+<li>Very high TPS can be supported because there are no ISBs (RAFT consensus) in between.</li>
+<li>Extremely low latency because there is no network hops between the Vertices (only one Vertex).</li>
+<li>Low Operational overhead, no need to maintain ISBs.</li>
+</ul>
+<p><em>MonoVertex - Condensed Pipeline with just one Vertex</em>
+<img alt="monovertex.png" src="../../assets/monovertex.png" /></p>
+<h2 id="use-cases-of-monovertex">Use cases of MonoVertex<a class="headerlink" href="#use-cases-of-monovertex" title="Permanent link">&para;</a></h2>
+<p>There are a few scenarios where MonoVertex is the best fit, which can be best described as use-cases where “the user is
+reading from the Source, doing simple transformations, and writing to a Sink”. You don't need to scale these Source,
+Sink, or Map vertices by themselves. If the Sink can't keep up, you just need to add more pods. This brings a new set
+of Source, Transformer, and a Sink (optionally with a backup sink). The same goes for if the Source cannot keep up
+(pending is increasing), we just need to add more pods.</p>
+<h3 id="a-brief-history">A Brief History<a class="headerlink" href="#a-brief-history" title="Permanent link">&para;</a></h3>
+<p>MonoVertex was developed because we found that, there are a decent amount of applications that read from 
+Sources like Kafka, Pulsar, etc., and write to a User-Defined Sink (DBs, etc). Often, the transformation itself was not 
+required because the User-Defined Sink can do the transformation before persisting the data in to the Sink.  The extra hop 
+through the ISB was not helping but just making things slower by adding more delays. Throughput was also getting limited to 
+about 50K unless larger ISBs were used.</p>
+<h3 id="when-not-to-use-monovertex">When not to use MonoVertex<a class="headerlink" href="#when-not-to-use-monovertex" title="Permanent link">&para;</a></h3>
+<p>The rule of thumb is, if you are just reading from the source and writing to a sink (with some transformation), then 
+you might be able to get away with MonoVertex. For all other use cases, use the full Pipeline Semantics. Below are a 
+few examples where you cannot use MonoVertex.</p>
+<ul>
+<li><a href="../../user-guide/user-defined-functions/user-defined-functions/">User-Defined Functions</a> are not supported, only
+   <a href="../../user-guide/sources/transformer/overview/">Transformer</a> can be used. If you need Map support, please let us know 
+   by creating an issue,</li>
+<li>If you are using the <a href="../../user-guide/user-defined-functions/reduce/reduce/">Reduce</a> feature, then the full <a href="../pipeline/">Pipeline</a>
+  semantics is required. This is because of the need for shuffling of data.</li>
+<li>There are cases where you want to autoscale intermediate process nodes, especially in the case of ML workloads.</li>
+<li>If there is a need for custom placement of vertices (e.g., GPU nodes for Inference), then the complete pipeline spec is required.</li>
+<li>If you want to use the <a href="../../user-guide/reference/join-vertex/">Join</a> feature, then MonoVertex will not work.</li>
+</ul>
+<h2 id="anatomy-of-monovertex">Anatomy of MonoVertex<a class="headerlink" href="#anatomy-of-monovertex" title="Permanent link">&para;</a></h2>
+<p>MonoVertex supports the same Sources, Sinks, and Transformers which are used in the Pipeline spec.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MonoVertex</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">simple-mono-vertex</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">    </span><span class="c1"># same as the Pipeline Source</span>
+<span class="w">    </span><span class="c1"># ...</span>
+<span class="w">    </span><span class="nt">transformer</span><span class="p">:</span><span class="w"> </span><span class="c1"># transformer is an optional container to do any transformation to the incoming data before passing to the sink</span>
+<span class="w">    </span><span class="c1"># same as the Pipeline Transformer</span>
+<span class="w">    </span><span class="c1"># ...</span>
+<span class="w">  </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># same as the Pipeline Sink</span>
+<span class="w">  </span><span class="c1"># ...</span>
 </code></pre></div>
+<p>Please keep in mind that, moving from a MonoVertex to Pipeline does not require code change, only spec change.</p>
+<h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
+<p>A <a href="https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/21-simple-mono-vertex.yaml">simple example</a> using 
+user-defined source, transformer, and sink.</p>
 
               
             </article>
@@ -2311,7 +2476,7 @@
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../pipeline/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Pipeline" rel="prev">
+        <a href="../vertex/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Vertex" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -2320,20 +2485,20 @@
               <span class="md-footer__direction">
                 Previous
               </span>
-              Pipeline
+              Vertex
             </div>
           </div>
         </a>
       
       
         
-        <a href="../monovertex/" class="md-footer__link md-footer__link--next" aria-label="Next: MonoVertex" rel="next">
+        <a href="../inter-step-buffer/" class="md-footer__link md-footer__link--next" aria-label="Next: Inter-Step Buffer" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              MonoVertex
+              Inter-Step Buffer
             </div>
           </div>
           <div class="md-footer__button md-icon">

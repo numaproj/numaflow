@@ -504,6 +504,20 @@
   
   
     <li class="md-nav__item">
+      <a href="../monovertex/" class="md-nav__link">
+        MonoVertex
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../inter-step-buffer/" class="md-nav__link">
         Inter-Step Buffer
       </a>
@@ -2265,10 +2279,13 @@
 
 
 <h1 id="pipeline">Pipeline<a class="headerlink" href="#pipeline" title="Permanent link">&para;</a></h1>
-<p>The <code>Pipeline</code> represents a data processing job. The most important concept in Numaflow, it defines:</p>
+<p>The <code>Pipeline</code> represents a data processing job (a simpler version of this is called <a href="../monovertex/">MonoVertex</a>). The
+most important concept in Numaflow, it defines:</p>
 <ol>
 <li>A list of <a href="../vertex/">vertices</a>, which define the data processing tasks;</li>
-<li>A list of <code>edges</code>, which are used to describe the relationship between the vertices. Note an edge may go from a vertex to multiple vertices, and as of v0.10, an edge may also go from multiple vertices to a vertex. This many-to-one relationship is possible via <a href="../../user-guide/reference/join-vertex/">Join and Cycles</a></li>
+<li>A list of <code>edges</code>, which are used to describe the relationship between the vertices. Note an edge may go from a vertex
+   to multiple vertices, and an edge may also go from multiple vertices to a vertex. This many-to-one relationship is
+   possible via <a href="../../user-guide/reference/join-vertex/">Join and Cycles</a></li>
 </ol>
 <p>The <code>Pipeline</code> is abstracted as a <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Kubernetes Custom Resource</a>. A <code>Pipeline</code> spec looks like below.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
