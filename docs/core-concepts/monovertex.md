@@ -1,6 +1,6 @@
 # MonoVertex
 
-MonoVertex is a simplified version of the [Pipeline](./pipeline.md) The major design idea of MonoVertex is to simplify data-processing
+MonoVertex is a simplified version of the [Pipeline](./pipeline.md). The major design idea behind MonoVertex is to simplify data-processing
 in those cases where independently autoscaling vertices are not required. This means there will only be a single vertex 
 called the MonoVertex, which is capable of running the [Source](../user-guide/sources/overview.md), the [Sink](../user-guide/sinks/overview.md)
 (with [Fallback Sink](../user-guide/sinks/fallback.md) if need be), and optionally the [Transformer](../user-guide/sources/transformer/overview.md) 
@@ -12,8 +12,8 @@ where the vertex scales out if the pending at the Source is increasing, and scal
 The major benefits of MonoVertex are as follows:
 
 * Very high TPS can be supported because there are no ISBs (RAFT consensus) in between.
-* Extremely low latency because there is no network hops between the components.
-* Low Operational overhead.
+* Extremely low latency because there is no network hops between the Vertices (only one Vertex).
+* Low Operational overhead, no need to maintain ISBs.
 
 _MonoVertex - Condensed Pipeline with just one Vertex_
 ![monovertex.png](../assets/monovertex.png)
@@ -30,8 +30,8 @@ of Source, Transformer, and a Sink (optionally with a backup sink). The same goe
 
 We developed MonoVertex because at Intuit we found that, there are a decent amount of applications that read from 
 Sources like Kafka, Pulsar, etc., and write to a User-Defined Sink (DBs, etc). Often, the transformation itself was not 
-required because the User-Defined Sink can do the transformation before persisting the data in the Sink.  The extra hop 
-through the ISB was not helping but just making things slower by adding more delays. Throughput was getting limited to 
+required because the User-Defined Sink can do the transformation before persisting the data in to the Sink.  The extra hop 
+through the ISB was not helping but just making things slower by adding more delays. Throughput was also getting limited to 
 about 50K unless larger ISBs were used.
 
 ### When not to use MonoVertex
@@ -41,14 +41,17 @@ you might be able to get away with MonoVertex. For all other use cases, use the 
 few examples where you cannot use MonoVertex.
 
  * [User-Defined Functions](../user-guide/user-defined-functions/user-defined-functions.md) are not supported, only
-   [Transformer](../user-guide/sources/transformer/overview.md) can be used.
+   [Transformer](../user-guide/sources/transformer/overview.md) can be used. If you need Map support, please let us know 
+   by creating an issue,
  * If you are using the [Reduce](../user-guide/user-defined-functions/reduce/reduce.md) feature, then the full [Pipeline](./pipeline.md)
   semantics is required. This is because of the need for shuffling of data.
- * There are cases where you want to auto-scale intermediate process nodes, especially in the case of ML workloads.
+ * There are cases where you want to autoscale intermediate process nodes, especially in the case of ML workloads.
  * If there is a need for custom placement of vertices (e.g., GPU nodes for Inference), then the complete pipeline spec is required.
  * If you want to use the [Join](../user-guide/reference/join-vertex.md) feature, then MonoVertex will not work.
 
 ## Anatomy of MonoVertex
+
+MonoVertex supports the same Sources, Sinks, and Transformers which is used in the Pipeline spec.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -66,6 +69,8 @@ spec:
   # same as the Pipeline Transformer
   # ...
 ```
+
+Please keep in mind that, moving from a MonoVertex to Pipeline does not require code change, only spec change.
 
 ## Example
 
