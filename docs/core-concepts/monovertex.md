@@ -4,7 +4,7 @@ MonoVertex is a simplified version of the [Pipeline](./pipeline.md). The major d
 in those cases where independently autoscaling vertices are not required. This means there will only be a single vertex 
 called the MonoVertex, which is capable of running the [Source](../user-guide/sources/overview.md), the [Sink](../user-guide/sinks/overview.md)
 (with [Fallback Sink](../user-guide/sinks/fallback.md) if need be), and optionally the [Transformer](../user-guide/sources/transformer/overview.md) 
-together. There is no concept of Edges in MonoVertex since there is only one vertex. The MonoVertex runs the same containers run by the 
+together. There is no concept of Edges in MonoVertex since there is only one [Vertex](vertex.md). The MonoVertex runs the same containers run by the 
 [Pipeline](./pipeline.md), this means the user’s can switch between MonoVertex and [Pipeline](./pipeline.md) by just 
 changing the spec. MonoVertex’s [autoscaling](../specifications/autoscaling.md)is also similar to the [Pipeline](./pipeline.md), 
 where the vertex scales out if the pending at the Source is increasing, and scales down when the pending at the Source drops.
@@ -51,7 +51,7 @@ few examples where you cannot use MonoVertex.
 
 ## Anatomy of MonoVertex
 
-MonoVertex supports the same Sources, Sinks, and Transformers which is used in the Pipeline spec.
+MonoVertex supports the same Sources, Sinks, and Transformers which are used in the Pipeline spec.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -75,4 +75,4 @@ Please keep in mind that, moving from a MonoVertex to Pipeline does not require 
 ## Example
 
 A [simple example](https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/21-simple-mono-vertex.yaml) using 
-user-defined sources, transformer, and sink.
+user-defined source, transformer, and sink.
