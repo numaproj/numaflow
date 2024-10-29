@@ -5,8 +5,8 @@ in those cases where independently autoscaling vertices are not required. This m
 called the MonoVertex, which is capable of running the [Source](../user-guide/sources/overview.md), the [Sink](../user-guide/sinks/overview.md)
 (with [Fallback Sink](../user-guide/sinks/fallback.md) if need be), and optionally the [Transformer](../user-guide/sources/transformer/overview.md) 
 together. There is no concept of Edges in MonoVertex since there is only one [Vertex](vertex.md). The MonoVertex runs the same containers run by the 
-[Pipeline](./pipeline.md), this means the user’s can switch between MonoVertex and [Pipeline](./pipeline.md) by just 
-changing the spec. MonoVertex’s [autoscaling](../specifications/autoscaling.md)is also similar to the [Pipeline](./pipeline.md), 
+[Pipeline](./pipeline.md), this means the users can switch between MonoVertex and [Pipeline](./pipeline.md) by just 
+changing the spec. MonoVertex’s [autoscaling](../specifications/autoscaling.md) is similar to the Source vertex of a [Pipeline](./pipeline.md), 
 where the vertex scales out if the pending at the Source is increasing, and scales down when the pending at the Source drops.
 
 The major benefits of MonoVertex are as follows:
@@ -20,6 +20,7 @@ _MonoVertex - Condensed Pipeline with just one Vertex_
 
 
 ## Use cases of MonoVertex
+
 There are a few scenarios where MonoVertex is the best fit, which can be best described as use-cases where “the user is
 reading from the Source, doing simple transformations, and writing to a Sink”. You don't need to scale these Source,
 Sink, or Map vertices by themselves. If the Sink can't keep up, you just need to add more pods. This brings a new set
@@ -28,7 +29,7 @@ of Source, Transformer, and a Sink (optionally with a backup sink). The same goe
 
 ### A Brief History
 
-We developed MonoVertex because at Intuit we found that, there are a decent amount of applications that read from 
+MonoVertex was developed because we found that, there are a decent amount of applications that read from 
 Sources like Kafka, Pulsar, etc., and write to a User-Defined Sink (DBs, etc). Often, the transformation itself was not 
 required because the User-Defined Sink can do the transformation before persisting the data in to the Sink.  The extra hop 
 through the ISB was not helping but just making things slower by adding more delays. Throughput was also getting limited to 
@@ -66,7 +67,7 @@ spec:
     # same as the Pipeline Transformer
     # ...
   sink:
-  # same as the Pipeline Transformer
+  # same as the Pipeline Sink
   # ...
 ```
 
