@@ -43,12 +43,6 @@ export function PodInfoNew({ podSpecificInfo }: PodSpecificInfoProps) {
               </TableRow>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
-                  Condition
-                </TableCell>
-                <TableCell>{podSpecificInfo?.Condition || "N/A"}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
                   Message
                 </TableCell>
                 <TableCell>{podSpecificInfo?.Message || "N/A"}</TableCell>
@@ -58,6 +52,30 @@ export function PodInfoNew({ podSpecificInfo }: PodSpecificInfoProps) {
                   Reason
                 </TableCell>
                 <TableCell>{podSpecificInfo?.Reason || "N/A"}</TableCell>
+              </TableRow>
+              {/* <TableRow>
+                <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
+                  Condition Type
+                </TableCell>
+                <TableCell>{podSpecificInfo?.Condition || "N/A"}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
+                  Last Transition Message
+                </TableCell>
+                <TableCell>{podSpecificInfo?.ConditionMessage || "N/A"}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
+                  Last Transition Reason
+                </TableCell>
+                <TableCell>{podSpecificInfo?.ConditionReason || "N/A"}</TableCell>
+              </TableRow> */}
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
+                  Containers Count
+                </TableCell>
+                <TableCell>{podSpecificInfo?.ContainerCount || "N/A"}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>

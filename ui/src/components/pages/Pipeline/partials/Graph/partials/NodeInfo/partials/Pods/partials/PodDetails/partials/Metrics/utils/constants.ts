@@ -28,5 +28,6 @@ export const dimensionReverseMap: { [p: string]: string } = {
 };
 
 export const metricNameMap: { [p: string]: string } = {
-  monovtx_processing_time_bucket: "Mono Vertex Processing Time Latency",
+  monovtx_processing_time_bucket: "Mono Vertex Processing Time Latency (in micro seconds)",
+  monovtx_sink_time_bucket: "Mono Vertex Sink Write Time Latency (in micro seconds)"
 };

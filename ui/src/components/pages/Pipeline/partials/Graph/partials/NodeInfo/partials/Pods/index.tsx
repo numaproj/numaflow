@@ -80,6 +80,8 @@ export function Pods(props: PodsProps) {
     const selectedPod = podsData?.find((pod) => pod?.Name === podName);
     if (selectedPod) {
       podSpecificInfo.Condition = selectedPod?.Condition;
+      podSpecificInfo.ConditionMessage = selectedPod?.ConditionMessage;
+      podSpecificInfo.ConditionReason = selectedPod?.ConditionReason;
       podSpecificInfo.Name = selectedPod?.Name;
       podSpecificInfo.Reason = selectedPod?.Reason;
       podSpecificInfo.Status = selectedPod?.Status;

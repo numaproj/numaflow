@@ -30,7 +30,7 @@ const Dropdown = ({
       case "dimension":
         return dimensionReverseMap[type];
       case "quantile":
-        return quantileOptions[0];
+        return quantileOptions[quantileOptions.length-1];
       case "duration":
         return durationOptions[0];
       default:

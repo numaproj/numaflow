@@ -34,3 +34,15 @@ data:
                   required: false
             - name: mono-vertex
               #expr: optional
+        - metric_name: monovtx_sink_time_bucket
+          required_filters:
+            - namespace
+            - mvtx_name
+          dimensions:
+            - name: pod
+              #expr: optional
+              filters:
+                - name: pod
+                  required: false
+            - name: mono-vertex
+              #expr: optional

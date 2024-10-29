@@ -99,6 +99,7 @@ export interface PodDetailProps {
   podDetails: PodDetail;
 }
 export interface ContainerInfoProps {
+  LastStartedAt: string;
   State: string;
   RestartCount: number;
   LastTerminationReason: string;
@@ -114,6 +115,8 @@ export interface PodSpecificInfoProps {
     Condition: string;
     Message: string;
     Reason: string;
+    ConditionMessage: string;
+    ConditionReason:  string;
     RestartCount: number;
     ContainerCount: number;
   };

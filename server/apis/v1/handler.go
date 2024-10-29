@@ -976,6 +976,9 @@ func (h *handler) GetContainerDetails(pod corev1.Pod) map[string]ContainerDetail
 			details.LastTerminationReason = status.LastTerminationState.Terminated.Reason
 			details.LastTerminationMessage = status.LastTerminationState.Terminated.Message
 		}
+		if status.State.Running != nil {
+			details.LastStartedAt = status.State.Running.StartedAt.Format(time.RFC3339)
+		}
 		containerDetailsMap[containerName] = details
 	}
 	return containerDetailsMap
@@ -983,26 +986,25 @@ func (h *handler) GetContainerDetails(pod corev1.Pod) map[string]ContainerDetail
 
 func (h *handler) GetPodDetails(client kubernetes.Interface, ns string, pod corev1.Pod) (PodDetails, error) {
 	podDetails := PodDetails{
-		Name:   pod.Name,
-		Status: string(pod.Status.Phase),
+		Name:    pod.Name,
+		Status:  string(pod.Status.Phase),
+		Message: string(pod.Status.Message),
+		Reason:  string(pod.Status.Reason),
 	}
 
 	containerDetails := h.GetContainerDetails(pod)
 	podDetails.ContainerDetailsMap = containerDetails
 
 	for _, condition := range pod.Status.Conditions {
-		if condition.Type == corev1.PodReady || condition.Type == corev1.PodScheduled || condition.Type == corev1.PodInitialized {
-			podDetails.Condition = string(condition.Type)
-			podDetails.Message = condition.Message
-			podDetails.Reason = condition.Reason
-			break
-		}
+		podDetails.Condition = string(condition.Type)
+		podDetails.ConditionMessage = string(condition.Message)
+		podDetails.ConditionReason = string(condition.Reason)
 	}
 	return podDetails, nil
 }
 
 func (h *handler) GetPodInfo(c *gin.Context) {
-	var items = make([]PodDetails, 0)
+	var response = make([]PodDetails, 0)
 	ns := c.Param("namespace")
 
 	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{})
@@ -1018,10 +1020,10 @@ func (h *handler) GetPodInfo(c *gin.Context) {
 			h.respondWithError(c, fmt.Sprintf("Error getting pod details: %v", err))
 			return
 		} else {
-			items = append(items, podDetails)
+			response = append(response, podDetails)
 		}
 	}
-	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, items))
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 func (h *handler) parseTailLines(query string) *int64 {
 	if query == "" {

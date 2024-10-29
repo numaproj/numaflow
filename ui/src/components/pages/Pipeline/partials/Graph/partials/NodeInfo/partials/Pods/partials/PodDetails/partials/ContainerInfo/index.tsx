@@ -84,8 +84,16 @@ export function ContainerInfo({
               {/*  <TableCell>{podName}</TableCell>*/}
               {/*</TableRow>*/}
               <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>Container</TableCell>
+                <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
                 <TableCell>{containerName}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                <TableCell>{containerInfo?.State}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Last (Re-) Start Time</TableCell>
+                <TableCell>{containerInfo?.LastStartedAt}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>CPU %</TableCell>
@@ -102,10 +110,6 @@ export function ContainerInfo({
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Memory</TableCell>
                 <TableCell>{`${usedMem} / ${specMem}`}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>State</TableCell>
-                <TableCell>{containerInfo?.State}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Restart Count </TableCell>
