@@ -185,25 +185,24 @@ impl UserDefinedSourceAck {
 
 impl SourceAcker for UserDefinedSourceAck {
     async fn ack(&mut self, offsets: Vec<Offset>) -> Result<()> {
-        let n = offsets.len();
+        let ack_offsets: Result<Vec<source::Offset>> =
+            offsets.into_iter().map(TryInto::try_into).collect();
 
-        // send n ack requests
-        for offset in offsets {
-            let request = offset.try_into()?;
-            self.ack_tx
-                .send(request)
-                .await
-                .map_err(|e| Error::Source(e.to_string()))?;
-        }
+        self.ack_tx
+            .send(AckRequest {
+                request: Some(source::ack_request::Request {
+                    offsets: ack_offsets?,
+                }),
+                handshake: None,
+            })
+            .await
+            .map_err(|e| Error::Source(e.to_string()))?;
 
-        // make sure we get n responses for the n requests.
-        for _ in 0..n {
-            let _ = self
-                .ack_resp_stream
-                .message()
-                .await?
-                .ok_or(Error::Source("failed to receive ack response".to_string()))?;
-        }
+        let _ = self
+            .ack_resp_stream
+            .message()
+            .await?
+            .ok_or(Error::Source("failed to receive ack response".to_string()))?;
 
         Ok(())
     }
