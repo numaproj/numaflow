@@ -99,10 +99,7 @@ func Test_gRPCBasedUDSink_ApplyWithMockClient(t *testing.T) {
 		mockSinkClient := sinkmock.NewMockSink_SinkFnClient(ctrl)
 		mockSinkClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 		mockSinkClient.EXPECT().Recv().Return(&sinkpb.SinkResponse{
-			Result: testResponseList[0],
-		}, nil)
-		mockSinkClient.EXPECT().Recv().Return(&sinkpb.SinkResponse{
-			Result: testResponseList[1],
+			Results: testResponseList,
 		}, nil)
 		mockSinkClient.EXPECT().Recv().Return(&sinkpb.SinkResponse{Status: &sinkpb.TransmissionStatus{
 			Eot: true,
