@@ -328,7 +328,7 @@ mod tests {
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    async fn test_forwarder_for_source_vetex() {
+    async fn test_forwarder_for_source_vertex() {
         // Unique names for the streams we use in this test
         let streams = vec![
             "default-test-forwarder-for-source-vertex-out-0",

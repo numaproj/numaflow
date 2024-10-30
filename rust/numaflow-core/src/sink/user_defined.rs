@@ -2,7 +2,6 @@ use crate::message::{Message, ResponseFromSink};
 use crate::sink::Sink;
 use crate::Error;
 use crate::Result;
-use log::info;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;
@@ -60,7 +59,6 @@ impl UserDefinedSink {
 impl Sink for UserDefinedSink {
     /// writes a set of messages to the sink.
     async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
-        let start_time = std::time::Instant::now();
         let requests: Vec<SinkRequest> =
             messages.into_iter().map(|message| message.into()).collect();
         let num_requests = requests.len();
@@ -113,7 +111,6 @@ impl Sink for UserDefinedSink {
             );
         }
 
-        info!("sink took: {:?}", start_time.elapsed());
         Ok(responses)
     }
 }

@@ -283,11 +283,13 @@ mod tests {
             self.yet_to_ack.write().unwrap().extend(message_offsets)
         }
 
-        async fn ack(&self, offset: Offset) {
-            self.yet_to_ack
-                .write()
-                .unwrap()
-                .remove(&String::from_utf8(offset.offset).unwrap());
+        async fn ack(&self, offsets: Vec<Offset>) {
+            for offset in offsets {
+                self.yet_to_ack
+                    .write()
+                    .unwrap()
+                    .remove(&String::from_utf8(offset.offset).unwrap());
+            }
         }
 
         async fn pending(&self) -> usize {
