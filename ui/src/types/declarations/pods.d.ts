@@ -112,13 +112,9 @@ export interface PodSpecificInfoProps {
   podSpecificInfo: {
     Name: string;
     Status: string;
-    Condition: string;
     Message: string;
     Reason: string;
-    ConditionMessage: string;
-    ConditionReason:  string;
     RestartCount: number;
-    ContainerCount: number;
   };
 }
 export interface PodInfoProps {

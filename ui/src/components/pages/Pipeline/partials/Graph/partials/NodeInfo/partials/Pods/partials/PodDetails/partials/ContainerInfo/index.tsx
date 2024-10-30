@@ -79,10 +79,6 @@ export function ContainerInfo({
         <TableContainer sx={{ maxHeight: "60rem", backgroundColor: "#FFF" }}>
           <Table stickyHeader>
             <TableBody>
-              {/*<TableRow>*/}
-              {/*  <TableCell sx={{ fontWeight: 600 }}>Pod</TableCell>*/}
-              {/*  <TableCell>{podName}</TableCell>*/}
-              {/*</TableRow>*/}
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
                 <TableCell>{containerName}</TableCell>
@@ -90,10 +86,6 @@ export function ContainerInfo({
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
                 <TableCell>{containerInfo?.State}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>Last (Re-) Start Time</TableCell>
-                <TableCell>{containerInfo?.LastStartedAt}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>CPU %</TableCell>
@@ -115,30 +107,42 @@ export function ContainerInfo({
                 <TableCell sx={{ fontWeight: 600 }}>Restart Count </TableCell>
                 <TableCell>{containerInfo?.RestartCount || "0"}</TableCell>
               </TableRow>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>
-                  Last Termination Reason
-                </TableCell>
-                <TableCell>
-                  {containerInfo?.LastTerminationReason || "N/A"}
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>
-                  Last Termination Message
-                </TableCell>
-                <TableCell>
-                  {containerInfo?.LastTerminationMessage || "N/A"}
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>Waiting Reason</TableCell>
-                <TableCell>{containerInfo?.WaitingReason || "N/A"}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>Waiting Message</TableCell>
-                <TableCell>{containerInfo?.WaitingMessage || "N/A"}</TableCell>
-              </TableRow>
+
+              {containerInfo?.LastTerminationReason && (
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 600 }}>
+                    Last Termination Reason
+                  </TableCell>
+                  <TableCell>
+                    {containerInfo?.LastTerminationReason}
+                  </TableCell>
+                </TableRow>
+              )}
+              {containerInfo?.LastTerminationMessage && (
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 600 }}>
+                    Last Termination Message
+                  </TableCell>
+                  <TableCell>
+                    {containerInfo?.LastTerminationMessage}
+                  </TableCell>
+                </TableRow>
+              )}
+
+              {containerInfo?.WaitingReason && (
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 600 }}>Waiting Reason</TableCell>
+                  <TableCell>{containerInfo?.WaitingReason}</TableCell>
+                </TableRow>
+
+              )}
+
+              {containerInfo?.WaitingMessage && (
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 600 }}>Waiting Message</TableCell>
+                  <TableCell>{containerInfo?.WaitingMessage}</TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </TableContainer>

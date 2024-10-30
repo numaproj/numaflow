@@ -994,12 +994,6 @@ func (h *handler) GetPodDetails(client kubernetes.Interface, ns string, pod core
 
 	containerDetails := h.GetContainerDetails(pod)
 	podDetails.ContainerDetailsMap = containerDetails
-
-	for _, condition := range pod.Status.Conditions {
-		podDetails.Condition = string(condition.Type)
-		podDetails.ConditionMessage = string(condition.Message)
-		podDetails.ConditionReason = string(condition.Reason)
-	}
 	return podDetails, nil
 }
 

@@ -3,9 +3,6 @@ package v1
 type PodDetails struct {
 	Name                string
 	Status              string
-	Condition           string
-	ConditionMessage    string
-	ConditionReason     string
 	Message             string
 	Reason              string
 	ContainerDetailsMap map[string]ContainerDetails

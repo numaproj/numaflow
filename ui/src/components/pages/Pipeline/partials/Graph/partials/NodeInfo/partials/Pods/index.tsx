@@ -79,9 +79,6 @@ export function Pods(props: PodsProps) {
     const podSpecificInfo: PodSpecificInfoProps = {};
     const selectedPod = podsData?.find((pod) => pod?.Name === podName);
     if (selectedPod) {
-      podSpecificInfo.Condition = selectedPod?.Condition;
-      podSpecificInfo.ConditionMessage = selectedPod?.ConditionMessage;
-      podSpecificInfo.ConditionReason = selectedPod?.ConditionReason;
       podSpecificInfo.Name = selectedPod?.Name;
       podSpecificInfo.Reason = selectedPod?.Reason;
       podSpecificInfo.Status = selectedPod?.Status;
@@ -92,9 +89,6 @@ export function Pods(props: PodsProps) {
           selectedPod?.ContainerDetailsMap?.[container].RestartCount;
       }
       podSpecificInfo.RestartCount = restartCount;
-      podSpecificInfo.ContainerCount = Object.keys(
-        selectedPod?.ContainerDetailsMap
-      ).length;
     }
     return podSpecificInfo;
   }, []);
