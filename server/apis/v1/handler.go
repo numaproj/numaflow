@@ -126,7 +126,8 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 		_ = value.Close()
 	})
 
-	// create handler instance even if prometheus server details are not set, let the API respond with err mssg
+	// create handler instance even if prometheus server details are not set
+	// the query API will respond with error message
 	prometheusMetricConfig := loadPrometheusMetricConfig()
 	// prom client instance
 	prometheusClient := NewPrometheusClient(prometheusMetricConfig.ServerUrl)
@@ -948,116 +949,7 @@ func (h *handler) PodLogs(c *gin.Context) {
 	h.streamLogs(c, stream)
 }
 
-func (h *handler) GetContainerStatus(state corev1.ContainerState) string {
-	if state.Running != nil {
-		return "Running"
-	} else if state.Waiting != nil {
-		return "Waiting"
-	} else if state.Terminated != nil {
-		return "Terminated"
-	} else {
-		return "Unknown"
-	}
-}
-func (h *handler) GetContainerDetails(pod corev1.Pod) map[string]ContainerDetails {
-	var containerDetailsMap = make(map[string]ContainerDetails)
-	for _, status := range pod.Status.ContainerStatuses {
-		containerName := status.Name
-		details := ContainerDetails{
-			Name:         status.Name,
-			ID:           status.ContainerID,
-			State:        h.GetContainerStatus(status.State),
-			RestartCount: status.RestartCount,
-		}
-		if status.State.Waiting != nil {
-			details.WaitingReason = status.State.Waiting.Reason
-			details.WaitingMessage = status.State.Waiting.Message
-		}
-		if status.LastTerminationState.Terminated != nil {
-			details.LastTerminationReason = status.LastTerminationState.Terminated.Reason
-			details.LastTerminationMessage = status.LastTerminationState.Terminated.Message
-		}
-		if status.State.Running != nil {
-			details.LastStartedAt = status.State.Running.StartedAt.Format(time.RFC3339)
-		}
-		containerDetailsMap[containerName] = details
-	}
-
-	// Get CPU/Memory requests and limits from Pod spec
-	for _, container := range pod.Spec.Containers {
-		cpuRequest := container.Resources.Requests.Cpu().MilliValue()
-		memRequest := container.Resources.Requests.Memory().Value() / (1024 * 1024)
-		cpuLimit := container.Resources.Limits.Cpu().MilliValue()
-		memLimit := container.Resources.Limits.Memory().Value() / (1024 * 1024)
-		// Get the existing ContainerDetails or create a new one
-		details, ok := containerDetailsMap[container.Name]
-		if !ok {
-			details = ContainerDetails{Name: container.Name} // Initialize if not found
-		}
-		if cpuRequest != 0 {
-			details.RequestedCPU = strconv.FormatInt(cpuRequest, 10) + "m"
-		}
-		if memRequest != 0 {
-			details.RequestedMemory = strconv.FormatInt(memRequest, 10) + "Mi"
-		}
-		if cpuLimit != 0 {
-			details.LimitCPU = strconv.FormatInt(cpuLimit, 10) + "m"
-		}
-		if memLimit != 0 {
-			details.LimitMemory = strconv.FormatInt(memLimit, 10) + "Mi"
-		}
-		containerDetailsMap[container.Name] = details
-	}
-	return containerDetailsMap
-}
-
-func (h *handler) GetPodDetails(client kubernetes.Interface, metricsClient *metricsversiond.Clientset, pod corev1.Pod) (PodDetails, error) {
-	podDetails := PodDetails{
-		Name:    pod.Name,
-		Status:  string(pod.Status.Phase),
-		Message: string(pod.Status.Message),
-		Reason:  string(pod.Status.Reason),
-	}
-
-	// container details of a pod
-	containerDetails := h.GetContainerDetails(pod)
-	podDetails.ContainerDetailsMap = containerDetails
-
-	// cpu/memory details of a pod
-	podMetrics, err := metricsClient.MetricsV1beta1().PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
-	if err == nil {
-		totalCPU := resource.NewQuantity(0, resource.DecimalSI)
-		totalMemory := resource.NewQuantity(0, resource.BinarySI)
-		for _, container := range podMetrics.Containers {
-			containerName := container.Name
-			cpuQuantity := container.Usage.Cpu()
-			memQuantity := container.Usage.Memory()
-			details, ok := containerDetails[containerName]
-			if !ok {
-				details = ContainerDetails{Name: container.Name} // Initialize if not found
-			}
-			if cpuQuantity != nil {
-				details.TotalCPU = strconv.FormatInt(cpuQuantity.MilliValue(), 10) + "m"
-			}
-			if memQuantity != nil {
-				details.TotalMemory = strconv.FormatInt(memQuantity.Value()/(1024*1024), 10) + "Mi"
-			}
-			containerDetails[containerName] = details
-			totalCPU.Add(*cpuQuantity)
-			totalMemory.Add(*memQuantity)
-		}
-		if totalCPU != nil {
-			podDetails.TotalCPU = strconv.FormatInt(totalCPU.MilliValue(), 10) + "m"
-		}
-
-		if totalMemory != nil {
-			podDetails.TotalMemory = strconv.FormatInt(totalMemory.Value()/(1024*1024), 10) + "Mi"
-		}
-	}
-	return podDetails, nil
-}
-
-func (h *handler) GetMonoVertexPodInfo(c *gin.Context) {
+func (h *handler) GetMonoVertexPodsInfo(c *gin.Context) {
 	var response = make([]PodDetails, 0)
 	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
 	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{
@@ -1067,10 +959,14 @@ func (h *handler) GetMonoVertexPodInfo(c *gin.Context) {
 		h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: Failed to get a list of pods: namespace %q mono vertex %q: %s",
 			ns, monoVertex, err.Error()))
 	}
+	if pods == nil || len(pods.Items) == 0 {
+		h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: No pods found for mono vertex %q in namespace %q", monoVertex, ns))
+		return
+	}
 	for _, pod := range pods.Items {
-		podDetails, err := h.GetPodDetails(h.kubeClient, h.metricsClient, pod)
+		podDetails, err := h.getPodDetails(pod)
 		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: Error getting pod details: %v", err))
+			h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: Failed to get the pod details: %v", err))
 			return
 		} else {
 			response = append(response, podDetails)
@@ -1079,21 +975,25 @@ func (h *handler) GetMonoVertexPodInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
-func (h *handler) GetPipelineVertexPodInfo(c *gin.Context) {
+func (h *handler) GetVertexPodsInfo(c *gin.Context) {
 	var response = make([]PodDetails, 0)
 	ns, pipeline, vertex := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex")
 	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipeline, dfv1.KeyVertexName, vertex),
 	})
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("GetPipelineVertexPodInfo: Failed to get a list of pods: namespace %q pipeline %q vertex %q: %s",
+		h.respondWithError(c, fmt.Sprintf("GetVertexPodsInfo: Failed to get a list of pods: namespace %q pipeline %q vertex %q: %s",
 			ns, pipeline, vertex, err.Error()))
 		return
 	}
+	if pods == nil || len(pods.Items) == 0 {
+		h.respondWithError(c, fmt.Sprintf("GetVertexPodsInfo: No pods found for pipeline %q vertex %q in namespace %q", pipeline, vertex, ns))
+		return
+	}
 	for _, pod := range pods.Items {
-		podDetails, err := h.GetPodDetails(h.kubeClient, h.metricsClient, pod)
+		podDetails, err := h.getPodDetails(pod)
 		if err != nil {
-			h.respondWithError(c, fmt.Sprintf("GetPipelineVertexPodInfo: Error getting pod details: %v", err))
+			h.respondWithError(c, fmt.Sprintf("GetVertexPodsInfo: Failed to get the pod details: %v", err))
 			return
 		} else {
 			response = append(response, podDetails)
@@ -1349,23 +1249,24 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 func (h *handler) GetMetricData(c *gin.Context) {
 	var requestBody MetricsRequestBody
 	if h.promQlService == nil {
-		h.respondWithError(c, "prom ql service is nil")
+		h.respondWithError(c, "Failed to get the prometheus query service")
 		return
 	}
 	if err := bindJson(c, &requestBody); err != nil {
-		h.respondWithError(c, fmt.Sprintf("error in decoding JSON req body %v", err))
+		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body to metrics query spec, %s", err.Error()))
 		return
 	}
 	// builds prom query
 	promQl, err := h.promQlService.BuildQuery(requestBody)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("error in building promql %v", err))
+		h.respondWithError(c, fmt.Sprintf("Failed to build the prometheus query%v", err))
 		return
 	}
-	// default start and end times
+	// default start time is 30 minutes before the current time
 	if requestBody.StartTime == "" {
 		requestBody.StartTime = time.Now().Add(-30 * time.Minute).Format(time.RFC3339)
 	}
+	// default end time is the current time
 	if requestBody.EndTime == "" {
 		requestBody.EndTime = time.Now().Format(time.RFC3339)
 	}
@@ -1375,7 +1276,7 @@ func (h *handler) GetMetricData(c *gin.Context) {
 
 	result, err := h.promQlService.QueryPrometheus(context.Background(), promQl, startTime, endTime)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("error in prometheus query %v", err))
+		h.respondWithError(c, fmt.Sprintf("Failed to execute the prometheus query, %s", err.Error()))
 		return
 	}
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, result))
@@ -1672,5 +1573,117 @@ func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient
 		return c, nil
 	} else {
 		return mvtDaemonClient, nil
+	}
+}
+
+func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
+	podDetails := PodDetails{
+		Name:    pod.Name,
+		Status:  string(pod.Status.Phase),
+		Message: pod.Status.Message,
+		Reason:  pod.Status.Reason,
+	}
+
+	metricsClient := h.metricsClient
+
+	// container details of a pod
+	containerDetails := h.getContainerDetails(pod)
+	podDetails.ContainerDetailsMap = containerDetails
+
+	// cpu/memory details of a pod
+	podMetrics, err := metricsClient.MetricsV1beta1().PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
+	if err == nil {
+		totalCPU := resource.NewQuantity(0, resource.DecimalSI)
+		totalMemory := resource.NewQuantity(0, resource.BinarySI)
+		for _, container := range podMetrics.Containers {
+			containerName := container.Name
+			cpuQuantity := container.Usage.Cpu()
+			memQuantity := container.Usage.Memory()
+			details, ok := containerDetails[containerName]
+			if !ok {
+				details = ContainerDetails{Name: container.Name} // Initialize if not found
+			}
+			if cpuQuantity != nil {
+				details.TotalCPU = strconv.FormatInt(cpuQuantity.MilliValue(), 10) + "m"
+				totalCPU.Add(*cpuQuantity)
+			}
+			if memQuantity != nil {
+				details.TotalMemory = strconv.FormatInt(memQuantity.Value()/(1024*1024), 10) + "Mi"
+				totalMemory.Add(*memQuantity)
+			}
+			containerDetails[containerName] = details
+		}
+		if totalCPU != nil {
+			podDetails.TotalCPU = strconv.FormatInt(totalCPU.MilliValue(), 10) + "m"
+		}
+
+		if totalMemory != nil {
+			podDetails.TotalMemory = strconv.FormatInt(totalMemory.Value()/(1024*1024), 10) + "Mi"
+		}
+	}
+	return podDetails, nil
+}
+
+func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetails {
+	var containerDetailsMap = make(map[string]ContainerDetails)
+	for _, status := range pod.Status.ContainerStatuses {
+		containerName := status.Name
+		details := ContainerDetails{
+			Name:         status.Name,
+			ID:           status.ContainerID,
+			State:        h.getContainerStatus(status.State),
+			RestartCount: status.RestartCount,
+		}
+		if status.State.Waiting != nil {
+			details.WaitingReason = status.State.Waiting.Reason
+			details.WaitingMessage = status.State.Waiting.Message
+		}
+		if status.LastTerminationState.Terminated != nil {
+			details.LastTerminationReason = status.LastTerminationState.Terminated.Reason
+			details.LastTerminationMessage = status.LastTerminationState.Terminated.Message
+		}
+		if status.State.Running != nil {
+			details.LastStartedAt = status.State.Running.StartedAt.Format(time.RFC3339)
+		}
+		containerDetailsMap[containerName] = details
+	}
+
+	// Get CPU/Memory requests and limits from Pod spec
+	for _, container := range pod.Spec.Containers {
+		cpuRequest := container.Resources.Requests.Cpu().MilliValue()
+		memRequest := container.Resources.Requests.Memory().Value() / (1024 * 1024)
+		cpuLimit := container.Resources.Limits.Cpu().MilliValue()
+		memLimit := container.Resources.Limits.Memory().Value() / (1024 * 1024)
+		// Get the existing ContainerDetails or create a new one
+		details, ok := containerDetailsMap[container.Name]
+		if !ok {
+			details = ContainerDetails{Name: container.Name} // Initialize if not found
+		}
+		if cpuRequest != 0 {
+			details.RequestedCPU = strconv.FormatInt(cpuRequest, 10) + "m"
+		}
+		if memRequest != 0 {
+			details.RequestedMemory = strconv.FormatInt(memRequest, 10) + "Mi"
+		}
+		if cpuLimit != 0 {
+			details.LimitCPU = strconv.FormatInt(cpuLimit, 10) + "m"
+		}
+		if memLimit != 0 {
+			details.LimitMemory = strconv.FormatInt(memLimit, 10) + "Mi"
+		}
+		containerDetailsMap[container.Name] = details
+	}
+	return containerDetailsMap
+}
+
+func (h *handler) getContainerStatus(state corev1.ContainerState) string {
+	if state.Running != nil {
+		return "Running"
+	} else if state.Waiting != nil {
+		return "Waiting"
+	} else if state.Terminated != nil {
+		return "Terminated"
+	} else {
+		return "Unknown"
 	}
 }

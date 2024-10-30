@@ -25,62 +25,59 @@ export function PodInfoNew({ podSpecificInfo }: PodSpecificInfoProps) {
           <Table stickyHeader>
             <TableBody>
               <TableRow>
-                <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
+                <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
                   Name
                 </TableCell>
                 <TableCell>
-                  {podSpecificInfo?.Name?.slice(
+                  {podSpecificInfo?.name?.slice(
                     0,
-                    podSpecificInfo.Name?.lastIndexOf("-")
+                    podSpecificInfo.name?.lastIndexOf("-")
                   )}
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
+                <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
                   Status
                 </TableCell>
-                <TableCell>{podSpecificInfo?.Status || "N/A"}</TableCell>
+                <TableCell>{podSpecificInfo?.status || "Unknown"}</TableCell>
               </TableRow>
-              {podSpecificInfo?.TotalCPU && (
-                  <TableRow>
-                  <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
+              {podSpecificInfo?.totalCPU && (
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
                     CPU
                   </TableCell>
-                  <TableCell>{podSpecificInfo?.TotalCPU}</TableCell>
+                  <TableCell>{podSpecificInfo?.totalCPU}</TableCell>
                 </TableRow>
               )}
-              {podSpecificInfo?.TotalMemory && (
-                  <TableRow>
-                  <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
+              {podSpecificInfo?.totalMemory && (
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
                     Memory
                   </TableCell>
-                  <TableCell>{podSpecificInfo?.TotalMemory}</TableCell>
+                  <TableCell>{podSpecificInfo?.totalMemory}</TableCell>
                 </TableRow>
               )}
-              {podSpecificInfo?.Message && (
-                  <TableRow>
-                  <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
-                    Message
-                  </TableCell>
-                  <TableCell>{podSpecificInfo?.Message}</TableCell>
-                </TableRow>
-              )}
-
-              {podSpecificInfo?.Reason && (
+              {podSpecificInfo?.reason && (
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
+                  <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
                     Reason
                   </TableCell>
-                  <TableCell>{podSpecificInfo?.Reason}</TableCell>
+                  <TableCell>{podSpecificInfo?.reason}</TableCell>
                 </TableRow>
-
               )}
-
+              {podSpecificInfo?.message && (
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
+                    Message
+                  </TableCell>
+                  <TableCell>{podSpecificInfo?.message}</TableCell>
+                </TableRow>
+              )}
               <TableRow>
-                <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
+                <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
                   Restart Count
                 </TableCell>
-                <TableCell>{podSpecificInfo?.RestartCount}</TableCell>
+                <TableCell>{podSpecificInfo?.restartCount}</TableCell>
               </TableRow>
             </TableBody>
           </Table>

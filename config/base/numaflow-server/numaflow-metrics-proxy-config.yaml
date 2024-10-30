@@ -4,7 +4,7 @@ metadata:
   name: numaflow-metrics-proxy-config
 data:
   config.yaml: |
-    url: http://my-release-kube-prometheus-prometheus.default.svc.cluster.local:9090
+    url: http://prometheus-operated.monitoring.svc.cluster.local:9090
     patterns:
     - name: mono_vertex_histogram
       object: mono-vertex
@@ -22,7 +22,7 @@ data:
         - name: end_time
           required: false
       metrics:
-        - metric_name: monovtx_processing_time_bucket
+        - metric_name: monovtx_read_time_bucket
           required_filters:
             - namespace
             - mvtx_name
@@ -34,7 +34,7 @@ data:
                   required: false
             - name: mono-vertex
               #expr: optional
-        - metric_name: monovtx_sink_time_bucket
+        - metric_name: monovtx_transformer_time_bucket
           required_filters:
             - namespace
             - mvtx_name

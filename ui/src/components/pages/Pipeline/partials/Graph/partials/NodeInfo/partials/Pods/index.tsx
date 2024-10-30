@@ -67,9 +67,9 @@ export function Pods(props: PodsProps) {
   >(undefined);
 
   const getContainerInfo = useCallback((podsData, podName, containerName) => {
-    const selectedPod = podsData?.find((pod) => pod?.Name === podName);
+    const selectedPod = podsData?.find((pod) => pod?.name === podName);
     if (selectedPod) {
-      return selectedPod?.ContainerDetailsMap[containerName];
+      return selectedPod?.containerDetailsMap[containerName];
     } else {
       return null;
     }
@@ -77,20 +77,20 @@ export function Pods(props: PodsProps) {
 
   const getPodSpecificInfo = useCallback((podsData, podName) => {
     const podSpecificInfo: PodSpecificInfoProps = {};
-    const selectedPod = podsData?.find((pod) => pod?.Name === podName);
+    const selectedPod = podsData?.find((pod) => pod?.name === podName);
     if (selectedPod) {
-      podSpecificInfo.Name = selectedPod?.Name;
-      podSpecificInfo.Reason = selectedPod?.Reason;
-      podSpecificInfo.Status = selectedPod?.Status;
-      podSpecificInfo.Message = selectedPod?.Message;
-      podSpecificInfo.TotalCPU = selectedPod?.TotalCPU;
-      podSpecificInfo.TotalMemory = selectedPod?.TotalMemory;
+      podSpecificInfo.name = selectedPod?.name;
+      podSpecificInfo.reason = selectedPod?.reason;
+      podSpecificInfo.status = selectedPod?.status;
+      podSpecificInfo.message = selectedPod?.message;
+      podSpecificInfo.totalCPU = selectedPod?.totalCPU;
+      podSpecificInfo.totalMemory = selectedPod?.totalMemory;
       let restartCount = 0;
-      for (const container in selectedPod?.ContainerDetailsMap) {
+      for (const container in selectedPod?.containerDetailsMap) {
         restartCount +=
-          selectedPod?.ContainerDetailsMap?.[container].RestartCount;
+          selectedPod?.containerDetailsMap?.[container].restartCount;
       }
-      podSpecificInfo.RestartCount = restartCount;
+      podSpecificInfo.restartCount = restartCount;
     }
     return podSpecificInfo;
   }, []);
@@ -98,11 +98,13 @@ export function Pods(props: PodsProps) {
   useEffect(() => {
     const fetchPodInfo = async () => {
       try {
-        const response = await fetch(`${host}${getBaseHref()}/api/v1/info/namespaces/${namespaceId}${
+        const response = await fetch(
+          `${host}${getBaseHref()}/api/v1/info/namespaces/${namespaceId}${
             type === "monoVertex"
               ? `/mono-vertices`
               : `/pipelines/${pipelineId}/vertices`
-          }/${vertexId}/pods`);
+          }/${vertexId}/pods`
+        );
         if (!response.ok) {
           throw new Error("Failed to fetch pod details");
         }
@@ -122,8 +124,24 @@ export function Pods(props: PodsProps) {
         setContainerInfo({ error: "Failed to fetch pod details" });
       }
     };
-    fetchPodInfo();
-  }, [namespaceId, host, selectedPod, selectedContainer]);
+    // for now only monoVertex type is supported for metrics
+    if (type === "monoVertex") {
+      fetchPodInfo();
+    }
+  }, [
+    namespaceId,
+    host,
+    getBaseHref,
+    type,
+    pipelineId,
+    vertexId,
+    getContainerInfo,
+    getPodSpecificInfo,
+    selectedPod,
+    selectedContainer,
+    setPodSpecificInfo,
+    setContainerInfo,
+  ]);
 
   // This useEffect notifies about the errors while querying for the pods of the vertex
   useEffect(() => {
@@ -334,6 +352,8 @@ export function Pods(props: PodsProps) {
               }}
             >
               <ContainerInfo
+                pod={selectedPod}
+                podDetails={selectedPodDetails}
                 containerName={selectedContainer}
                 containerInfo={containerInfo}
               />

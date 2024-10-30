@@ -354,7 +354,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
           borderRadius: "0.4rem",
           padding: "1rem 0.5rem",
           marginTop: "2.4rem",
-          height: "114.4rem",
+          height: "93.2rem",
         }}
       >
         <>

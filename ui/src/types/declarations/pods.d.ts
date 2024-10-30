@@ -99,33 +99,35 @@ export interface PodDetailProps {
   podDetails: PodDetail;
 }
 export interface ContainerInfoProps {
-  State: string;
-  RestartCount: number;
-  LastTerminationReason?: string;
-  LastTerminationMessage?: string;
-  WaitingReason?: string;
-  WaitingMessage?: string;
-  RequestedCPU?: string;
-	RequestedMemory?: string;
-	LimitCPU?:  string;
-	LimitMemory?: string;
-  TotalCPU?: string;
-  TotalMemory?: string;
+  state: string;
+  restartCount: number;
+  lastStartedAt: string;
+  lastTerminationReason?: string;
+  lastTerminationMessage?: string;
+  waitingReason?: string;
+  waitingMessage?: string;
+  requestedCPU?: string;
+  requestedMemory?: string;
+  limitCPU?: string;
+  limitMemory?: string;
+  totalCPU?: string;
+  totalMemory?: string;
 }
 
 export interface PodSpecificInfoProps {
   podSpecificInfo: {
-    Name: string;
-    Status: string;
-    Message: string;
-    Reason: string;
-    RestartCount: number;
-    TotalCPU: string;
-    TotalMemory: string;
+    name: string;
+    status: string;
+    message: string;
+    reason: string;
+    restartCount: number;
+    totalCPU: string;
+    totalMemory: string;
   };
 }
 export interface PodInfoProps {
   pod: Pod;
+  podDetails: PodDetail;
   containerName: string;
   containerInfo: ContainerInfoProps;
 }

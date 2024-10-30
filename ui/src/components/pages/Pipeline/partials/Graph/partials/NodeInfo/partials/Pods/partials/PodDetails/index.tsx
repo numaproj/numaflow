@@ -27,7 +27,7 @@ export function PodDetail({
 }: PodDetailProps) {
   if (!pod) return null;
 
-  const { disablePrometheusCharts } = useContext<AppContextProps>(AppContext);
+  const { disableMetricsCharts } = useContext<AppContextProps>(AppContext);
 
   const [selectedTab, setSelectedTab] = useState<number>(0);
   const handleTabChange = (_: any, newValue: number) => {
@@ -57,7 +57,7 @@ export function PodDetail({
           label="Logs"
           data-testid="logs-tab"
         />
-        {!disablePrometheusCharts && type === "monoVertex" && (
+        {!disableMetricsCharts && type === "monoVertex" && (
           <Tab
             className={
               selectedTab === METRICS_TAB_INDEX
@@ -85,7 +85,7 @@ export function PodDetail({
           </Box>
         )}
       </div>
-      {!disablePrometheusCharts && type === "monoVertex" && (
+      {!disableMetricsCharts && type === "monoVertex" && (
         <div
           className="vertex-details-tab-panel"
           role="tabpanel"

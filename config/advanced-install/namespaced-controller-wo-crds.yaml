@@ -130,7 +130,7 @@ apiVersion: v1
 data:
   namespaced: "true"
   server.disable.auth: "true"
-  server.disable.prometheus.charts: "false"
+  server.disable.metrics.charts: "false"
 kind: ConfigMap
 metadata:
   name: numaflow-cmd-params-config

@@ -44,18 +44,18 @@ var (
 )
 
 type ServerOptions struct {
-	Insecure                bool
-	Port                    int
-	Namespaced              bool
-	ManagedNamespace        string
-	BaseHref                string
-	DisableAuth             bool
-	DexServerAddr           string
-	ServerAddr              string
-	CorsAllowedOrigins      string
-	ReadOnly                bool
-	DisablePrometheusCharts bool
-	DaemonClientProtocol    string
+	Insecure             bool
+	Port                 int
+	Namespaced           bool
+	ManagedNamespace     string
+	BaseHref             string
+	DisableAuth          bool
+	DexServerAddr        string
+	ServerAddr           string
+	CorsAllowedOrigins   string
+	ReadOnly             bool
+	DisableMetricsCharts bool
+	DaemonClientProtocol string
 }
 
 type server struct {
@@ -104,12 +104,12 @@ func (s *server) Start(ctx context.Context) {
 		ctx,
 		router,
 		routes.SystemInfo{
-			ManagedNamespace:        s.options.ManagedNamespace,
-			Namespaced:              s.options.Namespaced,
-			IsReadOnly:              s.options.ReadOnly,
-			DisablePrometheusCharts: s.options.DisablePrometheusCharts,
-			Version:                 numaflow.GetVersion().String(),
-			DaemonClientProtocol:    s.options.DaemonClientProtocol,
+			ManagedNamespace:     s.options.ManagedNamespace,
+			Namespaced:           s.options.Namespaced,
+			IsReadOnly:           s.options.ReadOnly,
+			DisableMetricsCharts: s.options.DisableMetricsCharts,
+			Version:              numaflow.GetVersion().String(),
+			DaemonClientProtocol: s.options.DaemonClientProtocol,
 		},
 		routes.AuthInfo{
 			DisableAuth:   s.options.DisableAuth,
@@ -178,37 +178,39 @@ func UrlRewrite(r *gin.Engine) gin.HandlerFunc {
 // The value is a RouteInfo object.
 func CreateAuthRouteMap(baseHref string) authz.RouteMap {
 	return authz.RouteMap{
-		"GET:" + baseHref + "api/v1/sysinfo":                                                         authz.NewRouteInfo(authz.ObjectPipeline, false),
-		"GET:" + baseHref + "api/v1/authinfo":                                                        authz.NewRouteInfo(authz.ObjectEvents, false),
-		"GET:" + baseHref + "api/v1/namespaces":                                                      authz.NewRouteInfo(authz.ObjectEvents, false),
-		"GET:" + baseHref + "api/v1/cluster-summary":                                                 authz.NewRouteInfo(authz.ObjectPipeline, false),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines":                                 authz.NewRouteInfo(authz.ObjectPipeline, true),
-		"POST:" + baseHref + "api/v1/namespaces/:namespace/pipelines":                                authz.NewRouteInfo(authz.ObjectPipeline, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                       authz.NewRouteInfo(authz.ObjectPipeline, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/health":                authz.NewRouteInfo(authz.ObjectPipeline, true),
-		"PUT:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                       authz.NewRouteInfo(authz.ObjectPipeline, true),
-		"DELETE:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                    authz.NewRouteInfo(authz.ObjectPipeline, true),
-		"PATCH:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                     authz.NewRouteInfo(authz.ObjectPipeline, true),
-		"POST:" + baseHref + "api/v1/namespaces/:namespace/isb-services":                             authz.NewRouteInfo(authz.ObjectISBSvc, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/isb-services":                              authz.NewRouteInfo(authz.ObjectISBSvc, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":                 authz.NewRouteInfo(authz.ObjectISBSvc, true),
-		"PUT:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":                 authz.NewRouteInfo(authz.ObjectISBSvc, true),
-		"DELETE:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":              authz.NewRouteInfo(authz.ObjectISBSvc, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/isbs":                  authz.NewRouteInfo(authz.ObjectPipeline, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/watermarks":            authz.NewRouteInfo(authz.ObjectPipeline, true),
-		"PUT:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex":      authz.NewRouteInfo(authz.ObjectPipeline, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/metrics":      authz.NewRouteInfo(authz.ObjectPipeline, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods": authz.NewRouteInfo(authz.ObjectPipeline, true),
-		"GET:" + baseHref + "api/v1/metrics/namespaces/:namespace/pods":                              authz.NewRouteInfo(authz.ObjectPipeline, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/pods/:pod/logs":                            authz.NewRouteInfo(authz.ObjectPipeline, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/events":                                    authz.NewRouteInfo(authz.ObjectEvents, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices":                             authz.NewRouteInfo(authz.ObjectMonoVertex, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex":                authz.NewRouteInfo(authz.ObjectMonoVertex, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/pods":           authz.NewRouteInfo(authz.ObjectMonoVertex, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/metrics":        authz.NewRouteInfo(authz.ObjectMonoVertex, true),
-		"POST:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices":                            authz.NewRouteInfo(authz.ObjectMonoVertex, true),
-		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/health":         authz.NewRouteInfo(authz.ObjectMonoVertex, true),
-		"POST:" + baseHref + "api/v1/metrics-proxy":                                                  authz.NewRouteInfo(authz.ObjectAll, true),
-		"GET:" + baseHref + "api/v1/metrics-discovery/object/:object":                                authz.NewRouteInfo(authz.ObjectAll, true),
+		"GET:" + baseHref + "api/v1/sysinfo":                                                              authz.NewRouteInfo(authz.ObjectPipeline, false),
+		"GET:" + baseHref + "api/v1/authinfo":                                                             authz.NewRouteInfo(authz.ObjectEvents, false),
+		"GET:" + baseHref + "api/v1/namespaces":                                                           authz.NewRouteInfo(authz.ObjectEvents, false),
+		"GET:" + baseHref + "api/v1/cluster-summary":                                                      authz.NewRouteInfo(authz.ObjectPipeline, false),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines":                                      authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"POST:" + baseHref + "api/v1/namespaces/:namespace/pipelines":                                     authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                            authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/health":                     authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"PUT:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                            authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"DELETE:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                         authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"PATCH:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline":                          authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"POST:" + baseHref + "api/v1/namespaces/:namespace/isb-services":                                  authz.NewRouteInfo(authz.ObjectISBSvc, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/isb-services":                                   authz.NewRouteInfo(authz.ObjectISBSvc, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":                      authz.NewRouteInfo(authz.ObjectISBSvc, true),
+		"PUT:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":                      authz.NewRouteInfo(authz.ObjectISBSvc, true),
+		"DELETE:" + baseHref + "api/v1/namespaces/:namespace/isb-services/:isb-service":                   authz.NewRouteInfo(authz.ObjectISBSvc, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/isbs":                       authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/watermarks":                 authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"PUT:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex":           authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/metrics":           authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods":      authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/metrics/namespaces/:namespace/pods":                                   authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/pods/:pod/logs":                                 authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/info/namespaces/:namespace/mono-vertices/:mono-vertex/pods":           authz.NewRouteInfo(authz.ObjectMonoVertex, true),
+		"GET:" + baseHref + "api/v1/info/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods": authz.NewRouteInfo(authz.ObjectPipeline, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/events":                                         authz.NewRouteInfo(authz.ObjectEvents, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices":                                  authz.NewRouteInfo(authz.ObjectMonoVertex, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex":                     authz.NewRouteInfo(authz.ObjectMonoVertex, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/pods":                authz.NewRouteInfo(authz.ObjectMonoVertex, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/metrics":             authz.NewRouteInfo(authz.ObjectMonoVertex, true),
+		"POST:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices":                                 authz.NewRouteInfo(authz.ObjectMonoVertex, true),
+		"GET:" + baseHref + "api/v1/namespaces/:namespace/mono-vertices/:mono-vertex/health":              authz.NewRouteInfo(authz.ObjectMonoVertex, true),
+		"POST:" + baseHref + "api/v1/metrics-proxy":                                                       authz.NewRouteInfo(authz.ObjectAll, true),
+		"GET:" + baseHref + "api/v1/metrics-discovery/object/:object":                                     authz.NewRouteInfo(authz.ObjectAll, true),
 	}
 }

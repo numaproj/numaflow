@@ -95,7 +95,7 @@ func substitutePlaceHolders(expr string, placeholders []string, reqMap map[strin
 		key := match
 		val, ok := reqMap[key]
 		if !ok || val == "" {
-			return "", fmt.Errorf("req body doesn't have %s field", key)
+			return "", fmt.Errorf("missing the %s field in the request body", key)
 		}
 		expr = strings.Replace(expr, key, val, -1)
 	}
@@ -105,7 +105,8 @@ func substitutePlaceHolders(expr string, placeholders []string, reqMap map[strin
 // NewPromQlService creates a new PromQlService instance
 func NewPromQlService(client *Prometheus, config *PrometheusConfig) PromQl {
 	var (
-		expressions  = make(map[string]map[string]string) // map[metric_name][dimension] = expr
+		// map[metric_name][dimension] = expr
+		expressions  = make(map[string]map[string]string)
 		placeHolders = make(map[string]map[string][]string)
 	)
 	for _, pattern := range config.Patterns {
@@ -165,24 +166,24 @@ func (b *PromQlService) BuildQuery(requestBody MetricsRequestBody) (string, erro
 	var metricName = requestBody.MetricName
 	var dimension = requestBody.Dimension
 	if metricName == "" || dimension == "" {
-		return query, fmt.Errorf("metric name or dimension absent in the request body")
+		return query, fmt.Errorf("missing metric name or dimension in the request body")
 	}
 	expr, ok := b.Expression[metricName][dimension]
 	if !ok {
-		return query, fmt.Errorf(`expr not set for "%s" dimension of "%s" metric`, dimension, metricName)
+		return query, fmt.Errorf(`expression is not defined for "%s" dimension of "%s" metric`, dimension, metricName)
 	}
 	placeHolders, ok := b.PlaceHolders[metricName][dimension]
 	if !ok {
-		return query, fmt.Errorf(`placeholders not set for "%s" dimension of "%s" metric`, dimension, metricName)
+		return query, fmt.Errorf(`placeholders are not defined for "%s" dimension of "%s" metric`, dimension, metricName)
 	}
 
 	if expr == "" || len(placeHolders) == 0 {
-		return query, fmt.Errorf(`expr or placeholders do not exist for for "%s" dimension of "%s" metric in the config`, dimension, metricName)
+		return query, fmt.Errorf(`expression or placeholders do not exist for for "%s" dimension of "%s" metric in the metrics config`, dimension, metricName)
 	}
 	reqMap := b.PopulateReqMap(requestBody)
 	query, err := substitutePlaceHolders(expr, placeHolders, reqMap)
 	if err != nil {
-		return "", fmt.Errorf("error: %w", err)
+		return "", fmt.Errorf("failed to substitute placeholders: %w", err)
 	}
 	return query, nil
 }
@@ -190,7 +191,7 @@ func (b *PromQlService) BuildQuery(requestBody MetricsRequestBody) (string, erro
 // QueryPrometheus query prometheus server
 func (b *PromQlService) QueryPrometheus(ctx context.Context, promql string, start, end time.Time) (model.Value, error) {
 	if b.Prometheus == nil {
-		return nil, fmt.Errorf("prometheus client is nil")
+		return nil, fmt.Errorf("prometheus client is not defined")
 	}
 	r := v1.Range{
 		Start: start,
