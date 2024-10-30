@@ -6,6 +6,8 @@ type PodDetails struct {
 	Message             string
 	Reason              string
 	ContainerDetailsMap map[string]ContainerDetails
+	TotalCPU            string
+	TotalMemory         string
 }
 
 type ContainerDetails struct {
@@ -18,4 +20,10 @@ type ContainerDetails struct {
 	LastTerminationMessage string
 	WaitingReason          string
 	WaitingMessage         string
+	TotalCPU               string
+	TotalMemory            string
+	RequestedCPU           string
+	RequestedMemory        string
+	LimitCPU               string
+	LimitMemory            string
 }

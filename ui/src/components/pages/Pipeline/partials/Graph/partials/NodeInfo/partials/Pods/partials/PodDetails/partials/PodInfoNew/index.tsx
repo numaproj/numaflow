@@ -41,6 +41,22 @@ export function PodInfoNew({ podSpecificInfo }: PodSpecificInfoProps) {
                 </TableCell>
                 <TableCell>{podSpecificInfo?.Status || "N/A"}</TableCell>
               </TableRow>
+              {podSpecificInfo?.TotalCPU && (
+                  <TableRow>
+                  <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
+                    CPU
+                  </TableCell>
+                  <TableCell>{podSpecificInfo?.TotalCPU}</TableCell>
+                </TableRow>
+              )}
+              {podSpecificInfo?.TotalMemory && (
+                  <TableRow>
+                  <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>
+                    Memory
+                  </TableCell>
+                  <TableCell>{podSpecificInfo?.TotalMemory}</TableCell>
+                </TableRow>
+              )}
               {podSpecificInfo?.Message && (
                   <TableRow>
                   <TableCell sx={{ fontWeight: 600, minWidth: "30rem" }}>

@@ -5,64 +5,25 @@ import TableRow from "@mui/material/TableRow";
 import TableCell from "@mui/material/TableCell";
 import TableBody from "@mui/material/TableBody";
 import TableContainer from "@mui/material/TableContainer";
-import { getPodContainerUsePercentages } from "../../../../../../../../../../../../../utils";
+import { calculateCPUPercent, calculateMemoryPercent } from "../../../../../../../../../../../../../utils";
 import { PodInfoProps } from "../../../../../../../../../../../../../types/declarations/pods";
 
+
+
 export function ContainerInfo({
-  pod,
-  podDetails,
   containerName,
   containerInfo,
 }: PodInfoProps) {
-  const resourceUsage = getPodContainerUsePercentages(
-    pod,
-    podDetails,
-    containerName
-  );
 
-  // CPU
-  let usedCPU: string | undefined =
-    podDetails?.containerMap instanceof Map
-      ? podDetails?.containerMap?.get(containerName)?.cpu
-      : undefined;
-  let specCPU: string | undefined =
-    pod?.containerSpecMap instanceof Map
-      ? pod?.containerSpecMap?.get(containerName)?.cpu
-      : undefined;
-  if (!usedCPU) {
-    usedCPU = "?";
-  } else if (usedCPU.endsWith("n")) {
-    usedCPU = `${(parseFloat(usedCPU) / 1e6).toFixed(2)}m`;
-  }
-  if (!specCPU) {
-    specCPU = "?";
-  }
   let cpuPercent = "unavailable";
-  if (resourceUsage?.cpuPercent) {
-    cpuPercent = `${resourceUsage.cpuPercent?.toFixed(2)}%`;
+  if (containerInfo?.TotalCPU && containerInfo?.RequestedCPU){
+    cpuPercent = calculateCPUPercent(containerInfo?.TotalCPU,containerInfo?.RequestedCPU)
   }
-  // Memory
-  let usedMem: string | undefined =
-    podDetails?.containerMap instanceof Map
-      ? podDetails?.containerMap?.get(containerName)?.memory
-      : undefined;
-  let specMem: string | undefined =
-    pod?.containerSpecMap instanceof Map
-      ? pod?.containerSpecMap?.get(containerName)?.memory
-      : undefined;
-  if (!usedMem) {
-    usedMem = "?";
-  } else if (usedMem.endsWith("Ki")) {
-    usedMem = `${(parseFloat(usedMem) / 1024).toFixed(2)}Mi`;
-  }
-  if (!specMem) {
-    specMem = "?";
-  }
+
   let memPercent = "unavailable";
-  if (resourceUsage?.memoryPercent) {
-    memPercent = `${resourceUsage.memoryPercent.toFixed(2)}%`;
+  if (containerInfo?.TotalMemory && containerInfo?.RequestedMemory){
+    memPercent = calculateMemoryPercent(containerInfo?.TotalMemory,containerInfo?.RequestedMemory)
   }
-  const podName = pod?.name?.slice(0, pod?.name?.lastIndexOf("-"));
 
   return (
     <Box sx={{ padding: "1.6rem" }}>
@@ -93,7 +54,7 @@ export function ContainerInfo({
               </TableRow>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>CPU</TableCell>
-                <TableCell>{`${usedCPU} / ${specCPU}`}</TableCell>
+                <TableCell>{`${containerInfo?.TotalCPU} / ${containerInfo?.RequestedCPU ? containerInfo?.RequestedCPU : "?"}`}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Memory %</TableCell>
@@ -101,7 +62,7 @@ export function ContainerInfo({
               </TableRow>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Memory</TableCell>
-                <TableCell>{`${usedMem} / ${specMem}`}</TableCell>
+                <TableCell>{`${containerInfo?.TotalMemory} / ${containerInfo?.RequestedMemory ? containerInfo?.RequestedMemory : "?"}`}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell sx={{ fontWeight: 600 }}>Restart Count </TableCell>

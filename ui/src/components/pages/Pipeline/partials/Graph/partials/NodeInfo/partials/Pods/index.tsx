@@ -83,6 +83,8 @@ export function Pods(props: PodsProps) {
       podSpecificInfo.Reason = selectedPod?.Reason;
       podSpecificInfo.Status = selectedPod?.Status;
       podSpecificInfo.Message = selectedPod?.Message;
+      podSpecificInfo.TotalCPU = selectedPod?.TotalCPU;
+      podSpecificInfo.TotalMemory = selectedPod?.TotalMemory;
       let restartCount = 0;
       for (const container in selectedPod?.ContainerDetailsMap) {
         restartCount +=
@@ -96,9 +98,11 @@ export function Pods(props: PodsProps) {
   useEffect(() => {
     const fetchPodInfo = async () => {
       try {
-        const response = await fetch(
-          `${host}${getBaseHref()}/api/v1/info/namespaces/${namespaceId}/pods`
-        );
+        const response = await fetch(`${host}${getBaseHref()}/api/v1/info/namespaces/${namespaceId}${
+            type === "monoVertex"
+              ? `/mono-vertices`
+              : `/pipelines/${pipelineId}/vertices`
+          }/${vertexId}/pods`);
         if (!response.ok) {
           throw new Error("Failed to fetch pod details");
         }
@@ -330,8 +334,6 @@ export function Pods(props: PodsProps) {
               }}
             >
               <ContainerInfo
-                pod={selectedPod}
-                podDetails={selectedPodDetails}
                 containerName={selectedContainer}
                 containerInfo={containerInfo}
               />

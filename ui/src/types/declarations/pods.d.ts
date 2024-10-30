@@ -99,13 +99,18 @@ export interface PodDetailProps {
   podDetails: PodDetail;
 }
 export interface ContainerInfoProps {
-  LastStartedAt: string;
   State: string;
   RestartCount: number;
-  LastTerminationReason: string;
-  LastTerminationMessage: string;
-  WaitingReason: string;
-  WaitingMessage: string;
+  LastTerminationReason?: string;
+  LastTerminationMessage?: string;
+  WaitingReason?: string;
+  WaitingMessage?: string;
+  RequestedCPU?: string;
+	RequestedMemory?: string;
+	LimitCPU?:  string;
+	LimitMemory?: string;
+  TotalCPU?: string;
+  TotalMemory?: string;
 }
 
 export interface PodSpecificInfoProps {
@@ -115,11 +120,12 @@ export interface PodSpecificInfoProps {
     Message: string;
     Reason: string;
     RestartCount: number;
+    TotalCPU: string;
+    TotalMemory: string;
   };
 }
 export interface PodInfoProps {
   pod: Pod;
-  podDetails: PodDetail;
   containerName: string;
   containerInfo: ContainerInfoProps;
 }
