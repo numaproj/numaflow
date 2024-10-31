@@ -170,9 +170,10 @@ impl Forwarder {
 
         // write to all the buffers
         for i in 0..messages.len() {
-            for writers in self.buffer_writers.values() {
+            for (_, writers) in &self.buffer_writers {
                 // write to the stream writers in round-robin fashion
-                let writer = &writers[i % writers.len()]; // FIXME: we need to shuffle based on the message id hash
+                let partition = i % writers.len();
+                let writer = &writers[partition]; // FIXME: we need to shuffle based on the message id hash
                 let result = writer.write(messages[i].clone()).await?;
                 results.push(result);
             }

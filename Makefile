@@ -16,7 +16,7 @@ DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=numaflow
 DOCKERFILE:=Dockerfile
 DEV_BASE_IMAGE:=debian:bookworm
-RELEASE_BASE_IMAGE:=scratch
+RELEASE_BASE_IMAGE:=debian:bookworm
 
 BUILD_DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 GIT_COMMIT=$(shell git rev-parse HEAD)
@@ -208,7 +208,7 @@ image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_
 ifndef GITHUB_ACTIONS
 	$(MAKE) build-rust-in-docker-multi
 endif
-	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64,linux/arm64 --file $(DOCKERFILE) ${PUSH_OPTION} .
+	$(DOCKER) buildx build --sbom=false --provenance=false --build-arg "BASE_IMAGE=$(RELEASE_BASE_IMAGE)" $(DOCKER_BUILD_ARGS) -t $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --target $(BINARY_NAME) --platform linux/amd64 --file $(DOCKERFILE) ${PUSH_OPTION} .
 
 set-qemu:
 	$(DOCKER) pull tonistiigi/binfmt:latest

@@ -163,6 +163,7 @@ impl fmt::Display for StringOffset {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum ReadAck {
     /// Message was successfully processed.
     Ack,

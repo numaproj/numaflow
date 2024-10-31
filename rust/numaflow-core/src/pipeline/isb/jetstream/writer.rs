@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,18 +17,17 @@ use tracing::{error, info, warn};
 
 use crate::config::pipeline::isb::BufferWriterConfig;
 use crate::error::Error;
-use crate::message::{IntOffset, Offset};
+use crate::message::{IntOffset, Offset, ReadAck};
 use crate::Result;
 
 #[derive(Clone, Debug)]
 /// Writes to JetStream ISB. Exposes both write and blocking methods to write messages.
 /// It accepts a cancellation token to stop infinite retries during shutdown.
-pub(super) struct JetstreamWriter {
-    stream_name: String,
-    partition_idx: u16,
+pub(crate) struct JetstreamWriter {
+    streams: Vec<(String, u16)>,
     config: BufferWriterConfig,
     js_ctx: Context,
-    is_full: Arc<AtomicBool>,
+    is_full: HashMap<String, Arc<AtomicBool>>,
     paf_resolver_tx: mpsc::Sender<ResolveAndPublishResult>,
     cancel_token: CancellationToken,
 }
@@ -35,9 +35,8 @@ pub(super) struct JetstreamWriter {
 impl JetstreamWriter {
     /// Creates a JetStream Writer and a background task to make sure the Write futures (PAFs) are
     /// successful. Batch Size determines the maximum pending futures.
-    pub(super) fn new(
-        stream_name: String,
-        partition_idx: u16,
+    pub(crate) fn new(
+        streams: Vec<(String, u16)>,
         config: BufferWriterConfig,
         js_ctx: Context,
         paf_batch_size: usize,
@@ -46,12 +45,16 @@ impl JetstreamWriter {
         let (paf_resolver_tx, paf_resolver_rx) =
             mpsc::channel::<ResolveAndPublishResult>(paf_batch_size);
 
+        let is_full = streams
+            .iter()
+            .map(|stream| (stream.0.clone(), Arc::new(AtomicBool::new(false))))
+            .collect::<HashMap<_, _>>();
+
         let this = Self {
-            stream_name,
-            partition_idx,
+            streams,
             config,
             js_ctx,
-            is_full: Arc::new(AtomicBool::new(false)),
+            is_full,
             paf_resolver_tx,
             cancel_token,
         };
@@ -80,17 +83,23 @@ impl JetstreamWriter {
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    match Self::fetch_buffer_usage(self.js_ctx.clone(), self.stream_name.as_str(), self.config.max_length).await {
-                        Ok((soft_usage, solid_usage)) => {
-                            if solid_usage >= self.config.usage_limit && soft_usage >= self.config.usage_limit {
-                                self.is_full.store(true, Ordering::Relaxed);
-                            } else {
-                                self.is_full.store(false, Ordering::Relaxed);
+                    for stream in &self.streams {
+                        match Self::fetch_buffer_usage(self.js_ctx.clone(), stream.0.as_str(), self.config.max_length).await {
+                            Ok((soft_usage, solid_usage)) => {
+                                if solid_usage >= self.config.usage_limit && soft_usage >= self.config.usage_limit {
+                                    if let Some(is_full) = self.is_full.get(stream.0.as_str()) {
+                                        is_full.store(true, Ordering::Relaxed);
+                                    }
+                                } else if let Some(is_full) = self.is_full.get(stream.0.as_str()) {
+                                    is_full.store(false, Ordering::Relaxed);
+                                }
                             }
-                        }
-                        Err(e) => {
-                            error!(?e, "Failed to fetch buffer usage, updating isFull to true");
-                            self.is_full.store(true, Ordering::Relaxed);
+                            Err(e) => {
+                                error!(?e, "Failed to fetch buffer usage for stream {}, updating isFull to true", stream.0.as_str());
+                                if let Some(is_full) = self.is_full.get(stream.0.as_str()) {
+                                    is_full.store(true, Ordering::Relaxed);
+                                }
+                            }
                         }
                     }
                 }
@@ -154,20 +163,29 @@ impl JetstreamWriter {
     /// Writes the message to the JetStream ISB and returns a future which can be
     /// awaited to get the PublishAck. It will do infinite retries until the message
     /// gets published successfully. If it returns an error it means it is fatal error
-    pub(super) async fn write(&self, payload: Vec<u8>, callee_tx: oneshot::Sender<Result<Offset>>) {
+    pub(super) async fn write(
+        &self,
+        stream: (String, u16),
+        payload: Vec<u8>,
+        callee_tx: oneshot::Sender<Result<Vec<((String, u16), Offset)>>>,
+    ) {
         let js_ctx = self.js_ctx.clone();
 
         // loop till we get a PAF, there could be other reasons why PAFs cannot be created.
         let paf = loop {
             // let's write only if the buffer is not full
-            match self.is_full.load(Ordering::Relaxed) {
-                true => {
+            match self
+                .is_full
+                .get(&stream.0)
+                .map(|is_full| is_full.load(Ordering::Relaxed))
+            {
+                Some(true) => {
                     // FIXME: add metrics
-                    info!(%self.stream_name, "stream is full");
+                    info!("stream is full {}", stream.0);
                     // FIXME: consider buffer-full strategy
                 }
-                false => match js_ctx
-                    .publish(self.stream_name.clone(), Bytes::from(payload.clone()))
+                Some(false) => match js_ctx
+                    .publish(stream.0.clone(), Bytes::from(payload.clone()))
                     .await
                 {
                     Ok(paf) => {
@@ -177,6 +195,13 @@ impl JetstreamWriter {
                         error!(?e, "publishing failed, retrying");
                     }
                 },
+                None => {
+                    error!("Stream {} not found in is_full map", stream.0);
+                    callee_tx
+                        .send(Err(Error::ISB("Stream not found".to_string())))
+                        .unwrap();
+                    return;
+                }
             }
             // short-circuit out in failure mode if shutdown has been initiated
             if self.cancel_token.is_cancelled() {
@@ -194,23 +219,77 @@ impl JetstreamWriter {
         // send the paf and callee_tx over
         self.paf_resolver_tx
             .send(ResolveAndPublishResult {
-                paf,
+                pafs: vec![(stream, paf)],
                 payload,
-                callee_tx,
+                callee_tx: Some(callee_tx),
+                reader_tx: None,
             })
             .await
             .expect("send should not fail");
     }
 
+    pub(super) async fn temp_write(
+        &self,
+        stream: (String, u16),
+        payload: Vec<u8>,
+    ) -> Result<PublishAckFuture> {
+        let js_ctx = self.js_ctx.clone();
+
+        // loop till we get a PAF, there could be other reasons why PAFs cannot be created.
+        let paf = loop {
+            // let's write only if the buffer is not full
+            match self
+                .is_full
+                .get(&stream.0)
+                .map(|is_full| is_full.load(Ordering::Relaxed))
+            {
+                Some(true) => {
+                    // FIXME: add metrics
+                    info!("stream is full {}", stream.0);
+                    // FIXME: consider buffer-full strategy
+                }
+                Some(false) => match js_ctx
+                    .publish(stream.0.clone(), Bytes::from(payload.clone()))
+                    .await
+                {
+                    Ok(paf) => {
+                        break paf;
+                    }
+                    Err(e) => {
+                        error!(?e, "publishing failed, retrying");
+                    }
+                },
+                None => {
+                    error!("Stream {} not found in is_full map", stream.0);
+                    return Err(Error::ISB("Stream not found".to_string()));
+                }
+            }
+            // short-circuit out in failure mode if shutdown has been initiated
+            if self.cancel_token.is_cancelled() {
+                error!("Shutdown signal received, exiting write loop");
+                return Err(Error::ISB("Shutdown signal received".to_string()));
+            }
+
+            // sleep to avoid busy looping
+            sleep(self.config.retry_interval).await;
+        };
+
+        Ok(paf)
+    }
+
     /// Writes the message to the JetStream ISB and returns the PublishAck. It will do
     /// infinite retries until the message gets published successfully. If it returns
     /// an error it means it is fatal non-retryable error.
-    pub(super) async fn blocking_write(&self, payload: Vec<u8>) -> Result<PublishAck> {
+    pub(super) async fn blocking_write(
+        &self,
+        stream: (String, u16),
+        payload: Vec<u8>,
+    ) -> Result<PublishAck> {
         let js_ctx = self.js_ctx.clone();
-
+        info!("Blocking write for stream {}", stream.0);
         loop {
             match js_ctx
-                .publish(self.stream_name.clone(), Bytes::from(payload.clone()))
+                .publish(stream.0.clone(), Bytes::from(payload.clone()))
                 .await
             {
                 Ok(paf) => match paf.await {
@@ -244,22 +323,26 @@ impl JetstreamWriter {
 /// It contains the PublishAckFuture which can be awaited to get the PublishAck. Once PAF has
 /// resolved, the information is published to callee_tx.
 #[derive(Debug)]
-pub(super) struct ResolveAndPublishResult {
-    paf: PublishAckFuture,
-    payload: Vec<u8>,
-    callee_tx: oneshot::Sender<Result<Offset>>,
+pub(crate) struct ResolveAndPublishResult {
+    pub(crate) pafs: Vec<((String, u16), PublishAckFuture)>,
+    pub(crate) payload: Vec<u8>,
+    pub(crate) callee_tx: Option<oneshot::Sender<Result<Vec<((String, u16), Offset)>>>>,
+    pub(crate) reader_tx: Option<oneshot::Sender<ReadAck>>,
 }
 
 /// Resolves the PAF from the write call, if not successful it will do a blocking write so that
 /// it is eventually successful. Once the PAF has been resolved (by either means) it will notify
 /// the top-level callee via the oneshot rx.
-struct PafResolverActor {
+pub(crate) struct PafResolverActor {
     js_writer: JetstreamWriter,
     receiver: Receiver<ResolveAndPublishResult>,
 }
 
 impl PafResolverActor {
-    fn new(js_writer: JetstreamWriter, receiver: Receiver<ResolveAndPublishResult>) -> Self {
+    pub(crate) fn new(
+        js_writer: JetstreamWriter,
+        receiver: Receiver<ResolveAndPublishResult>,
+    ) -> Self {
         PafResolverActor {
             js_writer,
             receiver,
@@ -270,49 +353,84 @@ impl PafResolverActor {
     /// the successful result to the top-level callee's oneshot channel. If the original PAF does
     /// not successfully resolve, it will do blocking write till write to JetStream succeeds.
     async fn successfully_resolve_paf(&mut self, result: ResolveAndPublishResult) {
-        match result.paf.await {
-            Ok(ack) => {
-                if ack.duplicate {
-                    warn!("Duplicate message detected, ignoring {:?}", ack);
-                }
-                result
-                    .callee_tx
-                    .send(Ok(Offset::Int(IntOffset::new(
-                        ack.sequence,
-                        self.js_writer.partition_idx,
-                    ))))
-                    .unwrap_or_else(|e| {
-                        error!("Failed to send offset: {:?}", e);
-                    })
-            }
-            Err(e) => {
-                error!(?e, "Failed to resolve the future, trying blocking write");
-                match self.js_writer.blocking_write(result.payload.clone()).await {
-                    Ok(ack) => {
-                        if ack.duplicate {
-                            warn!("Duplicate message detected, ignoring {:?}", ack);
-                        }
-                        result
-                            .callee_tx
-                            .send(Ok(Offset::Int(IntOffset::new(
-                                ack.sequence,
-                                self.js_writer.partition_idx,
-                            ))))
-                            .unwrap()
+        let mut offsets = Vec::new();
+
+        for (stream, paf) in result.pafs {
+            match paf.await {
+                Ok(ack) => {
+                    if ack.duplicate {
+                        warn!(
+                            "Duplicate message detected for stream {}, ignoring {:?}",
+                            stream.0, ack
+                        );
                     }
-                    Err(e) => {
-                        error!(?e, "Blocking write failed");
-                        result
-                            .callee_tx
-                            .send(Err(Error::ISB("Shutdown signal received".to_string())))
-                            .unwrap()
+                    offsets.push((
+                        stream.clone(),
+                        Offset::Int(IntOffset::new(ack.sequence, stream.1)),
+                    ));
+                }
+                Err(e) => {
+                    error!(
+                        ?e,
+                        "Failed to resolve the future for stream {}, trying blocking write",
+                        stream.0
+                    );
+                    match self
+                        .js_writer
+                        .blocking_write(stream.clone(), result.payload.clone())
+                        .await
+                    {
+                        Ok(ack) => {
+                            if ack.duplicate {
+                                warn!(
+                                    "Duplicate message detected for stream {}, ignoring {:?}",
+                                    stream.0, ack
+                                );
+                            }
+                            offsets.push((
+                                stream.clone(),
+                                Offset::Int(IntOffset::new(ack.sequence, stream.1)),
+                            ));
+                        }
+                        Err(e) => {
+                            error!(?e, "Blocking write failed for stream {}", stream.0);
+                            if let Some(callee_tx) = result.callee_tx {
+                                callee_tx
+                                    .send(Err(Error::ISB("Shutdown signal received".to_string())))
+                                    .unwrap_or_else(|e| {
+                                        error!(
+                                            "Failed to send error for stream {}: {:?}",
+                                            stream.0, e
+                                        );
+                                    });
+                            }
+
+                            if let Some(reader_tx) = result.reader_tx {
+                                reader_tx.send(ReadAck::Nak).unwrap_or_else(|e| {
+                                    error!("Failed to send error for stream {}: {:?}", stream.0, e);
+                                });
+                            }
+                            return;
+                        }
                     }
                 }
             }
         }
+
+        if let Some(callee_tx) = result.callee_tx {
+            callee_tx.send(Ok(offsets)).unwrap_or_else(|e| {
+                error!("Failed to send offsets: {:?}", e);
+            });
+        }
+
+        if let Some(reader_tx) = result.reader_tx {
+            reader_tx.send(ReadAck::Ack).unwrap_or_else(|e| {
+                error!("Failed to send ack: {:?}", e);
+            });
+        }
     }
 
-    async fn run(&mut self) {
+    pub(crate) async fn run(&mut self) {
         while let Some(result) = self.receiver.recv().await {
             self.successfully_resolve_paf(result).await;
         }
@@ -365,7 +483,6 @@ mod tests {
 
         let writer = JetstreamWriter::new(
             stream_name.to_string(),
-            0,
             Default::default(),
             context.clone(),
             500,
@@ -426,7 +543,6 @@ mod tests {
 
         let writer = JetstreamWriter::new(
             stream_name.to_string(),
-            0,
             Default::default(),
             context.clone(),
             500,
@@ -490,7 +606,6 @@ mod tests {
         let cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
             stream_name.to_string(),
-            0,
             Default::default(),
             context.clone(),
             500,
@@ -674,7 +789,6 @@ mod tests {
         let cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
             stream_name.to_string(),
-            0,
             BufferWriterConfig {
                 max_length: 100,
                 ..Default::default()

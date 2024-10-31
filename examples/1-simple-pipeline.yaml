@@ -3,28 +3,32 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
+  interStepBufferServiceName: custom
+  limits:
+    bufferMaxLength: 150000
+    bufferUsageLimit: 85
+    readBatchSize: 1000
   vertices:
     - name: in
-      scale:
-        min: 1
-      # A self data generating source
+      containerTemplate:
+        securityContext:
+          capabilities:
+            add:
+              - “SYS_PTRACE”
+        env:
+          - name: NUMAFLOW_PIPELINE_STREAMING
+            value: "true"
+          - name: PAF_BATCH_SIZE
+            value: "1000"
       source:
         generator:
-          rpu: 5
+          rpu: 100
           duration: 1s
-    - name: cat
-      scale:
-        min: 1
-      udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message
     - name: out
       scale:
         min: 1
       sink:
-        log: {}
+        blackhole: {}
   edges:
     - from: in
-      to: cat
-    - from: cat
       to: out

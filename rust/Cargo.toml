@@ -16,6 +16,8 @@ name = "numaflow"
 version = "0.1.0"
 edition = "2021"
 
+[profile.release]
+debug = true
 
 [dependencies]
 tokio = "1.39.2"

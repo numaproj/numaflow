@@ -15,3 +15,4 @@ pub(crate) mod sink_forwarder;
 /// Source where the Reader is builtin or User-defined Source, Write is ISB,
 /// with an optional Transformer.
 pub(crate) mod source_forwarder;
+pub(crate) mod source_streaming_forwarder;

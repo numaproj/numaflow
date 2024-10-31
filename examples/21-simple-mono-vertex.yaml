@@ -4,14 +4,8 @@ metadata:
   name: simple-mono-vertex
 spec:
   source:
-    udsource:
-      container:
-        image: quay.io/numaio/numaflow-java/source-simple-source:stable
-    # transformer is an optional container to do any transformation to the incoming data before passing to the sink
-    transformer:
-      container:
-        image: quay.io/numaio/numaflow-rs/source-transformer-now:stable
+    generator:
+      rpu: 100000
+      duration: 1s
   sink:
-    udsink:
-      container:
-        image: quay.io/numaio/numaflow-java/simple-sink:stable
+    blackhole: {}

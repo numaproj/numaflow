@@ -314,7 +314,7 @@ impl StreamingSource {
         JoinHandle<Result<()>>,
     )> {
         let batch_size = self.read_batch_size;
-        let (messages_tx, messages_rx) = mpsc::channel(batch_size);
+        let (messages_tx, messages_rx) = mpsc::channel(2 * batch_size);
         let source_read = self.clone();
 
         // Create separate ack_tx and ack_rx for doing chunked acks
@@ -366,8 +366,9 @@ impl StreamingSource {
                 processed_msgs_count += n;
                 if last_logged_at.elapsed().as_secs() >= 1 {
                     info!(
-                        "Processed {} messages in the last second",
-                        processed_msgs_count
+                        "Processed {} messages in {:?}",
+                        processed_msgs_count,
+                        std::time::Instant::now()
                     );
                     processed_msgs_count = 0;
                     last_logged_at = std::time::Instant::now();
@@ -380,8 +381,21 @@ impl StreamingSource {
             let chunked_ack_stream =
                 ReceiverStream::new(ack_rx).chunks_timeout(batch_size, Duration::from_secs(1));
             tokio::pin!(chunked_ack_stream);
+            let mut start = std::time::Instant::now();
+            let mut total_acks = 0;
             while let Some(offsets) = chunked_ack_stream.next().await {
+                total_acks += offsets.len();
                 source_ack.ack(offsets).await.unwrap();
+
+                if start.elapsed().as_secs() >= 1 {
+                    info!(
+                        "Acked {} messages in {:?}",
+                        total_acks,
+                        std::time::Instant::now()
+                    );
+                    total_acks = 0;
+                    start = std::time::Instant::now();
+                }
             }
             Ok(())
         });

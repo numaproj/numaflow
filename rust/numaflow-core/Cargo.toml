@@ -50,3 +50,6 @@ numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "9fb3c0a
 
 [build-dependencies]
 
+[profile.release]
+debug = true
+

@@ -1,21 +1,22 @@
-use std::collections::HashMap;
-
 use async_nats::jetstream;
 use async_nats::jetstream::Context;
 use futures::future::try_join_all;
+use log::info;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use std::collections::HashMap;
+use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::source::SourceType;
 use crate::config::pipeline;
-use crate::config::pipeline::PipelineConfig;
+use crate::config::pipeline::{PipelineConfig, SourceVtxConfig};
 use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
-use crate::pipeline::isb::jetstream::WriterHandle;
+use crate::pipeline::isb::jetstream::{StreamingJetstreamWriter, WriterHandle};
 use crate::shared::server_info::check_for_server_compatibility;
 use crate::shared::utils;
 use crate::shared::utils::{
@@ -24,7 +25,8 @@ use crate::shared::utils::{
 use crate::sink::StreamingSink;
 use crate::source::generator::new_generator;
 use crate::source::user_defined::new_source;
-use crate::transformer::SourceTransformHandle;
+use crate::source::StreamingSource;
+use crate::transformer::{SourceTransformHandle, StreamingTransformer};
 use crate::{config, error, source, Result};
 
 mod forwarder;
@@ -39,6 +41,11 @@ pub(crate) async fn start_forwarder(
 
     match &config.vertex_config {
         pipeline::VertexType::Source(source) => {
+            info!("Starting source");
+            if std::env::var("NUMAFLOW_PIPELINE_STREAMING").is_ok() {
+                info!("Starting streaming forwarder");
+                return start_streaming_forwarder(cln_token, config.clone(), source.clone()).await;
+            }
             let buffer_writers =
                 create_buffer_writers(&config, js_context.clone(), cln_token.clone()).await?;
 
@@ -124,6 +131,49 @@ pub(crate) async fn start_forwarder(
     Ok(())
 }
 
+async fn start_streaming_forwarder(
+    cln_token: CancellationToken,
+    config: PipelineConfig,
+    source: SourceVtxConfig,
+) -> Result<()> {
+    let js_context = create_js_context(config.js_client_config.clone()).await?;
+
+    let buffer_writer =
+        create_streaming_buffer_writer(&config, js_context.clone(), cln_token.clone()).await;
+
+    let (source_type, source_grpc_client) =
+        create_source_type(&source, &config, cln_token.clone()).await?;
+    let (transformer, transformer_grpc_client) = create_streaming_transformer(
+        config.batch_size,
+        config.read_timeout,
+        &source,
+        cln_token.clone(),
+    )
+    .await?;
+
+    start_metrics_server(
+        config.metrics_config.clone(),
+        UserDefinedContainerState::Pipeline(PipelineContainerState::Source((
+            source_grpc_client.clone(),
+            transformer_grpc_client.clone(),
+        ))),
+    )
+    .await;
+
+    let streaming_source =
+        StreamingSource::new(source_type, config.batch_size, config.read_timeout);
+    let mut forwarder = forwarder::source_streaming_forwarder::ForwarderBuilder::new(
+        streaming_source,
+        transformer,
+        buffer_writer,
+        cln_token.clone(),
+        config.clone(),
+    )
+    .build();
+    forwarder.start().await?;
+    Ok(())
+}
+
 /// Creates the required buffer writers based on the pipeline configuration, it creates a map
 /// of vertex name to a list of writer handles.
 async fn create_buffer_writers(
@@ -152,6 +202,24 @@ async fn create_buffer_writers(
         buffer_writers.insert(to_vertex.name.clone(), writers);
     }
     Ok(buffer_writers)
+}
+
+async fn create_streaming_buffer_writer(
+    config: &PipelineConfig,
+    js_context: Context,
+    cln_token: CancellationToken,
+) -> StreamingJetstreamWriter {
+    StreamingJetstreamWriter::new(
+        config.paf_batch_size,
+        config
+            .to_vertex_config
+            .iter()
+            .map(|tv| tv.writer_config.clone())
+            .collect(),
+        js_context,
+        cln_token,
+    )
+    .await
 }
 
 async fn create_buffer_readers(
@@ -283,6 +351,42 @@ async fn create_transformer(
             wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
             return Ok((
                 Some(SourceTransformHandle::new(transformer_grpc_client.clone()).await?),
+                Some(transformer_grpc_client),
+            ));
+        }
+    }
+    Ok((None, None))
+}
+
+async fn create_streaming_transformer(
+    batch_size: usize,
+    timeout: Duration,
+    source: &SourceVtxConfig,
+    cln_token: CancellationToken,
+) -> Result<(
+    Option<StreamingTransformer>,
+    Option<SourceTransformClient<Channel>>,
+)> {
+    if let Some(transformer_config) = &source.transformer_config {
+        if let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
+            &transformer_config.transformer_type
+        {
+            check_for_server_compatibility(
+                ud_transformer.socket_path.clone().into(),
+                cln_token.clone(),
+            )
+            .await?;
+            let mut transformer_grpc_client = SourceTransformClient::new(
+                create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
+            )
+            .max_encoding_message_size(ud_transformer.grpc_max_message_size)
+            .max_encoding_message_size(ud_transformer.grpc_max_message_size);
+            wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
+            return Ok((
+                Some(
+                    StreamingTransformer::new(batch_size, timeout, transformer_grpc_client.clone())
+                        .await?,
+                ),
                 Some(transformer_grpc_client),
             ));
         }

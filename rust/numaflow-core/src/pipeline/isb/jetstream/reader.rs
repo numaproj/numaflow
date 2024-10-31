@@ -306,7 +306,6 @@ mod tests {
         let writer_cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
             stream_name.to_string(),
-            0,
             Default::default(),
             context.clone(),
             5000,

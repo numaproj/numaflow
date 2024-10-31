@@ -14,7 +14,6 @@ use tracing::{debug, error, info, warn};
 use user_defined::UserDefinedSink;
 
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig, SinkConfig};
-use crate::config::pipeline::SinkVtxConfig;
 use crate::error::Error;
 use crate::message::{Message, ReadAck, ReadMessage, ResponseFromSink, ResponseStatusFromSink};
 use crate::Result;
@@ -171,15 +170,11 @@ impl StreamingSink {
                 let mut processed_msgs_count: usize = 0;
                 let mut last_logged_at = std::time::Instant::now();
 
-                let mut start_time = std::time::Instant::now();
                 loop {
-                    let chunk_time = std::time::Instant::now();
                     let batch = match chunk_stream.next().await {
                         Some(batch) => batch,
                         None => break,
                     };
-                    // info!("Chunking latency - {}ms", chunk_time.elapsed().as_millis());
-                    let start = std::time::Instant::now();
                     if batch.is_empty() {
                         continue;
                     }
@@ -207,7 +202,6 @@ impl StreamingSink {
                     }
 
                     processed_msgs_count += n;
-
                     if last_logged_at.elapsed().as_millis() >= 1000 {
                         info!(
                             "Processed {} messages at {:?}",
@@ -222,16 +216,6 @@ impl StreamingSink {
                         warn!("Cancellation token is cancelled. Exiting SinkWriter");
                         break;
                     }
-                    // info!(
-                    //     "Sink processing latency - {}ms",
-                    //     start.elapsed().as_millis()
-                    // );
-                    // info!(
-                    //     "Sink latency for {} messages - {}ms",
-                    //     n,
-                    //     start_time.elapsed().as_millis()
-                    // );
-                    start_time = std::time::Instant::now();
                 }
 
                 Ok(())

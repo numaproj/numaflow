@@ -1,14 +1,17 @@
+use crate::config::pipeline::isb::BufferWriterConfig;
+use crate::error::Error;
+use crate::message::{Message, Offset, ReadMessage};
+use crate::pipeline::isb::jetstream::writer::{JetstreamWriter, ResolveAndPublishResult};
+use crate::Result;
 use async_nats::jetstream::Context;
 use bytes::BytesMut;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-
-use crate::config::pipeline::isb::BufferWriterConfig;
-use crate::error::Error;
-use crate::message::{Message, Offset};
-use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
-use crate::Result;
+use tracing::warn;
 
 /// JetStream Writer is responsible for writing messages to JetStream ISB.
 /// it exposes both sync and async methods to write messages. It has gates
@@ -24,15 +27,24 @@ pub(crate) mod reader;
 struct ActorMessage {
     /// Write the messages to ISB
     message: Message,
+    stream: (String, u16),
     /// once the message has been successfully written, we can let the sender know.
     /// This can be used to trigger Acknowledgement of the message from the Reader.
     // FIXME: concrete type and better name
-    callee_tx: oneshot::Sender<Result<Offset>>,
+    callee_tx: oneshot::Sender<Result<Vec<((String, u16), Offset)>>>,
 }
 
 impl ActorMessage {
-    fn new(message: Message, callee_tx: oneshot::Sender<Result<Offset>>) -> Self {
-        Self { message, callee_tx }
+    fn new(
+        message: Message,
+        stream: (String, u16),
+        callee_tx: oneshot::Sender<Result<Vec<((String, u16), Offset)>>>,
+    ) -> Self {
+        Self {
+            message,
+            stream,
+            callee_tx,
+        }
     }
 }
 
@@ -55,7 +67,9 @@ impl WriterActor {
             .message
             .try_into()
             .expect("message serialization should not fail");
-        self.js_writer.write(payload.into(), msg.callee_tx).await
+        self.js_writer
+            .write(msg.stream, payload.into(), msg.callee_tx)
+            .await
     }
 
     async fn run(&mut self) {
@@ -67,6 +81,8 @@ impl WriterActor {
 
 /// WriterHandle is the handle to the WriterActor. It exposes a method to send messages to the Actor.
 pub(crate) struct WriterHandle {
+    stream_name: String,
+    partition_idx: u16,
     sender: mpsc::Sender<ActorMessage>,
 }
 
@@ -83,8 +99,7 @@ impl WriterHandle {
         let (sender, receiver) = mpsc::channel::<ActorMessage>(batch_size);
 
         let js_writer = JetstreamWriter::new(
-            stream_name,
-            partition_idx,
+            vec![(stream_name.clone(), partition_idx)],
             config,
             js_ctx,
             paf_batch_size,
@@ -96,21 +111,122 @@ impl WriterHandle {
             actor.run().await;
         });
 
-        Self { sender }
+        Self {
+            stream_name,
+            partition_idx,
+            sender,
+        }
     }
 
     pub(crate) async fn write(
         &self,
         message: Message,
-    ) -> Result<oneshot::Receiver<Result<Offset>>> {
+    ) -> Result<oneshot::Receiver<Result<Vec<((String, u16), Offset)>>>> {
         let (sender, receiver) = oneshot::channel();
-        let msg = ActorMessage::new(message, sender);
+        let msg = ActorMessage::new(
+            message,
+            (self.stream_name.clone(), self.partition_idx),
+            sender,
+        );
         self.sender
             .send(msg)
             .await
             .map_err(|e| Error::ISB(format!("Failed to write message to actor channel: {}", e)))?;
 
         Ok(receiver)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct StreamingJetstreamWriter {
+    config: Vec<BufferWriterConfig>,
+    writer: JetstreamWriter,
+    paf_resolver_tx: mpsc::Sender<ResolveAndPublishResult>,
+    cancel_token: CancellationToken,
+}
+
+impl StreamingJetstreamWriter {
+    pub(crate) async fn new(
+        paf_batch_size: usize,
+        config: Vec<BufferWriterConfig>,
+        js_ctx: Context,
+        cancel_token: CancellationToken,
+    ) -> Self {
+        let (paf_resolver_tx, paf_resolver_rx) =
+            mpsc::channel::<ResolveAndPublishResult>(paf_batch_size);
+
+        let js_writer = JetstreamWriter::new(
+            // flatten the streams across the config
+            config.iter().flat_map(|c| c.streams.clone()).collect(),
+            config.get(0).unwrap().clone(),
+            js_ctx,
+            paf_batch_size,
+            cancel_token.clone(),
+        );
+
+        // spawn a task for resolving PAFs
+        let mut resolver_actor = writer::PafResolverActor::new(js_writer.clone(), paf_resolver_rx);
+        tokio::spawn(async move {
+            resolver_actor.run().await;
+        });
+
+        Self {
+            config,
+            writer: js_writer,
+            paf_resolver_tx,
+            cancel_token,
+        }
+    }
+
+    pub(crate) async fn start_streaming(
+        &self,
+        messages_stream: ReceiverStream<ReadMessage>,
+        cancellation_token: CancellationToken,
+    ) -> Result<JoinHandle<Result<()>>> {
+        let handle: JoinHandle<Result<()>> = tokio::spawn({
+            let this = self.clone();
+            let mut messages_stream = messages_stream;
+            let mut index = 0;
+            async move {
+                while let Some(read_message) = messages_stream.next().await {
+                    let mut pafs = vec![];
+                    for buffer in &this.config {
+                        let payload: BytesMut = read_message
+                            .message
+                            .clone()
+                            .try_into()
+                            .expect("message serialization should not fail");
+                        let stream = buffer.streams.get(index).unwrap();
+                        index = (index + 1) % buffer.streams.len();
+                        let paf = this
+                            .writer
+                            .temp_write(stream.clone(), payload.into())
+                            .await?;
+                        pafs.push((stream.clone(), paf));
+                    }
+
+                    this.paf_resolver_tx
+                        .send(ResolveAndPublishResult {
+                            pafs,
+                            payload: read_message.message.value.clone().into(),
+                            callee_tx: None,
+                            reader_tx: Some(read_message.ack),
+                        })
+                        .await
+                        .map_err(|e| {
+                            Error::ISB(format!("Failed to send PAFs to resolver actor: {}", e))
+                        })?;
+
+                    if cancellation_token.is_cancelled() {
+                        warn!("Cancellation token is cancelled. Exiting JetstreamWriter");
+                        break;
+                    }
+                }
+
+                Ok(())
+            }
+        });
+        Ok(handle)
     }
 }
 

@@ -57,6 +57,16 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cp -pv target/${TARGET}/release/numaflow /root/numaflow
 
 ####################################################################################################
+# Bytehound
+####################################################################################################
+FROM rust:1.81-bookworm AS bytehound
+WORKDIR /bytehound
+RUN apt-get update && apt-get install -y wget
+RUN wget https://github.com/koute/bytehound/releases/download/0.11.0/bytehound-x86_64-unknown-linux-gnu.tgz
+
+RUN tar -xvzf bytehound-x86_64-unknown-linux-gnu.tgz
+
+####################################################################################################
 # numaflow
 ####################################################################################################
 ARG BASE_IMAGE
@@ -71,6 +81,12 @@ COPY ui/build /ui/build
 
 COPY ./rust/serving/config config
 
+COPY --from=bytehound /bytehound/libbytehound.so /libbytehound.so
+COPY --from=bytehound /bytehound/bytehound /bytehound
+
+ENV MEMORY_PROFILER_LOG=info
+COPY start.sh .
+RUN chmod +x start.sh
 ENTRYPOINT [ "/bin/numaflow" ]
 
 ####################################################################################################
