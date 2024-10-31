@@ -40,6 +40,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	metricsversiond "k8s.io/metrics/pkg/client/clientset/versioned"
+	metricsclientv1beta1 "k8s.io/metrics/pkg/client/clientset/versioned/typed/metrics/v1beta1"
 	"k8s.io/utils/ptr"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -92,7 +93,7 @@ func WithReadOnlyMode() HandlerOption {
 
 type handler struct {
 	kubeClient            kubernetes.Interface
-	metricsClient         *metricsversiond.Clientset
+	metricsClient         metricsclientv1beta1.MetricsV1beta1Interface
 	promQlService         PromQl
 	numaflowClient        dfv1clients.NumaflowV1alpha1Interface
 	daemonClientsCache    *lru.Cache[string, daemonclient.DaemonClient]
@@ -142,7 +143,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	}
 	return &handler{
 		kubeClient:            kubeClient,
-		metricsClient:         metricsClient,
+		metricsClient:         metricsClient.MetricsV1beta1(),
 		promQlService:         promQlService,
 		numaflowClient:        numaflowClient,
 		daemonClientsCache:    daemonClientsCache,
@@ -913,7 +914,7 @@ func (h *handler) ListPodsMetrics(c *gin.Context) {
 	ns := c.Param("namespace")
 
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
-	metrics, err := h.metricsClient.MetricsV1beta1().PodMetricses(ns).List(c, metav1.ListOptions{
+	metrics, err := h.metricsClient.PodMetricses(ns).List(c, metav1.ListOptions{
 		Limit:    limit,
 		Continue: c.Query("continue"),
 	})
@@ -958,6 +959,7 @@ func (h *handler) GetMonoVertexPodsInfo(c *gin.Context) {
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: Failed to get a list of pods: namespace %q mono vertex %q: %s",
 			ns, monoVertex, err.Error()))
+		return
 	}
 	if pods == nil || len(pods.Items) == 0 {
 		h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: No pods found for mono vertex %q in namespace %q", monoVertex, ns))
@@ -1591,7 +1593,7 @@ func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
 	podDetails.ContainerDetailsMap = containerDetails
 
 	// cpu/memory details of a pod
-	podMetrics, err := metricsClient.MetricsV1beta1().PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
+	podMetrics, err := metricsClient.PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
 	if err == nil {
 		totalCPU := resource.NewQuantity(0, resource.DecimalSI)
 		totalMemory := resource.NewQuantity(0, resource.BinarySI)
