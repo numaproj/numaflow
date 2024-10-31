@@ -19,6 +19,7 @@ package monovertex
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -41,6 +42,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	mvtxscaling "github.com/numaproj/numaflow/pkg/reconciler/monovertex/scaling"
+	"github.com/numaproj/numaflow/pkg/reconciler/validator"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
@@ -72,6 +74,10 @@ func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 	log := mr.logger.With("namespace", monoVtx.Namespace).With("monoVertex", monoVtx.Name)
+	if instance := monoVtx.GetAnnotations()[dfv1.KeyInstance]; instance != mr.config.GetInstance() {
+		log.Debugw("MonoVertex not managed by this controller, skipping", zap.String("instance", instance))
+		return ctrl.Result{}, nil
+	}
 	ctx = logging.WithLogger(ctx, log)
 	monoVtxCopy := monoVtx.DeepCopy()
 	result, err := mr.reconcile(ctx, monoVtxCopy)
@@ -114,6 +120,12 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 	monoVtx.Status.SetObservedGeneration(monoVtx.Generation)
 	if monoVtx.Scalable() {
 		mr.scaler.StartWatching(mVtxKey)
+	}
+
+	if err := validator.ValidateMonoVertex(monoVtx); err != nil {
+		mr.recorder.Eventf(monoVtx, corev1.EventTypeWarning, "ValidateMonoVertexFailed", "Invalid mvtx: %s", err.Error())
+		monoVtx.Status.MarkDeployFailed("InvalidSpec", err.Error())
+		return ctrl.Result{}, err
 	}
 
 	if err := mr.orchestrateFixedResources(ctx, monoVtx); err != nil {
@@ -190,11 +202,11 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 		monoVtx.Status.UpdatedReadyReplicas = 0
 	}
 
-	// Manually or automatically scaled down
+	// Manually or automatically scaled down, in this case, we need to clean up extra pods if there's any
+	if err := mr.cleanUpPodsFromTo(ctx, monoVtx, desiredReplicas, math.MaxInt); err != nil {
+		return fmt.Errorf("failed to clean up mono vertex pods [%v, ∞): %w", desiredReplicas, err)
+	}
 	if currentReplicas := int(monoVtx.Status.Replicas); currentReplicas > desiredReplicas {
-		if err := mr.cleanUpPodsFromTo(ctx, monoVtx, desiredReplicas, currentReplicas); err != nil {
-			return fmt.Errorf("failed to clean up mono vertex pods [%v, %v): %w", desiredReplicas, currentReplicas, err)
-		}
 		monoVtx.Status.Replicas = uint32(desiredReplicas)
 	}
 	updatedReplicas := int(monoVtx.Status.UpdatedReplicas)

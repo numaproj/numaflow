@@ -16,14 +16,12 @@ k8s_swagger="dist/kubernetes.swagger.json"
 kubeified_swagger="dist/kubefied.swagger.json"
 output="api/openapi-spec/swagger.json"
 
-if [ "`command -v swagger`" = "" ]; then
-  go install -mod=vendor ./vendor/github.com/go-swagger/go-swagger/cmd/swagger
-fi
+go install -mod=vendor ./vendor/github.com/go-swagger/go-swagger/cmd/swagger
 
-curl -Ls https://raw.githubusercontent.com/kubernetes/kubernetes/release-1.29/api/openapi-spec/swagger.json -o ${k8s_swagger}
+curl -Ls https://raw.githubusercontent.com/kubernetes/kubernetes/release-1.31/api/openapi-spec/swagger.json -o ${k8s_swagger}
 
 go run ./hack/gen-openapi-spec/main.go ${VERSION} ${k8s_swagger} ${kubeified_swagger}
 
-swagger flatten --with-flatten minimal ${kubeified_swagger} -o ${output}
+$(go env GOPATH)/bin/swagger flatten --with-flatten minimal ${kubeified_swagger} -o ${output}
 
-swagger validate ${output}
+$(go env GOPATH)/bin/swagger validate ${output}

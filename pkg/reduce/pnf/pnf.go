@@ -424,7 +424,7 @@ func (pf *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 						metrics.LabelReason:             writeErr.Error(),
 					}).Add(float64(len(message.Payload)))
 
-					pf.log.Infow("Dropped message", zap.String("reason", writeErr.Error()), zap.String("vertex", pf.vertexName), zap.String("pipeline", pf.pipelineName))
+					pf.log.Infow("Dropped message", zap.String("reason", writeErr.Error()), zap.String("vertex", pf.vertexName), zap.String("pipeline", pf.pipelineName), zap.String("msg_id", message.ID.String()))
 				} else {
 					failedMessages = append(failedMessages, message)
 				}

@@ -280,14 +280,16 @@ async fn routes<T: Clone + Send + Sync + Store + 'static>(
 
 #[cfg(test)]
 mod tests {
+    use std::net::SocketAddr;
+
+    use async_nats::jetstream::stream;
+    use axum::http::StatusCode;
+    use tokio::time::{sleep, Duration};
+    use tower::ServiceExt;
+
     use super::*;
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::config::cert_key_pair;
-    use async_nats::jetstream::stream;
-    use axum::http::StatusCode;
-    use std::net::SocketAddr;
-    use tokio::time::{sleep, Duration};
-    use tower::ServiceExt;
 
     #[tokio::test]
     async fn test_start_main_server() {

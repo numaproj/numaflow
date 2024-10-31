@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -91,7 +91,7 @@ fn check_numaflow_compatibility(
 ) -> error::Result<()> {
     // Ensure that the minimum numaflow version is specified
     if min_numaflow_version.is_empty() {
-        return Err(Error::ServerInfoError("invalid version".to_string()));
+        return Err(Error::ServerInfo("invalid version".to_string()));
     }
 
     // Strip the 'v' prefix if present.
@@ -99,12 +99,12 @@ fn check_numaflow_compatibility(
 
     // Parse the provided numaflow version as a semantic version
     let numaflow_version_semver = Version::parse(numaflow_version_stripped)
-        .map_err(|e| Error::ServerInfoError(format!("Error parsing Numaflow version: {}", e)))?;
+        .map_err(|e| Error::ServerInfo(format!("Error parsing Numaflow version: {}", e)))?;
 
     // Create a version constraint based on the minimum numaflow version
     let numaflow_constraint = format!(">={}", min_numaflow_version);
     check_constraint(&numaflow_version_semver, &numaflow_constraint).map_err(|e| {
-        Error::ServerInfoError(format!(
+        Error::ServerInfo(format!(
             "numaflow version {} must be upgraded to at least {}, in order to work with current SDK version {}",
             numaflow_version_semver, human_readable(min_numaflow_version), e
         ))
@@ -120,7 +120,7 @@ fn check_sdk_compatibility(
 ) -> error::Result<()> {
     // Check if the SDK language is present in the minimum supported SDK versions
     if !min_supported_sdk_versions.contains_key(sdk_language) {
-        return Err(Error::ServerInfoError(format!(
+        return Err(Error::ServerInfo(format!(
             "SDK version constraint not found for language: {}, container type: {}",
             sdk_language, container_type
         )));
@@ -135,14 +135,13 @@ fn check_sdk_compatibility(
         // For Python, use Pep440 versioning
         if sdk_language.to_lowercase() == "python" {
             let sdk_version_pep440 = PepVersion::from_str(sdk_version)
-                .map_err(|e| Error::ServerInfoError(format!("Error parsing SDK version: {}", e)))?;
+                .map_err(|e| Error::ServerInfo(format!("Error parsing SDK version: {}", e)))?;
 
-            let specifiers = VersionSpecifier::from_str(&sdk_constraint).map_err(|e| {
-                Error::ServerInfoError(format!("Error parsing SDK constraint: {}", e))
-            })?;
+            let specifiers = VersionSpecifier::from_str(&sdk_constraint)
+                .map_err(|e| Error::ServerInfo(format!("Error parsing SDK constraint: {}", e)))?;
 
             if !specifiers.contains(&sdk_version_pep440) {
-                return Err(Error::ServerInfoError(format!(
+                return Err(Error::ServerInfo(format!(
                     "SDK version {} must be upgraded to at least {}, in order to work with the current numaflow version",
                     sdk_version_pep440, human_readable(sdk_required_version)
                 )));
@@ -153,11 +152,11 @@ fn check_sdk_compatibility(
 
             // Parse the SDK version using semver
             let sdk_version_semver = Version::parse(sdk_version_stripped)
-                .map_err(|e| Error::ServerInfoError(format!("Error parsing SDK version: {}", e)))?;
+                .map_err(|e| Error::ServerInfo(format!("Error parsing SDK version: {}", e)))?;
 
             // Check if the SDK version satisfies the constraint
             check_constraint(&sdk_version_semver, &sdk_constraint).map_err(|_| {
-                Error::ServerInfoError(format!(
+                Error::ServerInfo(format!(
                     "SDK version {} must be upgraded to at least {}, in order to work with the current numaflow version",
                     sdk_version_semver, human_readable(sdk_required_version)
                 ))
@@ -171,7 +170,7 @@ fn check_sdk_compatibility(
         );
 
         // Return error indicating the language
-        return Err(Error::ServerInfoError(format!(
+        return Err(Error::ServerInfo(format!(
             "SDK version constraint not found for language: {}, container type: {}",
             sdk_language, container_type
         )));
@@ -190,12 +189,12 @@ fn human_readable(ver: &str) -> String {
         return String::new();
     }
     // semver
-    if ver.ends_with("-z") {
-        return ver[..ver.len() - 2].to_string();
+    if let Some(version) = ver.strip_suffix("-z") {
+        return version.to_string();
     }
     // PEP 440
-    if ver.ends_with("rc100") {
-        return ver[..ver.len() - 5].to_string();
+    if let Some(version) = ver.strip_suffix("rc100") {
+        return version.to_string();
     }
     ver.to_string()
 }
@@ -206,7 +205,7 @@ fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
     // extract the major.minor.patch version
     let mmp_version =
         Version::parse(binding.split('-').next().unwrap_or_default()).map_err(|e| {
-            Error::ServerInfoError(format!(
+            Error::ServerInfo(format!(
                 "Error parsing version: {}, version string: {}",
                 e, binding
             ))
@@ -241,7 +240,7 @@ fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
 
     // Parse the given constraint as a semantic version requirement
     let version_req = VersionReq::parse(constraint).map_err(|e| {
-        Error::ServerInfoError(format!(
+        Error::ServerInfo(format!(
             "Error parsing constraint: {}, constraint string: {}",
             e, constraint
         ))
@@ -249,7 +248,7 @@ fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
 
     // Check if the provided version satisfies the parsed constraint
     if !version_req.matches(version) {
-        return Err(Error::ServerInfoError("invalid version".to_string()));
+        return Err(Error::ServerInfo("invalid version".to_string()));
     }
 
     Ok(())
@@ -265,7 +264,7 @@ fn trim_after_dash(input: &str) -> &str {
 
 /// Extracts the container type from the server info file.
 /// The file name is in the format of <container_type>-server-info.
-fn get_container_type(server_info_file: &PathBuf) -> Option<&str> {
+fn get_container_type(server_info_file: &Path) -> Option<&str> {
     let file_name = server_info_file.file_name()?;
     let container_type = file_name.to_str()?.trim_end_matches("-server-info");
     if container_type.is_empty() {
@@ -285,7 +284,7 @@ async fn read_server_info(
     // Infinite loop to keep checking until the file is ready
     loop {
         if cln_token.is_cancelled() {
-            return Err(Error::ServerInfoError("Operation cancelled".to_string()));
+            return Err(Error::ServerInfo("Operation cancelled".to_string()));
         }
 
         // Check if the file exists and has content
@@ -324,7 +323,7 @@ async fn read_server_info(
         retry += 1;
         if retry >= 10 {
             // Return an error if the retry limit is reached
-            return Err(Error::ServerInfoError(
+            return Err(Error::ServerInfo(
                 "server-info reading retry exceeded".to_string(),
             ));
         }
@@ -334,7 +333,7 @@ async fn read_server_info(
 
     // Parse the JSON; if there is an error, return the error
     let server_info: ServerInfo = serde_json::from_str(&contents).map_err(|e| {
-        Error::ServerInfoError(format!(
+        Error::ServerInfo(format!(
             "Failed to parse server-info file: {}, contents: {}",
             e, contents
         ))
@@ -459,9 +458,10 @@ mod version {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
     use std::io::{Read, Write};
     use std::{collections::HashMap, fs::File};
+
+    use serde_json::json;
     use tempfile::tempdir;
 
     use super::*;
@@ -482,7 +482,7 @@ mod tests {
         // Remove the existing file if it exists
         if let Err(e) = fs::remove_file(svr_info_file_path) {
             if e.kind() != std::io::ErrorKind::NotFound {
-                return Err(Error::ServerInfoError(format!(
+                return Err(Error::ServerInfo(format!(
                     "Failed to remove server-info file: {}",
                     e
                 )));
@@ -496,7 +496,7 @@ mod tests {
         let mut file = match file {
             Ok(f) => f,
             Err(e) => {
-                return Err(Error::ServerInfoError(format!(
+                return Err(Error::ServerInfo(format!(
                     "Failed to create server-info file: {}",
                     e
                 )));
@@ -506,13 +506,13 @@ mod tests {
         // Write the serialized data and the END marker to the file
         // Remove the existing file if it exists
         if let Err(e) = file.write_all(serialized.as_bytes()) {
-            return Err(Error::ServerInfoError(format!(
+            return Err(Error::ServerInfo(format!(
                 "Failed to write server-info file: {}",
                 e
             )));
         }
         if let Err(e) = file.write_all(END.as_bytes()) {
-            return Err(Error::ServerInfoError(format!(
+            return Err(Error::ServerInfo(format!(
                 "Failed to write server-info file: {}",
                 e
             )));
@@ -730,7 +730,7 @@ mod tests {
         assert!(result.is_err());
         assert!(
             result.unwrap_err().to_string().contains(
-            "ServerInfoError Error - SDK version 0.0.9 must be upgraded to at least 0.1.0, in order to work with the current numaflow version"));
+            "ServerInfo Error - SDK version 0.0.9 must be upgraded to at least 0.1.0, in order to work with the current numaflow version"));
     }
 
     #[tokio::test]
@@ -905,7 +905,7 @@ mod tests {
         assert!(result.is_err());
         assert!(
             result.unwrap_err().to_string().contains(
-                "ServerInfoError Error - SDK version 0.0.9 must be upgraded to at least 0.1.0-rc3, in order to work with the current numaflow version"));
+                "ServerInfo Error - SDK version 0.0.9 must be upgraded to at least 0.1.0-rc3, in order to work with the current numaflow version"));
     }
 
     #[tokio::test]
@@ -1074,7 +1074,7 @@ mod tests {
         // Check that we received the correct error variant
         let error = result.unwrap_err();
         assert!(
-            matches!(error, Error::ServerInfoError(_)),
+            matches!(error, Error::ServerInfo(_)),
             "Expected ServerInfoError, got {:?}",
             error
         );
@@ -1140,7 +1140,7 @@ mod tests {
 
         let error = result.unwrap_err();
         assert!(
-            matches!(error, Error::ServerInfoError(_)),
+            matches!(error, Error::ServerInfo(_)),
             "Expected ServerInfoError, got {:?}",
             error
         );

@@ -147,9 +147,8 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
-    use crate::strategy::fixed;
-
     use super::*;
+    use crate::strategy::fixed;
 
     async fn always_successful() -> Result<u64, ()> {
         Ok(42)

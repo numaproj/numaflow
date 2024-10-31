@@ -20,8 +20,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -38,25 +38,17 @@ type VertexLister interface {
 
 // vertexLister implements the VertexLister interface.
 type vertexLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.Vertex]
 }
 
 // NewVertexLister returns a new VertexLister.
 func NewVertexLister(indexer cache.Indexer) VertexLister {
-	return &vertexLister{indexer: indexer}
-}
-
-// List lists all Vertices in the indexer.
-func (s *vertexLister) List(selector labels.Selector) (ret []*v1alpha1.Vertex, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.Vertex))
-	})
-	return ret, err
+	return &vertexLister{listers.New[*v1alpha1.Vertex](indexer, v1alpha1.Resource("vertex"))}
 }
 
 // Vertices returns an object that can list and get Vertices.
 func (s *vertexLister) Vertices(namespace string) VertexNamespaceLister {
-	return vertexNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return vertexNamespaceLister{listers.NewNamespaced[*v1alpha1.Vertex](s.ResourceIndexer, namespace)}
 }
 
 // VertexNamespaceLister helps list and get Vertices.
@@ -74,26 +66,5 @@ type VertexNamespaceLister interface {
 // vertexNamespaceLister implements the VertexNamespaceLister
 // interface.
 type vertexNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all Vertices in the indexer for a given namespace.
-func (s vertexNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.Vertex, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.Vertex))
-	})
-	return ret, err
-}
-
-// Get retrieves the Vertex from the indexer for a given namespace and name.
-func (s vertexNamespaceLister) Get(name string) (*v1alpha1.Vertex, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("vertex"), name)
-	}
-	return obj.(*v1alpha1.Vertex), nil
+	listers.ResourceIndexer[*v1alpha1.Vertex]
 }

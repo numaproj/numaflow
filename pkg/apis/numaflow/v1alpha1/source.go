@@ -59,6 +59,9 @@ func (s Source) getContainers(req getContainerReq) ([]corev1.Container, error) {
 }
 
 func (s Source) getMainContainer(req getContainerReq) corev1.Container {
+	if req.executeRustBinary {
+		return containerBuilder{}.init(req).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
+	}
 	return containerBuilder{}.init(req).args("processor", "--type="+string(VertexTypeSource), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 
@@ -96,7 +99,7 @@ func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) core
 		c = c.image(mainContainerReq.image).args(args...) // Use the same image as the main container
 	}
 	if x := s.UDTransformer.Container; x != nil {
-		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
+		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...).appendPorts(x.Ports...)
 		if x.ImagePullPolicy != nil {
 			c = c.imagePullPolicy(*x.ImagePullPolicy)
 		}
@@ -142,7 +145,7 @@ func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Co
 		}
 	}
 	if x := s.UDSource.Container; x != nil {
-		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
+		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...).appendPorts(x.Ports...)
 		if x.ImagePullPolicy != nil {
 			c = c.imagePullPolicy(*x.ImagePullPolicy)
 		}

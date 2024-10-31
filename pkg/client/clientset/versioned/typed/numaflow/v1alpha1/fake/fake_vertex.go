@@ -41,22 +41,24 @@ var verticesKind = v1alpha1.SchemeGroupVersion.WithKind("Vertex")
 
 // Get takes name of the vertex, and returns the corresponding vertex object, and an error if there is any.
 func (c *FakeVertices) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Vertex, err error) {
+	emptyResult := &v1alpha1.Vertex{}
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(verticesResource, c.ns, name), &v1alpha1.Vertex{})
+		Invokes(testing.NewGetActionWithOptions(verticesResource, c.ns, name, options), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.Vertex), err
 }
 
 // List takes label and field selectors, and returns the list of Vertices that match those selectors.
 func (c *FakeVertices) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.VertexList, err error) {
+	emptyResult := &v1alpha1.VertexList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(verticesResource, verticesKind, c.ns, opts), &v1alpha1.VertexList{})
+		Invokes(testing.NewListActionWithOptions(verticesResource, verticesKind, c.ns, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -75,40 +77,43 @@ func (c *FakeVertices) List(ctx context.Context, opts v1.ListOptions) (result *v
 // Watch returns a watch.Interface that watches the requested vertices.
 func (c *FakeVertices) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(verticesResource, c.ns, opts))
+		InvokesWatch(testing.NewWatchActionWithOptions(verticesResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a vertex and creates it.  Returns the server's representation of the vertex, and an error, if there is any.
 func (c *FakeVertices) Create(ctx context.Context, vertex *v1alpha1.Vertex, opts v1.CreateOptions) (result *v1alpha1.Vertex, err error) {
+	emptyResult := &v1alpha1.Vertex{}
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(verticesResource, c.ns, vertex), &v1alpha1.Vertex{})
+		Invokes(testing.NewCreateActionWithOptions(verticesResource, c.ns, vertex, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.Vertex), err
 }
 
 // Update takes the representation of a vertex and updates it. Returns the server's representation of the vertex, and an error, if there is any.
 func (c *FakeVertices) Update(ctx context.Context, vertex *v1alpha1.Vertex, opts v1.UpdateOptions) (result *v1alpha1.Vertex, err error) {
+	emptyResult := &v1alpha1.Vertex{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(verticesResource, c.ns, vertex), &v1alpha1.Vertex{})
+		Invokes(testing.NewUpdateActionWithOptions(verticesResource, c.ns, vertex, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.Vertex), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeVertices) UpdateStatus(ctx context.Context, vertex *v1alpha1.Vertex, opts v1.UpdateOptions) (*v1alpha1.Vertex, error) {
+func (c *FakeVertices) UpdateStatus(ctx context.Context, vertex *v1alpha1.Vertex, opts v1.UpdateOptions) (result *v1alpha1.Vertex, err error) {
+	emptyResult := &v1alpha1.Vertex{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(verticesResource, "status", c.ns, vertex), &v1alpha1.Vertex{})
+		Invokes(testing.NewUpdateSubresourceActionWithOptions(verticesResource, "status", c.ns, vertex, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.Vertex), err
 }
@@ -123,7 +128,7 @@ func (c *FakeVertices) Delete(ctx context.Context, name string, opts v1.DeleteOp
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeVertices) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(verticesResource, c.ns, listOpts)
+	action := testing.NewDeleteCollectionActionWithOptions(verticesResource, c.ns, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.VertexList{})
 	return err
@@ -131,11 +136,12 @@ func (c *FakeVertices) DeleteCollection(ctx context.Context, opts v1.DeleteOptio
 
 // Patch applies the patch and returns the patched vertex.
 func (c *FakeVertices) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.Vertex, err error) {
+	emptyResult := &v1alpha1.Vertex{}
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(verticesResource, c.ns, name, pt, data, subresources...), &v1alpha1.Vertex{})
+		Invokes(testing.NewPatchSubresourceActionWithOptions(verticesResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.Vertex), err
 }

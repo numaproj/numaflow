@@ -70,6 +70,11 @@ func (b containerBuilder) appendEnv(x ...corev1.EnvVar) containerBuilder {
 	return b
 }
 
+func (b containerBuilder) appendPorts(x ...corev1.ContainerPort) containerBuilder {
+	b.Ports = append(b.Ports, x...)
+	return b
+}
+
 func (b containerBuilder) appendVolumeMounts(x ...corev1.VolumeMount) containerBuilder {
 	b.VolumeMounts = append(b.VolumeMounts, x...)
 	return b

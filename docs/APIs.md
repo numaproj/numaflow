@@ -1627,6 +1627,22 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>ports</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#containerport-v1-core">
+\[\]Kubernetes core/v1.ContainerPort </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -5211,6 +5227,30 @@ Description
 
 <td>
 
+<code>setKey</code></br> <em> bool </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+SetKey sets the Kafka key to the keys passed in the Message. When the
+key is null (default), the record is sent randomly to one of the
+available partitions of the topic. If a key exists, Kafka hashes the
+key, and the result is used to map the message to a specific partition.
+This ensures that messages with the same key end up in the same
+partition.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
 TLS </a> </em>
 </td>
@@ -5394,6 +5434,19 @@ default for TLS.
 SASL user to configure SASL connection for kafka broker SASL.enable=true
 default for SASL.
 </p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>kafkaVersion</code></br> <em> string </em>
+</td>
+
+<td>
 
 </td>
 

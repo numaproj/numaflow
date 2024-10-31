@@ -1,23 +1,24 @@
-use crate::error;
-use crate::error::Error;
-use crate::message::Message;
-use crate::monovertex::sink_pb::sink_client::SinkClient;
-use crate::monovertex::sink_pb::sink_request::Status;
-use crate::monovertex::sink_pb::{Handshake, SinkRequest, SinkResponse};
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
+use crate::error;
+use crate::message::{Message, ResponseFromSink};
+use crate::sink::Sink;
+use crate::Error;
+
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
 
-/// SinkWriter writes messages to a sink.
-pub struct SinkWriter {
+/// User-Defined Sink code writes messages to a custom [Sink].
+pub struct UserDefinedSink {
     sink_tx: mpsc::Sender<SinkRequest>,
     resp_stream: Streaming<SinkResponse>,
 }
 
-impl SinkWriter {
+impl UserDefinedSink {
     pub(crate) async fn new(mut client: SinkClient<Channel>) -> error::Result<Self> {
         let (sink_tx, sink_rx) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
         let sink_stream = ReceiverStream::new(sink_rx);
@@ -31,7 +32,7 @@ impl SinkWriter {
         sink_tx
             .send(handshake_request)
             .await
-            .map_err(|e| Error::SinkError(format!("failed to send handshake request: {}", e)))?;
+            .map_err(|e| Error::Sink(format!("failed to send handshake request: {}", e)))?;
 
         let mut resp_stream = client
             .sink_fn(Request::new(sink_stream))
@@ -40,13 +41,13 @@ impl SinkWriter {
 
         // First response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let handshake_response = resp_stream.message().await?.ok_or(Error::SinkError(
+        let handshake_response = resp_stream.message().await?.ok_or(Error::Sink(
             "failed to receive handshake response".to_string(),
         ))?;
 
         // Handshake cannot be None during the initial phase and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
-            return Err(Error::SinkError("invalid handshake response".to_string()));
+            return Err(Error::Sink("invalid handshake response".to_string()));
         }
 
         Ok(Self {
@@ -54,12 +55,11 @@ impl SinkWriter {
             resp_stream,
         })
     }
+}
 
+impl Sink for UserDefinedSink {
     /// writes a set of messages to the sink.
-    pub(crate) async fn sink_fn(
-        &mut self,
-        messages: Vec<Message>,
-    ) -> error::Result<Vec<SinkResponse>> {
+    async fn sink(&mut self, messages: Vec<Message>) -> error::Result<Vec<ResponseFromSink>> {
         let requests: Vec<SinkRequest> =
             messages.into_iter().map(|message| message.into()).collect();
         let num_requests = requests.len();
@@ -69,31 +69,39 @@ impl SinkWriter {
             self.sink_tx
                 .send(request)
                 .await
-                .map_err(|e| Error::SinkError(format!("failed to send request: {}", e)))?;
+                .map_err(|e| Error::Sink(format!("failed to send request: {}", e)))?;
         }
 
         // send eot request to indicate the end of the stream
         let eot_request = SinkRequest {
             request: None,
-            status: Some(Status { eot: true }),
+            status: Some(TransmissionStatus { eot: true }),
             handshake: None,
         };
         self.sink_tx
             .send(eot_request)
             .await
-            .map_err(|e| Error::SinkError(format!("failed to send eot request: {}", e)))?;
+            .map_err(|e| Error::Sink(format!("failed to send eot request: {}", e)))?;
 
-        // now that we have sent, we wait for responses!
-        // NOTE: this works now because the results are not streamed, as of today it will give the
+        // Now that we have sent, we wait for responses!
+        // NOTE: This works now because the results are not streamed. As of today, it will give the
         // response only once it has read all the requests.
+        // We wait for num_requests + 1 responses because the last response will be the EOT response.
         let mut responses = Vec::new();
-        for _ in 0..num_requests {
+        for i in 0..num_requests + 1 {
             let response = self
                 .resp_stream
                 .message()
                 .await?
-                .ok_or(Error::SinkError("failed to receive response".to_string()))?;
-            responses.push(response);
+                .ok_or(Error::Sink("failed to receive response".to_string()))?;
+
+            if response.status.map_or(false, |s| s.eot) {
+                if i != num_requests {
+                    log::error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
+                }
+                continue;
+            }
+            responses.push(response.try_into()?);
         }
 
         Ok(responses)
@@ -104,14 +112,15 @@ impl SinkWriter {
 mod tests {
     use chrono::offset::Utc;
     use numaflow::sink;
+    use numaflow_pb::clients::sink::sink_client::SinkClient;
     use tokio::sync::mpsc;
     use tracing::info;
 
+    use super::*;
     use crate::error::Result;
-    use crate::message::{Message, Offset};
-    use crate::monovertex::sink_pb::sink_client::SinkClient;
+    use crate::message::{Message, MessageID};
     use crate::shared::utils::create_rpc_channel;
-    use crate::sink::user_defined::SinkWriter;
+    use crate::sink::user_defined::UserDefinedSink;
 
     struct Logger;
     #[tonic::async_trait]
@@ -157,39 +166,41 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let mut sink_client =
-            SinkWriter::new(SinkClient::new(create_rpc_channel(sock_file).await?))
+            UserDefinedSink::new(SinkClient::new(create_rpc_channel(sock_file).await?))
                 .await
                 .expect("failed to connect to sink server");
 
         let messages = vec![
             Message {
                 keys: vec![],
-                value: b"Hello, World!".to_vec(),
-                offset: Offset {
-                    offset: "1".to_string(),
-                    partition_id: 0,
-                },
+                value: b"Hello, World!".to_vec().into(),
+                offset: None,
                 event_time: Utc::now(),
                 headers: Default::default(),
-                id: "one".to_string(),
+                id: MessageID {
+                    vertex_name: "vertex".to_string(),
+                    offset: "1".to_string(),
+                    index: 0,
+                },
             },
             Message {
                 keys: vec![],
-                value: b"Hello, World!".to_vec(),
-                offset: Offset {
-                    offset: "2".to_string(),
-                    partition_id: 0,
-                },
+                value: b"Hello, World!".to_vec().into(),
+                offset: None,
                 event_time: Utc::now(),
                 headers: Default::default(),
-                id: "two".to_string(),
+                id: MessageID {
+                    vertex_name: "vertex".to_string(),
+                    offset: "2".to_string(),
+                    index: 1,
+                },
             },
         ];
 
-        let response = sink_client.sink_fn(messages.clone()).await?;
+        let response = sink_client.sink(messages.clone()).await?;
         assert_eq!(response.len(), 2);
 
-        let response = sink_client.sink_fn(messages.clone()).await?;
+        let response = sink_client.sink(messages.clone()).await?;
         assert_eq!(response.len(), 2);
 
         drop(sink_client);

@@ -1,14 +1,10 @@
 use std::collections::HashMap;
 
-use crate::config::config;
-use crate::error::{Error, Result};
-use crate::message::{Message, Offset};
-use crate::monovertex::sourcetransform_pb::{
+use numaflow_pb::clients::sourcetransformer::{
     self, source_transform_client::SourceTransformClient, SourceTransformRequest,
     SourceTransformResponse,
 };
-use crate::shared::utils::utc_from_timestamp;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
@@ -16,27 +12,37 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::warn;
 
+use crate::error::{Error, Result};
+use crate::message::{get_vertex_name, Message, MessageID, Offset};
+use crate::shared::utils::utc_from_timestamp;
+
 const DROP: &str = "U+005C__DROP__";
 
 /// TransformerClient is a client to interact with the transformer server.
-pub struct SourceTransformer {
+struct SourceTransformer {
+    actor_messages: mpsc::Receiver<ActorMessage>,
     read_tx: mpsc::Sender<SourceTransformRequest>,
     resp_stream: Streaming<SourceTransformResponse>,
 }
 
 impl SourceTransformer {
-    pub(crate) async fn new(mut client: SourceTransformClient<Channel>) -> Result<Self> {
-        let (read_tx, read_rx) = mpsc::channel(config().batch_size as usize);
+    async fn new(
+        batch_size: usize,
+        mut client: SourceTransformClient<Channel>,
+        actor_messages: mpsc::Receiver<ActorMessage>,
+    ) -> Result<Self> {
+        let (read_tx, read_rx) = mpsc::channel(batch_size);
         let read_stream = ReceiverStream::new(read_rx);
 
         // do a handshake for read with the server before we start sending read requests
         let handshake_request = SourceTransformRequest {
             request: None,
-            handshake: Some(sourcetransform_pb::Handshake { sot: true }),
+            handshake: Some(sourcetransformer::Handshake { sot: true }),
         };
-        read_tx.send(handshake_request).await.map_err(|e| {
-            Error::TransformerError(format!("failed to send handshake request: {}", e))
-        })?;
+        read_tx
+            .send(handshake_request)
+            .await
+            .map_err(|e| Error::Transformer(format!("failed to send handshake request: {}", e)))?;
 
         let mut resp_stream = client
             .source_transform_fn(Request::new(read_stream))
@@ -45,23 +51,35 @@ impl SourceTransformer {
 
         // first response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let handshake_response = resp_stream.message().await?.ok_or(Error::TransformerError(
+        let handshake_response = resp_stream.message().await?.ok_or(Error::Transformer(
             "failed to receive handshake response".to_string(),
         ))?;
+
         // handshake cannot to None during the initial phase and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
-            return Err(Error::TransformerError(
-                "invalid handshake response".to_string(),
-            ));
+            return Err(Error::Transformer("invalid handshake response".to_string()));
         }
 
         Ok(Self {
+            actor_messages,
             read_tx,
             resp_stream,
         })
     }
 
-    pub(crate) async fn transform_fn(&mut self, messages: Vec<Message>) -> Result<Vec<Message>> {
+    async fn handle_message(&mut self, message: ActorMessage) {
+        match message {
+            ActorMessage::Transform {
+                messages,
+                respond_to,
+            } => {
+                let result = self.transform_fn(messages).await;
+                let _ = respond_to.send(result);
+            }
+        }
+    }
+
+    async fn transform_fn(&mut self, messages: Vec<Message>) -> Result<Vec<Message>> {
         // fields which will not be changed
         struct MessageInfo {
             offset: Offset,
@@ -71,9 +89,12 @@ impl SourceTransformer {
         let mut tracker: HashMap<String, MessageInfo> = HashMap::with_capacity(messages.len());
         for message in &messages {
             tracker.insert(
-                message.id.clone(),
+                message.id.to_string(),
                 MessageInfo {
-                    offset: message.offset.clone(),
+                    offset: message
+                        .offset
+                        .clone()
+                        .ok_or(Error::Transformer("Message offset is missing".to_string()))?,
                     headers: message.headers.clone(),
                 },
             );
@@ -100,7 +121,7 @@ impl SourceTransformer {
                         Ok(()) => continue,
                         Err(e) => {
                             token.cancel();
-                            return Err(Error::TransformerError(e.to_string()));
+                            return Err(Error::Transformer(e.to_string()));
                         }
                     };
                 }
@@ -128,15 +149,15 @@ impl SourceTransformer {
                 }
                 Err(e) => {
                     token.cancel();
-                    return Err(Error::TransformerError(format!(
+                    return Err(Error::Transformer(format!(
                         "gRPC error while receiving messages from source transformer server: {e:?}"
                     )));
                 }
             };
 
-            let Some((msg_id, msg_info)) = tracker.remove_entry(&resp.id) else {
+            let Some((_, msg_info)) = tracker.remove_entry(&resp.id) else {
                 token.cancel();
-                return Err(Error::TransformerError(format!(
+                return Err(Error::Transformer(format!(
                     "Received message with unknown ID {}",
                     resp.id
                 )));
@@ -148,10 +169,14 @@ impl SourceTransformer {
                     continue;
                 }
                 let message = Message {
-                    id: format!("{}-{}", msg_id, i),
+                    id: MessageID {
+                        vertex_name: get_vertex_name().to_string(),
+                        index: i as i32,
+                        offset: msg_info.offset.to_string(),
+                    },
                     keys: result.keys,
-                    value: result.value,
-                    offset: msg_info.offset.clone(),
+                    value: result.value.into(),
+                    offset: None,
                     event_time: utc_from_timestamp(result.event_time),
                     headers: msg_info.headers.clone(),
                 };
@@ -160,7 +185,7 @@ impl SourceTransformer {
         }
 
         sender_task.await.unwrap().map_err(|e| {
-            Error::TransformerError(format!(
+            Error::Transformer(format!(
                 "Sending messages to gRPC transformer failed: {e:?}",
             ))
         })?;
@@ -169,16 +194,54 @@ impl SourceTransformer {
     }
 }
 
+enum ActorMessage {
+    Transform {
+        messages: Vec<Message>,
+        respond_to: oneshot::Sender<Result<Vec<Message>>>,
+    },
+}
+
+#[derive(Clone)]
+pub(crate) struct SourceTransformHandle {
+    sender: mpsc::Sender<ActorMessage>,
+}
+
+impl SourceTransformHandle {
+    pub(crate) async fn new(client: SourceTransformClient<Channel>) -> Result<Self> {
+        let batch_size = 500;
+        let (sender, receiver) = mpsc::channel(batch_size);
+        let mut client = SourceTransformer::new(batch_size, client, receiver).await?;
+        tokio::spawn(async move {
+            while let Some(msg) = client.actor_messages.recv().await {
+                client.handle_message(msg).await;
+            }
+        });
+        Ok(Self { sender })
+    }
+
+    pub(crate) async fn transform(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
+        let (sender, receiver) = oneshot::channel();
+        let msg = ActorMessage::Transform {
+            messages,
+            respond_to: sender,
+        };
+        let _ = self.sender.send(msg).await;
+        receiver.await.unwrap()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::error::Error;
     use std::time::Duration;
 
-    use crate::shared::utils::create_rpc_channel;
-    use crate::transformer::user_defined::sourcetransform_pb::source_transform_client::SourceTransformClient;
-    use crate::transformer::user_defined::SourceTransformer;
     use numaflow::sourcetransform;
+    use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
     use tempfile::TempDir;
+
+    use crate::message::{MessageID, StringOffset};
+    use crate::shared::utils::create_rpc_channel;
+    use crate::transformer::user_defined::SourceTransformHandle;
 
     struct NowCat;
 
@@ -214,9 +277,9 @@ mod tests {
         });
 
         // wait for the server to start
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let mut client = SourceTransformer::new(SourceTransformClient::new(
+        let client = SourceTransformHandle::new(SourceTransformClient::new(
             create_rpc_channel(sock_file).await?,
         ))
         .await?;
@@ -224,20 +287,21 @@ mod tests {
         let message = crate::message::Message {
             keys: vec!["first".into()],
             value: "hello".into(),
-            offset: crate::message::Offset {
-                partition_id: 0,
-                offset: "0".into(),
-            },
+            offset: Some(crate::message::Offset::String(StringOffset::new(
+                "0".to_string(),
+                0,
+            ))),
             event_time: chrono::Utc::now(),
-            id: "1".to_string(),
+            id: MessageID {
+                vertex_name: "vertex_name".to_string(),
+                offset: "0".to_string(),
+                index: 0,
+            },
             headers: Default::default(),
         };
 
-        let resp = tokio::time::timeout(
-            tokio::time::Duration::from_secs(2),
-            client.transform_fn(vec![message]),
-        )
-        .await??;
+        let resp =
+            tokio::time::timeout(Duration::from_secs(2), client.transform(vec![message])).await??;
         assert_eq!(resp.len(), 1);
 
         // we need to drop the client, because if there are any in-flight requests
@@ -289,9 +353,9 @@ mod tests {
         });
 
         // wait for the server to start
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let mut client = SourceTransformer::new(SourceTransformClient::new(
+        let client = SourceTransformHandle::new(SourceTransformClient::new(
             create_rpc_channel(sock_file).await?,
         ))
         .await?;
@@ -299,16 +363,20 @@ mod tests {
         let message = crate::message::Message {
             keys: vec!["second".into()],
             value: "hello".into(),
-            offset: crate::message::Offset {
-                partition_id: 0,
-                offset: "0".into(),
-            },
+            offset: Some(crate::message::Offset::String(StringOffset::new(
+                "0".to_string(),
+                0,
+            ))),
             event_time: chrono::Utc::now(),
-            id: "".to_string(),
+            id: MessageID {
+                vertex_name: "vertex_name".to_string(),
+                offset: "0".to_string(),
+                index: 0,
+            },
             headers: Default::default(),
         };
 
-        let resp = client.transform_fn(vec![message]).await?;
+        let resp = client.transform(vec![message]).await?;
         assert!(resp.is_empty());
 
         // we need to drop the client, because if there are any in-flight requests

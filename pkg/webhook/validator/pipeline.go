@@ -26,7 +26,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
-	pipelinecontroller "github.com/numaproj/numaflow/pkg/reconciler/pipeline"
+	"github.com/numaproj/numaflow/pkg/reconciler/validator"
 )
 
 type pipelineValidator struct {
@@ -45,7 +45,7 @@ func NewPipelineValidator(isbClient v1alpha1.InterStepBufferServiceInterface, ol
 }
 
 func (v *pipelineValidator) ValidateCreate(ctx context.Context) *admissionv1.AdmissionResponse {
-	if err := pipelinecontroller.ValidatePipeline(v.newPipeline); err != nil {
+	if err := validator.ValidatePipeline(v.newPipeline); err != nil {
 		return DeniedResponse(err.Error())
 	}
 	// check that the ISB service exists
@@ -55,7 +55,7 @@ func (v *pipelineValidator) ValidateCreate(ctx context.Context) *admissionv1.Adm
 	} else {
 		isbName = dfv1.DefaultISBSvcName
 	}
-	if err := v.checkISBSVCExists(ctx, isbName); err != nil {
+	if err := v.validateISBSvc(ctx, isbName); err != nil {
 		return DeniedResponse(err.Error())
 	}
 	return AllowedResponse()
@@ -66,7 +66,7 @@ func (v *pipelineValidator) ValidateUpdate(_ context.Context) *admissionv1.Admis
 		return DeniedResponse("old pipeline spec is nil")
 	}
 	// check that the new pipeline spec is valid
-	if err := pipelinecontroller.ValidatePipeline(v.newPipeline); err != nil {
+	if err := validator.ValidatePipeline(v.newPipeline); err != nil {
 		return DeniedResponse(fmt.Sprintf("new pipeline spec is invalid: %s", err.Error()))
 	}
 	// check that the update is valid
@@ -76,11 +76,15 @@ func (v *pipelineValidator) ValidateUpdate(_ context.Context) *admissionv1.Admis
 	return AllowedResponse()
 }
 
-// checkISBSVCExists checks that the ISB service exists in the given namespace and is valid
-func (v *pipelineValidator) checkISBSVCExists(ctx context.Context, isbSvcName string) error {
+// validateISBSvc checks that the ISB service exists in the given namespace and is valid
+func (v *pipelineValidator) validateISBSvc(ctx context.Context, isbSvcName string) error {
 	isb, err := v.isbClient.Get(ctx, isbSvcName, metav1.GetOptions{})
 	if err != nil {
 		return err
+	}
+	// Check if they have the same instance annotation
+	if v.newPipeline.GetAnnotations()[dfv1.KeyInstance] != isb.GetAnnotations()[dfv1.KeyInstance] {
+		return fmt.Errorf("ISB service %q does not have the same annotation %q as the pipeline", isbSvcName, dfv1.KeyInstance)
 	}
 	if !isb.Status.IsHealthy() {
 		return fmt.Errorf("ISB service %q is not healthy", isbSvcName)
@@ -94,7 +98,11 @@ func validatePipelineUpdate(old, new *dfv1.Pipeline) error {
 	if new.Spec.InterStepBufferServiceName != old.Spec.InterStepBufferServiceName {
 		return fmt.Errorf("cannot update pipeline with different ISB service name")
 	}
-	// rule 2: if a vertex is updated, the update must be valid
+	// rule 2: the instance annotation shall not change
+	if new.GetAnnotations()[dfv1.KeyInstance] != old.GetAnnotations()[dfv1.KeyInstance] {
+		return fmt.Errorf("cannot update pipeline with different annotation %q", dfv1.KeyInstance)
+	}
+	// rule 3: if a vertex is updated, the update must be valid
 	// we consider that a vertex is updated if its name is the same but its spec is different
 	nameMap := make(map[string]dfv1.AbstractVertex)
 	for _, v := range old.Spec.Vertices {

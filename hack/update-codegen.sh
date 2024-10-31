@@ -8,28 +8,44 @@ source $(dirname $0)/library.sh
 header "running codegen"
 
 ensure_vendor
-make_fake_paths
 
-export GOPATH="${FAKE_GOPATH}"
-export GO111MODULE="off"
+CODEGEN_PKG=${CODEGEN_PKG:-$(cd "${REPO_ROOT}"; ls -d -1 ./vendor/k8s.io/code-generator 2>/dev/null || echo ../code-generator)}
 
-cd "${FAKE_REPOPATH}"
+source "${CODEGEN_PKG}/kube_codegen.sh"
 
-CODEGEN_PKG=${CODEGEN_PKG:-$(cd "${FAKE_REPOPATH}"; ls -d -1 ./vendor/k8s.io/code-generator 2>/dev/null || echo ../code-generator)}
+THIS_PKG="github.com/numaproj/numaflow"
 
-chmod +x ${CODEGEN_PKG}/*.sh
+subheader "running deepcopy gen"
 
-subheader "running codegen"
-bash -x ${CODEGEN_PKG}/generate-groups.sh "deepcopy" \
-  github.com/numaproj/numaflow/pkg/client github.com/numaproj/numaflow/pkg/apis \
-  "numaflow:v1alpha1" \
-  --go-header-file hack/boilerplate/boilerplate.go.txt
+kube::codegen::gen_helpers \
+    --boilerplate "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
+    "${REPO_ROOT}/pkg/apis"
 
-bash -x ${CODEGEN_PKG}/generate-groups.sh "client,informer,lister" \
-  github.com/numaproj/numaflow/pkg/client github.com/numaproj/numaflow/pkg/apis \
-  "numaflow:v1alpha1" \
-  --plural-exceptions="Vertex:Vertices,MonoVertex:MonoVertices" \
-  --go-header-file hack/boilerplate/boilerplate.go.txt
+subheader "running clients gen"
+
+kube::codegen::gen_client \
+    --with-watch \
+    --output-dir "${REPO_ROOT}/pkg/client" \
+    --output-pkg "${THIS_PKG}/pkg/client" \
+    --boilerplate "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
+    --plural-exceptions "Vertex:Vertices,MonoVertex:MonoVertices" \
+    --one-input-api "numaflow/v1alpha1" \
+    "${REPO_ROOT}/pkg/apis"
+
+#
+# Do not use following scripts for openapi generation, because it also 
+# generates apimachinery APIs, which makes trouble for swagger gen.
+#
+#subheader "running openapi gen"
+
+#kube::codegen::gen_openapi \
+#    --output-dir "${REPO_ROOT}/pkg/apis/numaflow/v1alpha1" \
+#    --output-pkg "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1" \
+#    --report-filename "/dev/null" \
+#    --update-report \
+#    --boilerplate "${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt" \
+#    "${REPO_ROOT}/pkg/apis"
+#
 
 # gofmt the tree
 subheader "running gofmt"

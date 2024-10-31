@@ -237,9 +237,8 @@ impl MessageGraph {
 
 #[cfg(test)]
 mod tests {
-    use crate::pipeline::{Conditions, Tag, Vertex};
-
     use super::*;
+    use crate::pipeline::{Conditions, Tag, Vertex};
 
     #[test]
     fn test_no_subgraph() {

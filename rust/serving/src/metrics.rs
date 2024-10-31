@@ -1,4 +1,7 @@
-use crate::Error::MetricsServer;
+use std::net::SocketAddr;
+use std::sync::OnceLock;
+use std::time::Instant;
+
 use axum::body::Body;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -15,10 +18,9 @@ use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
 use prometheus_client::registry::Registry;
-use std::net::SocketAddr;
-use std::sync::OnceLock;
-use std::time::Instant;
 use tracing::debug;
+
+use crate::Error::MetricsServer;
 
 // Define the labels for the metrics
 pub const SERVING_METHOD_LABEL: &str = "method";
@@ -158,13 +160,14 @@ mod tests {
     use std::net::SocketAddr;
     use std::time::Duration;
 
-    use super::*;
-    use crate::config::cert_key_pair;
     use axum::body::Body;
     use axum::http::{HeaderMap, StatusCode};
     use axum::middleware;
     use tokio::time::sleep;
     use tower::ServiceExt;
+
+    use super::*;
+    use crate::config::cert_key_pair;
 
     #[tokio::test]
     async fn test_start_metrics_server() {

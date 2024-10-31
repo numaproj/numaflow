@@ -72,12 +72,12 @@ Using K8s CronJob/Job will be a [challenge](https://github.com/istio/istio/issue
 
 When Side Inputs is enabled for a pipeline, each of its vertex pods will have a second init container added,
 the init container will have a shared volume (emptyDir) mounted,
-and the same volume will be mounted to the User-defined Function/Sink/Transformer container.
+and the same volume will be mounted to the User-defined Function/Source/Sink/Transformer container.
 The init container reads from the data store, and saves to the shared volume.
 
 A sidecar container will also be injected by the controller, and it mounts the same volume as above. The sidecar runs a service provided by numaflow, watching the Side Inputs data from the data store, if there’s any update, reads the data and updates the shared volume.
 
-In the User-defined Function/Sink/Sink container, a helper function will be provided by Numaflow SDK, to return the Side Input data. The helper function caches the Side Inputs data in the memory, but performs thread safe updates if it watches the changes in the shared volume.
+In the User-defined Function/Source/Sink/Transformer container, a helper function will be provided by Numaflow SDK, to return the Side Input data. The helper function caches the Side Inputs data in the memory, but performs thread safe updates if it watches the changes in the shared volume.
 
 ### Numaflow SDK
 

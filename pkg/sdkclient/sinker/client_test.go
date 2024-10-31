@@ -70,6 +70,11 @@ func TestClient_SinkFn(t *testing.T) {
 			Status: sinkpb.Status_SUCCESS,
 		},
 	}, nil)
+	mockSinkClient.EXPECT().Recv().Return(&sinkpb.SinkResponse{
+		Status: &sinkpb.TransmissionStatus{
+			Eot: true,
+		},
+	}, nil)
 
 	mockClient := sinkmock.NewMockSinkClient(ctrl)
 	mockClient.EXPECT().SinkFn(gomock.Any(), gomock.Any()).Return(mockSinkClient, nil)
