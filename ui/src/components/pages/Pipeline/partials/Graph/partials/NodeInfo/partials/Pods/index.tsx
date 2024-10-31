@@ -65,6 +65,7 @@ export function Pods(props: PodsProps) {
   const [podSpecificInfo, setPodSpecificInfo] = useState<
     PodSpecificInfoProps | undefined
   >(undefined);
+  const [requestKey, setRequestKey] = useState(`${Date.now()}`);
 
   const getContainerInfo = useCallback((podsData, podName, containerName) => {
     const selectedPod = podsData?.find((pod) => pod?.name === podName);
@@ -103,7 +104,7 @@ export function Pods(props: PodsProps) {
             type === "monoVertex"
               ? `/mono-vertices`
               : `/pipelines/${pipelineId}/vertices`
-          }/${vertexId}/pods`
+          }/${vertexId}/pods?refreshKey=${requestKey}`
         );
         if (!response.ok) {
           throw new Error("Failed to fetch pod details");
@@ -137,11 +138,22 @@ export function Pods(props: PodsProps) {
     vertexId,
     getContainerInfo,
     getPodSpecificInfo,
+    requestKey,
     selectedPod,
     selectedContainer,
     setPodSpecificInfo,
     setContainerInfo,
   ]);
+
+  useEffect(() => {
+    // Refresh pod details every 30 sec
+    const interval = setInterval(() => {
+      setRequestKey(`${Date.now()}`);
+    }, 30000);
+    return () => {
+      clearInterval(interval);
+    };
+  }, []);
 
   // This useEffect notifies about the errors while querying for the pods of the vertex
   useEffect(() => {

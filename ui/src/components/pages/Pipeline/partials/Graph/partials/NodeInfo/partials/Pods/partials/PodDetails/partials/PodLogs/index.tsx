@@ -99,6 +99,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
   useEffect(() => {
     // reset logs in memory on any log source change
     setLogs([]);
+    setPreviousLogs([]);
     // and start logs again if paused
     setPaused(false);
   }, [namespaceId, podName, containerName]);
