@@ -146,6 +146,7 @@ const FiltersDropdown = ({
     );
     const key = filterName.split(":")[0];
     setFilters((prev: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [key]: _, ...rest } = prev;
       return rest;
     });
