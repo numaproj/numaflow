@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: numaflow-server-metrics-proxy-config
+data:
+  config.yaml: |
+    # url is a required field, it should be the url of the service to which the metrics proxy will connect
+    # url: service_name + "." + service_namespace + ".svc.cluster.local" + ":" + port
+    # example for local prometheus service
+    url: http://prometheus-operated.monitoring.svc.cluster.local:9090
+    patterns:
+    - name: mono_vertex_histogram
+      object: mono-vertex
+      title: Processing Time Latency
+      description: This query pattern is for P99,P90 and P50 quantiles for a mono-vertex across different dimensions
+      expr: |
+        histogram_quantile($quantile, sum by($dimension,le) (rate($metric_name{$filters}[$duration])))
+      params:
+        - name: quantile
+          required: true
+        - name: duration
+          required: true
+        - name: start_time
+          required: false
+        - name: end_time
+          required: false
+      metrics:
+        - metric_name: monovtx_processing_time_bucket
+          required_filters:
+            - namespace
+            - mvtx_name
+          dimensions:
+            - name: pod
+              # expr: optional expression for prometheus query
+              # overrides the default expression
+              filters:
+                - name: pod
+                  required: false
+            - name: mono-vertex
+              # expr: optional expression for prometheus query
+              # overrides the default expression
+        # Add histogram metrics similar to the pattern above
+        #- metric_name: monovtx_sink_time_bucket
+        #  required_filters:
+        #    - namespace
+        #    - mvtx_name
+        #  dimensions:
+        #    - name: pod
+        #      #expr: optional
+        #      filters:
+        #        - name: pod
+        #          required: false
+        #    - name: mono-vertex
+        #      #expr: optional

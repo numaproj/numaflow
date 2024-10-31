@@ -28142,7 +28142,6 @@ apiVersion: v1
 data:
   namespaced: "true"
   server.disable.auth: "true"
-  server.disable.metrics.charts: "false"
 kind: ConfigMap
 metadata:
   name: numaflow-cmd-params-config
@@ -28329,8 +28328,18 @@ metadata:
 ---
 apiVersion: v1
 data:
+  admin.enabled: "true"
+kind: ConfigMap
+metadata:
+  name: numaflow-server-local-user-config
+---
+apiVersion: v1
+data:
   config.yaml: |
-    url: http://my-release-kube-prometheus-prometheus.default.svc.cluster.local:9090
+    # url is a required field, it should be the url of the service to which the metrics proxy will connect
+    # url: service_name + "." + service_namespace + ".svc.cluster.local" + ":" + port
+    # example for local prometheus service
+    url: http://prometheus-operated.monitoring.svc.cluster.local:9090
     patterns:
     - name: mono_vertex_histogram
       object: mono-vertex
@@ -28354,34 +28363,30 @@ data:
             - mvtx_name
           dimensions:
             - name: pod
-              #expr: optional
+              # expr: optional expression for prometheus query
+              # overrides the default expression
               filters:
                 - name: pod
                   required: false
             - name: mono-vertex
-              #expr: optional
-        - metric_name: monovtx_sink_time_bucket
-          required_filters:
-            - namespace
-            - mvtx_name
-          dimensions:
-            - name: pod
-              #expr: optional
-              filters:
-                - name: pod
-                  required: false
-            - name: mono-vertex
-              #expr: optional
+              # expr: optional expression for prometheus query
+              # overrides the default expression
+        # Add histogram metrics similar to the pattern above
+        #- metric_name: monovtx_sink_time_bucket
+        #  required_filters:
+        #    - namespace
+        #    - mvtx_name
+        #  dimensions:
+        #    - name: pod
+        #      #expr: optional
+        #      filters:
+        #        - name: pod
+        #          required: false
+        #    - name: mono-vertex
+        #      #expr: optional
 kind: ConfigMap
 metadata:
-  name: numaflow-metrics-proxy-config
----
-apiVersion: v1
-data:
-  admin.enabled: "true"
-kind: ConfigMap
-metadata:
-  name: numaflow-server-local-user-config
+  name: numaflow-server-metrics-proxy-config
 ---
 apiVersion: v1
 data:
@@ -28802,5 +28807,5 @@ spec:
           name: numaflow-server-rbac-config
         name: rbac-config
       - configMap:
-          name: numaflow-metrics-proxy-config
+          name: numaflow-server-metrics-proxy-config
         name: metrics-proxy-config

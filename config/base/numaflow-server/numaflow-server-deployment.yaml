@@ -28,7 +28,7 @@ spec:
           name: numaflow-server-rbac-config
       - name: metrics-proxy-config
         configMap:
-          name: numaflow-metrics-proxy-config
+          name: numaflow-server-metrics-proxy-config
       initContainers:
       - name: server-init
         image: quay.io/numaproj/numaflow:latest
