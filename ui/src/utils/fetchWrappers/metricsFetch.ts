@@ -35,7 +35,7 @@ export const useMetricsFetch = ({
           setChartData(null);
           setError(data?.errMsg);
         } else {
-          setChartData(data?.data?.map((item: any) => item.values));
+          setChartData(data?.data);
           setError(null);
         }
       } catch (e) {

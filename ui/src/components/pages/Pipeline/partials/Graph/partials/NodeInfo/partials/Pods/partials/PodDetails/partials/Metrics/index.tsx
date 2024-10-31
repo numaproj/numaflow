@@ -77,7 +77,9 @@ export function Metrics({ namespaceId, pipelineId, type }: MetricsProps) {
               aria-controls={`${metric?.metric_name}-content`}
               id={`${metric?.metric_name}-header`}
             >
-              {metricNameMap[metric?.metric_name]}
+              <Box sx={{ textTransform: "capitalize" }}>
+                {metricNameMap[metric?.metric_name] || metric?.metric_name}
+              </Box>
             </AccordionSummary>
             <AccordionDetails>
               {expanded?.has(panelId) && (

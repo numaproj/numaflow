@@ -20,6 +20,7 @@ import { useMetricsFetch } from "../../../../../../../../../../../../../../../ut
 // TODO have a check for metricReq against metric object to ensure required fields are passed
 const LineChartComponent = ({ namespaceId, pipelineId, type, metric }: any) => {
   const [transformedData, setTransformedData] = useState<any[]>([]);
+  const [chartLabels, setChartLabels] = useState<any[]>([]);
   const [metricsReq, setMetricsReq] = useState<any>({
     metric_name: metric?.metric_name,
   });
@@ -104,27 +105,49 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric }: any) => {
     filters,
   });
 
+  const groupByLabel = useCallback((dimension: string) => {
+    switch (dimension) {
+      case "mono-vertex":
+        return "mvtx_name";
+      default:
+        return dimension;
+    }
+  }, []);
+
   const updateChartData = useCallback(() => {
     if (chartData) {
-      const transformedData = chartData[0]?.map(([timestamp]: [number]) => {
-        const date = new Date(timestamp * 1000);
-        const hours = date.getHours().toString().padStart(2, "0");
-        const minutes = date.getMinutes().toString().padStart(2, "0");
-        const formattedTime = `${hours}:${minutes}`;
-
-        const dataObject: Record<string, any> = { time: formattedTime };
-
-        chartData.forEach((dataset, index) => {
-          const value = dataset.find(([ts]: [number]) => ts === timestamp)?.[1];
-          dataObject[`${metricsReq?.dimension}-${index}`] = parseFloat(value);
+      const labels: any[] = [];
+      const transformedData: any[] = [];
+      const label = groupByLabel(metricsReq?.dimension);
+      chartData?.forEach((item) => {
+        const labelVal = item?.metric?.[label];
+        labels.push(labelVal);
+        item?.values?.forEach(([timestamp, value]: [number, string]) => {
+          const date = new Date(timestamp * 1000);
+          const hours = date.getHours().toString().padStart(2, "0");
+          const minutes = date.getMinutes().toString().padStart(2, "0");
+          const formattedTime = `${hours}:${minutes}`;
+          const ele = transformedData?.find(
+            (data) => data?.time === formattedTime
+          );
+          if (!ele) {
+            const dataObject: Record<string, any> = { time: formattedTime };
+            dataObject[labelVal] = parseFloat(value);
+            transformedData.push(dataObject);
+          } else {
+            ele[labelVal] = parseFloat(value);
+          }
         });
-
-        return dataObject;
       });
-
+      transformedData.sort((a, b) => {
+        const [hoursA, minutesA] = a.time.split(":").map(Number);
+        const [hoursB, minutesB] = b.time.split(":").map(Number);
+        return hoursA * 60 + minutesA - (hoursB * 60 + minutesB);
+      });
+      setChartLabels(labels);
       setTransformedData(transformedData);
     }
-  }, [chartData, metricsReq]);
+  }, [chartData, metricsReq, groupByLabel]);
 
   useEffect(() => {
     if (chartData) updateChartData();
@@ -213,16 +236,24 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric }: any) => {
 
       {!isLoading && !error && transformedData?.length > 0 && (
         <ResponsiveContainer width="100%" height={400}>
-          <LineChart data={transformedData}>
+          <LineChart
+            data={transformedData}
+            margin={{
+              top: 5,
+              right: 30,
+              left: 30,
+              bottom: 5,
+            }}
+          >
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="time" padding={{ left: 30, right: 30 }} />
             <YAxis />
             <CartesianGrid stroke="#f5f5f5" />
-            {chartData?.map((_, index) => (
+            {chartLabels?.map((value, index) => (
               <Line
-                key={`${index}-line-chart`}
+                key={`${value}-line-chart`}
                 type="monotone"
-                dataKey={`${metricsReq?.dimension}-${index}`}
+                dataKey={`${value}`}
                 stroke={getRandomColor(index)}
                 activeDot={{ r: 8 }}
               />
