@@ -179,8 +179,8 @@ pub mod ack_request {
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Request {
         /// Required field holding the offset to be acked
-        #[prost(message, optional, tag = "1")]
-        pub offset: ::core::option::Option<super::Offset>,
+        #[prost(message, repeated, tag = "1")]
+        pub offsets: ::prost::alloc::vec::Vec<super::Offset>,
     }
 }
 ///

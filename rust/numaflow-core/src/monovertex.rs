@@ -300,7 +300,7 @@ mod tests {
     impl source::Sourcer for SimpleSource {
         async fn read(&self, _: SourceReadRequest, _: Sender<Message>) {}
 
-        async fn ack(&self, _: Offset) {}
+        async fn ack(&self, _: Vec<Offset>) {}
 
         async fn pending(&self) -> usize {
             0
