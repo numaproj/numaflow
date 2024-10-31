@@ -125,10 +125,7 @@ export function Pods(props: PodsProps) {
         setContainerInfo({ error: "Failed to fetch pod details" });
       }
     };
-    // for now only monoVertex type is supported for metrics
-    if (type === "monoVertex") {
-      fetchPodInfo();
-    }
+    fetchPodInfo();
   }, [
     namespaceId,
     host,
