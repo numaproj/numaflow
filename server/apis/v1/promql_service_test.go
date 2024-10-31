@@ -231,7 +231,7 @@ func Test_QueryPrometheus(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected an error, got nil")
 		}
-		expectedError := "prometheus client is nil"
+		expectedError := "prometheus client is not defined"
 		if err.Error() != expectedError {
 			t.Errorf("expected error %v, got %v", expectedError, err)
 		}
