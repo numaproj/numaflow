@@ -167,17 +167,21 @@ func (c *client) SinkFn(ctx context.Context, requests []*sinkpb.SinkRequest) ([]
 
 	// Wait for the corresponding responses
 	var responses []*sinkpb.SinkResponse
-	for i := 0; i < len(requests)+1; i++ {
+	responsesCount := 0
+	for {
 		resp, err := c.sinkStream.Recv()
 		if err != nil {
 			return nil, fmt.Errorf("failed to receive sink response: %v", err)
 		}
 		if resp.GetStatus() != nil && resp.GetStatus().GetEot() {
-			if i != len(requests) {
-				c.log.Errorw("Received EOT message before all responses are received, we will wait indefinitely for the remaining responses", zap.Int("received", i), zap.Int("expected", len(requests)))
+			if responsesCount != len(requests) {
+				c.log.Errorw("Received EOT message before all responses are received, we will wait indefinitely for the remaining responses", zap.Int("received", responsesCount), zap.Int("expected", len(requests)))
+			} else {
+				break
 			}
 			continue
 		}
+		responsesCount += len(resp.GetResults())
 		responses = append(responses, resp)
 	}
 

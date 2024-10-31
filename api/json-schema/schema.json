@@ -20899,6 +20899,9 @@
         "consumerGroup": {
           "type": "string"
         },
+        "kafkaVersion": {
+          "type": "string"
+        },
         "sasl": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASL",
           "description": "SASL user to configure SASL connection for kafka broker SASL.enable=true default for SASL."
@@ -22890,6 +22893,9 @@
           },
           "type": "array"
         },
+        "executeRustBinary": {
+          "type": "boolean"
+        },
         "image": {
           "type": "string"
         },
@@ -22915,7 +22921,8 @@
         "imagePullPolicy",
         "image",
         "volumeMounts",
-        "resources"
+        "resources",
+        "executeRustBinary"
       ],
       "type": "object"
     }

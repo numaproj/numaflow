@@ -68,7 +68,7 @@ mod stream_generator {
 
     impl StreamGenerator {
         pub(super) fn new(cfg: GeneratorConfig, batch_size: usize) -> Self {
-            let mut tick = tokio::time::interval(Duration::from_millis(cfg.duration as u64));
+            let mut tick = tokio::time::interval(cfg.duration);
             tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
             let mut rpu = cfg.rpu;
@@ -169,7 +169,7 @@ mod stream_generator {
 
             Message {
                 keys: self.next_key_to_be_fetched(),
-                value: data,
+                value: data.into(),
                 offset: Some(offset.clone()),
                 event_time,
                 id: MessageID {
@@ -251,7 +251,7 @@ mod stream_generator {
                 content: content.clone(),
                 rpu,
                 jitter: Duration::from_millis(0),
-                duration: 100,
+                duration: Duration::from_millis(100),
                 ..Default::default()
             };
 
@@ -407,7 +407,7 @@ mod tests {
             content: content.clone(),
             rpu,
             jitter: Duration::from_millis(0),
-            duration: 100,
+            duration: Duration::from_millis(100),
             ..Default::default()
         };
 
@@ -437,7 +437,7 @@ mod tests {
             content: Bytes::new(),
             rpu,
             jitter: Duration::from_millis(0),
-            duration: 100,
+            duration: Duration::from_millis(100),
             key_count: 3,
             msg_size_bytes: 100,
             ..Default::default()

@@ -24,6 +24,8 @@ pub struct KafkaSource {
     pub config: Option<String>,
     #[serde(rename = "consumerGroup", skip_serializing_if = "Option::is_none")]
     pub consumer_group: Option<String>,
+    #[serde(rename = "kafkaVersion", skip_serializing_if = "Option::is_none")]
+    pub kafka_version: Option<String>,
     #[serde(rename = "sasl", skip_serializing_if = "Option::is_none")]
     pub sasl: Option<Box<crate::models::Sasl>>,
     #[serde(rename = "tls", skip_serializing_if = "Option::is_none")]
@@ -38,6 +40,7 @@ impl KafkaSource {
             brokers: None,
             config: None,
             consumer_group: None,
+            kafka_version: None,
             sasl: None,
             tls: None,
             topic,

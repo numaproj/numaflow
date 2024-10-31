@@ -10,8 +10,8 @@ use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
 use crate::config::monovertex::MonovertexConfig;
 use crate::error;
 use crate::message::{Message, Offset, ResponseStatusFromSink};
-use crate::monovertex::metrics;
-use crate::monovertex::metrics::forward_metrics;
+use crate::metrics;
+use crate::metrics::forward_mvtx_metrics;
 use crate::sink::SinkHandle;
 use crate::Error;
 use crate::{source::SourceHandle, transformer::user_defined::SourceTransformHandle};
@@ -117,7 +117,7 @@ impl Forwarder {
                 last_forwarded_at = std::time::Instant::now();
             }
 
-            forward_metrics()
+            forward_mvtx_metrics()
                 .e2e_time
                 .get_or_create(&self.common_labels)
                 .observe(start_time.elapsed().as_micros() as f64);
@@ -140,7 +140,7 @@ impl Forwarder {
             start_time.elapsed().as_millis()
         );
 
-        forward_metrics()
+        forward_mvtx_metrics()
             .read_time
             .get_or_create(&self.common_labels)
             .observe(start_time.elapsed().as_micros() as f64);
@@ -151,7 +151,7 @@ impl Forwarder {
         }
 
         let msg_count = messages.len() as u64;
-        forward_metrics()
+        forward_mvtx_metrics()
             .read_total
             .get_or_create(&self.common_labels)
             .inc_by(msg_count);
@@ -169,7 +169,7 @@ impl Forwarder {
             },
         )?;
 
-        forward_metrics()
+        forward_mvtx_metrics()
             .read_bytes_total
             .get_or_create(&self.common_labels)
             .inc_by(bytes_count);
@@ -213,7 +213,7 @@ impl Forwarder {
             "Transformer latency - {}ms",
             start_time.elapsed().as_millis()
         );
-        forward_metrics()
+        forward_mvtx_metrics()
             .transformer
             .time
             .get_or_create(&self.common_labels)
@@ -306,7 +306,7 @@ impl Forwarder {
                 .await?;
         }
 
-        forward_metrics()
+        forward_mvtx_metrics()
             .sink
             .time
             .get_or_create(&self.common_labels)
@@ -314,7 +314,7 @@ impl Forwarder {
 
         // update the metric for number of messages written to the sink
         // this included primary and fallback sink
-        forward_metrics()
+        forward_mvtx_metrics()
             .sink
             .write_total
             .get_or_create(&self.common_labels)
@@ -355,7 +355,7 @@ impl Forwarder {
                     attempts, error_map
                 );
                 // update the metrics
-                forward_metrics()
+                forward_mvtx_metrics()
                     .dropped_total
                     .get_or_create(&self.common_labels)
                     .inc_by(messages_to_send.len() as u64);
@@ -532,7 +532,7 @@ impl Forwarder {
             )));
         }
         // increment the metric for the fallback sink write
-        forward_metrics()
+        forward_mvtx_metrics()
             .fb_sink
             .write_total
             .get_or_create(&self.common_labels)
@@ -549,12 +549,12 @@ impl Forwarder {
 
         debug!("Ack latency - {}ms", start_time.elapsed().as_millis());
 
-        forward_metrics()
+        forward_mvtx_metrics()
             .ack_time
             .get_or_create(&self.common_labels)
             .observe(start_time.elapsed().as_micros() as f64);
 
-        forward_metrics()
+        forward_mvtx_metrics()
             .ack_total
             .get_or_create(&self.common_labels)
             .inc_by(n as u64);
@@ -565,6 +565,7 @@ impl Forwarder {
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+    use std::time::Duration;
 
     use chrono::Utc;
     use numaflow::source::{Message, Offset, SourceReadRequest};
@@ -577,11 +578,11 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use crate::monovertex::forwarder::ForwarderBuilder;
-    use crate::monovertex::SourceType;
     use crate::shared::utils::create_rpc_channel;
     use crate::sink::{SinkClientType, SinkHandle};
     use crate::source::user_defined::new_source;
     use crate::source::SourceHandle;
+    use crate::source::SourceType;
     use crate::transformer::user_defined::SourceTransformHandle;
 
     struct SimpleSource {
@@ -624,11 +625,13 @@ mod tests {
                 .extend(message_offsets)
         }
 
-        async fn ack(&self, offset: Offset) {
-            self.yet_to_be_acked
-                .write()
-                .unwrap()
-                .remove(&String::from_utf8(offset.offset).unwrap());
+        async fn ack(&self, offsets: Vec<Offset>) {
+            for offset in offsets {
+                self.yet_to_be_acked
+                    .write()
+                    .unwrap()
+                    .remove(&String::from_utf8(offset.offset).unwrap());
+            }
         }
 
         async fn pending(&self) -> usize {
@@ -767,7 +770,7 @@ mod tests {
         let (source_read, source_ack, source_lag_reader) = new_source(
             SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap()),
             batch_size,
-            timeout_in_ms,
+            Duration::from_millis(timeout_in_ms),
         )
         .await
         .expect("failed to connect to source server");
@@ -904,7 +907,7 @@ mod tests {
         let (source_read, source_ack, lag_reader) = new_source(
             SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap()),
             batch_size,
-            timeout_in_ms,
+            Duration::from_millis(timeout_in_ms),
         )
         .await
         .expect("failed to connect to source server");
@@ -970,7 +973,6 @@ mod tests {
     #[tokio::test]
     async fn test_fb_sink() {
         let batch_size = 100;
-        let timeout_in_ms = 1000;
 
         let (sink_tx, mut sink_rx) = mpsc::channel(10);
 
@@ -1026,14 +1028,14 @@ mod tests {
         });
 
         // Wait for the servers to start
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let cln_token = CancellationToken::new();
 
         let (source_read, source_ack, source_lag_reader) = new_source(
             SourceClient::new(create_rpc_channel(source_sock_file.clone()).await.unwrap()),
             500,
-            100,
+            Duration::from_millis(100),
         )
         .await
         .expect("failed to connect to source server");

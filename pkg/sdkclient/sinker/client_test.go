@@ -65,9 +65,11 @@ func TestClient_SinkFn(t *testing.T) {
 	mockSinkClient := sinkmock.NewMockSink_SinkFnClient(ctrl)
 	mockSinkClient.EXPECT().Send(gomock.Any()).Return(nil).AnyTimes()
 	mockSinkClient.EXPECT().Recv().Return(&sinkpb.SinkResponse{
-		Result: &sinkpb.SinkResponse_Result{
-			Id:     "temp-id",
-			Status: sinkpb.Status_SUCCESS,
+		Results: []*sinkpb.SinkResponse_Result{
+			{
+				Id:     "temp-id",
+				Status: sinkpb.Status_SUCCESS,
+			},
 		},
 	}, nil)
 	mockSinkClient.EXPECT().Recv().Return(&sinkpb.SinkResponse{
@@ -94,9 +96,11 @@ func TestClient_SinkFn(t *testing.T) {
 	})
 	assert.Equal(t, []*sinkpb.SinkResponse{
 		{
-			Result: &sinkpb.SinkResponse_Result{
-				Id:     "temp-id",
-				Status: sinkpb.Status_SUCCESS,
+			Results: []*sinkpb.SinkResponse_Result{
+				{
+					Id:     "temp-id",
+					Status: sinkpb.Status_SUCCESS,
+				},
 			},
 		},
 	}, response)

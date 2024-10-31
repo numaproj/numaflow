@@ -106,24 +106,26 @@ func (u *UDSgRPCBasedUDSink) ApplySink(ctx context.Context, requests []*sinkpb.S
 		return errs
 	}
 	// Use ID to map the response messages, so that there's no strict requirement for the user-defined sink to return the response in order.
-	resMap := make(map[string]*sinkpb.SinkResponse)
+	resMap := make(map[string]*sinkpb.SinkResponse_Result)
 	for _, res := range responses {
-		resMap[res.Result.GetId()] = res
+		for _, result := range res.Results {
+			resMap[result.GetId()] = result
+		}
 	}
 	for i, m := range requests {
 		if r, existing := resMap[m.Request.GetId()]; !existing {
 			errs[i] = &NotFoundErr
 		} else {
-			if r.Result.GetStatus() == sinkpb.Status_FAILURE {
-				if r.Result.GetErrMsg() != "" {
+			if r.GetStatus() == sinkpb.Status_FAILURE {
+				if r.GetErrMsg() != "" {
 					errs[i] = &ApplyUDSinkErr{
 						UserUDSinkErr: true,
-						Message:       r.Result.GetErrMsg(),
+						Message:       r.GetErrMsg(),
 					}
 				} else {
 					errs[i] = &UnknownUDSinkErr
 				}
-			} else if r.Result.GetStatus() == sinkpb.Status_FALLBACK {
+			} else if r.GetStatus() == sinkpb.Status_FALLBACK {
 				errs[i] = &WriteToFallbackErr
 			} else {
 				errs[i] = nil

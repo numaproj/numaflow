@@ -2947,6 +2947,12 @@ func schema_pkg_apis_numaflow_v1alpha1_KafkaSource(ref common.ReferenceCallback)
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL"),
 						},
 					},
+					"kafkaVersion": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 				},
 				Required: []string{"topic"},
 			},
@@ -6638,8 +6644,15 @@ func schema_pkg_apis_numaflow_v1alpha1_getContainerReq(ref common.ReferenceCallb
 							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
 						},
 					},
+					"executeRustBinary": {
+						SchemaProps: spec.SchemaProps{
+							Default: false,
+							Type:    []string{"boolean"},
+							Format:  "",
+						},
+					},
 				},
-				Required: []string{"env", "isbSvcType", "imagePullPolicy", "image", "volumeMounts", "resources"},
+				Required: []string{"env", "isbSvcType", "imagePullPolicy", "image", "volumeMounts", "resources", "executeRustBinary"},
 			},
 		},
 		Dependencies: []string{
