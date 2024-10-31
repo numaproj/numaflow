@@ -40,7 +40,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
     *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
     esac && \
-    RUSTFLAGS='-C target-feature=+crt-static' cargo chef cook --workspace --release --target ${TARGET} --recipe-path recipe.json
+    cargo chef cook --workspace --release --target ${TARGET} --recipe-path recipe.json
 
 # Copy the actual source code files of the main project and the subprojects
 COPY ./rust/ .
@@ -53,7 +53,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
     *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
     esac && \
-    RUSTFLAGS='-C target-feature=+crt-static' cargo build --workspace --all --release --target ${TARGET} && \
+    cargo build --workspace --all --release --target ${TARGET} && \
     cp -pv target/${TARGET}/release/numaflow /root/numaflow
 
 ####################################################################################################
@@ -70,7 +70,7 @@ RUN tar -xvzf bytehound-x86_64-unknown-linux-gnu.tgz
 # numaflow
 ####################################################################################################
 ARG BASE_IMAGE
-FROM ${BASE_IMAGE} AS numaflow
+FROM ubuntu:24.04 AS numaflow
 ARG ARCH
 
 COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo

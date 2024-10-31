@@ -318,7 +318,7 @@ impl StreamingSource {
         let source_read = self.clone();
 
         // Create separate ack_tx and ack_rx for doing chunked acks
-        let (ack_tx, ack_rx) = mpsc::channel(batch_size);
+        let (ack_tx, ack_rx) = mpsc::channel(2 * batch_size);
 
         let handle = tokio::spawn(async move {
             let mut processed_msgs_count: usize = 0;
@@ -385,7 +385,7 @@ impl StreamingSource {
             let mut total_acks = 0;
             while let Some(offsets) = chunked_ack_stream.next().await {
                 total_acks += offsets.len();
-                source_ack.ack(offsets).await.unwrap();
+                source_ack.ack(offsets).await?;
 
                 if start.elapsed().as_secs() >= 1 {
                     info!(

@@ -49,7 +49,3 @@ tempfile = "3.11.0"
 numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "9fb3c0ad0f5f43cc42b4919f849b7dcce9a91387" }
 
 [build-dependencies]
-
-[profile.release]
-debug = true
-
