@@ -1,12 +1,10 @@
-apiVersion: numaflow.numaproj.io/v1alpha1
-kind: MonoVertex
 metadata:
   name: simple-mono-vertex
 spec:
   source:
     udsource:
       container:
-        image: quay.io/numaio/numaflow-java/source-simple-source:stable
+        image: quay.io/numaio/numaflow-rs/simple-source:stable
     # transformer is an optional container to do any transformation to the incoming data before passing to the sink
     transformer:
       container:
@@ -14,4 +12,4 @@ spec:
   sink:
     udsink:
       container:
-        image: quay.io/numaio/numaflow-java/simple-sink:stable
+        image: quay.io/numaio/numaflow-rs/sink-log:stable

@@ -61,8 +61,8 @@ pub struct TransmissionStatus {
 /// SinkResponse is the individual response of each message written to the sink.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SinkResponse {
-    #[prost(message, optional, tag = "1")]
-    pub result: ::core::option::Option<sink_response::Result>,
+    #[prost(message, repeated, tag = "1")]
+    pub results: ::prost::alloc::vec::Vec<sink_response::Result>,
     #[prost(message, optional, tag = "2")]
     pub handshake: ::core::option::Option<Handshake>,
     #[prost(message, optional, tag = "3")]
