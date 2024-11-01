@@ -1,6 +1,6 @@
-# Best Practices
+# User Defined Functions
 
-Few guidelines and tips to help with common use cases and FAQs
+Few guidelines and tips to help with common use cases and FAQs for UDFs
 
 ## High latency operations in UDF
 

@@ -128,7 +128,8 @@ nav:
           - operations/metrics/metrics.md
           - operations/grafana.md
       - Security: operations/security.md
-      - Best Practices: operations/best-practices.md
+      - Best Practices:
+        - UDF: "operations/best-practices/udf.md"
   - Contributor Guide:
       - development/development.md
       - Specifications:
