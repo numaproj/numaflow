@@ -39,7 +39,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	metricsversiond "k8s.io/metrics/pkg/client/clientset/versioned"
 	metricsclientv1beta1 "k8s.io/metrics/pkg/client/clientset/versioned/typed/metrics/v1beta1"
 	"k8s.io/utils/ptr"
 
@@ -118,7 +117,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	if err != nil {
 		return nil, fmt.Errorf("failed to get kubeclient, %w", err)
 	}
-	metricsClient := metricsversiond.NewForConfigOrDie(k8sRestConfig)
+	metricsClient := metricsclientv1beta1.NewForConfigOrDie(k8sRestConfig)
 	numaflowClient := dfv1versiond.NewForConfigOrDie(k8sRestConfig).NumaflowV1alpha1()
 	daemonClientsCache, _ := lru.NewWithEvict[string, daemonclient.DaemonClient](500, func(key string, value daemonclient.DaemonClient) {
 		_ = value.Close()
@@ -143,7 +142,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	}
 	return &handler{
 		kubeClient:            kubeClient,
-		metricsClient:         metricsClient.MetricsV1beta1(),
+		metricsClient:         metricsClient,
 		promQlService:         promQlService,
 		numaflowClient:        numaflowClient,
 		daemonClientsCache:    daemonClientsCache,
