@@ -2416,13 +2416,13 @@
 <h2 id="installing-numaflow">Installing Numaflow<a class="headerlink" href="#installing-numaflow" title="Permanent link">&para;</a></h2>
 <p>Once you have completed all the prerequisites, run the following command lines to install Numaflow and start the <a href="../core-concepts/inter-step-buffer-service/">Inter-Step Buffer Service</a> that handles communication between vertices.</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>create<span class="w"> </span>ns<span class="w"> </span>numaflow-system
-kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> </span>numaflow-system<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/config/install.yaml
-kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
+kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> </span>numaflow-system<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/config/install.yaml
+kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/examples/0-isbsvc-jetstream.yaml
 </code></pre></div>
 <h2 id="creating-a-simple-pipeline">Creating a simple pipeline<a class="headerlink" href="#creating-a-simple-pipeline" title="Permanent link">&para;</a></h2>
 <p>As an example, we will create a <code>simple pipeline</code> that contains a source vertex to generate messages, a processing vertex that echos the messages, and a sink vertex that logs the messages.</p>
 <p>Run the command below to create a simple pipeline.</p>
-<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/examples/1-simple-pipeline.yaml
 </code></pre></div>
 <p>To view a list of pipelines you've created, run:</p>
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>pipeline<span class="w"> </span><span class="c1"># or &quot;pl&quot; as a short name</span>
@@ -2460,9 +2460,9 @@ simple-pipeline-in-0-rhpjm<span class="w">                   </span><span class=
 <span class="m">2022</span>/08/25<span class="w"> </span><span class="m">23</span>:59:39<span class="w"> </span><span class="o">(</span>out<span class="o">)</span><span class="w"> </span><span class="o">{</span><span class="s2">&quot;Data&quot;</span>:<span class="s2">&quot;jk4nN/a7Dhc=&quot;</span>,<span class="s2">&quot;Createdts&quot;</span>:1661471978707963534<span class="o">}</span>
 </code></pre></div>
 <p>Numaflow also comes with a built-in user interface.</p>
-<p><strong>NOTE</strong>: Please install the metrics server if your local Kubernetes cluster does not bring it by default (e.g., Kind). 
+<p><strong>NOTE</strong>: Please install the metrics server if your local Kubernetes cluster does not bring it by default (e.g., Kind).
 You can install it by running the below command.</p>
-<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml<span class="w"> </span>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 kubectl<span class="w"> </span>patch<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>deployment<span class="w"> </span>metrics-server<span class="w"> </span>--type<span class="o">=</span>json<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;[{&quot;op&quot;:&quot;add&quot;,&quot;path&quot;:&quot;/spec/template/spec/containers/0/args/-&quot;,&quot;value&quot;:&quot;--kubelet-insecure-tls&quot;}]&#39;</span>
 </code></pre></div>
 <p>To port forward the UI, run the following command.</p>
@@ -2472,7 +2472,7 @@ kubectl<span class="w"> </span>-n<span class="w"> </span>numaflow-system<span cl
 <p>This renders the following UI on https://localhost:8443/.</p>
 <p><img alt="Numaflow UI" src="../assets/numaflow-ui-simple-pipeline.png" /></p>
 <p>The pipeline can be deleted by issuing the following command:</p>
-<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/main/examples/1-simple-pipeline.yaml
 </code></pre></div>
 <h2 id="creating-an-advanced-pipeline">Creating an advanced pipeline<a class="headerlink" href="#creating-an-advanced-pipeline" title="Permanent link">&para;</a></h2>
 <p>Now we will walk you through creating an advanced pipeline. In our example, this is called the <code>even-odd</code> pipeline, illustrated by the following diagram:</p>
