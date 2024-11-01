@@ -1614,7 +1614,7 @@ dependencies = [
 [[package]]
 name = "numaflow"
 version = "0.1.1"
-source = "git+https://github.com/numaproj/numaflow-rs.git?rev=9fb3c0ad0f5f43cc42b4919f849b7dcce9a91387#9fb3c0ad0f5f43cc42b4919f849b7dcce9a91387"
+source = "git+https://github.com/numaproj/numaflow-rs.git?rev=ddd879588e11455921f1ca958ea2b3c076689293#ddd879588e11455921f1ca958ea2b3c076689293"
 dependencies = [
  "chrono",
  "futures-util",
@@ -1648,7 +1648,7 @@ dependencies = [
  "hyper-util",
  "kube",
  "log",
- "numaflow 0.1.1 (git+https://github.com/numaproj/numaflow-rs.git?rev=9fb3c0ad0f5f43cc42b4919f849b7dcce9a91387)",
+ "numaflow 0.1.1 (git+https://github.com/numaproj/numaflow-rs.git?rev=ddd879588e11455921f1ca958ea2b3c076689293)",
  "numaflow-models",
  "numaflow-pb",
  "parking_lot",

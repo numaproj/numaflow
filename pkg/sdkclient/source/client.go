@@ -190,27 +190,19 @@ func (c *client) ReadFn(_ context.Context, req *sourcepb.ReadRequest, datumCh ch
 }
 
 // AckFn acknowledges the data from the source.
-func (c *client) AckFn(_ context.Context, reqs []*sourcepb.AckRequest) ([]*sourcepb.AckResponse, error) {
+func (c *client) AckFn(_ context.Context, req *sourcepb.AckRequest) (*sourcepb.AckResponse, error) {
 	// Send the ack request
-	for _, req := range reqs {
-		err := c.ackStream.Send(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to send ack request: %v", err)
-		}
+	err := c.ackStream.Send(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send ack request: %v", err)
 	}
 
-	responses := make([]*sourcepb.AckResponse, len(reqs))
-	for i := 0; i < len(reqs); i++ {
-		// Wait for the ack response
-		resp, err := c.ackStream.Recv()
-		// we don't need an EOF check because we only close the stream during shutdown.
-		if err != nil {
-			return nil, fmt.Errorf("failed to receive ack response: %v", err)
-		}
-		responses[i] = resp
+	// Wait for the ack response
+	resp, err := c.ackStream.Recv()
+	if err != nil {
+		return nil, fmt.Errorf("failed to receive ack response: %v", err)
 	}
-
-	return responses, nil
+	return resp, nil
 }
 
 // PendingFn returns the number of pending data from the source.

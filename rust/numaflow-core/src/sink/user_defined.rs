@@ -1,14 +1,13 @@
+use crate::message::{Message, ResponseFromSink};
+use crate::sink::Sink;
+use crate::Error;
+use crate::Result;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
-
-use crate::error;
-use crate::message::{Message, ResponseFromSink};
-use crate::sink::Sink;
-use crate::Error;
 
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
 
@@ -19,7 +18,7 @@ pub struct UserDefinedSink {
 }
 
 impl UserDefinedSink {
-    pub(crate) async fn new(mut client: SinkClient<Channel>) -> error::Result<Self> {
+    pub(crate) async fn new(mut client: SinkClient<Channel>) -> Result<Self> {
         let (sink_tx, sink_rx) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
         let sink_stream = ReceiverStream::new(sink_rx);
 
@@ -59,7 +58,7 @@ impl UserDefinedSink {
 
 impl Sink for UserDefinedSink {
     /// writes a set of messages to the sink.
-    async fn sink(&mut self, messages: Vec<Message>) -> error::Result<Vec<ResponseFromSink>> {
+    async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
         let requests: Vec<SinkRequest> =
             messages.into_iter().map(|message| message.into()).collect();
         let num_requests = requests.len();
@@ -88,7 +87,7 @@ impl Sink for UserDefinedSink {
         // response only once it has read all the requests.
         // We wait for num_requests + 1 responses because the last response will be the EOT response.
         let mut responses = Vec::new();
-        for i in 0..num_requests + 1 {
+        loop {
             let response = self
                 .resp_stream
                 .message()
@@ -96,12 +95,20 @@ impl Sink for UserDefinedSink {
                 .ok_or(Error::Sink("failed to receive response".to_string()))?;
 
             if response.status.map_or(false, |s| s.eot) {
-                if i != num_requests {
+                if responses.len() != num_requests {
                     log::error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
+                } else {
+                    break;
                 }
                 continue;
             }
-            responses.push(response.try_into()?);
+            responses.extend(
+                response
+                    .results
+                    .into_iter()
+                    .map(Into::into)
+                    .collect::<Vec<ResponseFromSink>>(),
+            );
         }
 
         Ok(responses)
@@ -112,7 +119,6 @@ impl Sink for UserDefinedSink {
 mod tests {
     use chrono::offset::Utc;
     use numaflow::sink;
-    use numaflow_pb::clients::sink::sink_client::SinkClient;
     use tokio::sync::mpsc;
     use tracing::info;
 
