@@ -46,8 +46,8 @@ pub(crate) async fn start_forwarder(
                 info!("Starting streaming forwarder");
                 return start_streaming_forwarder(cln_token, config.clone(), source.clone()).await;
             }
-            let buffer_writers =
-                create_buffer_writers(&config, js_context.clone(), cln_token.clone()).await?;
+            let isb_writer =
+                create_buffer_writers(&config, js_context.clone(), cln_token.clone()).await;
 
             let (source_type, source_grpc_client) =
                 create_source_type(source, &config, cln_token.clone()).await?;
@@ -63,12 +63,11 @@ pub(crate) async fn start_forwarder(
             )
             .await;
 
-            let source_handle =
-                source::SourceHandle::new(source_type, config.batch_size, config.read_timeout);
+            let source_handle = source::SourceHandle::new(source_type, config.batch_size);
             let mut forwarder = forwarder::source_forwarder::ForwarderBuilder::new(
                 source_handle,
                 transformer,
-                buffer_writers,
+                isb_writer,
                 cln_token.clone(),
                 config.clone(),
             )
@@ -160,9 +159,8 @@ async fn start_streaming_forwarder(
     )
     .await;
 
-    let streaming_source =
-        StreamingSource::new(source_type, config.batch_size, config.read_timeout);
-    let mut forwarder = forwarder::source_streaming_forwarder::ForwarderBuilder::new(
+    let streaming_source = StreamingSource::new(config.clone(), source_type, config.batch_size);
+    let forwarder = forwarder::source_streaming_forwarder::ForwarderBuilder::new(
         streaming_source,
         transformer,
         buffer_writer,
@@ -180,28 +178,18 @@ async fn create_buffer_writers(
     config: &PipelineConfig,
     js_context: Context,
     cln_token: CancellationToken,
-) -> Result<HashMap<String, Vec<WriterHandle>>> {
-    let mut buffer_writers = HashMap::new();
-    for to_vertex in &config.to_vertex_config {
-        let writers = to_vertex
-            .writer_config
-            .streams
+) -> WriterHandle {
+    WriterHandle::new(
+        config.paf_batch_size,
+        config
+            .to_vertex_config
             .iter()
-            .map(|stream| {
-                WriterHandle::new(
-                    stream.0.clone(),
-                    stream.1,
-                    to_vertex.writer_config.clone(),
-                    js_context.clone(),
-                    config.batch_size,
-                    config.paf_batch_size,
-                    cln_token.clone(),
-                )
-            })
-            .collect();
-        buffer_writers.insert(to_vertex.name.clone(), writers);
-    }
-    Ok(buffer_writers)
+            .map(|tv| tv.writer_config.clone())
+            .collect(),
+        js_context,
+        cln_token,
+    )
+    .await
 }
 
 async fn create_streaming_buffer_writer(
@@ -407,6 +395,7 @@ async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Re
         _ => async_nats::connect(config.url).await,
     }
     .map_err(|e| error::Error::Connection(e.to_string()))?;
+
     Ok(jetstream::new(js_client))
 }
 

@@ -24,7 +24,7 @@ async fn main() {
 
     // Start the task to print the number of active Tokio tasks every second
     tokio::spawn(async {
-        let mut interval = time::interval(Duration::from_secs(1));
+        let mut interval = time::interval(Duration::from_millis(200));
         loop {
             interval.tick().await;
             let active_tasks = tokio::runtime::Handle::current()

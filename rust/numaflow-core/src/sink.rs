@@ -171,16 +171,21 @@ impl StreamingSink {
                 let mut last_logged_at = std::time::Instant::now();
 
                 loop {
+                    let mut chunk_time = time::Instant::now();
                     let batch = match chunk_stream.next().await {
                         Some(batch) => batch,
                         None => break,
                     };
+                    info!(
+                        "Sink chunk batch size: {} and latency - {:?}",
+                        batch.len(),
+                        chunk_time.elapsed()
+                    );
                     if batch.is_empty() {
                         continue;
                     }
 
                     let n = batch.len();
-
                     let messages: Vec<Message> =
                         batch.iter().map(|rm| rm.message.clone()).collect();
 
@@ -216,6 +221,12 @@ impl StreamingSink {
                         warn!("Cancellation token is cancelled. Exiting SinkWriter");
                         break;
                     }
+                    info!(
+                        "Sink took {:?} to process {} messages",
+                        chunk_time.elapsed(),
+                        n
+                    );
+                    chunk_time = time::Instant::now();
                 }
 
                 Ok(())

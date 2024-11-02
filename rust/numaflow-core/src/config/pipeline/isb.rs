@@ -78,8 +78,6 @@ impl fmt::Display for BufferFullStrategy {
 pub(crate) struct BufferReaderConfig {
     pub(crate) partitions: u16,
     pub(crate) streams: Vec<(String, u16)>,
-    pub(crate) batch_size: usize,
-    pub(crate) read_timeout: Duration,
     pub(crate) wip_ack_interval: Duration,
 }
 
@@ -88,9 +86,7 @@ impl Default for BufferReaderConfig {
         BufferReaderConfig {
             partitions: DEFAULT_PARTITIONS,
             streams: vec![("default-0".to_string(), DEFAULT_PARTITION_IDX)],
-            batch_size: DEFAULT_BATCH_SIZE,
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
-            read_timeout: Duration::from_millis(DEFAULT_READ_TIMEOUT_MILLIS),
         }
     }
 }

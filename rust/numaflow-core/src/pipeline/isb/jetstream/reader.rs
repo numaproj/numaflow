@@ -3,6 +3,7 @@ use std::time::Duration;
 use async_nats::jetstream::{
     consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
 };
+use log::info;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -16,7 +17,9 @@ use crate::config::pipeline::isb::BufferReaderConfig;
 use crate::config::pipeline::PipelineConfig;
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset, ReadAck, ReadMessage};
-use crate::metrics::{forward_pipeline_metrics, pipeline_forward_read_metric_labels};
+use crate::metrics::{
+    pipeline_forward_read_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
+};
 use crate::Result;
 
 // The JetstreamReader is a handle to the background actor that continuously fetches messages from Jetstream.
@@ -73,7 +76,7 @@ impl JetstreamReader {
         cancel_token: CancellationToken,
         pipeline_config: &PipelineConfig,
     ) -> Result<(ReceiverStream<ReadMessage>, JoinHandle<Result<()>>)> {
-        let (messages_tx, messages_rx) = mpsc::channel(2 * self.config.batch_size);
+        let (messages_tx, messages_rx) = mpsc::channel(2 * pipeline_config.batch_size);
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let this = self.clone();
@@ -105,13 +108,24 @@ impl JetstreamReader {
                     .messages()
                     .await
                     .unwrap()
-                    .chunks_timeout(this.config.batch_size, this.config.read_timeout);
+                    .chunks_timeout(pipeline_config.batch_size, pipeline_config.read_timeout);
 
                 tokio::pin!(chunk_stream);
 
                 // The .next() call will not return if there is no data even if read_timeout is
                 // reached.
+                let mut chunk_time = Instant::now();
                 while let Some(messages) = chunk_stream.next().await {
+                    info!(
+                        "Read batch size: {} and latency - {:?}",
+                        messages.len(),
+                        chunk_time.elapsed()
+                    );
+                    pipeline_metrics()
+                        .isb
+                        .read_time
+                        .get_or_create(pipeline_isb_metric_labels())
+                        .observe(chunk_time.elapsed().as_micros() as f64);
                     for message in messages {
                         let jetstream_message = match message {
                             Ok(message) => message,
@@ -120,7 +134,6 @@ impl JetstreamReader {
                                 continue;
                             }
                         };
-
                         let msg_info = match jetstream_message.info() {
                             Ok(info) => info,
                             Err(e) => {
@@ -134,9 +147,10 @@ impl JetstreamReader {
                                 Ok(message) => message,
                                 Err(e) => {
                                     error!(
-                                        ?e,
-                                        "Failed to parse message payload received from Jetstream"
-                                    );
+                                    ?e,
+                                    "Failed to parse message payload received from Jetstream {:?}",
+                                    jetstream_message
+                                );
                                     continue;
                                 }
                             };
@@ -147,7 +161,6 @@ impl JetstreamReader {
                         )));
 
                         let (ack_tx, ack_rx) = oneshot::channel();
-
                         tokio::spawn(Self::start_work_in_progress(
                             jetstream_message,
                             ack_rx,
@@ -164,7 +177,13 @@ impl JetstreamReader {
                             return Ok(());
                         }
 
-                        forward_pipeline_metrics()
+                        pipeline_metrics()
+                            .isb
+                            .read_total
+                            .get_or_create(pipeline_isb_metric_labels())
+                            .inc();
+
+                        pipeline_metrics()
                             .forwarder
                             .data_read
                             .get_or_create(labels)
@@ -174,6 +193,7 @@ impl JetstreamReader {
                         warn!("Cancellation token is cancelled. Exiting JetstreamReader");
                         break;
                     }
+                    chunk_time = Instant::now();
                 }
                 Ok(())
             }
@@ -190,6 +210,13 @@ impl JetstreamReader {
         tick: Duration,
     ) {
         let mut interval = time::interval_at(Instant::now() + tick, tick);
+        let start = Instant::now();
+
+        pipeline_metrics()
+            .isb
+            .ack_tasks
+            .get_or_create(pipeline_isb_metric_labels())
+            .inc();
 
         loop {
             let wip = async {
@@ -218,6 +245,17 @@ impl JetstreamReader {
                     if let Err(e) = ack_result {
                         error!(?e, "Failed to send Ack to Jetstream for message");
                     }
+                    pipeline_metrics()
+                        .isb
+                        .ack_tasks
+                        .get_or_create(pipeline_isb_metric_labels())
+                        .dec();
+
+                    pipeline_metrics()
+                        .isb
+                        .ack_time
+                        .get_or_create(pipeline_isb_metric_labels())
+                        .observe(start.elapsed().as_micros() as f64);
                     return;
                 }
                 ReadAck::Nak => {

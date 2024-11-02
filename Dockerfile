@@ -40,7 +40,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
     *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
     esac && \
-    cargo chef cook --workspace --release --target ${TARGET} --recipe-path recipe.json
+    RUSTFLAGS='-C target-feature=+crt-static' cargo chef cook --workspace --release --target ${TARGET} --recipe-path recipe.json
 
 # Copy the actual source code files of the main project and the subprojects
 COPY ./rust/ .
@@ -53,24 +53,14 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
     *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
     esac && \
-    cargo build --workspace --all --release --target ${TARGET} && \
+    RUSTFLAGS='-C target-feature=+crt-static' cargo build --workspace --all --release --target ${TARGET} && \
     cp -pv target/${TARGET}/release/numaflow /root/numaflow
-
-####################################################################################################
-# Bytehound
-####################################################################################################
-FROM rust:1.81-bookworm AS bytehound
-WORKDIR /bytehound
-RUN apt-get update && apt-get install -y wget
-RUN wget https://github.com/koute/bytehound/releases/download/0.11.0/bytehound-x86_64-unknown-linux-gnu.tgz
-
-RUN tar -xvzf bytehound-x86_64-unknown-linux-gnu.tgz
 
 ####################################################################################################
 # numaflow
 ####################################################################################################
 ARG BASE_IMAGE
-FROM ubuntu:24.04 AS numaflow
+FROM ${BASE_IMAGE} AS numaflow
 ARG ARCH
 
 COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
@@ -81,12 +71,6 @@ COPY ui/build /ui/build
 
 COPY ./rust/serving/config config
 
-COPY --from=bytehound /bytehound/libbytehound.so /libbytehound.so
-COPY --from=bytehound /bytehound/bytehound /bytehound
-
-ENV MEMORY_PROFILER_LOG=info
-COPY start.sh .
-RUN chmod +x start.sh
 ENTRYPOINT [ "/bin/numaflow" ]
 
 ####################################################################################################

@@ -35,6 +35,12 @@ pub(crate) fn get_vertex_name() -> &'static str {
     })
 }
 
+static PIPELINE_NAME: OnceLock<String> = OnceLock::new();
+
+pub(crate) fn get_pipeline_name() -> &'static str {
+    PIPELINE_NAME.get_or_init(|| env::var("NUMAFLOW_PIPELINE_NAME").unwrap_or_default())
+}
+
 static VERTEX_REPLICA: OnceLock<u16> = OnceLock::new();
 
 // fetch the vertex replica information from the environment variable

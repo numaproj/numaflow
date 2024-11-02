@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use chrono::Utc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
@@ -8,7 +6,9 @@ use crate::config::pipeline::PipelineConfig;
 use crate::error;
 use crate::error::Error;
 use crate::message::{Message, Offset};
-use crate::metrics::{forward_pipeline_metrics, pipeline_forward_read_metric_labels};
+use crate::metrics::{
+    pipeline_forward_read_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
+};
 use crate::pipeline::isb::jetstream::WriterHandle;
 use crate::source::SourceHandle;
 use crate::transformer::SourceTransformHandle;
@@ -18,7 +18,7 @@ use crate::transformer::SourceTransformHandle;
 pub(crate) struct Forwarder {
     source_reader: SourceHandle,
     transformer: Option<SourceTransformHandle>,
-    buffer_writers: HashMap<String, Vec<WriterHandle>>,
+    isb_writer: WriterHandle,
     cln_token: CancellationToken,
     config: PipelineConfig,
 }
@@ -26,7 +26,7 @@ pub(crate) struct Forwarder {
 pub(crate) struct ForwarderBuilder {
     source_reader: SourceHandle,
     transformer: Option<SourceTransformHandle>,
-    buffer_writers: HashMap<String, Vec<WriterHandle>>,
+    isb_writer: WriterHandle,
     cln_token: CancellationToken,
     config: PipelineConfig,
 }
@@ -35,14 +35,14 @@ impl ForwarderBuilder {
     pub(crate) fn new(
         source_reader: SourceHandle,
         transformer: Option<SourceTransformHandle>,
-        buffer_writers: HashMap<String, Vec<WriterHandle>>,
+        isb_writer: WriterHandle,
         cln_token: CancellationToken,
         config: PipelineConfig,
     ) -> Self {
         Self {
             source_reader,
             transformer,
-            buffer_writers,
+            isb_writer,
             cln_token,
             config,
         }
@@ -52,7 +52,7 @@ impl ForwarderBuilder {
         Forwarder {
             source_reader: self.source_reader,
             transformer: self.transformer,
-            buffer_writers: self.buffer_writers,
+            isb_writer: self.isb_writer,
             cln_token: self.cln_token,
             config: self.config,
         }
@@ -90,10 +90,10 @@ impl Forwarder {
             Error::Forwarder(format!("Failed to read messages from source {:?}", e))
         })?;
 
-        debug!(
-            "Read batch size: {} and latency - {}ms",
+        info!(
+            "Read batch size: {} and latency - {:?}",
             messages.len(),
-            start_time.elapsed().as_millis()
+            start_time.elapsed()
         );
 
         let labels = pipeline_forward_read_metric_labels(
@@ -103,7 +103,8 @@ impl Forwarder {
             "Source",
             self.config.replica,
         );
-        forward_pipeline_metrics()
+
+        pipeline_metrics()
             .forwarder
             .data_read
             .get_or_create(labels)
@@ -135,9 +136,23 @@ impl Forwarder {
             ))
         })?;
 
+        // Write the transformed messages to the jetstream
         self.write_to_jetstream(transformed_messages).await?;
 
+        // Acknowledge the messages
         self.source_reader.ack(offsets).await?;
+
+        info!(
+            "Processed {} messages in processedTime={:?}",
+            msg_count,
+            start_time.elapsed()
+        );
+
+        pipeline_metrics()
+            .forwarder
+            .processed_time
+            .get_or_create(labels)
+            .observe(start_time.elapsed().as_micros() as f64);
 
         Ok(msg_count as usize)
     }
@@ -162,6 +177,8 @@ impl Forwarder {
 
     /// Writes messages to the jetstream, it writes to all the downstream buffers.
     async fn write_to_jetstream(&mut self, messages: Vec<Message>) -> Result<(), Error> {
+        let start = tokio::time::Instant::now();
+        let n = messages.len();
         if messages.is_empty() {
             return Ok(());
         }
@@ -169,14 +186,9 @@ impl Forwarder {
         let mut results = Vec::new();
 
         // write to all the buffers
-        for i in 0..messages.len() {
-            for (_, writers) in &self.buffer_writers {
-                // write to the stream writers in round-robin fashion
-                let partition = i % writers.len();
-                let writer = &writers[partition]; // FIXME: we need to shuffle based on the message id hash
-                let result = writer.write(messages[i].clone()).await?;
-                results.push(result);
-            }
+        for message in messages {
+            let result = self.isb_writer.write(message).await?;
+            results.push(result);
         }
 
         // await for all the result futures to complete
@@ -187,6 +199,18 @@ impl Forwarder {
                 .await
                 .map_err(|e| Error::Forwarder(format!("Failed to write to jetstream {:?}", e)))??;
         }
+        info!(
+            "Wrote {} messages to jetstream in writeTime={:?}",
+            n,
+            start.elapsed()
+        );
+
+        pipeline_metrics()
+            .isb
+            .write_time
+            .get_or_create(pipeline_isb_metric_labels())
+            .observe(start.elapsed().as_micros() as f64);
+
         Ok(())
     }
 }

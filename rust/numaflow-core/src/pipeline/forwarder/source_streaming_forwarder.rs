@@ -55,8 +55,7 @@ impl ForwarderBuilder {
 
 impl Forwarder {
     pub(crate) async fn start(&self) -> Result<()> {
-        let (read_messages_rx, reader_handle, ack_handle) =
-            self.streaming_source.start_streaming()?;
+        let (read_messages_rx, reader_handle) = self.streaming_source.start()?;
 
         let (transformed_messages_rx, transformer_handle) =
             if let Some(transformer) = &self.streaming_transformer {
@@ -69,20 +68,18 @@ impl Forwarder {
 
         let writer_handle = self
             .writer
-            .start_streaming(transformed_messages_rx, self.cln_token.clone())
+            .start(transformed_messages_rx, self.cln_token.clone())
             .await?;
 
         match tokio::try_join!(
             reader_handle,
             transformer_handle.unwrap_or_else(|| tokio::spawn(async { Ok(()) })),
             writer_handle,
-            ack_handle
         ) {
-            Ok((reader_result, transformer_result, sink_writer_result, ack_result)) => {
+            Ok((reader_result, transformer_result, sink_writer_result)) => {
                 reader_result?;
                 transformer_result?;
                 sink_writer_result?;
-                ack_result?;
                 Ok(())
             }
             Err(e) => Err(Error::Forwarder(format!(

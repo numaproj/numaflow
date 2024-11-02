@@ -153,7 +153,7 @@ pub(crate) async fn start_forwarder(
 
     if std::env::var("NUMAFLOW_MVTX_STREAMING").is_ok() {
         let streaming_source =
-            StreamingSource::new(source_type, config.batch_size, config.read_timeout);
+            StreamingSource::new(Default::default(), source_type, config.batch_size);
         let streaming_sink = StreamingSink::new(
             config.batch_size,
             config.read_timeout,
@@ -182,7 +182,7 @@ pub(crate) async fn start_forwarder(
         )
         .await?;
     } else {
-        let source = SourceHandle::new(source_type, config.batch_size, config.read_timeout);
+        let source = SourceHandle::new(source_type, config.batch_size);
         start_forwarder_with_source(
             config.clone(),
             source,

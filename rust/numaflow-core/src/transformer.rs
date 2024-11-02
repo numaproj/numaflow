@@ -19,10 +19,11 @@ pub(crate) mod user_defined;
 enum ActorMessage {
     Transform {
         messages: Vec<Message>,
-        respond_to: oneshot::Sender<error::Result<Vec<Message>>>,
+        respond_to: oneshot::Sender<Result<Vec<Message>>>,
     },
 }
 
+/// SourceTransformHandle, sends messages to the SourceTransformer Actor.
 #[derive(Clone)]
 pub(crate) struct SourceTransformHandle {
     sender: mpsc::Sender<ActorMessage>,
@@ -52,6 +53,7 @@ impl SourceTransformHandle {
     }
 }
 
+/// StreamingTransformer, transforms messages in a streaming fashion.
 #[derive(Clone)]
 pub(crate) struct StreamingTransformer {
     batch_size: usize,
@@ -79,7 +81,7 @@ impl StreamingTransformer {
         })
     }
 
-    pub(crate) async fn transform(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
+    async fn transform(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Transform {
             messages,
@@ -89,11 +91,13 @@ impl StreamingTransformer {
         receiver.await.unwrap()
     }
 
+    /// Starts reading messages in the form of chunks and transforms them and
+    /// sends them to the next stage.
     pub(crate) fn start_streaming(
         &self,
         input_stream: ReceiverStream<ReadMessage>,
     ) -> Result<(ReceiverStream<ReadMessage>, JoinHandle<Result<()>>)> {
-        let (output_tx, output_rx) = mpsc::channel(2 * self.batch_size);
+        let (output_tx, output_rx) = mpsc::channel(self.batch_size);
         let transform_handle = self.clone();
         let batch_size = self.batch_size;
         let timeout_duration = self.timeout;
@@ -119,6 +123,7 @@ impl StreamingTransformer {
                     .map(|(msg, _)| msg.clone())
                     .collect();
 
+                // FIXME: it should be streaming
                 let transformed_messages = match transform_handle.transform(messages).await {
                     Ok(messages) => messages,
                     Err(e) => {

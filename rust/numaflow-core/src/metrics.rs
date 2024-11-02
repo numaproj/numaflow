@@ -27,6 +27,7 @@ use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{debug, error, info};
 
+use crate::message::{get_pipeline_name, get_vertex_name, get_vertex_replica};
 use crate::source::SourceHandle;
 use crate::Error;
 
@@ -163,6 +164,7 @@ pub(crate) struct MonoVtxMetrics {
 // TODO: Add the metrics for the pipeline
 pub(crate) struct PipelineMetrics {
     pub(crate) forwarder: PipelineForwarderMetrics,
+    pub(crate) isb: PipelineISBMetrics,
 }
 
 /// Family of metrics for the sink
@@ -184,6 +186,18 @@ pub(crate) struct TransformerMetrics {
 
 pub(crate) struct PipelineForwarderMetrics {
     pub(crate) data_read: Family<Vec<(String, String)>, Counter>,
+    pub(crate) processed_time: Family<Vec<(String, String)>, Histogram>,
+}
+
+pub(crate) struct PipelineISBMetrics {
+    pub(crate) write_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) read_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) ack_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) read_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) ack_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) paf_resolution_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) ack_tasks: Family<Vec<(String, String)>, Gauge>,
 }
 
 /// Exponential bucket distribution with range.
@@ -333,6 +347,28 @@ impl PipelineMetrics {
         let metrics = Self {
             forwarder: PipelineForwarderMetrics {
                 data_read: Default::default(),
+                processed_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                    || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10)),
+                ),
+            },
+            isb: PipelineISBMetrics {
+                write_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                    || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10)),
+                ),
+                read_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+                }),
+                ack_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+                }),
+                write_total: Family::<Vec<(String, String)>, Counter>::default(),
+                read_total: Family::<Vec<(String, String)>, Counter>::default(),
+                ack_total: Family::<Vec<(String, String)>, Counter>::default(),
+                paf_resolution_time:
+                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+                    }),
+                ack_tasks: Family::<Vec<(String, String)>, Gauge>::default(),
             },
         };
         let mut registry = global_registry().registry.lock();
@@ -360,9 +396,9 @@ pub(crate) fn forward_mvtx_metrics() -> &'static MonoVtxMetrics {
 /// PIPELINE_METRICS is the PipelineMetrics object which stores the metrics
 static PIPELINE_METRICS: OnceLock<PipelineMetrics> = OnceLock::new();
 
-// forward_pipeline_metrics is a helper function used to fetch the
+// pipeline_metrics is a helper function used to fetch the
 // PipelineMetrics object
-pub(crate) fn forward_pipeline_metrics() -> &'static PipelineMetrics {
+pub(crate) fn pipeline_metrics() -> &'static PipelineMetrics {
     PIPELINE_METRICS.get_or_init(PipelineMetrics::new)
 }
 
@@ -406,6 +442,27 @@ pub(crate) fn pipeline_forward_read_metric_labels(
                 vertex_type.to_string(),
             ),
             (PIPELINE_VERTEX_LABEL.to_string(), vertex_name.to_string()),
+        ]
+    })
+}
+
+static PIPELINE_ISB_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
+
+pub(crate) fn pipeline_isb_metric_labels() -> &'static Vec<(String, String)> {
+    PIPELINE_ISB_METRICS_LABELS.get_or_init(|| {
+        vec![
+            (
+                PIPELINE_NAME_LABEL.to_string(),
+                get_pipeline_name().to_string(),
+            ),
+            (
+                PIPELINE_REPLICA_LABEL.to_string(),
+                get_vertex_replica().to_string(),
+            ),
+            (
+                PIPELINE_VERTEX_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ),
         ]
     })
 }

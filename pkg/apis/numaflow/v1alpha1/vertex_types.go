@@ -53,7 +53,7 @@ const (
 	VertexTypeReduceUDF VertexType = "ReduceUDF"
 )
 
-const NumaflowRustBinary = "./start.sh"
+const NumaflowRustBinary = "/bin/numaflow-rs"
 
 // +genclient
 // +kubebuilder:object:root=true
