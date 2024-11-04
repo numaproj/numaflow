@@ -27,16 +27,19 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	watch "k8s.io/apimachinery/pkg/watch"
+	rest "k8s.io/client-go/rest"
 	k8stesting "k8s.io/client-go/testing"
 	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsfake "k8s.io/metrics/pkg/client/clientset/versioned/fake"
+	metricsclientv1beta1 "k8s.io/metrics/pkg/client/clientset/versioned/typed/metrics/v1beta1"
 
 	"github.com/gin-gonic/gin"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	fakeClient "k8s.io/client-go/kubernetes/fake"
 )
@@ -45,6 +48,89 @@ var (
 	validPatchSpec   = `{"spec": {"lifecycle": {"desiredPhase": "Paused"}}}`
 	invalidPatchSpec = `{"spec": {"limits": {"readTimeout": "5s"}}}`
 )
+
+// Mock PromQl service for testing
+type mockPromQlService struct {
+	configData *PrometheusConfig
+}
+
+func NewmockPromQlService(configData *PrometheusConfig) PromQl {
+	return &mockPromQlService{
+		configData: configData,
+	}
+}
+
+func (m *mockPromQlService) BuildQuery(MetricsRequestBody) (string, error) {
+	return "", nil
+}
+
+func (m *mockPromQlService) QueryPrometheus(context.Context, string, time.Time, time.Time) (model.Value, error) {
+	return nil, nil
+}
+
+func (m *mockPromQlService) GetConfigData() *PrometheusConfig {
+	return m.configData
+}
+
+func (m *mockPromQlService) PopulateReqMap(MetricsRequestBody) map[string]string {
+	return map[string]string{}
+}
+
+func (m *mockPromQlService) DisableMetricsChart() bool {
+	return m.configData == nil
+}
+
+type MockMetricsClient struct {
+	podMetrics *metricsv1beta1.PodMetrics
+}
+
+func (m *MockMetricsClient) PodMetricses(namespace string) metricsclientv1beta1.PodMetricsInterface {
+	return &MockPodMetricsInterface{podMetrics: m.podMetrics}
+}
+func (m *MockMetricsClient) NodeMetricses() metricsclientv1beta1.NodeMetricsInterface {
+	return &MockNodeMetricsInterface{}
+}
+
+func (m *MockMetricsClient) RESTClient() rest.Interface {
+	return nil
+}
+
+type MockPodMetricsInterface struct {
+	podMetrics *metricsv1beta1.PodMetrics
+}
+type MockNodeMetricsInterface struct{}
+
+func (m *MockNodeMetricsInterface) Get(ctx context.Context, name string, opts metav1.GetOptions) (*metricsv1beta1.NodeMetrics, error) {
+	// Mock the node metrics data here
+	return nil, nil
+}
+
+func (m *MockNodeMetricsInterface) List(ctx context.Context, opts metav1.ListOptions) (*metricsv1beta1.NodeMetricsList, error) {
+	// Mock the node metrics data here
+	return nil, nil
+}
+
+func (m *MockNodeMetricsInterface) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
+	return nil, nil
+}
+
+func (m *MockPodMetricsInterface) Get(ctx context.Context, name string, opts metav1.GetOptions) (*metricsv1beta1.PodMetrics, error) {
+	// Mock the pod metrics data here
+	if m.podMetrics == nil {
+		return nil, fmt.Errorf("pod metrics not found")
+	}
+	return m.podMetrics, nil
+}
+
+func (m *MockPodMetricsInterface) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
+	// Mock the pod metrics data here
+	return nil, nil
+}
+
+func (m *MockPodMetricsInterface) List(ctx context.Context, opts metav1.ListOptions) (*metricsv1beta1.PodMetricsList, error) {
+	// Mock the pod metrics data here
+	return nil, nil
+}
 
 func TestValidatePipelinePatch(t *testing.T) {
 
@@ -61,22 +147,22 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 	tests := []struct {
 		name           string
 		object         string
-		configPatterns []PatternData
+		configPatterns []Pattern
 		want           MetricsDiscoveryResponse
 	}{
 		{
 			name:           "empty patterns",
 			object:         "pipeline",
-			configPatterns: []PatternData{},
+			configPatterns: []Pattern{},
 			want:           MetricsDiscoveryResponse{},
 		},
 		{
 			name:   "no matching object",
 			object: "pipeline",
-			configPatterns: []PatternData{
+			configPatterns: []Pattern{
 				{
 					Object: "vertex",
-					Metrics: []MetricData{
+					Metrics: []Metric{
 						{
 							Name:    "test_metric",
 							Filters: []string{"namespace"},
@@ -89,23 +175,23 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 		{
 			name:   "single metric with required filters",
 			object: "pipeline",
-			configPatterns: []PatternData{
+			configPatterns: []Pattern{
 				{
 					Object: "pipeline",
-					Params: []ParamData{
+					Params: []Params{
 						{
 							Name:     "quantile",
 							Required: true,
 						},
 					},
-					Metrics: []MetricData{
+					Metrics: []Metric{
 						{
 							Name:    "processing_rate",
 							Filters: []string{"namespace", "pipeline"},
-							Dimensions: []DimensionData{
+							Dimensions: []Dimension{
 								{
 									Name: "vertex",
-									Filters: []FilterData{
+									Filters: []Filter{
 										{Name: "vertex", Required: true},
 									},
 								},
@@ -120,12 +206,12 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 					Dimensions: []Dimensions{
 						{
 							Name: "vertex",
-							Filters: []FilterData{
+							Filters: []Filter{
 								{Name: "namespace", Required: true},
 								{Name: "pipeline", Required: true},
 								{Name: "vertex", Required: true},
 							},
-							Params: []ParamData{{
+							Params: []Params{{
 								Name:     "quantile",
 								Required: true,
 							}},
@@ -140,7 +226,7 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// Create mock promql service
-			promQlServiceObj := NewMockPromQlService(&PrometheusConfig{
+			promQlServiceObj := NewmockPromQlService(&PrometheusConfig{
 				Patterns: tt.configPatterns,
 			})
 
@@ -583,33 +669,362 @@ func TestHandler_GetVertexPodsInfo(t *testing.T) {
 	}
 }
 
-// Mock PromQl service for testing
-type mockPromQlService struct {
-	configData *PrometheusConfig
-}
+func TestHandler_GetPodDetails(t *testing.T) {
 
-func NewMockPromQlService(configData *PrometheusConfig) PromQl {
-	return &mockPromQlService{
-		configData: configData,
+	mockPodMetrics := &metricsv1beta1.PodMetrics{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-namespace",
+		},
+		Containers: []metricsv1beta1.ContainerMetrics{
+			{
+				Name: "container-1",
+				Usage: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("100m"),
+					corev1.ResourceMemory: resource.MustParse("200Mi"),
+				},
+			},
+			{
+				Name: "container-2",
+				Usage: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("150m"),
+					corev1.ResourceMemory: resource.MustParse("300Mi"),
+				},
+			},
+		},
+	}
+
+	h := handler{
+		metricsClient: &MockMetricsClient{podMetrics: mockPodMetrics},
+	}
+	now := metav1.NewTime(time.Now()) // Initialize now here
+
+	tests := []struct {
+		name            string
+		pod             corev1.Pod
+		expectedDetails PodDetails
+		expectedErr     error
+	}{
+		{
+			name: "Successful pod details retrieval",
+			pod: corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-pod",
+					Namespace: "test-namespace",
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name:         "container-1",
+							ContainerID:  "docker://container-1-id",
+							State:        corev1.ContainerState{Running: &corev1.ContainerStateRunning{StartedAt: now}},
+							RestartCount: 0,
+						},
+						{
+							Name:  "container-2",
+							State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "WaitingReason", Message: "WaitingMessage"}},
+						},
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "container-1",
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU: *resource.NewMilliQuantity(100, resource.DecimalSI),
+									corev1.ResourceMemory: *resource.NewQuantity(200*1024*1024,
+										resource.BinarySI),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    *resource.NewMilliQuantity(200, resource.DecimalSI),
+									corev1.ResourceMemory: *resource.NewQuantity(400*1024*1024, resource.BinarySI),
+								},
+							},
+						},
+						{
+							Name: "container-2",
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    *resource.NewMilliQuantity(150, resource.DecimalSI),
+									corev1.ResourceMemory: *resource.NewQuantity(300*1024*1024, resource.BinarySI),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    *resource.NewMilliQuantity(300, resource.DecimalSI),
+									corev1.ResourceMemory: *resource.NewQuantity(600*1024*1024, resource.BinarySI),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedDetails: PodDetails{
+				Name:        "test-pod",
+				Status:      "Running",
+				Message:     "",
+				Reason:      "",
+				TotalCPU:    "250m",
+				TotalMemory: "500Mi",
+				ContainerDetailsMap: map[string]ContainerDetails{
+					"container-1": {
+						Name:                   "container-1",
+						ID:                     "docker://container-1-id",
+						State:                  "Running",
+						RestartCount:           0,
+						LastStartedAt:          now.Format(time.RFC3339),
+						RequestedCPU:           "100m",
+						RequestedMemory:        "200Mi",
+						LimitCPU:               "200m",
+						LimitMemory:            "400Mi",
+						TotalCPU:               "100m",
+						TotalMemory:            "200Mi",
+						LastTerminationReason:  "",
+						LastTerminationMessage: "",
+						WaitingReason:          "",
+						WaitingMessage:         "",
+					},
+					"container-2": {
+						Name:                   "container-2",
+						State:                  "Waiting",
+						RestartCount:           0,
+						WaitingReason:          "WaitingReason",
+						WaitingMessage:         "WaitingMessage",
+						RequestedCPU:           "150m",
+						RequestedMemory:        "300Mi",
+						LimitCPU:               "300m",
+						LimitMemory:            "600Mi",
+						TotalCPU:               "150m",
+						TotalMemory:            "300Mi",
+						LastTerminationReason:  "",
+						LastTerminationMessage: "",
+						LastStartedAt:          "",
+						ID:                     "",
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		// Add more test cases for different scenarios:
+		// - Pod with terminated containers
+		// - Pod with no container statuses
+		// - Error getting pod metrics
+		// ...
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			podDetails, err := h.getPodDetails(tt.pod)
+
+			assert.Equal(t, tt.expectedErr, err)
+			assert.Equal(t, tt.expectedDetails, podDetails)
+		})
 	}
 }
 
-func (m *mockPromQlService) BuildQuery(MetricsRequestBody) (string, error) {
-	return "", nil
+func TestHandler_GetContainerDetails(t *testing.T) {
+	now := metav1.NewTime(time.Now())
+
+	tests := []struct {
+		name           string
+		pod            corev1.Pod
+		expectedResult map[string]ContainerDetails
+	}{
+		{
+			name: "Pod with running and waiting containers",
+			pod: corev1.Pod{
+				Status: corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{
+						{
+							Name:         "running-container",
+							ContainerID:  "docker://abc123",
+							RestartCount: 2,
+							State: corev1.ContainerState{
+								Running: &corev1.ContainerStateRunning{
+									StartedAt: now,
+								},
+							},
+						},
+						{
+							Name:         "waiting-container",
+							ContainerID:  "docker://def456",
+							RestartCount: 1,
+							State: corev1.ContainerState{
+								Waiting: &corev1.ContainerStateWaiting{
+									Reason:  "ImagePullBackOff",
+									Message: "Back-off pulling image",
+								},
+							},
+							LastTerminationState: corev1.ContainerState{
+								Terminated: &corev1.ContainerStateTerminated{
+									Reason:  "Error",
+									Message: "Container crashed",
+								},
+							},
+						},
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "running-container",
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceMemory: resource.MustParse("200Mi"),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("200m"),
+									corev1.ResourceMemory: resource.MustParse("400Mi"),
+								},
+							},
+						},
+						{
+							Name: "waiting-container",
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("150m"),
+									corev1.ResourceMemory: resource.MustParse("300Mi"),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("300m"),
+									corev1.ResourceMemory: resource.MustParse("600Mi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedResult: map[string]ContainerDetails{
+				"running-container": {
+					Name:                   "running-container",
+					ID:                     "docker://abc123",
+					State:                  "Running",
+					RestartCount:           2,
+					LastStartedAt:          now.Format(time.RFC3339),
+					RequestedCPU:           "100m",
+					RequestedMemory:        "200Mi",
+					LimitCPU:               "200m",
+					LimitMemory:            "400Mi",
+					WaitingReason:          "",
+					WaitingMessage:         "",
+					LastTerminationReason:  "",
+					LastTerminationMessage: "",
+				},
+				"waiting-container": {
+					Name:                   "waiting-container",
+					ID:                     "docker://def456",
+					State:                  "Waiting",
+					RestartCount:           1,
+					LastStartedAt:          "",
+					RequestedCPU:           "150m",
+					RequestedMemory:        "300Mi",
+					LimitCPU:               "300m",
+					LimitMemory:            "600Mi",
+					WaitingReason:          "ImagePullBackOff",
+					WaitingMessage:         "Back-off pulling image",
+					LastTerminationReason:  "Error",
+					LastTerminationMessage: "Container crashed",
+				},
+			},
+		},
+		{
+			name: "Pod with no container statuses but with spec",
+			pod: corev1.Pod{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name: "spec-only-container",
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceMemory: resource.MustParse("200Mi"),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("200m"),
+									corev1.ResourceMemory: resource.MustParse("400Mi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedResult: map[string]ContainerDetails{
+				"spec-only-container": {
+					Name:            "spec-only-container",
+					RequestedCPU:    "100m",
+					RequestedMemory: "200Mi",
+					LimitCPU:        "200m",
+					LimitMemory:     "400Mi",
+				},
+			},
+		},
+		{
+			name:           "Empty pod",
+			pod:            corev1.Pod{},
+			expectedResult: map[string]ContainerDetails{},
+		},
+	}
+
+	h := &handler{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := h.getContainerDetails(tt.pod)
+			assert.Equal(t, tt.expectedResult, result)
+		})
+	}
 }
 
-func (m *mockPromQlService) QueryPrometheus(context.Context, string, time.Time, time.Time) (model.Value, error) {
-	return nil, nil
-}
+func TestHandler_GetContainerStatus(t *testing.T) {
+	h := &handler{}
 
-func (m *mockPromQlService) GetConfigData() *PrometheusConfig {
-	return m.configData
-}
+	tests := []struct {
+		name           string
+		containerState corev1.ContainerState
+		expectedStatus string
+	}{
+		{
+			name: "Running container",
+			containerState: corev1.ContainerState{
+				Running: &corev1.ContainerStateRunning{
+					StartedAt: metav1.NewTime(time.Now()),
+				},
+			},
+			expectedStatus: "Running",
+		},
+		{
+			name: "Waiting container",
+			containerState: corev1.ContainerState{
+				Waiting: &corev1.ContainerStateWaiting{
+					Reason:  "ImagePullBackOff",
+					Message: "Back-off pulling image",
+				},
+			},
+			expectedStatus: "Waiting",
+		},
+		{
+			name: "Terminated container",
+			containerState: corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{
+					ExitCode: 1,
+					Reason:   "Error",
+					Message:  "Container crashed",
+				},
+			},
+			expectedStatus: "Terminated",
+		},
+		{
+			name:           "Empty container state",
+			containerState: corev1.ContainerState{},
+			expectedStatus: "Unknown",
+		},
+	}
 
-func (m *mockPromQlService) PopulateReqMap(MetricsRequestBody) map[string]string {
-	return map[string]string{}
-}
-
-func (m *mockPromQlService) DisableMetricsChart() bool {
-	return m.configData == nil
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status := h.getContainerStatus(tt.containerState)
+			assert.Equal(t, tt.expectedStatus, status)
+		})
+	}
 }

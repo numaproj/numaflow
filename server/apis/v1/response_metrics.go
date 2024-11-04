@@ -20,48 +20,48 @@ type MetricsRequestBody struct {
 	EndTime    string            `json:"end_time"`
 }
 
-type FilterData struct {
+type Filter struct {
 	Name     string `yaml:"name"`
 	Required bool   `yaml:"required"`
 }
 
-type DimensionData struct {
-	Name       string       `yaml:"name"`
-	Expression string       `yaml:"expr"`
-	Filters    []FilterData `yaml:"filters"`
+type Dimension struct {
+	Name       string   `yaml:"name"`
+	Expression string   `yaml:"expr"`
+	Filters    []Filter `yaml:"filters"`
 }
 
-type MetricData struct {
+type Metric struct {
 	Name string `yaml:"metric_name"`
 	// array of required labels.
 	Filters []string `yaml:"required_filters"`
 	//array of dimensions and their data
-	Dimensions []DimensionData `yaml:"dimensions"`
+	Dimensions []Dimension `yaml:"dimensions"`
 }
 
-type ParamData struct {
+type Params struct {
 	Name     string `yaml:"name"`
 	Required bool   `yaml:"required"`
 }
 
-type PatternData struct {
-	Name        string       `yaml:"name" json:"name"`
-	Object      string       `yaml:"object" json:"object"`
-	Title       string       `yaml:"title"`
-	Description string       `yaml:"description"`
-	Expression  string       `yaml:"expr"`
-	Params      []ParamData  `yaml:"params"`
-	Metrics     []MetricData `yaml:"metrics"`
+type Pattern struct {
+	Name        string   `yaml:"name" json:"name"`
+	Object      string   `yaml:"object" json:"object"`
+	Title       string   `yaml:"title"`
+	Description string   `yaml:"description"`
+	Expression  string   `yaml:"expr"`
+	Params      []Params `yaml:"params"`
+	Metrics     []Metric `yaml:"metrics"`
 }
 
 type PrometheusConfig struct {
 	// prometheus server url in the config
 	ServerUrl string `yaml:"url"`
 	// patterns in the config
-	Patterns []PatternData `yaml:"patterns"`
+	Patterns []Pattern `yaml:"patterns"`
 }
 
-func LoadPrometheusMetricConfig() (*PrometheusConfig, error) {
+var loadPrometheusMetricConfig = func() (*PrometheusConfig, error) {
 	var (
 		data       []byte
 		promConfig PrometheusConfig

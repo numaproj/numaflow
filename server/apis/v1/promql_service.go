@@ -30,7 +30,7 @@ type Prometheus struct {
 	Api    PrometheusAPI
 }
 
-func NewPrometheusClient(url string) (*Prometheus, error) {
+var newPrometheusClient = func(url string) (*Prometheus, error) {
 	if url == "" {
 		return nil, fmt.Errorf("prometheus server url is not set")
 	}
@@ -122,7 +122,7 @@ func NewPromQlServiceObject() (PromQl, error) {
 	}
 
 	// load prometheus metric config.
-	config, err = LoadPrometheusMetricConfig()
+	config, err = loadPrometheusMetricConfig()
 	if err != nil {
 		// return serviceObj with nil config data & client. Do not return error as this is not critical.
 		return serviceObj, nil
@@ -130,7 +130,7 @@ func NewPromQlServiceObject() (PromQl, error) {
 	serviceObj.ConfigData = config
 
 	// prometheus client instance.
-	client, err = NewPrometheusClient(config.ServerUrl)
+	client, err = newPrometheusClient(config.ServerUrl)
 	if err != nil {
 		// return serviceObj with nil prometheus client. Do not return error as this is not critical.
 		return serviceObj, nil

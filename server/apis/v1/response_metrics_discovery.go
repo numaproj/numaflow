@@ -1,9 +1,9 @@
 package v1
 
 type Dimensions struct {
-	Name    string       `json:"name"`
-	Filters []FilterData `json:"filters"`
-	Params  []ParamData  `json:"params"`
+	Name    string   `json:"name"`
+	Filters []Filter `json:"filters"`
+	Params  []Params `json:"params"`
 }
 
 type DiscoveryResponse struct {

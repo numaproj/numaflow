@@ -1293,10 +1293,10 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 	for _, pattern := range configData.Patterns {
 		if pattern.Object == object {
 			for _, metric := range pattern.Metrics {
-				var requiredFilters []FilterData
+				var requiredFilters []Filter
 				// Populate the required filters
 				for _, filter := range metric.Filters {
-					requiredFilters = append(requiredFilters, FilterData{
+					requiredFilters = append(requiredFilters, Filter{
 						Name:     filter,
 						Required: true,
 					})
@@ -1307,7 +1307,7 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 					var combinedFilters = requiredFilters
 					// Add the dimension filters
 					for _, filter := range dimension.Filters {
-						combinedFilters = append(combinedFilters, FilterData{
+						combinedFilters = append(combinedFilters, Filter{
 							Name:     filter.Name,
 							Required: filter.Required,
 						})

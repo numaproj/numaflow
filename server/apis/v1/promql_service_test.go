@@ -2,6 +2,8 @@ package v1
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"reflect"
 	"regexp"
 	"strings"
@@ -15,6 +17,11 @@ import (
 
 // MockPrometheusAPI is a mock implementation of the PrometheusAPI interface
 type MockPrometheusAPI struct{}
+type MockPrometheusClient struct{}
+
+func (m *MockPrometheusClient) Do(ctx context.Context, req *http.Request) (*http.Response, []byte, error) {
+	return nil, nil, nil
+}
 
 // QueryRange mock implementation
 func (m *MockPrometheusAPI) QueryRange(ctx context.Context, query string, r v1.Range, opts ...v1.Option) (model.Value, v1.Warnings, error) {
@@ -236,4 +243,231 @@ func Test_QueryPrometheus(t *testing.T) {
 			t.Errorf("expected error %v, got %v", expectedError, err)
 		}
 	})
+}
+
+func TestGetConfigData(t *testing.T) {
+	tests := []struct {
+		name     string
+		service  *PromQlService
+		expected *PrometheusConfig
+	}{
+		{
+			name: "returns nil when config is not set",
+			service: &PromQlService{
+				ConfigData: nil,
+			},
+			expected: nil,
+		},
+		{
+			name: "returns config when config is set",
+			service: &PromQlService{
+				ConfigData: &PrometheusConfig{
+					ServerUrl: "http://test.com",
+				},
+			},
+			expected: &PrometheusConfig{
+				ServerUrl: "http://test.com",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.service.GetConfigData()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestDisableMetricsChart(t *testing.T) {
+	tests := []struct {
+		name     string
+		service  *PromQlService
+		expected bool
+	}{
+		{
+			name: "returns true when both config and client are nil",
+			service: &PromQlService{
+				ConfigData:       nil,
+				PrometheusClient: nil,
+			},
+			expected: true,
+		},
+		{
+			name: "returns true when only config is nil",
+			service: &PromQlService{
+				ConfigData:       nil,
+				PrometheusClient: &Prometheus{},
+			},
+			expected: true,
+		},
+		{
+			name: "returns true when only client is nil",
+			service: &PromQlService{
+				ConfigData:       &PrometheusConfig{},
+				PrometheusClient: nil,
+			},
+			expected: true,
+		},
+		{
+			name: "returns false when both config and client are set",
+			service: &PromQlService{
+				ConfigData:       &PrometheusConfig{},
+				PrometheusClient: &Prometheus{},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.service.DisableMetricsChart()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestNewPromQlServiceObject(t *testing.T) {
+	// Test cases with different scenarios
+	tests := []struct {
+		name                 string
+		mockConfig           *PrometheusConfig
+		mockConfigErr        error
+		mockClient           *Prometheus
+		mockClientErr        error
+		expectedExpr         map[string]map[string]string
+		expectedPlaceholders map[string]map[string][]string
+	}{
+		{
+			name: "Successful initialization",
+			mockConfig: &PrometheusConfig{
+				ServerUrl: "http://prometheus:9090",
+				Patterns: []Pattern{
+					{
+						Expression: `sum(rate($metric{label="$label"}[$interval])) by ($groupBy)`,
+						Metrics: []Metric{
+							{
+								Name: "metric_1",
+								Dimensions: []Dimension{
+									{Name: "label", Expression: ""},
+									{Name: "groupBy", Expression: "$groupBy"},
+								},
+							},
+						},
+					},
+				},
+			},
+			mockClient: &Prometheus{
+				Client: &MockPrometheusClient{},
+				Api:    &MockPrometheusAPI{},
+			},
+			expectedExpr: map[string]map[string]string{
+				"metric_1": {
+					"label":   `sum(rate($metric{label="$label"}[$interval])) by ($groupBy)`,
+					"groupBy": "$groupBy",
+				},
+			},
+			expectedPlaceholders: map[string]map[string][]string{
+				"metric_1": {
+					"label":   []string{"$metric", "$label", "$interval", "$groupBy"},
+					"groupBy": []string{"$groupBy"},
+				},
+			},
+		},
+		{
+			name:                 "Error loading config",
+			mockConfigErr:        fmt.Errorf("config error"),
+			expectedExpr:         nil,
+			expectedPlaceholders: nil,
+		},
+		{
+			name: "Error creating client",
+			mockConfig: &PrometheusConfig{
+				ServerUrl: "http://prometheus:9090",
+			},
+			mockClientErr:        fmt.Errorf("client error"),
+			expectedExpr:         nil,
+			expectedPlaceholders: nil,
+		},
+		{
+			name:                 "Empty config file",
+			mockConfig:           &PrometheusConfig{}, // Empty config
+			expectedExpr:         nil,
+			expectedPlaceholders: nil,
+		},
+		{
+			name:                 "Invalid config file format",
+			mockConfigErr:        fmt.Errorf("yaml: unmarshal errors:\n  line 1: cannot unmarshal !!str `invalid...` into main.PrometheusConfig"), // Simulate invalid YAML error
+			expectedExpr:         nil,
+			expectedPlaceholders: nil,
+		},
+		{
+			name: "Missing server URL in config",
+			mockConfig: &PrometheusConfig{
+				Patterns: []Pattern{ // ServerUrl is missing
+					{
+						Expression: `sum(rate($metric{label="$label"}[$interval])) by ($groupBy)`,
+						Metrics: []Metric{
+							{
+								Name: "metric_1",
+								Dimensions: []Dimension{
+									{Name: "label", Expression: ""},
+									{Name: "groupBy", Expression: "$groupBy"},
+								},
+							},
+						},
+					},
+				},
+			},
+			mockClientErr:        fmt.Errorf("prometheus server url is not set"), // Expect client creation error
+			expectedExpr:         nil,
+			expectedPlaceholders: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Mock loadPrometheusMetricConfig and newPrometheusClient
+			originalLoadConfig := loadPrometheusMetricConfig
+			originalNewClient := newPrometheusClient
+			defer func() {
+				loadPrometheusMetricConfig = originalLoadConfig
+				newPrometheusClient = originalNewClient
+			}()
+
+			loadPrometheusMetricConfig = func() (*PrometheusConfig, error) {
+				return tt.mockConfig, tt.mockConfigErr
+			}
+
+			newPrometheusClient = func(url string) (*Prometheus, error) {
+				return tt.mockClient, tt.mockClientErr
+			}
+
+			service, err := NewPromQlServiceObject()
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+			promService := service.(*PromQlService)
+
+			if tt.mockConfigErr != nil || tt.mockClientErr != nil || tt.mockConfig.ServerUrl == "" {
+				// If there's an error in loading config or creating client,
+				//  expressions and placeholders should be nil (empty maps)
+				if len(promService.Expression) != 0 { // Check for empty map
+					t.Errorf("Expressions mismatch. Got: %v, Want: %v", promService.Expression, map[string]map[string]string{})
+				}
+				if len(promService.PlaceHolders) != 0 { // Check for empty map
+					t.Errorf("Placeholders mismatch. Got: %v, Want: %v", promService.PlaceHolders, map[string]map[string][]string{})
+				}
+			} else {
+				// Otherwise, compare with the expected values
+				if !reflect.DeepEqual(promService.Expression, tt.expectedExpr) {
+					t.Errorf("Expressions mismatch. Got: %v, Want: %v", promService.Expression, tt.expectedExpr)
+				}
+
+				if !reflect.DeepEqual(promService.PlaceHolders, tt.expectedPlaceholders) {
+					t.Errorf("Placeholders mismatch. Got: %v, Want: %v", promService.PlaceHolders, tt.expectedPlaceholders)
+				}
+			}
+		})
+	}
 }
