@@ -173,7 +173,7 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	// Get the time series data across different dimensions.
 	r.POST("/metrics-proxy", handler.GetMetricData)
 	// Discover the metrics for a given object type.
-	r.GET("/metrics-discovery/object/:object", handler.GetMetricsDiscovery)
+	r.GET("/metrics-discovery/object/:object", handler.DiscoverMetrics)
 }
 
 // authMiddleware is the middleware for AuthN/AuthZ.

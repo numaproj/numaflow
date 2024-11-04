@@ -57,7 +57,7 @@ func TestValidatePipelinePatch(t *testing.T) {
 
 }
 
-func TestHandler_GetMetricsDiscovery(t *testing.T) {
+func TestHandler_DiscoverMetrics(t *testing.T) {
 	tests := []struct {
 		name           string
 		object         string
@@ -160,7 +160,7 @@ func TestHandler_GetMetricsDiscovery(t *testing.T) {
 			}
 
 			// Call the handler
-			h.GetMetricsDiscovery(c)
+			h.DiscoverMetrics(c)
 
 			// Check response
 			var response NumaflowAPIResponse
@@ -181,7 +181,7 @@ func TestHandler_GetMetricsDiscovery(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(got, tt.want) && len(got) != 0 {
-				t.Errorf("GetMetricsDiscovery() got = %v, want %v", got, tt.want)
+				t.Errorf("DiscoverMetrics() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

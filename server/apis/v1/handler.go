@@ -1283,9 +1283,9 @@ func (h *handler) GetMetricData(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, result))
 }
 
-// GetMetricsDiscovery is used to provide a metrics list for each
+// DiscoverMetrics is used to provide a metrics list for each
 // dimension along with necessary params and filters for a given object
-func (h *handler) GetMetricsDiscovery(c *gin.Context) {
+func (h *handler) DiscoverMetrics(c *gin.Context) {
 	// Get the object for which the metrics are to be discovered
 	// Ex. mono-vertex, pipeline, etc.
 	object := c.Param("object")
