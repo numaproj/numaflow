@@ -140,13 +140,13 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// Create mock promql service
-			promQlService := NewMockPromQlService(&PrometheusConfig{
+			promQlServiceObj := NewMockPromQlService(&PrometheusConfig{
 				Patterns: tt.configPatterns,
 			})
 
 			// Create handler with service
 			h := &handler{
-				promQlService: promQlService,
+				promQlServiceObj: promQlServiceObj,
 			}
 
 			// Create gin test context

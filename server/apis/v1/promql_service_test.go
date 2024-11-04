@@ -204,7 +204,7 @@ func Test_QueryPrometheus(t *testing.T) {
 	t.Run("Successful query", func(t *testing.T) {
 		mockAPI := &MockPrometheusAPI{}
 		promQlService := &PromQlService{
-			Prometheus: &Prometheus{
+			PrometheusClient: &Prometheus{
 				Api: mockAPI,
 			},
 		}
@@ -223,9 +223,9 @@ func Test_QueryPrometheus(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, 1, matrix.Len())
 	})
-	t.Run("Prometheus is nil", func(t *testing.T) {
+	t.Run("Prometheus client is nil", func(t *testing.T) {
 		service := &PromQlService{
-			Prometheus: nil,
+			PrometheusClient: nil,
 		}
 		_, err := service.QueryPrometheus(context.Background(), "up", time.Now().Add(-10*time.Minute), time.Now())
 		if err == nil {

@@ -56,10 +56,10 @@ type PromQl interface {
 }
 
 type PromQlService struct {
-	Prometheus   *Prometheus
-	PlaceHolders map[string]map[string][]string
-	Expression   map[string]map[string]string
-	ConfigData   *PrometheusConfig
+	PrometheusClient *Prometheus
+	PlaceHolders     map[string]map[string][]string
+	Expression       map[string]map[string]string
+	ConfigData       *PrometheusConfig
 }
 
 func formatDimension(dimension string) string {
@@ -90,7 +90,7 @@ func formatMapLabels(labels map[string]string) string {
 }
 
 // substitutes placeholders in expr with req values
-// throws err if any required placeholder is not present/empty in reqmap
+// throws err if any required placeholder is not present/empty in reqMap
 func substitutePlaceHolders(expr string, placeholders []string, reqMap map[string]string) (string, error) {
 	for _, match := range placeholders {
 		key := match
@@ -103,8 +103,8 @@ func substitutePlaceHolders(expr string, placeholders []string, reqMap map[strin
 	return expr, nil
 }
 
-// NewPromQlService creates a new PromQlService instance
-func NewPromQlService() (PromQl, error) {
+// NewPromQlServiceObject creates a new PromQlService instance
+func NewPromQlServiceObject() (PromQl, error) {
 	var (
 		// map of [metric_name][dimension] = expr
 		expressions  = make(map[string]map[string]string)
@@ -114,27 +114,28 @@ func NewPromQlService() (PromQl, error) {
 		err          error
 	)
 
-	var service = &PromQlService{
-		Prometheus:   client,
-		PlaceHolders: placeHolders,
-		Expression:   expressions,
-		ConfigData:   config,
+	var serviceObj = &PromQlService{
+		PrometheusClient: client,
+		PlaceHolders:     placeHolders,
+		Expression:       expressions,
+		ConfigData:       config,
 	}
 
 	// load prometheus metric config.
 	config, err = LoadPrometheusMetricConfig()
 	if err != nil {
-		// return service with nil config data & client. Do not return error as this is not critical.
-		return service, nil
+		// return serviceObj with nil config data & client. Do not return error as this is not critical.
+		return serviceObj, nil
 	}
-	service.ConfigData = config
-	// prom client instance.
+	serviceObj.ConfigData = config
+
+	// prometheus client instance.
 	client, err = NewPrometheusClient(config.ServerUrl)
 	if err != nil {
-		// return service with nil prometheus client. Do not return error as this is not critical.
-		return service, nil
+		// return serviceObj with nil prometheus client. Do not return error as this is not critical.
+		return serviceObj, nil
 	}
-	service.Prometheus = client
+	serviceObj.PrometheusClient = client
 
 	for _, pattern := range config.Patterns {
 		patternExpression := pattern.Expression
@@ -167,9 +168,9 @@ func NewPromQlService() (PromQl, error) {
 		}
 	}
 
-	service.PlaceHolders = placeHolders
-	service.Expression = expressions
-	return service, nil
+	serviceObj.PlaceHolders = placeHolders
+	serviceObj.Expression = expressions
+	return serviceObj, nil
 }
 
 // PopulateReqMap populate map based on req fields
@@ -214,7 +215,7 @@ func (b *PromQlService) BuildQuery(requestBody MetricsRequestBody) (string, erro
 
 // QueryPrometheus query prometheus server
 func (b *PromQlService) QueryPrometheus(ctx context.Context, promql string, start, end time.Time) (model.Value, error) {
-	if b.Prometheus == nil {
+	if b.PrometheusClient == nil {
 		return nil, fmt.Errorf("prometheus client is not defined")
 	}
 	r := v1.Range{
@@ -222,7 +223,7 @@ func (b *PromQlService) QueryPrometheus(ctx context.Context, promql string, star
 		End:   end,
 		Step:  time.Minute,
 	}
-	result, _, err := b.Prometheus.Api.QueryRange(ctx, promql, r, v1.WithTimeout(5*time.Second))
+	result, _, err := b.PrometheusClient.Api.QueryRange(ctx, promql, r, v1.WithTimeout(5*time.Second))
 	return result, err
 }
 
@@ -233,5 +234,5 @@ func (b *PromQlService) GetConfigData() *PrometheusConfig {
 
 func (b *PromQlService) DisableMetricsChart() bool {
 	// disable metrics charts if metric config or prometheus client is nil
-	return b.ConfigData == nil || b.Prometheus == nil
+	return b.ConfigData == nil || b.PrometheusClient == nil
 }

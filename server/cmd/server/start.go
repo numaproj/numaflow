@@ -106,6 +106,7 @@ func (s *server) Start(ctx context.Context) {
 			ManagedNamespace:     s.options.ManagedNamespace,
 			Namespaced:           s.options.Namespaced,
 			IsReadOnly:           s.options.ReadOnly,
+			DisableMetricsCharts: true, // defaults to true
 			Version:              numaflow.GetVersion().String(),
 			DaemonClientProtocol: s.options.DaemonClientProtocol,
 		},

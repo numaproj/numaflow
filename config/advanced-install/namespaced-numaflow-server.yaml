@@ -141,7 +141,7 @@ data:
     # url is a required field, it should be the url of the service to which the metrics proxy will connect
     # url: service_name + "." + service_namespace + ".svc.cluster.local" + ":" + port
     # example for local prometheus service
-    url: http://prometheus-operated.monitoring.svc.cluster.local:9090
+    # url: http://prometheus-operated.monitoring.svc.cluster.local:9090
     patterns:
     - name: mono_vertex_histogram
       object: mono-vertex

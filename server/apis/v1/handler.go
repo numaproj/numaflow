@@ -93,7 +93,7 @@ func WithReadOnlyMode() HandlerOption {
 type handler struct {
 	kubeClient            kubernetes.Interface
 	metricsClient         metricsclientv1beta1.MetricsV1beta1Interface
-	promQlService         PromQl
+	promQlServiceObj      PromQl
 	numaflowClient        dfv1clients.NumaflowV1alpha1Interface
 	daemonClientsCache    *lru.Cache[string, daemonclient.DaemonClient]
 	mvtDaemonClientsCache *lru.Cache[string, mvtdaemonclient.MonoVertexDaemonClient]
@@ -104,7 +104,7 @@ type handler struct {
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, promQlService PromQl, opts ...HandlerOption) (*handler, error) {
+func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, promQlServiceObj PromQl, opts ...HandlerOption) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -135,7 +135,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	return &handler{
 		kubeClient:            kubeClient,
 		metricsClient:         metricsClient,
-		promQlService:         promQlService,
+		promQlServiceObj:      promQlServiceObj,
 		numaflowClient:        numaflowClient,
 		daemonClientsCache:    daemonClientsCache,
 		mvtDaemonClientsCache: mvtDaemonClientsCache,
@@ -1241,7 +1241,7 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 
 func (h *handler) GetMetricData(c *gin.Context) {
 	var requestBody MetricsRequestBody
-	if h.promQlService == nil {
+	if h.promQlServiceObj == nil {
 		h.respondWithError(c, "Failed to get the prometheus query service")
 		return
 	}
@@ -1250,7 +1250,7 @@ func (h *handler) GetMetricData(c *gin.Context) {
 		return
 	}
 	// builds prom query
-	promQl, err := h.promQlService.BuildQuery(requestBody)
+	promQl, err := h.promQlServiceObj.BuildQuery(requestBody)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to build the prometheus query%v", err))
 		return
@@ -1267,7 +1267,7 @@ func (h *handler) GetMetricData(c *gin.Context) {
 	startTime, _ := time.Parse(time.RFC3339, requestBody.StartTime)
 	endTime, _ := time.Parse(time.RFC3339, requestBody.EndTime)
 
-	result, err := h.promQlService.QueryPrometheus(context.Background(), promQl, startTime, endTime)
+	result, err := h.promQlServiceObj.QueryPrometheus(context.Background(), promQl, startTime, endTime)
 	if err != nil {
 		h.respondWithError(c, fmt.Sprintf("Failed to execute the prometheus query, %s", err.Error()))
 		return
@@ -1282,9 +1282,9 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 	// Ex. mono-vertex, pipeline, etc.
 	object := c.Param("object")
 
-	configData := h.promQlService.GetConfigData()
+	configData := h.promQlServiceObj.GetConfigData()
 	if configData == nil {
-		h.respondWithError(c, "Prometheus metric config is not available")
+		h.respondWithError(c, "PrometheusClient metric config is not available")
 		return
 	}
 
