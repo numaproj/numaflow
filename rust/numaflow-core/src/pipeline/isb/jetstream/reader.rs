@@ -3,13 +3,14 @@ use std::time::Duration;
 use async_nats::jetstream::{
     consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
 };
+
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::config::pipeline::isb::BufferReaderConfig;
 use crate::config::pipeline::PipelineConfig;
@@ -72,7 +73,8 @@ impl JetstreamReader {
         cancel_token: CancellationToken,
         pipeline_config: &PipelineConfig,
     ) -> Result<(Receiver<ReadMessage>, JoinHandle<Result<()>>)> {
-        let (messages_tx, messages_rx) = mpsc::channel(2 * self.config.batch_size);
+        // FIXME: factor of 2 should be configurable, at the least a const
+        let (messages_tx, messages_rx) = mpsc::channel(2 * pipeline_config.batch_size);
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let this = self.clone();
@@ -104,41 +106,44 @@ impl JetstreamReader {
                     .messages()
                     .await
                     .unwrap()
-                    .chunks_timeout(this.config.batch_size, this.config.read_timeout);
+                    .chunks_timeout(pipeline_config.batch_size, pipeline_config.read_timeout);
 
                 tokio::pin!(chunk_stream);
 
                 // The .next() call will not return if there is no data even if read_timeout is
                 // reached.
+                let mut total_messages = 0;
+                let mut chunk_time = Instant::now();
+                let mut start_time = Instant::now();
                 while let Some(messages) = chunk_stream.next().await {
+                    debug!(
+                        len = messages.len(),
+                        elapsed_ms = chunk_time.elapsed().as_millis(),
+                        "Received messages from Jetstream",
+                    );
+                    total_messages += messages.len();
                     for message in messages {
-                        let jetstream_message = match message {
-                            Ok(message) => message,
-                            Err(e) => {
-                                error!(?e, "Failed to fetch messages from the Jetstream");
-                                continue;
-                            }
-                        };
+                        let jetstream_message = message.map_err(|e| {
+                            Error::ISB(format!(
+                                "Error while fetching message from Jetstream: {:?}",
+                                e
+                            ))
+                        })?;
 
-                        let msg_info = match jetstream_message.info() {
-                            Ok(info) => info,
-                            Err(e) => {
-                                error!(?e, "Failed to get message info from Jetstream");
-                                continue;
-                            }
-                        };
+                        let msg_info = jetstream_message.info().map_err(|e| {
+                            Error::ISB(format!(
+                                "Error while fetching message info from Jetstream: {:?}",
+                                e
+                            ))
+                        })?;
 
                         let mut message: Message =
-                            match jetstream_message.payload.clone().try_into() {
-                                Ok(message) => message,
-                                Err(e) => {
-                                    error!(
-                                        ?e,
-                                        "Failed to parse message payload received from Jetstream"
-                                    );
-                                    continue;
-                                }
-                            };
+                            jetstream_message.payload.clone().try_into().map_err(|e| {
+                                Error::ISB(format!(
+                                    "Error while converting Jetstream message to Message: {:?}",
+                                    e
+                                ))
+                            })?;
 
                         message.offset = Some(Offset::Int(IntOffset::new(
                             msg_info.stream_sequence,
@@ -158,21 +163,31 @@ impl JetstreamReader {
                             ack: ack_tx,
                         };
 
-                        if messages_tx.send(read_message).await.is_err() {
-                            error!("Failed to send message to the channel");
-                            return Ok(());
-                        }
+                        messages_tx.send(read_message).await.map_err(|e| {
+                            Error::ISB(format!("Error while sending message to channel: {:?}", e))
+                        })?;
 
                         forward_pipeline_metrics()
                             .forwarder
                             .data_read
                             .get_or_create(labels)
                             .inc();
+
+                        if start_time.elapsed() >= Duration::from_millis(1000) {
+                            info!(
+                                len = total_messages,
+                                elapsed_ms = start_time.elapsed().as_millis(),
+                                "Total messages read from Jetstream"
+                            );
+                            start_time = Instant::now();
+                            total_messages = 0;
+                        }
                     }
                     if cancel_token.is_cancelled() {
                         warn!("Cancellation token is cancelled. Exiting JetstreamReader");
                         break;
                     }
+                    chunk_time = Instant::now();
                 }
                 Ok(())
             }
@@ -279,8 +294,6 @@ mod tests {
         let buf_reader_config = BufferReaderConfig {
             partitions: 0,
             streams: vec![],
-            batch_size: 2,
-            read_timeout: Duration::from_millis(1000),
             wip_ack_interval: Duration::from_millis(5),
         };
         let js_reader = JetstreamReader::new(
