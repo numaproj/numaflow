@@ -35,7 +35,6 @@ func NewServerCommand() *cobra.Command {
 		namespaced           bool
 		managedNamespace     string
 		baseHref             string
-		disableMetricsCharts bool
 		disableAuth          bool
 		serverAddr           string
 		corsAllowedOrigins   string
@@ -64,7 +63,6 @@ func NewServerCommand() *cobra.Command {
 				ServerAddr:           serverAddr,
 				CorsAllowedOrigins:   corsAllowedOrigins,
 				ReadOnly:             readOnly,
-				DisableMetricsCharts: disableMetricsCharts,
 				DaemonClientProtocol: daemonClientProtocol,
 			}
 			server := svrcmd.NewServer(opts)
@@ -78,7 +76,6 @@ func NewServerCommand() *cobra.Command {
 	command.Flags().StringVar(&managedNamespace, "managed-namespace", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_MANAGED_NAMESPACE", sharedutil.LookupEnvStringOr("NAMESPACE", "numaflow-system")), "The namespace that the server watches when \"--namespaced\" is \"true\".")
 	command.Flags().StringVar(&baseHref, "base-href", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_BASE_HREF", "/"), "Base href for Numaflow server, defaults to '/'.")
 	command.Flags().BoolVar(&readOnly, "readonly", sharedutil.LookupEnvBoolOr("NUMAFLOW_SERVER_READONLY", false), "Whether to enable read only view for the UX server, defaults to false.")
-	command.Flags().BoolVar(&disableMetricsCharts, "disable-metrics-charts", sharedutil.LookupEnvBoolOr("NUMAFLOW_SERVER_DISABLE_METRICS_CHARTS", true), "Whether to disable metrics charts for the UX server, defaults to true.")
 	command.Flags().BoolVar(&disableAuth, "disable-auth", sharedutil.LookupEnvBoolOr("NUMAFLOW_SERVER_DISABLE_AUTH", false), "Whether to disable authentication and authorization, defaults to false.")
 	command.Flags().StringVar(&serverAddr, "server-addr", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_ADDRESS", "https://localhost:8443"), "The external address of the Numaflow server.")
 	command.Flags().StringVar(&corsAllowedOrigins, "cors-allowed-origins", sharedutil.LookupEnvStringOr("NUMAFLOW_SERVER_CORS_ALLOWED_ORIGINS", ""), "The values for allowed cors AllowOrigins header field, separated by comma.")

@@ -1283,6 +1283,10 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 	object := c.Param("object")
 
 	configData := h.promQlService.GetConfigData()
+	if configData == nil {
+		h.respondWithError(c, "Prometheus metric config is not available")
+		return
+	}
 
 	var discoveredMetrics MetricsDiscoveryResponse
 

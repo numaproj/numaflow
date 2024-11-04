@@ -30,21 +30,21 @@ type Prometheus struct {
 	Api    PrometheusAPI
 }
 
-func NewPrometheusClient(url string) *Prometheus {
+func NewPrometheusClient(url string) (*Prometheus, error) {
 	if url == "" {
-		return nil
+		return nil, fmt.Errorf("prometheus server url is not set")
 	}
 	client, err := api.NewClient(api.Config{
 		Address: url,
 	})
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("failed to create prometheus client, %w", err)
 	}
 	v1api := v1.NewAPI(client)
 	return &Prometheus{
 		Client: client,
 		Api:    v1api,
-	}
+	}, nil
 }
 
 type PromQl interface {
@@ -52,6 +52,7 @@ type PromQl interface {
 	BuildQuery(MetricsRequestBody) (string, error)
 	PopulateReqMap(MetricsRequestBody) map[string]string
 	GetConfigData() *PrometheusConfig
+	DisableMetricsChart() bool
 }
 
 type PromQlService struct {
@@ -103,51 +104,72 @@ func substitutePlaceHolders(expr string, placeholders []string, reqMap map[strin
 }
 
 // NewPromQlService creates a new PromQlService instance
-func NewPromQlService(client *Prometheus, config *PrometheusConfig) PromQl {
+func NewPromQlService() (PromQl, error) {
 	var (
-		// map[metric_name][dimension] = expr
+		// map of [metric_name][dimension] = expr
 		expressions  = make(map[string]map[string]string)
 		placeHolders = make(map[string]map[string][]string)
+		client       *Prometheus
+		config       *PrometheusConfig
+		err          error
 	)
-	if config != nil {
-		for _, pattern := range config.Patterns {
-			patternExpression := pattern.Expression
-			for _, metric := range pattern.Metrics {
-				metricName := metric.Name
-				for _, dimension := range metric.Dimensions {
-					dimensionName := dimension.Name
-					_, ok := expressions[metricName]
-					if !ok {
-						expressions[metricName] = make(map[string]string)
-					}
-					if dimension.Expression != "" {
-						expressions[metricName][dimensionName] = dimension.Expression
-					} else {
-						expressions[metricName][dimensionName] = patternExpression
-					}
-					expr := expressions[metricName][dimensionName]
-					placeHoldersArr := make([]string, 0)
-					re := regexp.MustCompile(`\$(\w+)`)
-					matches := re.FindAllStringSubmatch(expr, -1)
-					for _, match := range matches {
-						placeHoldersArr = append(placeHoldersArr, match[0])
-					}
-					_, ok = placeHolders[metricName]
-					if !ok {
-						placeHolders[metricName] = map[string][]string{}
-					}
-					placeHolders[metricName][dimensionName] = placeHoldersArr
-				}
-			}
-		}
-	}
 
-	return &PromQlService{
+	var service = &PromQlService{
 		Prometheus:   client,
 		PlaceHolders: placeHolders,
 		Expression:   expressions,
 		ConfigData:   config,
 	}
+
+	// load prometheus metric config.
+	config, err = LoadPrometheusMetricConfig()
+	if err != nil {
+		// return service with nil config data & client. Do not return error as this is not critical.
+		return service, nil
+	}
+	service.ConfigData = config
+	// prom client instance.
+	client, err = NewPrometheusClient(config.ServerUrl)
+	if err != nil {
+		// return service with nil prometheus client. Do not return error as this is not critical.
+		return service, nil
+	}
+	service.Prometheus = client
+
+	for _, pattern := range config.Patterns {
+		patternExpression := pattern.Expression
+		for _, metric := range pattern.Metrics {
+			metricName := metric.Name
+			for _, dimension := range metric.Dimensions {
+				dimensionName := dimension.Name
+				_, ok := expressions[metricName]
+				if !ok {
+					expressions[metricName] = make(map[string]string)
+				}
+				if dimension.Expression != "" {
+					expressions[metricName][dimensionName] = dimension.Expression
+				} else {
+					expressions[metricName][dimensionName] = patternExpression
+				}
+				expr := expressions[metricName][dimensionName]
+				placeHoldersArr := make([]string, 0)
+				re := regexp.MustCompile(`\$(\w+)`)
+				matches := re.FindAllStringSubmatch(expr, -1)
+				for _, match := range matches {
+					placeHoldersArr = append(placeHoldersArr, match[0])
+				}
+				_, ok = placeHolders[metricName]
+				if !ok {
+					placeHolders[metricName] = map[string][]string{}
+				}
+				placeHolders[metricName][dimensionName] = placeHoldersArr
+			}
+		}
+	}
+
+	service.PlaceHolders = placeHolders
+	service.Expression = expressions
+	return service, nil
 }
 
 // PopulateReqMap populate map based on req fields
@@ -207,4 +229,9 @@ func (b *PromQlService) QueryPrometheus(ctx context.Context, promql string, star
 // GetConfigData returns the PrometheusConfig
 func (b *PromQlService) GetConfigData() *PrometheusConfig {
 	return b.ConfigData
+}
+
+func (b *PromQlService) DisableMetricsChart() bool {
+	// disable metrics charts if metric config or prometheus client is nil
+	return b.ConfigData == nil || b.Prometheus == nil
 }

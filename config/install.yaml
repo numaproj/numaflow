@@ -28821,12 +28821,6 @@ spec:
               key: server.readonly
               name: numaflow-cmd-params-config
               optional: true
-        - name: NUMAFLOW_SERVER_DISABLE_METRICS_CHARTS
-          valueFrom:
-            configMapKeyRef:
-              key: server.disable.metrics.charts
-              name: numaflow-cmd-params-config
-              optional: true
         - name: NUMAFLOW_SERVER_DISABLE_AUTH
           valueFrom:
             configMapKeyRef:

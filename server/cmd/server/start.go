@@ -54,7 +54,6 @@ type ServerOptions struct {
 	ServerAddr           string
 	CorsAllowedOrigins   string
 	ReadOnly             bool
-	DisableMetricsCharts bool
 	DaemonClientProtocol string
 }
 
@@ -107,7 +106,6 @@ func (s *server) Start(ctx context.Context) {
 			ManagedNamespace:     s.options.ManagedNamespace,
 			Namespaced:           s.options.Namespaced,
 			IsReadOnly:           s.options.ReadOnly,
-			DisableMetricsCharts: s.options.DisableMetricsCharts,
 			Version:              numaflow.GetVersion().String(),
 			DaemonClientProtocol: s.options.DaemonClientProtocol,
 		},

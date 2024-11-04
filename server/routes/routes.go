@@ -58,13 +58,16 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 	if err != nil {
 		panic(err)
 	}
+	// promql service instance.
+	promQlServiceObj, err := v1.NewPromQlService()
+	if err != nil {
+		panic(err)
+	}
 
-	// load prometheus metric config.
-	prometheusMetricConfig := v1.LoadPrometheusMetricConfig()
-	// prom client instance.
-	prometheusClient := v1.NewPrometheusClient(prometheusMetricConfig.ServerUrl)
-	// prom ql builder service instance.
-	promQlServiceObj := v1.NewPromQlService(prometheusClient, prometheusMetricConfig)
+	// disable metrics charts if metric config or prometheus client is nil
+	if promQlServiceObj.DisableMetricsChart() {
+		sysInfo.DisableMetricsCharts = true
+	}
 
 	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
 	noAuthGroup := r.Group(baseHref + "auth/v1")

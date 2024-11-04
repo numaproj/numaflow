@@ -61,7 +61,7 @@ type PrometheusConfig struct {
 	Patterns []PatternData `yaml:"patterns"`
 }
 
-func LoadPrometheusMetricConfig() *PrometheusConfig {
+func LoadPrometheusMetricConfig() (*PrometheusConfig, error) {
 	var (
 		data       []byte
 		promConfig PrometheusConfig
@@ -70,12 +70,12 @@ func LoadPrometheusMetricConfig() *PrometheusConfig {
 
 	data, err = os.ReadFile(metricsProxyConfigPath)
 	if err != nil {
-		return &PrometheusConfig{}
+		return nil, err
 	}
 	err = yaml.Unmarshal(data, &promConfig)
 
 	if err != nil {
-		return &PrometheusConfig{}
+		return nil, err
 	}
-	return &promConfig
+	return &promConfig, nil
 }

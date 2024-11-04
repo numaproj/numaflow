@@ -39,9 +39,6 @@ data:
   ### Whether to enable read only view for the UX server, defaults to false.
   #  server.readonly: "false"
   #
-  ### Whether to disable metrics charts for the UX server, defaults to true.
-  #  server.disable.metrics.charts: "false"
-  #
   ### Whether to disable authentication and authorization for the UX server, defaults to false.
   server.disable.auth: "true"
   #

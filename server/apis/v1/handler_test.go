@@ -609,3 +609,7 @@ func (m *mockPromQlService) GetConfigData() *PrometheusConfig {
 func (m *mockPromQlService) PopulateReqMap(MetricsRequestBody) map[string]string {
 	return map[string]string{}
 }
+
+func (m *mockPromQlService) DisableMetricsChart() bool {
+	return m.configData == nil
+}
