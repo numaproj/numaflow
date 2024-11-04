@@ -188,9 +188,9 @@ impl Forwarder {
                 .map_err(|e| Error::Forwarder(format!("Failed to write to jetstream {:?}", e)))??;
         }
         debug!(
-            "Wrote {} messages to jetstream in {}ms",
-            messages.len(),
-            start_time.elapsed().as_millis()
+            len = messages.len(),
+            elapsed_ms = start_time.elapsed().as_millis(),
+            "Wrote messages to jetstream",
         );
         Ok(())
     }

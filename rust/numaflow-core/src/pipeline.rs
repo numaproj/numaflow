@@ -289,6 +289,7 @@ async fn create_transformer(
 
 /// Creates a jetstream context based on the provided configuration
 async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Result<Context> {
+    // TODO: make these configurable. today this is hardcoded on Golang code too.
     let mut opts = ConnectOptions::new()
         .max_reconnects(None) // -1 for unlimited reconnects
         .ping_interval(Duration::from_secs(3))

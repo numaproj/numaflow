@@ -3,14 +3,14 @@ use std::time::Duration;
 use async_nats::jetstream::{
     consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
 };
-use log::info;
+
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::config::pipeline::isb::BufferReaderConfig;
 use crate::config::pipeline::PipelineConfig;
@@ -73,6 +73,7 @@ impl JetstreamReader {
         cancel_token: CancellationToken,
         pipeline_config: &PipelineConfig,
     ) -> Result<(Receiver<ReadMessage>, JoinHandle<Result<()>>)> {
+        // FIXME: factor of 2 should be configurable, at the least a const
         let (messages_tx, messages_rx) = mpsc::channel(2 * pipeline_config.batch_size);
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
@@ -116,9 +117,9 @@ impl JetstreamReader {
                 let mut start_time = Instant::now();
                 while let Some(messages) = chunk_stream.next().await {
                     debug!(
-                        "Received {} messages from Jetstream with latency={:?}",
-                        messages.len(),
-                        chunk_time.elapsed()
+                        len = messages.len(),
+                        elapsed_ms = chunk_time.elapsed().as_millis(),
+                        "Received messages from Jetstream",
                     );
                     total_messages += messages.len();
                     for message in messages {
@@ -174,9 +175,9 @@ impl JetstreamReader {
 
                         if start_time.elapsed() >= Duration::from_millis(1000) {
                             info!(
-                                "Total messages read from Jetstream in {}ms: {}",
-                                start_time.elapsed().as_millis(),
-                                total_messages
+                                len = total_messages,
+                                elapsed_ms = start_time.elapsed().as_millis(),
+                                "Total messages read from Jetstream"
                             );
                             start_time = Instant::now();
                             total_messages = 0;

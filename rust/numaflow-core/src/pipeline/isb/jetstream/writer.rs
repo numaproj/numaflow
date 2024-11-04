@@ -219,9 +219,12 @@ impl JetstreamWriter {
                             // should we return an error here? Because duplicate messages are not fatal
                             // But it can mess up the watermark progression because the offset will be
                             // same as the previous message offset
-                            warn!("Duplicate message detected, ignoring {:?}", ack);
+                            warn!(ack = ?ack, "Duplicate message detected, ignoring");
                         }
-                        debug!("Blocking write successful in {:?}", start_time.elapsed());
+                        debug!(
+                            elapsed_ms = start_time.elapsed().as_millis(),
+                            "Blocking write successful in",
+                        );
                         return Ok(ack);
                     }
                     Err(e) => {
