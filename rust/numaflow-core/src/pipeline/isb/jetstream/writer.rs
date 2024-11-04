@@ -12,7 +12,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::config::pipeline::isb::BufferWriterConfig;
 use crate::error::Error;
@@ -207,7 +207,7 @@ impl JetstreamWriter {
     /// an error it means it is fatal non-retryable error.
     pub(super) async fn blocking_write(&self, payload: Vec<u8>) -> Result<PublishAck> {
         let js_ctx = self.js_ctx.clone();
-
+        let start_time = tokio::time::Instant::now();
         loop {
             match js_ctx
                 .publish(self.stream_name.clone(), Bytes::from(payload.clone()))
@@ -221,6 +221,7 @@ impl JetstreamWriter {
                             // same as the previous message offset
                             warn!("Duplicate message detected, ignoring {:?}", ack);
                         }
+                        debug!("Blocking write successful in {:?}", start_time.elapsed());
                         return Ok(ack);
                     }
                     Err(e) => {

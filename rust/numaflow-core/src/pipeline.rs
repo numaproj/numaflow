@@ -1,11 +1,11 @@
-use std::collections::HashMap;
-
-use async_nats::jetstream;
 use async_nats::jetstream::Context;
+use async_nats::{jetstream, ConnectOptions};
 use futures::future::try_join_all;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use std::collections::HashMap;
+use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 
@@ -289,17 +289,21 @@ async fn create_transformer(
 
 /// Creates a jetstream context based on the provided configuration
 async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Result<Context> {
-    let js_client = match (config.user, config.password) {
-        (Some(user), Some(password)) => {
-            async_nats::connect_with_options(
-                config.url,
-                async_nats::ConnectOptions::with_user_and_password(user, password),
-            )
-            .await
-        }
-        _ => async_nats::connect(config.url).await,
+    let mut opts = ConnectOptions::new()
+        .max_reconnects(None) // -1 for unlimited reconnects
+        .ping_interval(Duration::from_secs(3))
+        .max_reconnects(None)
+        .ping_interval(Duration::from_secs(3))
+        .retry_on_initial_connect();
+
+    if let (Some(user), Some(password)) = (config.user, config.password) {
+        opts = opts.user_and_password(user, password);
     }
-    .map_err(|e| error::Error::Connection(e.to_string()))?;
+
+    let js_client = async_nats::connect_with_options(&config.url, opts)
+        .await
+        .map_err(|e| error::Error::Connection(e.to_string()))?;
+
     Ok(jetstream::new(js_client))
 }
 
@@ -562,8 +566,6 @@ mod tests {
                         .enumerate()
                         .map(|(i, key)| (key.to_string(), i as u16))
                         .collect(),
-                    batch_size: 500,
-                    read_timeout: Duration::from_secs(1),
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
