@@ -59,6 +59,13 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 		panic(err)
 	}
 
+	// load prometheus metric config.
+	prometheusMetricConfig := v1.LoadPrometheusMetricConfig()
+	// prom client instance.
+	prometheusClient := v1.NewPrometheusClient(prometheusMetricConfig.ServerUrl)
+	// prom ql builder service instance.
+	promQlServiceObj := v1.NewPromQlService(prometheusClient, prometheusMetricConfig)
+
 	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
 	noAuthGroup := r.Group(baseHref + "auth/v1")
 	v1RoutesNoAuth(noAuthGroup, dexObj, localUsersAuthObj)
@@ -73,9 +80,9 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 		}
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(ctx, authorizer, dexObj, localUsersAuthObj, authRouteMap))
-		v1Routes(ctx, r1Group, dexObj, localUsersAuthObj, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol)
+		v1Routes(ctx, r1Group, dexObj, localUsersAuthObj, promQlServiceObj, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol)
 	} else {
-		v1Routes(ctx, r1Group, nil, nil, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol)
+		v1Routes(ctx, r1Group, nil, nil, promQlServiceObj, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol)
 	}
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
@@ -99,12 +106,12 @@ func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v
 
 // v1Routes defines the routes for the v1 API. For adding a new route, add a new handler function
 // for the route along with an entry in the RouteMap in auth/route_map.go.
-func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v1.LocalUsersAuthObject, isReadOnly bool, daemonClientProtocol string) {
+func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v1.LocalUsersAuthObject, promQlServiceObj v1.PromQl, isReadOnly bool, daemonClientProtocol string) {
 	handlerOpts := []v1.HandlerOption{v1.WithDaemonClientProtocol(daemonClientProtocol)}
 	if isReadOnly {
 		handlerOpts = append(handlerOpts, v1.WithReadOnlyMode())
 	}
-	handler, err := v1.NewHandler(ctx, dexObj, localUsersAuthObject, handlerOpts...)
+	handler, err := v1.NewHandler(ctx, dexObj, localUsersAuthObject, promQlServiceObj, handlerOpts...)
 	if err != nil {
 		panic(err)
 	}
@@ -152,7 +159,7 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/metrics/namespaces/:namespace/pods", handler.ListPodsMetrics)
 	// Get pod logs.
 	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
-	// Get the pod metrics for a mono vertex
+	// Get the pod metrics for a mono vertex.
 	r.GET("/info/namespaces/:namespace/mono-vertices/:mono-vertex/pods", handler.GetMonoVertexPodsInfo)
 	// Get the pod metrics for a pipeline vertex.
 	r.GET("/info/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods", handler.GetVertexPodsInfo)

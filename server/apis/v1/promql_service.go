@@ -109,33 +109,35 @@ func NewPromQlService(client *Prometheus, config *PrometheusConfig) PromQl {
 		expressions  = make(map[string]map[string]string)
 		placeHolders = make(map[string]map[string][]string)
 	)
-	for _, pattern := range config.Patterns {
-		patternExpression := pattern.Expression
-		for _, metric := range pattern.Metrics {
-			metricName := metric.Name
-			for _, dimension := range metric.Dimensions {
-				dimensionName := dimension.Name
-				_, ok := expressions[metricName]
-				if !ok {
-					expressions[metricName] = make(map[string]string)
+	if config != nil {
+		for _, pattern := range config.Patterns {
+			patternExpression := pattern.Expression
+			for _, metric := range pattern.Metrics {
+				metricName := metric.Name
+				for _, dimension := range metric.Dimensions {
+					dimensionName := dimension.Name
+					_, ok := expressions[metricName]
+					if !ok {
+						expressions[metricName] = make(map[string]string)
+					}
+					if dimension.Expression != "" {
+						expressions[metricName][dimensionName] = dimension.Expression
+					} else {
+						expressions[metricName][dimensionName] = patternExpression
+					}
+					expr := expressions[metricName][dimensionName]
+					placeHoldersArr := make([]string, 0)
+					re := regexp.MustCompile(`\$(\w+)`)
+					matches := re.FindAllStringSubmatch(expr, -1)
+					for _, match := range matches {
+						placeHoldersArr = append(placeHoldersArr, match[0])
+					}
+					_, ok = placeHolders[metricName]
+					if !ok {
+						placeHolders[metricName] = map[string][]string{}
+					}
+					placeHolders[metricName][dimensionName] = placeHoldersArr
 				}
-				if dimension.Expression != "" {
-					expressions[metricName][dimensionName] = dimension.Expression
-				} else {
-					expressions[metricName][dimensionName] = patternExpression
-				}
-				expr := expressions[metricName][dimensionName]
-				placeHoldersArr := make([]string, 0)
-				re := regexp.MustCompile(`\$(\w+)`)
-				matches := re.FindAllStringSubmatch(expr, -1)
-				for _, match := range matches {
-					placeHoldersArr = append(placeHoldersArr, match[0])
-				}
-				_, ok = placeHolders[metricName]
-				if !ok {
-					placeHolders[metricName] = map[string][]string{}
-				}
-				placeHolders[metricName][dimensionName] = placeHoldersArr
 			}
 		}
 	}

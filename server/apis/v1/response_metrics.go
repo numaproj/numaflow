@@ -61,7 +61,7 @@ type PrometheusConfig struct {
 	Patterns []PatternData `yaml:"patterns"`
 }
 
-func loadPrometheusMetricConfig() *PrometheusConfig {
+func LoadPrometheusMetricConfig() *PrometheusConfig {
 	var (
 		data       []byte
 		promConfig PrometheusConfig

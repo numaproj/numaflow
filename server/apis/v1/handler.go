@@ -104,7 +104,7 @@ type handler struct {
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, opts ...HandlerOption) (*handler, error) {
+func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, promQlService PromQl, opts ...HandlerOption) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -125,14 +125,6 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	mvtDaemonClientsCache, _ := lru.NewWithEvict[string, mvtdaemonclient.MonoVertexDaemonClient](500, func(key string, value mvtdaemonclient.MonoVertexDaemonClient) {
 		_ = value.Close()
 	})
-
-	// create handler instance even if prometheus server details are not set
-	// the query API will respond with error message
-	prometheusMetricConfig := loadPrometheusMetricConfig()
-	// prom client instance
-	prometheusClient := NewPrometheusClient(prometheusMetricConfig.ServerUrl)
-	// prom ql builder service instance
-	promQlService := NewPromQlService(prometheusClient, prometheusMetricConfig)
 
 	o := defaultHandlerOptions()
 	for _, opt := range opts {
