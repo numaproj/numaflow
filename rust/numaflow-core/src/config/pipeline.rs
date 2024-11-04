@@ -353,8 +353,6 @@ mod tests {
                 reader_config: BufferReaderConfig {
                     partitions: 1,
                     streams: vec![("default-simple-pipeline-out-0".into(), 0)],
-                    batch_size: 500,
-                    read_timeout: Duration::from_secs(1),
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
