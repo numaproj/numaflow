@@ -20,14 +20,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// +kubebuilder:validation:Enum="";Pending;Running;Failed
+// +kubebuilder:validation:Enum="";Pending;Running;Failed;Deleting
 type ISBSvcPhase string
 
 const (
-	ISBSvcPhaseUnknown ISBSvcPhase = ""
-	ISBSvcPhasePending ISBSvcPhase = "Pending"
-	ISBSvcPhaseRunning ISBSvcPhase = "Running"
-	ISBSvcPhaseFailed  ISBSvcPhase = "Failed"
+	ISBSvcPhaseUnknown  ISBSvcPhase = ""
+	ISBSvcPhasePending  ISBSvcPhase = "Pending"
+	ISBSvcPhaseRunning  ISBSvcPhase = "Running"
+	ISBSvcPhaseFailed   ISBSvcPhase = "Failed"
+	ISBSvcPhaseDeleting ISBSvcPhase = "Deleting"
 
 	// ISBSvcConditionConfigured has the status True when the InterStepBufferService
 	// has valid configuration.
@@ -150,7 +151,8 @@ func (iss *InterStepBufferServiceStatus) SetObservedGeneration(value int64) {
 
 // IsHealthy indicates whether the InterStepBufferService is healthy or not
 func (iss *InterStepBufferServiceStatus) IsHealthy() bool {
-	if iss.Phase != ISBSvcPhaseRunning {
+	// Deleting is a special case, we don't want to mark it as unhealthy as Pipeline reconciliation relies on it
+	if iss.Phase != ISBSvcPhaseRunning && iss.Phase != ISBSvcPhaseDeleting {
 		return false
 	}
 	return iss.IsReady()

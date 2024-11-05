@@ -3174,6 +3174,7 @@ spec:
                 - Pending
                 - Running
                 - Failed
+                - Deleting
                 type: string
               type:
                 type: string

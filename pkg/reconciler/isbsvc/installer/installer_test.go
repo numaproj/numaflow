@@ -250,4 +250,71 @@ func TestUnInstall(t *testing.T) {
 		err := Uninstall(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.NoError(t, err)
 	})
+
+	t.Run("test has pl connected", func(t *testing.T) {
+		testPipeline := &dfv1.Pipeline{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pl",
+				Namespace: testNamespace,
+			},
+			Spec: dfv1.PipelineSpec{
+				InterStepBufferServiceName: testISBSName,
+			},
+		}
+		err := cl.Create(ctx, testPipeline)
+		assert.NoError(t, err)
+		testObj := testJetStreamIsbSvc.DeepCopy()
+		err = Uninstall(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "connected")
+	})
+}
+
+func Test_referencedPipelines(t *testing.T) {
+	cl := fake.NewClientBuilder().Build()
+	ctx := context.TODO()
+
+	t.Run("test no referenced pls", func(t *testing.T) {
+		testObj := testJetStreamIsbSvc.DeepCopy()
+		pls, err := referencedPipelines(ctx, cl, testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, pls)
+	})
+
+	t.Run("test having referenced pls - non default isbsvc", func(t *testing.T) {
+		testPipeline := &dfv1.Pipeline{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pl",
+				Namespace: testNamespace,
+			},
+			Spec: dfv1.PipelineSpec{
+				InterStepBufferServiceName: testISBSName,
+			},
+		}
+		err := cl.Create(ctx, testPipeline)
+		assert.NoError(t, err)
+		testObj := testJetStreamIsbSvc.DeepCopy()
+		pls, err := referencedPipelines(ctx, cl, testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, pls)
+	})
+
+	t.Run("test having referenced pls - default isbsvc", func(t *testing.T) {
+		testPipeline := &dfv1.Pipeline{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pl-1",
+				Namespace: testNamespace,
+			},
+			Spec: dfv1.PipelineSpec{
+				InterStepBufferServiceName: "",
+			},
+		}
+		err := cl.Create(ctx, testPipeline)
+		assert.NoError(t, err)
+		testObj := testJetStreamIsbSvc.DeepCopy()
+		testObj.Name = "default"
+		pls, err := referencedPipelines(ctx, cl, testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, pls)
+	})
 }
