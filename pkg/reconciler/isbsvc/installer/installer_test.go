@@ -254,8 +254,6 @@ func TestUnInstall(t *testing.T) {
 
 func Test_referencedPipelines(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
-	// kubeClient := k8sfake.NewSimpleClientset()
-	// fakeConfig := reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig)
 	ctx := context.TODO()
 
 	t.Run("test no referenced pls", func(t *testing.T) {
