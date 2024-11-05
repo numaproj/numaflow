@@ -91,10 +91,37 @@ func getInstaller(isbSvc *dfv1.InterStepBufferService, client client.Client, kub
 //
 // It could also be used to check if the ISB Service object can be safely deleted.
 func Uninstall(ctx context.Context, isbSvc *dfv1.InterStepBufferService, client client.Client, kubeClient kubernetes.Interface, config *reconciler.GlobalConfig, logger *zap.SugaredLogger, recorder record.EventRecorder) error {
+	pls, err := referencedPipelines(ctx, client, isbSvc)
+	if err != nil {
+		return fmt.Errorf("failed to check if there is any pipeline using this InterStepBufferService, %w", err)
+	}
+	if pls > 0 {
+		return fmt.Errorf("can not delete InterStepBufferService %q which has %d pipelines connected", isbSvc.Name, pls)
+	}
 	installer, err := getInstaller(isbSvc, client, kubeClient, config, logger, recorder)
 	if err != nil {
 		logger.Errorw("Failed to get an installer", zap.Error(err))
 		return err
 	}
 	return installer.Uninstall(ctx)
+}
+
+func referencedPipelines(ctx context.Context, c client.Client, isbSvc *dfv1.InterStepBufferService) (int, error) {
+	pipelines := &dfv1.PipelineList{}
+	if err := c.List(ctx, pipelines, &client.ListOptions{
+		Namespace: isbSvc.Namespace,
+	}); err != nil {
+		return 0, err
+	}
+	result := 0
+	for _, pl := range pipelines.Items {
+		isbSvcName := pl.Spec.InterStepBufferServiceName
+		if isbSvcName == "" {
+			isbSvcName = dfv1.DefaultISBSvcName
+		}
+		if isbSvcName == isbSvc.Name {
+			result++
+		}
+	}
+	return result, nil
 }
