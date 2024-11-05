@@ -250,6 +250,24 @@ func TestUnInstall(t *testing.T) {
 		err := Uninstall(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
 		assert.NoError(t, err)
 	})
+
+	t.Run("test has pl connected", func(t *testing.T) {
+		testPipeline := &dfv1.Pipeline{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pl",
+				Namespace: testNamespace,
+			},
+			Spec: dfv1.PipelineSpec{
+				InterStepBufferServiceName: testISBSName,
+			},
+		}
+		err := cl.Create(ctx, testPipeline)
+		assert.NoError(t, err)
+		testObj := testJetStreamIsbSvc.DeepCopy()
+		err = Uninstall(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "connected")
+	})
 }
 
 func Test_referencedPipelines(t *testing.T) {
