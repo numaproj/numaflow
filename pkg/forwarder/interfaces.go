@@ -49,7 +49,7 @@ func (gw GoWhere) WhereTo(ks []string, ts []string, id string) ([]VertexBuffer, 
 
 // StarterStopper starts/stops the forwarding.
 type StarterStopper interface {
-	Start() <-chan struct{}
+	Start() <-chan error
 	Stop()
 	ForceStop()
 }

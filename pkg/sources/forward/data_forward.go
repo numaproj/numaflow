@@ -119,9 +119,9 @@ func NewDataForward(
 }
 
 // Start starts reading from source and forwards to the next buffers. Call `Stop` to stop.
-func (df *DataForward) Start() <-chan struct{} {
+func (df *DataForward) Start() <-chan error {
 	log := logging.FromContext(df.ctx)
-	stopped := make(chan struct{})
+	stopped := make(chan error)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -145,7 +145,10 @@ func (df *DataForward) Start() <-chan struct{} {
 				// shutdown the reader should be empty.
 			}
 			// keep doing what you are good at
-			df.forwardAChunk(df.ctx)
+			if err := df.forwardAChunk(df.ctx); err != nil {
+				stopped <- err
+				return
+			}
 		}
 	}()
 
@@ -188,7 +191,7 @@ func (df *DataForward) Start() <-chan struct{} {
 // for a chunk of messages returned by the first Read call. It will return only if only we are successfully able to ack
 // the message after forwarding, barring any platform errors. The platform errors include buffer-full,
 // buffer-not-reachable, etc., but do not include errors due to user code transformer, WhereTo, etc.
-func (df *DataForward) forwardAChunk(ctx context.Context) {
+func (df *DataForward) forwardAChunk(ctx context.Context) error {
 	start := time.Now()
 	totalBytes := 0
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
@@ -210,7 +213,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	if len(readMessages) == 0 {
 		// not idling, so nothing much to do
 		if !df.srcIdleHandler.IsSourceIdling() {
-			return
+			return nil
 		}
 
 		// if the source is idling, we will publish idle watermark to the source and all the toBuffers
@@ -243,7 +246,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 
 		// len(readMessages) == 0, so we do not have anything more to do
-		return
+		return nil
 	}
 
 	// reset the idle handler because we have read messages
@@ -314,7 +317,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		readWriteMessagePairs, err = df.applyTransformer(ctx, readMessages)
 		if err != nil {
 			df.opts.logger.Errorw("failed to apply source transformer", zap.Error(err))
-			return
+			return err
 		}
 
 		df.opts.logger.Debugw("concurrent applyTransformer completed",
@@ -381,7 +384,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		for _, message := range m.WriteMessages {
 			if err = df.whereToStep(message, messageToStep); err != nil {
 				df.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
-				return
+				return err
 			}
 		}
 		// get the list of source partitions for which we have read messages, we will use this to publish watermarks to toVertices
@@ -392,7 +395,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	writeOffsets, err = df.writeToBuffers(ctx, messageToStep)
 	if err != nil {
 		df.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
-		return
+		return err
 	}
 
 	// activeWatermarkBuffers records the buffers that the publisher has published
@@ -464,7 +467,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			metrics.LabelPartitionName:      df.reader.GetName(),
 		}).Add(float64(len(readOffsets)))
 
-		return
+		return err
 	}
 	metrics.AckMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
@@ -487,6 +490,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 	}).Observe(float64(time.Since(start).Microseconds()))
+	return nil
 }
 
 func (df *DataForward) ackFromSource(ctx context.Context, offsets []isb.Offset) error {

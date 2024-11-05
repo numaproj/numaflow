@@ -29,16 +29,16 @@ import (
 )
 
 var (
-	WriteToFallbackErr = ApplyUDSinkErr{
+	WriteToFallbackErr error = &ApplyUDSinkErr{
 		UserUDSinkErr: true,
 		Message:       "write to fallback sink",
 	}
 
-	UnknownUDSinkErr = ApplyUDSinkErr{
+	UnknownUDSinkErr error = &ApplyUDSinkErr{
 		UserUDSinkErr: true,
 		Message:       "unknown error in udsink",
 	}
-	NotFoundErr = ApplyUDSinkErr{
+	NotFoundErr error = &ApplyUDSinkErr{
 		UserUDSinkErr: true,
 		Message:       "not found in response",
 	}
@@ -114,7 +114,7 @@ func (u *UDSgRPCBasedUDSink) ApplySink(ctx context.Context, requests []*sinkpb.S
 	}
 	for i, m := range requests {
 		if r, existing := resMap[m.Request.GetId()]; !existing {
-			errs[i] = &NotFoundErr
+			errs[i] = NotFoundErr
 		} else {
 			if r.GetStatus() == sinkpb.Status_FAILURE {
 				if r.GetErrMsg() != "" {
@@ -123,10 +123,10 @@ func (u *UDSgRPCBasedUDSink) ApplySink(ctx context.Context, requests []*sinkpb.S
 						Message:       r.GetErrMsg(),
 					}
 				} else {
-					errs[i] = &UnknownUDSinkErr
+					errs[i] = UnknownUDSinkErr
 				}
 			} else if r.GetStatus() == sinkpb.Status_FALLBACK {
-				errs[i] = &WriteToFallbackErr
+				errs[i] = WriteToFallbackErr
 			} else {
 				errs[i] = nil
 			}
