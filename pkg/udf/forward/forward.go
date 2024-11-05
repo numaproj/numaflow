@@ -623,29 +623,12 @@ func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBufferPar
 // the skip flag is set. ShutDown flag will only if there is an InternalErr and ForceStop has been invoked.
 // The UserError retry will be done on the ApplyUDF.
 func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
-	for {
-		writeMessages, err := isdf.opts.unaryMapUdfApplier.ApplyMap(ctx, readMessages)
-		if err != nil {
-			isdf.opts.logger.Errorw("mapUDF.Apply error", zap.Error(err))
-			// TODO: implement retry with backoff etc.
-			select {
-			case <-ctx.Done():
-				// no point in retrying if the context is cancelled
-				return nil, err
-			case <-time.After(isdf.opts.retryInterval):
-			}
-			// keep retrying, I cannot think of a use case where a user could say, errors are fine :-)
-			// as a platform we should not lose or corrupt data.
-			// this does not mean we should prohibit this from a shutdown.
-			if ok, _ := isdf.IsShuttingDown(); ok {
-				isdf.opts.logger.Errorw("mapUDF.Apply, Stop called while stuck on an internal error", zap.Error(err))
-				metrics.PlatformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Inc()
-				return nil, err
-			}
-			continue
-		}
-		return writeMessages, nil
+	writeMessages, err := isdf.opts.unaryMapUdfApplier.ApplyMap(ctx, readMessages)
+	if err != nil {
+		isdf.opts.logger.Errorw("mapUDF.Apply error", zap.Error(err))
+		return nil, err
 	}
+	return writeMessages, nil
 }
 
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.

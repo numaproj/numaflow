@@ -32,6 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	errors2 "github.com/numaproj/numaflow/pkg/sources/errors"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
@@ -207,6 +208,14 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 			metrics.LabelPartitionName:      df.reader.GetName(),
 		}).Inc()
+
+		// if the error is not retryable, we should return the error.
+		var readErr = new(errors2.SourceReadErr)
+		if errors.As(err, &readErr) {
+			if !readErr.IsRetryable() {
+				return err
+			}
+		}
 	}
 
 	// if there are no read messages, we return early.
@@ -466,8 +475,14 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 			metrics.LabelPartitionName:      df.reader.GetName(),
 		}).Add(float64(len(readOffsets)))
-
-		return err
+		// if the error is not retryable, we should return the error.
+		var ackErr = new(errors2.SourceAckErr)
+		if errors.As(err, &ackErr) {
+			if !ackErr.IsRetryable() {
+				return err
+			}
+		}
+		return nil
 	}
 	metrics.AckMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
@@ -642,29 +657,11 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 // the skip flag is set. The ShutDown flag will only if there is an InternalErr and ForceStop has been invoked.
 // The UserError retry will be done on the applyTransformer.
 func (df *DataForward) applyTransformer(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
-	for {
-		transformResults, err := df.opts.transformer.ApplyTransform(ctx, messages)
-		if err != nil {
-			df.opts.logger.Errorw("Transformer.Apply error", zap.Error(err))
-			// TODO: implement retry with backoff etc.
-			time.Sleep(df.opts.retryInterval)
-			// keep retrying, I cannot think of a use case where a user could say, errors are fine :-)
-			// as a platform, we should not lose or corrupt data.
-			// this does not mean we should prohibit this from a shutdown.
-			if ok, _ := df.IsShuttingDown(); ok {
-				df.opts.logger.Errorw("Transformer.Apply, Stop called while stuck on an internal error", zap.Error(err))
-				metrics.PlatformError.With(map[string]string{
-					metrics.LabelVertex:             df.vertexName,
-					metrics.LabelPipeline:           df.pipelineName,
-					metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-				}).Inc()
-				return nil, err
-			}
-			continue
-		}
-		return transformResults, nil
+	transformResults, err := df.opts.transformer.ApplyTransform(ctx, messages)
+	if err != nil {
+		return nil, err
 	}
+	return transformResults, nil
 }
 
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
