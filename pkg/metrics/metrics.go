@@ -33,7 +33,18 @@ const (
 	LabelPartitionName      = "partition_name"
 	LabelMonoVertexName     = "mvtx_name"
 
+	LabelSDKLanguage = "language"
+	LabelSDKVersion  = "version"
+	LabelSDKType     = "type" // e.g. udsource, udf, transformer, etc, use the container name as the type
+
 	LabelReason = "reason"
+)
+
+var (
+	SDKInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "sdk_info",
+		Help: "A metric with a constant value '1', labeled by SDK information",
+	}, []string{LabelSDKType, LabelSDKVersion, LabelSDKLanguage})
 )
 
 // Generic forwarder metrics

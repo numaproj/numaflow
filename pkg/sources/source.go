@@ -200,6 +200,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		metrics.SDKInfo.WithLabelValues(string(serverinfo.ContainerTypeSourcer), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
 		srcClient, err := sourceclient.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
@@ -239,6 +240,7 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		metrics.SDKInfo.WithLabelValues(string(serverinfo.ContainerTypeSourcetransformer), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
 		srcTransformerClient, err := sourcetransformer.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {

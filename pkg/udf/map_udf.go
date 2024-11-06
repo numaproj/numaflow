@@ -139,6 +139,7 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	metrics.SDKInfo.WithLabelValues(string(serverinfo.ContainerTypeMapper), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
 	// track all the resources that need to be closed
 	var resourcesToClose []io.Closer

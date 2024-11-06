@@ -154,6 +154,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		metrics.SDKInfo.WithLabelValues(string(serverinfo.ContainerTypeSinker), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
 		sdkClient, err := sinkclient.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
@@ -183,6 +184,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		metrics.SDKInfo.WithLabelValues(string(serverinfo.ContainerTypeFbsinker), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
 		sdkClient, err := sinkclient.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.FbSinkAddr))
 		if err != nil {
