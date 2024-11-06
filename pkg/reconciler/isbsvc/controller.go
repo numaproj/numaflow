@@ -101,6 +101,7 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 			// Finalizer logic should be added here.
 			if err := installer.Uninstall(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder); err != nil {
 				log.Errorw("Failed to uninstall", zap.Error(err))
+				isbSvc.Status.SetPhase(dfv1.ISBSvcPhaseDeleting, err.Error())
 				return err
 			}
 			controllerutil.RemoveFinalizer(isbSvc, finalizerName)
