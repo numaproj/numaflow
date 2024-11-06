@@ -231,6 +231,17 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) error {
 			dataBytes += len(m.Payload)
 		}
 	}
+
+	// If we don't have any data messages(we received only wmbs), we can ack all the readOffsets and return early.
+	if len(dataMessages) == 0 {
+		if err := isdf.ackFromBuffer(ctx, readOffsets); err != nil {
+			isdf.opts.logger.Errorw("Failed to ack from buffer", zap.Error(err))
+			metrics.AckMessageError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
+			return err
+		}
+		return nil
+	}
+
 	metrics.ReadDataMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(dataMessages)))
 	metrics.ReadMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readMessages)))
 	metrics.ReadBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(totalBytes))
@@ -381,7 +392,7 @@ func (isdf *InterStepDataForward) streamMessage(ctx context.Context, dataMessage
 	// Ensure dataMessages length is 1 for streaming
 	if len(dataMessages) != 1 {
 		errMsg := "data message size is not 1 with map UDF streaming"
-		isdf.opts.logger.Errorw(errMsg)
+		isdf.opts.logger.Errorw(errMsg, zap.Int("dataMessagesSize", len(dataMessages)))
 		return nil, errors.New(errMsg)
 	}
 
