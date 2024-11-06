@@ -193,6 +193,8 @@ pub(crate) async fn create_sink_handle(
                     .max_encoding_message_size(ud_config.grpc_max_message_size)
                     .max_encoding_message_size(ud_config.grpc_max_message_size);
             wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
+            // TODO: server info?
+
             Ok((
                 SinkHandle::new(
                     SinkClientType::UserDefined(sink_grpc_client.clone()),
