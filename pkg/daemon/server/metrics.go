@@ -25,7 +25,7 @@ import (
 var (
 	pipeline_info = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "pipeline",
-		Name:      "build_info",
+		Name:      "daemon_build_info",
 		Help:      "A metric with a constant value '1', labeled by Numaflow binary version and platform, as well as the pipeline name",
 	}, []string{metrics.LabelVersion, metrics.LabelPlatform, metrics.LabelPipeline})
 

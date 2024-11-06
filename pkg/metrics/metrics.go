@@ -35,7 +35,7 @@ const (
 
 	LabelSDKLanguage = "language"
 	LabelSDKVersion  = "version"
-	LabelSDKType     = "type" // e.g. udsource, udf, transformer, etc, use the container name as the type
+	LabelSDKType     = "type" // container type, e.g sourcer, sourcetransformer, sinker, etc. see serverinfo.ContainerType
 
 	LabelReason = "reason"
 )
@@ -43,7 +43,7 @@ const (
 var (
 	SDKInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "sdk_info",
-		Help: "A metric with a constant value '1', labeled by SDK information",
+		Help: "A metric with a constant value '1', labeled by SDK information such as version, language, and type",
 	}, []string{LabelSDKType, LabelSDKVersion, LabelSDKLanguage})
 )
 

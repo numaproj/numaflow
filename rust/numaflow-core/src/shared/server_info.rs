@@ -18,6 +18,17 @@ use crate::shared::server_info::version::SdkConstraints;
 // Equivalent to U+005C__END__.
 const END: &str = "U+005C__END__";
 
+pub const CONTAINER_TYPE_SOURCER: &str = "sourcer";
+pub const CONTAINER_TYPE_SOURCE_TRANSFORMER: &str = "sourcetransformer";
+pub const CONTAINER_TYPE_SINKER: &str = "sinker";
+pub const CONTAINER_TYPE_MAPPER: &str = "mapper";
+pub const CONTAINER_TYPE_REDUCER: &str = "reducer";
+pub const CONTAINER_TYPE_REDUCE_STREAMER: &str = "reducestreamer";
+pub const CONTAINER_TYPE_SESSION_REDUCER: &str = "sessionreducer";
+pub const CONTAINER_TYPE_SIDE_INPUT: &str = "sideinput";
+pub const CONTAINER_TYPE_FB_SINKER: &str = "fb-sinker";
+pub const CONTAINER_TYPE_UNKNOWN: &str = "unknown";
+
 /// ServerInfo structure to store server-related information
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct ServerInfo {
@@ -35,10 +46,10 @@ pub(crate) struct ServerInfo {
 
 /// check_for_server_compatibility waits until the server info file is ready and check whether the
 /// server is compatible with Numaflow.
-pub(crate) async fn check_for_server_compatibility(
+pub(crate) async fn sdk_server_info(
     file_path: PathBuf,
     cln_token: CancellationToken,
-) -> error::Result<()> {
+) -> error::Result<ServerInfo> {
     // Read the server info file
     let server_info = read_server_info(&file_path, cln_token).await?;
 
@@ -49,7 +60,7 @@ pub(crate) async fn check_for_server_compatibility(
     let sdk_version = &server_info.version;
     let min_numaflow_version = &server_info.minimum_numaflow_version;
     let sdk_language = &server_info.language;
-    let container_type = get_container_type(&file_path).unwrap_or("");
+    let container_type = get_container_type(&file_path).unwrap_or(CONTAINER_TYPE_UNKNOWN);
     // Get version information
     let version_info = version::get_version_info();
     let numaflow_version = &version_info.version;
@@ -81,7 +92,7 @@ pub(crate) async fn check_for_server_compatibility(
         )?;
     }
 
-    Ok(())
+    Ok(server_info)
 }
 
 /// Checks if the current numaflow version is compatible with the given minimum numaflow version.
@@ -270,7 +281,18 @@ fn get_container_type(server_info_file: &Path) -> Option<&str> {
     if container_type.is_empty() {
         None
     } else {
-        Some(container_type)
+        match container_type {
+            CONTAINER_TYPE_FB_SINKER
+            | CONTAINER_TYPE_MAPPER
+            | CONTAINER_TYPE_REDUCER
+            | CONTAINER_TYPE_REDUCE_STREAMER
+            | CONTAINER_TYPE_SESSION_REDUCER
+            | CONTAINER_TYPE_SIDE_INPUT
+            | CONTAINER_TYPE_SINKER
+            | CONTAINER_TYPE_SOURCER
+            | CONTAINER_TYPE_SOURCE_TRANSFORMER => Some(container_type),
+            _ => Some(CONTAINER_TYPE_UNKNOWN),
+        }
     }
 }
 
@@ -348,6 +370,11 @@ mod version {
     use std::env;
     use std::sync::LazyLock;
 
+    use super::{
+        CONTAINER_TYPE_FB_SINKER, CONTAINER_TYPE_SINKER, CONTAINER_TYPE_SOURCER,
+        CONTAINER_TYPE_SOURCE_TRANSFORMER,
+    };
+
     pub(crate) type SdkConstraints = HashMap<String, HashMap<String, String>>;
 
     // MINIMUM_SUPPORTED_SDK_VERSIONS is the minimum supported version of each SDK for the current numaflow version.
@@ -358,25 +385,40 @@ mod version {
         // NOTE: the string content of the keys matches the corresponding server info file name.
         // DO NOT change it unless the server info file name is changed.
         let mut go_version_map = HashMap::new();
-        go_version_map.insert("sourcer".to_string(), "0.8.0-z".to_string());
-        go_version_map.insert("sourcetransformer".to_string(), "0.8.0-z".to_string());
-        go_version_map.insert("sinker".to_string(), "0.8.0-z".to_string());
-        go_version_map.insert("fb-sinker".to_string(), "0.8.0-z".to_string());
+        go_version_map.insert(CONTAINER_TYPE_SOURCER.to_string(), "0.8.0-z".to_string());
+        go_version_map.insert(
+            CONTAINER_TYPE_SOURCE_TRANSFORMER.to_string(),
+            "0.8.0-z".to_string(),
+        );
+        go_version_map.insert(CONTAINER_TYPE_SINKER.to_string(), "0.8.0-z".to_string());
+        go_version_map.insert(CONTAINER_TYPE_FB_SINKER.to_string(), "0.8.0-z".to_string());
         let mut python_version_map = HashMap::new();
-        python_version_map.insert("sourcer".to_string(), "0.8.0rc100".to_string());
-        python_version_map.insert("sourcetransformer".to_string(), "0.8.0rc100".to_string());
-        python_version_map.insert("sinker".to_string(), "0.8.0rc100".to_string());
-        python_version_map.insert("fb-sinker".to_string(), "0.8.0rc100".to_string());
+        python_version_map.insert(CONTAINER_TYPE_SOURCER.to_string(), "0.8.0rc100".to_string());
+        python_version_map.insert(
+            CONTAINER_TYPE_SOURCE_TRANSFORMER.to_string(),
+            "0.8.0rc100".to_string(),
+        );
+        python_version_map.insert(CONTAINER_TYPE_SINKER.to_string(), "0.8.0rc100".to_string());
+        python_version_map.insert(
+            CONTAINER_TYPE_FB_SINKER.to_string(),
+            "0.8.0rc100".to_string(),
+        );
         let mut java_version_map = HashMap::new();
-        java_version_map.insert("sourcer".to_string(), "0.8.0-z".to_string());
-        java_version_map.insert("sourcetransformer".to_string(), "0.8.0-z".to_string());
-        java_version_map.insert("sinker".to_string(), "0.8.0-z".to_string());
-        java_version_map.insert("fb-sinker".to_string(), "0.8.0-z".to_string());
+        java_version_map.insert(CONTAINER_TYPE_SOURCER.to_string(), "0.8.0-z".to_string());
+        java_version_map.insert(
+            CONTAINER_TYPE_SOURCE_TRANSFORMER.to_string(),
+            "0.8.0-z".to_string(),
+        );
+        java_version_map.insert(CONTAINER_TYPE_SINKER.to_string(), "0.8.0-z".to_string());
+        java_version_map.insert(CONTAINER_TYPE_FB_SINKER.to_string(), "0.8.0-z".to_string());
         let mut rust_version_map = HashMap::new();
-        rust_version_map.insert("sourcer".to_string(), "0.1.0-z".to_string());
-        rust_version_map.insert("sourcetransformer".to_string(), "0.1.0-z".to_string());
-        rust_version_map.insert("sinker".to_string(), "0.1.0-z".to_string());
-        rust_version_map.insert("fb-sinker".to_string(), "0.1.0-z".to_string());
+        rust_version_map.insert(CONTAINER_TYPE_SOURCER.to_string(), "0.1.0-z".to_string());
+        rust_version_map.insert(
+            CONTAINER_TYPE_SOURCE_TRANSFORMER.to_string(),
+            "0.1.0-z".to_string(),
+        );
+        rust_version_map.insert(CONTAINER_TYPE_SINKER.to_string(), "0.1.0-z".to_string());
+        rust_version_map.insert(CONTAINER_TYPE_FB_SINKER.to_string(), "0.1.0-z".to_string());
 
         let mut m = HashMap::new();
         m.insert("go".to_string(), go_version_map);

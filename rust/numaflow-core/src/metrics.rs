@@ -30,6 +30,12 @@ use tracing::{debug, error, info};
 use crate::source::SourceHandle;
 use crate::Error;
 
+// SDK information
+const SDK_INFO: &str = "sdk_info";
+const SDK_VERSION: &str = "version";
+const SDK_LANGUAGE: &str = "language";
+const SDK_TYPE: &str = "type";
+
 // Define the labels for the metrics
 // Note: Please keep consistent with the definitions in MonoVertex daemon
 const MVTX_NAME_LABEL: &str = "mvtx_name";
@@ -130,6 +136,34 @@ static GLOBAL_REGISTRY: OnceLock<GlobalRegistry> = OnceLock::new();
 /// global_registry is a helper function to get the GLOBAL_REGISTRY
 fn global_registry() -> &'static GlobalRegistry {
     GLOBAL_REGISTRY.get_or_init(GlobalRegistry::new)
+}
+
+/// GlobalMetrics is a struct which is used for storing the global metrics
+pub(crate) struct GlobalMetrics {
+    pub(crate) sdk_info: Family<Vec<(String, String)>, Gauge>,
+}
+
+impl GlobalMetrics {
+    fn new() -> Self {
+        let metrics = Self {
+            sdk_info: Family::<Vec<(String, String)>, Gauge>::default(),
+        };
+        let mut registry = global_registry().registry.lock();
+        // Register all the metrics to the global registry
+        registry.register(
+            SDK_INFO, 
+            "A metric with a constant value '1', labeled by SDK information such as version, language, and type",
+            metrics.sdk_info.clone(),
+        );
+        metrics
+    }
+}
+
+/// GLOBAL_METRICS is the GlobalMetrics object which stores the metrics
+static GLOBAL_METRICS: OnceLock<GlobalMetrics> = OnceLock::new();
+
+pub(crate) fn global_metrics() -> &'static GlobalMetrics {
+    GLOBAL_METRICS.get_or_init(GlobalMetrics::new)
 }
 
 /// MonoVtxMetrics is a struct which is used for storing the metrics related to MonoVertex
@@ -364,6 +398,21 @@ static PIPELINE_METRICS: OnceLock<PipelineMetrics> = OnceLock::new();
 // PipelineMetrics object
 pub(crate) fn forward_pipeline_metrics() -> &'static PipelineMetrics {
     PIPELINE_METRICS.get_or_init(PipelineMetrics::new)
+}
+
+
+// forward_metrics_labels is a helper function used to fetch the
+// SDK_INFO_LABELS object
+pub(crate) fn sdk_info_labels(
+    language: String,
+    version: String,
+    container_type: String,
+) -> Vec<(String, String)> {
+    let labels = vec![ 
+        (SDK_LANGUAGE.to_string(), language), 
+        (SDK_VERSION.to_string(), version),  
+        (SDK_TYPE.to_string(), container_type),];
+    labels
 }
 
 /// MONOVTX_METRICS_LABELS are used to store the common labels used in the metrics
