@@ -112,9 +112,9 @@ func NewInterStepDataForward(vertexInstance *dfv1.VertexInstance, fromStep isb.B
 }
 
 // Start starts reading the buffer and forwards to the next buffers. Call `Stop` to stop.
-func (isdf *InterStepDataForward) Start() <-chan struct{} {
+func (isdf *InterStepDataForward) Start() <-chan error {
 	log := logging.FromContext(isdf.ctx)
-	stopped := make(chan struct{})
+	stopped := make(chan error)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -137,8 +137,12 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 				// once context.Done() is called, we still have to try to forwardAChunk because in graceful
 				// shutdown the fromBufferPartition should be empty.
 			}
-			// keep doing what you are good at
-			isdf.forwardAChunk(isdf.ctx)
+			// keep doing what you are good at, if we get an error we will stop.
+			if err := isdf.forwardAChunk(isdf.ctx); err != nil {
+				log.Errorw("Failed to forward a chunk", zap.Error(err))
+				stopped <- err
+				return
+			}
 		}
 	}()
 
@@ -170,7 +174,7 @@ func (isdf *InterStepDataForward) Start() <-chan struct{} {
 // for a chunk of messages returned by the first Read call. It will return only if only we are successfully able to ack
 // the message after forwarding, barring any platform errors. The platform errors include buffer-full,
 // buffer-not-reachable, etc., but does not include errors due to user code UDFs, WhereTo, etc.
-func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
+func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) error {
 	start := time.Now()
 	totalBytes := 0
 	dataBytes := 0
@@ -201,7 +205,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 				zap.Int64("offset", processorWMB.Offset),
 				zap.Int64("watermark", processorWMB.Watermark),
 				zap.Bool("idle", processorWMB.Idle))
-			return
+			return nil
 		}
 
 		// if the validation passed, we will publish the watermark to all the toBuffer partitions.
@@ -212,7 +216,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 				}
 			}
 		}
-		return
+		return nil
 	}
 
 	var dataMessages = make([]*isb.ReadMessage, 0, len(readMessages))
@@ -227,6 +231,17 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			dataBytes += len(m.Payload)
 		}
 	}
+
+	// If we don't have any data messages(we received only wmbs), we can ack all the readOffsets and return early.
+	if len(dataMessages) == 0 {
+		if err := isdf.ackFromBuffer(ctx, readOffsets); err != nil {
+			isdf.opts.logger.Errorw("Failed to ack from buffer", zap.Error(err))
+			metrics.AckMessageError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
+			return err
+		}
+		return nil
+	}
+
 	metrics.ReadDataMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(dataMessages)))
 	metrics.ReadMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readMessages)))
 	metrics.ReadBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(totalBytes))
@@ -254,7 +269,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			isdf.opts.logger.Errorw("failed to streamMessage", zap.Error(err))
 			// As there's no partial failure, non-ack all the readOffsets
 			isdf.fromBufferPartition.NoAck(ctx, readOffsets)
-			return
+			return err
 		}
 	} else {
 		// create space for writeMessages specific to each step as we could forward to all the steps too.
@@ -271,7 +286,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 			isdf.opts.logger.Errorw("failed to applyUDF", zap.Error(err))
 			// As there's no partial failure, non-ack all the readOffsets
 			isdf.fromBufferPartition.NoAck(ctx, readOffsets)
-			return
+			return err
 		}
 
 		// let's figure out which vertex to send the results to.
@@ -282,7 +297,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 				if err := isdf.whereToStep(message, messageToStep, m.ReadMessage); err != nil {
 					isdf.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
 					isdf.fromBufferPartition.NoAck(ctx, readOffsets)
-					return
+					return err
 				}
 			}
 		}
@@ -292,7 +307,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 		if err != nil {
 			isdf.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
 			isdf.fromBufferPartition.NoAck(ctx, readOffsets)
-			return
+			return err
 		}
 		isdf.opts.logger.Debugw("writeToBuffers completed")
 	}
@@ -348,7 +363,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	if err != nil {
 		isdf.opts.logger.Errorw("Failed to ack from buffer", zap.Error(err))
 		metrics.AckMessageError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
-		return
+		return err
 	}
 	metrics.AckMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
 
@@ -360,6 +375,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) {
 	}
 	// ProcessingTimes of the entire forwardAChunk
 	metrics.ForwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(start).Microseconds()))
+	return nil
 }
 
 // streamMessage streams the data messages to the next step.
@@ -376,7 +392,7 @@ func (isdf *InterStepDataForward) streamMessage(ctx context.Context, dataMessage
 	// Ensure dataMessages length is 1 for streaming
 	if len(dataMessages) != 1 {
 		errMsg := "data message size is not 1 with map UDF streaming"
-		isdf.opts.logger.Errorw(errMsg)
+		isdf.opts.logger.Errorw(errMsg, zap.Int("dataMessagesSize", len(dataMessages)))
 		return nil, errors.New(errMsg)
 	}
 
@@ -618,29 +634,12 @@ func (isdf *InterStepDataForward) writeToBuffer(ctx context.Context, toBufferPar
 // the skip flag is set. ShutDown flag will only if there is an InternalErr and ForceStop has been invoked.
 // The UserError retry will be done on the ApplyUDF.
 func (isdf *InterStepDataForward) applyUDF(ctx context.Context, readMessages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
-	for {
-		writeMessages, err := isdf.opts.unaryMapUdfApplier.ApplyMap(ctx, readMessages)
-		if err != nil {
-			isdf.opts.logger.Errorw("mapUDF.Apply error", zap.Error(err))
-			// TODO: implement retry with backoff etc.
-			select {
-			case <-ctx.Done():
-				// no point in retrying if the context is cancelled
-				return nil, err
-			case <-time.After(isdf.opts.retryInterval):
-			}
-			// keep retrying, I cannot think of a use case where a user could say, errors are fine :-)
-			// as a platform we should not lose or corrupt data.
-			// this does not mean we should prohibit this from a shutdown.
-			if ok, _ := isdf.IsShuttingDown(); ok {
-				isdf.opts.logger.Errorw("mapUDF.Apply, Stop called while stuck on an internal error", zap.Error(err))
-				metrics.PlatformError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Inc()
-				return nil, err
-			}
-			continue
-		}
-		return writeMessages, nil
+	writeMessages, err := isdf.opts.unaryMapUdfApplier.ApplyMap(ctx, readMessages)
+	if err != nil {
+		isdf.opts.logger.Errorw("mapUDF.Apply error", zap.Error(err))
+		return nil, err
 	}
+	return writeMessages, nil
 }
 
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.
