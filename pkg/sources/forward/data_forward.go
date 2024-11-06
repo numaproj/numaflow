@@ -512,7 +512,10 @@ func (df *DataForward) ackFromSource(ctx context.Context, offsets []isb.Offset) 
 	// for all the sources, we either ack all offsets or none.
 	// when a batch ack fails, the source Ack() function populate the error array with the same error;
 	// hence we can just return the first error.
-	return df.reader.Ack(ctx, offsets)[0]
+	if errs := df.reader.Ack(ctx, offsets); len(errs) > 0 {
+		return errs[0]
+	}
+	return nil
 }
 
 // writeToBuffers is a blocking call until all the messages have been forwarded to all the toBuffers, or a shutdown
