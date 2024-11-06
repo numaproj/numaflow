@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -297,19 +296,6 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to create source forwarder, error: %w", err)
 	}
 
-	log.Infow("Start processing source messages", zap.String("isbs", string(sp.ISBSvcType)), zap.Any("to", sp.VertexInstance.Vertex.GetToBuffers()))
-	stopped := sourceForwarder.Start()
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			<-stopped
-			log.Info("Source forwarder stopped, exiting...")
-			return
-		}
-	}()
-
 	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, healthCheckers, []isb.LagReader{sourceReader})
 	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
@@ -317,10 +303,23 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	} else {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
-	<-ctx.Done()
-	log.Info("SIGTERM, exiting...")
-	sourceForwarder.Stop()
-	wg.Wait()
+
+	log.Infow("Start processing source messages", zap.String("isbs", string(sp.ISBSvcType)), zap.Any("to", sp.VertexInstance.Vertex.GetToBuffers()))
+	stopped := sourceForwarder.Start()
+	select {
+	case <-ctx.Done(): // context cancelled case
+		log.Info("Context cancelled, stopping forwarder for partition...")
+		sourceForwarder.Stop()
+		if err := <-stopped; err != nil {
+			log.Errorw("Source forwarder stopped with error", zap.Error(err))
+		}
+		log.Info("Exited source forwarder...")
+	case err := <-stopped: // critical error case
+		if err != nil {
+			log.Errorw("Source forwarder stopped with error", zap.Error(err))
+			cancel()
+		}
+	}
 
 	// close all the sourceReader wm stores
 	for _, wmStore := range sourceWmStores {

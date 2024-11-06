@@ -292,24 +292,21 @@ func (u *MapUDFProcessor) Start(ctx context.Context) error {
 		go func(fromBufferPartitionName string, isdf *forward.InterStepDataForward) {
 			defer finalWg.Done()
 			log.Infow("Start processing udf messages", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("from", fromBufferPartitionName), zap.Any("to", u.VertexInstance.Vertex.GetToBuffers()))
-
 			stopped := isdf.Start()
-			wg := &sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for {
-					<-stopped
-					log.Info("Forwarder stopped, exiting udf data processor for partition " + fromBufferPartitionName + "...")
-					return
+			select {
+			case <-ctx.Done():
+				log.Info("Context cancelled, stopping forwarder for partition...", zap.String("partition", fromBufferPartitionName))
+				isdf.Stop()
+				if err := <-stopped; err != nil {
+					log.Errorw("Map forwarder stopped with error", zap.String("fromPartition", fromBufferPartitionName), zap.Error(err))
 				}
-			}()
-
-			<-ctx.Done()
-			log.Info("SIGTERM, exiting inside partition...", zap.String("partition", fromBufferPartitionName))
-			isdf.Stop()
-			wg.Wait()
-			log.Info("Exited for partition...", zap.String("partition", fromBufferPartitionName))
+				log.Info("Exited for partition...", zap.String("partition", fromBufferPartitionName))
+			case err := <-stopped:
+				if err != nil {
+					log.Errorw("Map forwarder stopped with error", zap.String("fromPartition", fromBufferPartitionName), zap.Error(err))
+					cancel()
+				}
+			}
 		}(bufferPartition, df)
 	}
 	// create lag readers from buffer readers
