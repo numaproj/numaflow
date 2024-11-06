@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 	"time"
 
@@ -159,11 +158,6 @@ loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-ks.handler.messages:
-			kafkaSourceReadCount.With(map[string]string{
-				metrics.LabelVertex:        ks.vertexName,
-				metrics.LabelPipeline:      ks.pipelineName,
-				metrics.LabelPartitionName: strconv.Itoa(int(m.Partition)),
-			}).Inc()
 			msgs = append(msgs, ks.toReadMessage(m))
 		case <-timeout:
 			// log that timeout has happened and don't return an error

@@ -32,8 +32,7 @@ const (
 	LabelVertexType         = "vertex_type"
 	LabelPartitionName      = "partition_name"
 	LabelMonoVertexName     = "mvtx_name"
-
-	LabelReason = "reason"
+	LabelReason             = "reason"
 )
 
 // Generic forwarder metrics
