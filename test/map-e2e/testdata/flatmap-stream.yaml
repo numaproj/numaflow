@@ -48,8 +48,8 @@ spec:
             - python
             - example.py
           # Split input message into an array with comma, https://github.com/numaproj/numaflow-python/tree/main/examples/mapstream/flatmap_stream
-          image: quay.io/numaio/numaflow-python/map-flatmap-stream:t1
-#          imagePullPolicy: Always
+          image: quay.io/numaio/numaflow-python/map-flatmap-stream:stable
+          imagePullPolicy: Always
     - name: python-udsink
       scale:
         min: 1
