@@ -18,11 +18,10 @@ import { Containers } from "./partials/Containers";
 import { PodDetail } from "./partials/PodDetails";
 import { SearchablePodsHeatMap } from "./partials/SearchablePodsHeatMap";
 import { ContainerInfo } from "./partials/PodDetails/partials/ContainerInfo";
-import { PodInfoNew } from "./partials/PodDetails/partials/PodInfoNew";
 import { usePodsViewFetch } from "../../../../../../../../../utils/fetcherHooks/podsViewFetch";
 import { notifyError } from "../../../../../../../../../utils/error";
 import { AppContext, AppContextProps } from "../../../../../../../../../App";
-import { getBaseHref } from "../../../../../../../../../utils/index";
+import { getBaseHref } from "../../../../../../../../../utils";
 import {
   ContainerInfoProps,
   Hexagon,
@@ -173,11 +172,11 @@ export function Pods(props: PodsProps) {
 
   const containerSelector = useMemo(() => {
     return (
-      <Box sx={{ display: "flex", flexDirection: "row" }}>
-        <Box sx={{ fontWeight: "600", width: "12.8rem" }}>
-          <span>Select a container</span>
+      <Box sx={{ display: "flex", width: "100%" }}>
+        <Box sx={{ fontWeight: "600", width: "24%", mr: "1%" }}>
+          Select a container
         </Box>
-        <Box data-testid={"pods-containers"} sx={{ mt: 2 }}>
+        <Box data-testid={"pods-containers"}>
           <Containers
             pod={selectedPod}
             containerName={selectedContainer}
@@ -191,7 +190,10 @@ export function Pods(props: PodsProps) {
   const podDetail = useMemo(() => {
     const selectedPodDetails = podsDetails?.get(selectedPod?.name);
     return (
-      <Box data-testid={"pods-poddetails"} sx={{ border: "1px solid #E0E0E0" }}>
+      <Box
+        data-testid={"pods-poddetails"}
+        sx={{ height: "100%", width: "100%", border: "1px solid #E0E0E0" }}
+      >
         <PodDetail
           namespaceId={namespaceId}
           pipelineId={pipelineId}
@@ -226,24 +228,15 @@ export function Pods(props: PodsProps) {
     <Box
       sx={{
         display: "flex",
-        flexDirection: "row",
-        justifyContent: "space-between",
+        mb: "0.75rem",
+        width: "100%",
       }}
     >
-      <Box sx={{ fontWeight: "600", width: "12.8rem" }}>
-        <span>Select a pod by name</span>
+      <Box sx={{ fontWeight: "600", width: "24%", mr: "1%" }}>
+        Select a pod by name
       </Box>
-      <Box
-        data-testid={"searchable-pods"}
-        sx={{
-          display: "flex",
-          flexDirection: "row",
-          mb: 2,
-          justifyContent: "space-between",
-          flexGrow: 1,
-        }}
-      >
-        <Box sx={{ paddingBottom: "1rem", width: "100%" }}>
+      <Box data-testid={"searchable-pods"} sx={{ width: "75%" }}>
+        <Box>
           {pods && selectedPod && (
             <Autocomplete
               {...defaultProps}
@@ -306,58 +299,64 @@ export function Pods(props: PodsProps) {
   }
 
   return (
-    <Paper square elevation={0} sx={{ padding: "1.6rem" }}>
-      <Box sx={{ display: "flex" }}>
+    <Paper square elevation={0} sx={{ height: "100%" }}>
+      <Box sx={{ display: "flex", height: "100%" }}>
+        {/*pod details container*/}
         <Box
           sx={{
             display: "flex",
             flexDirection: "column",
-            width: "40%",
+            padding: "1rem",
+            width: "calc(40% - 2rem)",
+            height: "calc(100% - 2rem)",
+            justifyContent: "space-between",
+            gap: "1rem",
           }}
         >
+          {/*pod and container selector*/}
           <Box
             sx={{
-              border: "1px solid #E0E0E0",
               display: "flex",
-              flexDirection: "column",
               width: "100%",
-              justifyContent: "space-evenly",
-              mb: "1rem",
+              border: "1px solid #E0E0E0",
             }}
             data-testid={"pods-searchablePodsHeatMap"}
           >
-            <Box sx={{ mt: "1.6rem" }}>
-              <Box sx={{ p: "1.6rem" }}>
-                {podSearchDetails}
-                <SearchablePodsHeatMap
-                  pods={pods}
-                  podsDetailsMap={podsDetails}
-                  onPodClick={handlePodClick}
-                  selectedPod={selectedPod}
-                />
-                {containerSelector}
-              </Box>
-            </Box>
-          </Box>
-          <Box sx={{ width: "100%", border: "1px solid #E0E0E0", mb: "1rem" }}>
             <Box
               sx={{
                 display: "flex",
                 flexDirection: "column",
                 width: "100%",
-                marginTop: "1.6rem",
+                justifyContent: "space-evenly",
+                p: "1rem",
               }}
             >
-              <PodInfoNew podSpecificInfo={podSpecificInfo} />
+              {podSearchDetails}
+              <SearchablePodsHeatMap
+                pods={pods}
+                podsDetailsMap={podsDetails}
+                onPodClick={handlePodClick}
+                selectedPod={selectedPod}
+              />
+              {containerSelector}
             </Box>
           </Box>
-          <Box sx={{ width: "100%", border: "1px solid #E0E0E0" }}>
+          {/*pod and container info*/}
+          <Box
+            sx={{
+              display: "flex",
+              height: "100%",
+              width: "100%",
+              border: "1px solid #E0E0E0",
+              overflow: "auto",
+            }}
+          >
             <Box
               sx={{
                 display: "flex",
-                flexDirection: "column",
-                width: "100%",
-                marginTop: "1.6rem",
+                flex: 1,
+                height: "calc(100% - 2rem)",
+                p: "1rem",
               }}
             >
               <ContainerInfo
@@ -365,11 +364,22 @@ export function Pods(props: PodsProps) {
                 podDetails={selectedPodDetails}
                 containerName={selectedContainer}
                 containerInfo={containerInfo}
+                podSpecificInfo={podSpecificInfo}
               />
             </Box>
           </Box>
         </Box>
-        <Box sx={{ width: "60%", ml: "1rem" }}>{podDetail}</Box>
+        {/*logs and metrics container*/}
+        <Box
+          sx={{
+            display: "flex",
+            padding: "1rem",
+            width: "calc(60% - 2rem)",
+            height: "calc(100% - 2rem)",
+          }}
+        >
+          {podDetail}
+        </Box>
       </Box>
     </Paper>
   );

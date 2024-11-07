@@ -88,6 +88,7 @@ export interface HexagonHeatMapProps {
   tooltipComponent: any;
   tooltipClass?: string;
   selected: string | undefined;
+  containerWidth: number;
 }
 
 export interface PodDetailProps {
@@ -115,21 +116,20 @@ export interface ContainerInfoProps {
 }
 
 export interface PodSpecificInfoProps {
-  podSpecificInfo: {
-    name: string;
-    status: string;
-    message: string;
-    reason: string;
-    restartCount: number;
-    totalCPU: string;
-    totalMemory: string;
-  };
+  name: string;
+  status: string;
+  message: string;
+  reason: string;
+  restartCount: number;
+  totalCPU: string;
+  totalMemory: string;
 }
 export interface PodInfoProps {
   pod: Pod;
   podDetails: PodDetail;
   containerName: string;
   containerInfo: ContainerInfoProps;
+  podSpecificInfo: PodSpecificInfoProps;
 }
 
 export interface PodLogsProps {

@@ -11,8 +11,10 @@ import { AppContext } from "../../../../../../../../../../../App";
 import "./style.css";
 
 const headerSx = {
+  height: "2rem",
   marginBottom: "1rem",
-  fontWeight: "bold",
+  fontWeight: 600,
+  fontSize: "2rem",
 };
 
 const LOGS_TAB_INDEX = 0;
@@ -40,7 +42,7 @@ export function PodDetail({
         display: "flex",
         flexDirection: "column",
         width: "100%",
-        marginTop: "1.6rem",
+        height: "100%",
       }}
     >
       <Tabs
@@ -75,13 +77,20 @@ export function PodDetail({
         hidden={selectedTab !== LOGS_TAB_INDEX}
       >
         {selectedTab === LOGS_TAB_INDEX && (
-          <Box sx={{ p: "1.6rem" }}>
+          <Box
+            sx={{
+              p: "1.6rem",
+              height: "calc(100% - 3.2rem)",
+            }}
+          >
             <Box sx={headerSx}>Container Logs</Box>
-            <PodLogs
-              namespaceId={namespaceId}
-              podName={pod.name}
-              containerName={containerName}
-            />
+            <Box sx={{ height: "calc(100% - 3rem)" }}>
+              <PodLogs
+                namespaceId={namespaceId}
+                podName={pod.name}
+                containerName={containerName}
+              />
+            </Box>
           </Box>
         )}
       </div>
@@ -92,11 +101,19 @@ export function PodDetail({
           hidden={selectedTab !== METRICS_TAB_INDEX}
         >
           {selectedTab === METRICS_TAB_INDEX && (
-            <Metrics
-              namespaceId={namespaceId}
-              pipelineId={pipelineId}
-              type={type}
-            />
+            <Box
+              sx={{
+                p: "1.6rem",
+                height: "calc(100% - 13.7rem)",
+                overflow: "scroll",
+              }}
+            >
+              <Metrics
+                namespaceId={namespaceId}
+                pipelineId={pipelineId}
+                type={type}
+              />
+            </Box>
           )}
         </div>
       )}

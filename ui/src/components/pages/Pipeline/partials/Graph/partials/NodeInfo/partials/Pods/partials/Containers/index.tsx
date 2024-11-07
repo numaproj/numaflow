@@ -8,7 +8,7 @@ export function Containers(props: ContainerProps) {
   if (!pod) return null;
 
   return (
-    <Box sx={{ mb: 2 }}>
+    <Box>
       <Stack direction="row" spacing={1}>
         {pod?.containers?.map((c: string) => {
           return (

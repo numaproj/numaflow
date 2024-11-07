@@ -243,8 +243,13 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
   const logsBtnStyle = { height: "2.4rem", width: "2.4rem" };
 
   return (
-    <Box>
-      <Box sx={{ display: "flex", flexDirection: "row" }}>
+    <Box sx={{ height: "100%" }}>
+      <Box
+        sx={{
+          display: "flex",
+          height: "4.8rem",
+        }}
+      >
         <Paper
           className="PodLogs-search"
           variant="outlined"
@@ -336,7 +341,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
             data-testid="previous-logs"
             checked={showPreviousLogs}
             onChange={(event) => setShowPreviousLogs(event.target.checked)}
-            sx={{ "& .MuiSvgIcon-root": { fontSize: 24 } }}
+            sx={{ "& .MuiSvgIcon-root": { fontSize: 24 }, height: "4.2rem" }}
           />
         }
         label={
@@ -345,74 +350,81 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
           </Typography>
         }
       />
-      <Box
-        sx={{
-          backgroundColor: `${colorMode === "light" ? "whitesmoke" : "black"}`,
-          fontWeight: 600,
-          overflow: "scroll",
-          display: "flex",
-          flexDirection: "column",
-          borderRadius: "0.4rem",
-          padding: "1rem 0.5rem",
-          marginTop: "2.4rem",
-          height: "93.2rem",
-        }}
-      >
-        <>
-          {logsOrder === "asc" &&
-            (showPreviousLogs ? previousLogs : filteredLogs).map(
-              (l: string, idx) => (
-                <Box
-                  key={`${idx}-${podName}-logs`}
-                  component="span"
-                  sx={{
-                    whiteSpace: "nowrap",
-                    paddingTop: "0.8rem",
-                  }}
-                >
-                  <Highlighter
-                    searchWords={[search]}
-                    autoEscape={true}
-                    textToHighlight={l}
-                    style={{ color: logColor(l, colorMode) }}
-                    highlightStyle={{
-                      color: `${colorMode === "light" ? "white" : "black"}`,
-                      backgroundColor: `${
-                        colorMode === "light" ? "black" : "white"
-                      }`,
+      <Box sx={{ height: "calc(100% - 9rem)" }}>
+        <Box
+          sx={{
+            backgroundColor: `${
+              colorMode === "light" ? "whitesmoke" : "black"
+            }`,
+            fontWeight: 600,
+            borderRadius: "0.4rem",
+            padding: "1rem 0.5rem",
+            height: "calc(100% - 6rem)",
+            overflow: "scroll",
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              height: "100%",
+            }}
+          >
+            {logsOrder === "asc" &&
+              (showPreviousLogs ? previousLogs : filteredLogs).map(
+                (l: string, idx) => (
+                  <Box
+                    key={`${idx}-${podName}-logs`}
+                    component="span"
+                    sx={{
+                      whiteSpace: "nowrap",
+                      paddingTop: "0.8rem",
                     }}
-                  />
-                </Box>
-              )
-            )}
-          {logsOrder === "desc" &&
-            (showPreviousLogs ? previousLogs : filteredLogs)
-              .slice()
-              .reverse()
-              .map((l: string, idx) => (
-                <Box
-                  key={`${idx}-${podName}-logs`}
-                  component="span"
-                  sx={{
-                    whiteSpace: "nowrap",
-                    paddingTop: "0.8rem",
-                  }}
-                >
-                  <Highlighter
-                    searchWords={[search]}
-                    autoEscape={true}
-                    textToHighlight={l}
-                    style={{ color: logColor(l, colorMode) }}
-                    highlightStyle={{
-                      color: `${colorMode === "light" ? "white" : "black"}`,
-                      backgroundColor: `${
-                        colorMode === "light" ? "black" : "white"
-                      }`,
+                  >
+                    <Highlighter
+                      searchWords={[search]}
+                      autoEscape={true}
+                      textToHighlight={l}
+                      style={{ color: logColor(l, colorMode) }}
+                      highlightStyle={{
+                        color: `${colorMode === "light" ? "white" : "black"}`,
+                        backgroundColor: `${
+                          colorMode === "light" ? "black" : "white"
+                        }`,
+                      }}
+                    />
+                  </Box>
+                )
+              )}
+            {logsOrder === "desc" &&
+              (showPreviousLogs ? previousLogs : filteredLogs)
+                .slice()
+                .reverse()
+                .map((l: string, idx) => (
+                  <Box
+                    key={`${idx}-${podName}-logs`}
+                    component="span"
+                    sx={{
+                      whiteSpace: "nowrap",
+                      paddingTop: "0.8rem",
                     }}
-                  />
-                </Box>
-              ))}
-        </>
+                  >
+                    <Highlighter
+                      searchWords={[search]}
+                      autoEscape={true}
+                      textToHighlight={l}
+                      style={{ color: logColor(l, colorMode) }}
+                      highlightStyle={{
+                        color: `${colorMode === "light" ? "white" : "black"}`,
+                        backgroundColor: `${
+                          colorMode === "light" ? "black" : "white"
+                        }`,
+                      }}
+                    />
+                  </Box>
+                ))}
+          </Box>
+        </Box>
       </Box>
     </Box>
   );

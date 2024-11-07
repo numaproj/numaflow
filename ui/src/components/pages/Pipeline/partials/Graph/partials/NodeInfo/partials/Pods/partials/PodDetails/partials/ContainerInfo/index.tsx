@@ -1,18 +1,16 @@
 import React from "react";
 import Box from "@mui/material/Box";
-import Table from "@mui/material/Table";
-import TableRow from "@mui/material/TableRow";
-import TableCell from "@mui/material/TableCell";
-import TableBody from "@mui/material/TableBody";
-import TableContainer from "@mui/material/TableContainer";
 import { getPodContainerUsePercentages } from "../../../../../../../../../../../../../utils";
 import { PodInfoProps } from "../../../../../../../../../../../../../types/declarations/pods";
+
+import "./style.css";
 
 export function ContainerInfo({
   pod,
   podDetails,
   containerName,
   containerInfo,
+  podSpecificInfo,
 }: PodInfoProps) {
   const resourceUsage = getPodContainerUsePercentages(
     pod,
@@ -64,106 +62,169 @@ export function ContainerInfo({
   }
 
   return (
-    <Box sx={{ padding: "1.6rem" }}>
-      <Box sx={{ fontWeight: 600 }}>Container Info</Box>
+    <Box
+      sx={{
+        display: "flex",
+        height: "100%",
+        width: "100%",
+      }}
+    >
       <Box
         data-testid="containerInfo"
         sx={{
           display: "flex",
-          flexDirection: "column",
           height: "100%",
-          color: "#DCDCDC",
+          width: "100%",
         }}
       >
-        <TableContainer sx={{ maxHeight: "60rem", backgroundColor: "#FFF" }}>
-          <Table stickyHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
-                  Name
-                </TableCell>
-                <TableCell>{containerName}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
-                  Status
-                </TableCell>
-                <TableCell>{containerInfo?.state || "Unknown"}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
-                  Last Started At
-                </TableCell>
-                <TableCell>{containerInfo?.lastStartedAt || "N/A"}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
-                  CPU %
-                </TableCell>
-                <TableCell>{cpuPercent}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
-                  CPU
-                </TableCell>
-                <TableCell>{`${usedCPU} / ${specCPU}`}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
-                  Memory %
-                </TableCell>
-                <TableCell>{memPercent}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
-                  Memory
-                </TableCell>
-                <TableCell>{`${usedMem} / ${specMem}`}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
-                  Restart Count{" "}
-                </TableCell>
-                <TableCell>{containerInfo?.restartCount || "0"}</TableCell>
-              </TableRow>
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            width: "100%",
+            justifyContent: "space-evenly",
+          }}
+        >
+          {/*container info*/}
+          <Box className={"category-title"}>Container Info</Box>
 
-              {containerInfo?.lastTerminationReason && (
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
-                    Last Termination Reason
-                  </TableCell>
-                  <TableCell>{containerInfo?.lastTerminationReason}</TableCell>
-                </TableRow>
-              )}
-              {containerInfo?.lastTerminationMessage && (
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
-                    Last Termination Message
-                  </TableCell>
-                  <TableCell>{containerInfo?.lastTerminationMessage}</TableCell>
-                </TableRow>
-              )}
+          <Box className={"outer-box"}>
+            <Box className={"inner-box-title"}>Name</Box>
+            <Box className={"inner-box-value"}>{containerName}</Box>
+          </Box>
 
-              {containerInfo?.waitingReason && (
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
-                    Waiting Reason
-                  </TableCell>
-                  <TableCell>{containerInfo?.waitingReason}</TableCell>
-                </TableRow>
-              )}
+          <Box className={"outer-box"}>
+            <Box className={"inner-box-title"}>Status</Box>
+            <Box className={"inner-box-value"}>
+              {containerInfo?.state || "Unknown"}
+            </Box>
+          </Box>
 
-              {containerInfo?.waitingMessage && (
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 600, width: "30rem" }}>
-                    Waiting Message
-                  </TableCell>
-                  <TableCell>{containerInfo?.waitingMessage}</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+          <Box className={"outer-box"}>
+            <Box className={"inner-box-title"}>Last Started At</Box>
+            <Box className={"inner-box-value"}>
+              {containerInfo?.lastStartedAt || "N/A"}
+            </Box>
+          </Box>
+
+          <Box className={"outer-box"}>
+            <Box className={"inner-box-title"}>CPU</Box>
+            <Box className={"inner-box-value"}>
+              {`${usedCPU} / ${specCPU}`} {` (${cpuPercent})`}
+            </Box>
+          </Box>
+
+          <Box className={"outer-box"}>
+            <Box className={"inner-box-title"}>Memory</Box>
+            <Box className={"inner-box-value"}>
+              {`${usedMem} / ${specMem}`} {` (${memPercent})`}
+            </Box>
+          </Box>
+
+          <Box className={"outer-box"}>
+            <Box className={"inner-box-title"}>Restart Count</Box>
+            <Box className={"inner-box-value"}>
+              {containerInfo?.restartCount ?? "Unknown"}
+            </Box>
+          </Box>
+
+          {containerInfo?.lastTerminationReason && (
+            <Box className={"outer-box"}>
+              <Box className={"inner-box-title"}>Last Termination Reason</Box>
+              <Box className={"inner-box-value"}>
+                {containerInfo?.lastTerminationReason}
+              </Box>
+            </Box>
+          )}
+
+          {containerInfo?.lastTerminationMessage && (
+            <Box className={"outer-box"}>
+              <Box className={"inner-box-title"}>Last Termination Message</Box>
+              <Box className={"inner-box-value"}>
+                {containerInfo?.lastTerminationMessage}
+              </Box>
+            </Box>
+          )}
+
+          {containerInfo?.waitingReason && (
+            <Box className={"outer-box"}>
+              <Box className={"inner-box-title"}>Waiting Reason</Box>
+              <Box className={"inner-box-value"}>
+                {containerInfo?.waitingReason}
+              </Box>
+            </Box>
+          )}
+
+          {containerInfo?.waitingMessage && (
+            <Box className={"outer-box"}>
+              <Box className={"inner-box-title"}>Waiting Message</Box>
+              <Box className={"inner-box-value"}>
+                {containerInfo?.waitingMessage}
+              </Box>
+            </Box>
+          )}
+
+          {/*pod info*/}
+          <Box className={"category-title"} sx={{ mt: "1.5rem" }}>
+            Pod Info
+          </Box>
+
+          <Box className={"outer-box"}>
+            <Box className={"inner-box-title"}>Name</Box>
+            <Box className={"inner-box-value"}>
+              {pod?.name?.slice(0, pod.name?.lastIndexOf("-"))}
+            </Box>
+          </Box>
+
+          <Box className={"outer-box"}>
+            <Box className={"inner-box-title"}>Status</Box>
+            <Box className={"inner-box-value"}>
+              {podSpecificInfo?.status || "Unknown"}
+            </Box>
+          </Box>
+
+          <Box className={"outer-box"}>
+            <Box className={"inner-box-title"}>Restart Count</Box>
+            <Box className={"inner-box-value"}>
+              {podSpecificInfo?.restartCount ?? "Unknown"}
+            </Box>
+          </Box>
+
+          {podSpecificInfo?.totalCPU && (
+            <Box className={"outer-box"}>
+              <Box className={"inner-box-title"}>CPU</Box>
+              <Box className={"inner-box-value"}>
+                {podSpecificInfo?.totalCPU}
+              </Box>
+            </Box>
+          )}
+
+          {podSpecificInfo?.totalMemory && (
+            <Box className={"outer-box"}>
+              <Box className={"inner-box-title"}>Memory</Box>
+              <Box className={"inner-box-value"}>
+                {podSpecificInfo?.totalMemory}
+              </Box>
+            </Box>
+          )}
+
+          {podSpecificInfo?.reason && (
+            <Box className={"outer-box"}>
+              <Box className={"inner-box-title"}>Reason</Box>
+              <Box className={"inner-box-value"}>{podSpecificInfo?.reason}</Box>
+            </Box>
+          )}
+
+          {podSpecificInfo?.message && (
+            <Box className={"outer-box"}>
+              <Box className={"inner-box-title"}>Message</Box>
+              <Box className={"inner-box-value"}>
+                {podSpecificInfo?.message}
+              </Box>
+            </Box>
+          )}
+        </Box>
       </Box>
     </Box>
   );

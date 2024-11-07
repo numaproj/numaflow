@@ -63,7 +63,7 @@ export function Metrics({ namespaceId, pipelineId, type }: MetricsProps) {
   if (discoveredMetrics === undefined) return <></>;
 
   return (
-    <Box sx={{ p: "2rem" }}>
+    <Box sx={{ height: "100%" }}>
       {discoveredMetrics?.data?.map((metric: any) => {
         const panelId = `${metric?.metric_name}-panel`;
         return (

@@ -107,7 +107,13 @@ export function SlidingSidebar({
       ? MIN_WIDTH_BY_TYPE[SidebarType.VERSION_DETAILS]
       : pageWidth * 0.85
   );
-  const [minWidth] = useState<number>(0);
+  const [minWidth] = useState<number>(
+    type === SidebarType.ERRORS
+      ? MIN_WIDTH_BY_TYPE[SidebarType.ERRORS]
+      : type === SidebarType.VERSION_DETAILS
+      ? MIN_WIDTH_BY_TYPE[SidebarType.VERSION_DETAILS]
+      : pageWidth * 0.5
+  );
   const [modalOnClose, setModalOnClose] = useState<
     SpecEditorModalProps | undefined
   >();
