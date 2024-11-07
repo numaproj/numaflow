@@ -3173,6 +3173,7 @@ spec:
                 - Pending
                 - Running
                 - Failed
+                - Deleting
                 type: string
               type:
                 type: string
@@ -7836,6 +7837,8 @@ spec:
                       config:
                         type: string
                       consumerGroup:
+                        type: string
+                      kafkaVersion:
                         type: string
                       sasl:
                         properties:
@@ -19066,6 +19069,8 @@ spec:
                               type: string
                             consumerGroup:
                               type: string
+                            kafkaVersion:
+                              type: string
                             sasl:
                               properties:
                                 gssapi:
@@ -25473,6 +25478,8 @@ spec:
                       config:
                         type: string
                       consumerGroup:
+                        type: string
+                      kafkaVersion:
                         type: string
                       sasl:
                         properties:

@@ -1,5 +1,3 @@
-apiVersion: numaflow.numaproj.io/v1alpha1
-kind: MonoVertex
 metadata:
   name: simple-mono-without-stream
 spec:
@@ -8,8 +6,14 @@ spec:
       - name: NUMAFLOW_MVTX_STREAMING
         value: "true"
   source:
-    generator:
-      rpu: 100000
-      duration: 1s
+    udsource:
+      container:
+        image: quay.io/numaio/numaflow-rs/simple-source:stable
+    # transformer is an optional container to do any transformation to the incoming data before passing to the sink
+    transformer:
+      container:
+        image: quay.io/numaio/numaflow-rs/source-transformer-now:stable
   sink:
-    blackhole: {}
+    udsink:
+      container:
+        image: quay.io/numaio/numaflow-rs/sink-log:stable

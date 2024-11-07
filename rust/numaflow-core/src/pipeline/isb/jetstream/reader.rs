@@ -11,7 +11,7 @@ use tokio::time::{self, Instant};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::config::pipeline::isb::BufferReaderConfig;
 use crate::config::pipeline::PipelineConfig;
@@ -172,10 +172,9 @@ impl JetstreamReader {
                             ack: ack_tx,
                         };
 
-                        if messages_tx.send(read_message).await.is_err() {
-                            error!("Failed to send message to the channel");
-                            return Ok(());
-                        }
+                        messages_tx.send(read_message).await.map_err(|e| {
+                            Error::ISB(format!("Error while sending message to channel: {:?}", e))
+                        })?;
 
                         pipeline_metrics()
                             .isb
@@ -188,6 +187,16 @@ impl JetstreamReader {
                             .data_read
                             .get_or_create(labels)
                             .inc();
+
+                        if start_time.elapsed() >= Duration::from_millis(1000) {
+                            info!(
+                                len = total_messages,
+                                elapsed_ms = start_time.elapsed().as_millis(),
+                                "Total messages read from Jetstream"
+                            );
+                            start_time = Instant::now();
+                            total_messages = 0;
+                        }
                     }
                     if cancel_token.is_cancelled() {
                         warn!("Cancellation token is cancelled. Exiting JetstreamReader");
@@ -318,8 +327,6 @@ mod tests {
         let buf_reader_config = BufferReaderConfig {
             partitions: 0,
             streams: vec![],
-            batch_size: 2,
-            read_timeout: Duration::from_millis(1000),
             wip_ack_interval: Duration::from_millis(5),
         };
         let js_reader = JetstreamReader::new(

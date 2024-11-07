@@ -274,21 +274,14 @@ func Test_gRPCBasedUDSource_ApplyAckWithMockClient(t *testing.T) {
 		mockClient.EXPECT().ReadFn(gomock.Any(), gomock.Any()).Return(nil, nil)
 		mockClient.EXPECT().AckFn(gomock.Any(), gomock.Any()).Return(mockAckClient, nil)
 
-		req1 := &sourcepb.AckRequest{
+		req := &sourcepb.AckRequest{
 			Request: &sourcepb.AckRequest_Request{
-				Offset: offset1,
+				Offsets: []*sourcepb.Offset{offset1, offset2},
 			},
 		}
 
-		req2 := &sourcepb.AckRequest{
-			Request: &sourcepb.AckRequest_Request{
-				Offset: offset2,
-			},
-		}
-
-		mockAckClient.EXPECT().Send(req1).Return(nil).Times(1)
-		mockAckClient.EXPECT().Send(req2).Return(nil).Times(1)
-		mockAckClient.EXPECT().Recv().Return(&sourcepb.AckResponse{}, nil).Times(2)
+		mockAckClient.EXPECT().Send(req).Return(nil).Times(1)
+		mockAckClient.EXPECT().Recv().Return(&sourcepb.AckResponse{}, nil).Times(1)
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
@@ -321,7 +314,7 @@ func Test_gRPCBasedUDSource_ApplyAckWithMockClient(t *testing.T) {
 
 		req1 := &sourcepb.AckRequest{
 			Request: &sourcepb.AckRequest_Request{
-				Offset: offset1,
+				Offsets: []*sourcepb.Offset{offset1, offset2},
 			},
 		}
 

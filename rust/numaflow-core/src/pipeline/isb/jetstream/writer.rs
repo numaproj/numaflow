@@ -13,7 +13,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot;
 use tokio::time::{sleep, Instant};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::config::pipeline::isb::BufferWriterConfig;
 use crate::error::Error;
@@ -219,8 +219,12 @@ impl JetstreamWriter {
                             // should we return an error here? Because duplicate messages are not fatal
                             // But it can mess up the watermark progression because the offset will be
                             // same as the previous message offset
-                            warn!("Duplicate message detected, ignoring {:?}", ack);
+                            warn!(ack = ?ack, "Duplicate message detected, ignoring");
                         }
+                        debug!(
+                            elapsed_ms = start_time.elapsed().as_millis(),
+                            "Blocking write successful in",
+                        );
                         return Ok(ack);
                     }
                     Err(e) => {

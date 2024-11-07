@@ -10,8 +10,8 @@ use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::sink::sink_request::Request;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, Success};
-use numaflow_pb::clients::sink::{sink_response, SinkRequest, SinkResponse};
-use numaflow_pb::clients::source::{read_response, AckRequest};
+use numaflow_pb::clients::sink::{sink_response, SinkRequest};
+use numaflow_pb::clients::source::read_response;
 use numaflow_pb::clients::sourcetransformer::SourceTransformRequest;
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
@@ -215,22 +215,17 @@ impl fmt::Display for MessageID {
     }
 }
 
-impl TryFrom<Offset> for AckRequest {
+impl TryFrom<Offset> for numaflow_pb::clients::source::Offset {
     type Error = Error;
 
-    fn try_from(value: Offset) -> std::result::Result<Self, Self::Error> {
-        match value {
+    fn try_from(offset: Offset) -> std::result::Result<Self, Self::Error> {
+        match offset {
             Offset::Int(_) => Err(Error::Source("IntOffset not supported".to_string())),
-            Offset::String(o) => Ok(Self {
-                request: Some(numaflow_pb::clients::source::ack_request::Request {
-                    offset: Some(numaflow_pb::clients::source::Offset {
-                        offset: BASE64_STANDARD
-                            .decode(o.offset)
-                            .expect("we control the encoding, so this should never fail"),
-                        partition_id: o.partition_idx as i32,
-                    }),
-                }),
-                handshake: None,
+            Offset::String(o) => Ok(numaflow_pb::clients::source::Offset {
+                offset: BASE64_STANDARD
+                    .decode(o.offset)
+                    .expect("we control the encoding, so this should never fail"),
+                partition_id: o.partition_idx as i32,
             }),
         }
     }
@@ -378,7 +373,7 @@ pub(crate) struct ResponseFromSink {
     pub(crate) status: ResponseStatusFromSink,
 }
 
-impl From<ResponseFromSink> for SinkResponse {
+impl From<ResponseFromSink> for sink_response::Result {
     fn from(value: ResponseFromSink) -> Self {
         let (status, err_msg) = match value.status {
             ResponseStatusFromSink::Success => (Success, "".to_string()),
@@ -387,35 +382,24 @@ impl From<ResponseFromSink> for SinkResponse {
         };
 
         Self {
-            result: Some(sink_response::Result {
-                id: value.id,
-                status: status as i32,
-                err_msg,
-            }),
-            handshake: None,
-            status: None,
+            id: value.id,
+            status: status as i32,
+            err_msg,
         }
     }
 }
 
-impl TryFrom<SinkResponse> for ResponseFromSink {
-    type Error = Error;
-
-    fn try_from(value: SinkResponse) -> Result<Self> {
-        let value = value
-            .result
-            .ok_or(Error::Sink("result is empty".to_string()))?;
-
+impl From<sink_response::Result> for ResponseFromSink {
+    fn from(value: sink_response::Result) -> Self {
         let status = match value.status() {
             Success => ResponseStatusFromSink::Success,
             Failure => ResponseStatusFromSink::Failed(value.err_msg),
             Fallback => ResponseStatusFromSink::Fallback,
         };
-
-        Ok(Self {
+        Self {
             id: value.id,
             status,
-        })
+        }
     }
 }
 
@@ -425,6 +409,7 @@ mod tests {
 
     use chrono::TimeZone;
     use numaflow_pb::clients::sink::sink_response::Result as SinkResult;
+    use numaflow_pb::clients::sink::SinkResponse;
     use numaflow_pb::clients::source::Offset as SourceOffset;
     use numaflow_pb::objects::isb::{
         Body, Header, Message as ProtoMessage, MessageId, MessageInfo,
@@ -449,26 +434,6 @@ mod tests {
             index: 0,
         };
         assert_eq!(format!("{}", message_id), "vertex-123-0");
-    }
-
-    #[test]
-    fn test_offset_to_ack_request() {
-        let offset = Offset::String(StringOffset {
-            offset: BASE64_STANDARD.encode("123"),
-            partition_idx: 1,
-        });
-        let ack_request: AckRequest = offset.try_into().unwrap();
-        assert_eq!(ack_request.request.unwrap().offset.unwrap().partition_id, 1);
-
-        let offset = Offset::Int(IntOffset::new(42, 1));
-        let result: Result<AckRequest> = offset.try_into();
-
-        // Assert that the conversion results in an error
-        assert!(result.is_err());
-
-        if let Err(e) = result {
-            assert_eq!(e.to_string(), "Source Error - IntOffset not supported");
-        }
     }
 
     #[test]
@@ -629,28 +594,34 @@ mod tests {
             status: ResponseStatusFromSink::Success,
         };
 
-        let sink_response: SinkResponse = response.into();
-        assert_eq!(sink_response.result.unwrap().status, Success as i32);
+        let sink_result: sink_response::Result = response.into();
+        assert_eq!(sink_result.status, Success as i32);
     }
 
     #[test]
     fn test_sink_response_to_response_from_sink() {
         let sink_response = SinkResponse {
-            result: Some(SinkResult {
+            results: vec![SinkResult {
                 id: "123".to_string(),
                 status: Success as i32,
                 err_msg: "".to_string(),
-            }),
+            }],
             handshake: None,
             status: None,
         };
 
-        let response: Result<ResponseFromSink> = sink_response.try_into();
-        assert!(response.is_ok());
+        let results: Vec<ResponseFromSink> = sink_response
+            .results
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<_>>();
+        assert!(!results.is_empty());
 
-        let response = response.unwrap();
-        assert_eq!(response.id, "123");
-        assert_eq!(response.status, ResponseStatusFromSink::Success);
+        assert_eq!(results.get(0).unwrap().id, "123");
+        assert_eq!(
+            results.get(0).unwrap().status,
+            ResponseStatusFromSink::Success
+        );
     }
 
     #[test]
@@ -699,14 +670,12 @@ mod tests {
 
         // Test conversion from Offset to AckRequest for StringOffset
         let offset = Offset::String(StringOffset::new(BASE64_STANDARD.encode("42"), 1));
-        let result: Result<AckRequest> = offset.try_into();
-        assert!(result.is_ok());
-        let ack_request = result.unwrap();
-        assert_eq!(ack_request.request.unwrap().offset.unwrap().partition_id, 1);
+        let offset: Result<numaflow_pb::clients::source::Offset> = offset.try_into();
+        assert_eq!(offset.unwrap().partition_id, 1);
 
         // Test conversion from Offset to AckRequest for IntOffset (should fail)
         let offset = Offset::Int(IntOffset::new(42, 1));
-        let result: Result<AckRequest> = offset.try_into();
+        let result: Result<numaflow_pb::clients::source::Offset> = offset.try_into();
         assert!(result.is_err());
     }
 }

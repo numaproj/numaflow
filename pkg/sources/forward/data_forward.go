@@ -32,6 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/idlehandler"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	errors2 "github.com/numaproj/numaflow/pkg/sources/errors"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 	"github.com/numaproj/numaflow/pkg/watermark/entity"
 	"github.com/numaproj/numaflow/pkg/watermark/fetch"
@@ -119,9 +120,9 @@ func NewDataForward(
 }
 
 // Start starts reading from source and forwards to the next buffers. Call `Stop` to stop.
-func (df *DataForward) Start() <-chan struct{} {
+func (df *DataForward) Start() <-chan error {
 	log := logging.FromContext(df.ctx)
-	stopped := make(chan struct{})
+	stopped := make(chan error)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -145,7 +146,10 @@ func (df *DataForward) Start() <-chan struct{} {
 				// shutdown the reader should be empty.
 			}
 			// keep doing what you are good at
-			df.forwardAChunk(df.ctx)
+			if err := df.forwardAChunk(df.ctx); err != nil {
+				stopped <- err
+				return
+			}
 		}
 	}()
 
@@ -188,7 +192,7 @@ func (df *DataForward) Start() <-chan struct{} {
 // for a chunk of messages returned by the first Read call. It will return only if only we are successfully able to ack
 // the message after forwarding, barring any platform errors. The platform errors include buffer-full,
 // buffer-not-reachable, etc., but do not include errors due to user code transformer, WhereTo, etc.
-func (df *DataForward) forwardAChunk(ctx context.Context) {
+func (df *DataForward) forwardAChunk(ctx context.Context) error {
 	start := time.Now()
 	totalBytes := 0
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
@@ -204,13 +208,21 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 			metrics.LabelPartitionName:      df.reader.GetName(),
 		}).Inc()
+
+		// if the error is not retryable, we should return the error.
+		var readErr = new(errors2.SourceReadErr)
+		if errors.As(err, &readErr) {
+			if !readErr.IsRetryable() {
+				return err
+			}
+		}
 	}
 
 	// if there are no read messages, we return early.
 	if len(readMessages) == 0 {
 		// not idling, so nothing much to do
 		if !df.srcIdleHandler.IsSourceIdling() {
-			return
+			return nil
 		}
 
 		// if the source is idling, we will publish idle watermark to the source and all the toBuffers
@@ -243,7 +255,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 
 		// len(readMessages) == 0, so we do not have anything more to do
-		return
+		return nil
 	}
 
 	// reset the idle handler because we have read messages
@@ -314,7 +326,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		readWriteMessagePairs, err = df.applyTransformer(ctx, readMessages)
 		if err != nil {
 			df.opts.logger.Errorw("failed to apply source transformer", zap.Error(err))
-			return
+			return err
 		}
 
 		df.opts.logger.Debugw("concurrent applyTransformer completed",
@@ -381,7 +393,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		for _, message := range m.WriteMessages {
 			if err = df.whereToStep(message, messageToStep); err != nil {
 				df.opts.logger.Errorw("failed in whereToStep", zap.Error(err))
-				return
+				return err
 			}
 		}
 		// get the list of source partitions for which we have read messages, we will use this to publish watermarks to toVertices
@@ -392,7 +404,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	writeOffsets, err = df.writeToBuffers(ctx, messageToStep)
 	if err != nil {
 		df.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
-		return
+		return err
 	}
 
 	// activeWatermarkBuffers records the buffers that the publisher has published
@@ -463,8 +475,14 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 			metrics.LabelPartitionName:      df.reader.GetName(),
 		}).Add(float64(len(readOffsets)))
-
-		return
+		// if the error is not retryable, we should return the error.
+		var ackErr = new(errors2.SourceAckErr)
+		if errors.As(err, &ackErr) {
+			if !ackErr.IsRetryable() {
+				return err
+			}
+		}
+		return nil
 	}
 	metrics.AckMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
@@ -487,13 +505,17 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
 		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 	}).Observe(float64(time.Since(start).Microseconds()))
+	return nil
 }
 
 func (df *DataForward) ackFromSource(ctx context.Context, offsets []isb.Offset) error {
 	// for all the sources, we either ack all offsets or none.
 	// when a batch ack fails, the source Ack() function populate the error array with the same error;
 	// hence we can just return the first error.
-	return df.reader.Ack(ctx, offsets)[0]
+	if errs := df.reader.Ack(ctx, offsets); len(errs) > 0 {
+		return errs[0]
+	}
+	return nil
 }
 
 // writeToBuffers is a blocking call until all the messages have been forwarded to all the toBuffers, or a shutdown
@@ -638,29 +660,11 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 // the skip flag is set. The ShutDown flag will only if there is an InternalErr and ForceStop has been invoked.
 // The UserError retry will be done on the applyTransformer.
 func (df *DataForward) applyTransformer(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
-	for {
-		transformResults, err := df.opts.transformer.ApplyTransform(ctx, messages)
-		if err != nil {
-			df.opts.logger.Errorw("Transformer.Apply error", zap.Error(err))
-			// TODO: implement retry with backoff etc.
-			time.Sleep(df.opts.retryInterval)
-			// keep retrying, I cannot think of a use case where a user could say, errors are fine :-)
-			// as a platform, we should not lose or corrupt data.
-			// this does not mean we should prohibit this from a shutdown.
-			if ok, _ := df.IsShuttingDown(); ok {
-				df.opts.logger.Errorw("Transformer.Apply, Stop called while stuck on an internal error", zap.Error(err))
-				metrics.PlatformError.With(map[string]string{
-					metrics.LabelVertex:             df.vertexName,
-					metrics.LabelPipeline:           df.pipelineName,
-					metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-					metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-				}).Inc()
-				return nil, err
-			}
-			continue
-		}
-		return transformResults, nil
+	transformResults, err := df.opts.transformer.ApplyTransform(ctx, messages)
+	if err != nil {
+		return nil, err
 	}
+	return transformResults, nil
 }
 
 // whereToStep executes the WhereTo interfaces and then updates the to step's writeToBuffers buffer.

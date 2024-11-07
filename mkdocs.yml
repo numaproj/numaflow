@@ -42,6 +42,7 @@ nav:
       - Core Concepts:
           - core-concepts/pipeline.md
           - core-concepts/vertex.md
+          - core-concepts/monovertex.md
           - core-concepts/inter-step-buffer.md
           - core-concepts/inter-step-buffer-service.md
           - core-concepts/watermarks.md
