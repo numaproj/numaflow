@@ -104,7 +104,7 @@ export function PodDetail({
             <Box
               sx={{
                 p: "1.6rem",
-                height: "calc(100% - 13.7rem)",
+                height: "calc(100% - 10rem)",
                 overflow: "scroll",
               }}
             >

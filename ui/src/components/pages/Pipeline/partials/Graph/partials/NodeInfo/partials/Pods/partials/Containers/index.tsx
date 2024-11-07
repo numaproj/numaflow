@@ -8,8 +8,12 @@ export function Containers(props: ContainerProps) {
   if (!pod) return null;
 
   return (
-    <Box>
-      <Stack direction="row" spacing={1}>
+    <Box sx={{ width: "100%" }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}
+      >
         {pod?.containers?.map((c: string) => {
           return (
             <Chip

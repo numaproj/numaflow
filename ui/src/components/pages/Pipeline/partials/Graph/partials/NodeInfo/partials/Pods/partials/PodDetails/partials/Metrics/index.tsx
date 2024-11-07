@@ -60,7 +60,7 @@ export function Metrics({ namespaceId, pipelineId, type }: MetricsProps) {
     );
   }
 
-  if (discoveredMetrics === undefined) return <></>;
+  if (discoveredMetrics == undefined) return <Box>No metrics found</Box>;
 
   return (
     <Box sx={{ height: "100%" }}>

@@ -176,7 +176,7 @@ export function Pods(props: PodsProps) {
         <Box sx={{ fontWeight: "600", width: "24%", mr: "1%" }}>
           Select a container
         </Box>
-        <Box data-testid={"pods-containers"}>
+        <Box data-testid={"pods-containers"} sx={{ width: "75%" }}>
           <Containers
             pod={selectedPod}
             containerName={selectedContainer}
