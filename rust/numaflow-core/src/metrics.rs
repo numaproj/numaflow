@@ -400,8 +400,7 @@ pub(crate) fn forward_pipeline_metrics() -> &'static PipelineMetrics {
     PIPELINE_METRICS.get_or_init(PipelineMetrics::new)
 }
 
-// forward_metrics_labels is a helper function used to fetch the
-// SDK_INFO_LABELS object
+// sdk_info_labels is a helper function used to build the labels used in sdk_info
 pub(crate) fn sdk_info_labels(
     language: String,
     version: String,
@@ -1056,6 +1055,28 @@ mod tests {
     #[should_panic(expected = "ExponentialBucketsRange min needs to be greater than 0")]
     fn test_exponential_buckets_range_negative_min() {
         let _ = exponential_buckets_range(-1.0, 100.0, 10).collect::<Vec<f64>>();
+    }
+
+    #[test]
+    fn test_global_metrics() {
+        let metrics = global_metrics();
+        let sdk_labels = sdk_info_labels(
+            "language".to_string(),
+            "version".to_string(),
+            "container_type".to_string(),
+        );
+        metrics.sdk_info.get_or_create(&sdk_labels).set(1);
+
+        let state = global_registry().registry.lock();
+        let mut buffer = String::new();
+        encode(&mut buffer, &state).unwrap();
+        let got = buffer.trim().lines().collect::<Vec<&str>>().join("\n");
+
+        let expected = r#"# HELP sdk_info A metric with a constant value '1', labeled by SDK information such as version, language, and type.
+# TYPE sdk_info gauge
+sdk_info{language="language",version="version",type="container_type"} 1
+# EOF"#;
+        assert_eq!(got.trim(), expected);
     }
 
     #[test]

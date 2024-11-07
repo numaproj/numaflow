@@ -10,10 +10,7 @@ use crate::config::components::{sink, source, transformer};
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self, Error};
 use crate::metrics;
-use crate::shared::server_info::{
-    sdk_server_info, CONTAINER_TYPE_FB_SINKER, CONTAINER_TYPE_SINKER, CONTAINER_TYPE_SOURCER,
-    CONTAINER_TYPE_SOURCE_TRANSFORMER,
-};
+use crate::shared::server_info::{sdk_server_info, ContainerType};
 use crate::shared::utils;
 use crate::shared::utils::{
     create_rpc_channel, wait_until_sink_ready, wait_until_source_ready,
@@ -50,7 +47,7 @@ pub(crate) async fn start_forwarder(
         let metric_labels = metrics::sdk_info_labels(
             server_info.language,
             server_info.version,
-            CONTAINER_TYPE_SOURCER.to_string(),
+            ContainerType::Sourcer.to_string(),
         );
         metrics::global_metrics()
             .sdk_info
@@ -81,7 +78,7 @@ pub(crate) async fn start_forwarder(
         let metric_labels = metrics::sdk_info_labels(
             server_info.language,
             server_info.version,
-            CONTAINER_TYPE_SINKER.to_string(),
+            ContainerType::Sinker.to_string(),
         );
         metrics::global_metrics()
             .sdk_info
@@ -111,7 +108,7 @@ pub(crate) async fn start_forwarder(
             let metric_labels = metrics::sdk_info_labels(
                 server_info.language,
                 server_info.version,
-                CONTAINER_TYPE_FB_SINKER.to_string(),
+                ContainerType::FbSinker.to_string(),
             );
             metrics::global_metrics()
                 .sdk_info
@@ -147,7 +144,7 @@ pub(crate) async fn start_forwarder(
             let metric_labels = metrics::sdk_info_labels(
                 server_info.language,
                 server_info.version,
-                CONTAINER_TYPE_SOURCE_TRANSFORMER.to_string(),
+                ContainerType::SourceTransformer.to_string(),
             );
 
             metrics::global_metrics()
