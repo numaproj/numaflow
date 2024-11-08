@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	metricsProxyConfigPath = "/etc/numaflow/metrics/config.yaml"
+	metricsProxyConfigPath = "/etc/numaflow/metrics-proxy-config.yaml"
 )
 
 type MetricsRequestBody struct {

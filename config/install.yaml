@@ -28447,7 +28447,7 @@ metadata:
 ---
 apiVersion: v1
 data:
-  config.yaml: |
+  metrics-proxy-config.yaml: |
     # url is a required field, it should be the url of the service to which the metrics proxy will connect
     # url: service_name + "." + service_namespace + ".svc.cluster.local" + ":" + port
     # example for local prometheus service
@@ -28877,7 +28877,7 @@ spec:
           subPath: index.html
         - mountPath: /etc/numaflow
           name: rbac-config
-        - mountPath: /etc/numaflow/metrics
+        - mountPath: /etc/numaflow
           name: metrics-proxy-config
       initContainers:
       - args:

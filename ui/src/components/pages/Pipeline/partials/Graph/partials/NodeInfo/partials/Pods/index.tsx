@@ -99,11 +99,11 @@ export function Pods(props: PodsProps) {
     const fetchPodInfo = async () => {
       try {
         const response = await fetch(
-          `${host}${getBaseHref()}/api/v1/info/namespaces/${namespaceId}${
+          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}${
             type === "monoVertex"
               ? `/mono-vertices`
               : `/pipelines/${pipelineId}/vertices`
-          }/${vertexId}/pods?refreshKey=${requestKey}`
+          }/${vertexId}/pods-info?refreshKey=${requestKey}`
         );
         if (!response.ok) {
           throw new Error("Failed to fetch pod details");

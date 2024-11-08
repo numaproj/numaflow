@@ -162,9 +162,9 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	// Get pod logs.
 	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
 	// Get the pod metrics for a mono vertex.
-	r.GET("/info/namespaces/:namespace/mono-vertices/:mono-vertex/pods", handler.GetMonoVertexPodsInfo)
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/pods-info", handler.GetMonoVertexPodsInfo)
 	// Get the pod metrics for a pipeline vertex.
-	r.GET("/info/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods", handler.GetVertexPodsInfo)
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods-info", handler.GetVertexPodsInfo)
 	// List of the Kubernetes events of a namespace.
 	r.GET("/namespaces/:namespace/events", handler.GetNamespaceEvents)
 	// List all mono vertices for a given namespace.
