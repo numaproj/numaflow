@@ -98,16 +98,16 @@ var minimumSupportedSDKVersions = sdkConstraints{
 		fbsinker:          "0.9.0rc100",
 	},
 	Go: map[ContainerType]string{
-		// meaning the minimum supported go SDK version is 0.9.0
-		sourcer:           "0.9.0-z",
-		sourcetransformer: "0.9.0-z",
-		sinker:            "0.9.0-z",
-		mapper:            "0.9.0-z",
-		reducer:           "0.9.0-z",
-		reducestreamer:    "0.9.0-z",
-		sessionreducer:    "0.9.0-z",
-		sideinput:         "0.9.0-z",
-		fbsinker:          "0.9.0-z",
+		// meaning the minimum supported go SDK version is 0.8.0
+		sourcer:           "0.8.0-z",
+		sourcetransformer: "0.8.0-z",
+		sinker:            "0.8.0-z",
+		mapper:            "0.8.0-z",
+		reducer:           "0.8.0-z",
+		reducestreamer:    "0.8.0-z",
+		sessionreducer:    "0.8.0-z",
+		sideinput:         "0.8.0-z",
+		fbsinker:          "0.8.0-z",
 	},
 	Java: map[ContainerType]string{
 		// meaning the minimum supported java SDK version is 0.9.0
