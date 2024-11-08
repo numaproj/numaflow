@@ -373,10 +373,10 @@ mod version {
         java_version_map.insert("sinker".to_string(), "0.9.0-z".to_string());
         java_version_map.insert("fb-sinker".to_string(), "0.9.0-z".to_string());
         let mut rust_version_map = HashMap::new();
-        rust_version_map.insert("sourcer".to_string(), "0.2.0-z".to_string());
-        rust_version_map.insert("sourcetransformer".to_string(), "0.2.0-z".to_string());
-        rust_version_map.insert("sinker".to_string(), "0.2.0-z".to_string());
-        rust_version_map.insert("fb-sinker".to_string(), "0.2.0-z".to_string());
+        rust_version_map.insert("sourcer".to_string(), "0.1.0-z".to_string());
+        rust_version_map.insert("sourcetransformer".to_string(), "0.1.0-z".to_string());
+        rust_version_map.insert("sinker".to_string(), "0.1.0-z".to_string());
+        rust_version_map.insert("fb-sinker".to_string(), "0.1.0-z".to_string());
 
         let mut m = HashMap::new();
         m.insert("go".to_string(), go_version_map);
