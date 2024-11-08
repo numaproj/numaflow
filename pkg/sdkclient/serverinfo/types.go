@@ -123,15 +123,15 @@ var minimumSupportedSDKVersions = sdkConstraints{
 	},
 	Rust: map[ContainerType]string{
 		// meaning the minimum supported rust SDK version is 0.2.0
-		sourcer:           "0.2.0-z",
-		sourcetransformer: "0.2.0-z",
-		sinker:            "0.2.0-z",
-		mapper:            "0.2.0-z",
-		reducer:           "0.2.0-z",
-		reducestreamer:    "0.2.0-z",
-		sessionreducer:    "0.2.0-z",
-		sideinput:         "0.2.0-z",
-		fbsinker:          "0.2.0-z",
+		sourcer:           "0.1.0-z",
+		sourcetransformer: "0.1.0-z",
+		sinker:            "0.1.0-z",
+		mapper:            "0.1.0-z",
+		reducer:           "0.1.0-z",
+		reducestreamer:    "0.1.0-z",
+		sessionreducer:    "0.1.0-z",
+		sideinput:         "0.1.0-z",
+		fbsinker:          "0.1.0-z",
 	},
 }
 
