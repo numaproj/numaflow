@@ -333,10 +333,6 @@ mod tests {
 
     #[tokio::test]
     async fn run_forwarder() {
-        let (src_shutdown_tx, src_shutdown_rx) = tokio::sync::oneshot::channel();
-        let tmp_dir = tempfile::TempDir::new().unwrap();
-        let src_sock_file = tmp_dir.path().join("source.sock");
-        let src_info_file = tmp_dir.path().join("sourcer-server-info");
         let server_info_obj = ServerInfo {
             protocol: "uds".to_string(),
             language: "rust".to_string(),
@@ -344,6 +340,11 @@ mod tests {
             version: "0.1.0".to_string(),
             metadata: None,
         };
+
+        let (src_shutdown_tx, src_shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let src_sock_file = tmp_dir.path().join("source.sock");
+        let src_info_file = tmp_dir.path().join("sourcer-server-info");
 
         write_server_info(src_info_file.to_str().unwrap(), &server_info_obj)
             .await
@@ -363,14 +364,14 @@ mod tests {
         let (sink_shutdown_tx, sink_shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let sink_sock_file = tmp_dir.path().join("sink.sock");
-        let sink_server_info = tmp_dir.path().join("sinker-server-info");
+        let sink_info_file = tmp_dir.path().join("sinker-server-info");
 
-        write_server_info(sink_server_info.to_str().unwrap(), &server_info_obj)
+        write_server_info(sink_info_file.to_str().unwrap(), &server_info_obj)
             .await
             .unwrap();
 
         let server_socket = sink_sock_file.clone();
-        let server_info = sink_server_info.clone();
+        let server_info = sink_info_file.clone();
         let sink_server_handle = tokio::spawn(async move {
             sink::Server::new(SimpleSink)
                 .with_socket_file(server_socket)
@@ -408,7 +409,7 @@ mod tests {
                     components::sink::UserDefinedConfig {
                         socket_path: sink_sock_file.to_str().unwrap().to_string(),
                         grpc_max_message_size: 1024,
-                        server_info_path: sink_server_info.to_str().unwrap().to_string(),
+                        server_info_path: sink_info_file.to_str().unwrap().to_string(),
                     },
                 ),
                 retry_config: Default::default(),
