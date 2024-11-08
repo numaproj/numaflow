@@ -76,7 +76,7 @@ spec:
             subPath: index.html
           - mountPath: /etc/numaflow
             name: rbac-config
-          - mountPath: /etc/numaflow
+          - mountPath: /etc/numaflow/metrics-proxy
             name: metrics-proxy-config
           env:
           - name: NAMESPACE
