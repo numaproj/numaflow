@@ -26,7 +26,7 @@ Welcome to Numaflow! A Kubernetes-native, serverless platform for running scalab
 
 ## Roadmap
 
-- Mono Vertex to bypass ISB for simple use cases (1.4)
+- Inbuilt Debugging Experience (1.5)
 
 ## Demo
 

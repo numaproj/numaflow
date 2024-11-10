@@ -194,7 +194,7 @@ fn check_sdk_compatibility(
 
             if !specifiers.contains(&sdk_version_pep440) {
                 return Err(Error::ServerInfo(format!(
-                    "SDK version {} must be upgraded to at least {}, in order to work with the current numaflow version",
+                    "Python SDK version {} must be upgraded to at least {}, in order to work with the current numaflow version",
                     sdk_version_pep440, human_readable(sdk_required_version)
                 )));
             }
@@ -408,20 +408,20 @@ mod version {
         // NOTE: the string content of the keys matches the corresponding server info file name.
         // DO NOT change it unless the server info file name is changed.
         let mut go_version_map: HashMap<ContainerType, String> = HashMap::new();
-        go_version_map.insert(ContainerType::Sourcer, "0.8.0-z".to_string());
-        go_version_map.insert(ContainerType::SourceTransformer, "0.8.0-z".to_string());
-        go_version_map.insert(ContainerType::Sinker, "0.8.0-z".to_string());
-        go_version_map.insert(ContainerType::FbSinker, "0.8.0-z".to_string());
+        go_version_map.insert(ContainerType::Sourcer, "0.9.0-z".to_string());
+        go_version_map.insert(ContainerType::SourceTransformer, "0.9.0-z".to_string());
+        go_version_map.insert(ContainerType::Sinker, "0.9.0-z".to_string());
+        go_version_map.insert(ContainerType::FbSinker, "0.9.0-z".to_string());
         let mut python_version_map = HashMap::new();
-        python_version_map.insert(ContainerType::Sourcer, "0.8.0rc100".to_string());
-        python_version_map.insert(ContainerType::SourceTransformer, "0.8.0rc100".to_string());
-        python_version_map.insert(ContainerType::Sinker, "0.8.0rc100".to_string());
-        python_version_map.insert(ContainerType::FbSinker, "0.8.0rc100".to_string());
+        python_version_map.insert(ContainerType::Sourcer, "0.9.0rc100".to_string());
+        python_version_map.insert(ContainerType::SourceTransformer, "0.9.0rc100".to_string());
+        python_version_map.insert(ContainerType::Sinker, "0.9.0rc100".to_string());
+        python_version_map.insert(ContainerType::FbSinker, "0.9.0rc100".to_string());
         let mut java_version_map = HashMap::new();
-        java_version_map.insert(ContainerType::Sourcer, "0.8.0-z".to_string());
-        java_version_map.insert(ContainerType::SourceTransformer, "0.8.0-z".to_string());
-        java_version_map.insert(ContainerType::Sinker, "0.8.0-z".to_string());
-        java_version_map.insert(ContainerType::FbSinker, "0.8.0-z".to_string());
+        java_version_map.insert(ContainerType::Sourcer, "0.9.0-z".to_string());
+        java_version_map.insert(ContainerType::SourceTransformer, "0.9.0-z".to_string());
+        java_version_map.insert(ContainerType::Sinker, "0.9.0-z".to_string());
+        java_version_map.insert(ContainerType::FbSinker, "0.9.0-z".to_string());
         let mut rust_version_map = HashMap::new();
         rust_version_map.insert(ContainerType::Sourcer, "0.1.0-z".to_string());
         rust_version_map.insert(ContainerType::SourceTransformer, "0.1.0-z".to_string());

@@ -1,5 +1,103 @@
 # Changelog
 
+## v1.4.0 (2024-11-08)
+
+ * [6892c115](https://github.com/numaproj/numaflow/commit/6892c11590ea482c186724e55837dbcfb2100ce3) Update manifests to v1.4.0
+ * [63d5f774](https://github.com/numaproj/numaflow/commit/63d5f774fecc0284ea92ad3934e7c2c8e4a58b6e) feat: metrics visualiser for mono vertex (#2195)
+ * [9c1d3cef](https://github.com/numaproj/numaflow/commit/9c1d3cef6ca817f0e0595dc07b727ce8ae597e4e) feat: block isbsvc deleting when there is linked pipeline (#2202)
+ * [426141a5](https://github.com/numaproj/numaflow/commit/426141a5e595e8cb4c827f48fea0e1bd286e4a11) fix(docs): use manifests from main branch in quick-start (#2197)
+ * [00a74df0](https://github.com/numaproj/numaflow/commit/00a74df0f03a8548b3f11776c598c61266801706) doc: monovertex (#2193)
+ * [eca3b0c0](https://github.com/numaproj/numaflow/commit/eca3b0c0be314939422ee18cdc938546d3b9e4e3) feat:KafkaSource supports KafkaVersion modification (#2191)
+ * [5b777826](https://github.com/numaproj/numaflow/commit/5b7778260c85c74fc73bf098d5d4609d2f8e2a42) feat: source and sink implementation in Rust (blocking implementation) (#2190)
+ * [e98ff980](https://github.com/numaproj/numaflow/commit/e98ff980577ee8c161d41fb3b00fcda6db20c9e7) chore(deps): bump http-proxy-middleware from 2.0.6 to 2.0.7 in /ui (#2188)
+ * [8e98c085](https://github.com/numaproj/numaflow/commit/8e98c0854bc3c17626238b2c58326cac5a602a05) fix: refine vertex/mvtx pod clean up logic (#2185)
+ * [ee27af35](https://github.com/numaproj/numaflow/commit/ee27af35aa7920d26068e4c03cb6efdf874f08fc) fix(metrics): fix incorrect metric label and add docs (#2180)
+ * [f21e75bc](https://github.com/numaproj/numaflow/commit/f21e75bcf1e133d26eed83cec9983501f3648ae3) fix(controller): incorporate instance into lease lock name (#2177)
+ * [7b02290d](https://github.com/numaproj/numaflow/commit/7b02290d3c8ee665916625fb119490192b4560bd) feat: config management for numaflow rust (#2172)
+ * [187398cc](https://github.com/numaproj/numaflow/commit/187398ccd1569316ad7303cdc86f7faed98e1eb1) fix: main branch, offset type got updated (#2171)
+ * [dc137c24](https://github.com/numaproj/numaflow/commit/dc137c24b3cc842c8a3e048fa928bc2a54f4d759) feat: blackhole sink for Monovertex (#2167)
+ * [9bd7e1b2](https://github.com/numaproj/numaflow/commit/9bd7e1b2925ad8714d86114618fe93f967d2b7fe) feat: check if the buffer is full before writing to ISB (#2166)
+ * [3d6e47ff](https://github.com/numaproj/numaflow/commit/3d6e47ffc119d8347a2087fb951f2061c516bc94) feat: ISB(jetstream) writer framework (#2160)
+ * [8bf96793](https://github.com/numaproj/numaflow/commit/8bf96793aa477d85d31dac01edc36c9201f55fc2) fix: create histogram buckets in a range (#2144)
+ * [c95d9308](https://github.com/numaproj/numaflow/commit/c95d930830912ceef3516b46994508c56214d236) feat: support multiple controller with instance config (#2153)
+ * [1ea4d2ea](https://github.com/numaproj/numaflow/commit/1ea4d2ea3f4a7b2ab939976eba5308d6cb0a9da0) feat: Log sink implementation for Monovertex (#2150)
+ * [6fb36acf](https://github.com/numaproj/numaflow/commit/6fb36acfc31f07bd53bfadf587fd2253dda9fe34) feat: Unify MapStream and Unary Map Operations Using a Shared gRPC Protocol (#2149)
+ * [fb328854](https://github.com/numaproj/numaflow/commit/fb328854d8a49aa915aaf7d3843ebcfdfd6c81a9) feat: actor pattern for forwarder + sink trait (#2141)
+ * [bc12925f](https://github.com/numaproj/numaflow/commit/bc12925f550d05732a435581570d6e1c0948f377) feat: set kafka keys if setKey is set (#2146)
+ * [dd08bcab](https://github.com/numaproj/numaflow/commit/dd08bcab15c7dad09930cb158b8b98caa3698d0e) feat: Unify Batch Map and Unary Map Operations Using a Shared gRPC Protocol (#2139)
+ * [271e459a](https://github.com/numaproj/numaflow/commit/271e459a5deb13f77906fb58c8308151ef6415a1) feat: add keys into kafka header while producing (#2143)
+ * [206ff7f7](https://github.com/numaproj/numaflow/commit/206ff7f72bf83e19edf17eb36861865585b1ce9c) fix: pipeline pausing race conditions of draining and terminating source (#2131)
+ * [d340a4e8](https://github.com/numaproj/numaflow/commit/d340a4e83311d487c2a1b3a75447168a01e3943e) feat: expose ports for user defined containers (#2135)
+ * [fae53fa2](https://github.com/numaproj/numaflow/commit/fae53fa2dcef7ef18d0d068368aaf6b832410c1e) feat: integrate tickgen with monovertex (#2136)
+ * [d5c96fd9](https://github.com/numaproj/numaflow/commit/d5c96fd9538d6eebe7267f89f677c837b309d6a0) feat: Use gRPC bidirectional streaming for map  (#2120)
+ * [ceb8f5b7](https://github.com/numaproj/numaflow/commit/ceb8f5b721c097310a5b91d89d1bd3df8648f284) feat: Make Generator Support Leaky Bucket (#2129)
+ * [fcef5053](https://github.com/numaproj/numaflow/commit/fcef50536cf85373e0ba8ac5162a27fd4e58db5f) refactor: generate static gRPC clients (#2128)
+ * [3182db3a](https://github.com/numaproj/numaflow/commit/3182db3af3a13ace6e7c2cb26d3be9df04173a5a) feat: generator based on ticker (#2126)
+ * [06515a2c](https://github.com/numaproj/numaflow/commit/06515a2cbfc3a183131cab54394bb5d2c546e046) fix: create buffers and buckets before updating Vertices (#2112)
+ * [7586ffb0](https://github.com/numaproj/numaflow/commit/7586ffb056f3155fd9f13ba8dee33be38851ce94) Debugging unit test timeout in CI (#2118)
+ * [dc25c4dc](https://github.com/numaproj/numaflow/commit/dc25c4dc11c7fd5125c53bfff2b39fa49b9c8368) feat: implement Source trait and use it for user-defined source (#2114)
+ * [3dbed43e](https://github.com/numaproj/numaflow/commit/3dbed43ea652ed5e4913e2346e60816d52b258ed) feat: container-level version compatibility check for monovertex (#2108)
+ * [6aacb6ea](https://github.com/numaproj/numaflow/commit/6aacb6ea8bf656c1d65888deba4c21b0aea5de73) chore(deps): bump tonic from 0.12.2 to 0.12.3 in /rust (#2111)
+ * [e69551ba](https://github.com/numaproj/numaflow/commit/e69551ba07d14dee5dccd90b28cf8b497943f415) feat: Use gRPC bidirectional streaming for source transformer (#2071)
+ * [5b8b8ddd](https://github.com/numaproj/numaflow/commit/5b8b8dddac727e53bcfbf4c8071221b284e606e9) chore(deps): bump rollup from 2.79.1 to 2.79.2 in /ui (#2096)
+ * [6cdec2d6](https://github.com/numaproj/numaflow/commit/6cdec2d6d1325866e99a204389bc9dc460146cbf) feat: Bidirectional Streaming for UDSink (#2080)
+ * [895a7780](https://github.com/numaproj/numaflow/commit/895a7780410b7bb5a43a4ab6f4dd55c1c145561f) feat: container-type level version compatibility check (#2087)
+ * [6d1ebd04](https://github.com/numaproj/numaflow/commit/6d1ebd04f2089c81bd8e0c5e763cd7c363cb7623) feat: add pause for monovertex (#2077)
+ * [b4f92785](https://github.com/numaproj/numaflow/commit/b4f9278570f67cba3d85fffe7ca287c5b00da489) fix: rollback codegen script (#2079)
+ * [40e960a4](https://github.com/numaproj/numaflow/commit/40e960a44184c876173e6bdf69b216df6296bf73) feat: Bidirectional Streaming for User Defined Source (#2056)
+ * [669dc186](https://github.com/numaproj/numaflow/commit/669dc186a0d885df92716b627ded236fab7476e7) Fix: Use Merge patch rather than json patch for `pause-timestamp` annotation apply (#2078)
+ * [ed543ad2](https://github.com/numaproj/numaflow/commit/ed543ad2e7824f3e6b508de5b07ba08e1d7d9b66) fix: support version compatibility check for pre-release versions (#2069)
+ * [9995ff81](https://github.com/numaproj/numaflow/commit/9995ff813d39489d22c94e574adae9e6a8a4ebe8) feat: allow customization on readyz and livez config (#2068)
+ * [cbe9054f](https://github.com/numaproj/numaflow/commit/cbe9054f8507639dac3a48b7b8eeb9e236ce706e) doc: example for PVC (#2067)
+ * [692fbeec](https://github.com/numaproj/numaflow/commit/692fbeec1b94d8ff66a82b9c3fe5d8242962750b) fix: skip updating phase for resource check (#2065)
+ * [c6003314](https://github.com/numaproj/numaflow/commit/c6003314c8f77905fbd86ddccab12853ca6c63a1) chore(deps): bump express from 4.19.2 to 4.21.0 in /ui (#2061)
+ * [0811eb4a](https://github.com/numaproj/numaflow/commit/0811eb4aff59dda8b9143a7420b2beb415143d27) fix: Fix numaflow-rs binary location in image (#2050)
+ * [ba40b150](https://github.com/numaproj/numaflow/commit/ba40b1500416a258fe131273d3cfc4b46a93a88f) fix: builtin transformer should keep the keys (#2047)
+ * [c4b4d006](https://github.com/numaproj/numaflow/commit/c4b4d0068012f06980595437b3bc39c73cace8ef) feat: rolling update for Pipeline Vertex (#2040)
+ * [32878877](https://github.com/numaproj/numaflow/commit/3287887761fa5a8da12ca70c5ce53947cbe896ec) feat: rolling update for MonoVertex (#2029)
+ * [cf90e258](https://github.com/numaproj/numaflow/commit/cf90e258261b50d95db2787cfe23e9008c2ab72a) fix: pause lifecyle changes and add drained status (#2028)
+ * [40a3d2f5](https://github.com/numaproj/numaflow/commit/40a3d2f5bd3ac57e075bc23b076c1e5df8436fc8) feat: allow configurable retryStrategy (#2010)
+ * [55230e84](https://github.com/numaproj/numaflow/commit/55230e84fd86f05bcac96dd4b42afe73aa1b2e4a) chore(deps): bump webpack from 5.93.0 to 5.94.0 in /ui (#2018)
+ * [a77c9391](https://github.com/numaproj/numaflow/commit/a77c9391e9e6dbdd00cbc50376b90b99eebc6cc5) fix: add latency metrics for mvtx (#2013)
+ * [35c6f099](https://github.com/numaproj/numaflow/commit/35c6f0991d6821b728c82bee6161e265dc2c1ba6) feat: introduce `readyReplicas` for Vertex and MonoVertex (#2014)
+ * [2ba54117](https://github.com/numaproj/numaflow/commit/2ba54117d7015126c6894d196d42848bd2e37644) feat: enable resourceClaims for vertex and monovtx (#2009)
+ * [53d1131d](https://github.com/numaproj/numaflow/commit/53d1131d82c8029e546c2f39305d1bcf80f1b60e) fix: log format with config load error (#2000)
+ * [91f372ca](https://github.com/numaproj/numaflow/commit/91f372ca9ea413041ad157746530481d78114fcf) feat: more flexible scaling with `replicasPerScaleUp` and `replicasPerScaleDown` (#2003)
+ * [102d1de1](https://github.com/numaproj/numaflow/commit/102d1de1230a5a9baf29128757b12e6af4413bf3) chore(deps): bump micromatch from 4.0.7 to 4.0.8 in /ui (#2002)
+ * [ae02243b](https://github.com/numaproj/numaflow/commit/ae02243b3f30de8da407b148bbac7cb2e48a68c4) fix: e2e testing isbsvc deletion timeout issue (#1997)
+ * [deb1626e](https://github.com/numaproj/numaflow/commit/deb1626ece55579d30e6d9003abe854980cc2923) fix: test coverage generation for Rust code (#1993)
+ * [6918e6f4](https://github.com/numaproj/numaflow/commit/6918e6f47e9309173dd67e6fc0c105d2cd9814f2) fix: do not pass scale info to MonoVertex (#1990)
+ * [3f735f76](https://github.com/numaproj/numaflow/commit/3f735f76425a15d8670f145e69e3caa044037a2c) fix: adding not available for negative processing rates (#1983)
+ * [33bbbad4](https://github.com/numaproj/numaflow/commit/33bbbad4d7b16f9494d4164993b1cb9d32acc18b) fix: minor perf improvements of mvtx fallback sink (#1967)
+ * [af2f6522](https://github.com/numaproj/numaflow/commit/af2f65220afa80fc8f4bf684cc9ce58234c2bb80) fix: remove coloring in logs (#1975)
+ * [a7074aa8](https://github.com/numaproj/numaflow/commit/a7074aa80345e41c39770e7d069e14c29eaff9e0) doc: update roadmap (#1970)
+ * [e1bfd1b2](https://github.com/numaproj/numaflow/commit/e1bfd1b2d016d64bfb9d6ac546cc3489c96b806d) refactor: re-arrange e2e tests  (#1961)
+ * [42671138](https://github.com/numaproj/numaflow/commit/42671138250d67f6eacddf33d4b5d5e069e5674f) fix: replicas derived in UI from mvtx status instead of spec (#1965)
+ * [b54a4cd3](https://github.com/numaproj/numaflow/commit/b54a4cd3e555ee3e29c603f7f2ea1c15ccd88f7a) feat: add health for monovertex (#1954)
+ * [cbad6996](https://github.com/numaproj/numaflow/commit/cbad6996f063acf1f4a3d2d8fc2ec1acff6ee912) feat: enable fallback sink for mvtx (#1957)
+ * [c14abd5d](https://github.com/numaproj/numaflow/commit/c14abd5de5cfc4d88f396c17231233b4e9fc2c5f) feat: Mono vertex UI (#1941)
+ * [c4b5d05c](https://github.com/numaproj/numaflow/commit/c4b5d05c24c189684043688fa657295bf4495dcd) fix: default resources mutated when applying templates (#1948)
+ * [9e963867](https://github.com/numaproj/numaflow/commit/9e9638677a35384e9acd12a1ecca1390fdf72b3e) feat: autoscaling for MonoVertex (#1927)
+ * [97f94283](https://github.com/numaproj/numaflow/commit/97f94283817f994549e8e5cb0b78bf9e8444eabf) fix: retry failed messages for MonoVertex sink (#1933)
+ * [2017f0c0](https://github.com/numaproj/numaflow/commit/2017f0c0f3a7fd3f7842fc70575644e38b69d294) Add Lockheed to Users.md (#1934)
+ * [8b7a9a16](https://github.com/numaproj/numaflow/commit/8b7a9a16e89bc5f81d36c1abb44201ad850c32bc) feat: add server-info support and versioning to MonoVertex (#1918)
+ * [c399d051](https://github.com/numaproj/numaflow/commit/c399d051466017dc331552531ea31d44a20bae66) feat: source to sink with an optional transformer without ISB (#1904)
+
+### Contributors
+
+ * Derek Wang
+ * Julie Vogelman
+ * Keran Yang
+ * Sidhant Kohli
+ * Sreekanth
+ * Vedant Gupta
+ * Vigith Maurice
+ * Yashash H L
+ * dependabot[bot]
+ * mdwarne1
+ * qianbeibuzui
+ * xdevxy
+
 ## v1.3.3 (2024-10-09)
 
  * [4f31aad7](https://github.com/numaproj/numaflow/commit/4f31aad7f51cce59700ef53f363d06afeb6d6aee) Update manifests to v1.3.3
