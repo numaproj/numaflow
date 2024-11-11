@@ -1,0 +1,20 @@
+.empty_chart_container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 20rem;
+  border: 0.1rem dashed #ccc;
+  border-radius: 0.5rem;
+  padding: 2rem;
+}
+
+.circle_icon {
+  color: #999;
+  margin-bottom: 1.5rem;
+  font-size: 4rem !important;
+}
+
+.empty_text {
+  color: #666;
+}

@@ -34,11 +34,12 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	metricsversiond "k8s.io/metrics/pkg/client/clientset/versioned"
+	metricsclientv1beta1 "k8s.io/metrics/pkg/client/clientset/versioned/typed/metrics/v1beta1"
 	"k8s.io/utils/ptr"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -91,7 +92,8 @@ func WithReadOnlyMode() HandlerOption {
 
 type handler struct {
 	kubeClient            kubernetes.Interface
-	metricsClient         *metricsversiond.Clientset
+	metricsClient         metricsclientv1beta1.MetricsV1beta1Interface
+	promQlServiceObj      PromQl
 	numaflowClient        dfv1clients.NumaflowV1alpha1Interface
 	daemonClientsCache    *lru.Cache[string, daemonclient.DaemonClient]
 	mvtDaemonClientsCache *lru.Cache[string, mvtdaemonclient.MonoVertexDaemonClient]
@@ -102,7 +104,7 @@ type handler struct {
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, opts ...HandlerOption) (*handler, error) {
+func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, promQlServiceObj PromQl, opts ...HandlerOption) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -115,7 +117,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	if err != nil {
 		return nil, fmt.Errorf("failed to get kubeclient, %w", err)
 	}
-	metricsClient := metricsversiond.NewForConfigOrDie(k8sRestConfig)
+	metricsClient := metricsclientv1beta1.NewForConfigOrDie(k8sRestConfig)
 	numaflowClient := dfv1versiond.NewForConfigOrDie(k8sRestConfig).NumaflowV1alpha1()
 	daemonClientsCache, _ := lru.NewWithEvict[string, daemonclient.DaemonClient](500, func(key string, value daemonclient.DaemonClient) {
 		_ = value.Close()
@@ -123,6 +125,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	mvtDaemonClientsCache, _ := lru.NewWithEvict[string, mvtdaemonclient.MonoVertexDaemonClient](500, func(key string, value mvtdaemonclient.MonoVertexDaemonClient) {
 		_ = value.Close()
 	})
+
 	o := defaultHandlerOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -132,6 +135,7 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	return &handler{
 		kubeClient:            kubeClient,
 		metricsClient:         metricsClient,
+		promQlServiceObj:      promQlServiceObj,
 		numaflowClient:        numaflowClient,
 		daemonClientsCache:    daemonClientsCache,
 		mvtDaemonClientsCache: mvtDaemonClientsCache,
@@ -901,7 +905,7 @@ func (h *handler) ListPodsMetrics(c *gin.Context) {
 	ns := c.Param("namespace")
 
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
-	metrics, err := h.metricsClient.MetricsV1beta1().PodMetricses(ns).List(c, metav1.ListOptions{
+	metrics, err := h.metricsClient.PodMetricses(ns).List(c, metav1.ListOptions{
 		Limit:    limit,
 		Continue: c.Query("continue"),
 	})
@@ -923,6 +927,7 @@ func (h *handler) PodLogs(c *gin.Context) {
 		Container: c.Query("container"),
 		Follow:    c.Query("follow") == "true",
 		TailLines: tailLines,
+		Previous:  c.Query("previous") == "true",
 	}
 
 	stream, err := h.kubeClient.CoreV1().Pods(ns).GetLogs(pod, logOptions).Stream(c)
@@ -936,6 +941,60 @@ func (h *handler) PodLogs(c *gin.Context) {
 	h.streamLogs(c, stream)
 }
 
+func (h *handler) GetMonoVertexPodsInfo(c *gin.Context) {
+	var response = make([]PodDetails, 0)
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", dfv1.KeyMonoVertexName, monoVertex),
+	})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: Failed to get a list of pods: namespace %q mono vertex %q: %s",
+			ns, monoVertex, err.Error()))
+		return
+	}
+	if pods == nil || len(pods.Items) == 0 {
+		h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: No pods found for mono vertex %q in namespace %q", monoVertex, ns))
+		return
+	}
+	for _, pod := range pods.Items {
+		podDetails, err := h.getPodDetails(pod)
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: Failed to get the pod details: %v", err))
+			return
+		} else {
+			response = append(response, podDetails)
+		}
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
+}
+
+func (h *handler) GetVertexPodsInfo(c *gin.Context) {
+	var response = make([]PodDetails, 0)
+	ns, pipeline, vertex := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex")
+	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipeline, dfv1.KeyVertexName, vertex),
+	})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("GetVertexPodsInfo: Failed to get a list of pods: namespace %q pipeline %q vertex %q: %s",
+			ns, pipeline, vertex, err.Error()))
+		return
+	}
+	if pods == nil || len(pods.Items) == 0 {
+		h.respondWithError(c, fmt.Sprintf("GetVertexPodsInfo: No pods found for pipeline %q vertex %q in namespace %q", pipeline, vertex, ns))
+		return
+	}
+	for _, pod := range pods.Items {
+		podDetails, err := h.getPodDetails(pod)
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("GetVertexPodsInfo: Failed to get the pod details: %v", err))
+			return
+		} else {
+			response = append(response, podDetails)
+		}
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
+
+}
 func (h *handler) parseTailLines(query string) *int64 {
 	if query == "" {
 		return nil
@@ -1178,6 +1237,94 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 		resourceHealth.Message, dataHealth.GetMessage(), resourceHealth.Code, dataHealth.GetCode())
 
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
+}
+
+func (h *handler) GetMetricData(c *gin.Context) {
+	var requestBody MetricsRequestBody
+	if h.promQlServiceObj == nil {
+		h.respondWithError(c, "Failed to get the prometheus query service")
+		return
+	}
+	if err := bindJson(c, &requestBody); err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body to metrics query spec, %s", err.Error()))
+		return
+	}
+	// builds prom query
+	promQl, err := h.promQlServiceObj.BuildQuery(requestBody)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to build the prometheus query%v", err))
+		return
+	}
+	// default start time is 30 minutes before the current time
+	if requestBody.StartTime == "" {
+		requestBody.StartTime = time.Now().Add(-30 * time.Minute).Format(time.RFC3339)
+	}
+	// default end time is the current time
+	if requestBody.EndTime == "" {
+		requestBody.EndTime = time.Now().Format(time.RFC3339)
+	}
+
+	startTime, _ := time.Parse(time.RFC3339, requestBody.StartTime)
+	endTime, _ := time.Parse(time.RFC3339, requestBody.EndTime)
+
+	result, err := h.promQlServiceObj.QueryPrometheus(context.Background(), promQl, startTime, endTime)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to execute the prometheus query, %s", err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, result))
+}
+
+// DiscoverMetrics is used to provide a metrics list for each
+// dimension along with necessary params and filters for a given object
+func (h *handler) DiscoverMetrics(c *gin.Context) {
+	// Get the object for which the metrics are to be discovered
+	// Ex. mono-vertex, pipeline, etc.
+	object := c.Param("object")
+
+	configData := h.promQlServiceObj.GetConfigData()
+	if configData == nil {
+		h.respondWithError(c, "PrometheusClient metric config is not available")
+		return
+	}
+
+	var discoveredMetrics MetricsDiscoveryResponse
+
+	for _, pattern := range configData.Patterns {
+		if pattern.Object == object {
+			for _, metric := range pattern.Metrics {
+				var requiredFilters []Filter
+				// Populate the required filters
+				for _, filter := range metric.Filters {
+					requiredFilters = append(requiredFilters, Filter{
+						Name:     filter,
+						Required: true,
+					})
+				}
+				// Computing dimension data for each metric
+				var dimensionData []Dimensions
+				for _, dimension := range metric.Dimensions {
+					var combinedFilters = requiredFilters
+					// Add the dimension filters
+					for _, filter := range dimension.Filters {
+						combinedFilters = append(combinedFilters, Filter{
+							Name:     filter.Name,
+							Required: filter.Required,
+						})
+					}
+					dimensionData = append(dimensionData, Dimensions{
+						Name:    dimension.Name,
+						Filters: combinedFilters,
+						Params:  pattern.Params,
+					})
+				}
+
+				discoveredMetrics = append(discoveredMetrics, NewDiscoveryResponse(metric.Name, dimensionData))
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, discoveredMetrics))
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
@@ -1423,5 +1570,117 @@ func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient
 		return c, nil
 	} else {
 		return mvtDaemonClient, nil
+	}
+}
+
+func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
+	podDetails := PodDetails{
+		Name:    pod.Name,
+		Status:  string(pod.Status.Phase),
+		Message: pod.Status.Message,
+		Reason:  pod.Status.Reason,
+	}
+
+	metricsClient := h.metricsClient
+
+	// container details of a pod
+	containerDetails := h.getContainerDetails(pod)
+	podDetails.ContainerDetailsMap = containerDetails
+
+	// cpu/memory details of a pod
+	podMetrics, err := metricsClient.PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
+	if err == nil {
+		totalCPU := resource.NewQuantity(0, resource.DecimalSI)
+		totalMemory := resource.NewQuantity(0, resource.BinarySI)
+		for _, container := range podMetrics.Containers {
+			containerName := container.Name
+			cpuQuantity := container.Usage.Cpu()
+			memQuantity := container.Usage.Memory()
+			details, ok := containerDetails[containerName]
+			if !ok {
+				details = ContainerDetails{Name: container.Name} // Initialize if not found
+			}
+			if cpuQuantity != nil {
+				details.TotalCPU = strconv.FormatInt(cpuQuantity.MilliValue(), 10) + "m"
+				totalCPU.Add(*cpuQuantity)
+			}
+			if memQuantity != nil {
+				details.TotalMemory = strconv.FormatInt(memQuantity.Value()/(1024*1024), 10) + "Mi"
+				totalMemory.Add(*memQuantity)
+			}
+			containerDetails[containerName] = details
+		}
+		if totalCPU != nil {
+			podDetails.TotalCPU = strconv.FormatInt(totalCPU.MilliValue(), 10) + "m"
+		}
+
+		if totalMemory != nil {
+			podDetails.TotalMemory = strconv.FormatInt(totalMemory.Value()/(1024*1024), 10) + "Mi"
+		}
+	}
+	return podDetails, nil
+}
+
+func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetails {
+	var containerDetailsMap = make(map[string]ContainerDetails)
+	for _, status := range pod.Status.ContainerStatuses {
+		containerName := status.Name
+		details := ContainerDetails{
+			Name:         status.Name,
+			ID:           status.ContainerID,
+			State:        h.getContainerStatus(status.State),
+			RestartCount: status.RestartCount,
+		}
+		if status.State.Waiting != nil {
+			details.WaitingReason = status.State.Waiting.Reason
+			details.WaitingMessage = status.State.Waiting.Message
+		}
+		if status.LastTerminationState.Terminated != nil {
+			details.LastTerminationReason = status.LastTerminationState.Terminated.Reason
+			details.LastTerminationMessage = status.LastTerminationState.Terminated.Message
+		}
+		if status.State.Running != nil {
+			details.LastStartedAt = status.State.Running.StartedAt.Format(time.RFC3339)
+		}
+		containerDetailsMap[containerName] = details
+	}
+
+	// Get CPU/Memory requests and limits from Pod spec
+	for _, container := range pod.Spec.Containers {
+		cpuRequest := container.Resources.Requests.Cpu().MilliValue()
+		memRequest := container.Resources.Requests.Memory().Value() / (1024 * 1024)
+		cpuLimit := container.Resources.Limits.Cpu().MilliValue()
+		memLimit := container.Resources.Limits.Memory().Value() / (1024 * 1024)
+		// Get the existing ContainerDetails or create a new one
+		details, ok := containerDetailsMap[container.Name]
+		if !ok {
+			details = ContainerDetails{Name: container.Name} // Initialize if not found
+		}
+		if cpuRequest != 0 {
+			details.RequestedCPU = strconv.FormatInt(cpuRequest, 10) + "m"
+		}
+		if memRequest != 0 {
+			details.RequestedMemory = strconv.FormatInt(memRequest, 10) + "Mi"
+		}
+		if cpuLimit != 0 {
+			details.LimitCPU = strconv.FormatInt(cpuLimit, 10) + "m"
+		}
+		if memLimit != 0 {
+			details.LimitMemory = strconv.FormatInt(memLimit, 10) + "Mi"
+		}
+		containerDetailsMap[container.Name] = details
+	}
+	return containerDetailsMap
+}
+
+func (h *handler) getContainerStatus(state corev1.ContainerState) string {
+	if state.Running != nil {
+		return "Running"
+	} else if state.Waiting != nil {
+		return "Waiting"
+	} else if state.Terminated != nil {
+		return "Terminated"
+	} else {
+		return "Unknown"
 	}
 }

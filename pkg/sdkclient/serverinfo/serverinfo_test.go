@@ -35,7 +35,7 @@ func Test_SDKServerInfo(t *testing.T) {
 		Protocol:               TCP,
 		Language:               Java,
 		MinimumNumaflowVersion: "1.3.0-rc1",
-		Version:                "v0.8.0",
+		Version:                "v0.9.0",
 		Metadata:               map[string]string{"key1": "value1", "key2": "value2"},
 	}
 	err := write(info, WithServerInfoFilePath(filepath))
