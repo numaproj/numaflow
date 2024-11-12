@@ -28,7 +28,6 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
@@ -182,7 +181,6 @@ func (ks *kafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 		partitionIdx := offset.PartitionIdx()
 		sequence, err := offset.Sequence()
 		if err != nil {
-			kafkaSourceOffsetAckErrors.With(map[string]string{metrics.LabelVertex: ks.vertexName, metrics.LabelPipeline: ks.pipelineName}).Inc()
 			ks.logger.Errorw("Unable to extract partition offset of type int64 from the supplied offset. skipping and continuing", zap.String("supplied-offset", offset.String()), zap.Error(err))
 			continue
 		}
@@ -198,8 +196,6 @@ func (ks *kafkaSource) Ack(_ context.Context, offsets []isb.Offset) []error {
 		// we need to mark the offset of the next message to read
 		ks.handler.sess.MarkOffset(ks.topic, partitionIdx, offset+1, "")
 	}
-
-	kafkaSourceAckCount.With(map[string]string{metrics.LabelVertex: ks.vertexName, metrics.LabelPipeline: ks.pipelineName}).Add(float64(len(offsets)))
 	// How come it does not return errors at all?
 	return make([]error, len(offsets))
 }

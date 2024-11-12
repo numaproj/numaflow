@@ -158,12 +158,6 @@ func (u *GRPCBasedUDSource) ApplyReadFn(ctx context.Context, count int64, timeou
 				},
 				ReadOffset: offset,
 			}
-			udsourceReadCount.WithLabelValues(
-				u.vertexName,
-				u.pipelineName,
-				strconv.Itoa(int(u.vertexReplicaIndex)),
-				strconv.Itoa(int(offset.PartitionIdx())),
-			).Inc()
 			readMessages = append(readMessages, readMessage)
 		}
 	}

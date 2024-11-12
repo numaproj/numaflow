@@ -198,7 +198,16 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
 	// at-least-once semantics for reading, during the restart we will have to reprocess all unacknowledged messages. It is the
 	// responsibility of the Read function to do that.
+	// Add read processing time measurement
+	readStart := time.Now()
 	readMessages, err := df.reader.Read(ctx, df.opts.readBatchSize)
+	metrics.ReadProcessingTime.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.reader.GetName(),
+	}).Observe(float64(time.Since(readStart).Microseconds()))
 	if err != nil {
 		df.opts.logger.Warnw("failed to read from source", zap.Error(err))
 		metrics.ReadMessagesError.With(map[string]string{
@@ -464,7 +473,16 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 
 	// when we apply transformer, we don't handle partial errors (it's either non or all, non will return early),
 	// so we should be able to ack all the readOffsets including data messages and control messages
+	// Measure ack processing time
+	ackStart := time.Now()
 	err = df.ackFromSource(ctx, readOffsets)
+	metrics.AckProcessingTime.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.reader.GetName(),
+	}).Observe(float64(time.Since(ackStart).Microseconds()))
 	// implicit return for posterity :-)
 	if err != nil {
 		df.opts.logger.Errorw("failed to ack from source", zap.Error(err))

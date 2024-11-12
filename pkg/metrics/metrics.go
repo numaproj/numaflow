@@ -71,6 +71,14 @@ var (
 		Help:      "Total number of Read Errors",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
+	// ReadProcessingTime is a histogram to observe read operation latency
+	ReadProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "forwarder",
+		Name:      "read_processing_time",
+		Help:      "Processing times of read operations (100 microseconds to 10 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*10, 10),
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
 	// WriteMessagesCount is used to indicate the number of messages written
 	WriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
@@ -111,6 +119,14 @@ var (
 		Subsystem: "forwarder",
 		Name:      "ack_total",
 		Help:      "Total number of Messages Acknowledged",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// AckProcessingTime is a histogram to observe acknowledgment operation latency
+	AckProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "forwarder",
+		Name:      "ack_processing_time",
+		Help:      "Processing times of acknowledgment operations (100 microseconds to 10 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*10, 10),
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// AckMessageError is used to indicate the errors in the number of  messages acknowledged
