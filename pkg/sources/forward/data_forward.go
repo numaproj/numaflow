@@ -201,13 +201,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 	// Add read processing time measurement
 	readStart := time.Now()
 	readMessages, err := df.reader.Read(ctx, df.opts.readBatchSize)
-	metrics.ReadProcessingTime.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.reader.GetName(),
-	}).Observe(float64(time.Since(readStart).Microseconds()))
 	if err != nil {
 		df.opts.logger.Warnw("failed to read from source", zap.Error(err))
 		metrics.ReadMessagesError.With(map[string]string{
@@ -267,6 +260,14 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 		return nil
 	}
 
+	// Only expose read processing time metric when there are messages and no error
+	metrics.ReadProcessingTime.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.reader.GetName(),
+	}).Observe(float64(time.Since(readStart).Microseconds()))
 	// reset the idle handler because we have read messages
 	df.srcIdleHandler.Reset()
 	metrics.ReadDataMessagesCount.With(map[string]string{
@@ -476,13 +477,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 	// Measure ack processing time
 	ackStart := time.Now()
 	err = df.ackFromSource(ctx, readOffsets)
-	metrics.AckProcessingTime.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.reader.GetName(),
-	}).Observe(float64(time.Since(ackStart).Microseconds()))
 	// implicit return for posterity :-)
 	if err != nil {
 		df.opts.logger.Errorw("failed to ack from source", zap.Error(err))
@@ -502,6 +496,14 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 		}
 		return nil
 	}
+	// Only expose ack processing time metric when there is no error
+	metrics.AckProcessingTime.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.reader.GetName(),
+	}).Observe(float64(time.Since(ackStart).Microseconds()))
 	metrics.AckMessagesCount.With(map[string]string{
 		metrics.LabelVertex:             df.vertexName,
 		metrics.LabelPipeline:           df.pipelineName,
