@@ -411,11 +411,19 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 	}
 
 	// forward the messages to the edge buffer (could be multiple edges)
+	writeStart := time.Now()
 	writeOffsets, err = df.writeToBuffers(ctx, messageToStep)
 	if err != nil {
 		df.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
 		return err
 	}
+	metrics.WriteProcessingTime.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.reader.GetName(),
+	}).Observe(float64(time.Since(writeStart).Microseconds()))
 
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
