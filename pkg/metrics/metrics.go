@@ -72,6 +72,13 @@ var (
 		Help:      "Total number of Read Errors",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
+	// ReadProcessingTime is a histogram to observe read operation latency
+	ReadProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "forwarder",
+		Name:      "read_processing_time",
+		Help:      "Processing times of read operations (100 microseconds to 10 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*10, 10),
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 	// WriteMessagesCount is used to indicate the number of messages written
 	WriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
@@ -93,6 +100,14 @@ var (
 		Help:      "Total number of Write Errors",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
+	// WriteProcessingTime is a histogram to observe write operation latency
+	WriteProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "forwarder",
+		Name:      "write_processing_time",
+		Help:      "Processing times of write operations (100 microseconds to 20 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
 	// DropMessagesCount is used to indicate the number of messages dropped
 	DropMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
@@ -112,6 +127,14 @@ var (
 		Subsystem: "forwarder",
 		Name:      "ack_total",
 		Help:      "Total number of Messages Acknowledged",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// AckProcessingTime is a histogram to observe acknowledgment operation latency
+	AckProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "forwarder",
+		Name:      "ack_processing_time",
+		Help:      "Processing times of acknowledgment operations (100 microseconds to 10 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*10, 10),
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// AckMessageError is used to indicate the errors in the number of  messages acknowledged
@@ -313,6 +336,14 @@ var (
 		Subsystem: "forwarder",
 		Name:      "fbsink_write_bytes_total",
 		Help:      "Total number of bytes written to a fallback sink",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// FbSinkWriteProcessingTime is a histogram to observe write operation latency to a fallback sink
+	FbSinkWriteProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "forwarder",
+		Name:      "fbsink_write_processing_time",
+		Help:      "Processing times of write operations to a fallback sink (100 microseconds to 20 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// FbSinkWriteMessagesError is used to indicate the number of errors while writing to a fallback sink

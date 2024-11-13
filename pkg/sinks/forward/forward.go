@@ -183,6 +183,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
 	// at-least-once semantics for reading, during restart we will have to reprocess all unacknowledged messages. It is the
 	// responsibility of the Read function to do that.
+	// Add read processing time measurement
+	readStart := time.Now()
 	readMessages, err := df.fromBufferPartition.Read(ctx, df.opts.readBatchSize)
 	df.opts.logger.Debugw("Read from buffer", zap.String("bufferFrom", df.fromBufferPartition.GetName()), zap.Int64("length", int64(len(readMessages))))
 	if err != nil {
@@ -214,6 +216,14 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		idlehandler.PublishIdleWatermark(ctx, df.sinkWriter.GetPartitionIdx(), df.sinkWriter, df.wmPublisher, df.idleManager, df.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeSink, df.vertexReplica, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
 		return
 	}
+
+	metrics.ReadProcessingTime.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
+	}).Observe(float64(time.Since(readStart).Microseconds()))
 
 	var dataMessages = make([]*isb.ReadMessage, 0, len(readMessages))
 
@@ -295,6 +305,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 
 	df.opts.logger.Debugw("write to sink completed")
 
+	ackStart := time.Now()
 	err = df.ackFromBuffer(ctx, readOffsets)
 	// implicit return for posterity :-)
 	if err != nil {
@@ -302,6 +313,15 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		metrics.AckMessageError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
 		return
 	}
+
+	// Ack processing time
+	metrics.AckProcessingTime.With(map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
+	}).Observe(float64(time.Since(ackStart).Microseconds()))
 	metrics.AckMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
 
 	if df.opts.cbPublisher != nil {
@@ -372,6 +392,7 @@ func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWr
 		writeBytes       float64
 		fallbackMessages []isb.Message
 	)
+	writeStart := time.Now()
 	// slice to store the successful offsets returned by the sink
 	writeOffsets := make([]isb.Offset, 0, len(messagesToTry))
 
@@ -456,7 +477,7 @@ func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWr
 		}
 	}
 	// update the write metrics for sink
-	df.updateSinkWriteMetrics(writeCount, writeBytes, sinkWriter.GetName(), isFbSinkWriter)
+	df.updateSinkWriteMetrics(writeCount, writeBytes, sinkWriter.GetName(), isFbSinkWriter, writeStart)
 
 	return writeOffsets, fallbackMessages, nil
 }
@@ -499,7 +520,7 @@ func (df *DataForward) handlePostRetryFailures(messagesToTry *[]isb.Message, fai
 
 // updateSinkWriteMetrics updates metrics related to data writes to a sink.
 // Metrics are updated based on whether the operation involves the primary or fallback sink.
-func (df *DataForward) updateSinkWriteMetrics(writeCount int, writeBytes float64, sinkWriterName string, isFallback bool) {
+func (df *DataForward) updateSinkWriteMetrics(writeCount int, writeBytes float64, sinkWriterName string, isFallback bool, writeStart time.Time) {
 	// Define labels to keep track of the data related to the specific operation
 	labels := map[string]string{
 		metrics.LabelVertex:             df.vertexName,
@@ -513,10 +534,14 @@ func (df *DataForward) updateSinkWriteMetrics(writeCount int, writeBytes float64
 	metrics.WriteMessagesCount.With(labels).Add(float64(writeCount))
 	metrics.WriteBytesCount.With(labels).Add(writeBytes)
 
+	// Add write processing time metric
+	metrics.WriteProcessingTime.With(labels).Observe(float64(time.Since(writeStart).Microseconds()))
+
 	// if this is for Fallback Sink, increment specific metrics as well
 	if isFallback {
 		metrics.FbSinkWriteMessagesCount.With(labels).Add(float64(writeCount))
 		metrics.FbSinkWriteBytesCount.With(labels).Add(writeBytes)
+		metrics.FbSinkWriteProcessingTime.With(labels).Observe(float64(time.Since(writeStart).Microseconds()))
 	}
 }
 
