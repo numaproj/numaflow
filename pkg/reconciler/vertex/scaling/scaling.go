@@ -223,7 +223,13 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		return err
 	}
 
-	if vertex.Status.Replicas == 0 { // Was scaled to 0
+	if vertex.Status.Replicas == 0 {
+		if min := vertex.Spec.Scale.GetMinReplicas(); min > 0 {
+			log.Infof("Vertex %s has 0 pod, scaling up to min replicas %d.", vertex.Name, min)
+			return s.patchVertexReplicas(ctx, vertex, min)
+		}
+
+		// Was scaled to 0
 		// For non-source vertices,
 		// Check if they have any pending messages in their owned buffers,
 		// If yes, then scale them back to 1
