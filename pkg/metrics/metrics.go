@@ -196,6 +196,14 @@ var (
 		Help:      "Total number of Messages Written by UDF",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
+	// UDFWriteProcessingTime is a histogram to observe UDF write operation latency
+	UDFWriteProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "forwarder",
+		Name:      "udf_write_processing_time",
+		Help:      "Processing times of UDF write operations (100 microseconds to 20 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
 	UserDroppedMessages = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "ud_drop_total",
