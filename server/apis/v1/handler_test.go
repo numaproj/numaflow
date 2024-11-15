@@ -464,8 +464,8 @@ func TestHandler_GetMonoVertexPodsInfo(t *testing.T) {
 				if len(podInfos) > 0 {
 					assert.Equal(t, "test-pod-1", podInfos[0].Name)
 					assert.Equal(t, string(corev1.PodRunning), podInfos[0].Status)
-					assert.Equal(t, "150m", podInfos[0].TotalCPU)
-					assert.Equal(t, "150Mi", podInfos[0].TotalMemory)
+					assert.Equal(t, "150.00m", podInfos[0].TotalCPU)
+					assert.Equal(t, "150.00Mi", podInfos[0].TotalMemory)
 				}
 			}
 		})
@@ -662,8 +662,8 @@ func TestHandler_GetVertexPodsInfo(t *testing.T) {
 				assert.Len(t, podInfos, 1)
 				assert.Equal(t, "test-pod-1", podInfos[0].Name)
 				assert.Equal(t, string(corev1.PodRunning), podInfos[0].Status)
-				assert.Equal(t, "150m", podInfos[0].TotalCPU)
-				assert.Equal(t, "150Mi", podInfos[0].TotalMemory)
+				assert.Equal(t, "150.00m", podInfos[0].TotalCPU)
+				assert.Equal(t, "150.00Mi", podInfos[0].TotalMemory)
 			}
 		})
 	}
@@ -764,8 +764,8 @@ func TestHandler_GetPodDetails(t *testing.T) {
 				Status:      "Running",
 				Message:     "",
 				Reason:      "",
-				TotalCPU:    "250m",
-				TotalMemory: "500Mi",
+				TotalCPU:    "250.00m",
+				TotalMemory: "500.00Mi",
 				ContainerDetailsMap: map[string]ContainerDetails{
 					"container-1": {
 						Name:                   "container-1",
@@ -777,8 +777,8 @@ func TestHandler_GetPodDetails(t *testing.T) {
 						RequestedMemory:        "200Mi",
 						LimitCPU:               "200m",
 						LimitMemory:            "400Mi",
-						TotalCPU:               "100m",
-						TotalMemory:            "200Mi",
+						TotalCPU:               "100.00m",
+						TotalMemory:            "200.00Mi",
 						LastTerminationReason:  "",
 						LastTerminationMessage: "",
 						WaitingReason:          "",
@@ -794,8 +794,8 @@ func TestHandler_GetPodDetails(t *testing.T) {
 						RequestedMemory:        "300Mi",
 						LimitCPU:               "300m",
 						LimitMemory:            "600Mi",
-						TotalCPU:               "150m",
-						TotalMemory:            "300Mi",
+						TotalCPU:               "150.00m",
+						TotalMemory:            "300.00Mi",
 						LastTerminationReason:  "",
 						LastTerminationMessage: "",
 						LastStartedAt:          "",
@@ -1025,6 +1025,29 @@ func TestHandler_GetContainerStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			status := h.getContainerStatus(tt.containerState)
 			assert.Equal(t, tt.expectedStatus, status)
+		})
+	}
+}
+
+func TestFormatCPU(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected string
+	}{
+		{"2953072n", "2.95m"},
+		{"500m", "500.00m"},
+		{"10000n", "0.01m"},
+		{"0n", "0.00m"},
+		{"100000000g", "0m"},
+		{"invalid input", "0m"}, // Error case
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("Input: %s", tc.input), func(t *testing.T) {
+			result := formatCPU(tc.input)
+			if result != tc.expected {
+				t.Errorf("Expected: %s, Got: %s", tc.expected, result)
+			}
 		})
 	}
 }

@@ -1573,6 +1573,25 @@ func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient
 	}
 }
 
+func formatCPU(quantityStr string) string {
+	var value float64
+	var format string
+	_, err := fmt.Sscanf(quantityStr, "%f%s", &value, &format)
+	if err != nil {
+		fmt.Println("Error parsing cpu quantity string:", err)
+		return "0m"
+	} else {
+		if strings.HasSuffix(format, "n") {
+			value /= 1e6
+		} else if !strings.HasSuffix(format, "m") { // Handle cases where the format is not "m"
+			fmt.Println("Error parsing quantity string: invalid format")
+			return "0m"
+		}
+		cpuInMillicores := value
+		return fmt.Sprintf("%.2fm", cpuInMillicores)
+	}
+}
+
 func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
 	podDetails := PodDetails{
 		Name:    pod.Name,
@@ -1598,24 +1617,24 @@ func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
 			memQuantity := container.Usage.Memory()
 			details, ok := containerDetails[containerName]
 			if !ok {
-				details = ContainerDetails{Name: container.Name} // Initialize if not found
+				details = ContainerDetails{Name: container.Name}
 			}
 			if cpuQuantity != nil {
-				details.TotalCPU = strconv.FormatInt(cpuQuantity.MilliValue(), 10) + "m"
+				details.TotalCPU = formatCPU(cpuQuantity.String())
 				totalCPU.Add(*cpuQuantity)
 			}
 			if memQuantity != nil {
-				details.TotalMemory = strconv.FormatInt(memQuantity.Value()/(1024*1024), 10) + "Mi"
+				details.TotalMemory = fmt.Sprintf("%.2fMi", float64(memQuantity.Value())/(1024*1024))
 				totalMemory.Add(*memQuantity)
 			}
 			containerDetails[containerName] = details
 		}
 		if totalCPU != nil {
-			podDetails.TotalCPU = strconv.FormatInt(totalCPU.MilliValue(), 10) + "m"
+			podDetails.TotalCPU = formatCPU(totalCPU.String())
 		}
 
 		if totalMemory != nil {
-			podDetails.TotalMemory = strconv.FormatInt(totalMemory.Value()/(1024*1024), 10) + "Mi"
+			podDetails.TotalMemory = fmt.Sprintf("%.2fMi", float64(totalMemory.Value())/(1024*1024))
 		}
 	}
 	return podDetails, nil
