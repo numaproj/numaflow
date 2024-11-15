@@ -61,7 +61,7 @@ type headerPreamble struct {
 	// message ID len
 	IDLen int16
 	// message keys length
-	KeysLen int16
+	KeysLen int32
 	// header length
 	HeadersLen int16
 }
@@ -77,7 +77,7 @@ func (h Header) MarshalBinary() (data []byte, err error) {
 		MLen:       int32(len(msgInfo)),
 		MsgKind:    h.Kind,
 		IDLen:      int16(len(h.ID)),
-		KeysLen:    int16(len(h.Keys)),
+		KeysLen:    int32(len(h.Keys)),
 		HeadersLen: int16(len(h.Headers)),
 	}
 	if err = binary.Write(buf, binary.LittleEndian, preamble); err != nil {
@@ -93,7 +93,7 @@ func (h Header) MarshalBinary() (data []byte, err error) {
 		return nil, err
 	}
 	for i := 0; i < len(h.Keys); i++ {
-		if err = binary.Write(buf, binary.LittleEndian, int16(len(h.Keys[i]))); err != nil {
+		if err = binary.Write(buf, binary.LittleEndian, int32(len(h.Keys[i]))); err != nil {
 			return nil, err
 		}
 		if err = binary.Write(buf, binary.LittleEndian, []byte(h.Keys[i])); err != nil {
@@ -141,10 +141,13 @@ func (h *Header) UnmarshalBinary(data []byte) (err error) {
 		return err
 	}
 	keys := make([]string, 0)
-	for i := int16(0); i < preamble.KeysLen; i++ {
-		var kl int16
+	for i := int32(0); i < preamble.KeysLen; i++ {
+		var kl int32
 		if err = binary.Read(r, binary.LittleEndian, &kl); err != nil {
 			return err
+		}
+		if kl < 0 {
+			return fmt.Errorf("invalid key len in header")
 		}
 		var k = make([]byte, kl)
 		if err = binary.Read(r, binary.LittleEndian, k); err != nil {
