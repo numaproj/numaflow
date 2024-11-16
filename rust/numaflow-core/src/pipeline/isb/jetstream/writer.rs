@@ -207,6 +207,7 @@ impl JetstreamWriter {
         payload: Vec<u8>,
     ) -> Result<PublishAck> {
         let js_ctx = self.js_ctx.clone();
+        let start_time = Instant::now();
         info!("Blocking write for stream {}", stream.0);
         loop {
             match js_ctx
@@ -290,66 +291,66 @@ impl PafResolverActor {
         self.message_count += 1;
 
         for (stream, paf) in result.pafs {
-            // match paf.await {
-            //     Ok(ack) => {
-            //         if ack.duplicate {
-            //             warn!(
-            //                 "Duplicate message detected for stream {}, ignoring {:?}",
-            //                 stream.0, ack
-            //             );
-            //         }
-            //         offsets.push((
-            //             stream.clone(),
-            //             Offset::Int(IntOffset::new(ack.sequence, stream.1)),
-            //         ));
-            //     }
-            //     Err(e) => {
-            //         error!(
-            //             ?e,
-            //             "Failed to resolve the future for stream {}, trying blocking write",
-            //             stream.0
-            //         );
-            //         match self
-            //             .js_writer
-            //             .blocking_write(stream.clone(), result.payload.clone())
-            //             .await
-            //         {
-            //             Ok(ack) => {
-            //                 if ack.duplicate {
-            //                     warn!(
-            //                         "Duplicate message detected for stream {}, ignoring {:?}",
-            //                         stream.0, ack
-            //                     );
-            //                 }
-            //                 offsets.push((
-            //                     stream.clone(),
-            //                     Offset::Int(IntOffset::new(ack.sequence, stream.1)),
-            //                 ));
-            //             }
-            //             Err(e) => {
-            //                 error!(?e, "Blocking write failed for stream {}", stream.0);
-            //                 if let Some(callee_tx) = result.callee_tx {
-            //                     callee_tx
-            //                         .send(Err(Error::ISB("Shutdown signal received".to_string())))
-            //                         .unwrap_or_else(|e| {
-            //                             error!(
-            //                                 "Failed to send error for stream {}: {:?}",
-            //                                 stream.0, e
-            //                             );
-            //                         });
-            //                 }
-            //
-            //                 // Since we failed to write to the stream, we need to send a NAK to the reader
-            //                 if let Some(reader_tx) = result.ack_tx {
-            //                     reader_tx.send(ReadAck::Nak).unwrap_or_else(|e| {
-            //                         error!("Failed to send error for stream {}: {:?}", stream.0, e);
-            //                     });
-            //                 }
-            //                 return;
-            //             }
-            //         }
-            //     }
-            // }
+            match paf.await {
+                Ok(ack) => {
+                    if ack.duplicate {
+                        warn!(
+                            "Duplicate message detected for stream {}, ignoring {:?}",
+                            stream.0, ack
+                        );
+                    }
+                    offsets.push((
+                        stream.clone(),
+                        Offset::Int(IntOffset::new(ack.sequence, stream.1)),
+                    ));
+                }
+                Err(e) => {
+                    error!(
+                        ?e,
+                        "Failed to resolve the future for stream {}, trying blocking write",
+                        stream.0
+                    );
+                    match self
+                        .js_writer
+                        .blocking_write(stream.clone(), result.payload.clone())
+                        .await
+                    {
+                        Ok(ack) => {
+                            if ack.duplicate {
+                                warn!(
+                                    "Duplicate message detected for stream {}, ignoring {:?}",
+                                    stream.0, ack
+                                );
+                            }
+                            offsets.push((
+                                stream.clone(),
+                                Offset::Int(IntOffset::new(ack.sequence, stream.1)),
+                            ));
+                        }
+                        Err(e) => {
+                            error!(?e, "Blocking write failed for stream {}", stream.0);
+                            if let Some(callee_tx) = result.callee_tx {
+                                callee_tx
+                                    .send(Err(Error::ISB("Shutdown signal received".to_string())))
+                                    .unwrap_or_else(|e| {
+                                        error!(
+                                            "Failed to send error for stream {}: {:?}",
+                                            stream.0, e
+                                        );
+                                    });
+                            }
+
+                            // Since we failed to write to the stream, we need to send a NAK to the reader
+                            if let Some(reader_tx) = result.ack_tx {
+                                reader_tx.send(ReadAck::Nak).unwrap_or_else(|e| {
+                                    error!("Failed to send error for stream {}: {:?}", stream.0, e);
+                                });
+                            }
+                            return;
+                        }
+                    }
+                }
+            }
         }
 
         // Send the offsets to the top-level callee
@@ -368,7 +369,7 @@ impl PafResolverActor {
             });
         }
 
-        if self.message_count >= 1000 {
+        if self.message_count >= 500 {
             self.message_count = 0;
             info!(
                 "Total time took to resolve paf for 500 messages={:?}",

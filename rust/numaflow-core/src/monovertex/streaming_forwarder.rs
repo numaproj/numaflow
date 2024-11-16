@@ -78,7 +78,7 @@ impl StreamingForwarder {
 
         let sink_writer_handle = self
             .streaming_sink
-            .start_streaming(transformed_messages_rx, self.cln_token.clone())
+            .start(transformed_messages_rx, self.cln_token.clone())
             .await?;
 
         match tokio::try_join!(

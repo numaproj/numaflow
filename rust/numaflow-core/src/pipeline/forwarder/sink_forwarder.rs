@@ -31,12 +31,12 @@ impl SinkForwarder {
         let reader_cancellation_token = self.cln_token.child_token();
         let (read_messages_rx, reader_handle) = self
             .jetstream_reader
-            .start_streaming(reader_cancellation_token.clone(), &pipeline_config)
+            .start(reader_cancellation_token.clone(), &pipeline_config)
             .await?;
 
         let sink_writer_handle = self
             .sink_writer
-            .start_streaming(read_messages_rx, self.cln_token.clone())
+            .start(read_messages_rx, self.cln_token.clone())
             .await?;
 
         // Join the reader and sink writer

@@ -1,5 +1,5 @@
 use crate::config::pipeline::PipelineConfig;
-use crate::message::{get_vertex_replica, ReadAck, ReadMessage};
+use crate::message::{ReadAck, ReadMessage};
 use crate::metrics::{
     pipeline_forward_read_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
 };
@@ -324,7 +324,7 @@ impl StreamingSource {
     /// a handle to the spawned task.
     pub(crate) fn start(&self) -> Result<(ReceiverStream<ReadMessage>, JoinHandle<Result<()>>)> {
         let batch_size = self.read_batch_size;
-        let (messages_tx, messages_rx) = mpsc::channel(2 * batch_size);
+        let (messages_tx, messages_rx) = mpsc::channel(batch_size);
         let source_read = self.clone();
 
         let labels = pipeline_forward_read_metric_labels(
@@ -341,10 +341,15 @@ impl StreamingSource {
             let mut last_logged_at = tokio::time::Instant::now();
 
             loop {
+                let permit_time = tokio::time::Instant::now();
                 // Reserve the permits before invoking the read method.
                 let mut permit = match messages_tx.reserve_many(batch_size).await {
                     Ok(permit) => {
-                        info!("Reserved permits for {} messages", batch_size);
+                        info!(
+                            "Reserved permits for {} messages in {:?}",
+                            batch_size,
+                            permit_time.elapsed()
+                        );
                         permit
                     }
                     Err(e) => {
@@ -451,12 +456,6 @@ impl StreamingSource {
                 }
             }
         }
-
-        info!(
-            "Ack one shots returned in for lastOffset {:?} ackTime={:?}",
-            last_offset,
-            start.elapsed()
-        );
 
         if !offsets_to_ack.is_empty() {
             streaming_source.ack(offsets_to_ack).await?;

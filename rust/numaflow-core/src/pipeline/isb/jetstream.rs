@@ -164,7 +164,6 @@ pub(crate) struct StreamingJetstreamWriter {
     config: Vec<BufferWriterConfig>,
     writer: JetstreamWriter,
     paf_resolver_tx: mpsc::Sender<ResolveAndPublishResult>,
-    cancel_token: CancellationToken,
 }
 
 impl StreamingJetstreamWriter {
@@ -200,7 +199,6 @@ impl StreamingJetstreamWriter {
             config,
             writer: js_writer,
             paf_resolver_tx,
-            cancel_token,
         }
     }
 

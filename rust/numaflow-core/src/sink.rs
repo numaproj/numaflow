@@ -154,7 +154,7 @@ impl StreamingSink {
         })
     }
 
-    pub(super) async fn start_streaming(
+    pub(super) async fn start(
         &self,
         messages_stream: ReceiverStream<ReadMessage>,
         cancellation_token: CancellationToken,
@@ -171,7 +171,7 @@ impl StreamingSink {
                 let mut last_logged_at = std::time::Instant::now();
 
                 loop {
-                    let mut chunk_time = time::Instant::now();
+                    let chunk_time = time::Instant::now();
                     let batch = match chunk_stream.next().await {
                         Some(batch) => batch,
                         None => break,
@@ -226,7 +226,6 @@ impl StreamingSink {
                         chunk_time.elapsed(),
                         n
                     );
-                    chunk_time = time::Instant::now();
                 }
 
                 Ok(())

@@ -3,15 +3,13 @@ use std::time::Duration;
 use async_nats::jetstream::{
     consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
 };
-use log::info;
-use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 use crate::config::pipeline::isb::BufferReaderConfig;
 use crate::config::pipeline::PipelineConfig;
@@ -71,7 +69,7 @@ impl JetstreamReader {
     // The closing of the channel should propagate to the receiver end and the receiver should exit gracefully.
     // Within the loop, we only consider cancellationToken cancellation during the permit reservation and fetching messages,
     // since rest of the operations should finish immediately.
-    pub(crate) async fn start_streaming(
+    pub(crate) async fn start(
         &self,
         cancel_token: CancellationToken,
         pipeline_config: &PipelineConfig,
@@ -115,6 +113,8 @@ impl JetstreamReader {
                 // The .next() call will not return if there is no data even if read_timeout is
                 // reached.
                 let mut chunk_time = Instant::now();
+                let mut start_time = Instant::now();
+                let mut total_messages = 0;
                 while let Some(messages) = chunk_stream.next().await {
                     info!(
                         "Read batch size: {} and latency - {:?}",
@@ -190,9 +190,9 @@ impl JetstreamReader {
 
                         if start_time.elapsed() >= Duration::from_millis(1000) {
                             info!(
-                                len = total_messages,
-                                elapsed_ms = start_time.elapsed().as_millis(),
-                                "Total messages read from Jetstream"
+                                "Total messages read from Jetstream in {:?} seconds: {}",
+                                start_time.elapsed(),
+                                total_messages
                             );
                             start_time = Instant::now();
                             total_messages = 0;
@@ -344,7 +344,7 @@ mod tests {
         let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
         let reader_cancel_token = CancellationToken::new();
         let (mut js_reader_rx, js_reader_task) = js_reader
-            .start_streaming(reader_cancel_token.clone(), &pipeline_config)
+            .start(reader_cancel_token.clone(), &pipeline_config)
             .await
             .unwrap();
 
