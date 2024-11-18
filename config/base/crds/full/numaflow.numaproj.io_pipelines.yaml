@@ -108,7 +108,11 @@ spec:
                 properties:
                   deleteGracePeriodSeconds:
                     default: 30
-                    format: int32
+                    format: int64
+                    type: integer
+                  deletionGracePeriodSeconds:
+                    default: 30
+                    format: int64
                     type: integer
                   desiredPhase:
                     default: Running
@@ -122,7 +126,7 @@ spec:
                     type: string
                   pauseGracePeriodSeconds:
                     default: 30
-                    format: int32
+                    format: int64
                     type: integer
                 type: object
               limits:
