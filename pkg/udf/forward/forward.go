@@ -432,18 +432,10 @@ func (isdf *InterStepDataForward) streamMessage(ctx context.Context, dataMessage
 			return nil, fmt.Errorf("failed at whereToStep, error: %w", err)
 		}
 
-		writeStart := time.Now()
 		curWriteOffsets, err := isdf.writeToBuffers(ctx, messageToStep)
 		if err != nil {
 			return nil, fmt.Errorf("failed to write to toBuffers, error: %w", err)
 		}
-		metrics.UDFWriteProcessingTime.With(map[string]string{
-			metrics.LabelVertex:             isdf.vertexName,
-			metrics.LabelPipeline:           isdf.pipelineName,
-			metrics.LabelVertexType:         string(dfv1.VertexTypeMapUDF),
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)),
-			metrics.LabelPartitionName:      isdf.fromBufferPartition.GetName(),
-		}).Observe(float64(time.Since(writeStart).Microseconds()))
 
 		// Merge current write offsets into the main writeOffsets map
 		for vertexName, toVertexBufferOffsets := range curWriteOffsets {
