@@ -45,6 +45,8 @@ pub(crate) async fn start_forwarder(
         .await?;
 
         let metric_labels = metrics::sdk_info_labels(
+            metrics::COMPONENT_MVTX.to_string(),
+            config.name.clone(),
             server_info.language,
             server_info.version,
             ContainerType::Sourcer.to_string(),
@@ -76,6 +78,8 @@ pub(crate) async fn start_forwarder(
         .await?;
 
         let metric_labels = metrics::sdk_info_labels(
+            metrics::COMPONENT_MVTX.to_string(),
+            config.name.clone(),
             server_info.language,
             server_info.version,
             ContainerType::Sinker.to_string(),
@@ -106,6 +110,8 @@ pub(crate) async fn start_forwarder(
             .await?;
 
             let metric_labels = metrics::sdk_info_labels(
+                metrics::COMPONENT_MVTX.to_string(),
+                config.name.clone(),
                 server_info.language,
                 server_info.version,
                 ContainerType::FbSinker.to_string(),
@@ -142,6 +148,8 @@ pub(crate) async fn start_forwarder(
             .await?;
 
             let metric_labels = metrics::sdk_info_labels(
+                metrics::COMPONENT_MVTX.to_string(),
+                config.name.clone(),
                 server_info.language,
                 server_info.version,
                 ContainerType::SourceTransformer.to_string(),

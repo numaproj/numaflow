@@ -30,8 +30,12 @@ use tracing::{debug, error, info};
 use crate::source::SourceHandle;
 use crate::Error;
 
+pub const COMPONENT_MVTX: &str = "mono-vertex";
+
 // SDK information
 const SDK_INFO: &str = "sdk_info";
+const COMPONENT: &str = "component";
+const COMPONENT_NAME: &str = "component_name";
 const SDK_VERSION: &str = "version";
 const SDK_LANGUAGE: &str = "language";
 const SDK_TYPE: &str = "type";
@@ -402,11 +406,15 @@ pub(crate) fn forward_pipeline_metrics() -> &'static PipelineMetrics {
 
 // sdk_info_labels is a helper function used to build the labels used in sdk_info
 pub(crate) fn sdk_info_labels(
+    component: String,
+    component_name: String,
     language: String,
     version: String,
     container_type: String,
 ) -> Vec<(String, String)> {
     let labels = vec![
+        (COMPONENT.to_string(), component),
+        (COMPONENT_NAME.to_string(), component_name),
         (SDK_LANGUAGE.to_string(), language),
         (SDK_VERSION.to_string(), version),
         (SDK_TYPE.to_string(), container_type),
@@ -1058,29 +1066,17 @@ mod tests {
     }
 
     #[test]
-    fn test_global_metrics() {
-        let metrics = global_metrics();
+    fn test_metric_names() {
+        let global_metrics = global_metrics();
         let sdk_labels = sdk_info_labels(
+            "component".to_string(),
+            "component_name".to_string(),
             "language".to_string(),
             "version".to_string(),
             "container_type".to_string(),
         );
-        metrics.sdk_info.get_or_create(&sdk_labels).set(1);
+        global_metrics.sdk_info.get_or_create(&sdk_labels).set(1);
 
-        let state = global_registry().registry.lock();
-        let mut buffer = String::new();
-        encode(&mut buffer, &state).unwrap();
-        let got = buffer.trim().lines().collect::<Vec<&str>>().join("\n");
-
-        let expected = r#"# HELP sdk_info A metric with a constant value '1', labeled by SDK information such as version, language, and type.
-# TYPE sdk_info gauge
-sdk_info{language="language",version="version",type="container_type"} 1
-# EOF"#;
-        assert_eq!(got.trim(), expected);
-    }
-
-    #[test]
-    fn test_metric_names() {
         let metrics = forward_mvtx_metrics();
         // Use a fixed set of labels instead of the ones from mvtx_forward_metric_labels() since other test functions may also set it.
         let common_labels = vec![
@@ -1121,23 +1117,12 @@ sdk_info{language="language",version="version",type="container_type"} 1
         encode(&mut buffer, &state).unwrap();
 
         let expected = r#"
-# HELP monovtx_read A Counter to keep track of the total number of messages read from the source.
-# TYPE monovtx_read counter
+sdk_info{component="component",component_name="component_name",language="language",version="version",type="container_type"} 1
 monovtx_read_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-# HELP monovtx_ack A Counter to keep track of the total number of messages acknowledged by the sink.
-# TYPE monovtx_ack counter
 monovtx_ack_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-# HELP monovtx_read_bytes A Counter to keep track of the total number of bytes read from the source.
-# TYPE monovtx_read_bytes counter
 monovtx_read_bytes_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-# HELP monovtx_dropped A Counter to keep track of the total number of messages dropped by the monovtx.
-# TYPE monovtx_dropped counter
 monovtx_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-# HELP monovtx_pending A Gauge to keep track of the total number of pending messages for the monovtx.
-# TYPE monovtx_pending gauge
 monovtx_pending{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 10
-# HELP monovtx_processing_time A Histogram to keep track of the total time taken to forward a chunk, in microseconds.
-# TYPE monovtx_processing_time histogram
 monovtx_processing_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 10.0
 monovtx_processing_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_processing_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
@@ -1151,8 +1136,6 @@ monovtx_processing_time_bucket{le="25636296.457956219",mvtx_name="test-monoverte
 monovtx_processing_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_processing_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_processing_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-# HELP monovtx_read_time A Histogram to keep track of the total time taken to Read from the Source, in microseconds.
-# TYPE monovtx_read_time histogram
 monovtx_read_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 3.0
 monovtx_read_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_read_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
@@ -1166,8 +1149,6 @@ monovtx_read_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metr
 monovtx_read_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_read_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_read_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-# HELP monovtx_ack_time A Histogram to keep track of the total time taken to Ack to the Source, in microseconds.
-# TYPE monovtx_ack_time histogram
 monovtx_ack_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2.0
 monovtx_ack_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_ack_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
@@ -1181,8 +1162,6 @@ monovtx_ack_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metri
 monovtx_ack_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_ack_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_ack_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-# HELP monovtx_transformer_time A Histogram to keep track of the total time taken to Transform, in microseconds.
-# TYPE monovtx_transformer_time histogram
 monovtx_transformer_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0
 monovtx_transformer_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_transformer_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
@@ -1196,11 +1175,7 @@ monovtx_transformer_time_bucket{le="25636296.457956219",mvtx_name="test-monovert
 monovtx_transformer_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_transformer_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_transformer_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-# HELP monovtx_sink_write A Counter to keep track of the total number of messages written to the sink.
-# TYPE monovtx_sink_write counter
 monovtx_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-# HELP monovtx_sink_time A Histogram to keep track of the total time taken to Write to the Sink, in microseconds.
-# TYPE monovtx_sink_time histogram
 monovtx_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 4.0
 monovtx_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
@@ -1214,23 +1189,13 @@ monovtx_sink_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metr
 monovtx_sink_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_sink_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
 monovtx_sink_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-# HELP monovtx_fallback_sink_write A Counter to keep track of the total number of messages written to the fallback sink.
-# TYPE monovtx_fallback_sink_write counter
 monovtx_fallback_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-# EOF
         "#;
-
-        // The registry may contains metrics from other tests also. Extract the ones created from this test using the unique labels we specify.
-        let labels = common_labels
-            .iter()
-            .map(|(k, v)| format!("{}=\"{}\"", k, v))
-            .collect::<Vec<String>>()
-            .join(",");
 
         let got = buffer
             .trim()
             .lines()
-            .filter(|line| line.starts_with('#') || line.contains(&labels))
+            .filter(|line| !line.starts_with("#"))
             .collect::<Vec<&str>>()
             .join("\n");
 

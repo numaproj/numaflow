@@ -88,7 +88,7 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	metrics.SDKInfo.WithLabelValues(string(serverinfo.ContainerTypeSideinput), serverInfo.Version, string(serverInfo.Language)).Set(1)
+	metrics.SDKInfo.WithLabelValues(dfv1.ComponentSideInputManager, fmt.Sprintf("%s-%s", sim.pipelineName, sim.sideInput.Name), string(serverinfo.ContainerTypeSideinput), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
 	// Create a new gRPC client for Side Input
 	sideInputClient, err := sideinput.New(serverInfo)
