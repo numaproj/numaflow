@@ -14,6 +14,8 @@ import {
   PodDetail,
 } from "../../types/declarations/pods";
 
+
+// TODO: calculate podsDetails from pods-info API
 export const usePodsViewFetch = (
   namespaceId: string | undefined,
   pipelineId: string | undefined,

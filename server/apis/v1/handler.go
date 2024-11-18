@@ -1573,25 +1573,6 @@ func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient
 	}
 }
 
-func formatCPU(quantityStr string) string {
-	var value float64
-	var format string
-	_, err := fmt.Sscanf(quantityStr, "%f%s", &value, &format)
-	if err != nil {
-		fmt.Println("Error parsing cpu quantity string:", err)
-		return "0m"
-	} else {
-		if strings.HasSuffix(format, "n") {
-			value /= 1e6
-		} else if !strings.HasSuffix(format, "m") { // Handle cases where the format is not "m"
-			fmt.Println("Error parsing quantity string: invalid format")
-			return "0m"
-		}
-		cpuInMillicores := value
-		return fmt.Sprintf("%.2fm", cpuInMillicores)
-	}
-}
-
 func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
 	podDetails := PodDetails{
 		Name:    pod.Name,
@@ -1620,7 +1601,7 @@ func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
 				details = ContainerDetails{Name: container.Name}
 			}
 			if cpuQuantity != nil {
-				details.TotalCPU = formatCPU(cpuQuantity.String())
+				details.TotalCPU = cpuToMillicores(cpuQuantity.String())
 				totalCPU.Add(*cpuQuantity)
 			}
 			if memQuantity != nil {
@@ -1630,7 +1611,7 @@ func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
 			containerDetails[containerName] = details
 		}
 		if totalCPU != nil {
-			podDetails.TotalCPU = formatCPU(totalCPU.String())
+			podDetails.TotalCPU = cpuToMillicores(totalCPU.String())
 		}
 
 		if totalMemory != nil {
@@ -1702,4 +1683,25 @@ func (h *handler) getContainerStatus(state corev1.ContainerState) string {
 	} else {
 		return "Unknown"
 	}
+}
+
+func cpuToMillicores(quantityStr string) string {
+	var value float64
+	var format string
+
+	// Parse the quantity string
+	if _, err := fmt.Sscanf(quantityStr, "%f%s", &value, &format); err != nil {
+		fmt.Println("Error parsing cpu quantity string:", err)
+		return "0m"
+	}
+
+	// Adjust value based on the format suffix
+	switch {
+	case strings.HasSuffix(format, "n"):
+		value /= 1e6
+	case !strings.HasSuffix(format, "m"):
+		fmt.Println("Error parsing quantity string: invalid format")
+		return "0m"
+	}
+	return fmt.Sprintf("%.2fm", value)
 }

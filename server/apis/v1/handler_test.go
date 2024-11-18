@@ -1029,7 +1029,7 @@ func TestHandler_GetContainerStatus(t *testing.T) {
 	}
 }
 
-func TestFormatCPU(t *testing.T) {
+func TestHandler_cpuToMillicores(t *testing.T) {
 	testCases := []struct {
 		input    string
 		expected string
@@ -1044,7 +1044,7 @@ func TestFormatCPU(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("Input: %s", tc.input), func(t *testing.T) {
-			result := formatCPU(tc.input)
+			result := cpuToMillicores(tc.input)
 			if result != tc.expected {
 				t.Errorf("Expected: %s, Got: %s", tc.expected, result)
 			}
