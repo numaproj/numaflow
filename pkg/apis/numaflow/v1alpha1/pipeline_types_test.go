@@ -400,18 +400,35 @@ func Test_GetWatermarkMaxDelay(t *testing.T) {
 	assert.Equal(t, "2s", wm.GetMaxDelay().String())
 }
 
-func Test_GetDeleteGracePeriodSeconds(t *testing.T) {
-	lc := Lifecycle{}
-	assert.Equal(t, int64(30), lc.GetDeletionGracePeriodSeconds())
-	lc.DeletionGracePeriodSeconds = ptr.To[int64](50)
-	assert.Equal(t, int32(50), lc.GetDeletionGracePeriodSeconds())
+func Test_GetTerminationGracePeriodSeconds(t *testing.T) {
+	p := Pipeline{}
+	assert.Equal(t, int64(30), p.GetTerminationGracePeriodSeconds())
+	p.DeletionGracePeriodSeconds = ptr.To[int64](35)
+	assert.Equal(t, int64(35), p.GetTerminationGracePeriodSeconds())
+	p.Spec.Lifecycle.DeletionGracePeriodSeconds = ptr.To[int64](40)
+	assert.Equal(t, int64(40), p.GetTerminationGracePeriodSeconds())
 }
 
 func Test_GetDesiredPhase(t *testing.T) {
-	lc := Lifecycle{}
-	assert.Equal(t, PipelinePhaseRunning, lc.GetDesiredPhase())
-	lc.DesiredPhase = PipelinePhasePaused
-	assert.Equal(t, PipelinePhasePaused, lc.GetDesiredPhase())
+	p := Pipeline{
+		Spec: PipelineSpec{
+			Lifecycle: Lifecycle{},
+		},
+	}
+	assert.Equal(t, PipelinePhaseRunning, p.GetDesiredPhase())
+	p.Spec.Lifecycle.DesiredPhase = PipelinePhasePaused
+	assert.Equal(t, PipelinePhasePaused, p.GetDesiredPhase())
+}
+
+func Test_GetPauseGracePeriodSeconds(t *testing.T) {
+	p := Pipeline{
+		Spec: PipelineSpec{
+			Lifecycle: Lifecycle{},
+		},
+	}
+	assert.Equal(t, int64(30), p.GetPauseGracePeriodSeconds())
+	p.Spec.Lifecycle.PauseGracePeriodSeconds = ptr.To[int64](40)
+	assert.Equal(t, int64(40), p.GetPauseGracePeriodSeconds())
 }
 
 func Test_GetPipelineLimits(t *testing.T) {

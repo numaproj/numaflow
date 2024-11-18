@@ -2986,7 +2986,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Lifecycle(ref common.ReferenceCallback) c
 						SchemaProps: spec.SchemaProps{
 							Description: "PauseGracePeriodSeconds used to pause pipeline gracefully",
 							Type:        []string{"integer"},
-							Format:      "int32",
+							Format:      "int64",
 						},
 					},
 					"deleteGracePeriodSeconds": {

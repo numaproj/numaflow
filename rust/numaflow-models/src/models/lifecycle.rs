@@ -38,7 +38,7 @@ pub struct Lifecycle {
         rename = "pauseGracePeriodSeconds",
         skip_serializing_if = "Option::is_none"
     )]
-    pub pause_grace_period_seconds: Option<i32>,
+    pub pause_grace_period_seconds: Option<i64>,
 }
 
 impl Lifecycle {

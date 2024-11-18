@@ -20937,7 +20937,7 @@
         },
         "pauseGracePeriodSeconds": {
           "description": "PauseGracePeriodSeconds used to pause pipeline gracefully",
-          "format": "int32",
+          "format": "int64",
           "type": "integer"
         }
       },

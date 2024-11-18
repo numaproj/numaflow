@@ -112,7 +112,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	if !pl.DeletionTimestamp.IsZero() {
 		log.Info("Deleting pipeline")
 		if controllerutil.ContainsFinalizer(pl, finalizerName) {
-			if time.Now().Before(pl.DeletionTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetDeletionGracePeriodSeconds()) * time.Second)) {
+			if time.Now().Before(pl.DeletionTimestamp.Add(time.Duration(pl.GetTerminationGracePeriodSeconds()) * time.Second)) {
 				safeToDelete, err := r.safeToDelete(ctx, pl)
 				if err != nil {
 					logMsg := fmt.Sprintf("Failed to check if it's safe to delete pipeline %s: %v", pl.Name, err.Error())
@@ -180,7 +180,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	// this should happen only after the required configs for the lifecycle changes
 	// have been applied.
 	if !isLifecycleChange(pl) {
-		pl.Status.SetPhase(pl.Spec.Lifecycle.GetDesiredPhase(), "")
+		pl.Status.SetPhase(pl.GetDesiredPhase(), "")
 	}
 	if err := r.checkChildrenResourceStatus(ctx, pl); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to check pipeline children resource status, %w", err)
@@ -188,7 +188,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 	// check if any changes related to pause/resume lifecycle for the pipeline
 	oldPhase := pl.Status.Phase
-	if isLifecycleChange(pl) && oldPhase != pl.Spec.Lifecycle.GetDesiredPhase() {
+	if isLifecycleChange(pl) && oldPhase != pl.GetDesiredPhase() {
 		requeue, err := r.updateDesiredState(ctx, pl)
 		if err != nil {
 			logMsg := fmt.Sprintf("Updated desired pipeline phase failed: %v", zap.Error(err))
@@ -215,7 +215,7 @@ func isLifecycleChange(pl *dfv1.Pipeline) bool {
 	// Check if the desired phase of the pipeline is 'Paused', or if the current phase of the
 	// pipeline is either 'Paused' or 'Pausing'. This indicates a transition into or out of
 	// a paused state which is a lifecycle phase change
-	if oldPhase := pl.Status.Phase; pl.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
+	if oldPhase := pl.Status.Phase; pl.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
 		oldPhase == dfv1.PipelinePhasePaused || oldPhase == dfv1.PipelinePhasePausing {
 		return true
 	}
@@ -810,7 +810,7 @@ var allVertexFilter vertexFilterFunc = func(v dfv1.Vertex) bool { return true }
 var sourceVertexFilter vertexFilterFunc = func(v dfv1.Vertex) bool { return v.IsASource() }
 
 func (r *pipelineReconciler) updateDesiredState(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
-	switch pl.Spec.Lifecycle.GetDesiredPhase() {
+	switch pl.GetDesiredPhase() {
 	case dfv1.PipelinePhasePaused:
 		return r.pausePipeline(ctx, pl)
 	case dfv1.PipelinePhaseRunning, dfv1.PipelinePhaseUnknown:
@@ -892,7 +892,7 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 	}
 
 	// if drain is completed, or we have exceeded the pause deadline, mark pl as paused and scale down
-	if time.Now().After(pauseTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetPauseGracePeriodSeconds())*time.Second)) || drainCompleted {
+	if time.Now().After(pauseTimestamp.Add(time.Duration(pl.GetPauseGracePeriodSeconds())*time.Second)) || drainCompleted {
 		_, err = r.scaleDownAllVertices(ctx, pl)
 		if err != nil {
 			return true, err

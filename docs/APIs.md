@@ -5538,7 +5538,7 @@ phase
 
 <td>
 
-<code>pauseGracePeriodSeconds</code></br> <em> int32 </em>
+<code>pauseGracePeriodSeconds</code></br> <em> int64 </em>
 </td>
 
 <td>

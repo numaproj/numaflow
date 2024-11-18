@@ -103,7 +103,7 @@ func checkVertexLevelHealth(h *handler, ns string,
 
 	// if the pipeline is paused, return inactive status
 	// this cannot be checked at individual vertex level, hence needs to be checked here
-	if pl.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused {
+	if pl.GetDesiredPhase() == dfv1.PipelinePhasePaused {
 		return &resourceHealthResponse{
 			Status:  dfv1.PipelineStatusInactive,
 			Message: fmt.Sprintf("Pipeline %q is paused", pipeline),
@@ -113,7 +113,7 @@ func checkVertexLevelHealth(h *handler, ns string,
 
 	// if the pipeline is killed, return killed status
 	// this cannot be checked at individual vertex level, hence needs to be checked here
-	if pl.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhaseDeleting {
+	if pl.GetDesiredPhase() == dfv1.PipelinePhaseDeleting {
 		return &resourceHealthResponse{
 			Status:  dfv1.PipelineStatusDeleting,
 			Message: fmt.Sprintf("Pipeline %q is killed", pipeline),

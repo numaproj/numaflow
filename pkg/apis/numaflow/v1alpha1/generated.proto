@@ -881,7 +881,7 @@ message Lifecycle {
   // PauseGracePeriodSeconds used to pause pipeline gracefully
   // +kubebuilder:default=30
   // +optional
-  optional int32 pauseGracePeriodSeconds = 3;
+  optional int64 pauseGracePeriodSeconds = 3;
 
   // DeleteGracePeriodSeconds used to delete pipeline gracefully
   // +kubebuilder:default=30
