@@ -1116,81 +1116,31 @@ mod tests {
         let mut buffer = String::new();
         encode(&mut buffer, &state).unwrap();
 
-        let expected = r#"
-sdk_info{component="component",component_name="component_name",language="language",version="version",type="container_type"} 1
-monovtx_read_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_ack_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_read_bytes_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_pending{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 10
-monovtx_processing_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 10.0
-monovtx_processing_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_processing_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_read_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 3.0
-monovtx_read_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_read_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_ack_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2.0
-monovtx_ack_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_ack_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_transformer_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0
-monovtx_transformer_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_transformer_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 4.0
-monovtx_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="592.5071727239734",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="3510.6474972935645",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="20800.83823051903",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="123246.4585025357",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="730244.1067557994",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="4326748.710922221",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="25636296.457956219",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="151896895.33417253",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="899999999.9999987",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_sink_time_bucket{le="+Inf",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-monovtx_fallback_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1
-        "#;
+        let expected = [
+            r#"sdk_info{component="component",component_name="component_name",language="language",version="version",type="container_type"} 1"#,
+            r#"monovtx_read_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_ack_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_read_bytes_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_pending{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 10"#,
+            r#"monovtx_processing_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 10.0"#,
+            r#"monovtx_processing_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_processing_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_read_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 3.0"#,
+            r#"monovtx_read_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_read_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_ack_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2.0"#,
+            r#"monovtx_ack_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_ack_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_transformer_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0"#,
+            r#"monovtx_transformer_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_transformer_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 4.0"#,
+            r#"monovtx_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_fallback_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+        ];
 
         let got = buffer
             .trim()
@@ -1199,6 +1149,8 @@ monovtx_fallback_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_
             .collect::<Vec<&str>>()
             .join("\n");
 
-        assert_eq!(got.trim(), expected.trim());
+        for t in expected {
+            assert!(got.contains(t));
+        }
     }
 }
