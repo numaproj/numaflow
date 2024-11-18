@@ -2388,7 +2388,7 @@
 <div class="highlight"><pre><span></span><code><span class="w">  </span>kubectl<span class="w"> </span>patch<span class="w"> </span>pl<span class="w"> </span>my-pipeline<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>--patch<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;: {&quot;lifecycle&quot;: {&quot;desiredPhase&quot;: &quot;Running&quot;}}}&#39;</span>
 </code></pre></div>
 <h2 id="delete-a-pipeline">Delete a Pipeline<a class="headerlink" href="#delete-a-pipeline" title="Permanent link">&para;</a></h2>
-<p>When deleting a pipeline, before terminating all the pods, it will try to wait for all the backlog messages that have already been ingested into the pipeline to be processed. However, it will not wait forever, if the backlog is too large, it will terminate the pods after <code>terminationGracePeriodSeconds</code>, which defaults to 30, and can be customized by setting <code>spec.lifecycle.terminationGracePeriodSeconds</code>.</p>
+<p>When deleting a pipeline, before terminating all the pods, it will try to wait for all the backlog messages that have already been ingested into the pipeline to be processed. However, it will not wait forever, if the backlog is too large, it will terminate the pods after <code>deletionGracePeriodSeconds</code>, which defaults to 30, and can be customized by setting <code>spec.lifecycle.deletionGracePeriodSeconds</code>.</p>
 
               
             </article>
