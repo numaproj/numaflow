@@ -18,12 +18,18 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Lifecycle {
-    /// DeleteGracePeriodSeconds used to delete pipeline gracefully
+    /// DeleteGracePeriodSeconds used to delete pipeline gracefully Deprecated: Use DeletionGracePeriodSeconds instead
     #[serde(
         rename = "deleteGracePeriodSeconds",
         skip_serializing_if = "Option::is_none"
     )]
-    pub delete_grace_period_seconds: Option<i32>,
+    pub delete_grace_period_seconds: Option<i64>,
+    /// DeletionGracePeriodSeconds used to delete pipeline gracefully
+    #[serde(
+        rename = "deletionGracePeriodSeconds",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub deletion_grace_period_seconds: Option<i64>,
     /// DesiredPhase used to bring the pipeline from current phase to desired phase
     #[serde(rename = "desiredPhase", skip_serializing_if = "Option::is_none")]
     pub desired_phase: Option<String>,
@@ -39,6 +45,7 @@ impl Lifecycle {
     pub fn new() -> Lifecycle {
         Lifecycle {
             delete_grace_period_seconds: None,
+            deletion_grace_period_seconds: None,
             desired_phase: None,
             pause_grace_period_seconds: None,
         }

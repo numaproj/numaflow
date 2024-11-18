@@ -112,7 +112,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	if !pl.DeletionTimestamp.IsZero() {
 		log.Info("Deleting pipeline")
 		if controllerutil.ContainsFinalizer(pl, finalizerName) {
-			if time.Now().Before(pl.DeletionTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetDeleteGracePeriodSeconds()) * time.Second)) {
+			if time.Now().Before(pl.DeletionTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetDeletionGracePeriodSeconds()) * time.Second)) {
 				safeToDelete, err := r.safeToDelete(ctx, pl)
 				if err != nil {
 					logMsg := fmt.Sprintf("Failed to check if it's safe to delete pipeline %s: %v", pl.Name, err.Error())

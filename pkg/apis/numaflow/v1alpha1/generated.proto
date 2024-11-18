@@ -868,10 +868,10 @@ message KafkaSource {
 }
 
 message Lifecycle {
-  // DeleteGracePeriodSeconds used to delete pipeline gracefully
+  // DeletionGracePeriodSeconds used to delete pipeline gracefully
   // +kubebuilder:default=30
   // +optional
-  optional int32 deleteGracePeriodSeconds = 1;
+  optional int64 deletionGracePeriodSeconds = 1;
 
   // DesiredPhase used to bring the pipeline from current phase to desired phase
   // +kubebuilder:default=Running
@@ -882,6 +882,12 @@ message Lifecycle {
   // +kubebuilder:default=30
   // +optional
   optional int32 pauseGracePeriodSeconds = 3;
+
+  // DeleteGracePeriodSeconds used to delete pipeline gracefully
+  // +kubebuilder:default=30
+  // Deprecated: Use DeletionGracePeriodSeconds instead
+  // +optional
+  optional int64 deleteGracePeriodSeconds = 4;
 }
 
 message Log {

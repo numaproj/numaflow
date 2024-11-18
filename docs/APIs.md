@@ -5497,7 +5497,7 @@ Description
 
 <td>
 
-<code>deleteGracePeriodSeconds</code></br> <em> int32 </em>
+<code>deletionGracePeriodSeconds</code></br> <em> int64 </em>
 </td>
 
 <td>
@@ -5505,7 +5505,7 @@ Description
 <em>(Optional)</em>
 <p>
 
-DeleteGracePeriodSeconds used to delete pipeline gracefully
+DeletionGracePeriodSeconds used to delete pipeline gracefully
 </p>
 
 </td>
@@ -5547,6 +5547,26 @@ phase
 <p>
 
 PauseGracePeriodSeconds used to pause pipeline gracefully
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>deleteGracePeriodSeconds</code></br> <em> int64 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+DeleteGracePeriodSeconds used to delete pipeline gracefully Deprecated:
+Use DeletionGracePeriodSeconds instead
 </p>
 
 </td>

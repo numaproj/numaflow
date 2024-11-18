@@ -402,9 +402,9 @@ func Test_GetWatermarkMaxDelay(t *testing.T) {
 
 func Test_GetDeleteGracePeriodSeconds(t *testing.T) {
 	lc := Lifecycle{}
-	assert.Equal(t, int32(30), lc.GetDeleteGracePeriodSeconds())
-	lc.DeleteGracePeriodSeconds = ptr.To[int32](50)
-	assert.Equal(t, int32(50), lc.GetDeleteGracePeriodSeconds())
+	assert.Equal(t, int64(30), lc.GetDeletionGracePeriodSeconds())
+	lc.DeletionGracePeriodSeconds = ptr.To[int64](50)
+	assert.Equal(t, int32(50), lc.GetDeletionGracePeriodSeconds())
 }
 
 func Test_GetDesiredPhase(t *testing.T) {
