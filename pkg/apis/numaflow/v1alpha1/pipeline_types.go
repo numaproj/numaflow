@@ -419,10 +419,10 @@ func (p Pipeline) GetPipelineLimits() PipelineLimits {
 }
 
 type Lifecycle struct {
-	// DeleteGracePeriodSeconds used to delete pipeline gracefully
+	// DeletionGracePeriodSeconds used to delete pipeline gracefully
 	// +kubebuilder:default=30
 	// +optional
-	DeleteGracePeriodSeconds *int32 `json:"deleteGracePeriodSeconds,omitempty" protobuf:"varint,1,opt,name=deleteGracePeriodSeconds"`
+	DeletionGracePeriodSeconds *int64 `json:"deletionGracePeriodSeconds,omitempty" protobuf:"varint,1,opt,name=deletionGracePeriodSeconds"`
 	// DesiredPhase used to bring the pipeline from current phase to desired phase
 	// +kubebuilder:default=Running
 	// +optional
@@ -430,28 +430,39 @@ type Lifecycle struct {
 	// PauseGracePeriodSeconds used to pause pipeline gracefully
 	// +kubebuilder:default=30
 	// +optional
-	PauseGracePeriodSeconds *int32 `json:"pauseGracePeriodSeconds,omitempty" protobuf:"varint,3,opt,name=pauseGracePeriodSeconds"`
+	PauseGracePeriodSeconds *int64 `json:"pauseGracePeriodSeconds,omitempty" protobuf:"varint,3,opt,name=pauseGracePeriodSeconds"`
+	// DeleteGracePeriodSeconds used to delete pipeline gracefully
+	// +kubebuilder:default=30
+	// Deprecated: Use DeletionGracePeriodSeconds instead
+	// +optional
+	DeprecatedDeleteGracePeriodSeconds *int64 `json:"deleteGracePeriodSeconds,omitempty" protobuf:"varint,4,opt,name=deleteGracePeriodSeconds"`
 }
 
-// GetDeleteGracePeriodSeconds returns the value DeleteGracePeriodSeconds.
-func (lc Lifecycle) GetDeleteGracePeriodSeconds() int32 {
-	if lc.DeleteGracePeriodSeconds != nil {
-		return *lc.DeleteGracePeriodSeconds
+// GetTerminationGracePeriodSeconds returns the value DeleteGracePeriodSeconds.
+func (p Pipeline) GetTerminationGracePeriodSeconds() int64 {
+	if p.Spec.Lifecycle.DeletionGracePeriodSeconds != nil {
+		return *p.Spec.Lifecycle.DeletionGracePeriodSeconds
+	}
+	if p.Spec.Lifecycle.DeprecatedDeleteGracePeriodSeconds != nil {
+		return *p.Spec.Lifecycle.DeprecatedDeleteGracePeriodSeconds
+	}
+	if p.DeletionGracePeriodSeconds != nil {
+		return *p.DeletionGracePeriodSeconds
 	}
 	return 30
 }
 
-func (lc Lifecycle) GetDesiredPhase() PipelinePhase {
-	if string(lc.DesiredPhase) != "" {
-		return lc.DesiredPhase
+func (p Pipeline) GetDesiredPhase() PipelinePhase {
+	if string(p.Spec.Lifecycle.DesiredPhase) != "" {
+		return p.Spec.Lifecycle.DesiredPhase
 	}
 	return PipelinePhaseRunning
 }
 
 // return PauseGracePeriodSeconds if set
-func (lc Lifecycle) GetPauseGracePeriodSeconds() int32 {
-	if lc.PauseGracePeriodSeconds != nil {
-		return *lc.PauseGracePeriodSeconds
+func (p Pipeline) GetPauseGracePeriodSeconds() int64 {
+	if p.Spec.Lifecycle.PauseGracePeriodSeconds != nil {
+		return *p.Spec.Lifecycle.PauseGracePeriodSeconds
 	}
 	return 30
 }

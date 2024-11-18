@@ -20918,9 +20918,14 @@
       "type": "object",
       "properties": {
         "deleteGracePeriodSeconds": {
-          "description": "DeleteGracePeriodSeconds used to delete pipeline gracefully",
+          "description": "DeleteGracePeriodSeconds used to delete pipeline gracefully Deprecated: Use DeletionGracePeriodSeconds instead",
           "type": "integer",
-          "format": "int32"
+          "format": "int64"
+        },
+        "deletionGracePeriodSeconds": {
+          "description": "DeletionGracePeriodSeconds used to delete pipeline gracefully",
+          "type": "integer",
+          "format": "int64"
         },
         "desiredPhase": {
           "description": "DesiredPhase used to bring the pipeline from current phase to desired phase",
@@ -20929,7 +20934,7 @@
         "pauseGracePeriodSeconds": {
           "description": "PauseGracePeriodSeconds used to pause pipeline gracefully",
           "type": "integer",
-          "format": "int32"
+          "format": "int64"
         }
       }
     },
