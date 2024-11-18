@@ -101,6 +101,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			metrics.SDKInfo.WithLabelValues(dfv1.ComponentVertex, fmt.Sprintf("%s-%s", pipelineName, vertexName), string(serverinfo.ContainerTypeReducestreamer), serverInfo.Version, string(serverInfo.Language)).Set(1)
 			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.ReduceStreamAddr))
 		} else {
 			// Wait for server info to be ready
@@ -108,6 +109,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			metrics.SDKInfo.WithLabelValues(dfv1.ComponentVertex, fmt.Sprintf("%s-%s", pipelineName, vertexName), string(serverinfo.ContainerTypeReducer), serverInfo.Version, string(serverInfo.Language)).Set(1)
 			client, err = reducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		}
 		if err != nil {
@@ -134,6 +136,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		metrics.SDKInfo.WithLabelValues(dfv1.ComponentVertex, fmt.Sprintf("%s-%s", pipelineName, vertexName), string(serverinfo.ContainerTypeSessionreducer), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
 		client, err := sessionreducer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
