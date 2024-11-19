@@ -32,12 +32,12 @@ const (
 	LabelVertexType         = "vertex_type"
 	LabelPartitionName      = "partition_name"
 	LabelMonoVertexName     = "mvtx_name"
-	LabelComponent     = "component"
-	LabelComponentName = "component_name"
-	LabelSDKLanguage   = "language"
-	LabelSDKVersion    = "version"
-	LabelSDKType       = "type" // container type, e.g sourcer, sourcetransformer, sinker, etc. see serverinfo.ContainerType
-	LabelReason        = "reason"
+	LabelComponent          = "component"
+	LabelComponentName      = "component_name"
+	LabelSDKLanguage        = "language"
+	LabelSDKVersion         = "version"
+	LabelSDKType            = "type" // container type, e.g sourcer, sourcetransformer, sinker, etc. see serverinfo.ContainerType
+	LabelReason             = "reason"
 )
 
 var (
