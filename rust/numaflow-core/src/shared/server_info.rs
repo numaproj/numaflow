@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -18,6 +19,60 @@ use crate::shared::server_info::version::SdkConstraints;
 // Equivalent to U+005C__END__.
 const END: &str = "U+005C__END__";
 
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
+pub enum ContainerType {
+    Sourcer,
+    SourceTransformer,
+    Sinker,
+    Mapper,
+    Reducer,
+    ReduceStreamer,
+    SessionReducer,
+    SideInput,
+    FbSinker,
+    Unknown,
+}
+
+impl ContainerType {
+    fn as_str(&self) -> &'static str {
+        match self {
+            ContainerType::Sourcer => "sourcer",
+            ContainerType::SourceTransformer => "sourcetransformer",
+            ContainerType::Sinker => "sinker",
+            ContainerType::Mapper => "mapper",
+            ContainerType::Reducer => "reducer",
+            ContainerType::ReduceStreamer => "reducestreamer",
+            ContainerType::SessionReducer => "sessionreducer",
+            ContainerType::SideInput => "sideinput",
+            ContainerType::FbSinker => "fb-sinker",
+            ContainerType::Unknown => "unknown",
+        }
+    }
+}
+
+impl fmt::Display for ContainerType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl From<String> for ContainerType {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "sourcer" => ContainerType::Sourcer,
+            "sourcetransformer" => ContainerType::SourceTransformer,
+            "sinker" => ContainerType::Sinker,
+            "mapper" => ContainerType::Mapper,
+            "reducer" => ContainerType::Reducer,
+            "reducestreamer" => ContainerType::ReduceStreamer,
+            "sessionreducer" => ContainerType::SessionReducer,
+            "sideinput" => ContainerType::SideInput,
+            "fb-sinker" => ContainerType::FbSinker,
+            _ => ContainerType::Unknown,
+        }
+    }
+}
+
 /// ServerInfo structure to store server-related information
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct ServerInfo {
@@ -35,10 +90,10 @@ pub(crate) struct ServerInfo {
 
 /// check_for_server_compatibility waits until the server info file is ready and check whether the
 /// server is compatible with Numaflow.
-pub(crate) async fn check_for_server_compatibility(
+pub(crate) async fn sdk_server_info(
     file_path: PathBuf,
     cln_token: CancellationToken,
-) -> error::Result<()> {
+) -> error::Result<ServerInfo> {
     // Read the server info file
     let server_info = read_server_info(&file_path, cln_token).await?;
 
@@ -49,14 +104,11 @@ pub(crate) async fn check_for_server_compatibility(
     let sdk_version = &server_info.version;
     let min_numaflow_version = &server_info.minimum_numaflow_version;
     let sdk_language = &server_info.language;
-    let container_type = get_container_type(&file_path).unwrap_or("");
+    let container_type = get_container_type(&file_path).unwrap_or(ContainerType::Unknown);
     // Get version information
     let version_info = version::get_version_info();
     let numaflow_version = &version_info.version;
 
-    info!("Version_info: {:?}", version_info);
-
-    // Check minimum numaflow version compatibility if specified
     if min_numaflow_version.is_empty() {
         warn!("Failed to get the minimum numaflow version, skipping numaflow version compatibility check");
     } else if !numaflow_version.contains("latest")
@@ -76,12 +128,12 @@ pub(crate) async fn check_for_server_compatibility(
         check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            container_type,
+            &container_type,
             min_supported_sdk_versions,
         )?;
     }
 
-    Ok(())
+    Ok(server_info)
 }
 
 /// Checks if the current numaflow version is compatible with the given minimum numaflow version.
@@ -115,7 +167,7 @@ fn check_numaflow_compatibility(
 fn check_sdk_compatibility(
     sdk_version: &str,
     sdk_language: &str,
-    container_type: &str,
+    container_type: &ContainerType,
     min_supported_sdk_versions: &SdkConstraints,
 ) -> error::Result<()> {
     // Check if the SDK language is present in the minimum supported SDK versions
@@ -264,14 +316,10 @@ fn trim_after_dash(input: &str) -> &str {
 
 /// Extracts the container type from the server info file.
 /// The file name is in the format of <container_type>-server-info.
-fn get_container_type(server_info_file: &Path) -> Option<&str> {
+fn get_container_type(server_info_file: &Path) -> Option<ContainerType> {
     let file_name = server_info_file.file_name()?;
     let container_type = file_name.to_str()?.trim_end_matches("-server-info");
-    if container_type.is_empty() {
-        None
-    } else {
-        Some(container_type)
-    }
+    Some(ContainerType::from(container_type.to_string()))
 }
 
 /// Reads the server info file and returns the parsed ServerInfo struct.
@@ -348,7 +396,9 @@ mod version {
     use std::env;
     use std::sync::LazyLock;
 
-    pub(crate) type SdkConstraints = HashMap<String, HashMap<String, String>>;
+    use super::ContainerType;
+
+    pub(crate) type SdkConstraints = HashMap<String, HashMap<ContainerType, String>>;
 
     // MINIMUM_SUPPORTED_SDK_VERSIONS is the minimum supported version of each SDK for the current numaflow version.
     static MINIMUM_SUPPORTED_SDK_VERSIONS: LazyLock<SdkConstraints> = LazyLock::new(|| {
@@ -357,26 +407,26 @@ mod version {
         // please follow the instruction there to update the value
         // NOTE: the string content of the keys matches the corresponding server info file name.
         // DO NOT change it unless the server info file name is changed.
-        let mut go_version_map = HashMap::new();
-        go_version_map.insert("sourcer".to_string(), "0.9.0-z".to_string());
-        go_version_map.insert("sourcetransformer".to_string(), "0.9.0-z".to_string());
-        go_version_map.insert("sinker".to_string(), "0.9.0-z".to_string());
-        go_version_map.insert("fb-sinker".to_string(), "0.9.0-z".to_string());
+        let mut go_version_map: HashMap<ContainerType, String> = HashMap::new();
+        go_version_map.insert(ContainerType::Sourcer, "0.9.0-z".to_string());
+        go_version_map.insert(ContainerType::SourceTransformer, "0.9.0-z".to_string());
+        go_version_map.insert(ContainerType::Sinker, "0.9.0-z".to_string());
+        go_version_map.insert(ContainerType::FbSinker, "0.9.0-z".to_string());
         let mut python_version_map = HashMap::new();
-        python_version_map.insert("sourcer".to_string(), "0.9.0rc100".to_string());
-        python_version_map.insert("sourcetransformer".to_string(), "0.9.0rc100".to_string());
-        python_version_map.insert("sinker".to_string(), "0.9.0rc100".to_string());
-        python_version_map.insert("fb-sinker".to_string(), "0.9.0rc100".to_string());
+        python_version_map.insert(ContainerType::Sourcer, "0.9.0rc100".to_string());
+        python_version_map.insert(ContainerType::SourceTransformer, "0.9.0rc100".to_string());
+        python_version_map.insert(ContainerType::Sinker, "0.9.0rc100".to_string());
+        python_version_map.insert(ContainerType::FbSinker, "0.9.0rc100".to_string());
         let mut java_version_map = HashMap::new();
-        java_version_map.insert("sourcer".to_string(), "0.9.0-z".to_string());
-        java_version_map.insert("sourcetransformer".to_string(), "0.9.0-z".to_string());
-        java_version_map.insert("sinker".to_string(), "0.9.0-z".to_string());
-        java_version_map.insert("fb-sinker".to_string(), "0.9.0-z".to_string());
+        java_version_map.insert(ContainerType::Sourcer, "0.9.0-z".to_string());
+        java_version_map.insert(ContainerType::SourceTransformer, "0.9.0-z".to_string());
+        java_version_map.insert(ContainerType::Sinker, "0.9.0-z".to_string());
+        java_version_map.insert(ContainerType::FbSinker, "0.9.0-z".to_string());
         let mut rust_version_map = HashMap::new();
-        rust_version_map.insert("sourcer".to_string(), "0.1.0-z".to_string());
-        rust_version_map.insert("sourcetransformer".to_string(), "0.1.0-z".to_string());
-        rust_version_map.insert("sinker".to_string(), "0.1.0-z".to_string());
-        rust_version_map.insert("fb-sinker".to_string(), "0.1.0-z".to_string());
+        rust_version_map.insert(ContainerType::Sourcer, "0.1.0-z".to_string());
+        rust_version_map.insert(ContainerType::SourceTransformer, "0.1.0-z".to_string());
+        rust_version_map.insert(ContainerType::Sinker, "0.1.0-z".to_string());
+        rust_version_map.insert(ContainerType::FbSinker, "0.1.0-z".to_string());
 
         let mut m = HashMap::new();
         m.insert("go".to_string(), go_version_map);
@@ -471,7 +521,7 @@ mod tests {
     const TCP: &str = "tcp";
     const PYTHON: &str = "python";
     const GOLANG: &str = "go";
-    const TEST_CONTAINER_TYPE: &str = "sourcer";
+    const TEST_CONTAINER_TYPE: ContainerType = ContainerType::Sourcer;
 
     async fn write_server_info(
         svr_info: &ServerInfo,
@@ -523,13 +573,13 @@ mod tests {
     // Helper function to create a SdkConstraints struct with minimum supported SDK versions all being stable releases
     fn create_sdk_constraints_stable_versions() -> SdkConstraints {
         let mut go_version_map = HashMap::new();
-        go_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "0.10.0-z".to_string());
+        go_version_map.insert(TEST_CONTAINER_TYPE, "0.10.0-z".to_string());
         let mut python_version_map = HashMap::new();
-        python_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "1.2.0rc100".to_string());
+        python_version_map.insert(TEST_CONTAINER_TYPE, "1.2.0rc100".to_string());
         let mut java_version_map = HashMap::new();
-        java_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "2.0.0-z".to_string());
+        java_version_map.insert(TEST_CONTAINER_TYPE, "2.0.0-z".to_string());
         let mut rust_version_map = HashMap::new();
-        rust_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "0.1.0-z".to_string());
+        rust_version_map.insert(TEST_CONTAINER_TYPE, "0.1.0-z".to_string());
 
         let mut m = HashMap::new();
         m.insert("go".to_string(), go_version_map);
@@ -542,13 +592,13 @@ mod tests {
     // Helper function to create a SdkConstraints struct with minimum supported SDK versions all being pre-releases
     fn create_sdk_constraints_pre_release_versions() -> SdkConstraints {
         let mut go_version_map = HashMap::new();
-        go_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "0.10.0-rc2".to_string());
+        go_version_map.insert(TEST_CONTAINER_TYPE, "0.10.0-rc2".to_string());
         let mut python_version_map = HashMap::new();
-        python_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "1.2.0b2".to_string());
+        python_version_map.insert(TEST_CONTAINER_TYPE, "1.2.0b2".to_string());
         let mut java_version_map = HashMap::new();
-        java_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "2.0.0-rc2".to_string());
+        java_version_map.insert(TEST_CONTAINER_TYPE, "2.0.0-rc2".to_string());
         let mut rust_version_map = HashMap::new();
-        rust_version_map.insert(TEST_CONTAINER_TYPE.to_string(), "0.1.0-rc3".to_string());
+        rust_version_map.insert(TEST_CONTAINER_TYPE, "0.1.0-rc3".to_string());
 
         let mut m = HashMap::new();
         m.insert("go".to_string(), go_version_map);
@@ -567,7 +617,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -583,7 +633,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -602,7 +652,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -618,7 +668,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -637,7 +687,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -653,7 +703,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -672,7 +722,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -688,7 +738,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -707,7 +757,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -723,7 +773,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -742,7 +792,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -758,7 +808,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -777,7 +827,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -793,7 +843,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -812,7 +862,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -828,7 +878,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -847,7 +897,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -863,7 +913,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -882,7 +932,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -898,7 +948,7 @@ mod tests {
         let result = check_sdk_compatibility(
             sdk_version,
             sdk_language,
-            TEST_CONTAINER_TYPE,
+            &TEST_CONTAINER_TYPE,
             &min_supported_sdk_versions,
         );
 
@@ -1012,7 +1062,7 @@ mod tests {
     async fn test_get_container_type_from_file_valid() {
         let file_path = PathBuf::from("/var/run/numaflow/sourcer-server-info");
         let container_type = get_container_type(&file_path);
-        assert_eq!("sourcer", container_type.unwrap());
+        assert_eq!(ContainerType::Sourcer, container_type.unwrap());
     }
 
     #[tokio::test]

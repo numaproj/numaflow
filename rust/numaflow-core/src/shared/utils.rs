@@ -26,7 +26,7 @@ use crate::error;
 use crate::metrics::{
     start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
 };
-use crate::shared::server_info::check_for_server_compatibility;
+use crate::shared::server_info::sdk_server_info;
 use crate::sink::{SinkClientType, SinkHandle};
 use crate::source::SourceHandle;
 use crate::Error;
@@ -186,16 +186,15 @@ pub(crate) async fn create_sink_handle(
             None,
         )),
         SinkType::UserDefined(ud_config) => {
-            check_for_server_compatibility(
-                ud_config.server_info_path.clone().into(),
-                cln_token.clone(),
-            )
-            .await?;
+            _ = sdk_server_info(ud_config.server_info_path.clone().into(), cln_token.clone())
+                .await?;
             let mut sink_grpc_client =
                 SinkClient::new(create_rpc_channel(ud_config.socket_path.clone().into()).await?)
                     .max_encoding_message_size(ud_config.grpc_max_message_size)
                     .max_encoding_message_size(ud_config.grpc_max_message_size);
             wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
+            // TODO: server info?
+
             Ok((
                 SinkHandle::new(
                     SinkClientType::UserDefined(sink_grpc_client.clone()),
