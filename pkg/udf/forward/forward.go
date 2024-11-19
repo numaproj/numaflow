@@ -178,6 +178,9 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) error {
 	start := time.Now()
 	totalBytes := 0
 	dataBytes := 0
+	// Initialize metric labels
+	metricLabels := map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}
+	metricLabelsWithPartition := map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
 	// at-least-once semantics for reading, during restart we will have to reprocess all unacknowledged messages. It is the
 	// responsibility of the Read function to do that.
@@ -186,7 +189,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) error {
 	isdf.opts.logger.Debugw("Read from buffer", zap.String("bufferFrom", isdf.fromBufferPartition.GetName()), zap.Int64("length", int64(len(readMessages))))
 	if err != nil {
 		isdf.opts.logger.Warnw("failed to read fromBufferPartition", zap.Error(err))
-		metrics.ReadMessagesError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Inc()
+		metrics.ReadMessagesError.With(metricLabelsWithPartition).Inc()
 	}
 
 	// process only if we have any read messages. There is a natural looping here if there is an internal error while
@@ -243,11 +246,11 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) error {
 		return nil
 	}
 
-	metrics.ReadProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Observe(float64(time.Since(readStart).Microseconds()))
-	metrics.ReadDataMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(dataMessages)))
-	metrics.ReadMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readMessages)))
-	metrics.ReadBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(totalBytes))
-	metrics.ReadDataBytesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(dataBytes))
+	metrics.ReadProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(readStart).Microseconds()))
+	metrics.ReadDataMessagesCount.With(metricLabelsWithPartition).Add(float64(len(dataMessages)))
+	metrics.ReadMessagesCount.With(metricLabelsWithPartition).Add(float64(len(readMessages)))
+	metrics.ReadBytesCount.With(metricLabelsWithPartition).Add(float64(totalBytes))
+	metrics.ReadDataBytesCount.With(metricLabelsWithPartition).Add(float64(dataBytes))
 
 	// fetch watermark if available
 	// TODO: make it async (concurrent and wait later)
@@ -365,11 +368,11 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) error {
 	// implicit return for posterity :-)
 	if err != nil {
 		isdf.opts.logger.Errorw("Failed to ack from buffer", zap.Error(err))
-		metrics.AckMessageError.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
+		metrics.AckMessageError.With(metricLabelsWithPartition).Add(float64(len(readOffsets)))
 		return err
 	}
-	metrics.AckProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Observe(float64(time.Since(ackStart).Microseconds()))
-	metrics.AckMessagesCount.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
+	metrics.AckProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(ackStart).Microseconds()))
+	metrics.AckMessagesCount.With(metricLabelsWithPartition).Add(float64(len(readOffsets)))
 
 	if isdf.opts.cbPublisher != nil {
 		// Publish the callback for the vertex
@@ -378,7 +381,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) error {
 		}
 	}
 	// ProcessingTimes of the entire forwardAChunk
-	metrics.ForwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}).Observe(float64(time.Since(start).Microseconds()))
+	metrics.ForwardAChunkProcessingTime.With(metricLabels).Observe(float64(time.Since(start).Microseconds()))
 	return nil
 }
 
@@ -387,6 +390,9 @@ func (isdf *InterStepDataForward) streamMessage(ctx context.Context, dataMessage
 	// Initialize maps for messages and offsets
 	messageToStep := make(map[string][][]isb.Message)
 	writeOffsets := make(map[string][][]isb.Offset)
+
+	metricLabels := map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica))}
+	metricLabelsWithPartition := map[string]string{metrics.LabelVertex: isdf.vertexName, metrics.LabelPipeline: isdf.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeMapUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)), metrics.LabelPartitionName: isdf.fromBufferPartition.GetName()}
 
 	for toVertex := range isdf.toBuffers {
 		messageToStep[toVertex] = make([][]isb.Message, len(isdf.toBuffers[toVertex]))
@@ -402,13 +408,7 @@ func (isdf *InterStepDataForward) streamMessage(ctx context.Context, dataMessage
 
 	// Process the single data message
 	start := time.Now()
-	metrics.UDFReadMessagesCount.With(map[string]string{
-		metrics.LabelVertex:             isdf.vertexName,
-		metrics.LabelPipeline:           isdf.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeMapUDF),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)),
-		metrics.LabelPartitionName:      isdf.fromBufferPartition.GetName(),
-	}).Inc()
+	metrics.UDFReadMessagesCount.With(metricLabelsWithPartition).Inc()
 
 	writeMessageCh := make(chan isb.WriteMessage)
 	errs, ctx := errgroup.WithContext(ctx)
@@ -419,13 +419,7 @@ func (isdf *InterStepDataForward) streamMessage(ctx context.Context, dataMessage
 	// Stream the message to the next vertex
 	for writeMessage := range writeMessageCh {
 		writeMessage.Headers = dataMessages[0].Headers
-		metrics.UDFWriteMessagesCount.With(map[string]string{
-			metrics.LabelVertex:             isdf.vertexName,
-			metrics.LabelPipeline:           isdf.pipelineName,
-			metrics.LabelVertexType:         string(dfv1.VertexTypeMapUDF),
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)),
-			metrics.LabelPartitionName:      isdf.fromBufferPartition.GetName(),
-		}).Add(1)
+		metrics.UDFWriteMessagesCount.With(metricLabelsWithPartition).Add(1)
 
 		// Determine where to step and write to buffers
 		if err := isdf.whereToStep(&writeMessage, messageToStep, dataMessages[0]); err != nil {
@@ -452,30 +446,15 @@ func (isdf *InterStepDataForward) streamMessage(ctx context.Context, dataMessage
 
 	// Handle errors in UDF processing
 	if err := errs.Wait(); err != nil {
-		metrics.UDFError.With(map[string]string{
-			metrics.LabelVertex:             isdf.vertexName,
-			metrics.LabelPipeline:           isdf.pipelineName,
-			metrics.LabelVertexType:         string(dfv1.VertexTypeMapUDF),
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)),
-		}).Inc()
+		metrics.UDFError.With(metricLabels).Inc()
 		if ok, _ := isdf.IsShuttingDown(); ok {
 			isdf.opts.logger.Errorw("mapUDF.Apply, Stop called while stuck on an internal error", zap.Error(err))
-			metrics.PlatformError.With(map[string]string{
-				metrics.LabelVertex:             isdf.vertexName,
-				metrics.LabelPipeline:           isdf.pipelineName,
-				metrics.LabelVertexType:         string(dfv1.VertexTypeMapUDF),
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)),
-			}).Inc()
+			metrics.PlatformError.With(metricLabels).Inc()
 		}
 		return nil, fmt.Errorf("failed to applyUDF, error: %w", err)
 	}
 
-	metrics.UDFProcessingTime.With(map[string]string{
-		metrics.LabelVertex:             isdf.vertexName,
-		metrics.LabelPipeline:           isdf.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeMapUDF),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(isdf.vertexReplica)),
-	}).Observe(float64(time.Since(start).Microseconds()))
+	metrics.UDFProcessingTime.With(metricLabels).Observe(float64(time.Since(start).Microseconds()))
 
 	return writeOffsets, nil
 }

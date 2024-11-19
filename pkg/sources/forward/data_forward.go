@@ -193,23 +193,21 @@ func (df *DataForward) Start() <-chan error {
 // the message after forwarding, barring any platform errors. The platform errors include buffer-full,
 // buffer-not-reachable, etc., but do not include errors due to user code transformer, WhereTo, etc.
 func (df *DataForward) forwardAChunk(ctx context.Context) error {
+	// Initialize metric labels
+	replicaIndex := strconv.Itoa(int(df.vertexReplica))
+	vertexType := string(dfv1.VertexTypeSource)
+	metricLabels := map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: vertexType, metrics.LabelVertexReplicaIndex: replicaIndex}
+	metricLabelsWithPartition := map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: vertexType, metrics.LabelVertexReplicaIndex: replicaIndex, metrics.LabelPartitionName: df.reader.GetName()}
+	// Initialize forwardAChunk and read start times
 	start := time.Now()
+	readStart := time.Now()
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
 	// at-least-once semantics for reading, during the restart we will have to reprocess all unacknowledged messages. It is the
 	// responsibility of the Read function to do that.
-	// Add read processing time measurement
-	readStart := time.Now()
 	readMessages, err := df.reader.Read(ctx, df.opts.readBatchSize)
 	if err != nil {
 		df.opts.logger.Warnw("failed to read from source", zap.Error(err))
-		metrics.ReadMessagesError.With(map[string]string{
-			metrics.LabelVertex:             df.vertexName,
-			metrics.LabelPipeline:           df.pipelineName,
-			metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-			metrics.LabelPartitionName:      df.reader.GetName(),
-		}).Inc()
-
+		metrics.ReadMessagesError.With(metricLabelsWithPartition).Inc()
 		// if the error is not retryable, we should return the error.
 		var readErr = new(errors2.SourceReadErr)
 		if errors.As(err, &readErr) {
@@ -260,53 +258,24 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 	}
 
 	// Only expose read processing time metric when there are messages and no error
-	metrics.ReadProcessingTime.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.reader.GetName(),
-	}).Observe(float64(time.Since(readStart).Microseconds()))
+	metrics.ReadProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(readStart).Microseconds()))
 	// reset the idle handler because we have read messages
 	df.srcIdleHandler.Reset()
-
 	// store the offsets of the messages we read from source
 	var readOffsets = make([]isb.Offset, len(readMessages))
 	for idx, m := range readMessages {
+		mssgLabels := map[string]string{
+			metrics.LabelVertex:             df.vertexName,
+			metrics.LabelPipeline:           df.pipelineName,
+			metrics.LabelVertexType:         vertexType,
+			metrics.LabelVertexReplicaIndex: replicaIndex,
+			metrics.LabelPartitionName:      strconv.Itoa(int(m.ReadOffset.PartitionIdx())),
+		}
 		totalBytes := len(m.Payload)
-
-		metrics.ReadDataMessagesCount.With(map[string]string{
-			metrics.LabelVertex:             df.vertexName,
-			metrics.LabelPipeline:           df.pipelineName,
-			metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-			metrics.LabelPartitionName:      strconv.Itoa(int(m.ReadOffset.PartitionIdx())),
-		}).Inc()
-
-		metrics.ReadMessagesCount.With(map[string]string{
-			metrics.LabelVertex:             df.vertexName,
-			metrics.LabelPipeline:           df.pipelineName,
-			metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-			metrics.LabelPartitionName:      strconv.Itoa(int(m.ReadOffset.PartitionIdx())),
-		}).Inc()
-
-		metrics.ReadBytesCount.With(map[string]string{
-			metrics.LabelVertex:             df.vertexName,
-			metrics.LabelPipeline:           df.pipelineName,
-			metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-			metrics.LabelPartitionName:      strconv.Itoa(int(m.ReadOffset.PartitionIdx())),
-		}).Add(float64(totalBytes))
-
-		metrics.ReadDataBytesCount.With(map[string]string{
-			metrics.LabelVertex:             df.vertexName,
-			metrics.LabelPipeline:           df.pipelineName,
-			metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-			metrics.LabelPartitionName:      strconv.Itoa(int(m.ReadOffset.PartitionIdx())),
-		}).Add(float64(totalBytes))
-
+		metrics.ReadDataMessagesCount.With(mssgLabels).Inc()
+		metrics.ReadMessagesCount.With(mssgLabels).Inc()
+		metrics.ReadBytesCount.With(mssgLabels).Add(float64(totalBytes))
+		metrics.ReadDataBytesCount.With(mssgLabels).Add(float64(totalBytes))
 		readOffsets[idx] = m.ReadOffset
 	}
 
@@ -343,14 +312,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 			zap.Duration("took", time.Since(transformerProcessingStart)),
 		)
 
-		metrics.SourceTransformerProcessingTime.With(map[string]string{
-			metrics.LabelVertex:             df.vertexName,
-			metrics.LabelPipeline:           df.pipelineName,
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-			metrics.LabelPartitionName:      df.reader.GetName(),
-		}).Observe(float64(time.Since(transformerProcessingStart).Microseconds()))
+		metrics.SourceTransformerProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexReplicaIndex: replicaIndex, metrics.LabelPartitionName: df.reader.GetName()}).Observe(float64(time.Since(transformerProcessingStart).Microseconds()))
 	} else {
-
 		for idx, m := range readMessages {
 			// assign watermark to the message
 			m.Watermark = time.Time(processorWM)
@@ -416,13 +379,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 		df.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
 		return err
 	}
-	metrics.WriteProcessingTime.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.reader.GetName(),
-	}).Observe(float64(time.Since(writeStart).Microseconds()))
+	metrics.WriteProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(writeStart).Microseconds()))
 
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
@@ -487,13 +444,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 	// implicit return for posterity :-)
 	if err != nil {
 		df.opts.logger.Errorw("failed to ack from source", zap.Error(err))
-		metrics.AckMessageError.With(map[string]string{
-			metrics.LabelVertex:             df.vertexName,
-			metrics.LabelPipeline:           df.pipelineName,
-			metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-			metrics.LabelPartitionName:      df.reader.GetName(),
-		}).Add(float64(len(readOffsets)))
+		metrics.AckMessageError.With(metricLabelsWithPartition).Add(float64(len(readOffsets)))
 		// if the error is not retryable, we should return the error.
 		var ackErr = new(errors2.SourceAckErr)
 		if errors.As(err, &ackErr) {
@@ -504,20 +455,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 		return nil
 	}
 	// Only expose ack processing time metric when there is no error
-	metrics.AckProcessingTime.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.reader.GetName(),
-	}).Observe(float64(time.Since(ackStart).Microseconds()))
-	metrics.AckMessagesCount.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.reader.GetName(),
-	}).Add(float64(len(readOffsets)))
+	metrics.AckProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(ackStart).Microseconds()))
+	metrics.AckMessagesCount.With(metricLabelsWithPartition).Add(float64(len(readOffsets)))
 
 	if df.opts.cbPublisher != nil {
 		if err := df.opts.cbPublisher.NonSinkVertexCallback(ctx, readWriteMessagePairs); err != nil {
@@ -526,12 +465,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 	}
 
 	// ProcessingTimes of the entire forwardAChunk
-	metrics.ForwardAChunkProcessingTime.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-	}).Observe(float64(time.Since(start).Microseconds()))
+	metrics.ForwardAChunkProcessingTime.With(metricLabels).Observe(float64(time.Since(start).Microseconds()))
 	return nil
 }
 

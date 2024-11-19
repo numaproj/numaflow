@@ -283,17 +283,15 @@ func (df *DataForward) replayForAlignedWindows(ctx context.Context, discoveredWA
 // forwardAChunk reads a chunk of messages from isb and assigns watermark to messages
 // and writes the windowRequests to pbq
 func (df *DataForward) forwardAChunk(ctx context.Context) {
+	// Initialize metric labels
+	metricLabelsWithPartition := map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeReduceUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}
+
 	readMessages, err := df.fromBufferPartition.Read(ctx, df.opts.readBatchSize)
 	totalBytes := 0
 	dataBytes := 0
 	if err != nil {
 		df.log.Errorw("Failed to read from isb", zap.Error(err))
-		metrics.ReadMessagesError.With(map[string]string{
-			metrics.LabelVertex:             df.vertexName,
-			metrics.LabelPipeline:           df.pipelineName,
-			metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-			metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-			metrics.LabelPartitionName:      df.fromBufferPartition.GetName()}).Inc()
+		metrics.ReadMessagesError.With(metricLabelsWithPartition).Inc()
 	}
 
 	// idle watermark
@@ -373,21 +371,9 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
-	metrics.ReadBytesCount.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
-	}).Add(float64(totalBytes))
+	metrics.ReadBytesCount.With(metricLabelsWithPartition).Add(float64(totalBytes))
 
-	metrics.ReadDataBytesCount.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
-	}).Add(float64(dataBytes))
+	metrics.ReadDataBytesCount.With(metricLabelsWithPartition).Add(float64(dataBytes))
 
 	// readMessages has to be written to PBQ, acked, etc.
 	df.process(ctx, readMessages)
@@ -448,6 +434,9 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 	var dataMessages = make([]*isb.ReadMessage, 0, len(messages))
 	var ctrlMessages = make([]*isb.ReadMessage, 0) // for a high TPS pipeline, 0 is the most optimal value
 
+	// Initialize metric labels
+	metricLabelsWithPartition := map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeReduceUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}
+
 	for _, message := range messages {
 		if message.Kind == isb.Data {
 			dataMessages = append(dataMessages, message)
@@ -456,20 +445,8 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 		}
 	}
 
-	metrics.ReadDataMessagesCount.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
-	}).Add(float64(len(dataMessages)))
-	metrics.ReadMessagesCount.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
-	}).Add(float64(len(messages)))
+	metrics.ReadDataMessagesCount.With(metricLabelsWithPartition).Add(float64(len(dataMessages)))
+	metrics.ReadMessagesCount.With(metricLabelsWithPartition).Add(float64(len(messages)))
 
 	// write messages to windows based by PBQs.
 	successfullyWrittenMessages, failedMessages, err := df.writeMessagesToWindows(ctx, dataMessages)
