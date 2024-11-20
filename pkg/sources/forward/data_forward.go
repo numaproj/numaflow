@@ -269,7 +269,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 			metrics.LabelPipeline:           df.pipelineName,
 			metrics.LabelVertexType:         vertexType,
 			metrics.LabelVertexReplicaIndex: replicaIndex,
-			metrics.LabelPartitionName:      strconv.Itoa(int(m.ReadOffset.PartitionIdx())),
+			metrics.LabelPartitionName:      "source-partition-" + strconv.Itoa(int(m.ReadOffset.PartitionIdx())),
 		}
 		totalBytes := len(m.Payload)
 		metrics.ReadDataMessagesCount.With(mssgLabels).Inc()
