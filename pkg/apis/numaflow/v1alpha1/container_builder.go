@@ -16,7 +16,10 @@ limitations under the License.
 
 package v1alpha1
 
-import corev1 "k8s.io/api/core/v1"
+import (
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
+)
 
 type containerBuilder corev1.Container
 
@@ -82,6 +85,11 @@ func (b containerBuilder) appendVolumeMounts(x ...corev1.VolumeMount) containerB
 
 func (b containerBuilder) resources(x corev1.ResourceRequirements) containerBuilder {
 	b.Resources = x
+	return b
+}
+
+func (b containerBuilder) asSidecar() containerBuilder {
+	b.RestartPolicy = ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways)
 	return b
 }
 

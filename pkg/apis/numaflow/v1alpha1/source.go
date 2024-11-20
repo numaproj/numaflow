@@ -45,17 +45,18 @@ type Source struct {
 	Serving *ServingSource `json:"serving,omitempty" protobuf:"bytes,8,opt,name=serving"`
 }
 
-func (s Source) getContainers(req getContainerReq) ([]corev1.Container, error) {
+func (s Source) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
 	containers := []corev1.Container{
 		s.getMainContainer(req),
 	}
+	sidecarContainers := []corev1.Container{}
 	if s.UDTransformer != nil {
-		containers = append(containers, s.getUDTransformerContainer(req))
+		sidecarContainers = append(sidecarContainers, s.getUDTransformerContainer(req))
 	}
 	if s.UDSource != nil {
-		containers = append(containers, s.getUDSourceContainer(req))
+		sidecarContainers = append(sidecarContainers, s.getUDSourceContainer(req))
 	}
-	return containers, nil
+	return sidecarContainers, containers, nil
 }
 
 func (s Source) getMainContainer(req getContainerReq) corev1.Container {
@@ -69,7 +70,7 @@ func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) core
 	c := containerBuilder{}.
 		name(CtrUdtransformer).
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
-		appendVolumeMounts(mainContainerReq.volumeMounts...)
+		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
 	c = c.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerTransformer})
 	if x := s.UDTransformer.Container; x != nil && x.Image != "" { // customized image
 		c = c.image(x.Image)
@@ -133,7 +134,7 @@ func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Co
 	c := containerBuilder{}.
 		name(CtrUdsource).
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
-		appendVolumeMounts(mainContainerReq.volumeMounts...)
+		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
 	c = c.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerSource})
 	if x := s.UDSource.Container; x != nil && x.Image != "" { // customized image
 		c = c.image(x.Image)
