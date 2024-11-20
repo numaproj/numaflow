@@ -4,18 +4,12 @@ use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use crate::config::{config, lookback_window_map};
-use crate::source::SourceHandle;
-use crate::Error;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
@@ -29,6 +23,14 @@ use tokio::time;
 use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{debug, error, info};
+
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+
+use crate::config::lookback_window_map;
+use crate::source::SourceHandle;
+use crate::Error;
 
 pub const COMPONENT_MVTX: &str = "mono-vertex";
 
@@ -800,12 +802,13 @@ mod tests {
     use std::net::SocketAddr;
     use std::time::Instant;
 
-    use super::*;
-    use crate::config::LookbackStruct;
-    use crate::shared::utils::create_rpc_channel;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
     use tokio::sync::mpsc::Sender;
+
+    use crate::shared::utils::create_rpc_channel;
+
+    use super::*;
 
     struct SimpleSource;
     #[tonic::async_trait]

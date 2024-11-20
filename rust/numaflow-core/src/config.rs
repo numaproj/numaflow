@@ -1,14 +1,9 @@
-use futures::future::Lazy;
-use log::info;
-use monovertex::MonovertexConfig;
-use parking_lot::lock_api::MutexGuard;
-use parking_lot::RawMutex;
-use prometheus_client::registry::Registry;
 use std::env;
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
+
+use monovertex::MonovertexConfig;
 
 use crate::config::pipeline::PipelineConfig;
-use crate::metrics::GlobalMetrics;
 use crate::Error;
 use crate::Result;
 

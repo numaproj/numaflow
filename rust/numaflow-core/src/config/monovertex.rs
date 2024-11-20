@@ -1,18 +1,18 @@
 use std::time::Duration;
 
-use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use serde_json::from_slice;
 
 use numaflow_models::models::MonoVertex;
 
-use crate::config::components::{sink, source};
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::source::{GeneratorConfig, SourceConfig};
 use crate::config::components::transformer::{
     TransformerConfig, TransformerType, UserDefinedConfig,
 };
+use crate::config::components::{sink, source};
 use crate::error::Error;
 use crate::message::get_vertex_replica;
 use crate::Result;
@@ -155,8 +155,8 @@ impl MonovertexConfig {
 
 #[cfg(test)]
 mod tests {
-    use base64::Engine;
     use base64::prelude::BASE64_STANDARD;
+    use base64::Engine;
 
     use crate::config::components::sink::SinkType;
     use crate::config::components::source::SourceType;

@@ -430,6 +430,7 @@ mod tests {
                 lag_check_interval_in_secs: 5,
                 lag_refresh_interval_in_secs: 3,
             },
+            lookback_seconds: 120,
         };
 
         let cancellation_token = tokio_util::sync::CancellationToken::new();
@@ -585,6 +586,7 @@ mod tests {
                 lag_check_interval_in_secs: 5,
                 lag_refresh_interval_in_secs: 3,
             },
+            lookback_seconds: 120,
         };
 
         let cancellation_token = tokio_util::sync::CancellationToken::new();
