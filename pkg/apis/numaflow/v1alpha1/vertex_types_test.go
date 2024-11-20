@@ -472,7 +472,16 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, 3, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 		assert.Equal(t, CtrInitSideInputs, s.InitContainers[1].Name)
+		assert.Equal(t, 1, len(s.InitContainers[1].VolumeMounts))
+		assert.Equal(t, "var-run-side-inputs", s.InitContainers[1].VolumeMounts[0].Name)
+		assert.False(t, s.InitContainers[1].VolumeMounts[0].ReadOnly)
 		assert.Equal(t, CtrUdf, s.InitContainers[2].Name)
+		assert.Equal(t, 2, len(s.InitContainers[2].VolumeMounts))
+		assert.Equal(t, "var-run-side-inputs", s.InitContainers[2].VolumeMounts[1].Name)
+		assert.True(t, s.InitContainers[2].VolumeMounts[1].ReadOnly)
+		assert.Equal(t, 1, len(s.Containers[1].VolumeMounts))
+		assert.Equal(t, "var-run-side-inputs", s.Containers[1].VolumeMounts[0].Name)
+		assert.False(t, s.Containers[1].VolumeMounts[0].ReadOnly)
 	})
 
 	t.Run("test serving source", func(t *testing.T) {

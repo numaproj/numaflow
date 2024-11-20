@@ -324,14 +324,11 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		if x := v.Spec.SideInputsContainerTemplate; x != nil {
 			x.ApplyToContainer(&sideInputsWatcher)
 		}
+		sideInputsWatcher.VolumeMounts = append(sideInputsWatcher.VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 		containers = append(containers, sideInputsWatcher)
-		for i := 1; i < len(containers); i++ {
-			if containers[i].Name == CtrSideInputsWatcher {
-				containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
-			} else {
-				// Readonly mount for user-defined containers
-				containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
-			}
+		for i := 0; i < len(sidecarContainers); i++ {
+			// Readonly mount for user-defined containers
+			sidecarContainers[i].VolumeMounts = append(sidecarContainers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
 		}
 		// Side Inputs init container
 		initContainers[1].VolumeMounts = append(initContainers[1].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
