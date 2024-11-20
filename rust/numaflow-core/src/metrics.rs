@@ -4,6 +4,9 @@ use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
+use crate::config::{config, lookback_window_map};
+use crate::source::SourceHandle;
+use crate::Error;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Response, StatusCode};
@@ -26,9 +29,6 @@ use tokio::time;
 use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{debug, error, info};
-
-use crate::source::SourceHandle;
-use crate::Error;
 
 pub const COMPONENT_MVTX: &str = "mono-vertex";
 
@@ -730,9 +730,6 @@ async fn fetch_pending(lag_reader: &SourceHandle) -> crate::error::Result<i64> {
     Ok(response)
 }
 
-const LOOKBACK_SECONDS_MAP: [(&str, i64); 4] =
-    [("1m", 60), ("default", 120), ("5m", 300), ("15m", 900)];
-
 // Periodically exposes the pending metrics by calculating the average pending messages over different intervals.
 async fn expose_pending_metrics(
     mvtx_name: String,
@@ -746,9 +743,11 @@ async fn expose_pending_metrics(
     // string concat is more efficient?
     let mut pending_info: BTreeMap<&str, i64> = BTreeMap::new();
 
+    let lookback_window_map = lookback_window_map();
+
     loop {
         ticker.tick().await;
-        for (label, seconds) in LOOKBACK_SECONDS_MAP {
+        for (label, seconds) in lookback_window_map.get_map() {
             let pending = calculate_pending(seconds, &pending_stats).await;
             if pending != -1 {
                 let mut metric_labels =
@@ -760,6 +759,7 @@ async fn expose_pending_metrics(
                     .get_or_create(&metric_labels)
                     .set(pending);
             }
+            info!("MYDEBUG LOOKBACK {} {}", label, seconds);
         }
         // skip for those the pending is not implemented
         if !pending_info.is_empty() {
@@ -801,12 +801,12 @@ mod tests {
     use std::net::SocketAddr;
     use std::time::Instant;
 
+    use super::*;
+    use crate::config::LookbackStruct;
+    use crate::shared::utils::create_rpc_channel;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
     use tokio::sync::mpsc::Sender;
-
-    use super::*;
-    use crate::shared::utils::create_rpc_channel;
 
     struct SimpleSource;
     #[tonic::async_trait]
@@ -995,15 +995,17 @@ mod tests {
                     .await;
             }
         });
+
         // We use tokio::time::interval() as the ticker in the expose_pending_metrics() function.
         // The first tick happens immediately, so we don't need to wait for the refresh_interval for the first iteration to complete.
         tokio::time::sleep(Duration::from_millis(50)).await;
 
+        let lookback_window_map = lookback_window_map();
         // Get the stored values for all time intervals
         // We will store the values corresponding to the labels (from LOOKBACK_SECONDS_MAP) "1m", "default", "5m", "15" in the same order in this array
         let mut stored_values: [i64; 4] = [0; 4];
         {
-            for (i, (label, _)) in LOOKBACK_SECONDS_MAP.iter().enumerate() {
+            for (i, (label, _)) in lookback_window_map.get_map().iter().enumerate() {
                 let mut metric_labels = mvtx_forward_metric_labels("test".to_string(), 0).clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
                 let guage = forward_mvtx_metrics()

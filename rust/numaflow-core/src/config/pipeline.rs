@@ -18,6 +18,7 @@ use crate::Result;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
+const DEFAULT_LOOKBACK_SECONDS: i64 = 120;
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
@@ -38,6 +39,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) to_vertex_config: Vec<ToVertexConfig>,
     pub(crate) vertex_config: VertexType,
     pub(crate) metrics_config: MetricsConfig,
+    pub(crate) lookback_seconds: i64,
 }
 
 impl Default for PipelineConfig {
@@ -57,6 +59,7 @@ impl Default for PipelineConfig {
                 transformer_config: None,
             }),
             metrics_config: Default::default(),
+            lookback_seconds: DEFAULT_LOOKBACK_SECONDS,
         }
     }
 }
@@ -263,6 +266,13 @@ impl PipelineConfig {
             });
         }
 
+        let look_back_window = vertex_obj
+            .spec
+            .scale
+            .as_ref()
+            .and_then(|scale| scale.lookback_seconds.map(|x| x as i64))
+            .unwrap_or(DEFAULT_LOOKBACK_SECONDS);
+
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
             paf_batch_size: env::var("PAF_BATCH_SIZE")
@@ -278,6 +288,7 @@ impl PipelineConfig {
             to_vertex_config,
             vertex_config: vertex,
             metrics_config: Default::default(),
+            lookback_seconds: look_back_window,
         })
     }
 }
@@ -305,6 +316,7 @@ mod tests {
                 transformer_config: None,
             }),
             metrics_config: Default::default(),
+            lookback_seconds: DEFAULT_LOOKBACK_SECONDS,
         };
 
         let config = PipelineConfig::default();
@@ -370,6 +382,7 @@ mod tests {
                 lag_check_interval_in_secs: 5,
                 lag_refresh_interval_in_secs: 3,
             },
+            lookback_seconds: DEFAULT_LOOKBACK_SECONDS,
         };
         assert_eq!(pipeline_config, expected);
     }
@@ -422,6 +435,7 @@ mod tests {
                 transformer_config: None,
             }),
             metrics_config: Default::default(),
+            lookback_seconds: DEFAULT_LOOKBACK_SECONDS,
         };
 
         assert_eq!(pipeline_config, expected);

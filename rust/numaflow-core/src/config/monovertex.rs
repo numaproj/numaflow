@@ -1,10 +1,5 @@
 use std::time::Duration;
 
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
-use numaflow_models::models::MonoVertex;
-use serde_json::from_slice;
-
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::source::{GeneratorConfig, SourceConfig};
@@ -15,9 +10,15 @@ use crate::config::components::{sink, source};
 use crate::error::Error;
 use crate::message::get_vertex_replica;
 use crate::Result;
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use numaflow_models::models::MonoVertex;
+use serde_json::from_slice;
+use tracing::info;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
+const DEFAULT_LOOKBACK_SECONDS: i64 = 120;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MonovertexConfig {
@@ -30,6 +31,7 @@ pub(crate) struct MonovertexConfig {
     pub(crate) transformer_config: Option<TransformerConfig>,
     pub(crate) fb_sink_config: Option<SinkConfig>,
     pub(crate) metrics_config: MetricsConfig,
+    pub(crate) lookback_seconds: i64,
 }
 
 impl Default for MonovertexConfig {
@@ -49,6 +51,7 @@ impl Default for MonovertexConfig {
             transformer_config: None,
             fb_sink_config: None,
             metrics_config: MetricsConfig::default(),
+            lookback_seconds: DEFAULT_LOOKBACK_SECONDS,
         }
     }
 }
@@ -127,12 +130,23 @@ impl MonovertexConfig {
             None
         };
 
+        info!("MONOBERT: {:?}", mono_vertex_obj);
+
+        let look_back_window = mono_vertex_obj
+            .spec
+            .scale
+            .as_ref()
+            .and_then(|scale| scale.lookback_seconds.map(|x| x as i64))
+            .unwrap_or(DEFAULT_LOOKBACK_SECONDS);
+        info!("Lookback window: {:?}", look_back_window);
+
         Ok(MonovertexConfig {
             name: mono_vertex_name,
             replica: *get_vertex_replica(),
             batch_size: batch_size as usize,
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
             metrics_config: MetricsConfig::default(),
+            lookback_seconds: look_back_window,
             source_config,
             sink_config,
             transformer_config,

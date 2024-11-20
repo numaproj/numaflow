@@ -1,9 +1,14 @@
-use std::env;
-use std::sync::OnceLock;
-
+use futures::future::Lazy;
+use log::info;
 use monovertex::MonovertexConfig;
+use parking_lot::lock_api::MutexGuard;
+use parking_lot::RawMutex;
+use prometheus_client::registry::Registry;
+use std::env;
+use std::sync::{Mutex, OnceLock};
 
 use crate::config::pipeline::PipelineConfig;
+use crate::metrics::GlobalMetrics;
 use crate::Error;
 use crate::Result;
 
@@ -42,6 +47,46 @@ pub(crate) struct Settings {
     pub(crate) custom_resource_type: CustomResourceType,
 }
 
+/// LookbackStruct is a struct to hold the lookback window map for the monovertex/pipeline.
+#[derive(Default)]
+pub(crate) struct LookbackStruct {
+    // It is okay to use std mutex because we register each metric only one time.
+    window_map: parking_lot::Mutex<[(&'static str, i64); 4]>,
+}
+
+impl LookbackStruct {
+    fn new() -> Self {
+        let default_map = [("1m", 60), ("default", 120), ("5m", 300), ("15m", 900)];
+        LookbackStruct {
+            // create a new entry map with default values
+            window_map: parking_lot::Mutex::new(default_map),
+        }
+    }
+    /// Update the lookback window value for the default entry
+    fn update_lookback(&self, lookback: i64) {
+        for entry in self.window_map.lock().iter_mut() {
+            if entry.0 == "default" {
+                entry.1 = lookback;
+                return;
+            }
+        }
+    }
+    /// Provides a reference to the entries array
+    pub(crate) fn get_map(&self) -> [(&'static str, i64); 4] {
+        *self.window_map.lock()
+    }
+}
+
+/// LOOKBACK_MAP is the static lookback window map which is initialized only once.
+/// This is initialized with default values, and then allows for updating the lookback window
+/// for the default entry based on the CRD.
+static LOOKBACK_MAP: OnceLock<LookbackStruct> = OnceLock::new();
+
+/// lookback_window_map is a helper function to get the global LOOKBACK_MAP
+pub(crate) fn lookback_window_map() -> &'static LookbackStruct {
+    LOOKBACK_MAP.get_or_init(LookbackStruct::new)
+}
+
 impl Settings {
     /// load based on the CRD type, either a pipeline or a monovertex.
     /// Settings are populated through reading the env vars set via the controller. The main
@@ -49,6 +94,8 @@ impl Settings {
     fn load() -> Result<Self> {
         if let Ok(obj) = env::var(ENV_MONO_VERTEX_OBJ) {
             let cfg = MonovertexConfig::load(obj)?;
+            // Update the lookback window map with the lookback seconds from the CRD
+            lookback_window_map().update_lookback(cfg.lookback_seconds);
             return Ok(Settings {
                 custom_resource_type: CustomResourceType::MonoVertex(cfg),
             });
@@ -56,6 +103,8 @@ impl Settings {
 
         if let Ok(obj) = env::var(ENV_VERTEX_OBJ) {
             let cfg = PipelineConfig::load(obj, env::vars())?;
+            // Update the lookback window map with the lookback seconds from the CRD
+            lookback_window_map().update_lookback(cfg.lookback_seconds);
             return Ok(Settings {
                 custom_resource_type: CustomResourceType::Pipeline(cfg),
             });
