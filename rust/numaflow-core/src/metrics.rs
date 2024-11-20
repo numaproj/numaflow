@@ -759,7 +759,6 @@ async fn expose_pending_metrics(
                     .get_or_create(&metric_labels)
                     .set(pending);
             }
-            info!("MYDEBUG LOOKBACK {} {}", label, seconds);
         }
         // skip for those the pending is not implemented
         if !pending_info.is_empty() {

@@ -318,7 +318,7 @@ func (mv MonoVertex) simpleCopy() MonoVertex {
 
 func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, error) {
 	copiedSpec := mv.simpleCopy()
-	copiedSpec.Spec.Scale = Scale{}
+	copiedSpec.Spec.Scale = Scale{LookbackSeconds: mv.Spec.Scale.LookbackSeconds}
 	monoVtxBytes, err := json.Marshal(copiedSpec)
 	if err != nil {
 		return nil, errors.New("failed to marshal mono vertex spec")
