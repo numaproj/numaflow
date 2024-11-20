@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 )
 
 var (
@@ -49,6 +50,7 @@ func Test_containerBuilder(t *testing.T) {
 		appendEnv(corev1.EnvVar{
 			Name: "env", Value: "value"}).
 		appendPorts(corev1.ContainerPort{Name: "port", ContainerPort: 8080}).
+		asSidecar().
 		build()
 	assert.Equal(t, "numa", c.Name)
 	assert.Len(t, c.VolumeMounts, 1)
@@ -58,4 +60,5 @@ func Test_containerBuilder(t *testing.T) {
 	assert.Equal(t, corev1.PullIfNotPresent, c.ImagePullPolicy)
 	assert.Equal(t, []corev1.EnvVar{{Name: "env", Value: "value"}}, c.Env)
 	assert.Equal(t, []corev1.ContainerPort{{Name: "port", ContainerPort: 8080}}, c.Ports)
+	assert.Equal(t, ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways), c.RestartPolicy)
 }
