@@ -152,6 +152,10 @@ func (p Pipeline) GetAllBuffers() []string {
 
 func (p Pipeline) GetAllBuckets() []string {
 	r := []string{}
+	// watermark is disabled, no need to generate bucket names
+	if p.Spec.Watermark.Disabled {
+		return r
+	}
 	for _, e := range p.ListAllEdges() {
 		r = append(r, GenerateEdgeBucketName(p.Namespace, p.Name, e.From, e.To))
 	}

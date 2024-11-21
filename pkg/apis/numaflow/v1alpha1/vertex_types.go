@@ -513,10 +513,14 @@ func (v Vertex) OwnedBuffers() []string {
 // GetFromBuckets returns the buckets that the vertex reads from.
 // For a source vertex, it returns the source bucket name.
 func (v Vertex) GetFromBuckets() []string {
+	r := []string{}
+	// watermark is disabled, no need to generate bucket names
+	if v.Spec.Watermark.Disabled {
+		return r
+	}
 	if v.IsASource() {
 		return []string{GenerateSourceBucketName(v.Namespace, v.Spec.PipelineName, v.Spec.Name)}
 	}
-	r := []string{}
 	for _, vt := range v.Spec.FromEdges {
 		r = append(r, GenerateEdgeBucketName(v.Namespace, v.Spec.PipelineName, vt.From, vt.To))
 	}
@@ -526,10 +530,14 @@ func (v Vertex) GetFromBuckets() []string {
 // GetToBuckets returns the buckets that the vertex writes to.
 // For a sink vertex, it returns the sink bucket name.
 func (v Vertex) GetToBuckets() []string {
+	r := []string{}
+	// watermark is disabled, no need to generate bucket names
+	if v.Spec.Watermark.Disabled {
+		return r
+	}
 	if v.IsASink() {
 		return []string{GenerateSinkBucketName(v.Namespace, v.Spec.PipelineName, v.Spec.Name)}
 	}
-	r := []string{}
 	for _, vt := range v.Spec.ToEdges {
 		r = append(r, GenerateEdgeBucketName(v.Namespace, v.Spec.PipelineName, vt.From, vt.To))
 	}
