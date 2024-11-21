@@ -15,7 +15,7 @@ use crate::config::pipeline::PipelineConfig;
 use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::pipeline::isb::jetstream::WriterHandle;
-use crate::shared::server_info::check_for_server_compatibility;
+use crate::shared::server_info::sdk_server_info;
 use crate::shared::utils;
 use crate::shared::utils::{
     create_rpc_channel, start_metrics_server, wait_until_source_ready, wait_until_transformer_ready,
@@ -231,11 +231,14 @@ async fn create_source_type(
             ))
         }
         SourceType::UserDefined(udsource_config) => {
-            check_for_server_compatibility(
+            _ = sdk_server_info(
                 udsource_config.server_info_path.clone().into(),
                 cln_token.clone(),
             )
             .await?;
+
+            // TODO: Add sdk info metric
+
             let mut source_grpc_client = SourceClient::new(
                 create_rpc_channel(udsource_config.socket_path.clone().into()).await?,
             )
@@ -267,11 +270,10 @@ async fn create_transformer(
         if let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
             &transformer_config.transformer_type
         {
-            check_for_server_compatibility(
-                ud_transformer.socket_path.clone().into(),
-                cln_token.clone(),
-            )
-            .await?;
+            _ = sdk_server_info(ud_transformer.socket_path.clone().into(), cln_token.clone())
+                .await?;
+            // TODO: Add sdk info metric
+
             let mut transformer_grpc_client = SourceTransformClient::new(
                 create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
             )

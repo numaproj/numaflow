@@ -1407,11 +1407,11 @@ func getMonoVertices(h *handler, namespace string) (MonoVertices, error) {
 func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
 	retStatus := dfv1.PipelineStatusHealthy
 	// Check if the pipeline is paused, if so, return inactive status
-	if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused {
+	if pipeline.GetDesiredPhase() == dfv1.PipelinePhasePaused {
 		retStatus = dfv1.PipelineStatusInactive
-	} else if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhaseRunning {
+	} else if pipeline.GetDesiredPhase() == dfv1.PipelinePhaseRunning {
 		retStatus = dfv1.PipelineStatusHealthy
-	} else if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhaseFailed {
+	} else if pipeline.GetDesiredPhase() == dfv1.PipelinePhaseFailed {
 		retStatus = dfv1.PipelineStatusCritical
 	}
 	return retStatus, nil

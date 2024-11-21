@@ -164,13 +164,13 @@ func Test_BuildPodSpec(t *testing.T) {
 		testObj := testMonoVtx.DeepCopy()
 		spec, err := r.buildPodSpec(testObj)
 		assert.NoError(t, err)
-		assert.Equal(t, 5, len(spec.Containers))
+		assert.Equal(t, 1, len(spec.Containers))
 		assert.Equal(t, dfv1.CtrMain, spec.Containers[0].Name)
-		assert.Equal(t, dfv1.CtrUdsource, spec.Containers[1].Name)
-		assert.Equal(t, dfv1.CtrUdtransformer, spec.Containers[2].Name)
-		assert.Equal(t, dfv1.CtrUdsink, spec.Containers[3].Name)
-		assert.Equal(t, dfv1.CtrFallbackUdsink, spec.Containers[4].Name)
-		assert.Equal(t, 0, len(spec.InitContainers))
+		assert.Equal(t, 4, len(spec.InitContainers))
+		assert.Equal(t, dfv1.CtrUdsource, spec.InitContainers[0].Name)
+		assert.Equal(t, dfv1.CtrUdtransformer, spec.InitContainers[1].Name)
+		assert.Equal(t, dfv1.CtrUdsink, spec.InitContainers[2].Name)
+		assert.Equal(t, dfv1.CtrFallbackUdsink, spec.InitContainers[3].Name)
 	})
 
 	t.Run("test no transformer, no fallback sink", func(t *testing.T) {
@@ -179,11 +179,11 @@ func Test_BuildPodSpec(t *testing.T) {
 		testObj.Spec.Sink.Fallback = nil
 		spec, err := r.buildPodSpec(testObj)
 		assert.NoError(t, err)
-		assert.Equal(t, 3, len(spec.Containers))
+		assert.Equal(t, 1, len(spec.Containers))
 		assert.Equal(t, dfv1.CtrMain, spec.Containers[0].Name)
-		assert.Equal(t, dfv1.CtrUdsource, spec.Containers[1].Name)
-		assert.Equal(t, dfv1.CtrUdsink, spec.Containers[2].Name)
-		assert.Equal(t, 0, len(spec.InitContainers))
+		assert.Equal(t, 2, len(spec.InitContainers))
+		assert.Equal(t, dfv1.CtrUdsource, spec.InitContainers[0].Name)
+		assert.Equal(t, dfv1.CtrUdsink, spec.InitContainers[1].Name)
 	})
 }
 

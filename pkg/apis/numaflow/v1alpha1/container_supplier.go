@@ -29,5 +29,6 @@ type getContainerReq struct {
 }
 
 type containerSupplier interface {
-	getContainers(req getContainerReq) ([]corev1.Container, error)
+	// getContainers returns the sidecar containers and main containers for the vertex.
+	getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error)
 }

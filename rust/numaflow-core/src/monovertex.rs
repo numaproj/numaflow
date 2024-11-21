@@ -10,7 +10,7 @@ use crate::config::components::{sink, source, transformer};
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self, Error};
 use crate::metrics;
-use crate::shared::server_info::check_for_server_compatibility;
+use crate::shared::server_info::{sdk_server_info, ContainerType};
 use crate::shared::utils;
 use crate::shared::utils::{
     create_rpc_channel, wait_until_sink_ready, wait_until_source_ready,
@@ -38,11 +38,23 @@ pub(crate) async fn start_forwarder(
         &config.source_config.source_type
     {
         // do server compatibility check
-        check_for_server_compatibility(
+        let server_info = sdk_server_info(
             source_config.server_info_path.clone().into(),
             cln_token.clone(),
         )
         .await?;
+
+        let metric_labels = metrics::sdk_info_labels(
+            metrics::COMPONENT_MVTX.to_string(),
+            config.name.clone(),
+            server_info.language,
+            server_info.version,
+            ContainerType::Sourcer.to_string(),
+        );
+        metrics::global_metrics()
+            .sdk_info
+            .get_or_create(&metric_labels)
+            .set(1);
 
         let mut source_grpc_client =
             SourceClient::new(create_rpc_channel(source_config.socket_path.clone().into()).await?)
@@ -59,11 +71,23 @@ pub(crate) async fn start_forwarder(
         &config.sink_config.sink_type
     {
         // do server compatibility check
-        check_for_server_compatibility(
+        let server_info = sdk_server_info(
             udsink_config.server_info_path.clone().into(),
             cln_token.clone(),
         )
         .await?;
+
+        let metric_labels = metrics::sdk_info_labels(
+            metrics::COMPONENT_MVTX.to_string(),
+            config.name.clone(),
+            server_info.language,
+            server_info.version,
+            ContainerType::Sinker.to_string(),
+        );
+        metrics::global_metrics()
+            .sdk_info
+            .get_or_create(&metric_labels)
+            .set(1);
 
         let mut sink_grpc_client =
             SinkClient::new(create_rpc_channel(udsink_config.socket_path.clone().into()).await?)
@@ -79,11 +103,23 @@ pub(crate) async fn start_forwarder(
     let fb_sink_grpc_client = if let Some(fb_sink) = &config.fb_sink_config {
         if let sink::SinkType::UserDefined(fb_sink_config) = &fb_sink.sink_type {
             // do server compatibility check
-            check_for_server_compatibility(
+            let server_info = sdk_server_info(
                 fb_sink_config.server_info_path.clone().into(),
                 cln_token.clone(),
             )
             .await?;
+
+            let metric_labels = metrics::sdk_info_labels(
+                metrics::COMPONENT_MVTX.to_string(),
+                config.name.clone(),
+                server_info.language,
+                server_info.version,
+                ContainerType::FbSinker.to_string(),
+            );
+            metrics::global_metrics()
+                .sdk_info
+                .get_or_create(&metric_labels)
+                .set(1);
 
             let mut fb_sink_grpc_client = SinkClient::new(
                 create_rpc_channel(fb_sink_config.socket_path.clone().into()).await?,
@@ -105,11 +141,24 @@ pub(crate) async fn start_forwarder(
             &transformer.transformer_type
         {
             // do server compatibility check
-            check_for_server_compatibility(
+            let server_info = sdk_server_info(
                 transformer_config.server_info_path.clone().into(),
                 cln_token.clone(),
             )
             .await?;
+
+            let metric_labels = metrics::sdk_info_labels(
+                metrics::COMPONENT_MVTX.to_string(),
+                config.name.clone(),
+                server_info.language,
+                server_info.version,
+                ContainerType::SourceTransformer.to_string(),
+            );
+
+            metrics::global_metrics()
+                .sdk_info
+                .get_or_create(&metric_labels)
+                .set(1);
 
             let mut transformer_grpc_client = SourceTransformClient::new(
                 create_rpc_channel(transformer_config.socket_path.clone().into()).await?,
