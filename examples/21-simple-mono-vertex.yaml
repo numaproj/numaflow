@@ -1,3 +1,5 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
 metadata:
   name: simple-mono-without-stream
 spec:

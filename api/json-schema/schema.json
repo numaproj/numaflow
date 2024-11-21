@@ -20922,8 +20922,13 @@
     "io.numaproj.numaflow.v1alpha1.Lifecycle": {
       "properties": {
         "deleteGracePeriodSeconds": {
-          "description": "DeleteGracePeriodSeconds used to delete pipeline gracefully",
-          "format": "int32",
+          "description": "DeleteGracePeriodSeconds used to delete pipeline gracefully Deprecated: Use DeletionGracePeriodSeconds instead",
+          "format": "int64",
+          "type": "integer"
+        },
+        "deletionGracePeriodSeconds": {
+          "description": "DeletionGracePeriodSeconds used to delete pipeline gracefully",
+          "format": "int64",
           "type": "integer"
         },
         "desiredPhase": {
@@ -20932,7 +20937,7 @@
         },
         "pauseGracePeriodSeconds": {
           "description": "PauseGracePeriodSeconds used to pause pipeline gracefully",
-          "format": "int32",
+          "format": "int64",
           "type": "integer"
         }
       },

@@ -2968,11 +2968,11 @@ func schema_pkg_apis_numaflow_v1alpha1_Lifecycle(ref common.ReferenceCallback) c
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"deleteGracePeriodSeconds": {
+					"deletionGracePeriodSeconds": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DeleteGracePeriodSeconds used to delete pipeline gracefully",
+							Description: "DeletionGracePeriodSeconds used to delete pipeline gracefully",
 							Type:        []string{"integer"},
-							Format:      "int32",
+							Format:      "int64",
 						},
 					},
 					"desiredPhase": {
@@ -2986,7 +2986,14 @@ func schema_pkg_apis_numaflow_v1alpha1_Lifecycle(ref common.ReferenceCallback) c
 						SchemaProps: spec.SchemaProps{
 							Description: "PauseGracePeriodSeconds used to pause pipeline gracefully",
 							Type:        []string{"integer"},
-							Format:      "int32",
+							Format:      "int64",
+						},
+					},
+					"deleteGracePeriodSeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DeleteGracePeriodSeconds used to delete pipeline gracefully Deprecated: Use DeletionGracePeriodSeconds instead",
+							Type:        []string{"integer"},
+							Format:      "int64",
 						},
 					},
 				},

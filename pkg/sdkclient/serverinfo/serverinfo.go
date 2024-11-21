@@ -67,9 +67,9 @@ func waitForServerInfo(timeout time.Duration, filePath string) (*ServerInfo, err
 	minNumaflowVersion := serverInfo.MinimumNumaflowVersion
 	sdkLanguage := serverInfo.Language
 	numaflowVersion := numaflow.GetVersion().Version
-	containerType, err := getContainerType(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get container type: %w", err)
+	containerType := getContainerType(filePath)
+	if containerType == ContainerTypeUnknown {
+		return nil, fmt.Errorf("unknown container type")
 	}
 
 	// If MinimumNumaflowVersion is empty, skip the numaflow compatibility check as there was an
@@ -221,11 +221,15 @@ func checkSDKCompatibility(sdkVersion string, sdkLanguage Language, containerTyp
 
 // getContainerType returns the container type from the server info file path
 // serverInfoFilePath is in the format of "/var/run/numaflow/{ContainerType}-server-info"
-func getContainerType(serverInfoFilePath string) (ContainerType, error) {
+func getContainerType(serverInfoFilePath string) ContainerType {
 	splits := strings.Split(serverInfoFilePath, "/")
-	if containerType := strings.TrimSuffix(splits[len(splits)-1], "-server-info"); containerType == "" {
-		return "", fmt.Errorf("failed to get container type from server info file path: %s", serverInfoFilePath)
-	} else {
-		return ContainerType(containerType), nil
+	containerType := ContainerType(strings.TrimSuffix(splits[len(splits)-1], "-server-info"))
+	switch containerType {
+	case ContainerTypeSourcer, ContainerTypeSourcetransformer, ContainerTypeSinker, ContainerTypeMapper,
+		ContainerTypeReducer, ContainerTypeReducestreamer, ContainerTypeSessionreducer,
+		ContainerTypeSideinput, ContainerTypeFbsinker:
+		return containerType
+	default:
+		return ContainerTypeUnknown
 	}
 }
