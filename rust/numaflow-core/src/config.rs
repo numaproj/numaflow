@@ -45,7 +45,6 @@ pub(crate) struct Settings {
 /// LookbackStruct is a struct to hold the lookback window map for the monovertex/pipeline.
 #[derive(Default)]
 pub(crate) struct LookbackStruct {
-    // It is okay to use std mutex because we register each metric only one time.
     window_map: parking_lot::Mutex<[(&'static str, i64); 4]>,
 }
 
