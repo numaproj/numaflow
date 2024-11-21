@@ -27,7 +27,7 @@ import (
 
 func Test_Sink_getContainers(t *testing.T) {
 	s := Sink{}
-	c, err := s.getContainers(getContainerReq{
+	sc, c, err := s.getContainers(getContainerReq{
 		env: []corev1.EnvVar{
 			{Name: "test-env", Value: "test-val"},
 		},
@@ -37,6 +37,7 @@ func Test_Sink_getContainers(t *testing.T) {
 		resources:       corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}},
 	})
 	assert.NoError(t, err)
+	assert.Equal(t, 0, len(sc))
 	assert.Equal(t, 1, len(c))
 	assert.Equal(t, testFlowImage, c[0].Image)
 	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, c[0].Resources)
@@ -89,6 +90,7 @@ func Test_Sink_getUDSinkContainer(t *testing.T) {
 	assert.Equal(t, int32(15), c.LivenessProbe.TimeoutSeconds)
 	assert.Equal(t, int32(14), c.LivenessProbe.PeriodSeconds)
 	assert.Equal(t, int32(5), c.LivenessProbe.FailureThreshold)
+	assert.Equal(t, ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways), c.RestartPolicy)
 }
 
 func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
@@ -151,4 +153,5 @@ func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
 	})
 	assert.Equal(t, testImagePullPolicy, c.ImagePullPolicy)
 	assert.True(t, c.LivenessProbe != nil)
+	assert.Equal(t, ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways), c.RestartPolicy)
 }

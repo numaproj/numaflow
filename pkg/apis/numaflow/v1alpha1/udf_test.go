@@ -49,36 +49,39 @@ func TestUDF_getContainers(t *testing.T) {
 			},
 		},
 	}
-	c, err := x.getContainers(getContainerReq{
+	sc, c, err := x.getContainers(getContainerReq{
 		image:           "main-image",
 		imagePullPolicy: corev1.PullAlways,
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, 2, len(c))
+	assert.Equal(t, 1, len(c))
+	assert.Equal(t, 1, len(sc))
 	assert.Equal(t, "main-image", c[0].Image)
-	assert.Equal(t, x.Container.Image, c[1].Image)
-	assert.Contains(t, c[1].VolumeMounts, c[1].VolumeMounts[0])
-	assert.Equal(t, x.Container.Command, c[1].Command)
-	assert.Equal(t, x.Container.Args, c[1].Args)
+	assert.Equal(t, x.Container.Image, sc[0].Image)
+	assert.Contains(t, sc[0].VolumeMounts, sc[0].VolumeMounts[0])
+	assert.Equal(t, x.Container.Command, sc[0].Command)
+	assert.Equal(t, x.Container.Args, sc[0].Args)
 	envs := map[string]string{}
-	for _, e := range c[1].Env {
+	for _, e := range sc[0].Env {
 		envs[e.Name] = e.Value
 	}
 	assert.Equal(t, envs[EnvUDContainerType], UDContainerFunction)
-	assert.Equal(t, 1, len(c[1].EnvFrom))
-	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, c[1].Resources)
-	assert.Equal(t, corev1.PullAlways, c[1].ImagePullPolicy)
+	assert.Equal(t, 1, len(sc[0].EnvFrom))
+	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, sc[0].Resources)
+	assert.Equal(t, corev1.PullAlways, sc[0].ImagePullPolicy)
 	x.Container.ImagePullPolicy = &testImagePullPolicy
-	c, _ = x.getContainers(getContainerReq{
+	sc, c, _ = x.getContainers(getContainerReq{
 		image:           "main-image",
 		imagePullPolicy: corev1.PullAlways,
 	})
-	assert.Equal(t, testImagePullPolicy, c[1].ImagePullPolicy)
-	assert.True(t, c[1].LivenessProbe != nil)
-	assert.Equal(t, int32(10), c[1].LivenessProbe.InitialDelaySeconds)
-	assert.Equal(t, int32(15), c[1].LivenessProbe.TimeoutSeconds)
-	assert.Equal(t, int32(14), c[1].LivenessProbe.PeriodSeconds)
-	assert.Equal(t, int32(5), c[1].LivenessProbe.FailureThreshold)
+	assert.Equal(t, 1, len(c))
+	assert.Equal(t, 1, len(sc))
+	assert.Equal(t, testImagePullPolicy, sc[0].ImagePullPolicy)
+	assert.True(t, sc[0].LivenessProbe != nil)
+	assert.Equal(t, int32(10), sc[0].LivenessProbe.InitialDelaySeconds)
+	assert.Equal(t, int32(15), sc[0].LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(14), sc[0].LivenessProbe.PeriodSeconds)
+	assert.Equal(t, int32(5), sc[0].LivenessProbe.FailureThreshold)
 }
 
 func Test_getUDFContainer(t *testing.T) {
@@ -110,6 +113,7 @@ func Test_getUDFContainer(t *testing.T) {
 			envs[e.Name] = e.Value
 		}
 		assert.Equal(t, envs[EnvUDContainerType], UDContainerFunction)
+		assert.Equal(t, ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways), c.RestartPolicy)
 	})
 
 	t.Run("with built-in functions", func(t *testing.T) {
