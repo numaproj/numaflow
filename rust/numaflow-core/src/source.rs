@@ -1,9 +1,9 @@
-use tokio::sync::{mpsc, oneshot};
-
 use crate::{
     message::{Message, Offset},
     reader::LagReader,
 };
+use numaflow_pulsar::source::PulsarSource;
+use tokio::sync::{mpsc, oneshot};
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -14,7 +14,7 @@ pub(crate) mod user_defined;
 ///
 /// [Generator]: https://numaflow.numaproj.io/user-guide/sources/generator/
 pub(crate) mod generator;
-mod pulsar;
+pub(crate) mod pulsar;
 
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
@@ -124,6 +124,19 @@ impl SourceHandle {
                     }
                 });
             }
+            SourceType::Pulsar(pulsar_source) => {
+                tokio::spawn(async move {
+                    let mut actor = SourceActor::new(
+                        receiver,
+                        pulsar_source.clone(),
+                        pulsar_source.clone(),
+                        pulsar_source,
+                    );
+                    while let Some(msg) = actor.receiver.recv().await {
+                        actor.handle_message(msg).await;
+                    }
+                });
+            }
         };
         Self { sender }
     }
@@ -176,4 +189,5 @@ pub(crate) enum SourceType {
         generator::GeneratorAck,
         generator::GeneratorLagReader,
     ),
+    Pulsar(PulsarSource),
 }

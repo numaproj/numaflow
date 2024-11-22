@@ -21,10 +21,8 @@ prost = "0.13.2"
 prost-types = "0.13.1"
 chrono = "0.4.31"
 base64 = "0.22.1"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 hyper-util = "0.1.6"
 tower = "0.4.13"
-uuid = { version = "1.10.0", features = ["v4"] }
 serde_json = "1.0.122"
 numaflow-models = { path = "../numaflow-models" }
 numaflow-pb = { path = "../numaflow-pb" }
@@ -43,6 +41,7 @@ futures = "0.3.30"
 pin-project = "1.1.5"
 rand = "0.8.5"
 async-nats = "0.37.0"
+numaflow-pulsar = {path = "../numaflow-extns/pulsar"}
 
 [dev-dependencies]
 tempfile = "3.11.0"

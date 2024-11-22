@@ -1,14 +1,3 @@
-use async_nats::jetstream::Context;
-use async_nats::{jetstream, ConnectOptions};
-use futures::future::try_join_all;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use std::collections::HashMap;
-use std::time::Duration;
-use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
-
 use crate::config::components::source::SourceType;
 use crate::config::pipeline;
 use crate::config::pipeline::PipelineConfig;
@@ -22,9 +11,20 @@ use crate::shared::utils::{
 };
 use crate::sink::SinkWriter;
 use crate::source::generator::new_generator;
+use crate::source::pulsar::new_pulsar_source;
 use crate::source::user_defined::new_source;
 use crate::transformer::user_defined::SourceTransformHandle;
 use crate::{config, error, source, Result};
+use async_nats::jetstream::Context;
+use async_nats::{jetstream, ConnectOptions};
+use futures::future::try_join_all;
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use std::collections::HashMap;
+use std::time::Duration;
+use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
 
 mod forwarder;
 mod isb;
@@ -256,6 +256,15 @@ async fn create_source_type(
                 Some(source_grpc_client),
             ))
         }
+        SourceType::Pulsar(pulsar_config) => {
+            let pulsar_source = new_pulsar_source(
+                pulsar_config.clone(),
+                config.batch_size,
+                config.read_timeout,
+            )
+            .await?;
+            Ok((source::SourceType::Pulsar(pulsar_source), None))
+        }
     }
 }
 /// Creates a transformer if it is configured in the pipeline
@@ -296,7 +305,6 @@ async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Re
         .max_reconnects(None) // -1 for unlimited reconnects
         .ping_interval(Duration::from_secs(3))
         .max_reconnects(None)
-        .ping_interval(Duration::from_secs(3))
         .retry_on_initial_connect();
 
     if let (Some(user), Some(password)) = (config.user, config.password) {

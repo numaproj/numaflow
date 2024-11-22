@@ -71,6 +71,7 @@ pub(crate) struct Message {
 pub(crate) enum Offset {
     Int(IntOffset),
     String(StringOffset),
+    Bytes(Bytes),
 }
 
 impl fmt::Display for Offset {
@@ -78,6 +79,7 @@ impl fmt::Display for Offset {
         match self {
             Offset::Int(offset) => write!(f, "{}", offset),
             Offset::String(offset) => write!(f, "{}", offset),
+            Offset::Bytes(_) => write!(f, "<-encoded-raw-bytes->"), //FIXME:
         }
     }
 }
@@ -219,6 +221,10 @@ impl TryFrom<Offset> for numaflow_pb::clients::source::Offset {
                     .decode(o.offset)
                     .expect("we control the encoding, so this should never fail"),
                 partition_id: o.partition_idx as i32,
+            }),
+            Offset::Bytes(offset) => Ok(numaflow_pb::clients::source::Offset {
+                offset: offset.into(),
+                partition_id: 1,
             }),
         }
     }

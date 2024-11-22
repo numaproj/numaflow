@@ -17,7 +17,6 @@ name = "numaflow"
 version = "0.1.0"
 edition = "2021"
 
-
 [dependencies]
 tokio = "1.39.2"
 backoff = { path = "backoff" }

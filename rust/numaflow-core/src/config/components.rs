@@ -29,6 +29,7 @@ pub(crate) mod source {
     pub(crate) enum SourceType {
         Generator(GeneratorConfig),
         UserDefined(UserDefinedConfig),
+        Pulsar(PulsarSourceConfig),
     }
 
     impl TryFrom<Box<Source>> for SourceType {
@@ -117,6 +118,14 @@ pub(crate) mod source {
                 server_info_path: DEFAULT_SOURCE_SERVER_INFO_FILE.to_string(),
             }
         }
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct PulsarSourceConfig {
+        pub(crate) pulsar_server_addr: String,
+        pub(crate) topic: String,
+        pub(crate) consumer_name: String,
+        pub(crate) subscription: String,
     }
 }
 
