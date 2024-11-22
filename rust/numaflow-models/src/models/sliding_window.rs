@@ -18,6 +18,8 @@ limitations under the License.
 
 /// SlidingWindow : SlidingWindow describes a sliding window
 
+
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SlidingWindow {
     #[serde(rename = "length", skip_serializing_if = "Option::is_none")]
@@ -39,3 +41,5 @@ impl SlidingWindow {
         }
     }
 }
+
+

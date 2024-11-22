@@ -18,16 +18,15 @@ limitations under the License.
 
 /// Probe : Probe is used to customize the configuration for Readiness and Liveness probes.
 
+
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Probe {
     /// Minimum consecutive failures for the probe to be considered failed after having succeeded. Defaults to 3. Minimum value is 1.
     #[serde(rename = "failureThreshold", skip_serializing_if = "Option::is_none")]
     pub failure_threshold: Option<i32>,
     /// Number of seconds after the container has started before liveness probes are initiated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
-    #[serde(
-        rename = "initialDelaySeconds",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "initialDelaySeconds", skip_serializing_if = "Option::is_none")]
     pub initial_delay_seconds: Option<i32>,
     /// How often (in seconds) to perform the probe.
     #[serde(rename = "periodSeconds", skip_serializing_if = "Option::is_none")]
@@ -52,3 +51,5 @@ impl Probe {
         }
     }
 }
+
+

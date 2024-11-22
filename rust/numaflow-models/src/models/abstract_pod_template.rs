@@ -18,15 +18,14 @@ limitations under the License.
 
 /// AbstractPodTemplate : AbstractPodTemplate provides a template for pod customization in vertices, daemon deployments and so on.
 
+
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AbstractPodTemplate {
     #[serde(rename = "affinity", skip_serializing_if = "Option::is_none")]
     pub affinity: Option<k8s_openapi::api::core::v1::Affinity>,
     /// AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.
-    #[serde(
-        rename = "automountServiceAccountToken",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "automountServiceAccountToken", skip_serializing_if = "Option::is_none")]
     pub automount_service_account_token: Option<bool>,
     #[serde(rename = "dnsConfig", skip_serializing_if = "Option::is_none")]
     pub dns_config: Option<k8s_openapi::api::core::v1::PodDNSConfig>,
@@ -84,3 +83,5 @@ impl AbstractPodTemplate {
         }
     }
 }
+
+

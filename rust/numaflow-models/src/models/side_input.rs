@@ -18,6 +18,8 @@ limitations under the License.
 
 /// SideInput : SideInput defines information of a Side Input
 
+
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SideInput {
     #[serde(rename = "container")]
@@ -32,11 +34,7 @@ pub struct SideInput {
 
 impl SideInput {
     /// SideInput defines information of a Side Input
-    pub fn new(
-        container: crate::models::Container,
-        name: String,
-        trigger: crate::models::SideInputTrigger,
-    ) -> SideInput {
+    pub fn new(container: crate::models::Container, name: String, trigger: crate::models::SideInputTrigger) -> SideInput {
         SideInput {
             container: Box::new(container),
             name,
@@ -45,3 +43,5 @@ impl SideInput {
         }
     }
 }
+
+

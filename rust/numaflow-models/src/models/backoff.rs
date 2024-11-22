@@ -18,6 +18,8 @@ limitations under the License.
 
 /// Backoff : Backoff defines parameters used to systematically configure the retry strategy.
 
+
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Backoff {
     #[serde(rename = "interval", skip_serializing_if = "Option::is_none")]
@@ -36,3 +38,5 @@ impl Backoff {
         }
     }
 }
+
+

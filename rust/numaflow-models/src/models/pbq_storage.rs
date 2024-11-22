@@ -18,16 +18,15 @@ limitations under the License.
 
 /// PbqStorage : PBQStorage defines the persistence configuration for a vertex.
 
+
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PbqStorage {
     #[serde(rename = "emptyDir", skip_serializing_if = "Option::is_none")]
     pub empty_dir: Option<k8s_openapi::api::core::v1::EmptyDirVolumeSource>,
     #[serde(rename = "no_store", skip_serializing_if = "Option::is_none")]
     pub no_store: Option<Box<crate::models::NoStore>>,
-    #[serde(
-        rename = "persistentVolumeClaim",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "persistentVolumeClaim", skip_serializing_if = "Option::is_none")]
     pub persistent_volume_claim: Option<Box<crate::models::PersistenceStrategy>>,
 }
 
@@ -41,3 +40,5 @@ impl PbqStorage {
         }
     }
 }
+
+

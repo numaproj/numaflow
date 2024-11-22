@@ -18,6 +18,8 @@ limitations under the License.
 
 /// CombinedEdge : CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits. It's used to decorate the fromEdges and toEdges of the generated Vertex objects, so that in the vertex pod, it knows the properties of the connected vertices, for example, how many partitioned buffers I should write to, what is the write buffer length, etc.
 
+
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CombinedEdge {
     #[serde(rename = "conditions", skip_serializing_if = "Option::is_none")]
@@ -27,10 +29,7 @@ pub struct CombinedEdge {
     #[serde(rename = "fromVertexLimits", skip_serializing_if = "Option::is_none")]
     pub from_vertex_limits: Option<Box<crate::models::VertexLimits>>,
     /// The number of partitions of the from vertex, if not provided, the default value is set to \"1\".
-    #[serde(
-        rename = "fromVertexPartitionCount",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "fromVertexPartitionCount", skip_serializing_if = "Option::is_none")]
     pub from_vertex_partition_count: Option<i32>,
     /// From vertex type.
     #[serde(rename = "fromVertexType")]
@@ -43,10 +42,7 @@ pub struct CombinedEdge {
     #[serde(rename = "toVertexLimits", skip_serializing_if = "Option::is_none")]
     pub to_vertex_limits: Option<Box<crate::models::VertexLimits>>,
     /// The number of partitions of the to vertex, if not provided, the default value is set to \"1\".
-    #[serde(
-        rename = "toVertexPartitionCount",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "toVertexPartitionCount", skip_serializing_if = "Option::is_none")]
     pub to_vertex_partition_count: Option<i32>,
     /// To vertex type.
     #[serde(rename = "toVertexType")]
@@ -55,12 +51,7 @@ pub struct CombinedEdge {
 
 impl CombinedEdge {
     /// CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits. It's used to decorate the fromEdges and toEdges of the generated Vertex objects, so that in the vertex pod, it knows the properties of the connected vertices, for example, how many partitioned buffers I should write to, what is the write buffer length, etc.
-    pub fn new(
-        from: String,
-        from_vertex_type: String,
-        to: String,
-        to_vertex_type: String,
-    ) -> CombinedEdge {
+    pub fn new(from: String, from_vertex_type: String, to: String, to_vertex_type: String) -> CombinedEdge {
         CombinedEdge {
             conditions: None,
             from,
@@ -75,3 +66,5 @@ impl CombinedEdge {
         }
     }
 }
+
+

@@ -18,6 +18,8 @@ limitations under the License.
 
 /// InterStepBufferServiceList : InterStepBufferServiceList is the list of InterStepBufferService resources
 
+
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct InterStepBufferServiceList {
     /// APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
@@ -34,10 +36,7 @@ pub struct InterStepBufferServiceList {
 
 impl InterStepBufferServiceList {
     /// InterStepBufferServiceList is the list of InterStepBufferService resources
-    pub fn new(
-        items: Vec<crate::models::InterStepBufferService>,
-        metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ListMeta,
-    ) -> InterStepBufferServiceList {
+    pub fn new(items: Vec<crate::models::InterStepBufferService>, metadata: k8s_openapi::apimachinery::pkg::apis::meta::v1::ListMeta) -> InterStepBufferServiceList {
         InterStepBufferServiceList {
             api_version: None,
             items,
@@ -46,3 +45,5 @@ impl InterStepBufferServiceList {
         }
     }
 }
+
+

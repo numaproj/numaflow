@@ -18,6 +18,8 @@ limitations under the License.
 
 /// Status : Status is a common structure which can be used for Status field.
 
+
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Status {
     /// Conditions are the latest available observations of a resource's current state.
@@ -28,6 +30,10 @@ pub struct Status {
 impl Status {
     /// Status is a common structure which can be used for Status field.
     pub fn new() -> Status {
-        Status { conditions: None }
+        Status {
+            conditions: None,
+        }
     }
 }
+
+

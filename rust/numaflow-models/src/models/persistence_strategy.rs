@@ -18,6 +18,8 @@ limitations under the License.
 
 /// PersistenceStrategy : PersistenceStrategy defines the strategy of persistence
 
+
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PersistenceStrategy {
     /// Available access modes such as ReadWriteOnce, ReadWriteMany https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
@@ -40,3 +42,5 @@ impl PersistenceStrategy {
         }
     }
 }
+
+
