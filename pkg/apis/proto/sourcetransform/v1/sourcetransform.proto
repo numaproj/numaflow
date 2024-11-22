@@ -28,21 +28,35 @@ service SourceTransform {
   // SourceTransformFn applies a function to each request element.
   // In addition to map function, SourceTransformFn also supports assigning a new event time to response.
   // SourceTransformFn can be used only at source vertex by source data transformer.
-  rpc SourceTransformFn(SourceTransformRequest) returns (SourceTransformResponse);
+  rpc SourceTransformFn(stream SourceTransformRequest) returns (stream SourceTransformResponse);
 
   // IsReady is the heartbeat endpoint for gRPC.
   rpc IsReady(google.protobuf.Empty) returns (ReadyResponse);
+}
+
+/*
+ * Handshake message between client and server to indicate the start of transmission.
+ */
+ message Handshake {
+  // Required field indicating the start of transmission.
+  bool sot = 1;
 }
 
 /**
  * SourceTransformerRequest represents a request element.
  */
 message SourceTransformRequest {
-  repeated string keys = 1;
-  bytes value = 2;
-  google.protobuf.Timestamp event_time = 3;
-  google.protobuf.Timestamp watermark = 4;
-  map<string, string> headers = 5;
+  message Request {
+    repeated string keys = 1;
+    bytes value = 2;
+    google.protobuf.Timestamp event_time = 3;
+    google.protobuf.Timestamp watermark = 4;
+    map<string, string> headers = 5;
+    // This ID is used to uniquely identify a transform request
+    string id = 6;
+  }
+  Request request = 1;
+  optional Handshake handshake = 2;
 }
 
 /**
@@ -56,6 +70,10 @@ message SourceTransformResponse {
     repeated string tags = 4;
   }
   repeated Result results = 1;
+  // This ID is used to refer the responses to the request it corresponds to.
+  string id = 2;
+  // Handshake message between client and server to indicate the start of transmission.
+  optional Handshake handshake = 3;
 }
 
 /**

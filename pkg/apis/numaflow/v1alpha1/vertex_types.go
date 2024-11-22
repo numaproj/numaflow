@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/env"
 	"k8s.io/utils/ptr"
 )
 
@@ -240,14 +241,15 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		},
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
-
-	containers, err := v.Spec.getType().getContainers(getContainerReq{
-		isbSvcType:      req.ISBSvcType,
-		env:             envVars,
-		image:           req.Image,
-		imagePullPolicy: req.PullPolicy,
-		resources:       req.DefaultResources,
-		volumeMounts:    volumeMounts,
+	executeRustBinary, _ := env.GetBool(EnvExecuteRustBinary, false)
+	sidecarContainers, containers, err := v.Spec.getType().getContainers(getContainerReq{
+		isbSvcType:        req.ISBSvcType,
+		env:               envVars,
+		image:             req.Image,
+		imagePullPolicy:   req.PullPolicy,
+		resources:         req.DefaultResources,
+		volumeMounts:      volumeMounts,
+		executeRustBinary: executeRustBinary,
 	})
 	if err != nil {
 		return nil, err
@@ -296,11 +298,9 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		{Name: VertexMetricsPortName, ContainerPort: VertexMetricsPort},
 	}
 
-	if len(containers) > 1 { // udf, udsink, udsource, or source vertex specifies a udtransformer
-		for i := 1; i < len(containers); i++ {
-			containers[i].Env = append(containers[i].Env, v.commonEnvs()...)
-			containers[i].Env = append(containers[i].Env, v.sidecarEnvs()...)
-		}
+	for i := 0; i < len(sidecarContainers); i++ { // udf, udsink, udsource, or source vertex specifies a udtransformer
+		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.commonEnvs()...)
+		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.sidecarEnvs()...)
 	}
 
 	initContainers := v.getInitContainers(req)
@@ -324,18 +324,18 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		if x := v.Spec.SideInputsContainerTemplate; x != nil {
 			x.ApplyToContainer(&sideInputsWatcher)
 		}
+		sideInputsWatcher.VolumeMounts = append(sideInputsWatcher.VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 		containers = append(containers, sideInputsWatcher)
-		for i := 1; i < len(containers); i++ {
-			if containers[i].Name == CtrSideInputsWatcher {
-				containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
-			} else {
-				// Readonly mount for user-defined containers
-				containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
-			}
+		for i := 0; i < len(sidecarContainers); i++ {
+			// Readonly mount for user-defined containers
+			sidecarContainers[i].VolumeMounts = append(sidecarContainers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
 		}
 		// Side Inputs init container
 		initContainers[1].VolumeMounts = append(initContainers[1].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 	}
+
+	// Add the sidecar containers
+	initContainers = append(initContainers, sidecarContainers...)
 
 	if v.IsASource() && v.Spec.Source.Serving != nil {
 		servingContainer, err := v.getServingContainer(req)

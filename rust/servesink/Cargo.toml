@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tonic = "0.12.0"
+tonic = "0.12.3"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "0c1682864a4b906fab52e149cfd7cacc679ce688" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "ddd879588e11455921f1ca958ea2b3c076689293" }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 

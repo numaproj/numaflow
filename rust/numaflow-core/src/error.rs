@@ -4,36 +4,46 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug, Clone)]
 pub enum Error {
-    #[error("Metrics Error - {0}")]
-    MetricsError(String),
+    #[error("metrics Error - {0}")]
+    Metrics(String),
 
     #[error("Source Error - {0}")]
-    SourceError(String),
+    Source(String),
 
     #[error("Sink Error - {0}")]
-    SinkError(String),
+    Sink(String),
 
     #[error("Transformer Error - {0}")]
-    TransformerError(String),
+    Transformer(String),
 
     #[error("Forwarder Error - {0}")]
-    ForwarderError(String),
+    Forwarder(String),
 
     #[error("Connection Error - {0}")]
-    ConnectionError(String),
+    Connection(String),
 
     #[error("gRPC Error - {0}")]
-    GRPCError(String),
+    Grpc(String),
 
     #[error("Config Error - {0}")]
-    ConfigError(String),
+    Config(String),
 
-    #[error("ServerInfoError Error - {0}")]
-    ServerInfoError(String),
+    #[error("ServerInfo Error - {0}")]
+    ServerInfo(String),
+
+    #[error("Proto Error - {0}")]
+    Proto(String),
+
+    #[allow(clippy::upper_case_acronyms)]
+    #[error("ISB Error - {0}")]
+    ISB(String),
+
+    #[error("OneShot Receiver Error - {0}")]
+    ActorPatternRecv(String),
 }
 
 impl From<tonic::Status> for Error {
     fn from(status: tonic::Status) -> Self {
-        Error::GRPCError(status.to_string())
+        Error::Grpc(status.to_string())
     }
 }

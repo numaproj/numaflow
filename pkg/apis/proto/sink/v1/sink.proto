@@ -45,14 +45,11 @@ message SinkRequest {
     string id = 5;
     map<string, string> headers = 6;
   }
-  message Status {
-    bool eot = 1;
-  }
   // Required field indicating the request.
   Request request = 1;
   // Required field indicating the status of the request.
   // If eot is set to true, it indicates the end of transmission.
-  Status status = 2;
+  TransmissionStatus status = 2;
   // optional field indicating the handshake message.
   optional Handshake handshake = 3;
 }
@@ -70,6 +67,13 @@ message Handshake {
  */
 message ReadyResponse {
   bool ready = 1;
+}
+
+/**
+ * TransmissionStatus is the status of the transmission.
+ */
+message TransmissionStatus {
+  bool eot = 1;
 }
 
 /*
@@ -93,6 +97,7 @@ message SinkResponse {
     // err_msg is the error message, set it if success is set to false.
     string err_msg = 3;
   }
-  Result result = 1;
+  repeated Result results = 1;
   optional Handshake handshake = 2;
+  optional TransmissionStatus status = 3;
 }

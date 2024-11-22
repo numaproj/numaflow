@@ -1,11 +1,13 @@
+use std::net::SocketAddr;
+
+use axum_server::tls_rustls::RustlsConfig;
+use tracing::info;
+
 pub use self::error::{Error, Result};
 use crate::app::start_main_server;
 use crate::config::{cert_key_pair, config};
 use crate::metrics::start_https_metrics_server;
 use crate::pipeline::min_pipeline_spec;
-use axum_server::tls_rustls::RustlsConfig;
-use std::net::SocketAddr;
-use tracing::info;
 
 mod app;
 mod config;

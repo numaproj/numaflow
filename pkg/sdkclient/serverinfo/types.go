@@ -32,15 +32,16 @@ type ContainerType string
 // the string content matches the corresponding server info file name.
 // DO NOT change it unless the server info file name is changed.
 const (
-	sourcer           ContainerType = "sourcer"
-	sourcetransformer ContainerType = "sourcetransformer"
-	sinker            ContainerType = "sinker"
-	mapper            ContainerType = "mapper"
-	reducer           ContainerType = "reducer"
-	reducestreamer    ContainerType = "reducestreamer"
-	sessionreducer    ContainerType = "sessionreducer"
-	sideinput         ContainerType = "sideinput"
-	fbsinker          ContainerType = "fb-sinker"
+	ContainerTypeSourcer           ContainerType = "sourcer"
+	ContainerTypeSourcetransformer ContainerType = "sourcetransformer"
+	ContainerTypeSinker            ContainerType = "sinker"
+	ContainerTypeMapper            ContainerType = "mapper"
+	ContainerTypeReducer           ContainerType = "reducer"
+	ContainerTypeReducestreamer    ContainerType = "reducestreamer"
+	ContainerTypeSessionreducer    ContainerType = "sessionreducer"
+	ContainerTypeSideinput         ContainerType = "sideinput"
+	ContainerTypeFbsinker          ContainerType = "fb-sinker"
+	ContainerTypeUnknown           ContainerType = "unknown"
 )
 
 type sdkConstraints map[Language]map[ContainerType]string
@@ -81,58 +82,57 @@ This is because the go semver library considers pre-releases to be invalid if th
 Therefore, we have to put a pre-release version of the stable version in the map and choose the largest one.
 For python, we use "rc100" as the largest pre-release version. For go, rust, we use "-z" as the largest pre-release version.
 E.g., if the minimum supported version is "0.8.0", then put "0.8.0-z" for java, go, rust, "0.8.0rc100" for python.
-A constraint ">=0.8.0-z" will match any pre-release version of 0.8.0, including "0.8.0-rc1", "0.8.0-rc2", etc.
 
 More details about version comparison can be found in the PEP 440 and semver documentation.
 */
 var minimumSupportedSDKVersions = sdkConstraints{
 	Python: map[ContainerType]string{
-		// meaning the minimum supported python SDK version is 0.8.0
-		sourcer:           "0.8.0rc100",
-		sourcetransformer: "0.8.0rc100",
-		sinker:            "0.8.0rc100",
-		mapper:            "0.8.0rc100",
-		reducer:           "0.8.0rc100",
-		reducestreamer:    "0.8.0rc100",
-		sessionreducer:    "0.8.0rc100",
-		sideinput:         "0.8.0rc100",
-		fbsinker:          "0.8.0rc100",
+		// meaning the minimum supported python SDK version is 0.9.0
+		ContainerTypeSourcer:           "0.9.0rc100",
+		ContainerTypeSourcetransformer: "0.9.0rc100",
+		ContainerTypeSinker:            "0.9.0rc100",
+		ContainerTypeMapper:            "0.9.0rc100",
+		ContainerTypeReducer:           "0.9.0rc100",
+		ContainerTypeReducestreamer:    "0.9.0rc100",
+		ContainerTypeSessionreducer:    "0.9.0rc100",
+		ContainerTypeSideinput:         "0.9.0rc100",
+		ContainerTypeFbsinker:          "0.9.0rc100",
 	},
 	Go: map[ContainerType]string{
-		// meaning the minimum supported go SDK version is 0.8.0
-		sourcer:           "0.8.0-z",
-		sourcetransformer: "0.8.0-z",
-		sinker:            "0.8.0-z",
-		mapper:            "0.8.0-z",
-		reducer:           "0.8.0-z",
-		reducestreamer:    "0.8.0-z",
-		sessionreducer:    "0.8.0-z",
-		sideinput:         "0.8.0-z",
-		fbsinker:          "0.8.0-z",
+		// meaning the minimum supported go SDK version is 0.9.0
+		ContainerTypeSourcer:           "0.9.0-z",
+		ContainerTypeSourcetransformer: "0.9.0-z",
+		ContainerTypeSinker:            "0.9.0-z",
+		ContainerTypeMapper:            "0.9.0-z",
+		ContainerTypeReducer:           "0.9.0-z",
+		ContainerTypeReducestreamer:    "0.9.0-z",
+		ContainerTypeSessionreducer:    "0.9.0-z",
+		ContainerTypeSideinput:         "0.9.0-z",
+		ContainerTypeFbsinker:          "0.9.0-z",
 	},
 	Java: map[ContainerType]string{
-		// meaning the minimum supported go SDK version is 0.8.0
-		sourcer:           "0.8.0-z",
-		sourcetransformer: "0.8.0-z",
-		sinker:            "0.8.0-z",
-		mapper:            "0.8.0-z",
-		reducer:           "0.8.0-z",
-		reducestreamer:    "0.8.0-z",
-		sessionreducer:    "0.8.0-z",
-		sideinput:         "0.8.0-z",
-		fbsinker:          "0.8.0-z",
+		// meaning the minimum supported go SDK version is 0.9.0
+		ContainerTypeSourcer:           "0.9.0-z",
+		ContainerTypeSourcetransformer: "0.9.0-z",
+		ContainerTypeSinker:            "0.9.0-z",
+		ContainerTypeMapper:            "0.9.0-z",
+		ContainerTypeReducer:           "0.9.0-z",
+		ContainerTypeReducestreamer:    "0.9.0-z",
+		ContainerTypeSessionreducer:    "0.9.0-z",
+		ContainerTypeSideinput:         "0.9.0-z",
+		ContainerTypeFbsinker:          "0.9.0-z",
 	},
 	Rust: map[ContainerType]string{
 		// meaning the minimum supported go SDK version is 0.1.0
-		sourcer:           "0.1.0-z",
-		sourcetransformer: "0.1.0-z",
-		sinker:            "0.1.0-z",
-		mapper:            "0.1.0-z",
-		reducer:           "0.1.0-z",
-		reducestreamer:    "0.1.0-z",
-		sessionreducer:    "0.1.0-z",
-		sideinput:         "0.1.0-z",
-		fbsinker:          "0.1.0-z",
+		ContainerTypeSourcer:           "0.1.0-z",
+		ContainerTypeSourcetransformer: "0.1.0-z",
+		ContainerTypeSinker:            "0.1.0-z",
+		ContainerTypeMapper:            "0.1.0-z",
+		ContainerTypeReducer:           "0.1.0-z",
+		ContainerTypeReducestreamer:    "0.1.0-z",
+		ContainerTypeSessionreducer:    "0.1.0-z",
+		ContainerTypeSideinput:         "0.1.0-z",
+		ContainerTypeFbsinker:          "0.1.0-z",
 	},
 }
 

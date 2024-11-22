@@ -45,8 +45,8 @@ type UDF struct {
 	GroupBy *GroupBy `json:"groupBy" protobuf:"bytes,3,opt,name=groupBy"`
 }
 
-func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, error) {
-	return []corev1.Container{in.getMainContainer(req), in.getUDFContainer(req)}, nil
+func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
+	return []corev1.Container{in.getUDFContainer(req)}, []corev1.Container{in.getMainContainer(req)}, nil
 }
 
 func (in UDF) getMainContainer(req getContainerReq) corev1.Container {
@@ -63,7 +63,7 @@ func (in UDF) getUDFContainer(mainContainerReq getContainerReq) corev1.Container
 	c := containerBuilder{}.
 		name(CtrUdf).
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as main container
-		appendVolumeMounts(mainContainerReq.volumeMounts...)
+		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
 	if x := in.Container; x != nil && x.Image != "" { // customized image
 		c = c.image(x.Image)
 		if len(x.Command) > 0 {
@@ -91,7 +91,7 @@ func (in UDF) getUDFContainer(mainContainerReq getContainerReq) corev1.Container
 		c = c.image(mainContainerReq.image).args(args...) // Use the same image as the main container
 	}
 	if x := in.Container; x != nil {
-		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
+		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...).appendPorts(x.Ports...)
 		if x.ImagePullPolicy != nil {
 			c = c.imagePullPolicy(*x.ImagePullPolicy)
 		}

@@ -36,6 +36,8 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/numaproj/numaflow/pkg/reconciler/isbsvc/installer"
+	"github.com/numaproj/numaflow/pkg/reconciler/validator"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 const (
@@ -67,6 +69,11 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, err
 	}
 	log := r.logger.With("namespace", isbSvc.Namespace).With("isbsvc", isbSvc.Name)
+	if instance := isbSvc.GetAnnotations()[dfv1.KeyInstance]; instance != r.config.GetInstance() {
+		log.Debugw("ISB Service not managed by this controller, skipping", zap.String("instance", instance))
+		return ctrl.Result{}, nil
+	}
+	ctx = logging.WithLogger(ctx, log)
 	isbSvcCopy := isbSvc.DeepCopy()
 	reconcileErr := r.reconcile(ctx, isbSvcCopy)
 	if reconcileErr != nil {
@@ -87,13 +94,14 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 
 // reconcile does the real logic
 func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc *dfv1.InterStepBufferService) error {
-	log := r.logger.With("namespace", isbSvc.Namespace).With("isbsvc", isbSvc.Name)
+	log := logging.FromContext(ctx)
 	if !isbSvc.DeletionTimestamp.IsZero() {
 		log.Info("Deleting ISB Service")
 		if controllerutil.ContainsFinalizer(isbSvc, finalizerName) {
 			// Finalizer logic should be added here.
 			if err := installer.Uninstall(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder); err != nil {
 				log.Errorw("Failed to uninstall", zap.Error(err))
+				isbSvc.Status.SetPhase(dfv1.ISBSvcPhaseDeleting, err.Error())
 				return err
 			}
 			controllerutil.RemoveFinalizer(isbSvc, finalizerName)
@@ -116,7 +124,7 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 
 	isbSvc.Status.InitConditions()
 	isbSvc.Status.SetObservedGeneration(isbSvc.Generation)
-	if err := ValidateInterStepBufferService(isbSvc); err != nil {
+	if err := validator.ValidateInterStepBufferService(isbSvc); err != nil {
 		log.Errorw("Validation failed", zap.Error(err))
 		isbSvc.Status.MarkNotConfigured("InvalidSpec", err.Error())
 		return err

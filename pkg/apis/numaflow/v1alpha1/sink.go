@@ -48,20 +48,24 @@ type AbstractSink struct {
 	UDSink *UDSink `json:"udsink,omitempty" protobuf:"bytes,4,opt,name=udsink"`
 }
 
-func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, error) {
+func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
 	containers := []corev1.Container{
 		s.getMainContainer(req),
 	}
+	sidecarContainers := []corev1.Container{}
 	if s.UDSink != nil {
-		containers = append(containers, s.getUDSinkContainer(req))
+		sidecarContainers = append(sidecarContainers, s.getUDSinkContainer(req))
 	}
 	if s.Fallback != nil && s.Fallback.UDSink != nil {
-		containers = append(containers, s.getFallbackUDSinkContainer(req))
+		sidecarContainers = append(sidecarContainers, s.getFallbackUDSinkContainer(req))
 	}
-	return containers, nil
+	return sidecarContainers, containers, nil
 }
 
 func (s Sink) getMainContainer(req getContainerReq) corev1.Container {
+	if req.executeRustBinary {
+		return containerBuilder{}.init(req).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
+	}
 	return containerBuilder{}.init(req).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 
@@ -69,7 +73,7 @@ func (s Sink) getUDSinkContainer(mainContainerReq getContainerReq) corev1.Contai
 	c := containerBuilder{}.
 		name(CtrUdsink).
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
-		appendVolumeMounts(mainContainerReq.volumeMounts...)
+		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
 	x := s.UDSink.Container
 	c = c.image(x.Image)
 	if len(x.Command) > 0 {
@@ -79,7 +83,7 @@ func (s Sink) getUDSinkContainer(mainContainerReq getContainerReq) corev1.Contai
 		c = c.args(x.Args...)
 	}
 	c = c.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerSink})
-	c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
+	c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...).appendPorts(x.Ports...)
 	if x.ImagePullPolicy != nil {
 		c = c.imagePullPolicy(*x.ImagePullPolicy)
 	}
@@ -104,7 +108,7 @@ func (s Sink) getFallbackUDSinkContainer(mainContainerReq getContainerReq) corev
 	c := containerBuilder{}.
 		name(CtrFallbackUdsink).
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
-		appendVolumeMounts(mainContainerReq.volumeMounts...)
+		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
 	x := s.Fallback.UDSink.Container
 	c = c.image(x.Image)
 	if len(x.Command) > 0 {
@@ -114,7 +118,7 @@ func (s Sink) getFallbackUDSinkContainer(mainContainerReq getContainerReq) corev
 		c = c.args(x.Args...)
 	}
 	c = c.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerFallbackSink})
-	c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...)
+	c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...).appendPorts(x.Ports...)
 	if x.ImagePullPolicy != nil {
 		c = c.imagePullPolicy(*x.ImagePullPolicy)
 	}

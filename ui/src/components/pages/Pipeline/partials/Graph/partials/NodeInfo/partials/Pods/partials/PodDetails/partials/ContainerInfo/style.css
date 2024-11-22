@@ -1,0 +1,24 @@
+.category-title {
+  font-weight: 600;
+  font-size: 2rem;
+}
+
+.outer-box {
+  display: flex;
+  width: 100%;
+  border-bottom: 1px solid #DCDCDC;
+  padding: 1rem 1rem 1rem 2rem;
+}
+
+.inner-box-title {
+  font-weight: 600;
+  width: 45%;
+  font-size: 1.4rem;
+  font-family: "IBM Plex Sans", sans-serif;
+}
+
+.inner-box-value {
+  font-size: 1.4rem;
+  font-family: "IBM Plex Sans", sans-serif;
+  flex-grow: 1;
+}

@@ -341,7 +341,7 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
 
-	containers := mv.Spec.buildContainers(getContainerReq{
+	sidecarContainers, containers := mv.Spec.buildContainers(getContainerReq{
 		env:             envVars,
 		image:           req.Image,
 		imagePullPolicy: req.PullPolicy,
@@ -391,17 +391,19 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 		{Name: MonoVertexMetricsPortName, ContainerPort: MonoVertexMetricsPort},
 	}
 
-	if len(containers) > 1 { // udf, udsink, udsource, or source vertex specifies a udtransformer
-		for i := 1; i < len(containers); i++ {
-			containers[i].Env = append(containers[i].Env, mv.commonEnvs()...)
-			containers[i].Env = append(containers[i].Env, mv.sidecarEnvs()...)
-		}
+	for i := 0; i < len(sidecarContainers); i++ { // udsink, udsource, udtransformer ...
+		sidecarContainers[i].Env = append(sidecarContainers[i].Env, mv.commonEnvs()...)
+		sidecarContainers[i].Env = append(sidecarContainers[i].Env, mv.sidecarEnvs()...)
 	}
+
+	initContainers := []corev1.Container{}
+	initContainers = append(initContainers, mv.Spec.InitContainers...)
+	initContainers = append(initContainers, sidecarContainers...)
 
 	spec := &corev1.PodSpec{
 		Subdomain:      mv.GetHeadlessServiceName(),
 		Volumes:        append(volumes, mv.Spec.Volumes...),
-		InitContainers: mv.Spec.InitContainers,
+		InitContainers: initContainers,
 		Containers:     append(containers, mv.Spec.Sidecars...),
 	}
 	mv.Spec.AbstractPodTemplate.ApplyToPodSpec(spec)
@@ -458,26 +460,28 @@ func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
 	return x
 }
 
-func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) []corev1.Container {
+// buildContainers builds the sidecar containers and main containers for the mono vertex.
+func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Container, []corev1.Container) {
 	mainContainer := containerBuilder{}.
-		init(req).command(NumaflowRustBinary).args("--monovertex").build()
-
+		init(req).command(NumaflowRustBinary).args("--rust").build()
 	containers := []corev1.Container{mainContainer}
+
+	sidecarContainers := []corev1.Container{}
 	if mvspec.Source.UDSource != nil { // Only support UDSource for now.
-		containers = append(containers, mvspec.Source.getUDSourceContainer(req))
+		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDSourceContainer(req))
 	}
 	if mvspec.Source.UDTransformer != nil {
-		containers = append(containers, mvspec.Source.getUDTransformerContainer(req))
+		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDTransformerContainer(req))
 	}
 	if mvspec.Sink.UDSink != nil { // Only support UDSink for now.
-		containers = append(containers, mvspec.Sink.getUDSinkContainer(req))
+		sidecarContainers = append(sidecarContainers, mvspec.Sink.getUDSinkContainer(req))
 	}
 	if mvspec.Sink.Fallback != nil {
-		containers = append(containers, mvspec.Sink.getFallbackUDSinkContainer(req))
+		sidecarContainers = append(sidecarContainers, mvspec.Sink.getFallbackUDSinkContainer(req))
 	}
 	// Fallback sink is not supported.
-	containers = append(containers, mvspec.Sidecars...)
-	return containers
+	sidecarContainers = append(sidecarContainers, mvspec.Sidecars...)
+	return sidecarContainers, containers
 }
 
 type MonoVertexLimits struct {

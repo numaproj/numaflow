@@ -3,10 +3,14 @@ name = "numaflow-core"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+nats-tests = []
+all-tests = ["nats-tests"]
+
 [dependencies]
 axum = "0.7.5"
 axum-server = { version = "0.7.1", features = ["tls-rustls"] }
-tonic = "0.12.2"
+tonic = "0.12.3"
 bytes = "1.7.1"
 thiserror = "1.0.63"
 tokio = { version = "1.39.3", features = ["full"] }
@@ -21,9 +25,9 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 hyper-util = "0.1.6"
 tower = "0.4.13"
 uuid = { version = "1.10.0", features = ["v4"] }
-once_cell = "1.19.0"
 serde_json = "1.0.122"
 numaflow-models = { path = "../numaflow-models" }
+numaflow-pb = { path = "../numaflow-pb" }
 trait-variant = "0.1.2"
 rcgen = "0.13.1"
 rustls = { version = "0.23.12", features = ["aws_lc_rs"] }
@@ -33,12 +37,16 @@ pep440_rs = "0.6.6"
 backoff = { path = "../backoff" }
 parking_lot = "0.12.3"
 prometheus-client = "0.22.3"
-kube = "0.94.0"
+kube = "0.95.0"
 log = "0.4.22"
+futures = "0.3.30"
+pin-project = "1.1.5"
+rand = "0.8.5"
+async-nats = "0.37.0"
 
 [dev-dependencies]
 tempfile = "3.11.0"
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "0c1682864a4b906fab52e149cfd7cacc679ce688" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "ddd879588e11455921f1ca958ea2b3c076689293" }
 
 [build-dependencies]
-tonic-build = "0.12.1"
+

@@ -358,14 +358,15 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, len(s.Containers))
-		assert.Equal(t, "image", s.Containers[1].Image)
-		assert.Equal(t, 1, len(s.Containers[1].Command))
-		assert.Equal(t, "cmd", s.Containers[1].Command[0])
-		assert.Equal(t, 1, len(s.Containers[1].Args))
-		assert.Equal(t, "arg0", s.Containers[1].Args[0])
+		assert.Equal(t, 1, len(s.Containers))
+		assert.Equal(t, 2, len(s.InitContainers))
+		assert.Equal(t, "image", s.InitContainers[1].Image)
+		assert.Equal(t, 1, len(s.InitContainers[1].Command))
+		assert.Equal(t, "cmd", s.InitContainers[1].Command[0])
+		assert.Equal(t, 1, len(s.InitContainers[1].Args))
+		assert.Equal(t, "arg0", s.InitContainers[1].Args[0])
 		var sidecarEnvNames []string
-		for _, env := range s.Containers[1].Env {
+		for _, env := range s.InitContainers[1].Env {
 			sidecarEnvNames = append(sidecarEnvNames, env.Name)
 		}
 		assert.Contains(t, sidecarEnvNames, EnvCPULimit)
@@ -394,16 +395,17 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
-		assert.Equal(t, 3, len(s.Containers))
+		assert.Equal(t, 1, len(s.Containers))
+		assert.Equal(t, 3, len(s.InitContainers))
 
-		for i := 1; i < len(s.Containers); i++ {
-			assert.Equal(t, "image", s.Containers[i].Image)
-			assert.Equal(t, 1, len(s.Containers[i].Command))
-			assert.Equal(t, "cmd", s.Containers[i].Command[0])
-			assert.Equal(t, 1, len(s.Containers[i].Args))
-			assert.Equal(t, "arg0", s.Containers[i].Args[0])
+		for i := 1; i < len(s.InitContainers); i++ {
+			assert.Equal(t, "image", s.InitContainers[i].Image)
+			assert.Equal(t, 1, len(s.InitContainers[i].Command))
+			assert.Equal(t, "cmd", s.InitContainers[i].Command[0])
+			assert.Equal(t, 1, len(s.InitContainers[i].Args))
+			assert.Equal(t, "arg0", s.InitContainers[i].Args[0])
 			var sidecarEnvNames []string
-			for _, env := range s.Containers[i].Env {
+			for _, env := range s.InitContainers[i].Env {
 				sidecarEnvNames = append(sidecarEnvNames, env.Name)
 			}
 			assert.Contains(t, sidecarEnvNames, EnvCPULimit)
@@ -422,9 +424,10 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, len(s.Containers))
+		assert.Equal(t, 1, len(s.Containers))
+		assert.Equal(t, 2, len(s.InitContainers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
-		assert.Equal(t, CtrUdf, s.Containers[1].Name)
+		assert.Equal(t, CtrUdf, s.InitContainers[1].Name)
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[0].ImagePullPolicy)
 		var envNames []string
@@ -440,10 +443,11 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, EnvReplica)
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeMapUDF))
-		assert.Equal(t, 1, len(s.InitContainers))
+		assert.Equal(t, 2, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
+		assert.Equal(t, CtrUdf, s.InitContainers[1].Name)
 		var sidecarEnvNames []string
-		for _, env := range s.Containers[1].Env {
+		for _, env := range s.InitContainers[1].Env {
 			sidecarEnvNames = append(sidecarEnvNames, env.Name)
 		}
 		assert.Contains(t, sidecarEnvNames, EnvCPULimit)
@@ -462,13 +466,22 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
-		assert.Equal(t, 3, len(s.Containers))
+		assert.Equal(t, 2, len(s.Containers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
-		assert.Equal(t, CtrUdf, s.Containers[1].Name)
-		assert.Equal(t, CtrSideInputsWatcher, s.Containers[2].Name)
-		assert.Equal(t, 2, len(s.InitContainers))
+		assert.Equal(t, CtrSideInputsWatcher, s.Containers[1].Name)
+		assert.Equal(t, 3, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 		assert.Equal(t, CtrInitSideInputs, s.InitContainers[1].Name)
+		assert.Equal(t, 1, len(s.InitContainers[1].VolumeMounts))
+		assert.Equal(t, "var-run-side-inputs", s.InitContainers[1].VolumeMounts[0].Name)
+		assert.False(t, s.InitContainers[1].VolumeMounts[0].ReadOnly)
+		assert.Equal(t, CtrUdf, s.InitContainers[2].Name)
+		assert.Equal(t, 2, len(s.InitContainers[2].VolumeMounts))
+		assert.Equal(t, "var-run-side-inputs", s.InitContainers[2].VolumeMounts[1].Name)
+		assert.True(t, s.InitContainers[2].VolumeMounts[1].ReadOnly)
+		assert.Equal(t, 1, len(s.Containers[1].VolumeMounts))
+		assert.Equal(t, "var-run-side-inputs", s.Containers[1].VolumeMounts[0].Name)
+		assert.False(t, s.Containers[1].VolumeMounts[0].ReadOnly)
 	})
 
 	t.Run("test serving source", func(t *testing.T) {

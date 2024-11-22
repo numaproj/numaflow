@@ -111,9 +111,9 @@ func NewDataForward(
 }
 
 // Start starts reading the buffer and forwards to sinker. Call `Stop` to stop.
-func (df *DataForward) Start() <-chan struct{} {
+func (df *DataForward) Start() <-chan error {
 	log := logging.FromContext(df.ctx)
-	stopped := make(chan struct{})
+	stopped := make(chan error)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -137,7 +137,11 @@ func (df *DataForward) Start() <-chan struct{} {
 				// shutdown the fromBufferPartition should be empty.
 			}
 			// keep doing what you are good at
-			df.forwardAChunk(df.ctx)
+			if err := df.forwardAChunk(df.ctx); err != nil {
+				log.Errorw("Failed to forward a chunk", zap.Error(err))
+				stopped <- err
+				return
+			}
 		}
 	}()
 
@@ -176,7 +180,7 @@ func (df *DataForward) Start() <-chan struct{} {
 // for a chunk of messages returned by the first Read call. It will return only if only we are successfully able to ack
 // the message after forwarding, barring any platform errors. The platform errors include buffer-full,
 // buffer-not-reachable, etc., but does not include errors due to WhereTo, etc.
-func (df *DataForward) forwardAChunk(ctx context.Context) {
+func (df *DataForward) forwardAChunk(ctx context.Context) error {
 	start := time.Now()
 	totalBytes := 0
 	dataBytes := 0
@@ -207,12 +211,12 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				zap.Int64("offset", processorWMB.Offset),
 				zap.Int64("watermark", processorWMB.Watermark),
 				zap.Bool("idle", processorWMB.Idle))
-			return
+			return nil
 		}
 
 		// if the validation passed, we will publish the watermark to all the toBuffer partitions.
 		idlehandler.PublishIdleWatermark(ctx, df.sinkWriter.GetPartitionIdx(), df.sinkWriter, df.wmPublisher, df.idleManager, df.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeSink, df.vertexReplica, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
-		return
+		return nil
 	}
 
 	var dataMessages = make([]*isb.ReadMessage, 0, len(readMessages))
@@ -266,7 +270,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	if err != nil {
 		df.opts.logger.Errorw("failed to write to sink", zap.Error(err))
 		df.fromBufferPartition.NoAck(ctx, readOffsets)
-		return
+		return err
 	}
 
 	// Only when fallback is configured, it is possible to return fallbackMessages. If there's any, write to the fallback sink.
@@ -277,7 +281,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		_, _, err = df.writeToSink(ctx, df.opts.fbSinkWriter, fallbackMessages, true)
 		if err != nil {
 			df.opts.logger.Errorw("Failed to write to fallback sink", zap.Error(err))
-			return
+			df.fromBufferPartition.NoAck(ctx, readOffsets)
+			return err
 		}
 	}
 
@@ -300,7 +305,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	if err != nil {
 		df.opts.logger.Errorw("Failed to ack from buffer", zap.Error(err))
 		metrics.AckMessageError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
-		return
+		return nil
 	}
 	metrics.AckMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
 
@@ -311,6 +316,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	}
 	// ProcessingTimes of the entire forwardAChunk
 	metrics.ForwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica))}).Observe(float64(time.Since(start).Microseconds()))
+	return nil
 }
 
 // ackFromBuffer acknowledges an array of offsets back to fromBufferPartition and is a blocking call or until shutdown has been initiated.
@@ -390,20 +396,26 @@ func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWr
 			_writeOffsets, errs := sinkWriter.Write(ctx, messagesToTry)
 			for idx, msg := range messagesToTry {
 				if err = errs[idx]; err != nil {
+					var udsinkErr = new(udsink.ApplyUDSinkErr)
+					if errors.As(err, &udsinkErr) {
+						if udsinkErr.IsInternalErr() {
+							return false, err
+						}
+					}
 					// if we are asked to write to fallback sink, check if the fallback sink is configured,
 					// and we are not already in the fallback sink write path.
-					if errors.Is(err, &udsink.WriteToFallbackErr) && df.opts.fbSinkWriter != nil && !isFbSinkWriter {
+					if errors.Is(err, udsink.WriteToFallbackErr) && df.opts.fbSinkWriter != nil && !isFbSinkWriter {
 						fallbackMessages = append(fallbackMessages, msg)
 						continue
 					}
 
 					// if we are asked to write to fallback but no fallback sink is configured, we will retry the messages to the same sink
-					if errors.Is(err, &udsink.WriteToFallbackErr) && df.opts.fbSinkWriter == nil {
+					if errors.Is(err, udsink.WriteToFallbackErr) && df.opts.fbSinkWriter == nil {
 						df.opts.logger.Error("Asked to write to fallback but no fallback sink is configured, retrying the message to the same sink")
 					}
 
 					// if we are asked to write to fallback sink inside the fallback sink, we will retry the messages to the fallback sink
-					if errors.Is(err, &udsink.WriteToFallbackErr) && isFbSinkWriter {
+					if errors.Is(err, udsink.WriteToFallbackErr) && isFbSinkWriter {
 						df.opts.logger.Error("Asked to write to fallback sink inside the fallback sink, retrying the message to fallback sink")
 					}
 
@@ -444,9 +456,8 @@ func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWr
 			}
 			return true, nil
 		})
-		// If we exited out of the loop and it was due to a forced shutdown we should exit
-		// TODO(Retry-Sink): Check for ctx done separately? That should be covered in shutdown
-		if ok, _ := df.IsShuttingDown(); err != nil && ok {
+
+		if err != nil {
 			return nil, nil, err
 		}
 		// Check what actions are required once the writing loop is completed

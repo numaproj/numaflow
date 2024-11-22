@@ -154,6 +154,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		metrics.SDKInfo.WithLabelValues(dfv1.ComponentVertex, fmt.Sprintf("%s-%s", pipelineName, vertexName), string(serverinfo.ContainerTypeSinker), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
 		sdkClient, err := sinkclient.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
@@ -183,6 +184,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		metrics.SDKInfo.WithLabelValues(dfv1.ComponentVertex, fmt.Sprintf("%s-%s", pipelineName, vertexName), string(serverinfo.ContainerTypeFbsinker), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
 		sdkClient, err := sinkclient.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.FbSinkAddr))
 		if err != nil {
@@ -256,21 +258,20 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			defer finalWg.Done()
 			log.Infow("Start processing sink messages ", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("fromPartition ", fromBufferPartitionName))
 			stopped := sinkForwarder.Start()
-			wg := &sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for {
-					<-stopped
-					log.Info("Sink forwarder stopped, exiting sink processor...")
-					return
+			select {
+			case <-ctx.Done(): // context cancelled case
+				log.Info("Context cancelled, stopping forwarder for partition...", zap.String("partition", fromBufferPartitionName))
+				sinkForwarder.Stop()
+				if err := <-stopped; err != nil {
+					log.Errorw("Sink forwarder stopped with error", zap.String("fromPartition", fromBufferPartitionName), zap.Error(err))
 				}
-			}()
-			<-ctx.Done()
-			log.Infow("SIGTERM exiting inside partition...", zap.String("fromPartition", fromBufferPartitionName))
-			sinkForwarder.Stop()
-			wg.Wait()
-			log.Infow("Exited for partition...", zap.String("fromPartition", fromBufferPartitionName))
+				log.Info("Exited for partition...", zap.String("partition", fromBufferPartitionName))
+			case err := <-stopped: // critical error case
+				if err != nil {
+					log.Errorw("Sink forwarder stopped with error", zap.String("fromPartition", fromBufferPartitionName), zap.Error(err))
+					cancel()
+				}
+			}
 		}(df, readers[index].GetName())
 	}
 

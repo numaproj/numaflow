@@ -19,6 +19,7 @@ package vertex
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -72,6 +73,10 @@ func (r *vertexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 	log := r.logger.With("namespace", vertex.Namespace).With("vertex", vertex.Name).With("pipeline", vertex.Spec.PipelineName)
 	ctx = logging.WithLogger(ctx, log)
+	if instance := vertex.GetAnnotations()[dfv1.KeyInstance]; instance != r.config.GetInstance() {
+		log.Debugw("Vertex not managed by this controller, skipping", zap.String("instance", instance))
+		return ctrl.Result{}, nil
+	}
 	vertexCopy := vertex.DeepCopy()
 	result, err := r.reconcile(ctx, vertexCopy)
 	if err != nil {
@@ -116,6 +121,10 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		log.Errorw("Failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
 		vertex.Status.MarkPhaseFailed("FindISBSvcFailed", err.Error())
 		return ctrl.Result{}, err
+	}
+	if isbSvc.GetAnnotations()[dfv1.KeyInstance] != vertex.GetAnnotations()[dfv1.KeyInstance] {
+		log.Errorw("ISB Service is found but not managed by the same controller of this vertex", zap.String("isbsvc", isbSvcName), zap.Error(err))
+		return ctrl.Result{}, fmt.Errorf("isbsvc not managed by the same controller of this vertex")
 	}
 	if !isbSvc.Status.IsHealthy() {
 		log.Errorw("ISB Service is not in healthy status", zap.String("isbsvc", isbSvcName), zap.Error(err))
@@ -207,11 +216,11 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 		vertex.Status.UpdatedReadyReplicas = 0
 	}
 
-	// Manually or automatically scaled down
+	// Manually or automatically scaled down, in this case, we need to clean up extra pods if there's any
+	if err := r.cleanUpPodsFromTo(ctx, vertex, desiredReplicas, math.MaxInt); err != nil {
+		return fmt.Errorf("failed to clean up vertex pods [%v, ∞): %w", desiredReplicas, err)
+	}
 	if currentReplicas := int(vertex.Status.Replicas); currentReplicas > desiredReplicas {
-		if err := r.cleanUpPodsFromTo(ctx, vertex, desiredReplicas, currentReplicas); err != nil {
-			return fmt.Errorf("failed to clean up vertex pods [%v, %v): %w", desiredReplicas, currentReplicas, err)
-		}
 		vertex.Status.Replicas = uint32(desiredReplicas)
 	}
 	updatedReplicas := int(vertex.Status.UpdatedReplicas)

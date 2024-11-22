@@ -34,6 +34,7 @@ type SystemInfo struct {
 	ManagedNamespace     string `json:"managedNamespace"`
 	Namespaced           bool   `json:"namespaced"`
 	IsReadOnly           bool   `json:"isReadOnly"`
+	DisableMetricsCharts bool   `json:"disableMetricsCharts"`
 	Version              string `json:"version"`
 	DaemonClientProtocol string `json:"daemonClientProtocol"`
 }
@@ -58,6 +59,15 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 		panic(err)
 	}
 
+	// promql service instance.
+	promQlServiceObj, err := v1.NewPromQlServiceObject()
+	if err != nil {
+		panic(err)
+	}
+
+	// disable metrics charts if metric config or prometheus client is not set.
+	sysInfo.DisableMetricsCharts = promQlServiceObj.DisableMetricsChart()
+
 	// noAuthGroup is a group of routes that do not require AuthN/AuthZ no matter whether auth is enabled.
 	noAuthGroup := r.Group(baseHref + "auth/v1")
 	v1RoutesNoAuth(noAuthGroup, dexObj, localUsersAuthObj)
@@ -72,9 +82,9 @@ func Routes(ctx context.Context, r *gin.Engine, sysInfo SystemInfo, authInfo Aut
 		}
 		// Add the AuthN/AuthZ middleware to the group.
 		r1Group.Use(authMiddleware(ctx, authorizer, dexObj, localUsersAuthObj, authRouteMap))
-		v1Routes(ctx, r1Group, dexObj, localUsersAuthObj, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol)
+		v1Routes(ctx, r1Group, dexObj, localUsersAuthObj, promQlServiceObj, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol)
 	} else {
-		v1Routes(ctx, r1Group, nil, nil, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol)
+		v1Routes(ctx, r1Group, nil, nil, promQlServiceObj, sysInfo.IsReadOnly, sysInfo.DaemonClientProtocol)
 	}
 	r1Group.GET("/sysinfo", func(c *gin.Context) {
 		c.JSON(http.StatusOK, v1.NewNumaflowAPIResponse(nil, sysInfo))
@@ -98,12 +108,12 @@ func v1RoutesNoAuth(r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v
 
 // v1Routes defines the routes for the v1 API. For adding a new route, add a new handler function
 // for the route along with an entry in the RouteMap in auth/route_map.go.
-func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v1.LocalUsersAuthObject, isReadOnly bool, daemonClientProtocol string) {
+func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUsersAuthObject *v1.LocalUsersAuthObject, promQlServiceObj v1.PromQl, isReadOnly bool, daemonClientProtocol string) {
 	handlerOpts := []v1.HandlerOption{v1.WithDaemonClientProtocol(daemonClientProtocol)}
 	if isReadOnly {
 		handlerOpts = append(handlerOpts, v1.WithReadOnlyMode())
 	}
-	handler, err := v1.NewHandler(ctx, dexObj, localUsersAuthObject, handlerOpts...)
+	handler, err := v1.NewHandler(ctx, dexObj, localUsersAuthObject, promQlServiceObj, handlerOpts...)
 	if err != nil {
 		panic(err)
 	}
@@ -151,6 +161,10 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/metrics/namespaces/:namespace/pods", handler.ListPodsMetrics)
 	// Get pod logs.
 	r.GET("/namespaces/:namespace/pods/:pod/logs", handler.PodLogs)
+	// Get the pod metrics for a mono vertex.
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/pods-info", handler.GetMonoVertexPodsInfo)
+	// Get the pod metrics for a pipeline vertex.
+	r.GET("/namespaces/:namespace/pipelines/:pipeline/vertices/:vertex/pods-info", handler.GetVertexPodsInfo)
 	// List of the Kubernetes events of a namespace.
 	r.GET("/namespaces/:namespace/events", handler.GetNamespaceEvents)
 	// List all mono vertices for a given namespace.
@@ -165,6 +179,10 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/metrics", handler.GetMonoVertexMetrics)
 	// Get the health information of a mono vertex.
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/health", handler.GetMonoVertexHealth)
+	// Get the time series data across different dimensions.
+	r.POST("/metrics-proxy", handler.GetMetricData)
+	// Discover the metrics for a given object type.
+	r.GET("/metrics-discovery/object/:object", handler.DiscoverMetrics)
 }
 
 // authMiddleware is the middleware for AuthN/AuthZ.

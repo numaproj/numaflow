@@ -137,6 +137,61 @@ metadata:
 ---
 apiVersion: v1
 data:
+  config.yaml: |
+    # url is a required field, it should be the url of the service to which the metrics proxy will connect
+    # url: service_name + "." + service_namespace + ".svc.cluster.local" + ":" + port
+    # example for local prometheus service
+    # url: http://prometheus-operated.monitoring.svc.cluster.local:9090
+    patterns:
+    - name: mono_vertex_histogram
+      object: mono-vertex
+      title: Processing Time Latency
+      description: This query pattern is for P99,P90 and P50 quantiles for a mono-vertex across different dimensions
+      expr: |
+        histogram_quantile($quantile, sum by($dimension,le) (rate($metric_name{$filters}[$duration])))
+      params:
+        - name: quantile
+          required: true
+        - name: duration
+          required: true
+        - name: start_time
+          required: false
+        - name: end_time
+          required: false
+      metrics:
+        - metric_name: monovtx_processing_time_bucket
+          required_filters:
+            - namespace
+            - mvtx_name
+          dimensions:
+            - name: pod
+              # expr: optional expression for prometheus query
+              # overrides the default expression
+              filters:
+                - name: pod
+                  required: false
+            - name: mono-vertex
+              # expr: optional expression for prometheus query
+              # overrides the default expression
+        # Add histogram metrics similar to the pattern above
+        #- metric_name: monovtx_sink_time_bucket
+        #  required_filters:
+        #    - namespace
+        #    - mvtx_name
+        #  dimensions:
+        #    - name: pod
+        #      #expr: optional
+        #      filters:
+        #        - name: pod
+        #          required: false
+        #    - name: mono-vertex
+        #      #expr: optional
+kind: ConfigMap
+metadata:
+  name: numaflow-server-metrics-proxy-config
+---
+apiVersion: v1
+data:
   rbac-conf.yaml: |
     policy.default: role:readonly
     # The scopes field controls which authentication scopes to examine during rbac enforcement.
@@ -294,6 +349,8 @@ spec:
           subPath: index.html
         - mountPath: /etc/numaflow
           name: rbac-config
+        - mountPath: /etc/numaflow/metrics-proxy
+          name: metrics-proxy-config
       initContainers:
       - args:
         - server-init
@@ -336,3 +393,6 @@ spec:
       - configMap:
           name: numaflow-server-rbac-config
         name: rbac-config
+      - configMap:
+          name: numaflow-server-metrics-proxy-config
+        name: metrics-proxy-config

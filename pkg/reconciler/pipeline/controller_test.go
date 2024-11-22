@@ -99,6 +99,42 @@ var (
 		},
 	}
 
+	testPipeline = &dfv1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pl",
+			Namespace: "test-ns",
+		},
+		Spec: dfv1.PipelineSpec{
+			Vertices: []dfv1.AbstractVertex{
+				{
+					Name: "input",
+					Source: &dfv1.Source{
+						UDTransformer: &dfv1.UDTransformer{
+							Builtin: &dfv1.Transformer{Name: "filter"},
+						}},
+				},
+				{
+					Name: "p1",
+					UDF: &dfv1.UDF{
+						Builtin: &dfv1.Function{Name: "cat"},
+					},
+				},
+				{
+					Name: "output",
+					Sink: &dfv1.Sink{},
+				},
+			},
+			Edges: []dfv1.Edge{
+				{From: "input", To: "p1"},
+				{From: "p1", To: "output"},
+			},
+			Watermark: dfv1.Watermark{
+				Disabled: false,
+				MaxDelay: &metav1.Duration{Duration: 5 * time.Second},
+			},
+		},
+	}
+
 	testPipelineWithSideinput = &dfv1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-pl",
@@ -143,6 +179,129 @@ var (
 			Watermark: dfv1.Watermark{
 				Disabled: false,
 				MaxDelay: &metav1.Duration{Duration: 5 * time.Second},
+			},
+		},
+	}
+
+	testReducePipeline = &dfv1.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pl",
+			Namespace: "test-ns",
+		},
+		Spec: dfv1.PipelineSpec{
+			Vertices: []dfv1.AbstractVertex{
+				{
+					Name:   "input",
+					Source: &dfv1.Source{},
+				},
+				{
+					Name: "p1",
+					UDF: &dfv1.UDF{
+						Container: &dfv1.Container{
+							Image: "my-image",
+						},
+						GroupBy: &dfv1.GroupBy{
+							Window: dfv1.Window{
+								Fixed: &dfv1.FixedWindow{
+									Length: &metav1.Duration{
+										Duration: 60 * time.Second,
+									},
+								},
+							},
+							Storage: &dfv1.PBQStorage{
+								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
+									StorageClassName: nil,
+									AccessMode:       &dfv1.DefaultAccessMode,
+									VolumeSize:       &dfv1.DefaultVolumeSize,
+								},
+							},
+						},
+					},
+				},
+				{
+					Name:       "p2",
+					Partitions: ptr.To[int32](2),
+					UDF: &dfv1.UDF{
+						Container: &dfv1.Container{
+							Image: "my-image",
+						},
+						GroupBy: &dfv1.GroupBy{
+							Window: dfv1.Window{
+								Fixed: &dfv1.FixedWindow{
+									Length: &metav1.Duration{
+										Duration: 60 * time.Second,
+									},
+								},
+							},
+							Keyed: true,
+							Storage: &dfv1.PBQStorage{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+					},
+				},
+				{
+					Name: "p3",
+					UDF: &dfv1.UDF{
+						Container: &dfv1.Container{
+							Image: "my-image",
+						},
+						GroupBy: &dfv1.GroupBy{
+							Window: dfv1.Window{
+								Sliding: &dfv1.SlidingWindow{
+									Length: &metav1.Duration{
+										Duration: time.Duration(60 * time.Second),
+									},
+									Slide: &metav1.Duration{
+										Duration: time.Duration(30 * time.Second),
+									},
+								},
+							},
+							Storage: &dfv1.PBQStorage{
+								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
+									StorageClassName: nil,
+									AccessMode:       &dfv1.DefaultAccessMode,
+									VolumeSize:       &dfv1.DefaultVolumeSize,
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "p4",
+					UDF: &dfv1.UDF{
+						Container: &dfv1.Container{
+							Image: "my-image",
+						},
+						GroupBy: &dfv1.GroupBy{
+							Window: dfv1.Window{
+								Session: &dfv1.SessionWindow{
+									Timeout: &metav1.Duration{
+										Duration: time.Duration(10 * time.Second),
+									},
+								},
+							},
+							Storage: &dfv1.PBQStorage{
+								PersistentVolumeClaim: &dfv1.PersistenceStrategy{
+									StorageClassName: nil,
+									AccessMode:       &dfv1.DefaultAccessMode,
+									VolumeSize:       &dfv1.DefaultVolumeSize,
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "output",
+					Sink: &dfv1.Sink{},
+				},
+			},
+			Edges: []dfv1.Edge{
+				{From: "input", To: "p1"},
+				{From: "p1", To: "p2"},
+				{From: "p2", To: "p3"},
+				{From: "p3", To: "p4"},
+				{From: "p4", To: "output"},
 			},
 		},
 	}

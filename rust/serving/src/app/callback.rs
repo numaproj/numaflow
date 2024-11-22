@@ -1,13 +1,11 @@
 use axum::{body::Bytes, extract::State, http::HeaderMap, routing, Json, Router};
 use serde::{Deserialize, Serialize};
+use state::State as CallbackState;
 use tracing::error;
 
-use state::State as CallbackState;
-
+use self::store::Store;
 use crate::app::response::ApiError;
 use crate::config;
-
-use self::store::Store;
 
 /// in-memory state store including connection tracking
 pub(crate) mod state;
@@ -73,11 +71,10 @@ mod tests {
     use axum::http::StatusCode;
     use tower::ServiceExt;
 
+    use super::*;
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::app::tracker::MessageGraph;
     use crate::pipeline::min_pipeline_spec;
-
-    use super::*;
 
     #[tokio::test]
     async fn test_callback_failure() {

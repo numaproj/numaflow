@@ -49,7 +49,9 @@ func (gw GoWhere) WhereTo(ks []string, ts []string, id string) ([]VertexBuffer, 
 
 // StarterStopper starts/stops the forwarding.
 type StarterStopper interface {
-	Start() <-chan struct{}
+	// Start returns a channel that can be used to listen for errors. If
+	// the channel is closed without any error, it means the forwarder has stopped.
+	Start() <-chan error
 	Stop()
 	ForceStop()
 }
