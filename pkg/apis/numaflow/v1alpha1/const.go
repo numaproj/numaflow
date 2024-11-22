@@ -153,6 +153,8 @@ const (
 	EnvServingStoreTTL                  = "NUMAFLOW_SERVING_STORE_TTL"
 	EnvExecuteRustBinary                = "NUMAFLOW_EXECUTE_RUST_BINARY"
 
+	EnvK8sServerVersion = "K8S_SERVER_VERSION"
+
 	PathVarRun                  = "/var/run/numaflow"
 	VertexMetricsPort           = 2469
 	VertexMetricsPortName       = "metrics"

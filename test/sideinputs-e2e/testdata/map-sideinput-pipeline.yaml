@@ -16,6 +16,8 @@ spec:
       source:
         http: {}
     - name: si-e2e
+      scale:
+        min: 1
       udf:
         container:
           # A map side input udf, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/map_sideinput/udf
