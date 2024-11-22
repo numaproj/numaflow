@@ -18,8 +18,6 @@ limitations under the License.
 
 /// SessionWindow : SessionWindow describes a session window
 
-
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SessionWindow {
     #[serde(rename = "timeout", skip_serializing_if = "Option::is_none")]
@@ -29,10 +27,6 @@ pub struct SessionWindow {
 impl SessionWindow {
     /// SessionWindow describes a session window
     pub fn new() -> SessionWindow {
-        SessionWindow {
-            timeout: None,
-        }
+        SessionWindow { timeout: None }
     }
 }
-
-

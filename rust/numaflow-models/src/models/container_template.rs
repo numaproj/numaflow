@@ -18,8 +18,6 @@ limitations under the License.
 
 /// ContainerTemplate : ContainerTemplate defines customized spec for a container
 
-
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ContainerTemplate {
     #[serde(rename = "env", skip_serializing_if = "Option::is_none")]
@@ -52,5 +50,3 @@ impl ContainerTemplate {
         }
     }
 }
-
-

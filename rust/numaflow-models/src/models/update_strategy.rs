@@ -18,8 +18,6 @@ limitations under the License.
 
 /// UpdateStrategy : UpdateStrategy indicates the strategy that the controller will use to perform updates for Vertex or MonoVertex.
 
-
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct UpdateStrategy {
     #[serde(rename = "rollingUpdate", skip_serializing_if = "Option::is_none")]
@@ -51,4 +49,3 @@ impl Default for Type {
         Self::RollingUpdate
     }
 }
-

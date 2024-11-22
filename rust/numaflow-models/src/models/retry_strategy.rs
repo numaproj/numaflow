@@ -18,8 +18,6 @@ limitations under the License.
 
 /// RetryStrategy : RetryStrategy struct encapsulates the settings for retrying operations in the event of failures. It includes a BackOff strategy to manage the timing of retries and defines the action to take upon failure.
 
-
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RetryStrategy {
     #[serde(rename = "backoff", skip_serializing_if = "Option::is_none")]
@@ -38,5 +36,3 @@ impl RetryStrategy {
         }
     }
 }
-
-

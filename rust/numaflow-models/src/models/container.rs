@@ -18,8 +18,6 @@ limitations under the License.
 
 /// Container : Container is used to define the container properties for user-defined functions, sinks, etc.
 
-
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Container {
     #[serde(rename = "args", skip_serializing_if = "Option::is_none")]
@@ -67,5 +65,3 @@ impl Container {
         }
     }
 }
-
-

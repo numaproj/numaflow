@@ -18,18 +18,12 @@ limitations under the License.
 
 /// Blackhole : Blackhole is a sink to emulate /dev/null
 
-
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Blackhole {
-}
+pub struct Blackhole {}
 
 impl Blackhole {
     /// Blackhole is a sink to emulate /dev/null
     pub fn new() -> Blackhole {
-        Blackhole {
-        }
+        Blackhole {}
     }
 }
-
-

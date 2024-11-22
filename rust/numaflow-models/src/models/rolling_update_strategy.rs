@@ -18,8 +18,6 @@ limitations under the License.
 
 /// RollingUpdateStrategy : RollingUpdateStrategy is used to communicate parameter for RollingUpdateStrategyType.
 
-
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RollingUpdateStrategy {
     #[serde(rename = "maxUnavailable", skip_serializing_if = "Option::is_none")]
@@ -34,5 +32,3 @@ impl RollingUpdateStrategy {
         }
     }
 }
-
-

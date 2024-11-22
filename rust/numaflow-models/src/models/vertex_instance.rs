@@ -18,8 +18,6 @@ limitations under the License.
 
 /// VertexInstance : VertexInstance is a wrapper of a vertex instance, which contains the vertex spec and the instance information such as hostname and replica index.
 
-
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VertexInstance {
     #[serde(rename = "hostname", skip_serializing_if = "Option::is_none")]
@@ -40,5 +38,3 @@ impl VertexInstance {
         }
     }
 }
-
-

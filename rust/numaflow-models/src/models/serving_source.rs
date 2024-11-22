@@ -18,8 +18,6 @@ limitations under the License.
 
 /// ServingSource : ServingSource is the HTTP endpoint for Numaflow.
 
-
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ServingSource {
     #[serde(rename = "auth", skip_serializing_if = "Option::is_none")]
@@ -45,5 +43,3 @@ impl ServingSource {
         }
     }
 }
-
-

@@ -18,8 +18,6 @@ limitations under the License.
 
 /// Scale : Scale defines the parameters for autoscaling.
 
-
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Scale {
     /// Whether to disable autoscaling. Set to \"true\" when using Kubernetes HPA or any other 3rd party autoscaling strategies.
@@ -38,25 +36,43 @@ pub struct Scale {
     #[serde(rename = "replicasPerScale", skip_serializing_if = "Option::is_none")]
     pub replicas_per_scale: Option<i64>,
     /// ReplicasPerScaleDown defines the number of maximum replicas that can be changed in a single scaled down operation. The is use to prevent from too aggressive scaling down operations
-    #[serde(rename = "replicasPerScaleDown", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "replicasPerScaleDown",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub replicas_per_scale_down: Option<i64>,
     /// ReplicasPerScaleUp defines the number of maximum replicas that can be changed in a single scaled up operation. The is use to prevent from too aggressive scaling up operations
     #[serde(rename = "replicasPerScaleUp", skip_serializing_if = "Option::is_none")]
     pub replicas_per_scale_up: Option<i64>,
     /// ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down. It defaults to the CooldownSeconds if not set.
-    #[serde(rename = "scaleDownCooldownSeconds", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "scaleDownCooldownSeconds",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub scale_down_cooldown_seconds: Option<i64>,
     /// ScaleUpCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling up. It defaults to the CooldownSeconds if not set.
-    #[serde(rename = "scaleUpCooldownSeconds", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "scaleUpCooldownSeconds",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub scale_up_cooldown_seconds: Option<i64>,
     /// TargetBufferAvailability is used to define the target percentage of the buffer availability. A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50. It only applies to UDF and Sink vertices because only they have buffers to read.
-    #[serde(rename = "targetBufferAvailability", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "targetBufferAvailability",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub target_buffer_availability: Option<i64>,
     /// TargetProcessingSeconds is used to tune the aggressiveness of autoscaling for source vertices, it measures how fast you want the vertex to process all the pending messages. Typically increasing the value, which leads to lower processing rate, thus less replicas. It's only effective for source vertices.
-    #[serde(rename = "targetProcessingSeconds", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "targetProcessingSeconds",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub target_processing_seconds: Option<i64>,
     /// After scaling down the source vertex to 0, sleep how many seconds before scaling the source vertex back up to peek.
-    #[serde(rename = "zeroReplicaSleepSeconds", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "zeroReplicaSleepSeconds",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub zero_replica_sleep_seconds: Option<i64>,
 }
 
@@ -79,5 +95,3 @@ impl Scale {
         }
     }
 }
-
-
