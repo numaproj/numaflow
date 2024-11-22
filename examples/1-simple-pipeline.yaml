@@ -20,7 +20,8 @@ spec:
             value: "1000"
       source:
         generator:
-          rpu: 100000
+          rpu: 50000
+          msgSize: 40
           duration: 1s
     - name: out
       scale:

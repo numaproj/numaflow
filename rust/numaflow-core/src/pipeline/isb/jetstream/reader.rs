@@ -9,21 +9,21 @@ use tokio::time::{self, Instant};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use crate::config::pipeline::isb::BufferReaderConfig;
 use crate::config::pipeline::PipelineConfig;
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset, ReadAck, ReadMessage};
 use crate::metrics::{
-    pipeline_forward_read_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
+    pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
 };
 use crate::Result;
 
-// The JetstreamReader is a handle to the background actor that continuously fetches messages from Jetstream.
-// It can be used to cancel the background task and stop reading from Jetstream.
-// The sender end of the channel is not stored in this struct, since the struct is clone-able and the mpsc channel is only closed when all the senders are dropped.
-// Storing the Sender end of channel in this struct would make it difficult to close the channel with `cancel` method.
+/// The JetstreamReader is a handle to the background actor that continuously fetches messages from Jetstream.
+/// It can be used to cancel the background task and stop reading from Jetstream.
+/// The sender end of the channel is not stored in this struct, since the struct is clone-able and the mpsc channel is only closed when all the senders are dropped.
+/// Storing the Sender end of channel in this struct would make it difficult to close the channel with `cancel` method.
 #[derive(Clone)]
 pub(crate) struct JetstreamReader {
     partition_idx: u16,
@@ -65,11 +65,13 @@ impl JetstreamReader {
         })
     }
 
-    // When we encounter an error, we log the error and return from the function. This drops the sender end of the channel.
-    // The closing of the channel should propagate to the receiver end and the receiver should exit gracefully.
-    // Within the loop, we only consider cancellationToken cancellation during the permit reservation and fetching messages,
-    // since rest of the operations should finish immediately.
-    pub(crate) async fn start(
+    /// streaming_read is a background task that continuously fetches messages from Jetstream and emits them on a channel.
+    ///
+    /// When we encounter an error, we log the error and return from the function. This drops the sender end of the channel.
+    /// The closing of the channel should propagate to the receiver end and the receiver should exit gracefully.
+    /// Within the loop, we only consider cancellationToken cancellation during the permit reservation and fetching messages,
+    /// since rest of the operations should finish immediately.
+    pub(crate) async fn streaming_read(
         &self,
         cancel_token: CancellationToken,
         pipeline_config: &PipelineConfig,
@@ -79,9 +81,9 @@ impl JetstreamReader {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let this = self.clone();
             let pipeline_config = pipeline_config.clone();
+            let cancel_token = cancel_token.clone();
 
             async move {
-                // FIXME:
                 let partition: &str = pipeline_config
                     .from_vertex_config
                     .first()
@@ -93,116 +95,99 @@ impl JetstreamReader {
                     .0
                     .as_ref();
 
-                let labels = pipeline_forward_read_metric_labels(
-                    pipeline_config.pipeline_name.as_ref(),
-                    partition,
-                    pipeline_config.vertex_name.as_ref(),
-                    pipeline_config.vertex_config.to_string().as_ref(),
-                    pipeline_config.replica,
-                );
+                let labels = pipeline_forward_metric_labels("Sink", Some(partition));
 
-                let chunk_stream = this
-                    .consumer
-                    .messages()
-                    .await
-                    .unwrap()
-                    .chunks_timeout(pipeline_config.batch_size, pipeline_config.read_timeout);
+                let mut message_stream = this.consumer.messages().await.map_err(|e| {
+                    Error::ISB(format!(
+                        "Failed to get message stream from Jetstream: {:?}",
+                        e
+                    ))
+                })?;
 
-                tokio::pin!(chunk_stream);
-
-                // The .next() call will not return if there is no data even if read_timeout is
-                // reached.
-                let mut chunk_time = Instant::now();
                 let mut start_time = Instant::now();
                 let mut total_messages = 0;
-                while let Some(messages) = chunk_stream.next().await {
-                    info!(
-                        "Read batch size: {} and latency - {:?}",
-                        messages.len(),
-                        chunk_time.elapsed()
-                    );
-                    pipeline_metrics()
-                        .isb
-                        .read_time
-                        .get_or_create(pipeline_isb_metric_labels())
-                        .observe(chunk_time.elapsed().as_micros() as f64);
-                    for message in messages {
-                        let jetstream_message = match message {
-                            Ok(message) => message,
-                            Err(e) => {
-                                error!(?e, "Failed to fetch messages from the Jetstream");
-                                continue;
-                            }
-                        };
-                        let msg_info = match jetstream_message.info() {
-                            Ok(info) => info,
-                            Err(e) => {
-                                error!(?e, "Failed to get message info from Jetstream");
-                                continue;
-                            }
-                        };
+                loop {
+                    tokio::select! {
+                        _ = cancel_token.cancelled() => { // should we drain from the stream when token is cancelled?
+                            info!("Cancellation token received, stopping the reader.");
+                            break;
+                        }
+                        message = message_stream.next() => {
+                            let Some(message) = message else {
+                                break;
+                            };
 
-                        let mut message: Message =
-                            match jetstream_message.payload.clone().try_into() {
+                            let jetstream_message = match message {
                                 Ok(message) => message,
                                 Err(e) => {
-                                    error!(
-                                    ?e,
-                                    "Failed to parse message payload received from Jetstream {:?}",
-                                    jetstream_message
-                                );
+                                    error!(?e, "Failed to fetch messages from the Jetstream");
+                                    continue;
+                                }
+                            };
+                            let msg_info = match jetstream_message.info() {
+                                Ok(info) => info,
+                                Err(e) => {
+                                    error!(?e, "Failed to get message info from Jetstream");
                                     continue;
                                 }
                             };
 
-                        message.offset = Some(Offset::Int(IntOffset::new(
-                            msg_info.stream_sequence,
-                            this.partition_idx,
-                        )));
+                            let mut message: Message = match jetstream_message.payload.clone().try_into() {
+                                Ok(message) => message,
+                                Err(e) => {
+                                    error!(
+                                        ?e,
+                                        "Failed to parse message payload received from Jetstream {:?}",
+                                        jetstream_message
+                                    );
+                                    continue;
+                                }
+                            };
 
-                        let (ack_tx, ack_rx) = oneshot::channel();
-                        tokio::spawn(Self::start_work_in_progress(
-                            jetstream_message,
-                            ack_rx,
-                            this.config.wip_ack_interval,
-                        ));
+                            message.offset = Some(Offset::Int(IntOffset::new(
+                                msg_info.stream_sequence,
+                                this.partition_idx,
+                            )));
 
-                        let read_message = ReadMessage {
-                            message,
-                            ack: ack_tx,
-                        };
+                            let (ack_tx, ack_rx) = oneshot::channel();
+                            tokio::spawn(Self::start_work_in_progress(
+                                jetstream_message,
+                                ack_rx,
+                                this.config.wip_ack_interval,
+                            ));
 
-                        messages_tx.send(read_message).await.map_err(|e| {
-                            Error::ISB(format!("Error while sending message to channel: {:?}", e))
-                        })?;
+                            let read_message = ReadMessage {
+                                message,
+                                ack: ack_tx,
+                            };
 
-                        pipeline_metrics()
-                            .isb
-                            .read_total
-                            .get_or_create(pipeline_isb_metric_labels())
-                            .inc();
+                            messages_tx.send(read_message).await.map_err(|e| {
+                                Error::ISB(format!("Error while sending message to channel: {:?}", e))
+                            })?;
 
-                        pipeline_metrics()
-                            .forwarder
-                            .data_read
-                            .get_or_create(labels)
-                            .inc();
+                            pipeline_metrics()
+                                .isb
+                                .read_total
+                                .get_or_create(pipeline_isb_metric_labels())
+                                .inc();
 
-                        if start_time.elapsed() >= Duration::from_millis(1000) {
-                            info!(
-                                "Total messages read from Jetstream in {:?} seconds: {}",
-                                start_time.elapsed(),
-                                total_messages
-                            );
-                            start_time = Instant::now();
-                            total_messages = 0;
+                            pipeline_metrics()
+                                .forwarder
+                                .data_read
+                                .get_or_create(labels)
+                                .inc();
+
+                            if start_time.elapsed() >= Duration::from_millis(1000) {
+                                info!(
+                                    "Total messages read from Jetstream in {:?} seconds: {}",
+                                    start_time.elapsed(),
+                                    total_messages
+                                );
+                                start_time = Instant::now();
+                                total_messages = 0;
+                            }
                         }
                     }
-                    if cancel_token.is_cancelled() {
-                        warn!("Cancellation token is cancelled. Exiting JetstreamReader");
-                        break;
-                    }
-                    chunk_time = Instant::now();
                 }
                 Ok(())
             }
@@ -344,7 +329,7 @@ mod tests {
         let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
         let reader_cancel_token = CancellationToken::new();
         let (mut js_reader_rx, js_reader_task) = js_reader
-            .start(reader_cancel_token.clone(), &pipeline_config)
+            .streaming_read(reader_cancel_token.clone(), &pipeline_config)
             .await
             .unwrap();
 

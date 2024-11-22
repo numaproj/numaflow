@@ -35,6 +35,24 @@ pub(crate) fn get_vertex_name() -> &'static str {
     })
 }
 
+static IS_MONO_VERTEX: OnceLock<bool> = OnceLock::new();
+
+pub(crate) fn is_mono_vertex() -> &'static bool {
+    IS_MONO_VERTEX.get_or_init(|| env::var(NUMAFLOW_MONO_VERTEX_NAME).is_ok())
+}
+
+static COMPONENT_TYPE: OnceLock<String> = OnceLock::new();
+
+pub(crate) fn get_component_type() -> &'static str {
+    COMPONENT_TYPE.get_or_init(|| {
+        if *is_mono_vertex() {
+            "mono-vertex".to_string()
+        } else {
+            "pipeline".to_string()
+        }
+    })
+}
+
 static PIPELINE_NAME: OnceLock<String> = OnceLock::new();
 
 pub(crate) fn get_pipeline_name() -> &'static str {

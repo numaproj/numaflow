@@ -23,10 +23,7 @@ mod tests {
 
     use super::BlackholeSink;
     use crate::message::IntOffset;
-    use crate::{
-        message::{Message, MessageID, Offset, ResponseFromSink, ResponseStatusFromSink},
-        sink::Sink,
-    };
+    use crate::message::{Message, MessageID, Offset, ResponseFromSink, ResponseStatusFromSink};
 
     #[tokio::test]
     async fn test_black_hole() {

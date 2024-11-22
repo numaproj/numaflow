@@ -28,10 +28,8 @@ use tonic::Request;
 use tracing::{debug, error, info};
 
 use crate::message::{get_pipeline_name, get_vertex_name, get_vertex_replica};
-use crate::source::SourceHandle;
+use crate::source::Source;
 use crate::Error;
-
-pub const COMPONENT_MVTX: &str = "mono-vertex";
 
 // SDK information
 const SDK_INFO: &str = "sdk_info";
@@ -463,14 +461,11 @@ static MONOVTX_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new()
 
 // forward_metrics_labels is a helper function used to fetch the
 // MONOVTX_METRICS_LABELS object
-pub(crate) fn mvtx_forward_metric_labels(
-    mvtx_name: String,
-    replica: u16,
-) -> &'static Vec<(String, String)> {
+pub(crate) fn mvtx_forward_metric_labels() -> &'static Vec<(String, String)> {
     MONOVTX_METRICS_LABELS.get_or_init(|| {
         let common_labels = vec![
-            (MVTX_NAME_LABEL.to_string(), mvtx_name),
-            (REPLICA_LABEL.to_string(), replica.to_string()),
+            (MVTX_NAME_LABEL.to_string(), get_vertex_name().to_string()),
+            (REPLICA_LABEL.to_string(), get_vertex_replica().to_string()),
         ];
         common_labels
     })
@@ -478,27 +473,38 @@ pub(crate) fn mvtx_forward_metric_labels(
 
 static PIPELINE_READ_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
 
-pub(crate) fn pipeline_forward_read_metric_labels(
-    pipeline_name: &str,
-    partition_name: &str,
-    vertex_name: &str,
+pub(crate) fn pipeline_forward_metric_labels(
     vertex_type: &str,
-    replica: u16,
+    partition_name: Option<&str>,
 ) -> &'static Vec<(String, String)> {
     PIPELINE_READ_METRICS_LABELS.get_or_init(|| {
-        vec![
-            (PIPELINE_NAME_LABEL.to_string(), pipeline_name.to_string()),
-            (PIPELINE_REPLICA_LABEL.to_string(), replica.to_string()),
+        let mut labels = vec![
             (
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                partition_name.to_string(),
+                PIPELINE_NAME_LABEL.to_string(),
+                get_pipeline_name().to_string(),
+            ),
+            (
+                PIPELINE_REPLICA_LABEL.to_string(),
+                get_vertex_replica().to_string(),
             ),
             (
                 PIPELINE_VERTEX_TYPE_LABEL.to_string(),
                 vertex_type.to_string(),
             ),
-            (PIPELINE_VERTEX_LABEL.to_string(), vertex_name.to_string()),
-        ]
+            (
+                PIPELINE_VERTEX_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ),
+        ];
+
+        if let Some(partition) = partition_name {
+            labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                partition.to_string(),
+            ));
+        }
+
+        labels
     })
 }
 
@@ -652,9 +658,7 @@ struct TimestampedPending {
 /// and exposing the metrics. It maintains a list of pending stats and ensures that
 /// only the most recent entries are kept.
 pub(crate) struct PendingReader {
-    mvtx_name: String,
-    replica: u16,
-    lag_reader: SourceHandle,
+    lag_reader: Source,
     lag_checking_interval: Duration,
     refresh_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
@@ -667,18 +671,14 @@ pub(crate) struct PendingReaderTasks {
 
 /// PendingReaderBuilder is used to build a [LagReader] instance.
 pub(crate) struct PendingReaderBuilder {
-    mvtx_name: String,
-    replica: u16,
-    lag_reader: SourceHandle,
+    lag_reader: Source,
     lag_checking_interval: Option<Duration>,
     refresh_interval: Option<Duration>,
 }
 
 impl PendingReaderBuilder {
-    pub(crate) fn new(mvtx_name: String, replica: u16, lag_reader: SourceHandle) -> Self {
+    pub(crate) fn new(lag_reader: Source) -> Self {
         Self {
-            mvtx_name,
-            replica,
             lag_reader,
             lag_checking_interval: None,
             refresh_interval: None,
@@ -697,8 +697,6 @@ impl PendingReaderBuilder {
 
     pub(crate) fn build(self) -> PendingReader {
         PendingReader {
-            mvtx_name: self.mvtx_name,
-            replica: self.replica,
             lag_reader: self.lag_reader,
             lag_checking_interval: self
                 .lag_checking_interval
@@ -730,10 +728,8 @@ impl PendingReader {
         });
 
         let pending_stats = self.pending_stats.clone();
-        let mvtx_name = self.mvtx_name.clone();
-        let replica = self.replica;
         let expose_handle = tokio::spawn(async move {
-            expose_pending_metrics(mvtx_name, replica, refresh_interval, pending_stats).await;
+            expose_pending_metrics(refresh_interval, pending_stats).await;
         });
         PendingReaderTasks {
             buildup_handle,
@@ -753,7 +749,7 @@ impl Drop for PendingReaderTasks {
 
 /// Periodically checks the pending messages from the source client and build the pending stats.
 async fn build_pending_info(
-    source: SourceHandle,
+    source: Source,
     lag_checking_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
@@ -782,7 +778,7 @@ async fn build_pending_info(
     }
 }
 
-async fn fetch_pending(lag_reader: &SourceHandle) -> crate::error::Result<i64> {
+async fn fetch_pending(lag_reader: &Source) -> crate::error::Result<i64> {
     let response: i64 = lag_reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
     Ok(response)
 }
@@ -792,8 +788,6 @@ const LOOKBACK_SECONDS_MAP: [(&str, i64); 4] =
 
 // Periodically exposes the pending metrics by calculating the average pending messages over different intervals.
 async fn expose_pending_metrics(
-    mvtx_name: String,
-    replica: u16,
     refresh_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
@@ -808,8 +802,7 @@ async fn expose_pending_metrics(
         for (label, seconds) in LOOKBACK_SECONDS_MAP {
             let pending = calculate_pending(seconds, &pending_stats).await;
             if pending != -1 {
-                let mut metric_labels =
-                    mvtx_forward_metric_labels(mvtx_name.clone(), replica).clone();
+                let mut metric_labels = mvtx_forward_metric_labels().clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
                 pending_info.insert(label, pending);
                 forward_mvtx_metrics()
@@ -1048,8 +1041,7 @@ mod tests {
         tokio::spawn({
             let pending_stats = pending_stats.clone();
             async move {
-                expose_pending_metrics("test".to_string(), 0, refresh_interval, pending_stats)
-                    .await;
+                expose_pending_metrics(refresh_interval, pending_stats).await;
             }
         });
         // We use tokio::time::interval() as the ticker in the expose_pending_metrics() function.
@@ -1061,7 +1053,7 @@ mod tests {
         let mut stored_values: [i64; 4] = [0; 4];
         {
             for (i, (label, _)) in LOOKBACK_SECONDS_MAP.iter().enumerate() {
-                let mut metric_labels = mvtx_forward_metric_labels("test".to_string(), 0).clone();
+                let mut metric_labels = mvtx_forward_metric_labels().clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
                 let guage = forward_mvtx_metrics()
                     .source_pending

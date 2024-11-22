@@ -20,13 +20,13 @@ use crate::transformer::ActorMessage;
 const DROP: &str = "U+005C__DROP__";
 
 /// TransformerClient is a client to interact with the transformer server.
-pub(crate) struct SourceTransformer {
+pub(super) struct SourceTransformer {
     read_tx: mpsc::Sender<SourceTransformRequest>,
     resp_stream: Streaming<SourceTransformResponse>,
 }
 
 impl SourceTransformer {
-    pub(crate) async fn new(
+    pub(super) async fn new(
         batch_size: usize,
         mut client: SourceTransformClient<Channel>,
     ) -> Result<Self> {
@@ -65,7 +65,7 @@ impl SourceTransformer {
         })
     }
 
-    pub(crate) async fn handle_message(&mut self, message: ActorMessage) {
+    pub(super) async fn handle_message(&mut self, message: ActorMessage) {
         match message {
             ActorMessage::Transform {
                 messages,
@@ -203,7 +203,6 @@ mod tests {
 
     use crate::message::{MessageID, StringOffset};
     use crate::shared::utils::create_rpc_channel;
-    use crate::transformer::SourceTransformHandle;
 
     struct NowCat;
 

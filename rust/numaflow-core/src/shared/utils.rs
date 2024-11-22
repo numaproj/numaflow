@@ -20,17 +20,22 @@ use tower::service_fn;
 use tracing::info;
 
 use crate::config::components::metrics::MetricsConfig;
-use crate::config::components::sink::SinkType;
-use crate::config::monovertex::MonovertexConfig;
-use crate::error;
+use crate::config::components::sink::{SinkConfig, SinkType};
+use crate::config::components::source::{SourceConfig, SourceType};
+use crate::config::components::transformer::TransformerConfig;
+use crate::message::{get_component_type, get_vertex_name, is_mono_vertex};
 use crate::metrics::{
     start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
 };
-use crate::shared::server_info::sdk_server_info;
-use crate::sink::{SinkClientType, SinkHandle};
-use crate::source::SourceHandle;
-use crate::Error;
-use crate::Result;
+use crate::shared::server_info::{sdk_server_info, ContainerType};
+use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
+use crate::source::generator::new_generator;
+use crate::source::user_defined::new_source;
+use crate::source::Source;
+use crate::transformer::Transformer;
+use crate::{config, error};
+use crate::{metrics, Result};
+use crate::{source, Error};
 
 pub(crate) async fn start_metrics_server(
     metrics_config: MetricsConfig,
@@ -50,24 +55,17 @@ pub(crate) async fn start_metrics_server(
 }
 
 pub(crate) async fn create_pending_reader(
-    mvtx_config: &MonovertexConfig,
-    lag_reader_grpc_client: SourceHandle,
+    metrics_config: &MetricsConfig,
+    lag_reader_grpc_client: Source,
 ) -> PendingReader {
-    PendingReaderBuilder::new(
-        mvtx_config.name.clone(),
-        mvtx_config.replica,
-        lag_reader_grpc_client,
-    )
-    .lag_checking_interval(Duration::from_secs(
-        mvtx_config.metrics_config.lag_check_interval_in_secs.into(),
-    ))
-    .refresh_interval(Duration::from_secs(
-        mvtx_config
-            .metrics_config
-            .lag_refresh_interval_in_secs
-            .into(),
-    ))
-    .build()
+    PendingReaderBuilder::new(lag_reader_grpc_client)
+        .lag_checking_interval(Duration::from_secs(
+            metrics_config.lag_check_interval_in_secs.into(),
+        ))
+        .refresh_interval(Duration::from_secs(
+            metrics_config.lag_refresh_interval_in_secs.into(),
+        ))
+        .build()
 }
 pub(crate) async fn wait_until_source_ready(
     cln_token: &CancellationToken,
@@ -171,37 +169,216 @@ pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> Result<Channel> {
     Ok(channel)
 }
 
-pub(crate) async fn create_sink_handle(
+pub(crate) async fn create_sink_writer(
     batch_size: usize,
-    sink_type: &SinkType,
+    read_timeout: Duration,
+    primary_sink: SinkConfig,
+    fallback_sink: Option<SinkConfig>,
     cln_token: &CancellationToken,
-) -> Result<(SinkHandle, Option<SinkClient<Channel>>)> {
-    match sink_type {
-        SinkType::Log(_) => Ok((
-            SinkHandle::new(SinkClientType::Log, batch_size).await?,
+) -> Result<(
+    SinkWriter,
+    Option<SinkClient<Channel>>,
+    Option<SinkClient<Channel>>,
+)> {
+    let (sink_writer_builder, sink_rpc_client) = match primary_sink.sink_type.clone() {
+        SinkType::Log(_) => (
+            SinkWriterBuilder::new(primary_sink.clone(), SinkClientType::Log)
+                .batch_size(batch_size)
+                .read_timeout(read_timeout),
             None,
-        )),
-        SinkType::Blackhole(_) => Ok((
-            SinkHandle::new(SinkClientType::Blackhole, batch_size).await?,
+        ),
+        SinkType::Blackhole(_) => (
+            SinkWriterBuilder::new(primary_sink.clone(), SinkClientType::Blackhole)
+                .batch_size(batch_size)
+                .read_timeout(read_timeout),
             None,
-        )),
+        ),
         SinkType::UserDefined(ud_config) => {
-            _ = sdk_server_info(ud_config.server_info_path.clone().into(), cln_token.clone())
-                .await?;
+            let sink_server_info =
+                sdk_server_info(ud_config.server_info_path.clone().into(), cln_token.clone())
+                    .await?;
+
+            let metric_labels = metrics::sdk_info_labels(
+                get_component_type().to_string(),
+                get_vertex_name().to_string(),
+                sink_server_info.language,
+                sink_server_info.version,
+                ContainerType::Sourcer.to_string(),
+            );
+
+            metrics::global_metrics()
+                .sdk_info
+                .get_or_create(&metric_labels)
+                .set(1);
+
             let mut sink_grpc_client =
                 SinkClient::new(create_rpc_channel(ud_config.socket_path.clone().into()).await?)
                     .max_encoding_message_size(ud_config.grpc_max_message_size)
                     .max_encoding_message_size(ud_config.grpc_max_message_size);
             wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
-            // TODO: server info?
-
-            Ok((
-                SinkHandle::new(
+            (
+                SinkWriterBuilder::new(
+                    primary_sink.clone(),
                     SinkClientType::UserDefined(sink_grpc_client.clone()),
-                    batch_size,
                 )
-                .await?,
+                .batch_size(batch_size)
+                .read_timeout(read_timeout),
                 Some(sink_grpc_client),
+            )
+        }
+    };
+
+    if let Some(fb_sink) = fallback_sink {
+        return match fb_sink.sink_type.clone() {
+            SinkType::Log(_) => Ok((
+                sink_writer_builder
+                    .fb_sink_client(SinkClientType::Log)
+                    .build()
+                    .await?,
+                sink_rpc_client.clone(),
+                None,
+            )),
+            SinkType::Blackhole(_) => Ok((
+                sink_writer_builder
+                    .fb_sink_client(SinkClientType::Blackhole)
+                    .build()
+                    .await?,
+                sink_rpc_client.clone(),
+                None,
+            )),
+            SinkType::UserDefined(ud_config) => {
+                let fb_server_info =
+                    sdk_server_info(ud_config.server_info_path.clone().into(), cln_token.clone())
+                        .await?;
+
+                let metric_labels = metrics::sdk_info_labels(
+                    get_component_type().to_string(),
+                    get_vertex_name().to_string(),
+                    fb_server_info.language,
+                    fb_server_info.version,
+                    ContainerType::Sourcer.to_string(),
+                );
+
+                metrics::global_metrics()
+                    .sdk_info
+                    .get_or_create(&metric_labels)
+                    .set(1);
+
+                let mut sink_grpc_client = SinkClient::new(
+                    create_rpc_channel(ud_config.socket_path.clone().into()).await?,
+                )
+                .max_encoding_message_size(ud_config.grpc_max_message_size)
+                .max_encoding_message_size(ud_config.grpc_max_message_size);
+                wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
+
+                Ok((
+                    sink_writer_builder
+                        .fb_sink_client(SinkClientType::UserDefined(sink_grpc_client.clone()))
+                        .build()
+                        .await?,
+                    sink_rpc_client.clone(),
+                    Some(sink_grpc_client),
+                ))
+            }
+        };
+    }
+    Ok((sink_writer_builder.build().await?, sink_rpc_client, None))
+}
+
+/// Creates a transformer if it is configured
+pub async fn create_transformer(
+    batch_size: usize,
+    timeout: Duration,
+    transformer_config: Option<TransformerConfig>,
+    cln_token: CancellationToken,
+) -> Result<(Option<Transformer>, Option<SourceTransformClient<Channel>>)> {
+    if let Some(transformer_config) = transformer_config {
+        if let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
+            &transformer_config.transformer_type
+        {
+            let server_info =
+                sdk_server_info(ud_transformer.socket_path.clone().into(), cln_token.clone())
+                    .await?;
+            let metric_labels = metrics::sdk_info_labels(
+                get_component_type().to_string(),
+                get_vertex_name().to_string(),
+                server_info.language,
+                server_info.version,
+                ContainerType::Sourcer.to_string(),
+            );
+            metrics::global_metrics()
+                .sdk_info
+                .get_or_create(&metric_labels)
+                .set(1);
+
+            let mut transformer_grpc_client = SourceTransformClient::new(
+                create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
+            )
+            .max_encoding_message_size(ud_transformer.grpc_max_message_size)
+            .max_encoding_message_size(ud_transformer.grpc_max_message_size);
+            wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
+            return Ok((
+                Some(Transformer::new(batch_size, timeout, transformer_grpc_client.clone()).await?),
+                Some(transformer_grpc_client),
+            ));
+        }
+    }
+    Ok((None, None))
+}
+
+/// Creates a source type based on the configuration
+pub async fn create_source(
+    batch_size: usize,
+    read_timeout: Duration,
+    source_config: &SourceConfig,
+    cln_token: CancellationToken,
+) -> Result<(Source, Option<SourceClient<Channel>>)> {
+    match &source_config.source_type {
+        SourceType::Generator(generator_config) => {
+            let (generator_read, generator_ack, generator_lag) =
+                new_generator(generator_config.clone(), batch_size)?;
+            Ok((
+                Source::new(
+                    source::SourceType::Generator(generator_read, generator_ack, generator_lag),
+                    batch_size,
+                ),
+                None,
+            ))
+        }
+        SourceType::UserDefined(udsource_config) => {
+            let server_info = sdk_server_info(
+                udsource_config.server_info_path.clone().into(),
+                cln_token.clone(),
+            )
+            .await?;
+
+            let metric_labels = metrics::sdk_info_labels(
+                get_component_type().to_string(),
+                get_vertex_name().to_string(),
+                server_info.language,
+                server_info.version,
+                ContainerType::Sourcer.to_string(),
+            );
+            metrics::global_metrics()
+                .sdk_info
+                .get_or_create(&metric_labels)
+                .set(1);
+
+            // TODO: Add sdk info metric
+            let mut source_grpc_client = SourceClient::new(
+                create_rpc_channel(udsource_config.socket_path.clone().into()).await?,
+            )
+            .max_encoding_message_size(udsource_config.grpc_max_message_size)
+            .max_encoding_message_size(udsource_config.grpc_max_message_size);
+            wait_until_source_ready(&cln_token, &mut source_grpc_client).await?;
+            let (ud_read, ud_ack, ud_lag) =
+                new_source(source_grpc_client.clone(), batch_size, read_timeout).await?;
+            Ok((
+                Source::new(
+                    source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
+                    batch_size,
+                ),
+                Some(source_grpc_client),
             ))
         }
     }

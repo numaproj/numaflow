@@ -7,8 +7,8 @@ use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
-use user_defined::SourceTransformer;
 
+use crate::transformer::user_defined::SourceTransformer;
 use crate::Result;
 
 /// User-Defined Transformer extends Numaflow to add custom sources supported outside the builtins.
@@ -16,52 +16,22 @@ use crate::Result;
 /// [User-Defined Transformer]: https://numaflow.numaproj.io/user-guide/sources/transformer/overview/#build-your-own-transformer
 pub(crate) mod user_defined;
 
-enum ActorMessage {
+pub(self) enum ActorMessage {
     Transform {
         messages: Vec<Message>,
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
     },
 }
 
-/// SourceTransformHandle, sends messages to the SourceTransformer Actor.
-#[derive(Clone)]
-pub(crate) struct SourceTransformHandle {
-    sender: mpsc::Sender<ActorMessage>,
-}
-
-impl SourceTransformHandle {
-    pub(crate) async fn new(client: SourceTransformClient<Channel>) -> Result<Self> {
-        let batch_size = 500;
-        let (sender, mut receiver) = mpsc::channel(batch_size);
-        let mut client = SourceTransformer::new(batch_size, client).await?;
-        tokio::spawn(async move {
-            while let Some(msg) = receiver.recv().await {
-                client.handle_message(msg).await;
-            }
-        });
-        Ok(Self { sender })
-    }
-
-    pub(crate) async fn transform(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
-        let (sender, receiver) = oneshot::channel();
-        let msg = ActorMessage::Transform {
-            messages,
-            respond_to: sender,
-        };
-        let _ = self.sender.send(msg).await;
-        receiver.await.unwrap()
-    }
-}
-
 /// StreamingTransformer, transforms messages in a streaming fashion.
 #[derive(Clone)]
-pub(crate) struct StreamingTransformer {
+pub(crate) struct Transformer {
     batch_size: usize,
     timeout: Duration,
     sender: mpsc::Sender<ActorMessage>,
 }
 
-impl StreamingTransformer {
+impl Transformer {
     pub(crate) async fn new(
         batch_size: usize,
         timeout: Duration,
@@ -81,7 +51,7 @@ impl StreamingTransformer {
         })
     }
 
-    async fn transform(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
+    pub(crate) async fn transform(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Transform {
             messages,
@@ -93,7 +63,7 @@ impl StreamingTransformer {
 
     /// Starts reading messages in the form of chunks and transforms them and
     /// sends them to the next stage.
-    pub(crate) fn start_streaming(
+    pub(crate) fn transform_stream(
         &self,
         input_stream: ReceiverStream<ReadMessage>,
     ) -> Result<(ReceiverStream<ReadMessage>, JoinHandle<Result<()>>)> {

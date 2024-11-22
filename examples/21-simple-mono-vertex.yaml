@@ -3,19 +3,13 @@ kind: MonoVertex
 metadata:
   name: simple-mono-without-stream
 spec:
-  containerTemplate:
-    env:
-      - name: NUMAFLOW_MVTX_STREAMING
-        value: "true"
   source:
     udsource:
       container:
         image: quay.io/numaio/numaflow-rs/simple-source:stable
     # transformer is an optional container to do any transformation to the incoming data before passing to the sink
-    transformer:
-      container:
-        image: quay.io/numaio/numaflow-rs/source-transformer-now:stable
+#    transformer:
+#      container:
+#        image: quay.io/numaio/numaflow-rs/source-transformer-now:stable
   sink:
-    udsink:
-      container:
-        image: quay.io/numaio/numaflow-rs/sink-log:stable
+    blackhole: {}

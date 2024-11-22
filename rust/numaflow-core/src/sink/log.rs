@@ -1,7 +1,7 @@
+use crate::sink::Sink;
 use crate::{
     error,
     message::{Message, ResponseFromSink, ResponseStatusFromSink},
-    sink::Sink,
 };
 
 pub(crate) struct LogSink;
@@ -41,7 +41,7 @@ mod tests {
     use crate::message::IntOffset;
     use crate::{
         message::{Message, MessageID, Offset, ResponseFromSink, ResponseStatusFromSink},
-        sink::Sink,
+        sink::SinkWriter,
     };
 
     #[tokio::test]

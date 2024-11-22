@@ -152,10 +152,6 @@ func (p Pipeline) GetAllBuffers() []string {
 
 func (p Pipeline) GetAllBuckets() []string {
 	r := []string{}
-	// buckets are only used when watermark is enabled
-	if p.Spec.Watermark.Disabled {
-		return r
-	}
 	for _, e := range p.ListAllEdges() {
 		r = append(r, GenerateEdgeBucketName(p.Namespace, p.Name, e.From, e.To))
 	}
@@ -810,7 +806,7 @@ func (pls *PipelineStatus) IsHealthy() bool {
 
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-git type PipelineList struct {
+type PipelineList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []Pipeline `json:"items" protobuf:"bytes,2,rep,name=items"`

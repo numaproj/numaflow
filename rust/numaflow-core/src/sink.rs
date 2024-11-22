@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-
 use numaflow_pb::clients::sink::sink_client::SinkClient;
+use std::collections::HashMap;
+use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -35,6 +35,7 @@ pub(crate) trait LocalSink {
     async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>>;
 }
 
+/// ActorMessage is a message that is sent to the SinkActor.
 enum ActorMessage {
     Sink {
         messages: Vec<Message>,
@@ -42,8 +43,9 @@ enum ActorMessage {
     },
 }
 
+/// SinkActor is an actor that handles messages sent to the Sink.
 struct SinkActor<T> {
-    actor_messages: mpsc::Receiver<ActorMessage>,
+    actor_messages: Receiver<ActorMessage>,
     sink: T,
 }
 
@@ -71,21 +73,62 @@ where
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct SinkHandle {
-    sender: mpsc::Sender<ActorMessage>,
-}
-
 pub(crate) enum SinkClientType {
     Log,
     Blackhole,
     UserDefined(SinkClient<Channel>),
 }
 
-impl SinkHandle {
-    pub(crate) async fn new(sink_client: SinkClientType, batch_size: usize) -> Result<Self> {
-        let (sender, receiver) = mpsc::channel(batch_size);
-        match sink_client {
+/// SinkWriter is a writer that writes messages to the Sink.
+#[derive(Clone)]
+pub(super) struct SinkWriter {
+    batch_size: usize,
+    read_timeout: time::Duration,
+    config: SinkConfig,
+    sink_handle: mpsc::Sender<ActorMessage>,
+    fb_sink_handle: Option<mpsc::Sender<ActorMessage>>,
+}
+
+/// SinkWriterBuilder is a builder to build a SinkWriter.
+pub struct SinkWriterBuilder {
+    batch_size: usize,
+    read_timeout: time::Duration,
+    config: SinkConfig,
+    sink_client: SinkClientType,
+    fb_sink_client: Option<SinkClientType>,
+}
+
+impl SinkWriterBuilder {
+    pub fn new(config: SinkConfig, sink_type: SinkClientType) -> Self {
+        Self {
+            batch_size: 500,
+            read_timeout: Duration::from_secs(1),
+            config,
+            sink_client: sink_type,
+            fb_sink_client: None,
+        }
+    }
+
+    pub fn batch_size(mut self, batch_size: usize) -> Self {
+        self.batch_size = batch_size;
+        self
+    }
+
+    pub fn read_timeout(mut self, read_timeout: Duration) -> Self {
+        self.read_timeout = read_timeout;
+        self
+    }
+
+    pub fn fb_sink_client(mut self, fb_sink_client: SinkClientType) -> Self {
+        self.fb_sink_client = Some(fb_sink_client);
+        self
+    }
+
+    /// Build the SinkWriter, it also starts the SinkActor to handle messages.
+    pub async fn build(self) -> Result<SinkWriter> {
+        let (sender, receiver) = mpsc::channel(self.batch_size);
+
+        match self.sink_client {
             SinkClientType::Log => {
                 let log_sink = log::LogSink;
                 tokio::spawn(async {
@@ -114,47 +157,86 @@ impl SinkHandle {
                 });
             }
         };
-        Ok(Self { sender })
-    }
 
-    pub(crate) async fn sink(&self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
+        let fb_sink_handle = if let Some(fb_sink_client) = self.fb_sink_client {
+            let (fb_sender, fb_receiver) = mpsc::channel(self.batch_size);
+            match fb_sink_client {
+                SinkClientType::Log => {
+                    let log_sink = log::LogSink;
+                    tokio::spawn(async {
+                        let mut actor = SinkActor::new(fb_receiver, log_sink);
+                        while let Some(msg) = actor.actor_messages.recv().await {
+                            actor.handle_message(msg).await;
+                        }
+                    });
+                }
+                SinkClientType::Blackhole => {
+                    let blackhole_sink = blackhole::BlackholeSink;
+                    tokio::spawn(async {
+                        let mut actor = SinkActor::new(fb_receiver, blackhole_sink);
+                        while let Some(msg) = actor.actor_messages.recv().await {
+                            actor.handle_message(msg).await;
+                        }
+                    });
+                }
+                SinkClientType::UserDefined(sink_client) => {
+                    let sink = UserDefinedSink::new(sink_client).await?;
+                    tokio::spawn(async {
+                        let mut actor = SinkActor::new(fb_receiver, sink);
+                        while let Some(msg) = actor.actor_messages.recv().await {
+                            actor.handle_message(msg).await;
+                        }
+                    });
+                }
+            };
+            Some(fb_sender)
+        } else {
+            None
+        };
+
+        Ok(SinkWriter {
+            batch_size: self.batch_size,
+            read_timeout: self.read_timeout,
+            config: self.config,
+            sink_handle: sender,
+            fb_sink_handle,
+        })
+    }
+}
+
+impl SinkWriter {
+    /// Sink the messages to the Sink.
+    async fn sink(&self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
         let (tx, rx) = oneshot::channel();
         let msg = ActorMessage::Sink {
             messages,
             respond_to: tx,
         };
-        let _ = self.sender.send(msg).await;
+        let _ = self.sink_handle.send(msg).await;
         rx.await.unwrap()
     }
-}
 
-#[derive(Clone)]
-pub(super) struct StreamingSink {
-    batch_size: usize,
-    read_timeout: time::Duration,
-    config: SinkConfig,
-    sink_handle: SinkHandle,
-    fb_sink_handle: Option<SinkHandle>,
-}
+    /// Sink the messages to the Fallback Sink.
+    async fn fb_sink(&self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
+        if self.fb_sink_handle.is_none() {
+            return Err(Error::Sink(
+                "Response contains fallback messages but no fallback sink is configured"
+                    .to_string(),
+            ));
+        }
 
-impl StreamingSink {
-    pub(super) fn new(
-        batch_size: usize,
-        read_timeout: time::Duration,
-        config: SinkConfig,
-        sink_handle: SinkHandle,
-        fb_sink_handle: Option<SinkHandle>,
-    ) -> Result<Self> {
-        Ok(Self {
-            batch_size,
-            read_timeout,
-            config,
-            sink_handle,
-            fb_sink_handle,
-        })
+        let (tx, rx) = oneshot::channel();
+        let msg = ActorMessage::Sink {
+            messages,
+            respond_to: tx,
+        };
+        let _ = self.fb_sink_handle.as_ref().unwrap().send(msg).await;
+        rx.await.unwrap()
     }
 
-    pub(super) async fn start(
+    /// Streaming write the messages to the Sink, it will keep writing messages until the stream is
+    /// closed or the cancellation token is triggered.
+    pub(super) async fn streaming_write(
         &self,
         messages_stream: ReceiverStream<ReadMessage>,
         cancellation_token: CancellationToken,
@@ -171,16 +253,11 @@ impl StreamingSink {
                 let mut last_logged_at = std::time::Instant::now();
 
                 loop {
-                    let chunk_time = time::Instant::now();
                     let batch = match chunk_stream.next().await {
                         Some(batch) => batch,
                         None => break,
                     };
-                    info!(
-                        "Sink chunk batch size: {} and latency - {:?}",
-                        batch.len(),
-                        chunk_time.elapsed()
-                    );
+
                     if batch.is_empty() {
                         continue;
                     }
@@ -189,10 +266,7 @@ impl StreamingSink {
                     let messages: Vec<Message> =
                         batch.iter().map(|rm| rm.message.clone()).collect();
 
-                    match this
-                        .write_to_sink(messages, cancellation_token.clone())
-                        .await
-                    {
+                    match this.write(messages, cancellation_token.clone()).await {
                         Ok(_) => {
                             for rm in batch {
                                 let _ = rm.ack.send(ReadAck::Ack);
@@ -221,11 +295,6 @@ impl StreamingSink {
                         warn!("Cancellation token is cancelled. Exiting SinkWriter");
                         break;
                     }
-                    info!(
-                        "Sink took {:?} to process {} messages",
-                        chunk_time.elapsed(),
-                        n
-                    );
                 }
 
                 Ok(())
@@ -234,8 +303,8 @@ impl StreamingSink {
         Ok(handle)
     }
 
-    // Writes the messages to the sink and handles fallback messages if present
-    async fn write_to_sink(
+    /// Write the messages to the Sink.
+    pub(crate) async fn write(
         &mut self,
         messages: Vec<Message>,
         cln_token: CancellationToken,
@@ -372,11 +441,8 @@ impl StreamingSink {
         messages_to_send: &mut Vec<Message>,
         retry_config: &RetryConfig,
     ) -> Result<bool> {
-        let start_time = time::Instant::now();
-        match self.sink_handle.sink(messages_to_send.clone()).await {
+        match self.sink(messages_to_send.clone()).await {
             Ok(response) => {
-                debug!("Sink latency - {}ms", start_time.elapsed().as_millis());
-
                 // create a map of id to result, since there is no strict requirement
                 // for the udsink to return the results in the same order as the requests
                 let result_map = response
@@ -435,7 +501,6 @@ impl StreamingSink {
             ));
         }
 
-        let fallback_client = self.fb_sink_handle.as_mut().unwrap();
         let mut attempts = 0;
         let mut fallback_error_map = HashMap::new();
         // start with the original set of message to be sent.
@@ -451,8 +516,8 @@ impl StreamingSink {
         let sleep_interval = default_retry.interval.unwrap();
 
         while attempts < max_attempts {
-            let start_time = tokio::time::Instant::now();
-            match fallback_client.sink(messages_to_send.clone()).await {
+            let start_time = time::Instant::now();
+            match self.fb_sink(messages_to_send.clone()).await {
                 Ok(fb_response) => {
                     debug!(
                         "Fallback sink latency - {}ms",

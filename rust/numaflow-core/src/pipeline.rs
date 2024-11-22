@@ -2,31 +2,17 @@ use async_nats::jetstream::Context;
 use async_nats::{jetstream, ConnectOptions};
 use futures::future::try_join_all;
 use log::info;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
 
-use crate::config::components::sink::SinkConfig;
-use crate::config::components::source::SourceType;
 use crate::config::pipeline;
-use crate::config::pipeline::{PipelineConfig, SourceVtxConfig};
+use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
 use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
-use crate::pipeline::isb::jetstream::WriterHandle;
-use crate::shared::server_info::sdk_server_info;
+use crate::pipeline::isb::jetstream::StreamingJetstreamWriter;
 use crate::shared::utils;
-use crate::shared::utils::{
-    create_rpc_channel, start_metrics_server, wait_until_source_ready, wait_until_transformer_ready,
-};
-use crate::sink::StreamingSink;
-use crate::source::generator::new_generator;
-use crate::source::user_defined::new_source;
-use crate::source::StreamingSource;
-use crate::transformer::{SourceTransformHandle, StreamingTransformer};
-use crate::{config, error, source, Result};
+use crate::shared::utils::{create_sink_writer, start_metrics_server};
+use crate::{error, Result};
 
 mod forwarder;
 mod isb;
@@ -36,115 +22,39 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: PipelineConfig,
 ) -> Result<()> {
-    let js_context = create_js_context(config.js_client_config.clone()).await?;
-
     match &config.vertex_config {
         pipeline::VertexType::Source(source) => {
-            info!("Starting source");
-            if std::env::var("NUMAFLOW_PIPELINE_STREAMING").is_ok() {
-                info!("Starting streaming forwarder");
-                return start_streaming_forwarder(cln_token, config.clone(), source.clone()).await;
-            }
-            let isb_writer =
-                create_buffer_writers(&config, js_context.clone(), cln_token.clone()).await;
-
-            let (source_type, source_grpc_client) =
-                create_source_type(source, &config, cln_token.clone()).await?;
-            let (transformer, transformer_grpc_client) =
-                create_transformer(source, cln_token.clone()).await?;
-
-            start_metrics_server(
-                config.metrics_config.clone(),
-                UserDefinedContainerState::Pipeline(PipelineContainerState::Source((
-                    source_grpc_client.clone(),
-                    transformer_grpc_client.clone(),
-                ))),
-            )
-            .await;
-
-            let source_handle = source::SourceHandle::new(source_type, config.batch_size);
-            let mut forwarder = forwarder::source_forwarder::ForwarderBuilder::new(
-                source_handle,
-                transformer,
-                isb_writer,
-                cln_token.clone(),
-                config.clone(),
-            )
-            .build();
-            forwarder.start().await?;
+            info!("Starting source forwarder");
+            start_source_forwarder(cln_token, config.clone(), source.clone()).await?;
         }
         pipeline::VertexType::Sink(sink) => {
-            // Create buffer readers for each partition
-            let buffer_readers = create_buffer_readers(&config, js_context.clone()).await?;
-
-            // Create sink writers and clients
-            let mut sink_writers = Vec::new();
-            for _ in &buffer_readers {
-                let (sink_writer, sink_grpc_client, fb_sink_grpc_client) = create_sink_writer(
-                    &config,
-                    &sink.sink_config,
-                    &sink.fb_sink_config,
-                    cln_token.clone(),
-                )
-                .await?;
-                sink_writers.push((sink_writer, sink_grpc_client, fb_sink_grpc_client));
-            }
-
-            // Start the metrics server with one of the clients
-            if let Some((_, sink, fb_sink)) = sink_writers.first() {
-                start_metrics_server(
-                    config.metrics_config.clone(),
-                    UserDefinedContainerState::Pipeline(PipelineContainerState::Sink((
-                        sink.clone(),
-                        fb_sink.clone(),
-                    ))),
-                )
-                .await;
-            }
-
-            // Start a new forwarder for each buffer reader
-            let mut forwarder_tasks = Vec::new();
-            for (buffer_reader, (sink_writer, _, _)) in buffer_readers.into_iter().zip(sink_writers)
-            {
-                let forwarder = forwarder::sink_forwarder::SinkForwarder::new(
-                    buffer_reader,
-                    sink_writer,
-                    cln_token.clone(),
-                )
-                .await;
-
-                let task = tokio::spawn({
-                    let config = config.clone();
-                    async move { forwarder.start(config.clone()).await }
-                });
-
-                forwarder_tasks.push(task);
-            }
-
-            try_join_all(forwarder_tasks)
-                .await
-                .map_err(|e| error::Error::Forwarder(e.to_string()))?;
+            info!("Starting sink forwarder");
+            start_sink_forwarder(cln_token, config.clone(), sink.clone()).await?;
         }
     }
     Ok(())
 }
 
-async fn start_streaming_forwarder(
+async fn start_source_forwarder(
     cln_token: CancellationToken,
     config: PipelineConfig,
-    source: SourceVtxConfig,
+    source_config: SourceVtxConfig,
 ) -> Result<()> {
     let js_context = create_js_context(config.js_client_config.clone()).await?;
 
-    let buffer_writer =
-        create_streaming_buffer_writer(&config, js_context.clone(), cln_token.clone()).await;
+    let buffer_writer = create_buffer_writer(&config, js_context.clone(), cln_token.clone()).await;
 
-    let (source_type, source_grpc_client) =
-        create_source_type(&source, &config, cln_token.clone()).await?;
-    let (transformer, transformer_grpc_client) = create_streaming_transformer(
+    let (source, source_grpc_client) = utils::create_source(
         config.batch_size,
         config.read_timeout,
-        &source,
+        &source_config.source_config,
+        cln_token.clone(),
+    )
+    .await?;
+    let (transformer, transformer_grpc_client) = utils::create_transformer(
+        config.batch_size,
+        config.read_timeout,
+        source_config.transformer_config.clone(),
         cln_token.clone(),
     )
     .await?;
@@ -158,40 +68,80 @@ async fn start_streaming_forwarder(
     )
     .await;
 
-    let streaming_source = StreamingSource::new(config.clone(), source_type, config.batch_size);
-    let forwarder = forwarder::source_streaming_forwarder::ForwarderBuilder::new(
-        streaming_source,
+    let forwarder = forwarder::source_forwarder::StreamingForwarderBuilder::new(
+        source,
         transformer,
         buffer_writer,
         cln_token.clone(),
         config.clone(),
     )
     .build();
+
     forwarder.start().await?;
     Ok(())
 }
 
-/// Creates the required buffer writers based on the pipeline configuration, it creates a map
-/// of vertex name to a list of writer handles.
-async fn create_buffer_writers(
-    config: &PipelineConfig,
-    js_context: Context,
+async fn start_sink_forwarder(
     cln_token: CancellationToken,
-) -> WriterHandle {
-    WriterHandle::new(
-        config.paf_batch_size,
-        config
-            .to_vertex_config
-            .iter()
-            .map(|tv| tv.writer_config.clone())
-            .collect(),
-        js_context,
-        cln_token,
-    )
-    .await
+    config: PipelineConfig,
+    sink: SinkVtxConfig,
+) -> Result<()> {
+    let js_context = create_js_context(config.js_client_config.clone()).await?;
+
+    // Create buffer readers for each partition
+    let buffer_readers = create_buffer_readers(&config, js_context.clone()).await?;
+
+    // Create sink writers and clients
+    let mut sink_writers = Vec::new();
+    for _ in &buffer_readers {
+        let (sink_writer, sink_grpc_client, fb_sink_grpc_client) = create_sink_writer(
+            config.batch_size,
+            config.read_timeout,
+            sink.sink_config.clone(),
+            sink.fb_sink_config.clone(),
+            &cln_token,
+        )
+        .await?;
+        sink_writers.push((sink_writer, sink_grpc_client, fb_sink_grpc_client));
+    }
+
+    // Start the metrics server with one of the clients
+    if let Some((_, sink, fb_sink)) = sink_writers.first() {
+        start_metrics_server(
+            config.metrics_config.clone(),
+            UserDefinedContainerState::Pipeline(PipelineContainerState::Sink((
+                sink.clone(),
+                fb_sink.clone(),
+            ))),
+        )
+        .await;
+    }
+
+    // Start a new forwarder for each buffer reader
+    let mut forwarder_tasks = Vec::new();
+    for (buffer_reader, (sink_writer, _, _)) in buffer_readers.into_iter().zip(sink_writers) {
+        let forwarder = forwarder::sink_forwarder::SinkForwarder::new(
+            buffer_reader,
+            sink_writer,
+            cln_token.clone(),
+        )
+        .await;
+
+        let task = tokio::spawn({
+            let config = config.clone();
+            async move { forwarder.start(config.clone()).await }
+        });
+
+        forwarder_tasks.push(task);
+    }
+
+    try_join_all(forwarder_tasks)
+        .await
+        .map_err(|e| error::Error::Forwarder(e.to_string()))?;
+    Ok(())
 }
 
-async fn create_streaming_buffer_writer(
+async fn create_buffer_writer(
     config: &PipelineConfig,
     js_context: Context,
     cln_token: CancellationToken,
@@ -237,152 +187,6 @@ async fn create_buffer_readers(
     Ok(readers)
 }
 
-// Creates a sink writer based on the pipeline configuration
-async fn create_sink_writer(
-    config: &PipelineConfig,
-    sink_config: &SinkConfig,
-    fb_sink_config: &Option<SinkConfig>,
-    cln_token: CancellationToken,
-) -> Result<(
-    StreamingSink,
-    Option<SinkClient<Channel>>,
-    Option<SinkClient<Channel>>,
-)> {
-    let (sink_handle, sink_grpc_client) =
-        utils::create_sink_handle(config.batch_size, &sink_config.sink_type, &cln_token).await?;
-    let (fb_sink_handle, fb_sink_grpc_client) = match fb_sink_config {
-        None => (None, None),
-        Some(fb_sink_config) => {
-            let (handle, client) =
-                utils::create_sink_handle(config.batch_size, &fb_sink_config.sink_type, &cln_token)
-                    .await?;
-            (Some(handle), client)
-        }
-    };
-
-    Ok((
-        StreamingSink::new(
-            config.batch_size,
-            config.read_timeout,
-            sink_config.clone(),
-            sink_handle,
-            fb_sink_handle,
-        )?,
-        sink_grpc_client,
-        fb_sink_grpc_client,
-    ))
-}
-
-/// Creates a source type based on the pipeline configuration
-async fn create_source_type(
-    source: &pipeline::SourceVtxConfig,
-    config: &PipelineConfig,
-    cln_token: CancellationToken,
-) -> Result<(source::SourceType, Option<SourceClient<Channel>>)> {
-    match &source.source_config.source_type {
-        SourceType::Generator(generator_config) => {
-            let (generator_read, generator_ack, generator_lag) =
-                new_generator(generator_config.clone(), config.batch_size)?;
-            Ok((
-                source::SourceType::Generator(generator_read, generator_ack, generator_lag),
-                None,
-            ))
-        }
-        SourceType::UserDefined(udsource_config) => {
-            _ = sdk_server_info(
-                udsource_config.server_info_path.clone().into(),
-                cln_token.clone(),
-            )
-            .await?;
-
-            // TODO: Add sdk info metric
-
-            let mut source_grpc_client = SourceClient::new(
-                create_rpc_channel(udsource_config.socket_path.clone().into()).await?,
-            )
-            .max_encoding_message_size(udsource_config.grpc_max_message_size)
-            .max_encoding_message_size(udsource_config.grpc_max_message_size);
-            wait_until_source_ready(&cln_token, &mut source_grpc_client).await?;
-            let (ud_read, ud_ack, ud_lag) = new_source(
-                source_grpc_client.clone(),
-                config.batch_size,
-                config.read_timeout,
-            )
-            .await?;
-            Ok((
-                source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
-                Some(source_grpc_client),
-            ))
-        }
-    }
-}
-/// Creates a transformer if it is configured in the pipeline
-async fn create_transformer(
-    source: &pipeline::SourceVtxConfig,
-    cln_token: CancellationToken,
-) -> Result<(
-    Option<SourceTransformHandle>,
-    Option<SourceTransformClient<Channel>>,
-)> {
-    if let Some(transformer_config) = &source.transformer_config {
-        if let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
-            &transformer_config.transformer_type
-        {
-            _ = sdk_server_info(ud_transformer.socket_path.clone().into(), cln_token.clone())
-                .await?;
-            // TODO: Add sdk info metric
-
-            let mut transformer_grpc_client = SourceTransformClient::new(
-                create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
-            )
-            .max_encoding_message_size(ud_transformer.grpc_max_message_size)
-            .max_encoding_message_size(ud_transformer.grpc_max_message_size);
-            wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
-            return Ok((
-                Some(SourceTransformHandle::new(transformer_grpc_client.clone()).await?),
-                Some(transformer_grpc_client),
-            ));
-        }
-    }
-    Ok((None, None))
-}
-
-async fn create_streaming_transformer(
-    batch_size: usize,
-    timeout: Duration,
-    source: &SourceVtxConfig,
-    cln_token: CancellationToken,
-) -> Result<(
-    Option<StreamingTransformer>,
-    Option<SourceTransformClient<Channel>>,
-)> {
-    if let Some(transformer_config) = &source.transformer_config {
-        if let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
-            &transformer_config.transformer_type
-        {
-            check_for_server_compatibility(
-                ud_transformer.socket_path.clone().into(),
-                cln_token.clone(),
-            )
-            .await?;
-            let mut transformer_grpc_client = SourceTransformClient::new(
-                create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
-            )
-            .max_encoding_message_size(ud_transformer.grpc_max_message_size)
-            .max_encoding_message_size(ud_transformer.grpc_max_message_size);
-            wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
-            return Ok((
-                Some(
-                    StreamingTransformer::new(batch_size, timeout, transformer_grpc_client.clone())
-                        .await?,
-                ),
-                Some(transformer_grpc_client),
-            ));
-        }
-    }
-    Ok((None, None))
-}
-
 /// Creates a jetstream context based on the provided configuration
 async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Result<Context> {
     // TODO: make these configurable. today this is hardcoded on Golang code too.
@@ -406,6 +210,7 @@ async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Re
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::time::Duration;
 
     use async_nats::jetstream;
