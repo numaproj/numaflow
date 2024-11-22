@@ -507,7 +507,8 @@ func Test_GetSideInputManagerDeployments(t *testing.T) {
 		deployments, err := testObj.GetSideInputsManagerDeployments(testGetSideInputDeploymentReq)
 		assert.Nil(t, err)
 		assert.Equal(t, 1, len(deployments))
-		assert.Equal(t, 2, len(deployments[0].Spec.Template.Spec.Containers))
+		assert.Equal(t, 1, len(deployments[0].Spec.Template.Spec.Containers))
+		assert.Equal(t, 2, len(deployments[0].Spec.Template.Spec.InitContainers))
 	})
 }
 

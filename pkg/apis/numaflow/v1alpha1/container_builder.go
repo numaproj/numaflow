@@ -89,6 +89,10 @@ func (b containerBuilder) resources(x corev1.ResourceRequirements) containerBuil
 }
 
 func (b containerBuilder) asSidecar() containerBuilder {
+	// TODO: (k8s 1.29) clean this up once we deprecate the support for k8s < 1.29
+	if !isSidecarSupported() {
+		return b
+	}
 	b.RestartPolicy = ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways)
 	return b
 }

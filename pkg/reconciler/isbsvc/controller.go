@@ -82,7 +82,7 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 	if !equality.Semantic.DeepEqual(isbSvc.Finalizers, isbSvcCopy.Finalizers) {
 		patchYaml := "metadata:\n  finalizers: [" + strings.Join(isbSvcCopy.Finalizers, ",") + "]"
 		patchJson, _ := yaml.YAMLToJSON([]byte(patchYaml))
-		if err := r.client.Patch(ctx, isbSvc, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil {
+		if err := r.client.Patch(ctx, isbSvc, client.RawPatch(types.MergePatchType, patchJson)); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
