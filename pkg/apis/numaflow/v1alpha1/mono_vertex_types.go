@@ -398,7 +398,12 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 
 	initContainers := []corev1.Container{}
 	initContainers = append(initContainers, mv.Spec.InitContainers...)
-	initContainers = append(initContainers, sidecarContainers...)
+	// TODO: (k8s 1.29)  clean this up once we deprecate the support for k8s < 1.29
+	if isSidecarSupported() {
+		initContainers = append(initContainers, sidecarContainers...)
+	} else {
+		containers = append(containers, sidecarContainers...)
+	}
 
 	spec := &corev1.PodSpec{
 		Subdomain:      mv.GetHeadlessServiceName(),
