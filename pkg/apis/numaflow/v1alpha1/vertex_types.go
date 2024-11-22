@@ -335,7 +335,12 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	}
 
 	// Add the sidecar containers
-	initContainers = append(initContainers, sidecarContainers...)
+	// TODO: (k8s 1.29) clean this up once we deprecate the support for k8s <1.29
+	if isSidecarSupported() {
+		initContainers = append(initContainers, sidecarContainers...)
+	} else {
+		containers = append(containers, sidecarContainers...)
+	}
 
 	if v.IsASource() && v.Spec.Source.Serving != nil {
 		servingContainer, err := v.getServingContainer(req)
