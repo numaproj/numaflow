@@ -23,6 +23,13 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 )
 
+// udsourceReadCount is used to indicate the number of messages read
+var udsourceReadCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "udsource",
+	Name:      "read_total",
+	Help:      "Total number of messages Read",
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelVertexReplicaIndex, metrics.LabelPartitionName})
+
 // udsourcePending is used to indicate the number of messages pending in the user defined source
 var udsourcePending = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "udsource",
