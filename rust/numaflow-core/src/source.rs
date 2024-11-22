@@ -14,6 +14,7 @@ pub(crate) mod user_defined;
 ///
 /// [Generator]: https://numaflow.numaproj.io/user-guide/sources/generator/
 pub(crate) mod generator;
+mod pulsar;
 
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
