@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
@@ -157,6 +159,11 @@ loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-ks.handler.messages:
+			kafkaSourceReadCount.With(map[string]string{
+				metrics.LabelVertex:        ks.vertexName,
+				metrics.LabelPipeline:      ks.pipelineName,
+				metrics.LabelPartitionName: strconv.Itoa(int(m.Partition)),
+			})
 			msgs = append(msgs, ks.toReadMessage(m))
 		case <-timeout:
 			// log that timeout has happened and don't return an error

@@ -196,8 +196,20 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 	// Initialize metric labels
 	replicaIndex := strconv.Itoa(int(df.vertexReplica))
 	vertexType := string(dfv1.VertexTypeSource)
-	metricLabels := map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: vertexType, metrics.LabelVertexReplicaIndex: replicaIndex}
-	metricLabelsWithPartition := map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: vertexType, metrics.LabelVertexReplicaIndex: replicaIndex, metrics.LabelPartitionName: df.reader.GetName()}
+	totalBytes := 0
+	metricLabels := map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         vertexType,
+		metrics.LabelVertexReplicaIndex: replicaIndex,
+	}
+	metricLabelsWithPartition := map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         vertexType,
+		metrics.LabelVertexReplicaIndex: replicaIndex,
+		metrics.LabelPartitionName:      df.reader.GetName(),
+	}
 	// Initialize forwardAChunk and read start times
 	start := time.Now()
 	readStart := time.Now()
@@ -264,20 +276,13 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 	// store the offsets of the messages we read from source
 	var readOffsets = make([]isb.Offset, len(readMessages))
 	for idx, m := range readMessages {
-		mssgLabels := map[string]string{
-			metrics.LabelVertex:             df.vertexName,
-			metrics.LabelPipeline:           df.pipelineName,
-			metrics.LabelVertexType:         vertexType,
-			metrics.LabelVertexReplicaIndex: replicaIndex,
-			metrics.LabelPartitionName:      "source-partition-" + strconv.Itoa(int(m.ReadOffset.PartitionIdx())),
-		}
-		totalBytes := len(m.Payload)
-		metrics.ReadDataMessagesCount.With(mssgLabels).Inc()
-		metrics.ReadMessagesCount.With(mssgLabels).Inc()
-		metrics.ReadBytesCount.With(mssgLabels).Add(float64(totalBytes))
-		metrics.ReadDataBytesCount.With(mssgLabels).Add(float64(totalBytes))
+		totalBytes += len(m.Payload)
 		readOffsets[idx] = m.ReadOffset
 	}
+	metrics.ReadDataMessagesCount.With(metricLabelsWithPartition).Add(float64(len(readMessages)))
+	metrics.ReadMessagesCount.With(metricLabelsWithPartition).Add(float64(len(readMessages)))
+	metrics.ReadBytesCount.With(metricLabelsWithPartition).Add(float64(totalBytes))
+	metrics.ReadDataBytesCount.With(metricLabelsWithPartition).Add(float64(totalBytes))
 
 	// source data transformer applies filtering and assigns event time to source data, which doesn't require watermarks.
 	// hence we assign time.UnixMilli(-1) to processorWM.
@@ -311,8 +316,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 			zap.Int("concurrency", df.opts.transformerConcurrency),
 			zap.Duration("took", time.Since(transformerProcessingStart)),
 		)
-
-		metrics.SourceTransformerProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexReplicaIndex: replicaIndex, metrics.LabelPartitionName: df.reader.GetName()}).Observe(float64(time.Since(transformerProcessingStart).Microseconds()))
+		metrics.SourceTransformerProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(transformerProcessingStart).Microseconds()))
 	} else {
 		for idx, m := range readMessages {
 			// assign watermark to the message
@@ -509,6 +513,20 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 		writeCount int
 		writeBytes float64
 	)
+	// initialize metric labels
+	metricLabels := map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+	}
+	metricLabelsWithPartition := map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      toBufferPartition.GetName(),
+	}
 	totalCount = len(messages)
 	writeOffsets = make([]isb.Offset, 0, totalCount)
 
@@ -524,24 +542,16 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 				// when the buffer is full and the user has set the buffer full strategy to
 				// DiscardLatest or when the message is duplicate.
 				if errors.As(err, &isb.NonRetryableBufferWriteErr{}) {
-					metrics.DropMessagesCount.With(map[string]string{
+					metricLabelWithReason := map[string]string{
 						metrics.LabelVertex:             df.vertexName,
 						metrics.LabelPipeline:           df.pipelineName,
 						metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
 						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
 						metrics.LabelPartitionName:      toBufferPartition.GetName(),
 						metrics.LabelReason:             err.Error(),
-					}).Inc()
-
-					metrics.DropBytesCount.With(map[string]string{
-						metrics.LabelVertex:             df.vertexName,
-						metrics.LabelPipeline:           df.pipelineName,
-						metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-						metrics.LabelPartitionName:      toBufferPartition.GetName(),
-						metrics.LabelReason:             err.Error(),
-					}).Add(float64(len(msg.Payload)))
-
+					}
+					metrics.DropMessagesCount.With(metricLabelWithReason).Inc()
+					metrics.DropBytesCount.With(metricLabelWithReason).Add(float64(len(msg.Payload)))
 					df.opts.logger.Infow("Dropped message",
 						zap.String("reason", err.Error()),
 						zap.String("partition", toBufferPartition.GetName()),
@@ -552,22 +562,11 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 					needRetry = true
 					// we retry only failed messages
 					failedMessages = append(failedMessages, msg)
-					metrics.WriteMessagesError.With(map[string]string{
-						metrics.LabelVertex:             df.vertexName,
-						metrics.LabelPipeline:           df.pipelineName,
-						metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-						metrics.LabelPartitionName:      toBufferPartition.GetName(),
-					}).Inc()
+					metrics.WriteMessagesError.With(metricLabelsWithPartition).Inc()
 
 					// a shutdown can break the blocking loop caused due to InternalErr
 					if ok, _ := df.IsShuttingDown(); ok {
-						metrics.PlatformError.With(map[string]string{
-							metrics.LabelVertex:             df.vertexName,
-							metrics.LabelPipeline:           df.pipelineName,
-							metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-							metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-						}).Inc()
+						metrics.PlatformError.With(metricLabels).Inc()
 
 						return writeOffsets, fmt.Errorf("writeToBuffer failed, Stop called while stuck on an internal error with failed messages:%d, %v", len(failedMessages), errs)
 					}
@@ -598,22 +597,8 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 		}
 	}
 
-	metrics.WriteMessagesCount.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      toBufferPartition.GetName(),
-	}).Add(float64(writeCount))
-
-	metrics.WriteBytesCount.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeSource),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      toBufferPartition.GetName(),
-	}).Add(writeBytes)
-
+	metrics.WriteMessagesCount.With(metricLabelsWithPartition).Add(float64(writeCount))
+	metrics.WriteBytesCount.With(metricLabelsWithPartition).Add(writeBytes)
 	return writeOffsets, nil
 }
 

@@ -23,6 +23,13 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 )
 
+// kafkaSourceReadCount is used to indicate the number of messages read
+var kafkaSourceReadCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	Subsystem: "kafka_source",
+	Name:      "read_total",
+	Help:      "Total number of messages Read",
+}, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
+
 // kafkaPending is used to indicate the number of messages pending in the kafka source
 var kafkaPending = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "kafka_source",
