@@ -271,6 +271,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 
 	// Only expose read processing time metric when there are messages and no error
 	metrics.ReadProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(readStart).Microseconds()))
+	metrics.ReadDataMessagesCount.With(metricLabelsWithPartition).Add(float64(len(readMessages)))
+	metrics.ReadMessagesCount.With(metricLabelsWithPartition).Add(float64(len(readMessages)))
 	// reset the idle handler because we have read messages
 	df.srcIdleHandler.Reset()
 	// store the offsets of the messages we read from source
@@ -279,8 +281,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 		totalBytes += len(m.Payload)
 		readOffsets[idx] = m.ReadOffset
 	}
-	metrics.ReadDataMessagesCount.With(metricLabelsWithPartition).Add(float64(len(readMessages)))
-	metrics.ReadMessagesCount.With(metricLabelsWithPartition).Add(float64(len(readMessages)))
 	metrics.ReadBytesCount.With(metricLabelsWithPartition).Add(float64(totalBytes))
 	metrics.ReadDataBytesCount.With(metricLabelsWithPartition).Add(float64(totalBytes))
 
