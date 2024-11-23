@@ -2007,54 +2007,6 @@
     Traffic
   </a>
   
-    <nav class="md-nav" aria-label="Traffic">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#data-forward" class="md-nav__link">
-    Data-forward
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#kafka-source" class="md-nav__link">
-    Kafka Source
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#generator-source" class="md-nav__link">
-    Generator Source
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#http-source" class="md-nav__link">
-    Http Source
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#kafka-sink" class="md-nav__link">
-    Kafka Sink
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#log-sink" class="md-nav__link">
-    Log Sink
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
         
           <li class="md-nav__item">
@@ -2441,54 +2393,6 @@
     Traffic
   </a>
   
-    <nav class="md-nav" aria-label="Traffic">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#data-forward" class="md-nav__link">
-    Data-forward
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#kafka-source" class="md-nav__link">
-    Kafka Source
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#generator-source" class="md-nav__link">
-    Generator Source
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#http-source" class="md-nav__link">
-    Http Source
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#kafka-sink" class="md-nav__link">
-    Kafka Sink
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#log-sink" class="md-nav__link">
-    Log Sink
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
         
           <li class="md-nav__item">
@@ -2588,7 +2492,6 @@
 <p>These metrics in combination can be used to determine the overall health of your pipeline</p>
 <h3 id="traffic">Traffic<a class="headerlink" href="#traffic" title="Permanent link">&para;</a></h3>
 <p>These metrics can be used to determine throughput of your pipeline.</p>
-<h4 id="data-forward">Data-forward<a class="headerlink" href="#data-forward" title="Permanent link">&para;</a></h4>
 <table>
 <thead>
 <tr>
@@ -2600,16 +2503,34 @@
 </thead>
 <tbody>
 <tr>
+<td><code>forwarder_read_total</code></td>
+<td>Counter</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages read by a given Vertex from an Inter-Step Buffer Partition or Source</td>
+</tr>
+<tr>
 <td><code>forwarder_data_read_total</code></td>
 <td>Counter</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of messages read by a given Vertex from an Inter-Step Buffer Partition</td>
+<td>Provides the total number of data messages read by a given Vertex from an Inter-Step Buffer Partition or Source</td>
 </tr>
 <tr>
 <td><code>forwarder_read_bytes_total</code></td>
 <td>Counter</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides the total number of bytes read by a given Vertex from an Inter-Step Buffer Partition</td>
+<td>Provides the total number of bytes read by a given Vertex from an Inter-Step Buffer Partition or Source</td>
+</tr>
+<tr>
+<td><code>forwarder_data_read_bytes_total</code></td>
+<td>Counter</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of data bytes read by a given Vertex from an Inter-Step Buffer Partition or Source</td>
+</tr>
+<tr>
+<td><code>source_forwarder_transformer_read_total</code></td>
+<td>Counter</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages read by source transformer</td>
 </tr>
 <tr>
 <td><code>forwarder_write_total</code></td>
@@ -2622,6 +2543,24 @@
 <td>Counter</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides the total number of bytes written to Inter-Step Buffer by a given Vertex</td>
+</tr>
+<tr>
+<td><code>source_forwarder_transformer_write_total</code></td>
+<td>Counter</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages written by source transformer</td>
+</tr>
+<tr>
+<td><code>forwarder_fbsink_write_total</code></td>
+<td>Counter</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages written to a fallback sink</td>
+</tr>
+<tr>
+<td><code>forwarder_fbsink_write_bytes_total</code></td>
+<td>Counter</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of bytes written to a fallback sink</td>
 </tr>
 <tr>
 <td><code>forwarder_ack_total</code></td>
@@ -2641,106 +2580,17 @@
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Provides the total number of bytes dropped by a given Vertex due to a full Inter-Step Buffer Partition</td>
 </tr>
-</tbody>
-</table>
-<h4 id="kafka-source">Kafka Source<a class="headerlink" href="#kafka-source" title="Permanent link">&para;</a></h4>
-<table>
-<thead>
 <tr>
-<th>Metric name</th>
-<th>Metric type</th>
-<th>Labels</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>kafka_source_read_total</code></td>
+<td><code>forwarder_udf_read_total</code></td>
 <td>Counter</td>
-<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
-<td>Provides the number of messages read by the Kafka Source Vertex/Processor.</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages read by UDF</td>
 </tr>
 <tr>
-<td><code>kafka_source_ack_total</code></td>
+<td><code>forwarder_udf_write_total</code></td>
 <td>Counter</td>
-<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
-<td>Provides the number of messages acknowledged by the Kafka Source Vertex/Processor</td>
-</tr>
-</tbody>
-</table>
-<h4 id="generator-source">Generator Source<a class="headerlink" href="#generator-source" title="Permanent link">&para;</a></h4>
-<table>
-<thead>
-<tr>
-<th>Metric name</th>
-<th>Metric type</th>
-<th>Labels</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>tickgen_source_read_total</code></td>
-<td>Counter</td>
-<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
-<td>Provides the number of messages read by the Generator Source Vertex/Processor.</td>
-</tr>
-</tbody>
-</table>
-<h4 id="http-source">Http Source<a class="headerlink" href="#http-source" title="Permanent link">&para;</a></h4>
-<table>
-<thead>
-<tr>
-<th>Metric name</th>
-<th>Metric type</th>
-<th>Labels</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>http_source_read_total</code></td>
-<td>Counter</td>
-<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
-<td>Provides the number of messages read by the HTTP Source Vertex/Processor.</td>
-</tr>
-</tbody>
-</table>
-<h4 id="kafka-sink">Kafka Sink<a class="headerlink" href="#kafka-sink" title="Permanent link">&para;</a></h4>
-<table>
-<thead>
-<tr>
-<th>Metric name</th>
-<th>Metric type</th>
-<th>Labels</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>kafka_sink_write_total</code></td>
-<td>Counter</td>
-<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
-<td>Provides the number of messages written by the Kafka Sink Vertex/Processor</td>
-</tr>
-</tbody>
-</table>
-<h4 id="log-sink">Log Sink<a class="headerlink" href="#log-sink" title="Permanent link">&para;</a></h4>
-<table>
-<thead>
-<tr>
-<th>Metric name</th>
-<th>Metric type</th>
-<th>Labels</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>log_sink_write_total</code></td>
-<td>Counter</td>
-<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
-<td>Provides the number of messages written by the Log Sink Vertex/Processor</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the total number of messages written by UDF</td>
 </tr>
 </tbody>
 </table>
@@ -2769,10 +2619,34 @@
 <td>Max watermark of source compared with current time in milliseconds</td>
 </tr>
 <tr>
-<td><code>source_forwarder_transformer_processing_time</code></td>
+<td><code>forwarder_read_processing_time</code></td>
 <td>Histogram</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
-<td>Provides a histogram distribution of the processing times of User-defined Source Transformer</td>
+<td>Provides the histogram distribution of the processing times of read operations</td>
+</tr>
+<tr>
+<td><code>forwarder_write_processing_time</code></td>
+<td>Histogram</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the histogram distribution of the processing times of write operations</td>
+</tr>
+<tr>
+<td><code>forwarder_ack_processing_time</code></td>
+<td>Histogram</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the histogram distribution of the processing times of ack operations</td>
+</tr>
+<tr>
+<td><code>forwarder_fbsink_write_processing_time</code></td>
+<td>Histogram</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the histogram distribution of the processing times of write operations to a fallback sink</td>
+</tr>
+<tr>
+<td><code>source_forwarder_transformer_processing_time</code></td>
+<td>Histogram</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides a histogram distribution of the processing times of source transformer</td>
 </tr>
 <tr>
 <td><code>forwarder_udf_processing_time</code></td>
@@ -2797,6 +2671,12 @@
 <td>Histogram</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
 <td>Provides a histogram distribution of the forwarding times of the reducer</td>
+</tr>
+<tr>
+<td><code>vertex_pending_messages</code></td>
+<td>Gauge</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>period=&lt;duration&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Provides the average pending messages in the last period of seconds. It is the pending messages of a vertex</td>
 </tr>
 </tbody>
 </table>
@@ -2849,28 +2729,28 @@
 <td>Indicates any errors while reading messages by the forwarder</td>
 </tr>
 <tr>
+<td><code>source_forwarder_transformer_error_total</code></td>
+<td>Counter</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Indicates source transformer errors</td>
+</tr>
+<tr>
 <td><code>forwarder_write_error_total</code></td>
 <td>Counter</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any errors while writing messages by the forwarder</td>
 </tr>
 <tr>
+<td><code>forwarder_fbsink_write_error_total</code></td>
+<td>Counter</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
+<td>Indicates any errors while writing to a fallback sink</td>
+</tr>
+<tr>
 <td><code>forwarder_ack_error_total</code></td>
 <td>Counter</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code> <br> <code>partition_name=&lt;partition-name&gt;</code></td>
 <td>Indicates any errors while acknowledging messages by the forwarder</td>
-</tr>
-<tr>
-<td><code>kafka_source_offset_ack_errors</code></td>
-<td>Counter</td>
-<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
-<td>Indicates any kafka acknowledgement errors</td>
-</tr>
-<tr>
-<td><code>kafka_sink_write_error_total</code></td>
-<td>Counter</td>
-<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code></td>
-<td>Provides the number of errors while writing to the Kafka sink</td>
 </tr>
 <tr>
 <td><code>kafka_sink_write_timeout_total</code></td>
