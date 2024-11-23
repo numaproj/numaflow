@@ -31,7 +31,6 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 )
@@ -199,7 +198,6 @@ loop:
 		// we implement Read With Wait semantics
 		select {
 		case r := <-mg.srcChan:
-			tickgenSourceReadCount.With(map[string]string{metrics.LabelVertex: mg.vertexName, metrics.LabelPipeline: mg.pipelineName}).Inc()
 			msgs = append(msgs, mg.newReadMessage(r.key, r.data, r.offset, r.ts))
 		case <-timeout:
 			break loop
@@ -240,7 +238,6 @@ func (mg *memGen) newWorker(ctx context.Context, rate int) func(chan time.Time, 
 			case <-ctx.Done():
 				return
 			case ts := <-tickChan:
-				tickgenSourceCount.With(map[string]string{metrics.LabelVertex: mg.vertexName, metrics.LabelPipeline: mg.pipelineName}).Inc()
 				// we would generate all the keys in a round robin fashion
 				// even if there are multiple pods, all the pods will generate same keys in the same order.
 				// TODO: alternatively, we could also think about generating a subset of keys per pod.

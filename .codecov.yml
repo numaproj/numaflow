@@ -17,4 +17,4 @@ coverage:
     project:
       default:
         # allow test coverage to drop by 2%, assume that it's typically due to CI problems
-        threshold: 2
+        threshold: "2"
