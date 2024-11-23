@@ -196,13 +196,6 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 		tk.producer.Input() <- message
 	}
 	<-done
-	for _, err := range errs {
-		if err != nil {
-			kafkaSinkWriteErrors.With(map[string]string{metrics.LabelVertex: tk.name, metrics.LabelPipeline: tk.pipelineName}).Inc()
-		} else {
-			kafkaSinkWriteCount.With(map[string]string{metrics.LabelVertex: tk.name, metrics.LabelPipeline: tk.pipelineName}).Inc()
-		}
-	}
 	return nil, errs
 }
 

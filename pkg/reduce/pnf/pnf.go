@@ -391,6 +391,15 @@ func (pf *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 		Jitter:   0.1,
 	}
 
+	// initialize metric label
+	metricLabelsWithPartition := map[string]string{
+		metrics.LabelVertex:             pf.vertexName,
+		metrics.LabelPipeline:           pf.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pf.vertexReplica)),
+		metrics.LabelPartitionName:      pf.toBuffers[edgeName][partition].GetName(),
+	}
+
 	writeMessages := resultMessages
 
 	// write to isb with infinite exponential backoff (until shutdown is triggered)
@@ -406,24 +415,16 @@ func (pf *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 				// when the buffer is full and the user has set the buffer full strategy to
 				// DiscardLatest or when the message is duplicate.
 				if errors.As(writeErr, &isb.NonRetryableBufferWriteErr{}) {
-					metrics.DropMessagesCount.With(map[string]string{
+					metricLabelWithReason := map[string]string{
 						metrics.LabelVertex:             pf.vertexName,
 						metrics.LabelPipeline:           pf.pipelineName,
 						metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
 						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pf.vertexReplica)),
 						metrics.LabelPartitionName:      pf.toBuffers[edgeName][partition].GetName(),
 						metrics.LabelReason:             writeErr.Error(),
-					}).Inc()
-
-					metrics.DropBytesCount.With(map[string]string{
-						metrics.LabelVertex:             pf.vertexName,
-						metrics.LabelPipeline:           pf.pipelineName,
-						metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-						metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pf.vertexReplica)),
-						metrics.LabelPartitionName:      pf.toBuffers[edgeName][partition].GetName(),
-						metrics.LabelReason:             writeErr.Error(),
-					}).Add(float64(len(message.Payload)))
-
+					}
+					metrics.DropMessagesCount.With(metricLabelWithReason).Inc()
+					metrics.DropBytesCount.With(metricLabelWithReason).Add(float64(len(message.Payload)))
 					pf.log.Infow("Dropped message", zap.String("reason", writeErr.Error()), zap.String("vertex", pf.vertexName), zap.String("pipeline", pf.pipelineName), zap.String("msg_id", message.ID.String()))
 				} else {
 					failedMessages = append(failedMessages, message)
@@ -437,12 +438,7 @@ func (pf *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 		if len(failedMessages) > 0 {
 			pf.log.Warnw("Failed to write messages to isb inside pnf", zap.Errors("errors", writeErrs))
 			writeMessages = failedMessages
-			metrics.WriteMessagesError.With(map[string]string{
-				metrics.LabelVertex:             pf.vertexName,
-				metrics.LabelPipeline:           pf.pipelineName,
-				metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pf.vertexReplica)),
-				metrics.LabelPartitionName:      pf.toBuffers[edgeName][partition].GetName()}).Add(float64(len(failedMessages)))
+			metrics.WriteMessagesError.With(metricLabelsWithPartition).Add(float64(len(failedMessages)))
 
 			if ctx.Err() != nil {
 				// no need to retry if the context is closed
@@ -459,19 +455,8 @@ func (pf *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 		return nil, ctxClosedErr
 	}
 
-	metrics.WriteMessagesCount.With(map[string]string{
-		metrics.LabelVertex:             pf.vertexName,
-		metrics.LabelPipeline:           pf.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pf.vertexReplica)),
-		metrics.LabelPartitionName:      pf.toBuffers[edgeName][partition].GetName()}).Add(float64(writeCount))
-
-	metrics.WriteBytesCount.With(map[string]string{
-		metrics.LabelVertex:             pf.vertexName,
-		metrics.LabelPipeline:           pf.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pf.vertexReplica)),
-		metrics.LabelPartitionName:      pf.toBuffers[edgeName][partition].GetName()}).Add(writeBytes)
+	metrics.WriteMessagesCount.With(metricLabelsWithPartition).Add(float64(writeCount))
+	metrics.WriteBytesCount.With(metricLabelsWithPartition).Add(writeBytes)
 	return offsets, nil
 }
 

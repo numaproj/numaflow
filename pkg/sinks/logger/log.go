@@ -26,7 +26,6 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -71,7 +70,6 @@ func (t *ToLog) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, 
 		for k, v := range message.Headers {
 			hStr.WriteString(fmt.Sprintf("%s: %s, ", k, v))
 		}
-		logSinkWriteCount.With(map[string]string{metrics.LabelVertex: t.name, metrics.LabelPipeline: t.pipelineName}).Inc()
 		log.Println(prefix, " Payload - ", string(message.Payload), " Keys - ", message.Keys, " EventTime - ", message.EventTime.UnixMilli(), " Headers - ", hStr.String(), " ID - ", message.ID.String())
 	}
 	return nil, make([]error, len(messages))

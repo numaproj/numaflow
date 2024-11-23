@@ -14,18 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package blackhole
+package v1alpha1
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-
-	"github.com/numaproj/numaflow/pkg/metrics"
+	"os"
+	"strconv"
 )
 
-// sinkWriteCount is used to indicate the number of messages written to the sink
-var sinkWriteCount = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "blackhole_sink",
-	Name:      "write_total",
-	Help:      "Total number of messages written to blackhole sink",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline})
+// TODO: (k8s 1.29) Remove this once we deprecate the support for k8s < 1.29
+func isSidecarSupported() bool {
+	v := os.Getenv(EnvK8sServerVersion)
+	if v == "" {
+		return true // default to true if the env var is not found
+	}
+	// e.g. 1.31
+	k8sVersion, _ := strconv.ParseFloat(v, 32)
+	return k8sVersion >= 1.29
+}
