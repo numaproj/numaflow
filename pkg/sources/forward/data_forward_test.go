@@ -1230,7 +1230,6 @@ func validateMetrics(batchSize int64) (err error) {
 	expected := `
 		forwarder_read_total{partition_name="from",pipeline="testPipeline",replica="0",vertex="testVertex",vertex_type="Source"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
 	`
-
 	err = testutil.CollectAndCompare(metrics.ReadMessagesCount, strings.NewReader(metadata+expected), "forwarder_read_total")
 	if err != nil {
 		return err
