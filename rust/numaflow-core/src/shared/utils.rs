@@ -23,7 +23,7 @@ use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
-use crate::message::{get_component_type, get_vertex_name, is_mono_vertex};
+use crate::message::{get_component_type, get_vertex_name};
 use crate::metrics::{
     start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
 };
@@ -37,6 +37,7 @@ use crate::{config, error};
 use crate::{metrics, Result};
 use crate::{source, Error};
 
+/// Starts the metrics server
 pub(crate) async fn start_metrics_server(
     metrics_config: MetricsConfig,
     metrics_state: UserDefinedContainerState,
@@ -54,6 +55,7 @@ pub(crate) async fn start_metrics_server(
     })
 }
 
+/// Creates a pending reader
 pub(crate) async fn create_pending_reader(
     metrics_config: &MetricsConfig,
     lag_reader_grpc_client: Source,
@@ -67,6 +69,8 @@ pub(crate) async fn create_pending_reader(
         ))
         .build()
 }
+
+/// Waits until the source server is ready, by doing health checks
 pub(crate) async fn wait_until_source_ready(
     cln_token: &CancellationToken,
     client: &mut SourceClient<Channel>,
@@ -87,6 +91,7 @@ pub(crate) async fn wait_until_source_ready(
     Ok(())
 }
 
+/// Waits until the sink server is ready, by doing health checks
 pub(crate) async fn wait_until_sink_ready(
     cln_token: &CancellationToken,
     client: &mut SinkClient<Channel>,
@@ -106,6 +111,7 @@ pub(crate) async fn wait_until_sink_ready(
     Ok(())
 }
 
+/// Waits until the transformer server is ready, by doing health checks
 pub(crate) async fn wait_until_transformer_ready(
     cln_token: &CancellationToken,
     client: &mut SourceTransformClient<Channel>,
@@ -153,6 +159,7 @@ pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> Result<Channel> 
     Ok(channel)
 }
 
+/// Connects to the UDS socket and returns a channel
 pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> Result<Channel> {
     let channel = Endpoint::try_from("http://[::]:50051")
         .map_err(|e| Error::Connection(format!("Failed to create endpoint: {:?}", e)))?
@@ -169,6 +176,7 @@ pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> Result<Channel> {
     Ok(channel)
 }
 
+/// Creates a sink writer based on the configuration
 pub(crate) async fn create_sink_writer(
     batch_size: usize,
     read_timeout: Duration,

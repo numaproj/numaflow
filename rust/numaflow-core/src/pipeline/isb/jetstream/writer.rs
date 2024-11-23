@@ -252,7 +252,6 @@ impl JetstreamWriter {
 pub(crate) struct ResolveAndPublishResult {
     pub(crate) pafs: Vec<(Stream, PublishAckFuture)>,
     pub(crate) payload: Vec<u8>,
-
     // Acknowledgement oneshot to notify the reader that the message has been written
     pub(crate) ack_tx: oneshot::Sender<ReadAck>,
 }
@@ -359,6 +358,7 @@ mod tests {
 
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
+    use async_nats::subject::ToSubject;
     use bytes::BytesMut;
     use chrono::Utc;
 
@@ -397,10 +397,9 @@ mod tests {
             .unwrap();
 
         let writer = JetstreamWriter::new(
-            stream_name.to_string(),
+            vec![(stream_name.to_string(), 0)],
             Default::default(),
             context.clone(),
-            500,
             cln_token.clone(),
         );
 
@@ -417,10 +416,11 @@ mod tests {
             headers: HashMap::new(),
         };
 
-        let (success_tx, success_rx) = oneshot::channel::<Result<Offset>>();
         let message_bytes: BytesMut = message.try_into().unwrap();
-        writer.write(message_bytes.into(), success_tx).await;
-        assert!(success_rx.await.is_ok());
+        let paf = writer
+            .write((stream_name.to_string(), 0), message_bytes.into())
+            .await;
+        assert!(paf.await.is_ok());
 
         context.delete_stream(stream_name).await.unwrap();
     }
@@ -457,10 +457,9 @@ mod tests {
             .unwrap();
 
         let writer = JetstreamWriter::new(
-            stream_name.to_string(),
+            vec![(stream_name.to_string(), 0)],
             Default::default(),
             context.clone(),
-            500,
             cln_token.clone(),
         );
 
@@ -478,7 +477,9 @@ mod tests {
         };
 
         let message_bytes: BytesMut = message.try_into().unwrap();
-        let result = writer.blocking_write(message_bytes.into()).await;
+        let result = writer
+            .blocking_write((stream_name.to_string(), 0), message_bytes.into())
+            .await;
         assert!(result.is_ok());
 
         let publish_ack = result.unwrap();
@@ -520,10 +521,9 @@ mod tests {
 
         let cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
-            stream_name.to_string(),
+            vec![(stream_name.to_string(), 0)],
             Default::default(),
             context.clone(),
-            500,
             cancel_token.clone(),
         );
 
@@ -542,10 +542,11 @@ mod tests {
                 },
                 headers: HashMap::new(),
             };
-            let (success_tx, success_rx) = oneshot::channel::<Result<Offset>>();
             let message_bytes: BytesMut = message.try_into().unwrap();
-            writer.write(message_bytes.into(), success_tx).await;
-            result_receivers.push(success_rx);
+            let paf = writer
+                .write((stream_name.to_string(), 0), message_bytes.into())
+                .await;
+            result_receivers.push(paf);
         }
 
         // Attempt to publish a message which has a payload size greater than the max_message_size
@@ -562,31 +563,27 @@ mod tests {
             },
             headers: HashMap::new(),
         };
-        let (success_tx, success_rx) = oneshot::channel::<Result<Offset>>();
         let message_bytes: BytesMut = message.try_into().unwrap();
-        writer.write(message_bytes.into(), success_tx).await;
-        result_receivers.push(success_rx);
+        let paf = writer
+            .write((stream_name.to_string(), 0), message_bytes.into())
+            .await;
+        result_receivers.push(paf);
 
         // Cancel the token to exit the retry loop
         cancel_token.cancel();
 
         // Check the results
         for (i, receiver) in result_receivers.into_iter().enumerate() {
-            let result = receiver.await.unwrap();
             if i < 10 {
                 assert!(
-                    result.is_ok(),
+                    receiver.await.is_ok(),
                     "Message {} should be published successfully",
                     i
                 );
             } else {
                 assert!(
-                    result.is_err(),
+                    receiver.await.is_err(),
                     "Message 11 should fail with cancellation error"
-                );
-                assert_eq!(
-                    result.err().unwrap().to_string(),
-                    "ISB Error - Shutdown signal received",
                 );
             }
         }
@@ -703,13 +700,12 @@ mod tests {
 
         let cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
-            stream_name.to_string(),
+            vec![(stream_name.to_string(), 0)],
             BufferWriterConfig {
                 max_length: 100,
                 ..Default::default()
             },
             context.clone(),
-            500,
             cancel_token.clone(),
         );
 
@@ -728,13 +724,23 @@ mod tests {
         }
 
         let start_time = Instant::now();
-        while !writer.is_full.load(Ordering::Relaxed) && start_time.elapsed().as_millis() < 1000 {
+        while !writer
+            .is_full
+            .get(stream_name)
+            .map(|is_full| is_full.load(Ordering::Relaxed))
+            .unwrap()
+            && start_time.elapsed().as_millis() < 1000
+        {
             sleep(Duration::from_millis(5)).await;
         }
 
         // Verify the is_full flag
         assert!(
-            writer.is_full.load(Ordering::Relaxed),
+            writer
+                .is_full
+                .get(stream_name)
+                .map(|is_full| is_full.load(Ordering::Relaxed))
+                .unwrap(),
             "Buffer should be full after publishing messages"
         );
 

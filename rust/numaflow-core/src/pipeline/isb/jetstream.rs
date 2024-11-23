@@ -1,5 +1,5 @@
 use crate::config::pipeline::isb::BufferWriterConfig;
-use crate::message::{Offset, ReadMessage};
+use crate::message::ReadMessage;
 use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
 use crate::pipeline::isb::jetstream::writer::{
     JetstreamWriter, PafResolver, ResolveAndPublishResult,
@@ -28,13 +28,13 @@ type Stream = (String, u16);
 /// StreamingJetstreamWriter is a streaming version of JetstreamWriter. It accepts a stream of messages
 /// and writes them to Jetstream ISB. It also has a PAF resolver actor to resolve the PAFs.
 #[derive(Clone)]
-pub(crate) struct StreamingJetstreamWriter {
+pub(crate) struct ISBWriter {
     concurrency: usize,
     config: Vec<BufferWriterConfig>,
     writer: JetstreamWriter,
 }
 
-impl StreamingJetstreamWriter {
+impl ISBWriter {
     pub(crate) async fn new(
         concurrency: usize,
         config: Vec<BufferWriterConfig>,
@@ -78,7 +78,7 @@ impl StreamingJetstreamWriter {
             );
 
             async move {
-                let temp_paf_resolver = PafResolver::new(this.concurrency, this.writer.clone());
+                let paf_resolver = PafResolver::new(this.concurrency, this.writer.clone());
 
                 while let Some(read_message) = messages_stream.next().await {
                     let mut pafs = vec![];
@@ -103,7 +103,7 @@ impl StreamingJetstreamWriter {
                         .get_or_create(pipeline_isb_metric_labels())
                         .inc();
 
-                    temp_paf_resolver
+                    paf_resolver
                         .resolve_pafs(ResolveAndPublishResult {
                             pafs,
                             payload: read_message.message.value.clone().into(),

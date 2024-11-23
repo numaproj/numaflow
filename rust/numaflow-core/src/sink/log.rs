@@ -39,10 +39,8 @@ mod tests {
 
     use super::LogSink;
     use crate::message::IntOffset;
-    use crate::{
-        message::{Message, MessageID, Offset, ResponseFromSink, ResponseStatusFromSink},
-        sink::SinkWriter,
-    };
+    use crate::message::{Message, MessageID, Offset, ResponseFromSink, ResponseStatusFromSink};
+    use crate::sink::Sink;
 
     #[tokio::test]
     async fn test_log_sink() {

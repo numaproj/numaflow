@@ -20,12 +20,12 @@ use crate::transformer::ActorMessage;
 const DROP: &str = "U+005C__DROP__";
 
 /// TransformerClient is a client to interact with the transformer server.
-pub(super) struct SourceTransformer {
+pub(super) struct UserDefinedTransformer {
     read_tx: mpsc::Sender<SourceTransformRequest>,
     resp_stream: Streaming<SourceTransformResponse>,
 }
 
-impl SourceTransformer {
+impl UserDefinedTransformer {
     pub(super) async fn new(
         batch_size: usize,
         mut client: SourceTransformClient<Channel>,
@@ -54,7 +54,7 @@ impl SourceTransformer {
             "failed to receive handshake response".to_string(),
         ))?;
 
-        // handshake cannot to None during the initial phase and it has to set `sot` to true.
+        // handshake cannot to None during the initial phase, and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
             return Err(Error::Transformer("invalid handshake response".to_string()));
         }
@@ -203,6 +203,7 @@ mod tests {
 
     use crate::message::{MessageID, StringOffset};
     use crate::shared::utils::create_rpc_channel;
+    use crate::transformer::Transformer;
 
     struct NowCat;
 
@@ -240,9 +241,11 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let client = SourceTransformHandle::new(SourceTransformClient::new(
-            create_rpc_channel(sock_file).await?,
-        ))
+        let client = Transformer::new(
+            500,
+            Duration::from_secs(1),
+            SourceTransformClient::new(create_rpc_channel(sock_file).await?),
+        )
         .await?;
 
         let message = crate::message::Message {
@@ -316,9 +319,11 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let client = SourceTransformHandle::new(SourceTransformClient::new(
-            create_rpc_channel(sock_file).await?,
-        ))
+        let client = Transformer::new(
+            500,
+            Duration::from_secs(1),
+            SourceTransformClient::new(create_rpc_channel(sock_file).await?),
+        )
         .await?;
 
         let message = crate::message::Message {

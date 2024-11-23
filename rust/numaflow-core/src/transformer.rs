@@ -8,7 +8,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 
-use crate::transformer::user_defined::SourceTransformer;
+use crate::transformer::user_defined::UserDefinedTransformer;
 use crate::Result;
 
 /// User-Defined Transformer extends Numaflow to add custom sources supported outside the builtins.
@@ -38,7 +38,7 @@ impl Transformer {
         client: SourceTransformClient<Channel>,
     ) -> Result<Self> {
         let (sender, mut receiver) = mpsc::channel(batch_size);
-        let mut client = SourceTransformer::new(batch_size, client).await?;
+        let mut client = UserDefinedTransformer::new(batch_size, client).await?;
         tokio::spawn(async move {
             while let Some(msg) = receiver.recv().await {
                 client.handle_message(msg).await;

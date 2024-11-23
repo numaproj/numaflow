@@ -173,7 +173,7 @@ impl JetstreamReader {
 
                             pipeline_metrics()
                                 .forwarder
-                                .data_read
+                                .read_total
                                 .get_or_create(labels)
                                 .inc();
 
@@ -272,10 +272,10 @@ mod tests {
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
     use chrono::Utc;
-    use tracing::info;
 
     use super::*;
-    use crate::message::{Message, MessageID, Offset};
+    use crate::message::ReadAck::Ack;
+    use crate::message::{Message, MessageID};
     use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 
     #[cfg(feature = "nats-tests")]
@@ -335,10 +335,9 @@ mod tests {
 
         let writer_cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
-            stream_name.to_string(),
+            vec![(stream_name.to_string(), 0)],
             Default::default(),
             context.clone(),
-            5000,
             writer_cancel_token.clone(),
         );
 
@@ -355,18 +354,20 @@ mod tests {
                 },
                 headers: HashMap::new(),
             };
-            let (success_tx, success_rx) = oneshot::channel::<Result<Offset>>();
             let message_bytes: BytesMut = message.try_into().unwrap();
-            writer.write(message_bytes.into(), success_tx).await;
-            success_rx.await.unwrap().unwrap();
+            writer
+                .write((stream_name.to_string(), 0), message_bytes.into())
+                .await
+                .await
+                .unwrap();
         }
-        info!("Sent 10 messages");
+
         // Cancel the token to exit the retry loop
         writer_cancel_token.cancel();
 
         let mut buffer = vec![];
         for _ in 0..10 {
-            let Some(val) = js_reader_rx.recv().await else {
+            let Some(val) = js_reader_rx.next().await else {
                 break;
             };
             buffer.push(val);
@@ -379,12 +380,117 @@ mod tests {
         );
 
         reader_cancel_token.cancel();
-        // The token cancellation won't abort the task since we are using chunks_timeout in
-        // Jetstream reader.
-        // js_reader_task.await.unwrap().unwrap();
-        js_reader_task.abort();
-        let _ = js_reader_task.await;
-        assert!(js_reader_rx.is_closed());
+        js_reader_task.await.unwrap().unwrap();
+
+        context.delete_stream(stream_name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_ack() {
+        let js_url = "localhost:4222";
+        // Create JetStream context
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream_name = "test_ack";
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream_name.into(),
+                subjects: vec![stream_name.into()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream_name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream_name,
+            )
+            .await
+            .unwrap();
+
+        let buf_reader_config = BufferReaderConfig {
+            partitions: 0,
+            streams: vec![],
+            wip_ack_interval: Duration::from_millis(5),
+        };
+        let js_reader = JetstreamReader::new(
+            stream_name.to_string(),
+            0,
+            context.clone(),
+            buf_reader_config,
+        )
+        .await
+        .unwrap();
+
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW91dCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im91dCIsInNpbmsiOnsiYmxhY2tob2xlIjp7fSwicmV0cnlTdHJhdGVneSI6eyJvbkZhaWx1cmUiOiJyZXRyeSJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoib3V0IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==".to_string();
+
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
+        let reader_cancel_token = CancellationToken::new();
+        let (mut js_reader_rx, js_reader_task) = js_reader
+            .streaming_read(reader_cancel_token.clone(), &pipeline_config)
+            .await
+            .unwrap();
+
+        let writer_cancel_token = CancellationToken::new();
+        let writer = JetstreamWriter::new(
+            vec![(stream_name.to_string(), 0)],
+            Default::default(),
+            context.clone(),
+            writer_cancel_token.clone(),
+        );
+
+        // write 5 messages
+        for i in 0..5 {
+            let message = Message {
+                keys: vec![format!("key_{}", i)],
+                value: format!("message {}", i).as_bytes().to_vec().into(),
+                offset: None,
+                event_time: Utc::now(),
+                id: MessageID {
+                    vertex_name: "vertex".to_string(),
+                    offset: format!("offset_{}", i),
+                    index: i,
+                },
+                headers: HashMap::new(),
+            };
+            let message_bytes: BytesMut = message.try_into().unwrap();
+            writer
+                .write((stream_name.to_string(), 0), message_bytes.into())
+                .await
+                .await
+                .unwrap();
+        }
+        // Cancel the token to exit the retry loop
+        writer_cancel_token.cancel();
+
+        for _ in 0..5 {
+            let Some(val) = js_reader_rx.next().await else {
+                break;
+            };
+            val.ack.send(Ack).unwrap()
+        }
+
+        let mut consumer: PullConsumer = context
+            .get_consumer_from_stream(stream_name, stream_name)
+            .await
+            .unwrap();
+
+        let consumer_info = consumer.info().await.unwrap();
+
+        assert_eq!(consumer_info.num_pending, 0);
+        assert_eq!(consumer_info.num_ack_pending, 0);
+
+        reader_cancel_token.cancel();
+        js_reader_task.await.unwrap().unwrap();
 
         context.delete_stream(stream_name).await.unwrap();
     }

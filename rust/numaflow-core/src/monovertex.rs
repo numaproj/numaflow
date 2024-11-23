@@ -85,7 +85,7 @@ async fn start_forwarder_with_source(
 
     // add transformer if exists
     if let Some(transformer_client) = transformer {
-        forwarder_builder = forwarder_builder.streaming_transformer(transformer_client);
+        forwarder_builder = forwarder_builder.transformer(transformer_client);
     }
 
     // build the final forwarder

@@ -1,7 +1,7 @@
-use crate::message::{get_vertex_name, ReadAck, ReadMessage};
+use crate::message::{get_vertex_name, is_mono_vertex, ReadAck, ReadMessage};
 use crate::metrics::{
-    mvtx_forward_metric_labels, pipeline_forward_metric_labels, pipeline_isb_metric_labels,
-    pipeline_metrics,
+    monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
+    pipeline_isb_metric_labels, pipeline_metrics,
 };
 use crate::Result;
 use crate::{
@@ -130,8 +130,7 @@ where
     }
 }
 
-/// Source is used to read messages from the source in a streaming fashion, and ack the offsets
-/// after the messages are processed.
+/// Source is used to read, ack, and get the pending messages count from the source.
 #[derive(Clone)]
 pub(crate) struct Source {
     read_batch_size: usize,
@@ -147,11 +146,15 @@ impl Source {
         let (ack_sender, mut ack_receiver) = mpsc::channel(batch_size);
         let (pending_sender, mut pending_receiver) = mpsc::channel(1);
 
+        // Create actors based on the source type and start the actors in the background.
         match src_type {
             SourceType::UserDefinedSource(reader, acker, lag_reader) => {
                 let mut read_actor = ReadActor::new(reader);
                 let mut ack_actor = AckActor::new(acker);
                 let mut pending_actor = PendingActor::new(lag_reader);
+
+                // FIXME: should we have one spawn and multiple tokio::select! for each receiver?
+                // will it impact the performance?
 
                 tokio::spawn(async move {
                     while let Some(msg) = read_receiver.recv().await {
@@ -284,11 +287,27 @@ impl Source {
                 let n = messages.len();
                 info!("Read {} messages in {:?}", n, read_start_time.elapsed());
 
-                pipeline_metrics()
-                    .forwarder
-                    .data_read
-                    .get_or_create(pipeline_labels)
-                    .inc_by(n as u64);
+                if *is_mono_vertex() {
+                    monovertex_metrics()
+                        .read_total
+                        .get_or_create(mvtx_labels)
+                        .inc_by(n as u64);
+                    monovertex_metrics()
+                        .read_time
+                        .get_or_create(mvtx_labels)
+                        .observe(read_start_time.elapsed().as_micros() as f64);
+                } else {
+                    pipeline_metrics()
+                        .forwarder
+                        .read_total
+                        .get_or_create(pipeline_labels)
+                        .inc_by(n as u64);
+                    pipeline_metrics()
+                        .forwarder
+                        .read_time
+                        .get_or_create(pipeline_labels)
+                        .observe(read_start_time.elapsed().as_micros() as f64);
+                }
 
                 let mut ack_batch = Vec::with_capacity(n);
                 for message in messages {
@@ -315,7 +334,7 @@ impl Source {
                     }
                 }
 
-                // Spawn a task to invoke ack for the batch of messages.
+                // start a background task to invoke ack on the source for the offsets that are acked.
                 tokio::spawn(Self::invoke_ack(source_read.clone(), ack_batch));
 
                 processed_msgs_count += n;
@@ -344,13 +363,6 @@ impl Source {
             .get_or_create(pipeline_isb_metric_labels())
             .inc();
 
-        let last_offset = ack_rx_batch.last().unwrap().0.clone();
-        info!(
-            "Ack was invoked with last offset: {:?} at time {:?}",
-            last_offset,
-            tokio::time::Instant::now()
-        );
-
         let n = ack_rx_batch.len();
         let start = tokio::time::Instant::now();
         let mut offsets_to_ack = Vec::with_capacity(n);
@@ -375,12 +387,7 @@ impl Source {
         if !offsets_to_ack.is_empty() {
             streaming_source.ack(offsets_to_ack).await?;
         }
-        info!(
-            "Acked {} offsets in {:?}, last offset - {:?}",
-            n,
-            start.elapsed(),
-            last_offset
-        );
+        info!("Acked {} offsets in {:?}", n, start.elapsed());
 
         pipeline_metrics()
             .isb

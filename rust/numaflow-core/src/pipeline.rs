@@ -8,8 +8,9 @@ use tokio_util::sync::CancellationToken;
 use crate::config::pipeline;
 use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
 use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
+use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
-use crate::pipeline::isb::jetstream::StreamingJetstreamWriter;
+use crate::pipeline::isb::jetstream::ISBWriter;
 use crate::shared::utils;
 use crate::shared::utils::{create_sink_writer, start_metrics_server};
 use crate::{error, Result};
@@ -68,14 +69,14 @@ async fn start_source_forwarder(
     )
     .await;
 
-    let forwarder = forwarder::source_forwarder::StreamingForwarderBuilder::new(
-        source,
-        transformer,
-        buffer_writer,
-        cln_token.clone(),
-        config.clone(),
-    )
-    .build();
+    let forwarder =
+        source_forwarder::SourceForwarderBuilder::new(source, buffer_writer, cln_token.clone());
+
+    let forwarder = if let Some(transformer) = transformer {
+        forwarder.with_transformer(transformer).build()
+    } else {
+        forwarder.build()
+    };
 
     forwarder.start().await?;
     Ok(())
@@ -145,8 +146,8 @@ async fn create_buffer_writer(
     config: &PipelineConfig,
     js_context: Context,
     cln_token: CancellationToken,
-) -> StreamingJetstreamWriter {
-    StreamingJetstreamWriter::new(
+) -> ISBWriter {
+    ISBWriter::new(
         config.paf_batch_size,
         config
             .to_vertex_config

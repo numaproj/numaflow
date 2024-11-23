@@ -221,13 +221,14 @@ pub(crate) struct TransformerMetrics {
 }
 
 pub(crate) struct PipelineForwarderMetrics {
-    pub(crate) data_read: Family<Vec<(String, String)>, Counter>,
+    pub(crate) read_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) read_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) ack_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) read_bytes_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) processed_time: Family<Vec<(String, String)>, Histogram>,
 }
 
 pub(crate) struct PipelineISBMetrics {
-    pub(crate) write_time: Family<Vec<(String, String)>, Histogram>,
-    pub(crate) read_time: Family<Vec<(String, String)>, Histogram>,
     pub(crate) ack_time: Family<Vec<(String, String)>, Histogram>,
     pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) read_total: Family<Vec<(String, String)>, Counter>,
@@ -382,18 +383,17 @@ impl PipelineMetrics {
     fn new() -> Self {
         let metrics = Self {
             forwarder: PipelineForwarderMetrics {
-                data_read: Default::default(),
+                read_total: Family::<Vec<(String, String)>, Counter>::default(),
                 processed_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
-                    || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10)),
-                ),
-            },
-            isb: PipelineISBMetrics {
-                write_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
                     || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10)),
                 ),
                 read_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                 }),
+                read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+                ack_total: Family::<Vec<(String, String)>, Counter>::default(),
+            },
+            isb: PipelineISBMetrics {
                 ack_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                 }),
@@ -414,7 +414,27 @@ impl PipelineMetrics {
         forwarder_registry.register(
             PIPELINE_FORWARDER_READ_TOTAL,
             "Total number of Data Messages Read",
-            metrics.forwarder.data_read.clone(),
+            metrics.forwarder.read_total.clone(),
+        );
+        forwarder_registry.register(
+            "read_time",
+            "Time taken to read data",
+            metrics.forwarder.read_time.clone(),
+        );
+        forwarder_registry.register(
+            "read_bytes_total",
+            "Total number of bytes read",
+            metrics.forwarder.read_bytes_total.clone(),
+        );
+        forwarder_registry.register(
+            "processed_time",
+            "Time taken to process data",
+            metrics.forwarder.processed_time.clone(),
+        );
+        forwarder_registry.register(
+            "ack_total",
+            "Total number of Ack Messages",
+            metrics.forwarder.ack_total.clone(),
         );
         metrics
     }
@@ -425,7 +445,7 @@ static MONOVTX_METRICS: OnceLock<MonoVtxMetrics> = OnceLock::new();
 
 // forward_metrics is a helper function used to fetch the
 // MonoVtxMetrics object
-pub(crate) fn forward_mvtx_metrics() -> &'static MonoVtxMetrics {
+pub(crate) fn monovertex_metrics() -> &'static MonoVtxMetrics {
     MONOVTX_METRICS.get_or_init(MonoVtxMetrics::new)
 }
 
@@ -805,7 +825,7 @@ async fn expose_pending_metrics(
                 let mut metric_labels = mvtx_forward_metric_labels().clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
                 pending_info.insert(label, pending);
-                forward_mvtx_metrics()
+                monovertex_metrics()
                     .source_pending
                     .get_or_create(&metric_labels)
                     .set(pending);
@@ -1055,7 +1075,7 @@ mod tests {
             for (i, (label, _)) in LOOKBACK_SECONDS_MAP.iter().enumerate() {
                 let mut metric_labels = mvtx_forward_metric_labels().clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
-                let guage = forward_mvtx_metrics()
+                let guage = monovertex_metrics()
                     .source_pending
                     .get_or_create(&metric_labels)
                     .get();
@@ -1126,7 +1146,7 @@ mod tests {
         );
         global_metrics.sdk_info.get_or_create(&sdk_labels).set(1);
 
-        let metrics = forward_mvtx_metrics();
+        let metrics = monovertex_metrics();
         // Use a fixed set of labels instead of the ones from mvtx_forward_metric_labels() since other test functions may also set it.
         let common_labels = vec![
             (

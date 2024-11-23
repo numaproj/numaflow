@@ -1,64 +1,67 @@
 use tokio_util::sync::CancellationToken;
 
-use crate::config::pipeline::PipelineConfig;
 use crate::error;
 use crate::error::Error;
-use crate::pipeline::isb::jetstream::StreamingJetstreamWriter;
+use crate::pipeline::isb::jetstream::ISBWriter;
 use crate::source::Source;
 use crate::transformer::Transformer;
 
-/// Simple source forwarder that reads messages from the source, applies transformation if present
-/// and writes to the messages to ISB.
-pub(crate) struct Forwarder {
-    streaming_source: Source,
-    streaming_transformer: Option<Transformer>,
-    writer: StreamingJetstreamWriter,
+/// Source forwarder is the orchestrator which starts streaming source, a transformer, and an isb writer
+/// and manages the lifecycle of these components.
+pub(crate) struct SourceForwarder {
+    source: Source,
+    transformer: Option<Transformer>,
+    writer: ISBWriter,
     cln_token: CancellationToken,
-    config: PipelineConfig,
 }
 
-pub(crate) struct StreamingForwarderBuilder {
+/// ForwarderBuilder is a builder for Forwarder.
+pub(crate) struct SourceForwarderBuilder {
     streaming_source: Source,
-    streaming_transformer: Option<Transformer>,
-    writer: StreamingJetstreamWriter,
+    transformer: Option<Transformer>,
+    writer: ISBWriter,
     cln_token: CancellationToken,
-    config: PipelineConfig,
 }
 
-impl StreamingForwarderBuilder {
+impl SourceForwarderBuilder {
     pub(crate) fn new(
         streaming_source: Source,
-        streaming_transformer: Option<Transformer>,
-        writer: StreamingJetstreamWriter,
+        writer: ISBWriter,
         cln_token: CancellationToken,
-        config: PipelineConfig,
     ) -> Self {
         Self {
             streaming_source,
-            streaming_transformer,
+            transformer: None,
             writer,
             cln_token,
-            config,
         }
     }
 
-    pub(crate) fn build(self) -> Forwarder {
-        Forwarder {
-            streaming_source: self.streaming_source,
-            streaming_transformer: self.streaming_transformer,
+    pub(crate) fn with_transformer(mut self, transformer: Transformer) -> Self {
+        self.transformer = Some(transformer);
+        self
+    }
+
+    pub(crate) fn build(self) -> SourceForwarder {
+        SourceForwarder {
+            source: self.streaming_source,
+            transformer: self.transformer,
             writer: self.writer,
             cln_token: self.cln_token,
-            config: self.config,
         }
     }
 }
 
-impl Forwarder {
+impl SourceForwarder {
+    /// Start the forwarder by starting the streaming source, transformer, and writer.
     pub(crate) async fn start(&self) -> error::Result<()> {
-        let (read_messages_rx, reader_handle) = self.streaming_source.streaming_read()?;
+        // RETHINK: only source should stop when the token is cancelled, transformer and writer should drain the streams
+        // and then stop.
+        let (read_messages_rx, reader_handle) = self.source.streaming_read()?;
 
+        // start the transformer if it is present
         let (transformed_messages_rx, transformer_handle) =
-            if let Some(transformer) = &self.streaming_transformer {
+            if let Some(transformer) = &self.transformer {
                 let (transformed_messages_rx, transformer_handle) =
                     transformer.transform_stream(read_messages_rx)?;
                 (transformed_messages_rx, Some(transformer_handle))

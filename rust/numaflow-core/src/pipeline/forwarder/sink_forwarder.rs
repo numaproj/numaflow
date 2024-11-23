@@ -6,7 +6,8 @@ use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::sink::SinkWriter;
 use crate::Result;
 
-/// Sink forwarder reads messages from the jetstream and writes to the sink.
+/// Sink forwarder is a component which starts a streaming reader and a sink writer
+/// and manages the lifecycle of these components.
 pub(crate) struct SinkForwarder {
     jetstream_reader: JetstreamReader,
     sink_writer: SinkWriter,

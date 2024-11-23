@@ -45,8 +45,8 @@ impl ForwarderBuilder {
     }
 
     /// Set the optional transformer client
-    pub(crate) fn streaming_transformer(mut self, transformer_client: Transformer) -> Self {
-        self.streaming_transformer = Some(transformer_client);
+    pub(crate) fn transformer(mut self, transformer: Transformer) -> Self {
+        self.streaming_transformer = Some(transformer);
         self
     }
 
