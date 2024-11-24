@@ -126,6 +126,7 @@ pub(crate) mod source {
         pub(crate) topic: String,
         pub(crate) consumer_name: String,
         pub(crate) subscription: String,
+        pub(crate) max_unack: usize
     }
 }
 

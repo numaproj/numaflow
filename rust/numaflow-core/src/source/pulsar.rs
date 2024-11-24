@@ -11,6 +11,7 @@ impl From<PulsarSourceConfig> for numaflow_pulsar::source::PulsarSourceConfig {
             topic: value.topic,
             consumer_name: value.consumer_name,
             subscription: value.subscription,
+            max_unack: value.max_unack,
         }
     }
 }
@@ -30,11 +31,12 @@ impl source::SourceReader for PulsarSource {
     }
 
     async fn read(&mut self) -> crate::error::Result<Vec<Message>> {
-        Ok(Self::read(self)
+        // let messages = Self::read(self).await;
+        Self::read(self)
             .await
             .into_iter()
-            .map(|msg| msg.into())
-            .collect())
+            .map(|msg| msg.try_into())
+            .collect()
     }
 
     fn partitions(&self) -> Vec<u16> {
@@ -46,12 +48,11 @@ impl source::SourceAcker for PulsarSource {
     async fn ack(&mut self, offsets: Vec<Offset>) -> crate::error::Result<()> {
         let mut pulsar_offsets = Vec::with_capacity(offsets.len());
         for offset in offsets {
-            let Offset::Bytes(offset) = offset else {
-                return Err(crate::error::Error::Source(
-                    "expected offset type Offset::Bytes for Pulsar source".into(),
-                )); // FIXME:
+            let Offset::Int(int_offset) = offset else {
+                tracing::error!(?offset, "Expected Offset::Int type for Pulsar");
+                continue;
             };
-            pulsar_offsets.push(offset);
+            pulsar_offsets.push(int_offset.offset);
         }
         Self::ack(self, pulsar_offsets).await;
         Ok(())
@@ -64,19 +65,3 @@ impl source::LagReader for PulsarSource {
     }
 }
 
-impl From<numaflow_pulsar::source::Message> for Message {
-    fn from(value: numaflow_pulsar::source::Message) -> Self {
-        Message {
-            keys: value.keys,
-            value: value.value,
-            offset: Some(Offset::Bytes(value.offset)),
-            event_time: value.event_time,
-            id: MessageID {
-                vertex_name: value.id.vertex_name,
-                offset: value.id.offset,
-                index: value.id.index,
-            },
-            headers: value.headers,
-        }
-    }
-}

@@ -1,9 +1,9 @@
-use std::{collections::HashMap, time::Duration};
-
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use prost::Message as ProstMessage;
 use pulsar::{proto::MessageIdData, Consumer, ConsumerOptions, Pulsar, SubType, TokioExecutor};
+use std::collections::BTreeMap;
+use std::{collections::HashMap, time::Duration};
 use tokio::time::Instant;
 use tokio::{
     sync::{mpsc, oneshot},
@@ -39,23 +39,34 @@ pub struct PulsarSourceConfig {
     pub topic: String,
     pub consumer_name: String,
     pub subscription: String,
+    pub max_unack: usize,
 }
 
 enum ConsumerActorMessage {
     Read {
         count: usize,
         timeout_at: Instant,
-        respond_to: oneshot::Sender<Vec<Message>>,
+        respond_to: oneshot::Sender<Vec<PulsarMessage>>,
     },
     Ack {
-        offsets: Vec<(String, MessageIdData)>,
+        offsets: Vec<u64>,
         respond_to: oneshot::Sender<()>,
     },
+}
+
+pub struct PulsarMessage {
+    pub payload: Bytes,
+    pub offset: u64,
+    pub event_time: DateTime<Utc>,
+    pub headers: HashMap<String, String>
 }
 
 struct ConsumerReaderActor {
     consumer: Consumer<Vec<u8>, TokioExecutor>,
     handler_rx: mpsc::Receiver<ConsumerActorMessage>,
+    message_ids: BTreeMap<u64, MessageIdData>,
+    max_unack: usize,
+    topic: String,
 }
 
 impl ConsumerReaderActor {
@@ -84,6 +95,9 @@ impl ConsumerReaderActor {
             let mut consumer_actor = ConsumerReaderActor {
                 consumer,
                 handler_rx,
+                message_ids: BTreeMap::new(),
+                max_unack: config.max_unack,
+                topic: config.topic,
             };
             consumer_actor.run().await;
         });
@@ -115,32 +129,63 @@ impl ConsumerReaderActor {
         }
     }
 
-    async fn get_messages(&mut self, count: usize, timeout_at: Instant) -> Vec<Message> {
+    async fn get_messages(&mut self, count: usize, timeout_at: Instant) -> Vec<PulsarMessage> {
         let mut messages = vec![];
         for _ in 0..count {
             let remaining_time = timeout_at - Instant::now();
             let Ok(msg) = time::timeout(remaining_time, self.consumer.try_next()).await else {
                 return messages;
             };
-            let msg: Message = match msg {
-                Ok(Some(msg)) => msg.into(),
+            let msg = match msg {
+                Ok(Some(msg)) => msg,
                 Ok(None) => break,
                 Err(e) => {
                     tracing::error!(?e, "Fetching message from Pulsar");
-                    time::sleep(Duration::from_millis(500)).await; // FIXME:
+                    time::sleep(Duration::from_millis(500)).await; // FIXME: add error metrics. Also, respect the timeout
                     continue;
                 }
             };
-            messages.push(msg);
+            let offset = msg.message_id().entry_id;
+            let event_time = msg
+                .metadata()
+                .event_time
+                .unwrap_or(msg.metadata().publish_time);
+            let Some(event_time) = chrono::DateTime::from_timestamp_millis(event_time as i64)
+            else {
+                tracing::error!(
+                    event_time = msg.metadata().event_time,
+                    publish_time = msg.metadata().publish_time,
+                    parsed_event_time = event_time,
+                    "Pulsar message contains invalid event_time/publish_time timestamp"
+                );
+                continue;
+                //FIXME: NACK the message
+            };
+            self.message_ids.insert(offset, msg.message_id().clone());
+            messages.push(PulsarMessage {
+                payload: msg.payload.data.into(),
+                offset,
+                event_time,
+                headers: HashMap::new() // FIXME:
+            });
+
+            // stop reading as soon as we hit max_unack
+            if messages.len() >= self.max_unack {
+                return messages; // FIXME: we should return error here or log it
+            }
         }
         messages
     }
 
-    async fn ack_messages(&mut self, offsets: Vec<(String, MessageIdData)>) {
-        for (topic, offset) in offsets {
-            if let Err(e) = self.consumer.ack_with_id(&topic, offset).await {
-                tracing::error!(?e, topic, "Acknowledging message");
-            }
+    async fn ack_messages(&mut self, offsets: Vec<u64>) {
+        for offset in offsets {
+            let msg_id = self.message_ids.remove(&offset);
+
+            let msg_id = match msg_id {
+                None =>{todo!()},
+                Some(msg_id) => msg_id,
+            };
+            self.consumer.ack_with_id(&self.topic, msg_id).await.unwrap(); // FIXME: error handling
         }
     }
 }
@@ -166,7 +211,7 @@ impl PulsarSource {
 }
 
 impl PulsarSource {
-    pub async fn read(&self) -> Vec<Message> {
+    pub async fn read(&self) -> Vec<PulsarMessage> {
         let start = Instant::now();
         let (tx, rx) = oneshot::channel();
         let msg = ConsumerActorMessage::Read {
@@ -185,19 +230,12 @@ impl PulsarSource {
         messages
     }
 
-    pub async fn ack(&self, offsets: Vec<Bytes>) {
-        let mut pulsar_offsets = Vec::with_capacity(offsets.len());
-        for offset in offsets {
-            let pulsar_offset: PulsarOffset = offset.try_into().unwrap();
-            let offset = pulsar_offset.message_id_data().unwrap();
-            pulsar_offsets.push((pulsar_offset.topic_name, offset));
-        }
-
+    pub async fn ack(&self, offsets: Vec<u64>) {
         let (tx, rx) = oneshot::channel();
         let _ = self
             .actor_tx
             .send(ConsumerActorMessage::Ack {
-                offsets: pulsar_offsets,
+                offsets,
                 respond_to: tx,
             })
             .await;

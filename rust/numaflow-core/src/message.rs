@@ -16,7 +16,7 @@ use numaflow_pb::clients::sourcetransformer::SourceTransformRequest;
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
-
+use numaflow_pulsar::source::PulsarMessage;
 use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
 use crate::Error;
 use crate::Result;
@@ -71,7 +71,6 @@ pub(crate) struct Message {
 pub(crate) enum Offset {
     Int(IntOffset),
     String(StringOffset),
-    Bytes(Bytes),
 }
 
 impl fmt::Display for Offset {
@@ -79,7 +78,6 @@ impl fmt::Display for Offset {
         match self {
             Offset::Int(offset) => write!(f, "{}", offset),
             Offset::String(offset) => write!(f, "{}", offset),
-            Offset::Bytes(_) => write!(f, "<-encoded-raw-bytes->"), //FIXME:
         }
     }
 }
@@ -121,11 +119,33 @@ impl TryFrom<async_nats::Message> for Message {
     }
 }
 
+impl TryFrom<PulsarMessage> for Message {
+    type Error = Error;
+
+    fn try_from(message: PulsarMessage) -> Result<Self> {
+        let offset =Offset::Int(IntOffset::new(message.offset, 1)); // FIXME: partition id
+
+        Ok(Message {
+            keys: vec![], // FIXME: expose keys
+            value: message.payload,
+            offset: Some(offset.clone()),
+            event_time: message.event_time,
+            id: MessageID {
+                vertex_name: get_vertex_name().to_string(),
+                offset: offset.to_string(),
+                index: 0,
+            },
+            headers: message.headers,
+        })
+    }
+}
+
+
 /// IntOffset is integer based offset enum type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntOffset {
-    offset: u64,
-    partition_idx: u16,
+    pub offset: u64,
+    pub partition_idx: u16,
 }
 
 impl IntOffset {
@@ -221,10 +241,6 @@ impl TryFrom<Offset> for numaflow_pb::clients::source::Offset {
                     .decode(o.offset)
                     .expect("we control the encoding, so this should never fail"),
                 partition_id: o.partition_idx as i32,
-            }),
-            Offset::Bytes(offset) => Ok(numaflow_pb::clients::source::Offset {
-                offset: offset.into(),
-                partition_id: 1,
             }),
         }
     }
