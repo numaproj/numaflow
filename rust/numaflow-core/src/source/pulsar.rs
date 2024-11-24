@@ -1,8 +1,9 @@
+use std::time::Duration;
+
 use crate::config::components::source::PulsarSourceConfig;
-use crate::message::{Message, MessageID, Offset};
+use crate::message::{Message, Offset};
 use crate::source;
 use numaflow_pulsar::source::PulsarSource;
-use std::time::Duration;
 
 impl From<PulsarSourceConfig> for numaflow_pulsar::source::PulsarSourceConfig {
     fn from(value: PulsarSourceConfig) -> Self {
@@ -31,7 +32,6 @@ impl source::SourceReader for PulsarSource {
     }
 
     async fn read(&mut self) -> crate::error::Result<Vec<Message>> {
-        // let messages = Self::read(self).await;
         Self::read(self)
             .await
             .into_iter()
@@ -64,4 +64,3 @@ impl source::LagReader for PulsarSource {
         Ok(Self::pending(self).await)
     }
 }
-

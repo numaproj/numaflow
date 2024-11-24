@@ -13,10 +13,11 @@ use numaflow_pb::clients::sink::Status::{Failure, Fallback, Success};
 use numaflow_pb::clients::sink::{sink_response, SinkRequest};
 use numaflow_pb::clients::source::read_response;
 use numaflow_pb::clients::sourcetransformer::SourceTransformRequest;
+use numaflow_pulsar::source::PulsarMessage;
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
-use numaflow_pulsar::source::PulsarMessage;
+
 use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
 use crate::Error;
 use crate::Result;
@@ -123,10 +124,10 @@ impl TryFrom<PulsarMessage> for Message {
     type Error = Error;
 
     fn try_from(message: PulsarMessage) -> Result<Self> {
-        let offset =Offset::Int(IntOffset::new(message.offset, 1)); // FIXME: partition id
+        let offset = Offset::Int(IntOffset::new(message.offset, 1)); // FIXME: partition id
 
         Ok(Message {
-            keys: vec![], // FIXME: expose keys
+            keys: vec![message.key],
             value: message.payload,
             offset: Some(offset.clone()),
             event_time: message.event_time,
@@ -139,7 +140,6 @@ impl TryFrom<PulsarMessage> for Message {
         })
     }
 }
-
 
 /// IntOffset is integer based offset enum type.
 #[derive(Debug, Clone, Serialize, Deserialize)]

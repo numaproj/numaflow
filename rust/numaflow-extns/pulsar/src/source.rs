@@ -1,38 +1,15 @@
-use bytes::Bytes;
-use chrono::{DateTime, Utc};
-use prost::Message as ProstMessage;
-use pulsar::{proto::MessageIdData, Consumer, ConsumerOptions, Pulsar, SubType, TokioExecutor};
 use std::collections::BTreeMap;
 use std::{collections::HashMap, time::Duration};
+
+use bytes::Bytes;
+use chrono::{DateTime, Utc};
+use pulsar::{proto::MessageIdData, Consumer, ConsumerOptions, Pulsar, SubType, TokioExecutor};
 use tokio::time::Instant;
 use tokio::{
     sync::{mpsc, oneshot},
     time,
 };
 use tonic::codegen::tokio_stream::StreamExt;
-
-pub struct Message {
-    /// keys of the message
-    pub keys: Vec<String>,
-    /// actual payload of the message
-    pub value: Bytes,
-    /// offset of the message, it is optional because offset is only
-    /// available when we read the message, and we don't persist the
-    /// offset in the ISB.
-    pub offset: Bytes,
-    /// event time of the message
-    pub event_time: DateTime<Utc>,
-    /// id of the message
-    pub id: MessageID,
-    /// headers of the message
-    pub headers: HashMap<String, String>,
-}
-
-pub struct MessageID {
-    pub vertex_name: String,
-    pub offset: String,
-    pub index: i32,
-}
 
 pub struct PulsarSourceConfig {
     pub pulsar_server_addr: String,
@@ -55,10 +32,11 @@ enum ConsumerActorMessage {
 }
 
 pub struct PulsarMessage {
+    pub key: String,
     pub payload: Bytes,
     pub offset: u64,
     pub event_time: DateTime<Utc>,
-    pub headers: HashMap<String, String>
+    pub headers: HashMap<String, String>,
 }
 
 struct ConsumerReaderActor {
@@ -161,12 +139,21 @@ impl ConsumerReaderActor {
                 continue;
                 //FIXME: NACK the message
             };
+
             self.message_ids.insert(offset, msg.message_id().clone());
+            let headers = msg
+                .metadata()
+                .properties
+                .iter()
+                .map(|prop| (prop.key.clone(), prop.value.clone()))
+                .collect();
+
             messages.push(PulsarMessage {
+                key: msg.key().unwrap_or_else(|| "".to_string()), // FIXME: This is partition key. Identify the correct option. Also, there is a partition_key_b64_encoded boolean option in Pulsar metadata
                 payload: msg.payload.data.into(),
                 offset,
                 event_time,
-                headers: HashMap::new() // FIXME:
+                headers,
             });
 
             // stop reading as soon as we hit max_unack
@@ -182,10 +169,15 @@ impl ConsumerReaderActor {
             let msg_id = self.message_ids.remove(&offset);
 
             let msg_id = match msg_id {
-                None =>{todo!()},
+                None => {
+                    todo!()
+                }
                 Some(msg_id) => msg_id,
             };
-            self.consumer.ack_with_id(&self.topic, msg_id).await.unwrap(); // FIXME: error handling
+            self.consumer
+                .ack_with_id(&self.topic, msg_id)
+                .await
+                .unwrap(); // FIXME: error handling
         }
     }
 }
@@ -248,69 +240,5 @@ impl PulsarSource {
 
     pub fn partitions(&self) -> Vec<u16> {
         todo!()
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-struct PulsarOffset {
-    message_id_data: Vec<u8>,
-    topic_name: String,
-}
-
-impl PulsarOffset {
-    fn message_id_data(
-        &self,
-    ) -> Result<MessageIdData, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        MessageIdData::decode(self.message_id_data.as_slice()).map_err(Into::into)
-    }
-
-    fn serialize(&self) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        bincode::serialize(self).map_err(Into::into)
-    }
-}
-
-impl TryFrom<Bytes> for PulsarOffset {
-    type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
-
-    fn try_from(offset: Bytes) -> Result<Self, Self::Error> {
-        let pulsar_offset: PulsarOffset = bincode::deserialize(offset.as_ref())?;
-        Ok(pulsar_offset)
-    }
-}
-
-impl From<pulsar::consumer::message::Message<Vec<u8>>> for Message {
-    fn from(msg: pulsar::consumer::message::Message<Vec<u8>>) -> Self {
-        let partition_id = msg.message_id().partition();
-        // We need topic name along with message id data (comes from Pulsar message) to ack the message.
-        // The message id data is serialized using prost.
-        // Then the wrapper struct PulsarOffset that includes topic name is serialized using bincode.
-        let pulsar_offset = PulsarOffset {
-            message_id_data: msg.message_id().encode_to_vec(),
-            topic_name: msg.topic.clone(),
-        };
-
-        let offset: Vec<u8> = pulsar_offset.serialize().unwrap_or_else(|e| {
-            tracing::error!(?e, "Serializing Pulsar offset");
-            vec![]
-        });
-
-        let offset_id = msg.message_id().entry_id.to_string();
-        let metadata = msg.payload.metadata;
-        let event_time = metadata.event_time.unwrap_or(metadata.publish_time);
-        let event_time = chrono::DateTime::from_timestamp_millis(event_time as i64)
-            .expect("Invalid event_time/publish_time timestamp");
-        let payload = msg.payload.data;
-        Message {
-            event_time,
-            id: MessageID {
-                vertex_name: msg.topic.clone(), // FIXME:
-                offset: offset_id,
-                index: partition_id,
-            },
-            headers: HashMap::new(),
-            keys: vec![],
-            offset: offset.into(),
-            value: payload.into(),
-        }
     }
 }
