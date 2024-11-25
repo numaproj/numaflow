@@ -18,7 +18,7 @@ import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
 
 // TODO have a check for metricReq against metric object to ensure required fields are passed
-const LineChartComponent = ({ namespaceId, pipelineId, type, metric }: any) => {
+const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }: any) => {
   const [transformedData, setTransformedData] = useState<any[]>([]);
   const [chartLabels, setChartLabels] = useState<any[]>([]);
   const [metricsReq, setMetricsReq] = useState<any>({
@@ -42,6 +42,8 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric }: any) => {
         case "mvtx_name":
         case "pipeline":
           return pipelineId;
+        case "vertex":
+          return vertexId;
         default:
           return "";
       }
@@ -91,7 +93,7 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric }: any) => {
         name: param?.Name,
         required: param?.Required,
       })) || [];
-
+    
     setParamsList([...initParams, ...newParams]);
   }, [metric, setParamsList]);
 
@@ -214,6 +216,7 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric }: any) => {
             namespaceId={namespaceId}
             pipelineId={pipelineId}
             type={type}
+            vertexId={vertexId}
             setFilters={setFilters}
           />
         </Box>

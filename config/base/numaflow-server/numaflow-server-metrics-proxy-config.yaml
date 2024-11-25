@@ -52,3 +52,29 @@ data:
         #          required: false
         #    - name: mono-vertex
         #      #expr: optional
+    - name: pipeline_counter_metrics
+      object: vertex
+      title: Rate of Change of metrics
+      description: This pattern is to calculate rate of change of counter metrics
+      expr: sum(rate($metric_name{$filters}[$duration])) by ($dimension)
+      params:
+        - name: duration
+          required: true
+        - name: start_time
+          required: false
+        - name: end_time
+          required: false
+      metrics:
+        - metric_name: forwarder_data_read_total
+          required_filters:
+            - namespace
+            - pipeline
+            - vertex
+          dimensions:
+            - name: vertex
+              # expr: optional expression for prometheus query
+              # overrides the default expression
+            - name: pod
+              filters:
+                - name: pod
+                  required: false
