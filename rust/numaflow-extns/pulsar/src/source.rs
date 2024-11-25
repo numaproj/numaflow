@@ -47,7 +47,6 @@ struct ConsumerReaderActor {
     message_ids: BTreeMap<u64, MessageIdData>,
     max_unack: usize,
     topic: String,
-    prev_messages: Vec<PulsarMessage>,
 }
 
 impl ConsumerReaderActor {
@@ -82,7 +81,6 @@ impl ConsumerReaderActor {
                 message_ids: BTreeMap::new(),
                 max_unack: config.max_unack,
                 topic: config.topic,
-                prev_messages: vec![],
             };
             consumer_actor.run().await;
         });
