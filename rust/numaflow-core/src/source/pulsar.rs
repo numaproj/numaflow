@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use crate::config::components::source::PulsarSourceConfig;
+use crate::error::Error;
 use crate::message::{Message, Offset};
 use crate::source;
 use numaflow_pulsar::source::PulsarSource;
@@ -22,8 +23,7 @@ pub(crate) async fn new_pulsar_source(
     batch_size: usize,
     timeout: Duration,
 ) -> crate::Result<PulsarSource> {
-    let pulsar_source = PulsarSource::new(cfg.into(), batch_size, timeout).await;
-    Ok(pulsar_source)
+    Ok(PulsarSource::new(cfg.into(), batch_size, timeout).await?)
 }
 
 impl source::SourceReader for PulsarSource {
@@ -31,9 +31,9 @@ impl source::SourceReader for PulsarSource {
         "Pulsar"
     }
 
-    async fn read(&mut self) -> crate::error::Result<Vec<Message>> {
+    async fn read(&mut self) -> crate::Result<Vec<Message>> {
         Self::read(self)
-            .await
+            .await?
             .into_iter()
             .map(|msg| msg.try_into())
             .collect()
@@ -49,13 +49,13 @@ impl source::SourceAcker for PulsarSource {
         let mut pulsar_offsets = Vec::with_capacity(offsets.len());
         for offset in offsets {
             let Offset::Int(int_offset) = offset else {
-                tracing::error!(?offset, "Expected Offset::Int type for Pulsar");
-                continue;
+                return Err(Error::Source(format!(
+                    "Expected Offset::Int type for Pulsar. offset={offset:?}"
+                )));
             };
             pulsar_offsets.push(int_offset.offset);
         }
-        Self::ack(self, pulsar_offsets).await;
-        Ok(())
+        Self::ack(self, pulsar_offsets).await.map_err(Into::into)
     }
 }
 
