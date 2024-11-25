@@ -1315,7 +1315,7 @@ message Probe {
 }
 
 message PulsarSource {
-  repeated string server_addr = 1;
+  optional string serverAddr = 1;
 
   optional string topic = 2;
 

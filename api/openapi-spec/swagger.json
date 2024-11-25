@@ -21640,8 +21640,10 @@
     "io.numaproj.numaflow.v1alpha1.PulsarSource": {
       "type": "object",
       "required": [
-        "server_addr",
-        "topic"
+        "serverAddr",
+        "topic",
+        "consumerName",
+        "subscriptionName"
       ],
       "properties": {
         "consumerName": {
@@ -21651,11 +21653,8 @@
           "type": "integer",
           "format": "int64"
         },
-        "server_addr": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+        "serverAddr": {
+          "type": "string"
         },
         "subscriptionName": {
           "type": "string"

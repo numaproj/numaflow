@@ -17,9 +17,9 @@ limitations under the License.
 package v1alpha1
 
 type PulsarSource struct {
-	ServerAddr       []string `json:"server_addr" protobuf:"bytes,1,name=server_addr"`
-	Topic            string   `json:"topic" protobuf:"bytes,2,opt,name=topic"`
-	ConsumerName     string   `json:"consumerName,omitempty" protobuf:"bytes,3,opt,name=consumerName"`
-	SubscriptionName string   `json:"subscriptionName,omitempty" protobuf:"bytes,4,opt,name=subscriptionName"`
-	MaxUnack         uint32   `json:"maxUnack,omitempty" protobuf:"bytes,5,opt,name=maxUnack"`
+	ServerAddr       string `json:"serverAddr" protobuf:"bytes,1,name=server_addr"`
+	Topic            string `json:"topic" protobuf:"bytes,2,name=topic"`
+	ConsumerName     string `json:"consumerName" protobuf:"bytes,3,name=consumerName"`
+	SubscriptionName string `json:"subscriptionName" protobuf:"bytes,4,name=subscriptionName"`
+	MaxUnack         uint32 `json:"maxUnack,omitempty" protobuf:"bytes,5,opt,name=maxUnack"`
 }

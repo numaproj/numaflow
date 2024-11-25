@@ -9683,16 +9683,16 @@ spec:
                             maxUnack:
                               format: int32
                               type: integer
-                            server_addr:
-                              items:
-                                type: string
-                              type: array
+                            serverAddr:
+                              type: string
                             subscriptionName:
                               type: string
                             topic:
                               type: string
                           required:
-                          - server_addr
+                          - consumerName
+                          - serverAddr
+                          - subscriptionName
                           - topic
                           type: object
                         serving:

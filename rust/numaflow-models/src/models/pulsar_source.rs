@@ -18,25 +18,30 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PulsarSource {
-    #[serde(rename = "consumerName", skip_serializing_if = "Option::is_none")]
-    pub consumer_name: Option<String>,
+    #[serde(rename = "consumerName")]
+    pub consumer_name: String,
     #[serde(rename = "maxUnack", skip_serializing_if = "Option::is_none")]
     pub max_unack: Option<i64>,
-    #[serde(rename = "server_addr")]
-    pub server_addr: Vec<String>,
-    #[serde(rename = "subscriptionName", skip_serializing_if = "Option::is_none")]
-    pub subscription_name: Option<String>,
+    #[serde(rename = "serverAddr")]
+    pub server_addr: String,
+    #[serde(rename = "subscriptionName")]
+    pub subscription_name: String,
     #[serde(rename = "topic")]
     pub topic: String,
 }
 
 impl PulsarSource {
-    pub fn new(server_addr: Vec<String>, topic: String) -> PulsarSource {
+    pub fn new(
+        consumer_name: String,
+        server_addr: String,
+        subscription_name: String,
+        topic: String,
+    ) -> PulsarSource {
         PulsarSource {
-            consumer_name: None,
+            consumer_name,
             max_unack: None,
             server_addr,
-            subscription_name: None,
+            subscription_name,
             topic,
         }
     }

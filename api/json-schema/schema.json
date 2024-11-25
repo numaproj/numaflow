@@ -21660,11 +21660,8 @@
           "format": "int64",
           "type": "integer"
         },
-        "server_addr": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+        "serverAddr": {
+          "type": "string"
         },
         "subscriptionName": {
           "type": "string"
@@ -21674,8 +21671,10 @@
         }
       },
       "required": [
-        "server_addr",
-        "topic"
+        "serverAddr",
+        "topic",
+        "consumerName",
+        "subscriptionName"
       ],
       "type": "object"
     },

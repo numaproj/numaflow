@@ -6,9 +6,8 @@ pub(crate) mod source {
     use std::time::Duration;
 
     use bytes::Bytes;
-    use numaflow_models::models::Source;
+    use numaflow_models::models::{GeneratorSource, PulsarSource, Source};
     use tracing::warn;
-
     use crate::error::Error;
     use crate::Result;
 
@@ -32,49 +31,69 @@ pub(crate) mod source {
         Pulsar(PulsarSourceConfig),
     }
 
+    impl From<Box<GeneratorSource>> for SourceType {
+        fn from(generator: Box<GeneratorSource>) -> Self {
+            let mut generator_config = GeneratorConfig::default();
+
+            if let Some(value_blob) = &generator.value_blob {
+                generator_config.content = Bytes::from(value_blob.clone());
+            }
+
+            if let Some(msg_size) = generator.msg_size {
+                if msg_size >= 0 {
+                    generator_config.msg_size_bytes = msg_size as u32;
+                } else {
+                    warn!("'msgSize' cannot be negative, using default value (8 bytes)");
+                }
+            }
+
+            generator_config.value = generator.value;
+            generator_config.rpu = generator.rpu.unwrap_or(1) as usize;
+            generator_config.duration =
+                generator.duration.map_or(Duration::from_millis(1000), |d| {
+                    std::time::Duration::from(d)
+                });
+            generator_config.key_count = generator
+                .key_count
+                .map_or(0, |kc| std::cmp::min(kc, u8::MAX as i32) as u8);
+            generator_config.jitter = generator
+                .jitter
+                .map_or(Duration::from_secs(0), std::time::Duration::from);
+
+            SourceType::Generator(generator_config)
+        }
+    }
+
+    impl From<Box<PulsarSource>> for SourceType {
+        fn from(value: Box<PulsarSource>) -> Self {
+            let pulsar_config = PulsarSourceConfig {
+                server_addr: value.server_addr,
+                topic: value.topic,
+                consumer_name: value.consumer_name,
+                subscription: value.subscription_name,
+                max_unack: value.max_unack.unwrap_or(1000) as usize,
+            };
+            SourceType::Pulsar(pulsar_config)
+        }
+    }
+
     impl TryFrom<Box<Source>> for SourceType {
         type Error = Error;
 
-        fn try_from(source: Box<Source>) -> Result<Self> {
-            source
-                .udsource
-                .as_ref()
-                .map(|_| Ok(SourceType::UserDefined(UserDefinedConfig::default())))
-                .or_else(|| {
-                    source.generator.as_ref().map(|generator| {
-                        let mut generator_config = GeneratorConfig::default();
+        fn try_from(mut source: Box<Source>) -> Result<Self> {
+            if let Some(generator) = source.generator.take() {
+               return Ok(generator.into()) ;
+            }
 
-                        if let Some(value_blob) = &generator.value_blob {
-                            generator_config.content = Bytes::from(value_blob.clone());
-                        }
+            if source.udsource.is_some() {
+                return Ok(SourceType::UserDefined(UserDefinedConfig::default()));
+            }
 
-                        if let Some(msg_size) = generator.msg_size {
-                            if msg_size >= 0 {
-                                generator_config.msg_size_bytes = msg_size as u32;
-                            } else {
-                                warn!(
-                                    "'msgSize' cannot be negative, using default value (8 bytes)"
-                                );
-                            }
-                        }
+            if let Some(pulsar) = source.pulsar.take() {
+                return Ok(pulsar.into());
+            }
 
-                        generator_config.value = generator.value;
-                        generator_config.rpu = generator.rpu.unwrap_or(1) as usize;
-                        generator_config.duration =
-                            generator.duration.map_or(Duration::from_millis(1000), |d| {
-                                std::time::Duration::from(d)
-                            });
-                        generator_config.key_count = generator
-                            .key_count
-                            .map_or(0, |kc| std::cmp::min(kc, u8::MAX as i32) as u8);
-                        generator_config.jitter = generator
-                            .jitter
-                            .map_or(Duration::from_secs(0), std::time::Duration::from);
-
-                        Ok(SourceType::Generator(generator_config))
-                    })
-                })
-                .ok_or_else(|| Error::Config("Source type not found".to_string()))?
+            Err(Error::Config(format!("Invalid source type: {source:?}")))
         }
     }
 
