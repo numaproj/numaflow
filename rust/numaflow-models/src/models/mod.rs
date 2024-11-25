@@ -124,6 +124,8 @@ pub mod pipeline_status;
 pub use self::pipeline_status::PipelineStatus;
 pub mod probe;
 pub use self::probe::Probe;
+pub mod pulsar_source;
+pub use self::pulsar_source::PulsarSource;
 pub mod redis_buffer_service;
 pub use self::redis_buffer_service::RedisBufferService;
 pub mod redis_config;

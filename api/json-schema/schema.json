@@ -21651,6 +21651,34 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.PulsarSource": {
+      "properties": {
+        "consumerName": {
+          "type": "string"
+        },
+        "maxUnack": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "server_addr": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "subscriptionName": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_addr",
+        "topic"
+      ],
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.RedisBufferService": {
       "properties": {
         "external": {
@@ -22095,6 +22123,9 @@
         },
         "nats": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
+        },
+        "pulsar": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarSource"
         },
         "serving": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingSource"

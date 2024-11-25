@@ -1314,6 +1314,18 @@ message Probe {
   optional int32 failureThreshold = 5;
 }
 
+message PulsarSource {
+  repeated string server_addr = 1;
+
+  optional string topic = 2;
+
+  optional string consumerName = 3;
+
+  optional string subscriptionName = 4;
+
+  optional uint32 maxUnack = 5;
+}
+
 message RedisBufferService {
   // Native brings up a native Redis service
   optional NativeRedis native = 1;
@@ -1607,6 +1619,9 @@ message Source {
 
   // +optional
   optional ServingSource serving = 8;
+
+  // +optional
+  optional PulsarSource pulsar = 9;
 }
 
 // Status is a common structure which can be used for Status field.

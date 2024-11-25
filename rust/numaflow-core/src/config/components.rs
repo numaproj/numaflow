@@ -122,7 +122,7 @@ pub(crate) mod source {
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct PulsarSourceConfig {
-        pub(crate) pulsar_server_addr: String,
+        pub(crate) server_addr: String,
         pub(crate) topic: String,
         pub(crate) consumer_name: String,
         pub(crate) subscription: String,

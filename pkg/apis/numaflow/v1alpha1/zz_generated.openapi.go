@@ -89,6 +89,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineSpec":                     schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineStatus":                   schema_pkg_apis_numaflow_v1alpha1_PipelineStatus(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Probe":                            schema_pkg_apis_numaflow_v1alpha1_Probe(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSource":                     schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisBufferService":               schema_pkg_apis_numaflow_v1alpha1_RedisBufferService(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisConfig":                      schema_pkg_apis_numaflow_v1alpha1_RedisConfig(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSettings":                    schema_pkg_apis_numaflow_v1alpha1_RedisSettings(ref),
@@ -4310,6 +4311,58 @@ func schema_pkg_apis_numaflow_v1alpha1_Probe(ref common.ReferenceCallback) commo
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"server_addr": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"topic": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"consumerName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"subscriptionName": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
+					"maxUnack": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
+				},
+				Required: []string{"server_addr", "topic"},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_RedisBufferService(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -5120,11 +5173,16 @@ func schema_pkg_apis_numaflow_v1alpha1_Source(ref common.ReferenceCallback) comm
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingSource"),
 						},
 					},
+					"pulsar": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSource"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"},
 	}
 }
 

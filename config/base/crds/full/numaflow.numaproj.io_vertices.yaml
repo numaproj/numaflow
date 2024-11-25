@@ -4460,6 +4460,25 @@ spec:
                     - subject
                     - url
                     type: object
+                  pulsar:
+                    properties:
+                      consumerName:
+                        type: string
+                      maxUnack:
+                        format: int32
+                        type: integer
+                      server_addr:
+                        items:
+                          type: string
+                        type: array
+                      subscriptionName:
+                        type: string
+                      topic:
+                        type: string
+                    required:
+                    - server_addr
+                    - topic
+                    type: object
                   serving:
                     properties:
                       auth:

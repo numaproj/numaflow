@@ -9,7 +9,7 @@ use numaflow_pulsar::source::PulsarSource;
 impl From<PulsarSourceConfig> for numaflow_pulsar::source::PulsarSourceConfig {
     fn from(value: PulsarSourceConfig) -> Self {
         numaflow_pulsar::source::PulsarSourceConfig {
-            pulsar_server_addr: value.pulsar_server_addr,
+            pulsar_server_addr: value.server_addr,
             topic: value.topic,
             consumer_name: value.consumer_name,
             subscription: value.subscription,
