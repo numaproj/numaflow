@@ -248,7 +248,7 @@ impl PulsarSource {
         Ok(messages)
     }
 
-    pub async fn ack(&self, offsets: Vec<u64>) ->Result<()>{
+    pub async fn ack(&self, offsets: Vec<u64>) -> Result<()> {
         let (tx, rx) = oneshot::channel();
         let _ = self
             .actor_tx

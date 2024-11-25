@@ -5,11 +5,11 @@ pub(crate) mod source {
 
     use std::time::Duration;
 
+    use crate::error::Error;
+    use crate::Result;
     use bytes::Bytes;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source};
     use tracing::warn;
-    use crate::error::Error;
-    use crate::Result;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SourceConfig {
@@ -82,7 +82,7 @@ pub(crate) mod source {
 
         fn try_from(mut source: Box<Source>) -> Result<Self> {
             if let Some(generator) = source.generator.take() {
-               return Ok(generator.into()) ;
+                return Ok(generator.into());
             }
 
             if source.udsource.is_some() {
@@ -145,7 +145,7 @@ pub(crate) mod source {
         pub(crate) topic: String,
         pub(crate) consumer_name: String,
         pub(crate) subscription: String,
-        pub(crate) max_unack: usize
+        pub(crate) max_unack: usize,
     }
 }
 

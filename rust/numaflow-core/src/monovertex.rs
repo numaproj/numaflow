@@ -18,9 +18,9 @@ use crate::shared::utils::{
 };
 use crate::sink::{SinkClientType, SinkHandle};
 use crate::source::generator::new_generator;
+use crate::source::pulsar::new_pulsar_source;
 use crate::source::user_defined::new_source;
 use crate::source::{SourceHandle, SourceType};
-use crate::source::pulsar::new_pulsar_source;
 use crate::transformer::user_defined::SourceTransformHandle;
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
@@ -220,7 +220,7 @@ async fn fetch_source(
     config: &MonovertexConfig,
     source_grpc_client: &mut Option<SourceClient<Channel>>,
 ) -> crate::Result<SourceType> {
-    match &config.source_config.source_type{
+    match &config.source_config.source_type {
         source::SourceType::Generator(generator_config) => {
             let (source_read, source_ack, lag_reader) =
                 new_generator(generator_config.clone(), config.batch_size)?;
@@ -228,7 +228,9 @@ async fn fetch_source(
         }
         source::SourceType::UserDefined(_) => {
             let Some(source_grpc_client) = source_grpc_client.clone() else {
-                return Err(Error::Config("Configuration type is user-defined, however no grpc client is provided".into()))
+                return Err(Error::Config(
+                    "Configuration type is user-defined, however no grpc client is provided".into(),
+                ));
             };
             let (source_read, source_ack, lag_reader) =
                 new_source(source_grpc_client, config.batch_size, config.read_timeout).await?;
@@ -239,7 +241,12 @@ async fn fetch_source(
             ))
         }
         source::SourceType::Pulsar(pulsar_config) => {
-            let pulsar = new_pulsar_source(pulsar_config.clone(), config.batch_size, config.read_timeout).await?;
+            let pulsar = new_pulsar_source(
+                pulsar_config.clone(),
+                config.batch_size,
+                config.read_timeout,
+            )
+            .await?;
             Ok(SourceType::Pulsar(pulsar))
         }
     }

@@ -14,7 +14,7 @@ pub enum Error {
 
     #[error("Failed to receive message from channel. Actor task is terminated: {0:?}")]
     ActorTaskTerminated(oneshot::error::RecvError),
-    
+
     #[error("Received unknown offset for acknowledgement. offset={0}")]
     UnknownOffset(u64),
 
