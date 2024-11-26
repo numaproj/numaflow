@@ -1,3 +1,9 @@
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info};
+
 use crate::message::{get_vertex_name, is_mono_vertex, ReadAck, ReadMessage};
 use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
@@ -8,10 +14,6 @@ use crate::{
     message::{Message, Offset},
     reader::LagReader,
 };
-use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinHandle;
-use tokio_stream::wrappers::ReceiverStream;
-use tracing::{error, info};
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -141,7 +143,7 @@ pub(crate) struct Source {
 
 impl Source {
     /// Create a new StreamingSource. It starts the read and ack actors in the background.
-    pub(crate) fn new(src_type: SourceType, batch_size: usize) -> Self {
+    pub(crate) fn new(batch_size: usize, src_type: SourceType) -> Self {
         let (read_sender, mut read_receiver) = mpsc::channel(batch_size);
         let (ack_sender, mut ack_receiver) = mpsc::channel(batch_size);
         let (pending_sender, mut pending_receiver) = mpsc::channel(1);
@@ -245,6 +247,7 @@ impl Source {
     /// a handle to the spawned task.
     pub(crate) fn streaming_read(
         &self,
+        cln_token: CancellationToken,
     ) -> Result<(ReceiverStream<ReadMessage>, JoinHandle<Result<()>>)> {
         let batch_size = self.read_batch_size;
         let (messages_tx, messages_rx) = mpsc::channel(batch_size);
@@ -259,6 +262,10 @@ impl Source {
             let mut last_logged_at = tokio::time::Instant::now();
 
             loop {
+                if cln_token.is_cancelled() {
+                    info!("Cancellation token is cancelled. Stopping the source.");
+                    return Ok(());
+                }
                 let permit_time = tokio::time::Instant::now();
                 // Reserve the permits before invoking the read method.
                 let mut permit = match messages_tx.reserve_many(batch_size).await {

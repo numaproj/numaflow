@@ -2,7 +2,6 @@ use async_nats::jetstream::Context;
 use async_nats::{jetstream, ConnectOptions};
 use futures::future::try_join_all;
 use log::info;
-use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::pipeline;
@@ -54,7 +53,6 @@ async fn start_source_forwarder(
     .await?;
     let (transformer, transformer_grpc_client) = utils::create_transformer(
         config.batch_size,
-        config.read_timeout,
         source_config.transformer_config.clone(),
         cln_token.clone(),
     )
@@ -191,12 +189,12 @@ async fn create_buffer_readers(
 /// Creates a jetstream context based on the provided configuration
 async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Result<Context> {
     // TODO: make these configurable. today this is hardcoded on Golang code too.
-    let mut opts = ConnectOptions::new()
-        .max_reconnects(None) // -1 for unlimited reconnects
-        .ping_interval(Duration::from_secs(3))
-        .max_reconnects(None)
-        .ping_interval(Duration::from_secs(3))
-        .retry_on_initial_connect();
+    let mut opts = ConnectOptions::new();
+    // .max_reconnects(None) // -1 for unlimited reconnects
+    // .ping_interval(Duration::from_secs(3))
+    // .max_reconnects(None)
+    // .ping_interval(Duration::from_secs(3))
+    // .retry_on_initial_connect();
 
     if let (Some(user), Some(password)) = (config.user, config.password) {
         opts = opts.user_and_password(user, password);
@@ -219,7 +217,6 @@ mod tests {
     use futures::StreamExt;
 
     use super::*;
-
     use crate::config::components::metrics::MetricsConfig;
     use crate::config::components::sink::{BlackholeConfig, SinkConfig, SinkType};
     use crate::config::components::source::GeneratorConfig;
@@ -408,8 +405,9 @@ mod tests {
                 .unwrap();
 
             // Publish some messages into the stream
-            use crate::message::{Message, MessageID, Offset, StringOffset};
             use chrono::{TimeZone, Utc};
+
+            use crate::message::{Message, MessageID, Offset, StringOffset};
             let message = Message {
                 keys: vec!["key1".to_string()],
                 value: vec![1, 2, 3].into(),

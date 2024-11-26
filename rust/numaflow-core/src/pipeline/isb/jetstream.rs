@@ -1,10 +1,3 @@
-use crate::config::pipeline::isb::BufferWriterConfig;
-use crate::message::ReadMessage;
-use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
-use crate::pipeline::isb::jetstream::writer::{
-    JetstreamWriter, PafResolver, ResolveAndPublishResult,
-};
-use crate::Result;
 use async_nats::jetstream::Context;
 use bytes::BytesMut;
 use log::info;
@@ -13,6 +6,14 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
+
+use crate::config::pipeline::isb::BufferWriterConfig;
+use crate::message::ReadMessage;
+use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
+use crate::pipeline::isb::jetstream::writer::{
+    JetstreamWriter, PafResolver, ResolveAndPublishResult,
+};
+use crate::Result;
 
 /// JetStream Writer is responsible for writing messages to JetStream ISB.
 /// it exposes both sync and async methods to write messages. It has gates

@@ -57,7 +57,8 @@ impl SourceForwarder {
     pub(crate) async fn start(&self) -> error::Result<()> {
         // RETHINK: only source should stop when the token is cancelled, transformer and writer should drain the streams
         // and then stop.
-        let (read_messages_rx, reader_handle) = self.source.streaming_read()?;
+        let (read_messages_rx, reader_handle) =
+            self.source.streaming_read(self.cln_token.clone())?;
 
         // start the transformer if it is present
         let (transformed_messages_rx, transformer_handle) =

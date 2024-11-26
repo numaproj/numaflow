@@ -276,9 +276,7 @@ impl PafResolver {
     /// asynchronously, if it fails it will do a blocking write to resolve the PAFs.
     pub(crate) async fn resolve_pafs(&self, result: ResolveAndPublishResult) -> Result<()> {
         let start_time = Instant::now();
-        let permit = self
-            .sem
-            .clone()
+        let permit = Arc::clone(&self.sem)
             .acquire_owned()
             .await
             .map_err(|_e| Error::ISB("Failed to acquire semaphore permit".to_string()))?;
@@ -358,12 +356,11 @@ mod tests {
 
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
-    use async_nats::subject::ToSubject;
     use bytes::BytesMut;
     use chrono::Utc;
 
     use super::*;
-    use crate::message::{Message, MessageID, Offset};
+    use crate::message::{Message, MessageID};
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]

@@ -1,3 +1,4 @@
+use forwarder::ForwarderBuilder;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -8,7 +9,6 @@ use crate::shared::utils;
 use crate::sink::SinkWriter;
 use crate::source::Source;
 use crate::transformer::Transformer;
-use forwarder::ForwarderBuilder;
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
@@ -32,7 +32,6 @@ pub(crate) async fn start_forwarder(
 
     let (transformer, transformer_grpc_client) = utils::create_transformer(
         config.batch_size,
-        config.read_timeout,
         config.transformer_config.clone(),
         cln_token.clone(),
     )

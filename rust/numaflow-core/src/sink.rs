@@ -1,6 +1,7 @@
-use numaflow_pb::clients::sink::sink_client::SinkClient;
 use std::collections::HashMap;
 use std::time::Duration;
+
+use numaflow_pb::clients::sink::sink_client::SinkClient;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -13,7 +14,7 @@ use tonic::transport::Channel;
 use tracing::{debug, error, info, warn};
 use user_defined::UserDefinedSink;
 
-use crate::config::components::sink::{OnFailureStrategy, RetryConfig, SinkConfig};
+use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
 use crate::error::Error;
 use crate::message::{Message, ReadAck, ReadMessage, ResponseFromSink, ResponseStatusFromSink};
 use crate::Result;
@@ -83,8 +84,8 @@ pub(crate) enum SinkClientType {
 #[derive(Clone)]
 pub(super) struct SinkWriter {
     batch_size: usize,
-    read_timeout: time::Duration,
-    config: SinkConfig,
+    chunk_timeout: Duration,
+    retry_config: RetryConfig,
     sink_handle: mpsc::Sender<ActorMessage>,
     fb_sink_handle: Option<mpsc::Sender<ActorMessage>>,
 }
@@ -92,30 +93,25 @@ pub(super) struct SinkWriter {
 /// SinkWriterBuilder is a builder to build a SinkWriter.
 pub struct SinkWriterBuilder {
     batch_size: usize,
-    read_timeout: time::Duration,
-    config: SinkConfig,
+    chunk_timeout: Duration,
+    retry_config: RetryConfig,
     sink_client: SinkClientType,
     fb_sink_client: Option<SinkClientType>,
 }
 
 impl SinkWriterBuilder {
-    pub fn new(config: SinkConfig, sink_type: SinkClientType) -> Self {
+    pub fn new(batch_size: usize, chunk_timeout: Duration, sink_type: SinkClientType) -> Self {
         Self {
-            batch_size: 500,
-            read_timeout: Duration::from_secs(1),
-            config,
+            batch_size,
+            chunk_timeout,
+            retry_config: RetryConfig::default(),
             sink_client: sink_type,
             fb_sink_client: None,
         }
     }
 
-    pub fn batch_size(mut self, batch_size: usize) -> Self {
-        self.batch_size = batch_size;
-        self
-    }
-
-    pub fn read_timeout(mut self, read_timeout: Duration) -> Self {
-        self.read_timeout = read_timeout;
+    pub fn retry_config(mut self, retry_config: RetryConfig) -> Self {
+        self.retry_config = retry_config;
         self
     }
 
@@ -196,8 +192,8 @@ impl SinkWriterBuilder {
 
         Ok(SinkWriter {
             batch_size: self.batch_size,
-            read_timeout: self.read_timeout,
-            config: self.config,
+            chunk_timeout: self.chunk_timeout,
+            retry_config: self.retry_config,
             sink_handle: sender,
             fb_sink_handle,
         })
@@ -245,7 +241,7 @@ impl SinkWriter {
             let mut this = self.clone();
             async move {
                 let chunk_stream =
-                    messages_stream.chunks_timeout(this.batch_size, this.read_timeout);
+                    messages_stream.chunks_timeout(this.batch_size, this.chunk_timeout);
 
                 pin!(chunk_stream);
 
@@ -255,7 +251,9 @@ impl SinkWriter {
                 loop {
                     let batch = match chunk_stream.next().await {
                         Some(batch) => batch,
-                        None => break,
+                        None => {
+                            break;
+                        }
                     };
 
                     if batch.is_empty() {
@@ -290,11 +288,6 @@ impl SinkWriter {
                         processed_msgs_count = 0;
                         last_logged_at = std::time::Instant::now();
                     }
-
-                    if cancellation_token.is_cancelled() {
-                        warn!("Cancellation token is cancelled. Exiting SinkWriter");
-                        break;
-                    }
                 }
 
                 Ok(())
@@ -322,7 +315,7 @@ impl SinkWriter {
 
         // only breaks out of this loop based on the retry strategy unless all the messages have been written to sink
         // successfully.
-        let retry_config = &self.config.retry_config.clone().unwrap_or_default();
+        let retry_config = &self.retry_config.clone();
 
         loop {
             while attempts < retry_config.sink_max_retry_attempts {
@@ -476,7 +469,7 @@ impl SinkWriter {
                     return Ok(true);
                 }
 
-                sleep(tokio::time::Duration::from_millis(
+                sleep(Duration::from_millis(
                     retry_config.sink_retry_interval_in_ms as u64,
                 ))
                 .await;

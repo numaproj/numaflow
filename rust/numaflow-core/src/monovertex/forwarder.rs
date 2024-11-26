@@ -11,19 +11,19 @@ use crate::Error;
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
 /// back to the source.
 pub(crate) struct Forwarder {
-    streaming_source: Source,
-    streaming_transformer: Option<Transformer>,
-    streaming_sink: SinkWriter,
+    source: Source,
+    transformer: Option<Transformer>,
+    sink_writer: SinkWriter,
     cln_token: CancellationToken,
     #[allow(dead_code)]
     mvtx_config: MonovertexConfig,
 }
 
 pub(crate) struct ForwarderBuilder {
-    streaming_source: Source,
-    streaming_sink: SinkWriter,
+    source: Source,
+    sink_writer: SinkWriter,
     cln_token: CancellationToken,
-    streaming_transformer: Option<Transformer>,
+    transformer: Option<Transformer>,
     mvtx_config: MonovertexConfig,
 }
 
@@ -36,17 +36,17 @@ impl ForwarderBuilder {
         cln_token: CancellationToken,
     ) -> Self {
         Self {
-            streaming_source,
-            streaming_sink,
+            source: streaming_source,
+            sink_writer: streaming_sink,
             cln_token,
-            streaming_transformer: None,
+            transformer: None,
             mvtx_config,
         }
     }
 
     /// Set the optional transformer client
     pub(crate) fn transformer(mut self, transformer: Transformer) -> Self {
-        self.streaming_transformer = Some(transformer);
+        self.transformer = Some(transformer);
         self
     }
 
@@ -54,9 +54,9 @@ impl ForwarderBuilder {
     #[must_use]
     pub(crate) fn build(self) -> Forwarder {
         Forwarder {
-            streaming_source: self.streaming_source,
-            streaming_sink: self.streaming_sink,
-            streaming_transformer: self.streaming_transformer,
+            source: self.source,
+            sink_writer: self.sink_writer,
+            transformer: self.transformer,
             cln_token: self.cln_token,
             mvtx_config: self.mvtx_config,
         }
@@ -65,10 +65,11 @@ impl ForwarderBuilder {
 
 impl Forwarder {
     pub(crate) async fn start(&self) -> error::Result<()> {
-        let (read_messages_rx, reader_handle) = self.streaming_source.streaming_read()?;
+        let (read_messages_rx, reader_handle) =
+            self.source.streaming_read(self.cln_token.clone())?;
 
         let (transformed_messages_rx, transformer_handle) =
-            if let Some(transformer) = &self.streaming_transformer {
+            if let Some(transformer) = &self.transformer {
                 let (transformed_messages_rx, transformer_handle) =
                     transformer.transform_stream(read_messages_rx)?;
                 (transformed_messages_rx, Some(transformer_handle))
@@ -77,7 +78,7 @@ impl Forwarder {
             };
 
         let sink_writer_handle = self
-            .streaming_sink
+            .sink_writer
             .streaming_write(transformed_messages_rx, self.cln_token.clone())
             .await?;
 
@@ -117,9 +118,10 @@ mod tests {
 
     use crate::monovertex::forwarder::ForwarderBuilder;
     use crate::shared::utils::create_rpc_channel;
-    use crate::sink::SinkClientType;
+    use crate::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::user_defined::new_source;
-    use crate::source::SourceType;
+    use crate::source::{Source, SourceType};
+    use crate::transformer::Transformer;
 
     struct SimpleSource {
         yet_to_be_acked: std::sync::RwLock<HashSet<String>>,
@@ -245,7 +247,7 @@ mod tests {
         let batch_size = 100;
         let timeout_in_ms = 1000;
 
-        let (sink_tx, mut sink_rx) = mpsc::channel(10);
+        let (sink_tx, mut sink_rx) = mpsc::channel(1000000);
 
         // Start the source server
         let (source_shutdown_tx, source_shutdown_rx) = tokio::sync::oneshot::channel();
@@ -311,30 +313,35 @@ mod tests {
         .await
         .expect("failed to connect to source server");
 
-        let src_reader = SourceHandle::new(
-            SourceType::UserDefinedSource(source_read, source_ack, source_lag_reader),
+        let src_reader = Source::new(
             batch_size,
+            SourceType::UserDefinedSource(source_read, source_ack, source_lag_reader),
         );
 
         let sink_grpc_client = SinkClient::new(create_rpc_channel(sink_sock_file).await.unwrap());
-        let sink_writer =
-            SinkHandle::new(SinkClientType::UserDefined(sink_grpc_client), batch_size)
-                .await
-                .expect("failed to connect to sink server");
+        let sink_writer = SinkWriterBuilder::new(
+            500,
+            Duration::from_secs(1),
+            SinkClientType::UserDefined(sink_grpc_client),
+        )
+        .build()
+        .await
+        .expect("failed to connect to sink server");
 
-        let transformer_client = SourceTransformHandle::new(SourceTransformClient::new(
-            create_rpc_channel(transformer_sock_file).await.unwrap(),
-        ))
+        let transformer_client = Transformer::new(
+            500,
+            SourceTransformClient::new(create_rpc_channel(transformer_sock_file).await.unwrap()),
+        )
         .await
         .expect("failed to connect to transformer server");
 
-        let mut forwarder = ForwarderBuilder::new(
+        let forwarder = ForwarderBuilder::new(
             src_reader,
             sink_writer,
             Default::default(),
             cln_token.clone(),
         )
-        .source_transformer(transformer_client)
+        .transformer(transformer_client)
         .build();
 
         // Assert the received message in a different task
@@ -346,6 +353,8 @@ mod tests {
                 vec!["test-key-transformed".to_string()]
             );
             cln_token.cancel();
+            // read all the messges
+            while sink_rx.recv().await.is_some() {}
         });
 
         forwarder.start().await.unwrap();
@@ -448,17 +457,22 @@ mod tests {
         .await
         .expect("failed to connect to source server");
 
-        let source_reader = SourceHandle::new(
-            SourceType::UserDefinedSource(source_read, source_ack, lag_reader),
+        let source_reader = Source::new(
             batch_size,
+            SourceType::UserDefinedSource(source_read, source_ack, lag_reader),
         );
 
         let sink_client = SinkClient::new(create_rpc_channel(sink_sock_file).await.unwrap());
-        let sink_writer = SinkHandle::new(SinkClientType::UserDefined(sink_client), batch_size)
-            .await
-            .expect("failed to connect to sink server");
+        let sink_writer = SinkWriterBuilder::new(
+            batch_size,
+            Duration::from_secs(1),
+            SinkClientType::UserDefined(sink_client),
+        )
+        .build()
+        .await
+        .expect("failed to connect to sink server");
 
-        let mut forwarder = ForwarderBuilder::new(
+        let forwarder = ForwarderBuilder::new(
             source_reader,
             sink_writer,
             Default::default(),
@@ -576,25 +590,25 @@ mod tests {
         .await
         .expect("failed to connect to source server");
 
-        let source = SourceHandle::new(
-            SourceType::UserDefinedSource(source_read, source_ack, source_lag_reader),
+        let source = Source::new(
             batch_size,
+            SourceType::UserDefinedSource(source_read, source_ack, source_lag_reader),
         );
 
+        let fb_sink_client = SinkClient::new(create_rpc_channel(fb_sink_sock_file).await.unwrap());
         let sink_client = SinkClient::new(create_rpc_channel(sink_sock_file).await.unwrap());
-        let sink_writer = SinkHandle::new(SinkClientType::UserDefined(sink_client), batch_size)
-            .await
-            .expect("failed to connect to sink server");
+        let sink_writer = SinkWriterBuilder::new(
+            batch_size,
+            Duration::from_secs(1),
+            SinkClientType::UserDefined(sink_client),
+        )
+        .fb_sink_client(SinkClientType::UserDefined(fb_sink_client))
+        .build()
+        .await
+        .expect("failed to connect to sink server");
 
-        let fb_sink_writer = SinkClient::new(create_rpc_channel(fb_sink_sock_file).await.unwrap());
-        let fb_sink_writer =
-            SinkHandle::new(SinkClientType::UserDefined(fb_sink_writer), batch_size)
-                .await
-                .expect("failed to connect to fb sink server");
-
-        let mut forwarder =
+        let forwarder =
             ForwarderBuilder::new(source, sink_writer, Default::default(), cln_token.clone())
-                .fallback_sink_writer(fb_sink_writer)
                 .build();
 
         let assert_handle = tokio::spawn(async move {

@@ -266,12 +266,6 @@ func (mg *memGen) newWorker(ctx context.Context, rate int) func(chan time.Time, 
 
 // generator fires once per time unit and generates records and writes them to the channel
 func (mg *memGen) generator(ctx context.Context, rate int, timeunit time.Duration) {
-	// capping the rate to 10000 msgs/sec
-	if rate > 10000 {
-		mg.logger.Infow("Capping the rate to 10000 msg/sec. rate has been changed from %d to 10000", rate)
-		rate = 10000
-	}
-
 	tickChan := make(chan time.Time, 1000)
 	doneChan := make(chan struct{})
 

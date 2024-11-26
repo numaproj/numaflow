@@ -190,15 +190,11 @@ pub(crate) async fn create_sink_writer(
 )> {
     let (sink_writer_builder, sink_rpc_client) = match primary_sink.sink_type.clone() {
         SinkType::Log(_) => (
-            SinkWriterBuilder::new(primary_sink.clone(), SinkClientType::Log)
-                .batch_size(batch_size)
-                .read_timeout(read_timeout),
+            SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Log),
             None,
         ),
         SinkType::Blackhole(_) => (
-            SinkWriterBuilder::new(primary_sink.clone(), SinkClientType::Blackhole)
-                .batch_size(batch_size)
-                .read_timeout(read_timeout),
+            SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Blackhole),
             None,
         ),
         SinkType::UserDefined(ud_config) => {
@@ -226,11 +222,11 @@ pub(crate) async fn create_sink_writer(
             wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
             (
                 SinkWriterBuilder::new(
-                    primary_sink.clone(),
+                    batch_size,
+                    read_timeout,
                     SinkClientType::UserDefined(sink_grpc_client.clone()),
                 )
-                .batch_size(batch_size)
-                .read_timeout(read_timeout),
+                .retry_config(primary_sink.retry_config.unwrap_or_default()),
                 Some(sink_grpc_client),
             )
         }
@@ -296,7 +292,6 @@ pub(crate) async fn create_sink_writer(
 /// Creates a transformer if it is configured
 pub async fn create_transformer(
     batch_size: usize,
-    timeout: Duration,
     transformer_config: Option<TransformerConfig>,
     cln_token: CancellationToken,
 ) -> Result<(Option<Transformer>, Option<SourceTransformClient<Channel>>)> {
@@ -326,7 +321,7 @@ pub async fn create_transformer(
             .max_encoding_message_size(ud_transformer.grpc_max_message_size);
             wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
             return Ok((
-                Some(Transformer::new(batch_size, timeout, transformer_grpc_client.clone()).await?),
+                Some(Transformer::new(batch_size, transformer_grpc_client.clone()).await?),
                 Some(transformer_grpc_client),
             ));
         }
@@ -347,8 +342,8 @@ pub async fn create_source(
                 new_generator(generator_config.clone(), batch_size)?;
             Ok((
                 Source::new(
-                    source::SourceType::Generator(generator_read, generator_ack, generator_lag),
                     batch_size,
+                    source::SourceType::Generator(generator_read, generator_ack, generator_lag),
                 ),
                 None,
             ))
@@ -383,8 +378,8 @@ pub async fn create_source(
                 new_source(source_grpc_client.clone(), batch_size, read_timeout).await?;
             Ok((
                 Source::new(
-                    source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
                     batch_size,
+                    source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
                 ),
                 Some(source_grpc_client),
             ))
