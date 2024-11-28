@@ -14,6 +14,7 @@ impl From<PulsarSourceConfig> for numaflow_pulsar::source::PulsarSourceConfig {
             consumer_name: value.consumer_name,
             subscription: value.subscription,
             max_unack: value.max_unack,
+            accept_invalid_certs: value.accept_invalid_certs,
         }
     }
 }

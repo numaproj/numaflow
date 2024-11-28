@@ -72,6 +72,7 @@ pub(crate) mod source {
                 consumer_name: value.consumer_name,
                 subscription: value.subscription_name,
                 max_unack: value.max_unack.unwrap_or(1000) as usize,
+                accept_invalid_certs: value.accept_invalid_certs.unwrap_or_default(),
             };
             SourceType::Pulsar(pulsar_config)
         }
@@ -146,6 +147,7 @@ pub(crate) mod source {
         pub(crate) consumer_name: String,
         pub(crate) subscription: String,
         pub(crate) max_unack: usize,
+        pub(crate) accept_invalid_certs: bool,
     }
 }
 

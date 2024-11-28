@@ -22,4 +22,6 @@ type PulsarSource struct {
 	ConsumerName     string `json:"consumerName" protobuf:"bytes,3,name=consumerName"`
 	SubscriptionName string `json:"subscriptionName" protobuf:"bytes,4,name=subscriptionName"`
 	MaxUnack         uint32 `json:"maxUnack,omitempty" protobuf:"bytes,5,opt,name=maxUnack"`
+	// +optional
+	AcceptInvalidCerts bool `json:"acceptInvalidCerts" protobuf:"bytes,6,opt,name=acceptInvalidCerts"`
 }

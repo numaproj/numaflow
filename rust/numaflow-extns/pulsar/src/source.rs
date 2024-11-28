@@ -19,6 +19,7 @@ pub struct PulsarSourceConfig {
     pub consumer_name: String,
     pub subscription: String,
     pub max_unack: usize,
+    pub accept_invalid_certs: bool,
 }
 
 enum ConsumerActorMessage {
@@ -59,6 +60,7 @@ impl ConsumerReaderActor {
             "Pulsar connection details"
         );
         let pulsar: Pulsar<_> = Pulsar::builder(&config.pulsar_server_addr, TokioExecutor)
+            .with_allow_insecure_connection(config.accept_invalid_certs)
             .build()
             .await
             .map_err(|e| format!("Creating Pulsar client connection: {e:?}"))?;

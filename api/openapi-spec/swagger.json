@@ -21646,6 +21646,9 @@
         "subscriptionName"
       ],
       "properties": {
+        "acceptInvalidCerts": {
+          "type": "boolean"
+        },
         "consumerName": {
           "type": "string"
         },

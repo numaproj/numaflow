@@ -468,6 +468,7 @@ mod tests {
                         consumer_name: "my_persistent_consumer".to_string(),
                         subscription: "my_persistent_subscription".to_string(),
                         max_unack: 1000,
+                        accept_invalid_certs: false,
                     }),
                 },
                 transformer_config: None,

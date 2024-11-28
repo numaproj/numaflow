@@ -1324,6 +1324,9 @@ message PulsarSource {
   optional string subscriptionName = 4;
 
   optional uint32 maxUnack = 5;
+
+  // +optional
+  optional bool acceptInvalidCerts = 6;
 }
 
 message RedisBufferService {
