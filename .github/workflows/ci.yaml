@@ -77,6 +77,13 @@ jobs:
           - 4222:4222
         env:
           NATS_EXTRA_ARGS: -js
+      pulsar:
+        image: "apachepulsar/pulsar:4.0.0"
+        ports:
+          - 6650:6650
+        options: >-
+          --entrypoint "/bin/pulsar standalone"
+
     steps:
       - name: Set up Go 1.x
         uses: actions/setup-go@v5

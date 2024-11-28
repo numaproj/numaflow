@@ -229,7 +229,7 @@ impl PulsarSource {
 }
 
 impl PulsarSource {
-    pub async fn read(&self) -> Result<Vec<PulsarMessage>> {
+    pub async fn read_messages(&self) -> Result<Vec<PulsarMessage>> {
         let start = Instant::now();
         let (tx, rx) = oneshot::channel();
         let msg = ConsumerActorMessage::Read {
@@ -248,7 +248,7 @@ impl PulsarSource {
         Ok(messages)
     }
 
-    pub async fn ack(&self, offsets: Vec<u64>) -> Result<()> {
+    pub async fn ack_offsets(&self, offsets: Vec<u64>) -> Result<()> {
         let (tx, rx) = oneshot::channel();
         let _ = self
             .actor_tx
@@ -260,7 +260,7 @@ impl PulsarSource {
         rx.await.map_err(Error::ActorTaskTerminated)?
     }
 
-    pub async fn pending(&self) -> Option<usize> {
+    pub async fn pending_count(&self) -> Option<usize> {
         None
     }
 

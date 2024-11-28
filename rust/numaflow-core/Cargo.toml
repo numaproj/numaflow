@@ -5,7 +5,8 @@ edition = "2021"
 
 [features]
 nats-tests = []
-all-tests = ["nats-tests"]
+pulsar-tests = []
+all-tests = ["nats-tests", "pulsar-tests"]
 
 [dependencies]
 axum = "0.7.5"
@@ -46,6 +47,7 @@ numaflow-pulsar = {path = "../numaflow-extns/pulsar"}
 [dev-dependencies]
 tempfile = "3.11.0"
 numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "ddd879588e11455921f1ca958ea2b3c076689293" }
+pulsar = {version = "6.3.0", default-features = false, features = ["tokio-runtime"]}
 
 [build-dependencies]
 

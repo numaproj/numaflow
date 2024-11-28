@@ -18,6 +18,8 @@ serde = { version = "1.0.204", features = ["derive"] }
 tracing = "0.1.40"
 bincode = "1.3.3"
 chrono = "0.4.38"
-pulsar = {version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"]}
+# tokio-runtime uses native tls. To use rustls, the feature is tokio-rustls-runtime.
+# Rustls doesn't allow accepting self-signed certs: https://github.com/streamnative/pulsar-rs/blob/715411cb365932c379d4b5d0a8fde2ac46c54055/src/connection.rs#L912
+pulsar = {version = "6.3.0", default-features = false, features = ["tokio-runtime"]}
 bytes = "1.7.1"
 thiserror = "2.0.3"

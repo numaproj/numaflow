@@ -54,7 +54,7 @@ impl source::SourceReader for PulsarSource {
     }
 
     async fn read(&mut self) -> crate::Result<Vec<Message>> {
-        Self::read(self)
+        self.read_messages()
             .await?
             .into_iter()
             .map(|msg| msg.try_into())
@@ -77,12 +77,79 @@ impl source::SourceAcker for PulsarSource {
             };
             pulsar_offsets.push(int_offset.offset);
         }
-        Self::ack(self, pulsar_offsets).await.map_err(Into::into)
+        self.ack_offsets(pulsar_offsets).await.map_err(Into::into)
     }
 }
 
 impl source::LagReader for PulsarSource {
     async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
-        Ok(Self::pending(self).await)
+        Ok(self.pending_count().await)
+    }
+}
+
+#[cfg(feature = "pulsar-tests")]
+#[cfg(test)]
+mod tests {
+    use pulsar::{producer, proto, Pulsar, TokioExecutor};
+    use source::{LagReader, SourceAcker, SourceReader};
+
+    use super::*;
+
+    type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+    #[tokio::test]
+    async fn test_pulsar_source() -> Result<()> {
+        let cfg = PulsarSourceConfig {
+            server_addr: "pulsar://localhost:6650".into(),
+            topic: "persistent://public/default/test_persistent".into(),
+            consumer_name: "test".into(),
+            subscription: "test".into(),
+            max_unack: 100,
+            accept_invalid_certs: true,
+        };
+        let mut pulsar = new_pulsar_source(cfg, 10, Duration::from_millis(200)).await?;
+        assert_eq!(pulsar.name(), "Pulsar");
+
+        // Read should return before the timeout
+        let msgs = tokio::time::timeout(Duration::from_millis(400), pulsar.read_messages()).await;
+        assert!(msgs.is_ok());
+
+        assert!(pulsar.pending().await.unwrap().is_none());
+
+        let pulsar_producer: Pulsar<_> = Pulsar::builder("pulsar://localhost:6650", TokioExecutor)
+            .build()
+            .await
+            .unwrap();
+        let mut pulsar_producer = pulsar_producer
+            .producer()
+            .with_topic("persistent://public/default/test_persistent")
+            .with_name("my producer")
+            .with_options(producer::ProducerOptions {
+                schema: Some(proto::Schema {
+                    r#type: proto::schema::Type::String as i32,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })
+            .build()
+            .await
+            .unwrap();
+
+        let data: Vec<String> = (0..10).map(|i| format!("test_data_{i}")).collect();
+        let send_futures = pulsar_producer
+            .send_all(data)
+            .await
+            .map_err(|e| format!("Sending messages to Pulsar: {e:?}"))?;
+        for fut in send_futures {
+            fut.await?;
+        }
+
+        let messages = pulsar.read().await?;
+        assert_eq!(messages.len(), 10);
+
+        let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset.unwrap()).collect();
+        pulsar.ack(offsets).await?;
+
+        Ok(())
     }
 }
