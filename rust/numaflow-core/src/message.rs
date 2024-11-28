@@ -13,7 +13,6 @@ use numaflow_pb::clients::sink::Status::{Failure, Fallback, Success};
 use numaflow_pb::clients::sink::{sink_response, SinkRequest};
 use numaflow_pb::clients::source::read_response;
 use numaflow_pb::clients::sourcetransformer::SourceTransformRequest;
-use numaflow_pulsar::source::PulsarMessage;
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
@@ -116,27 +115,6 @@ impl TryFrom<async_nats::Message> for Message {
             event_time,
             id,
             headers,
-        })
-    }
-}
-
-impl TryFrom<PulsarMessage> for Message {
-    type Error = Error;
-
-    fn try_from(message: PulsarMessage) -> Result<Self> {
-        let offset = Offset::Int(IntOffset::new(message.offset, 1)); // FIXME: partition id
-
-        Ok(Message {
-            keys: vec![message.key],
-            value: message.payload,
-            offset: Some(offset.clone()),
-            event_time: message.event_time,
-            id: MessageID {
-                vertex_name: get_vertex_name().to_string(),
-                offset: offset.to_string(),
-                index: 0,
-            },
-            headers: message.headers,
         })
     }
 }

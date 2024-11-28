@@ -2,9 +2,9 @@ use std::time::Duration;
 
 use crate::config::components::source::PulsarSourceConfig;
 use crate::error::Error;
-use crate::message::{Message, Offset};
+use crate::message::{get_vertex_name, IntOffset, Message, MessageID, Offset};
 use crate::source;
-use numaflow_pulsar::source::PulsarSource;
+use numaflow_pulsar::source::{PulsarMessage, PulsarSource};
 
 impl From<PulsarSourceConfig> for numaflow_pulsar::source::PulsarSourceConfig {
     fn from(value: PulsarSourceConfig) -> Self {
@@ -15,6 +15,27 @@ impl From<PulsarSourceConfig> for numaflow_pulsar::source::PulsarSourceConfig {
             subscription: value.subscription,
             max_unack: value.max_unack,
         }
+    }
+}
+
+impl TryFrom<PulsarMessage> for Message {
+    type Error = Error;
+
+    fn try_from(message: PulsarMessage) -> crate::Result<Self> {
+        let offset = Offset::Int(IntOffset::new(message.offset, 1)); // FIXME: partition id
+
+        Ok(Message {
+            keys: vec![message.key],
+            value: message.payload,
+            offset: Some(offset.clone()),
+            event_time: message.event_time,
+            id: MessageID {
+                vertex_name: get_vertex_name().to_string(),
+                offset: offset.to_string(),
+                index: 0,
+            },
+            headers: message.headers,
+        })
     }
 }
 
