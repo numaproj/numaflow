@@ -77,14 +77,11 @@ jobs:
           - 4222:4222
         env:
           NATS_EXTRA_ARGS: -js
-      pulsar:
-        image: "apachepulsar/pulsar:4.0.0"
-        ports:
-          - 6650:6650
-        options: >-
-          --entrypoint "/bin/pulsar standalone"
 
     steps:
+      - name: Start Pulsar standalone container
+        run: docker run -d -p 6650:6650 -p 8080:8080 apachepulsar/pulsar:4.0.0 bin/pulsar standalone 
+
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
         with:
