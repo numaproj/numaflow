@@ -21638,7 +21638,7 @@
       }
     },
     "io.numaproj.numaflow.v1alpha1.PulsarAuth": {
-      "description": "PulsarAuth defines how to authenticate the nats access",
+      "description": "PulsarAuth defines how to authenticate with Pulsar",
       "type": "object",
       "properties": {
         "token": {

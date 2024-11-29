@@ -4316,7 +4316,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PulsarAuth(ref common.ReferenceCallback) 
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "PulsarAuth defines how to authenticate the nats access",
+				Description: "PulsarAuth defines how to authenticate with Pulsar",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"token": {

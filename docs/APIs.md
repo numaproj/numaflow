@@ -8451,7 +8451,7 @@ PulsarAuth
 
 <p>
 
-PulsarAuth defines how to authenticate the nats access
+PulsarAuth defines how to authenticate with Pulsar
 </p>
 
 </p>

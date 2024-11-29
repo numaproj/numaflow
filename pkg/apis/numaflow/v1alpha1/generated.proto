@@ -1314,7 +1314,7 @@ message Probe {
   optional int32 failureThreshold = 5;
 }
 
-// PulsarAuth defines how to authenticate the nats access
+// PulsarAuth defines how to authenticate with Pulsar
 message PulsarAuth {
   // JWT Token auth
   // +optional
