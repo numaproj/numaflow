@@ -21,5 +21,9 @@ type PulsarSource struct {
 	Topic            string `json:"topic" protobuf:"bytes,2,name=topic"`
 	ConsumerName     string `json:"consumerName" protobuf:"bytes,3,name=consumerName"`
 	SubscriptionName string `json:"subscriptionName" protobuf:"bytes,4,name=subscriptionName"`
-	MaxUnack         uint32 `json:"maxUnack,omitempty" protobuf:"bytes,5,opt,name=maxUnack"`
+	// Maximum number of messages that are in not yet acked state. Once this limit is crossed, futher read requests will return empty list.
+	MaxUnack uint32 `json:"maxUnack,omitempty" protobuf:"bytes,5,opt,name=maxUnack"`
+	// Auth information
+	// +optional
+	Auth *PulsarAuth `json:"auth,omitempty" protobuf:"bytes,6,opt,name=auth"`
 }

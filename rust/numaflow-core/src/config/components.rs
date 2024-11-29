@@ -3,12 +3,13 @@ pub(crate) mod source {
     const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
     const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
-    use std::time::Duration;
+    use std::{fmt::Debug, time::Duration};
 
     use crate::error::Error;
     use crate::Result;
     use bytes::Bytes;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source};
+    use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use tracing::warn;
 
     #[derive(Debug, Clone, PartialEq)]
@@ -64,16 +65,31 @@ pub(crate) mod source {
         }
     }
 
-    impl From<Box<PulsarSource>> for SourceType {
-        fn from(value: Box<PulsarSource>) -> Self {
+    impl TryFrom<Box<PulsarSource>> for SourceType {
+        type Error = Error;
+        fn try_from(value: Box<PulsarSource>) -> Result<Self> {
+            let auth: Option<PulsarAuth> = match value.auth {
+                Some(auth) => 'out: {
+                    let Some(token) = auth.token else {
+                        tracing::warn!("JWT Token authentication is specified, but token is empty");
+                        break 'out None;
+                    };
+                    let secret =
+                        crate::shared::utils::get_secret_from_volume(&token.name, &token.key)
+                            .unwrap();
+                    Some(PulsarAuth::JWT(secret))
+                }
+                None => None,
+            };
             let pulsar_config = PulsarSourceConfig {
-                server_addr: value.server_addr,
+                pulsar_server_addr: value.server_addr,
                 topic: value.topic,
                 consumer_name: value.consumer_name,
                 subscription: value.subscription_name,
                 max_unack: value.max_unack.unwrap_or(1000) as usize,
+                auth,
             };
-            SourceType::Pulsar(pulsar_config)
+            Ok(SourceType::Pulsar(pulsar_config))
         }
     }
 
@@ -90,7 +106,7 @@ pub(crate) mod source {
             }
 
             if let Some(pulsar) = source.pulsar.take() {
-                return Ok(pulsar.into());
+                return pulsar.try_into();
             }
 
             Err(Error::Config(format!("Invalid source type: {source:?}")))
@@ -137,15 +153,6 @@ pub(crate) mod source {
                 server_info_path: DEFAULT_SOURCE_SERVER_INFO_FILE.to_string(),
             }
         }
-    }
-
-    #[derive(Debug, Clone, PartialEq)]
-    pub(crate) struct PulsarSourceConfig {
-        pub(crate) server_addr: String,
-        pub(crate) topic: String,
-        pub(crate) consumer_name: String,
-        pub(crate) subscription: String,
-        pub(crate) max_unack: usize,
     }
 }
 

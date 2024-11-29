@@ -1,22 +1,9 @@
 use std::time::Duration;
 
-use crate::config::components::source::PulsarSourceConfig;
 use crate::error::Error;
 use crate::message::{get_vertex_name, IntOffset, Message, MessageID, Offset};
 use crate::source;
-use numaflow_pulsar::source::{PulsarMessage, PulsarSource};
-
-impl From<PulsarSourceConfig> for numaflow_pulsar::source::PulsarSourceConfig {
-    fn from(value: PulsarSourceConfig) -> Self {
-        numaflow_pulsar::source::PulsarSourceConfig {
-            pulsar_server_addr: value.server_addr,
-            topic: value.topic,
-            consumer_name: value.consumer_name,
-            subscription: value.subscription,
-            max_unack: value.max_unack,
-        }
-    }
-}
+use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig};
 
 impl TryFrom<PulsarMessage> for Message {
     type Error = Error;
@@ -44,7 +31,7 @@ pub(crate) async fn new_pulsar_source(
     batch_size: usize,
     timeout: Duration,
 ) -> crate::Result<PulsarSource> {
-    Ok(PulsarSource::new(cfg.into(), batch_size, timeout).await?)
+    Ok(PulsarSource::new(cfg, batch_size, timeout).await?)
 }
 
 impl source::SourceReader for PulsarSource {
@@ -99,11 +86,12 @@ mod tests {
     #[tokio::test]
     async fn test_pulsar_source() -> Result<()> {
         let cfg = PulsarSourceConfig {
-            server_addr: "pulsar://localhost:6650".into(),
+            pulsar_server_addr: "pulsar://localhost:6650".into(),
             topic: "persistent://public/default/test_persistent".into(),
             consumer_name: "test".into(),
             subscription: "test".into(),
             max_unack: 100,
+            auth: None,
         };
         let mut pulsar = new_pulsar_source(cfg, 10, Duration::from_millis(200)).await?;
         assert_eq!(pulsar.name(), "Pulsar");

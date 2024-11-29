@@ -1314,6 +1314,13 @@ message Probe {
   optional int32 failureThreshold = 5;
 }
 
+// PulsarAuth defines how to authenticate the nats access
+message PulsarAuth {
+  // JWT Token auth
+  // +optional
+  optional .k8s.io.api.core.v1.SecretKeySelector token = 1;
+}
+
 message PulsarSource {
   optional string serverAddr = 1;
 
@@ -1323,7 +1330,12 @@ message PulsarSource {
 
   optional string subscriptionName = 4;
 
+  // Maximum number of messages that are in not yet acked state. Once this limit is crossed, futher read requests will return empty list.
   optional uint32 maxUnack = 5;
+
+  // Auth information
+  // +optional
+  optional PulsarAuth auth = 6;
 }
 
 message RedisBufferService {

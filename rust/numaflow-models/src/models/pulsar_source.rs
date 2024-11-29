@@ -18,8 +18,11 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PulsarSource {
+    #[serde(rename = "auth", skip_serializing_if = "Option::is_none")]
+    pub auth: Option<Box<crate::models::PulsarAuth>>,
     #[serde(rename = "consumerName")]
     pub consumer_name: String,
+    /// Maximum number of messages that are in not yet acked state. Once this limit is crossed, futher read requests will return empty list.
     #[serde(rename = "maxUnack", skip_serializing_if = "Option::is_none")]
     pub max_unack: Option<i64>,
     #[serde(rename = "serverAddr")]
@@ -38,6 +41,7 @@ impl PulsarSource {
         topic: String,
     ) -> PulsarSource {
         PulsarSource {
+            auth: None,
             consumer_name,
             max_unack: None,
             server_addr,

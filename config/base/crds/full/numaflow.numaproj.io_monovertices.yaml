@@ -4994,6 +4994,22 @@ spec:
                     type: object
                   pulsar:
                     properties:
+                      auth:
+                        properties:
+                          token:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                        type: object
                       consumerName:
                         type: string
                       maxUnack:

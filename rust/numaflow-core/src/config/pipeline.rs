@@ -284,9 +284,11 @@ impl PipelineConfig {
 
 #[cfg(test)]
 mod tests {
+    use numaflow_pulsar::source::PulsarSourceConfig;
+
     use super::*;
     use crate::config::components::sink::{BlackholeConfig, LogConfig, SinkType};
-    use crate::config::components::source::{GeneratorConfig, PulsarSourceConfig, SourceType};
+    use crate::config::components::source::{GeneratorConfig, SourceType};
 
     #[test]
     fn test_default_pipeline_config() {
@@ -463,11 +465,12 @@ mod tests {
             vertex_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     source_type: SourceType::Pulsar(PulsarSourceConfig {
-                        server_addr: "pulsar://pulsar-service:6650".to_string(),
+                        pulsar_server_addr: "pulsar://pulsar-service:6650".to_string(),
                         topic: "test_persistent".to_string(),
                         consumer_name: "my_persistent_consumer".to_string(),
                         subscription: "my_persistent_subscription".to_string(),
                         max_unack: 1000,
+                        auth: None,
                     }),
                 },
                 transformer_config: None,

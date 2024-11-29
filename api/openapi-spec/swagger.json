@@ -21637,6 +21637,16 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.PulsarAuth": {
+      "description": "PulsarAuth defines how to authenticate the nats access",
+      "type": "object",
+      "properties": {
+        "token": {
+          "description": "JWT Token auth",
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.PulsarSource": {
       "type": "object",
       "required": [
@@ -21646,10 +21656,15 @@
         "subscriptionName"
       ],
       "properties": {
+        "auth": {
+          "description": "Auth information",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarAuth"
+        },
         "consumerName": {
           "type": "string"
         },
         "maxUnack": {
+          "description": "Maximum number of messages that are in not yet acked state. Once this limit is crossed, futher read requests will return empty list.",
           "type": "integer",
           "format": "int64"
         },
