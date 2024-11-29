@@ -28501,10 +28501,10 @@ data:
         #          required: false
         #    - name: mono-vertex
         #      #expr: optional
-    - name: pipeline_counter_metrics
+    - name: vertex_throughput
       object: vertex
-      title: Rate of Change of metrics
-      description: This pattern is to calculate rate of change of counter metrics
+      title: Vertex Throughput and Message Rates
+      description: This pattern measures the throughput of a vertex in messages per second across different dimensions
       expr: sum(rate($metric_name{$filters}[$duration])) by ($dimension)
       params:
         - name: duration
