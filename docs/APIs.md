@@ -8538,20 +8538,6 @@ Description
 
 </tr>
 
-<tr>
-
-<td>
-
-<code>acceptInvalidCerts</code></br> <em> bool </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-</td>
-
-</tr>
-
 </tbody>
 
 </table>

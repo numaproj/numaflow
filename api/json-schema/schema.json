@@ -21653,9 +21653,6 @@
     },
     "io.numaproj.numaflow.v1alpha1.PulsarSource": {
       "properties": {
-        "acceptInvalidCerts": {
-          "type": "boolean"
-        },
         "consumerName": {
           "type": "string"
         },

@@ -8181,8 +8181,6 @@ spec:
                     type: object
                   pulsar:
                     properties:
-                      acceptInvalidCerts:
-                        type: boolean
                       consumerName:
                         type: string
                       maxUnack:
@@ -19437,8 +19435,6 @@ spec:
                           type: object
                         pulsar:
                           properties:
-                            acceptInvalidCerts:
-                              type: boolean
                             consumerName:
                               type: string
                             maxUnack:
@@ -25868,8 +25864,6 @@ spec:
                     type: object
                   pulsar:
                     properties:
-                      acceptInvalidCerts:
-                        type: boolean
                       consumerName:
                         type: string
                       maxUnack:

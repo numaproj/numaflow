@@ -18,8 +18,6 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PulsarSource {
-    #[serde(rename = "acceptInvalidCerts", skip_serializing_if = "Option::is_none")]
-    pub accept_invalid_certs: Option<bool>,
     #[serde(rename = "consumerName")]
     pub consumer_name: String,
     #[serde(rename = "maxUnack", skip_serializing_if = "Option::is_none")]
@@ -40,7 +38,6 @@ impl PulsarSource {
         topic: String,
     ) -> PulsarSource {
         PulsarSource {
-            accept_invalid_certs: None,
             consumer_name,
             max_unack: None,
             server_addr,

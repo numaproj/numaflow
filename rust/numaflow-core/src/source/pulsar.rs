@@ -14,7 +14,6 @@ impl From<PulsarSourceConfig> for numaflow_pulsar::source::PulsarSourceConfig {
             consumer_name: value.consumer_name,
             subscription: value.subscription,
             max_unack: value.max_unack,
-            accept_invalid_certs: value.accept_invalid_certs,
         }
     }
 }
@@ -105,7 +104,6 @@ mod tests {
             consumer_name: "test".into(),
             subscription: "test".into(),
             max_unack: 100,
-            accept_invalid_certs: true,
         };
         let mut pulsar = new_pulsar_source(cfg, 10, Duration::from_millis(200)).await?;
         assert_eq!(pulsar.name(), "Pulsar");

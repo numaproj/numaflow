@@ -4351,13 +4351,6 @@ func schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref common.ReferenceCallback
 							Format: "int64",
 						},
 					},
-					"acceptInvalidCerts": {
-						SchemaProps: spec.SchemaProps{
-							Default: false,
-							Type:    []string{"boolean"},
-							Format:  "",
-						},
-					},
 				},
 				Required: []string{"serverAddr", "topic", "consumerName", "subscriptionName"},
 			},
