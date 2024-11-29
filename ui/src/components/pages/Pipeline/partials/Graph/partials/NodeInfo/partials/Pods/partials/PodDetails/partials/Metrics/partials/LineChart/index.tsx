@@ -28,6 +28,7 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
   // store all filters for each selected dimension
   const [filtersList, setFiltersList] = useState<any[]>([]);
   const [filters, setFilters] = useState<any>({});
+  const [previousDimension, setPreviousDimension] = useState(metricsReq?.dimension);
 
   const getRandomColor = useCallback((index: number) => {
     const hue = (index * 137.508) % 360;
@@ -75,9 +76,11 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
     setFilters(newFilters);
   }, [filtersList, getFilterValue, setFilters]);
 
+  //update filters only when dimension changes in metricsReq
   useEffect(() => {
-    if (metricsReq?.dimension) {
+    if (metricsReq?.dimension !== previousDimension) {
       updateFilterList(metricsReq.dimension);
+      setPreviousDimension(metricsReq?.dimension);
     }
   }, [metricsReq, updateFilterList]);
 
