@@ -59,11 +59,13 @@ const (
 )
 
 // HealthThresholds are the thresholds used to compute the health of a vertex
-const (
+var (
 	// criticalBufferThreshold is the threshold above which the health of a vertex is critical
-	criticalBufferThreshold = 95
+	criticalBufferThreshold = v1alpha1.DefaultBufferUsageLimit * float64(90) // 95
 	// warningBufferThreshold is the threshold above which the health of a vertex is warning
-	warningBufferThreshold = 80
+	warningBufferThreshold = float64(0.85) * criticalBufferThreshold // 80
+
+	BufferToThreshold = make(map[string]uint32)
 )
 
 // Dataflow states
@@ -229,8 +231,10 @@ func (hc *HealthChecker) getPipelineVertexDataCriticality(ctx context.Context) (
 	if err != nil {
 		return nil, err
 	}
-	// update the usage timeline for all the ISBs used in the pipeline
+
+	// update the usage timeline for all the ISBs used in the pipelin
 	hc.updateUsageTimeline(buffers.Buffers)
+	//hc.udpateThresholds()
 
 	var vertexState []*vertexState
 
@@ -238,6 +242,9 @@ func (hc *HealthChecker) getPipelineVertexDataCriticality(ctx context.Context) (
 	// for the last HEALTH_WINDOW_SIZE buffer usage entries
 	for bufferName := range hc.timelineData {
 		// Extract the buffer usage of the timeline
+		// temp := hc.pipeline.FindVertexWithBuffer(bufferName)
+		// hc.udpateThresholds(*temp.Limits.BufferUsageLimit)
+		// BufferToThreshold[bufferName] = *temp.Limits.BufferUsageLimit
 		var bufferUsage []float64
 		for _, entry := range hc.timelineData[bufferName].Items() {
 			bufferUsage = append(bufferUsage, entry.BufferUsage)
@@ -246,13 +253,22 @@ func (hc *HealthChecker) getPipelineVertexDataCriticality(ctx context.Context) (
 		ewmaBufferUsage := calculateEWMAUsage(bufferUsage)
 		// assign the state to the vertex based on the average buffer usage
 		// Look back is enabled for the critical state
-		currentState := assignStateToTimeline(ewmaBufferUsage, enableCriticalLookBack)
+		currentState := assignStateToTimeline(ewmaBufferUsage, enableCriticalLookBack, BufferToThreshold[bufferName])
 		// create a new vertex state object
 		currentVertexState := newVertexState(bufferName, currentState)
 		// add the vertex state to the list of vertex states
 		vertexState = append(vertexState, currentVertexState)
 	}
 	return vertexState, nil
+}
+
+func (hc *HealthChecker) udpateThresholds(bufferLimit uint32) {
+	criticalBufferThreshold = float64(bufferLimit) * 0.9
+	warningBufferThreshold = criticalBufferThreshold * 0.85
+}
+
+func (hc *HealthChecker) GetThresholds() (float64, float64) {
+	return criticalBufferThreshold, warningBufferThreshold
 }
 
 // updateUsageTimeline is used to update the usage timeline for a given buffer list
@@ -274,6 +290,15 @@ func (hc *HealthChecker) updateUsageTimeline(bufferList []*daemon.BufferInfo) {
 		bufferName := buffer.GetBufferName()
 		timestamp := time.Now().Unix()
 
+		// check if the buffer name is present in the pipeline
+		// `FindVertexWithBuffer` is a method that returns the vertex with the given buffer name
+		// if the buffer name is present in the pipeline
+		if hc.pipeline != nil {
+			vert := hc.pipeline.FindVertexWithBuffer(bufferName)
+			if vert != nil {
+				BufferToThreshold[bufferName] = *vert.Limits.BufferUsageLimit
+			}
+		}
 		// if the buffer name is not present in the timeline data, add it
 		if _, ok := hc.timelineData[bufferName]; !ok {
 			hc.timelineData[bufferName] = sharedqueue.New[*timelineEntry](int(healthWindowSize))
@@ -345,12 +370,12 @@ func calculateEWMAUsage(bufferUsage []float64) []float64 {
 // - if the buffer usage is above CRITICAL_THRESHOLD, the state is set to CRITICAL
 // - if the buffer usage is above WARNING_THRESHOLD, the state is set to WARNING
 // - otherwise, the state is set to HEALTHY
-func assignStateToBufferUsage(ewmaValue float64) string {
+func assignStateToBufferUsage(ewmaValue float64, buFUsageVal uint32) string {
 	// Assign the state to the buffer usage
 	var state string
-	if ewmaValue > criticalBufferThreshold {
+	if ewmaValue > float64(float64(buFUsageVal)*0.9) {
 		state = criticalState
-	} else if ewmaValue > warningBufferThreshold {
+	} else if ewmaValue > float64(float64(buFUsageVal)*0.9*0.85) {
 		state = warningState
 	} else {
 		state = healthyState
@@ -363,12 +388,12 @@ func assignStateToBufferUsage(ewmaValue float64) string {
 // In this case, we check if the state is CRITICAL at least LOOK_BACK_COUNT times in the last CRITICAL_WINDOW_SIZE entries
 // If the state is CRITICAL at least LOOK_BACK_COUNT times in the last CRITICAL_WINDOW_SIZE entries
 // Set the state to CRITICAL
-func assignStateToTimeline(ewmaValues []float64, lookBack bool) string {
+func assignStateToTimeline(ewmaValues []float64, lookBack bool, bufUsageVal uint32) string {
 	// Extract the last entry of the timeline
 	ewmaUsage := ewmaValues[len(ewmaValues)-1]
 
 	// Assign the state to the buffer usage value
-	state := assignStateToBufferUsage(ewmaUsage)
+	state := assignStateToBufferUsage(ewmaUsage, bufUsageVal)
 
 	// If the state is CRITICAL, and we have a look back, we need to check we have
 	// LOOK_BACK_COUNT entries as CRITICAL
@@ -376,7 +401,7 @@ func assignStateToTimeline(ewmaValues []float64, lookBack bool) string {
 		// Extract the states of the timeline
 		var states []string
 		for _, entry := range ewmaValues {
-			states = append(states, assignStateToBufferUsage(entry))
+			states = append(states, assignStateToBufferUsage(entry, bufUsageVal))
 		}
 		// Count the number of times the state is CRITICAL in the last CRITICAL_WINDOW_SIZE entries
 		var criticalCount int

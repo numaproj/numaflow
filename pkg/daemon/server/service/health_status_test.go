@@ -107,6 +107,25 @@ func TestNewHealthChecker(t *testing.T) {
 	}
 }
 
+func TestHealthThresholds(t *testing.T) {
+
+	hc := NewHealthChecker(&v1alpha1.Pipeline{}, &mockISBService{})
+	a, _ := hc.GetThresholds()
+	assert.Equal(t, a, float64(72))
+
+	forty := uint32(40)
+	eighty := uint32(80)
+
+	hc.pipeline.Spec.Limits = &v1alpha1.PipelineLimits{BufferUsageLimit: &forty}
+	hc.udpateThresholds(uint32(*hc.pipeline.Spec.Limits.BufferUsageLimit))
+	c, _ := hc.GetThresholds()
+	assert.Equal(t, c, float64(36))
+
+	hc.pipeline.Spec.Limits = &v1alpha1.PipelineLimits{BufferUsageLimit: &eighty}
+	hc.udpateThresholds(uint32(*hc.pipeline.Spec.Limits.BufferUsageLimit))
+
+}
+
 type mockISBService struct {
 	isbsvc.ISBService
 }
@@ -576,30 +595,32 @@ func TestAssignStateToBufferUsage(t *testing.T) {
 	}{
 		{
 			name:      "Critical state",
-			ewmaValue: 96,
+			ewmaValue: v1alpha1.DefaultBufferUsageLimit * 95,
 			expected:  criticalState,
 		},
 		{
 			name:      "Warning state",
-			ewmaValue: 85,
+			ewmaValue: v1alpha1.DefaultBufferUsageLimit * 90 * 0.86,
 			expected:  warningState,
 		},
 		{
 			name:      "Healthy state",
-			ewmaValue: 30,
+			ewmaValue: v1alpha1.DefaultBufferUsageLimit * 30,
 			expected:  healthyState,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := assignStateToBufferUsage(tt.ewmaValue)
+			result := assignStateToBufferUsage(tt.ewmaValue, 80)
+			t.Log(tt.ewmaValue, result)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
 func TestAssignStateToTimeline(t *testing.T) {
+	n := v1alpha1.DefaultBufferUsageLimit * 100
 	tests := []struct {
 		name       string
 		ewmaValues []float64
@@ -608,61 +629,61 @@ func TestAssignStateToTimeline(t *testing.T) {
 	}{
 		{
 			name:       "Single healthy value",
-			ewmaValues: []float64{30},
+			ewmaValues: []float64{n * 0.3},
 			lookBack:   false,
 			expected:   healthyState,
 		},
 		{
 			name:       "Single warning value",
-			ewmaValues: []float64{85},
+			ewmaValues: []float64{n * 0.85},
 			lookBack:   false,
 			expected:   warningState,
 		},
 		{
 			name:       "Single critical value without lookback",
-			ewmaValues: []float64{96},
+			ewmaValues: []float64{n * 0.95},
 			lookBack:   false,
 			expected:   criticalState,
 		},
 		{
 			name:       "Single critical value with lookback",
-			ewmaValues: []float64{96},
+			ewmaValues: []float64{n * 0.95},
 			lookBack:   true,
 			expected:   warningState,
 		},
 		{
 			name:       "Multiple values ending with critical, no lookback",
-			ewmaValues: []float64{30, 85, 96},
+			ewmaValues: []float64{n * 0.3, n * 0.7, n * 0.92},
 			lookBack:   false,
 			expected:   criticalState,
 		},
 		{
 			name:       "Multiple values ending with critical, with lookback, insufficient critical count",
-			ewmaValues: []float64{30, 85, 96, 96},
+			ewmaValues: []float64{n * 0.3, n * 0.7, n * 0.95, n * 0.95},
 			lookBack:   true,
 			expected:   warningState,
 		},
 		{
 			name:       "Multiple values ending with critical, with lookback, sufficient critical count",
-			ewmaValues: []float64{96, 96, 96, 96, 96},
+			ewmaValues: []float64{n * 0.95, n * 0.95, n * 0.95, n * 0.95, n * 0.95},
 			lookBack:   true,
 			expected:   criticalState,
 		},
 		{
 			name:       "Values fluctuating between warning and critical",
-			ewmaValues: []float64{85, 96, 85, 96, 85},
+			ewmaValues: []float64{n * 0.85, n * 0.95, n * 0.85, n * 0.95, n * 0.85},
 			lookBack:   true,
 			expected:   warningState,
 		},
 		{
 			name:       "Values increasing from healthy to critical",
-			ewmaValues: []float64{30, 50, 70, 90, 96},
+			ewmaValues: []float64{n * 0.3, n * 0.5, n * 0.7, n * 0.9, n * 0.96},
 			lookBack:   true,
 			expected:   warningState,
 		},
 		{
 			name:       "Values decreasing from critical to healthy",
-			ewmaValues: []float64{96, 90, 70, 50, 30},
+			ewmaValues: []float64{n * 0.96, n * 0.9, n * 0.7, n * 0.5, n * 0.3},
 			lookBack:   true,
 			expected:   healthyState,
 		},
@@ -670,11 +691,47 @@ func TestAssignStateToTimeline(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := assignStateToTimeline(tt.ewmaValues, tt.lookBack)
+			result := assignStateToTimeline(tt.ewmaValues, tt.lookBack, 80)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
+
+// func Scalalbility_error_test(t *testing.T) {
+// 	pipelineName := "simple-pipeline"
+// 	namespace := "numaflow-system"
+// 	edges := []v1alpha1.Edge{
+// 		{
+// 			From: "in",
+// 			To:   "cat",
+// 		},
+// 		{
+// 			From: "cat",
+// 			To:   "out",
+// 		},
+// 	}
+// 	pipeline := &v1alpha1.Pipeline{
+// 		ObjectMeta: metav1.ObjectMeta{
+// 			Name:      pipelineName,
+// 			Namespace: namespace,
+// 		},
+// 		Spec: v1alpha1.PipelineSpec{
+// 			Vertices: []v1alpha1.AbstractVertex{
+// 				{Name: "in", Source: &v1alpha1.Source{}},
+// 				{Name: "cat", UDF: &v1alpha1.UDF{}},
+// 				{Name: "out", Sink: &v1alpha1.Sink{}},
+// 			},
+// 			Edges: edges,
+// 		},
+// 	}
+
+// 	for v := range pipeline.Spec.Vertices {
+// 		pipeline.Spec.Vertices[v].Scale = v1alpha1.Scale{Disabled: true}
+// 	}
+
+// 	pipeline.
+
+// }
 
 func TestConvertVertexStateToPipelineState(t *testing.T) {
 	tests := []struct {
