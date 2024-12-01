@@ -56,7 +56,15 @@ export const usePodsViewFetch = (
             const pList = data?.map((pod: any) => {
               const containers: string[] = [];
               const containerSpecMap = new Map<string, PodContainerSpec>();
-              pod?.spec?.containers?.forEach((container: any) => {
+
+              const containersList = JSON.parse(
+                JSON.stringify(pod?.spec?.containers)
+              );
+              pod?.spec?.initContainers
+                ?.filter((initContainer: any) => initContainer?.name !== "init")
+                ?.forEach((container: any) => containersList.push(container));
+
+              containersList?.forEach((container: any) => {
                 const cpu = container?.resources?.requests?.cpu;
                 let cpuParsed: undefined | number;
                 if (cpu) {
