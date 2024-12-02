@@ -13,7 +13,7 @@ use crate::config::components::source::SourceConfig;
 use crate::config::components::transformer::{TransformerConfig, TransformerType};
 use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
 use crate::error::Error;
-use crate::message::get_vertex_replica;
+use crate::shared::utils::get_vertex_replica;
 use crate::Result;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
@@ -150,6 +150,7 @@ impl PipelineConfig {
 
         let vertex: VertexType = if let Some(source) = vertex_obj.spec.source {
             let transformer_config = source.transformer.as_ref().map(|_| TransformerConfig {
+                concurrency: batch_size as usize, // FIXME: introduce a separate field in the spec
                 transformer_type: TransformerType::UserDefined(Default::default()),
             });
 

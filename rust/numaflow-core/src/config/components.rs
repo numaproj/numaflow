@@ -323,6 +323,7 @@ pub(crate) mod transformer {
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct TransformerConfig {
+        pub(crate) concurrency: usize,
         pub(crate) transformer_type: TransformerType,
     }
 
@@ -573,6 +574,7 @@ mod transformer_tests {
     fn test_transformer_config_user_defined() {
         let user_defined_config = UserDefinedConfig::default();
         let transformer_config = TransformerConfig {
+            concurrency: 1,
             transformer_type: TransformerType::UserDefined(user_defined_config.clone()),
         };
         if let TransformerType::UserDefined(config) = transformer_config.transformer_type {

@@ -1,7 +1,6 @@
 use std::cmp::PartialEq;
 use std::collections::HashMap;
-use std::sync::OnceLock;
-use std::{env, fmt};
+use std::fmt;
 
 use async_nats::HeaderValue;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -17,59 +16,10 @@ use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
+use crate::shared::utils;
 use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
 use crate::Error;
 use crate::Result;
-
-const NUMAFLOW_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
-const NUMAFLOW_VERTEX_NAME: &str = "NUMAFLOW_VERTEX_NAME";
-const NUMAFLOW_REPLICA: &str = "NUMAFLOW_REPLICA";
-
-static VERTEX_NAME: OnceLock<String> = OnceLock::new();
-
-pub(crate) fn get_vertex_name() -> &'static str {
-    VERTEX_NAME.get_or_init(|| {
-        env::var(NUMAFLOW_MONO_VERTEX_NAME)
-            .or_else(|_| env::var(NUMAFLOW_VERTEX_NAME))
-            .unwrap_or_default()
-    })
-}
-
-static IS_MONO_VERTEX: OnceLock<bool> = OnceLock::new();
-
-pub(crate) fn is_mono_vertex() -> &'static bool {
-    IS_MONO_VERTEX.get_or_init(|| env::var(NUMAFLOW_MONO_VERTEX_NAME).is_ok())
-}
-
-static COMPONENT_TYPE: OnceLock<String> = OnceLock::new();
-
-pub(crate) fn get_component_type() -> &'static str {
-    COMPONENT_TYPE.get_or_init(|| {
-        if *is_mono_vertex() {
-            "mono-vertex".to_string()
-        } else {
-            "pipeline".to_string()
-        }
-    })
-}
-
-static PIPELINE_NAME: OnceLock<String> = OnceLock::new();
-
-pub(crate) fn get_pipeline_name() -> &'static str {
-    PIPELINE_NAME.get_or_init(|| env::var("NUMAFLOW_PIPELINE_NAME").unwrap_or_default())
-}
-
-static VERTEX_REPLICA: OnceLock<u16> = OnceLock::new();
-
-// fetch the vertex replica information from the environment variable
-pub(crate) fn get_vertex_replica() -> &'static u16 {
-    VERTEX_REPLICA.get_or_init(|| {
-        env::var(NUMAFLOW_REPLICA)
-            .unwrap_or_default()
-            .parse()
-            .unwrap_or_default()
-    })
-}
 
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,7 +77,7 @@ impl TryFrom<async_nats::Message> for Message {
         let event_time = Utc::now();
         let offset = None;
         let id = MessageID {
-            vertex_name: get_vertex_name().to_string(),
+            vertex_name: utils::get_vertex_name().to_string(),
             offset: "0".to_string(),
             index: 0,
         };
@@ -187,7 +137,7 @@ impl fmt::Display for StringOffset {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) enum ReadAck {
     /// Message was successfully processed.
     Ack,
@@ -344,7 +294,7 @@ impl TryFrom<read_response::Result> for Message {
             offset: Some(source_offset.clone()),
             event_time: utc_from_timestamp(result.event_time),
             id: MessageID {
-                vertex_name: get_vertex_name().to_string(),
+                vertex_name: utils::get_vertex_name().to_string(),
                 offset: source_offset.to_string(),
                 index: 0,
             },

@@ -11,10 +11,10 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
 use crate::error::{Error, Result};
-use crate::message::{get_vertex_name, Message, MessageID, Offset};
-use crate::shared::utils::utc_from_timestamp;
+use crate::message::{Message, MessageID, Offset};
+use crate::shared::utils::{get_vertex_name, utc_from_timestamp};
 
-type SenderMap =
+type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
 
 // fields which will not be changed
@@ -30,13 +30,14 @@ pub enum ActorMessage {
     },
 }
 
-/// TransformerClient is a client to interact with the transformer server.
+/// UserDefinedTransformer exposes methods to do user-defined transformations.
 pub(super) struct UserDefinedTransformer {
     read_tx: mpsc::Sender<SourceTransformRequest>,
-    sender_map: SenderMap,
+    senders: ResponseSenderMap,
 }
 
 impl UserDefinedTransformer {
+    /// Performs handshake with the server and creates a new UserDefinedTransformer.
     pub(super) async fn new(
         batch_size: usize,
         mut client: SourceTransformClient<Channel>,
@@ -44,6 +45,7 @@ impl UserDefinedTransformer {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let read_stream = ReceiverStream::new(read_rx);
 
+        // perform handshake
         let handshake_request = SourceTransformRequest {
             request: None,
             handshake: Some(sourcetransformer::Handshake { sot: true }),
@@ -66,20 +68,25 @@ impl UserDefinedTransformer {
             return Err(Error::Transformer("invalid handshake response".to_string()));
         }
 
+        // map to track the oneshot sender for each request along with the message info
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
 
         let transformer = Self {
             read_tx,
-            sender_map: sender_map.clone(),
+            senders: sender_map.clone(),
         };
 
+        // background task to receive responses from the server and send them to the appropriate
+        // oneshot sender based on the message id
         tokio::spawn(Self::receive_responses(sender_map, resp_stream));
 
         Ok(transformer)
     }
 
+    // receive responses from the server and gets the corresponding oneshot sender from the map
+    // and sends the response.
     async fn receive_responses(
-        sender_map: SenderMap,
+        sender_map: ResponseSenderMap,
         mut resp_stream: Streaming<SourceTransformResponse>,
     ) {
         while let Some(resp) = resp_stream.message().await.unwrap() {
@@ -108,6 +115,7 @@ impl UserDefinedTransformer {
         }
     }
 
+    /// Handles the incoming message and sends it to the server for transformation.
     pub(super) async fn handle_message(&mut self, message: ActorMessage) {
         match message {
             ActorMessage::Transform {
@@ -120,7 +128,7 @@ impl UserDefinedTransformer {
                     headers: message.headers.clone(),
                 };
 
-                self.sender_map
+                self.senders
                     .lock()
                     .unwrap()
                     .insert(msg_id, (msg_info, respond_to));

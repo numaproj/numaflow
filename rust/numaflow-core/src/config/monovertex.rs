@@ -13,7 +13,7 @@ use crate::config::components::transformer::{
 };
 use crate::config::components::{sink, source};
 use crate::error::Error;
-use crate::message::get_vertex_replica;
+use crate::shared::utils::get_vertex_replica;
 use crate::Result;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
@@ -94,6 +94,7 @@ impl MonovertexConfig {
             .as_ref()
             .and_then(|source| source.transformer.as_ref())
             .map(|_| TransformerConfig {
+                concurrency: batch_size as usize, // FIXME: introduce a new config called udf concurrency in the spec
                 transformer_type: TransformerType::UserDefined(UserDefinedConfig::default()),
             });
 

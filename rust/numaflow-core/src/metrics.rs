@@ -27,7 +27,7 @@ use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{debug, error, info};
 
-use crate::message::{get_pipeline_name, get_vertex_name, get_vertex_replica};
+use crate::shared::utils::{get_pipeline_name, get_vertex_name, get_vertex_replica};
 use crate::source::Source;
 use crate::Error;
 

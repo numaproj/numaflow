@@ -33,9 +33,8 @@ mod stream_generator {
     use tracing::warn;
 
     use crate::config::components::source::GeneratorConfig;
-    use crate::message::{
-        get_vertex_name, get_vertex_replica, Message, MessageID, Offset, StringOffset,
-    };
+    use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::shared::utils::{get_vertex_name, get_vertex_replica};
 
     #[pin_project]
     pub(super) struct StreamGenerator {

@@ -330,6 +330,7 @@ mod tests {
 
         let transformer_client = Transformer::new(
             500,
+            500,
             SourceTransformClient::new(create_rpc_channel(transformer_sock_file).await.unwrap()),
         )
         .await

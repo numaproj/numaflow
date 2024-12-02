@@ -27,13 +27,14 @@ pub(crate) struct Transformer {
 impl Transformer {
     pub(crate) async fn new(
         batch_size: usize,
+        concurrency: usize,
         client: SourceTransformClient<Channel>,
     ) -> Result<Self> {
         let (sender, mut receiver) = mpsc::channel(batch_size);
         let mut client = UserDefinedTransformer::new(batch_size, client).await?;
 
         // FIXME: batch_size should not be used, introduce a new config called udf concurrency
-        let semaphore = Arc::new(Semaphore::new(batch_size));
+        let semaphore = Arc::new(Semaphore::new(concurrency));
 
         tokio::spawn(async move {
             while let Some(msg) = receiver.recv().await {
@@ -48,6 +49,8 @@ impl Transformer {
         })
     }
 
+    /// Applies the transformation on the message and sends it to the next stage, it blocks if the
+    /// concurrency limit is reached.
     pub(crate) async fn transform(
         &self,
         read_msg: ReadMessage,
@@ -111,5 +114,178 @@ impl Transformer {
         });
 
         Ok((ReceiverStream::new(output_rx), handle))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::message::{Message, MessageID, Offset, ReadAck, ReadMessage};
+    use crate::shared::utils::create_rpc_channel;
+    use numaflow::sourcetransform;
+    use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+    use std::time::Duration;
+    use tempfile::TempDir;
+    use tokio::sync::oneshot;
+
+    struct SimpleTransformer;
+
+    #[tonic::async_trait]
+    impl sourcetransform::SourceTransformer for SimpleTransformer {
+        async fn transform(
+            &self,
+            input: sourcetransform::SourceTransformRequest,
+        ) -> Vec<sourcetransform::Message> {
+            let message = sourcetransform::Message::new(input.value, chrono::offset::Utc::now())
+                .keys(input.keys);
+            vec![message]
+        }
+    }
+
+    #[tokio::test]
+    async fn transformer_operations() -> Result<()> {
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sourcetransform.sock");
+        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            sourcetransform::Server::new(SimpleTransformer)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
+        let transformer = Transformer::new(500, 10, client).await?;
+
+        let message = Message {
+            keys: vec!["first".into()],
+            value: "hello".into(),
+            offset: Some(Offset::String(crate::message::StringOffset::new(
+                "0".to_string(),
+                0,
+            ))),
+            event_time: chrono::Utc::now(),
+            id: MessageID {
+                vertex_name: "vertex_name".to_string(),
+                offset: "0".to_string(),
+                index: 0,
+            },
+            headers: Default::default(),
+        };
+
+        let (tx, rx) = oneshot::channel();
+
+        let read_message = ReadMessage {
+            message: message.clone(),
+            ack: tx,
+        };
+
+        let (output_tx, mut output_rx) = mpsc::channel(10);
+
+        transformer.transform(read_message, output_tx).await?;
+
+        let transformed_message = output_rx.recv().await.unwrap();
+        assert_eq!(transformed_message.message.value, "hello");
+
+        // we need to drop the transformer, because if there are any in-flight requests
+        // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
+        drop(transformer);
+
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_transform_stream() -> Result<()> {
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sourcetransform.sock");
+        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            sourcetransform::Server::new(SimpleTransformer)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
+        let transformer = Transformer::new(500, 10, client).await?;
+
+        let (input_tx, input_rx) = mpsc::channel(10);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        for i in 0..5 {
+            let message = Message {
+                keys: vec![format!("key_{}", i)],
+                value: format!("value_{}", i).into(),
+                offset: Some(Offset::String(crate::message::StringOffset::new(
+                    i.to_string(),
+                    0,
+                ))),
+                event_time: chrono::Utc::now(),
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string(),
+                    offset: i.to_string(),
+                    index: i as i32,
+                },
+                headers: Default::default(),
+            };
+            let (tx, _) = oneshot::channel();
+            let read_message = ReadMessage { message, ack: tx };
+
+            input_tx.send(read_message).await.unwrap();
+        }
+        drop(input_tx);
+
+        let (output_stream, transform_handle) = transformer.transform_stream(input_stream)?;
+
+        let mut output_rx = output_stream.into_inner();
+
+        for i in 0..5 {
+            let transformed_message = output_rx.recv().await.unwrap();
+            assert_eq!(transformed_message.message.value, format!("value_{}", i));
+        }
+
+        // we need to drop the transformer, because if there are any in-flight requests
+        // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
+        drop(transformer);
+
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+        assert!(
+            transform_handle.is_finished(),
+            "Expected transformer to have shut down"
+        );
+        Ok(())
     }
 }

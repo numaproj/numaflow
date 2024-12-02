@@ -261,19 +261,19 @@ impl SinkWriter {
                     }
 
                     let n = batch.len();
-                    let messages: Vec<Message> =
-                        batch.iter().map(|rm| rm.message.clone()).collect();
+                    let (messages, senders): (Vec<_>, Vec<_>) =
+                        batch.into_iter().map(|rm| (rm.message, rm.ack)).unzip();
 
                     match this.write(messages, cancellation_token.clone()).await {
                         Ok(_) => {
-                            for rm in batch {
-                                let _ = rm.ack.send(ReadAck::Ack);
+                            for sender in senders {
+                                let _ = sender.send(ReadAck::Ack);
                             }
                         }
                         Err(e) => {
                             error!(?e, "Error writing to sink");
-                            for rm in batch {
-                                let _ = rm.ack.send(ReadAck::Nak);
+                            for sender in senders {
+                                let _ = sender.send(ReadAck::Nak);
                             }
                         }
                     }
@@ -577,5 +577,193 @@ impl SinkWriter {
             )));
         }
         Ok(())
+    }
+}
+
+impl Drop for SinkWriter {
+    fn drop(&mut self) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::message::{Message, MessageID};
+    use crate::shared::utils::create_rpc_channel;
+    use chrono::Utc;
+    use numaflow::sink;
+    use tokio::time::Duration;
+    use tokio_util::sync::CancellationToken;
+
+    struct ErrorSink;
+    #[tonic::async_trait]
+    impl sink::Sinker for ErrorSink {
+        async fn sink(&self, mut input: Receiver<sink::SinkRequest>) -> Vec<sink::Response> {
+            let mut responses: Vec<sink::Response> = Vec::new();
+            while let Some(datum) = input.recv().await {
+                responses.push(sink::Response::failure(
+                    datum.id,
+                    "simple error".to_string(),
+                ));
+            }
+            responses
+        }
+    }
+
+    #[tokio::test]
+    async fn test_write() {
+        let mut sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_secs(1), SinkClientType::Log)
+                .build()
+                .await
+                .unwrap();
+
+        let messages: Vec<Message> = (0..5)
+            .map(|i| Message {
+                keys: vec![format!("key_{}", i)],
+                value: format!("message {}", i).as_bytes().to_vec().into(),
+                offset: None,
+                event_time: Utc::now(),
+                id: MessageID {
+                    vertex_name: "vertex".to_string(),
+                    offset: format!("offset_{}", i),
+                    index: i,
+                },
+                headers: HashMap::new(),
+            })
+            .collect();
+
+        let result = sink_writer
+            .write(messages.clone(), CancellationToken::new())
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_streaming_write() {
+        let sink_writer =
+            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
+                .build()
+                .await
+                .unwrap();
+
+        let messages: Vec<Message> = (0..10)
+            .map(|i| Message {
+                keys: vec![format!("key_{}", i)],
+                value: format!("message {}", i).as_bytes().to_vec().into(),
+                offset: None,
+                event_time: Utc::now(),
+                id: MessageID {
+                    vertex_name: "vertex".to_string(),
+                    offset: format!("offset_{}", i),
+                    index: i,
+                },
+                headers: HashMap::new(),
+            })
+            .collect();
+
+        let (tx, rx) = mpsc::channel(10);
+        let mut ack_rxs = vec![];
+        for msg in messages {
+            let (ack_tx, ack_rx) = oneshot::channel();
+            let _ = tx
+                .send(ReadMessage {
+                    message: msg,
+                    ack: ack_tx,
+                })
+                .await;
+            ack_rxs.push(ack_rx);
+        }
+        drop(tx);
+
+        let handle = sink_writer
+            .streaming_write(ReceiverStream::new(rx), CancellationToken::new())
+            .await
+            .unwrap();
+
+        let _ = handle.await.unwrap();
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_streaming_write_error() {
+        // start the server
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sink.sock");
+        let server_info_file = tmp_dir.path().join("sink-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+
+        let server_handle = tokio::spawn(async move {
+            sink::Server::new(ErrorSink)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("failed to start sink server");
+        });
+
+        // wait for the server to start
+        sleep(Duration::from_millis(100)).await;
+
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::UserDefined(SinkClient::new(
+                create_rpc_channel(sock_file).await.unwrap(),
+            )),
+        )
+        .build()
+        .await
+        .unwrap();
+
+        let messages: Vec<Message> = (0..10)
+            .map(|i| Message {
+                keys: vec![format!("key_{}", i)],
+                value: format!("message {}", i).as_bytes().to_vec().into(),
+                offset: None,
+                event_time: Utc::now(),
+                id: MessageID {
+                    vertex_name: "vertex".to_string(),
+                    offset: format!("offset_{}", i),
+                    index: i,
+                },
+                headers: HashMap::new(),
+            })
+            .collect();
+
+        let (tx, rx) = mpsc::channel(10);
+        let mut ack_rxs = vec![];
+        for msg in messages {
+            let (ack_tx, ack_rx) = oneshot::channel();
+            let _ = tx
+                .send(ReadMessage {
+                    message: msg,
+                    ack: ack_tx,
+                })
+                .await;
+            ack_rxs.push(ack_rx);
+        }
+        drop(tx);
+        let cln_token = CancellationToken::new();
+        let handle = sink_writer
+            .streaming_write(ReceiverStream::new(rx), cln_token.clone())
+            .await
+            .unwrap();
+
+        // cancel the token after 1 second to exit from the retry loop
+        tokio::spawn(async move {
+            sleep(Duration::from_secs(1)).await;
+            cln_token.cancel();
+        });
+
+        let _ = handle.await.unwrap();
+        // since the writes fail, all the messages will be NAKed
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak);
+        }
     }
 }

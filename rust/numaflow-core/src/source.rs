@@ -4,11 +4,12 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::message::{get_vertex_name, is_mono_vertex, ReadAck, ReadMessage};
+use crate::message::{ReadAck, ReadMessage};
 use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_isb_metric_labels, pipeline_metrics,
 };
+use crate::shared::utils::{get_vertex_name, is_mono_vertex};
 use crate::Result;
 use crate::{
     message::{Message, Offset},
@@ -415,5 +416,71 @@ impl Source {
             .dec();
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::Utc;
+    use numaflow::source;
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use std::collections::HashSet;
+    use tokio::sync::mpsc::Sender;
+
+    struct SimpleSource {
+        num: usize,
+        yet_to_ack: std::sync::RwLock<HashSet<String>>,
+    }
+
+    impl SimpleSource {
+        fn new(num: usize) -> Self {
+            Self {
+                num,
+                yet_to_ack: std::sync::RwLock::new(HashSet::new()),
+            }
+        }
+    }
+
+    #[tonic::async_trait]
+    impl source::Sourcer for SimpleSource {
+        async fn read(&self, request: SourceReadRequest, transmitter: Sender<Message>) {
+            let event_time = Utc::now();
+            let mut message_offsets = Vec::with_capacity(request.count);
+            for i in 0..request.count {
+                let offset = format!("{}-{}", event_time.timestamp_nanos_opt().unwrap(), i);
+                transmitter
+                    .send(Message {
+                        value: self.num.to_le_bytes().to_vec(),
+                        event_time,
+                        offset: Offset {
+                            offset: offset.clone().into_bytes(),
+                            partition_id: 0,
+                        },
+                        keys: vec![],
+                        headers: Default::default(),
+                    })
+                    .await
+                    .unwrap();
+                message_offsets.push(offset)
+            }
+            self.yet_to_ack.write().unwrap().extend(message_offsets)
+        }
+
+        async fn ack(&self, offsets: Vec<Offset>) {
+            for offset in offsets {
+                self.yet_to_ack
+                    .write()
+                    .unwrap()
+                    .remove(&String::from_utf8(offset.offset).unwrap());
+            }
+        }
+
+        async fn pending(&self) -> usize {
+            self.yet_to_ack.read().unwrap().len()
+        }
+
+        async fn partitions(&self) -> Option<Vec<i32>> {
+            Some(vec![1, 2])
+        }
     }
 }

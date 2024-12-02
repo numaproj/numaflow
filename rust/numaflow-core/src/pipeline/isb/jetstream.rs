@@ -50,7 +50,7 @@ impl ISBWriter {
         let js_writer = JetstreamWriter::new(
             // flatten the streams across the config
             config.iter().flat_map(|c| c.streams.clone()).collect(),
-            config.get(0).unwrap().clone(),
+            config.first().unwrap().clone(),
             js_ctx,
             cancel_token.clone(),
         );
