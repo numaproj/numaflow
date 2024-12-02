@@ -56,19 +56,3 @@ impl From<tonic::Status> for Error {
         Error::Grpc(status.to_string())
     }
 }
-
-impl From<numaflow_pulsar::Error> for Error {
-    fn from(value: numaflow_pulsar::Error) -> Self {
-        match value {
-            numaflow_pulsar::Error::Pulsar(e) => Error::Source(e.to_string()),
-            numaflow_pulsar::Error::UnknownOffset(_) => Error::Source(value.to_string()),
-            numaflow_pulsar::Error::AckPendingExceeded(pending) => {
-                Error::AckPendingExceeded(pending)
-            }
-            numaflow_pulsar::Error::ActorTaskTerminated(_) => {
-                Error::ActorPatternRecv(value.to_string())
-            }
-            numaflow_pulsar::Error::Other(e) => Error::Source(e),
-        }
-    }
-}

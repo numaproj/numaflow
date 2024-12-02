@@ -122,8 +122,8 @@ impl TryFrom<async_nats::Message> for Message {
 /// IntOffset is integer based offset enum type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntOffset {
-    pub offset: u64,
-    pub partition_idx: u16,
+    pub(crate) offset: u64,
+    pub(crate) partition_idx: u16,
 }
 
 impl IntOffset {
