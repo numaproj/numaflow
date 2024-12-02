@@ -1,5 +1,7 @@
 # Pulsar Source
 
+#### NOTE: 1.5 Feature, not available Numaflow version < 1.5
+
 A `Pulsar` source is used to ingest the messages from a Pulsar topic.
 
 ```yaml
