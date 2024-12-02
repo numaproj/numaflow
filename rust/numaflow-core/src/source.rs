@@ -14,6 +14,10 @@ pub(crate) mod user_defined;
 ///
 /// [Generator]: https://numaflow.numaproj.io/user-guide/sources/generator/
 pub(crate) mod generator;
+
+/// [Pulsar] is a builtin to ingest data from a Pulsar topic
+///
+/// [Pulsar]: https://numaflow.numaproj.io/user-guide/sources/pulsar/
 pub(crate) mod pulsar;
 
 /// Set of Read related items that has to be implemented to become a Source.
