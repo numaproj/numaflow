@@ -235,18 +235,15 @@ export const usePodsViewFetch = (
     };
   }, []);
 
-  // checks if all pods are present in podsDetailsMap
-  const checkPodDetails = () => {
+  // return false if pods/podsDetails are still undefined
+  const checkPodDetailsResponse = () => {
     if (!pods || !podsDetails) return false;
-    for (let i = 0; i < pods.length; i++) {
-      if (!podsDetails.has(pods[i]?.name)) return false;
-    }
     return true;
   };
 
-  //sets loading variable
+  //sets loading variable true only when requests are pending
   useEffect(() => {
-    if (checkPodDetails()) {
+    if (checkPodDetailsResponse()) {
       setLoading(false);
     } else if (podsErr || podsDetailsErr) {
       setLoading(false);
