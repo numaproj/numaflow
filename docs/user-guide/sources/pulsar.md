@@ -31,7 +31,7 @@ spec:
               key: token
 ```
 
-Currently, the implentation only supports JWT token based authentication. If `auth` field is not specified, Numaflow will connect to the Pulsar servers without authentication. 
+We have only tested the 4.0.x LTS version of Pulsar. Currently, the implementation only supports [JWT token](https://pulsar.apache.org/docs/4.0.x/security-jwt/) based authentication. If the `auth` field is not specified, Numaflow will connect to the Pulsar servers without authentication. 
 
-More authentication mechanisms and ability to customize Pulsar consumer will be added in the future.
+More authentication mechanisms and the ability to customize Pulsar consumer will be added in the future.
 
