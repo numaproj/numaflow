@@ -287,7 +287,7 @@ mod tests {
         }
 
         let receiver_stream = ReceiverStream::new(rx);
-        let handle = writer.streaming_write(receiver_stream).await.unwrap();
+        let _handle = writer.streaming_write(receiver_stream).await.unwrap();
 
         // Attempt to publish the 101th message, which should get stuck in the retry loop
         // because the max message size is set to 1024

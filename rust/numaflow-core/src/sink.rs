@@ -690,7 +690,7 @@ mod tests {
     #[tokio::test]
     async fn test_streaming_write_error() {
         // start the server
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let (_shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("sink.sock");
         let server_info_file = tmp_dir.path().join("sink-server-info");
@@ -698,7 +698,7 @@ mod tests {
         let server_info = server_info_file.clone();
         let server_socket = sock_file.clone();
 
-        let server_handle = tokio::spawn(async move {
+        let _server_handle = tokio::spawn(async move {
             sink::Server::new(ErrorSink)
                 .with_socket_file(server_socket)
                 .with_server_info_file(server_info)

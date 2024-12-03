@@ -12,8 +12,8 @@ use crate::config::components::transformer::{
     TransformerConfig, TransformerType, UserDefinedConfig,
 };
 use crate::config::components::{sink, source};
+use crate::config::get_vertex_replica;
 use crate::error::Error;
-use crate::shared::utils::get_vertex_replica;
 use crate::Result;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;

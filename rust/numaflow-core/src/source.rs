@@ -4,12 +4,12 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
+use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::message::{ReadAck, ReadMessage};
 use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_isb_metric_labels, pipeline_metrics,
 };
-use crate::shared::utils::{get_vertex_name, is_mono_vertex};
 use crate::Result;
 use crate::{
     message::{Message, Offset},

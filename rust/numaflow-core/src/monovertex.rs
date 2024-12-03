@@ -4,11 +4,11 @@ use tracing::info;
 
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
-use crate::{metrics, shared};
-use crate::shared::{create_components, utils};
+use crate::shared::create_components;
 use crate::sink::SinkWriter;
 use crate::source::Source;
 use crate::transformer::Transformer;
+use crate::{metrics, shared};
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
@@ -37,14 +37,15 @@ pub(crate) async fn start_forwarder(
     )
     .await?;
 
-    let (sink_writer, sink_grpc_client, fb_sink_grpc_client) = create_components::create_sink_writer(
-        config.batch_size,
-        config.read_timeout,
-        config.sink_config.clone(),
-        config.fb_sink_config.clone(),
-        &cln_token,
-    )
-    .await?;
+    let (sink_writer, sink_grpc_client, fb_sink_grpc_client) =
+        create_components::create_sink_writer(
+            config.batch_size,
+            config.read_timeout,
+            config.sink_config.clone(),
+            config.fb_sink_config.clone(),
+            &cln_token,
+        )
+        .await?;
 
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not

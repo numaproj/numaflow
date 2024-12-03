@@ -10,9 +10,9 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
+use crate::config::get_vertex_name;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageID, Offset};
-use crate::shared::utils::get_vertex_name;
 use crate::shared::grpc::utc_from_timestamp;
 
 type ResponseSenderMap =

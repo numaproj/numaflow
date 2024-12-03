@@ -16,11 +16,10 @@ use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
-use crate::shared::utils;
-use crate::shared::grpc::utc_from_timestamp;
-use crate::Error;
-use crate::Result;
 use crate::shared::grpc::prost_timestamp_from_utc;
+use crate::shared::grpc::utc_from_timestamp;
+use crate::Result;
+use crate::{config, Error};
 
 const DROP: &str = "U+005C__DROP__";
 
@@ -80,7 +79,7 @@ impl TryFrom<async_nats::Message> for Message {
         let event_time = Utc::now();
         let offset = None;
         let id = MessageID {
-            vertex_name: utils::get_vertex_name().to_string(),
+            vertex_name: config::get_vertex_name().to_string(),
             offset: "0".to_string(),
             index: 0,
         };
@@ -304,7 +303,7 @@ impl TryFrom<read_response::Result> for Message {
             offset: Some(source_offset.clone()),
             event_time: utc_from_timestamp(result.event_time),
             id: MessageID {
-                vertex_name: utils::get_vertex_name().to_string(),
+                vertex_name: config::get_vertex_name().to_string(),
                 offset: source_offset.to_string(),
                 index: 0,
             },

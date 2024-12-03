@@ -10,10 +10,10 @@ use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::pipeline::isb::jetstream::ISBWriter;
-use crate::shared::{create_components, utils};
+use crate::shared::create_components;
 use crate::shared::create_components::create_sink_writer;
-use crate::{error, Result};
 use crate::shared::metrics::start_metrics_server;
+use crate::{error, Result};
 
 mod forwarder;
 mod isb;
