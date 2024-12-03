@@ -4992,6 +4992,41 @@ spec:
                     - subject
                     - url
                     type: object
+                  pulsar:
+                    properties:
+                      auth:
+                        properties:
+                          token:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                        type: object
+                      consumerName:
+                        type: string
+                      maxUnack:
+                        format: int32
+                        type: integer
+                      serverAddr:
+                        type: string
+                      subscriptionName:
+                        type: string
+                      topic:
+                        type: string
+                    required:
+                    - consumerName
+                    - serverAddr
+                    - subscriptionName
+                    - topic
+                    type: object
                   serving:
                     properties:
                       auth:
