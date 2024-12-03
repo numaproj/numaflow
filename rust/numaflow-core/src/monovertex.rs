@@ -81,7 +81,7 @@ async fn start_forwarder_with_source(
         shared::metrics::create_pending_reader(&mvtx_config.metrics_config, source.clone()).await;
     let _pending_reader_handle = pending_reader.start().await;
 
-    let mut forwarder_builder = ForwarderBuilder::new(source, sink, mvtx_config, cln_token);
+    let mut forwarder_builder = ForwarderBuilder::new(source, sink, cln_token);
 
     // add transformer if exists
     if let Some(transformer_client) = transformer {

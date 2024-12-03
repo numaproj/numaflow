@@ -178,7 +178,7 @@ impl Source {
     }
 
     /// read messages from the source by communicating with the read actor.
-    pub(crate) async fn read(&self) -> crate::Result<Vec<Message>> {
+    pub(crate) async fn read(&self) -> Result<Vec<Message>> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Read { respond_to: sender };
         // Ignore send errors. If send fails, so does the recv.await below. There's no reason
@@ -190,7 +190,7 @@ impl Source {
     }
 
     /// ack the offsets by communicating with the ack actor.
-    pub(crate) async fn ack(&self, offsets: Vec<Offset>) -> crate::Result<()> {
+    pub(crate) async fn ack(&self, offsets: Vec<Offset>) -> Result<()> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Ack {
             respond_to: sender,
@@ -205,7 +205,7 @@ impl Source {
     }
 
     /// get the pending messages count by communicating with the pending actor.
-    pub(crate) async fn pending(&self) -> crate::error::Result<Option<usize>> {
+    pub(crate) async fn pending(&self) -> Result<Option<usize>> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Pending { respond_to: sender };
         // Ignore send errors. If send fails, so does the recv.await below. There's no reason

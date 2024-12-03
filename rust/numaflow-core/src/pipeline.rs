@@ -2,6 +2,7 @@ use async_nats::jetstream::Context;
 use async_nats::{jetstream, ConnectOptions};
 use futures::future::try_join_all;
 use log::info;
+use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::pipeline;
@@ -90,6 +91,8 @@ async fn start_sink_forwarder(
 
     // Create buffer readers for each partition
     let buffer_readers = create_buffer_readers(&config, js_context.clone()).await?;
+
+    // TODO(code review): add more logs about starting and stopping
 
     // Create sink writers and clients
     let mut sink_writers = Vec::new();
@@ -190,12 +193,12 @@ async fn create_buffer_readers(
 /// Creates a jetstream context based on the provided configuration
 async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Result<Context> {
     // TODO: make these configurable. today this is hardcoded on Golang code too.
-    let mut opts = ConnectOptions::new();
-    // .max_reconnects(None) // -1 for unlimited reconnects
-    // .ping_interval(Duration::from_secs(3))
-    // .max_reconnects(None)
-    // .ping_interval(Duration::from_secs(3))
-    // .retry_on_initial_connect();
+    let mut opts = ConnectOptions::new()
+        .max_reconnects(None) // -1 for unlimited reconnects
+        .ping_interval(Duration::from_secs(3))
+        .max_reconnects(None)
+        .ping_interval(Duration::from_secs(3))
+        .retry_on_initial_connect();
 
     if let (Some(user), Some(password)) = (config.user, config.password) {
         opts = opts.user_and_password(user, password);

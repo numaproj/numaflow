@@ -1,6 +1,6 @@
 use async_nats::jetstream::Context;
 use bytes::BytesMut;
-use log::info;
+use tracing::info;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
@@ -24,27 +24,28 @@ pub(super) mod writer;
 
 pub(crate) mod reader;
 
+/// Stream is a combination of stream name and partition id.
 type Stream = (String, u16);
 
 /// StreamingJetstreamWriter is a streaming version of JetstreamWriter. It accepts a stream of messages
 /// and writes them to Jetstream ISB. It also has a PAF resolver actor to resolve the PAFs.
 #[derive(Clone)]
 pub(crate) struct ISBWriter {
-    concurrency: usize,
+    paf_concurrency: usize,
     config: Vec<BufferWriterConfig>,
     writer: JetstreamWriter,
 }
 
 impl ISBWriter {
     pub(crate) async fn new(
-        concurrency: usize,
+        paf_concurrency: usize,
         config: Vec<BufferWriterConfig>,
         js_ctx: Context,
         cancel_token: CancellationToken,
     ) -> Self {
         info!(
-            "New StreamingJetstreamWriter created with {:?} config and paf batch size {}",
-            config, concurrency
+            ?config, paf_concurrency, "Streaming JetstreamWriter",
+            
         );
 
         let js_writer = JetstreamWriter::new(
@@ -58,7 +59,7 @@ impl ISBWriter {
         Self {
             config,
             writer: js_writer,
-            concurrency,
+            paf_concurrency,
         }
     }
 
@@ -72,13 +73,8 @@ impl ISBWriter {
             let mut messages_stream = messages_stream;
             let mut index = 0;
 
-            info!(
-                "Starting streaming JetstreamWriter with config: {:?}",
-                this.config
-            );
-
             async move {
-                let paf_resolver = PafResolver::new(this.concurrency, this.writer.clone());
+                let paf_resolver = PafResolver::new(this.paf_concurrency, this.writer.clone());
                 while let Some(read_message) = messages_stream.next().await {
                     // if message needs to be dropped, ack and continue
                     // TODO: add metric for dropped count

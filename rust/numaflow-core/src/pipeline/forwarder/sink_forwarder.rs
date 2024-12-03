@@ -30,14 +30,14 @@ impl SinkForwarder {
     pub(crate) async fn start(&self, pipeline_config: PipelineConfig) -> Result<()> {
         // Create a child cancellation token only for the reader so that we can stop the reader first
         let reader_cancellation_token = self.cln_token.child_token();
-        let (read_messages_rx, reader_handle) = self
+        let (read_messages_stream, reader_handle) = self
             .jetstream_reader
             .streaming_read(reader_cancellation_token.clone(), &pipeline_config)
             .await?;
 
         let sink_writer_handle = self
             .sink_writer
-            .streaming_write(read_messages_rx, self.cln_token.clone())
+            .streaming_write(read_messages_stream, self.cln_token.clone())
             .await?;
 
         // Join the reader and sink writer

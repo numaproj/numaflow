@@ -106,6 +106,7 @@ impl JetstreamReader {
 
                 let mut start_time = Instant::now();
                 let mut total_messages = 0;
+                // TODO(code review): add which reader, because of multi-partitions 
                 loop {
                     tokio::select! {
                         _ = cancel_token.cancelled() => { // should we drain from the stream when token is cancelled?
@@ -114,6 +115,8 @@ impl JetstreamReader {
                         }
                         message = message_stream.next() => {
                             let Some(message) = message else {
+                                // stream has been closed because we got none
+                                info!("Stream has been closed");
                                 break;
                             };
 

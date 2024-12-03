@@ -1,6 +1,32 @@
+//! The forwarder for [MonoVertex] at its core orchestrates message movement asynchronously using
+//! [Stream] over channels between the components. The messages send over this channel using
+//! [Actor Pattern].
+//!
+//! ```text
+//! (source) --[c]--> (transformer)* --[c]--> (sink)
+//!
+//! [c] - channel
+//! * - optional
+//!  ```
+//!
+//! Most of the data move forward except for the ack which can happen only after the Write.
+//! ```text
+//! (Read) +-------> (UDF) -------> (Write) +
+//!        |                                |
+//!        |                                |
+//!        +-------> {Ack} <----------------+
+//!
+//! {} -> Listens on a OneShot
+//! () -> Streaming Interface
+//! ```
+//!
+//! [MonoVertex]: https://numaflow.numaproj.io/core-concepts/monovertex/
+//! [Stream]: https://docs.rs/tokio-stream/latest/tokio_stream/wrappers/struct.ReceiverStream.html
+//! [Actor Pattern]: https://ryhl.io/blog/actors-with-tokio/
+
 use tokio_util::sync::CancellationToken;
 
-use crate::config::monovertex::MonovertexConfig;
+
 use crate::error;
 use crate::sink::SinkWriter;
 use crate::source::Source;
@@ -15,8 +41,6 @@ pub(crate) struct Forwarder {
     transformer: Option<Transformer>,
     sink_writer: SinkWriter,
     cln_token: CancellationToken,
-    #[allow(dead_code)]
-    mvtx_config: MonovertexConfig,
 }
 
 pub(crate) struct ForwarderBuilder {
@@ -24,7 +48,6 @@ pub(crate) struct ForwarderBuilder {
     sink_writer: SinkWriter,
     cln_token: CancellationToken,
     transformer: Option<Transformer>,
-    mvtx_config: MonovertexConfig,
 }
 
 impl ForwarderBuilder {
@@ -32,7 +55,6 @@ impl ForwarderBuilder {
     pub(crate) fn new(
         streaming_source: Source,
         streaming_sink: SinkWriter,
-        mvtx_config: MonovertexConfig,
         cln_token: CancellationToken,
     ) -> Self {
         Self {
@@ -40,7 +62,6 @@ impl ForwarderBuilder {
             sink_writer: streaming_sink,
             cln_token,
             transformer: None,
-            mvtx_config,
         }
     }
 
@@ -58,7 +79,6 @@ impl ForwarderBuilder {
             sink_writer: self.sink_writer,
             transformer: self.transformer,
             cln_token: self.cln_token,
-            mvtx_config: self.mvtx_config,
         }
     }
 }
@@ -276,7 +296,6 @@ mod tests {
         let forwarder = ForwarderBuilder::new(
             source.clone(),
             sink_writer,
-            Default::default(),
             cln_token.clone(),
         )
         .transformer(transformer)

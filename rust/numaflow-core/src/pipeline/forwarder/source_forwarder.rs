@@ -57,20 +57,20 @@ impl SourceForwarder {
     pub(crate) async fn start(&self) -> error::Result<()> {
         // RETHINK: only source should stop when the token is cancelled, transformer and writer should drain the streams
         // and then stop.
-        let (read_messages_rx, reader_handle) =
+        let (read_messages_stream, reader_handle) =
             self.source.streaming_read(self.cln_token.clone())?;
 
         // start the transformer if it is present
-        let (transformed_messages_rx, transformer_handle) =
+        let (transformed_messages_stream, transformer_handle) =
             if let Some(transformer) = &self.transformer {
-                let (transformed_messages_rx, transformer_handle) =
-                    transformer.transform_stream(read_messages_rx)?;
-                (transformed_messages_rx, Some(transformer_handle))
+                let (transformed_messages_stream, transformer_handle) =
+                    transformer.transform_stream(read_messages_stream)?;
+                (transformed_messages_stream, Some(transformer_handle))
             } else {
-                (read_messages_rx, None)
+                (read_messages_stream, None)
             };
 
-        let writer_handle = self.writer.streaming_write(transformed_messages_rx).await?;
+        let writer_handle = self.writer.streaming_write(transformed_messages_stream).await?;
 
         match tokio::try_join!(
             reader_handle,
