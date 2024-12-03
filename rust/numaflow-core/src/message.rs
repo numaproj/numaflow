@@ -21,6 +21,8 @@ use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
 use crate::Error;
 use crate::Result;
 
+const DROP: &str = "U+005C__DROP__";
+
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Message {
@@ -90,6 +92,13 @@ impl TryFrom<async_nats::Message> for Message {
             id,
             headers,
         })
+    }
+}
+
+impl Message {
+    // Check if the message should be dropped.
+    pub(crate) fn dropped(&self) -> bool {
+        self.keys.len() == 1 && self.keys[0] == DROP
     }
 }
 

@@ -7,7 +7,8 @@ use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::pipeline::isb::BufferWriterConfig;
-use crate::message::ReadMessage;
+use crate::error::Error;
+use crate::message::{ReadAck, ReadMessage};
 use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
 use crate::pipeline::isb::jetstream::writer::{
     JetstreamWriter, PafResolver, ResolveAndPublishResult,
@@ -79,6 +80,15 @@ impl ISBWriter {
             async move {
                 let paf_resolver = PafResolver::new(this.concurrency, this.writer.clone());
                 while let Some(read_message) = messages_stream.next().await {
+                    // if message needs to be dropped, ack and continue
+                    // TODO: add metric for dropped count
+                    if read_message.message.dropped() {
+                        read_message
+                            .ack
+                            .send(ReadAck::Ack)
+                            .map_err(|e| Error::ISB(format!("Failed to send ack: {:?}", e)))?;
+                        continue;
+                    }
                     let mut pafs = vec![];
 
                     // FIXME(CF): This is a temporary solution to round-robin the streams

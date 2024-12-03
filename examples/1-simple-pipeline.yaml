@@ -3,46 +3,28 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
-  watermark:
-    disabled: true
-  limits:
-    bufferMaxLength: 150000
-    bufferUsageLimit: 85
   vertices:
     - name: in
       scale:
         min: 1
-      containerTemplate:
-        resources:
-          requests:
-            memory: "500Mi"
-            cpu: "2"
-          limits:
-            memory: "500Mi"
-            cpu: "2"
-        env:
-          - name: NUMAFLOW_PIPELINE_STREAMING
-            value: "true"
-          - name: PAF_BATCH_SIZE
-            value: "1000"
+      # A self data generating source
       source:
         generator:
-          rpu: 20000
-          msgSize: 40
+          rpu: 5
           duration: 1s
+    - name: cat
+      scale:
+        min: 1
+      udf:
+        builtin:
+          name: cat # A built-in UDF which simply cats the message
     - name: out
-      containerTemplate:
-        resources:
-          requests:
-            memory: "500Mi"
-            cpu: "2"
-          limits:
-            memory: "500Mi"
-            cpu: "1"
       scale:
         min: 1
       sink:
-        blackhole: {}
+        log: {}
   edges:
     - from: in
+      to: cat
+    - from: cat
       to: out
