@@ -289,7 +289,7 @@ export function Pods(props: PodsProps) {
     );
   }
 
-  if (podsErr || podsDetailsErr || !pods?.length) {
+  if (podsErr || !pods?.length) {
     return (
       <Box
         data-testid={"pods-error"}
