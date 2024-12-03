@@ -128,7 +128,7 @@ mod tests {
 
     use super::*;
     use crate::message::{Message, MessageID, Offset, ReadMessage};
-    use crate::shared::utils::create_rpc_channel;
+    use crate::shared::grpc::create_rpc_channel;
 
     struct SimpleTransformer;
 

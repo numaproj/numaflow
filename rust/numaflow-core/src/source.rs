@@ -433,7 +433,7 @@ mod tests {
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
 
-    use crate::shared::utils::create_rpc_channel;
+    use crate::shared::grpc::create_rpc_channel;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
 

@@ -593,7 +593,7 @@ mod tests {
 
     use super::*;
     use crate::message::{Message, MessageID};
-    use crate::shared::utils::create_rpc_channel;
+    use crate::shared::grpc::create_rpc_channel;
 
     struct ErrorSink;
     #[tonic::async_trait]

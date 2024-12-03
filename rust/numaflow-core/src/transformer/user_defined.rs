@@ -12,7 +12,8 @@ use tonic::{Request, Streaming};
 
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageID, Offset};
-use crate::shared::utils::{get_vertex_name, utc_from_timestamp};
+use crate::shared::utils::get_vertex_name;
+use crate::shared::grpc::utc_from_timestamp;
 
 type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
@@ -149,7 +150,7 @@ mod tests {
     use tempfile::TempDir;
 
     use crate::message::{MessageID, StringOffset};
-    use crate::shared::utils::create_rpc_channel;
+    use crate::shared::grpc::create_rpc_channel;
     use crate::transformer::user_defined::{ActorMessage, UserDefinedTransformer};
     struct NowCat;
 

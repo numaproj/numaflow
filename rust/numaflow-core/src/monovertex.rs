@@ -4,8 +4,8 @@ use tracing::info;
 
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
-use crate::metrics;
-use crate::shared::utils;
+use crate::{metrics, shared};
+use crate::shared::{create_components, utils};
 use crate::sink::SinkWriter;
 use crate::source::Source;
 use crate::transformer::Transformer;
@@ -22,7 +22,7 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: &MonovertexConfig,
 ) -> error::Result<()> {
-    let (source, source_grpc_client) = utils::create_source(
+    let (source, source_grpc_client) = create_components::create_source(
         config.batch_size,
         config.read_timeout,
         &config.source_config,
@@ -30,14 +30,14 @@ pub(crate) async fn start_forwarder(
     )
     .await?;
 
-    let (transformer, transformer_grpc_client) = utils::create_transformer(
+    let (transformer, transformer_grpc_client) = create_components::create_transformer(
         config.batch_size,
         config.transformer_config.clone(),
         cln_token.clone(),
     )
     .await?;
 
-    let (sink_writer, sink_grpc_client, fb_sink_grpc_client) = utils::create_sink_writer(
+    let (sink_writer, sink_grpc_client, fb_sink_grpc_client) = create_components::create_sink_writer(
         config.batch_size,
         config.read_timeout,
         config.sink_config.clone(),
@@ -59,7 +59,7 @@ pub(crate) async fn start_forwarder(
 
     // start the metrics server
     // FIXME: what to do with the handle
-    utils::start_metrics_server(config.metrics_config.clone(), metrics_state).await;
+    shared::metrics::start_metrics_server(config.metrics_config.clone(), metrics_state).await;
 
     start_forwarder_with_source(config.clone(), source, sink_writer, transformer, cln_token)
         .await?;
@@ -77,7 +77,7 @@ async fn start_forwarder_with_source(
 ) -> error::Result<()> {
     // start the pending reader to publish pending metrics
     let pending_reader =
-        utils::create_pending_reader(&mvtx_config.metrics_config, source.clone()).await;
+        shared::metrics::create_pending_reader(&mvtx_config.metrics_config, source.clone()).await;
     let _pending_reader_handle = pending_reader.start().await;
 
     let mut forwarder_builder = ForwarderBuilder::new(source, sink, mvtx_config, cln_token);

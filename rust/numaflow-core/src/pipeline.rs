@@ -10,9 +10,10 @@ use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::pipeline::isb::jetstream::ISBWriter;
-use crate::shared::utils;
-use crate::shared::utils::{create_sink_writer, start_metrics_server};
+use crate::shared::{create_components, utils};
+use crate::shared::create_components::create_sink_writer;
 use crate::{error, Result};
+use crate::shared::metrics::start_metrics_server;
 
 mod forwarder;
 mod isb;
@@ -44,14 +45,14 @@ async fn start_source_forwarder(
 
     let buffer_writer = create_buffer_writer(&config, js_context.clone(), cln_token.clone()).await;
 
-    let (source, source_grpc_client) = utils::create_source(
+    let (source, source_grpc_client) = create_components::create_source(
         config.batch_size,
         config.read_timeout,
         &source_config.source_config,
         cln_token.clone(),
     )
     .await?;
-    let (transformer, transformer_grpc_client) = utils::create_transformer(
+    let (transformer, transformer_grpc_client) = create_components::create_transformer(
         config.batch_size,
         source_config.transformer_config.clone(),
         cln_token.clone(),
