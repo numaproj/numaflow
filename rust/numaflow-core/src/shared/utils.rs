@@ -207,6 +207,15 @@ pub(crate) async fn create_sink_handle(
     }
 }
 
+// Retrieve value from mounted secret volume
+// "/var/numaflow/secrets/${secretRef.name}/${secretRef.key}" is expected to be the file path
+pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> std::result::Result<String, String> {
+    let path = format!("/var/numaflow/secrets/{name}/{key}");
+    let val = std::fs::read_to_string(path.clone())
+        .map_err(|e| format!("Reading secret from file {path}: {e:?}"))?;
+    Ok(val.trim().into())
+}
+
 #[cfg(test)]
 mod tests {
     use numaflow::source::{Message, Offset, SourceReadRequest};

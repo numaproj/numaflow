@@ -40,6 +40,15 @@ pub enum Error {
 
     #[error("OneShot Receiver Error - {0}")]
     ActorPatternRecv(String),
+
+    #[error("Ack Pending Exceeded, pending={0}")]
+    AckPendingExceeded(usize),
+
+    #[error("Offset (id={0}) not found to Ack")]
+    AckOffsetNotFound(String),
+
+    #[error("Lag cannot be fetched, {0}")]
+    Lag(String),
 }
 
 impl From<tonic::Status> for Error {

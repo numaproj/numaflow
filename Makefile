@@ -296,11 +296,11 @@ endif
 
 .PHONY: docs
 docs: /usr/local/bin/mkdocs docs-linkcheck
-	mkdocs build
+	$(PYTHON) -m mkdocs build
 
 .PHONY: docs-serve
 docs-serve: docs
-	mkdocs serve
+	$(PYTHON) -m mkdocs serve
 
 .PHONY: docs-linkcheck
 docs-linkcheck: /usr/local/bin/lychee
