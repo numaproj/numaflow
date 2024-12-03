@@ -23,18 +23,6 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer().with_ansi(false))
         .init();
 
-    // Start the task to print the number of active Tokio tasks every second
-    tokio::spawn(async {
-        let mut interval = time::interval(Duration::from_millis(200));
-        loop {
-            interval.tick().await;
-            let active_tasks = tokio::runtime::Handle::current()
-                .metrics()
-                .num_alive_tasks();
-            info!("Number of active Tokio tasks: {}", active_tasks);
-        }
-    });
-
     // Based on the argument, run the appropriate component.
     if args.contains(&"--serving".to_string()) {
         if let Err(e) = serving::serve().await {

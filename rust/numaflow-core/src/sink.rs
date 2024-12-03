@@ -586,13 +586,14 @@ impl Drop for SinkWriter {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::message::{Message, MessageID};
-    use crate::shared::utils::create_rpc_channel;
     use chrono::Utc;
     use numaflow::sink;
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
+
+    use super::*;
+    use crate::message::{Message, MessageID};
+    use crate::shared::utils::create_rpc_channel;
 
     struct ErrorSink;
     #[tonic::async_trait]

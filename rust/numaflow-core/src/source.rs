@@ -421,19 +421,21 @@ impl Source {
 
 #[cfg(test)]
 mod tests {
-    use crate::shared::utils::create_rpc_channel;
-    use crate::source::user_defined::new_source;
-    use crate::source::{Source, SourceType};
+    use std::collections::HashSet;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
     use chrono::Utc;
     use futures::StreamExt;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
-    use std::collections::HashSet;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::Duration;
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
+
+    use crate::shared::utils::create_rpc_channel;
+    use crate::source::user_defined::new_source;
+    use crate::source::{Source, SourceType};
 
     struct SimpleSource {
         num: usize,

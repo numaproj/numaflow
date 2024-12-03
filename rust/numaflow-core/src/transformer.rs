@@ -119,14 +119,16 @@ impl Transformer {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use numaflow::sourcetransform;
+    use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+    use tempfile::TempDir;
+    use tokio::sync::oneshot;
+
     use super::*;
     use crate::message::{Message, MessageID, Offset, ReadMessage};
     use crate::shared::utils::create_rpc_channel;
-    use numaflow::sourcetransform;
-    use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-    use std::time::Duration;
-    use tempfile::TempDir;
-    use tokio::sync::oneshot;
 
     struct SimpleTransformer;
 
