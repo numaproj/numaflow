@@ -22,7 +22,15 @@ pub mod reduce_request {
     /// Nested message and enum types in `WindowOperation`.
     pub mod window_operation {
         #[derive(
-            Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            Clone,
+            Copy,
+            Debug,
+            PartialEq,
+            Eq,
+            Hash,
+            PartialOrd,
+            Ord,
+            ::prost::Enumeration
         )]
         #[repr(i32)]
         pub enum Event {
@@ -122,10 +130,10 @@ pub mod reduce_client {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value
+        clippy::let_unit_value,
     )]
-    use tonic::codegen::http::Uri;
     use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
     #[derive(Debug, Clone)]
     pub struct ReduceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -169,8 +177,9 @@ pub mod reduce_client {
                     <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
-                Into<StdError> + std::marker::Send + std::marker::Sync,
+            <T as tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             ReduceClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -213,14 +222,20 @@ pub mod reduce_client {
             tonic::Response<tonic::codec::Streaming<super::ReduceResponse>>,
             tonic::Status,
         > {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/reduce.v1.Reduce/ReduceFn");
+            let path = http::uri::PathAndQuery::from_static(
+                "/reduce.v1.Reduce/ReduceFn",
+            );
             let mut req = request.into_streaming_request();
-            req.extensions_mut()
-                .insert(GrpcMethod::new("reduce.v1.Reduce", "ReduceFn"));
+            req.extensions_mut().insert(GrpcMethod::new("reduce.v1.Reduce", "ReduceFn"));
             self.inner.streaming(req, path, codec).await
         }
         /// IsReady is the heartbeat endpoint for gRPC.
@@ -228,14 +243,18 @@ pub mod reduce_client {
             &mut self,
             request: impl tonic::IntoRequest<()>,
         ) -> std::result::Result<tonic::Response<super::ReadyResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/reduce.v1.Reduce/IsReady");
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(GrpcMethod::new("reduce.v1.Reduce", "IsReady"));
+            req.extensions_mut().insert(GrpcMethod::new("reduce.v1.Reduce", "IsReady"));
             self.inner.unary(req, path, codec).await
         }
     }

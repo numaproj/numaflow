@@ -26,10 +26,10 @@ pub mod side_input_client {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value
+        clippy::let_unit_value,
     )]
-    use tonic::codegen::http::Uri;
     use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
     /// SideInput is the gRPC service for user-defined Side Inputs.
     /// It is used to propagate changes in the values of the provided Side Inputs
     /// which allows access to slow updated data or configuration without needing to retrieve
@@ -81,8 +81,9 @@ pub mod side_input_client {
                     <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
-                Into<StdError> + std::marker::Send + std::marker::Sync,
+            <T as tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             SideInputClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -121,18 +122,25 @@ pub mod side_input_client {
         pub async fn retrieve_side_input(
             &mut self,
             request: impl tonic::IntoRequest<()>,
-        ) -> std::result::Result<tonic::Response<super::SideInputResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
-            })?;
+        ) -> std::result::Result<
+            tonic::Response<super::SideInputResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path =
-                http::uri::PathAndQuery::from_static("/sideinput.v1.SideInput/RetrieveSideInput");
+            let path = http::uri::PathAndQuery::from_static(
+                "/sideinput.v1.SideInput/RetrieveSideInput",
+            );
             let mut req = request.into_request();
-            req.extensions_mut().insert(GrpcMethod::new(
-                "sideinput.v1.SideInput",
-                "RetrieveSideInput",
-            ));
+            req.extensions_mut()
+                .insert(GrpcMethod::new("sideinput.v1.SideInput", "RetrieveSideInput"));
             self.inner.unary(req, path, codec).await
         }
         /// IsReady is the health check endpoint to indicate whether the service is ready to be used.
@@ -140,11 +148,18 @@ pub mod side_input_client {
             &mut self,
             request: impl tonic::IntoRequest<()>,
         ) -> std::result::Result<tonic::Response<super::ReadyResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static("/sideinput.v1.SideInput/IsReady");
+            let path = http::uri::PathAndQuery::from_static(
+                "/sideinput.v1.SideInput/IsReady",
+            );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("sideinput.v1.SideInput", "IsReady"));

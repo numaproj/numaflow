@@ -35,7 +35,15 @@ pub mod session_reduce_request {
     /// Nested message and enum types in `WindowOperation`.
     pub mod window_operation {
         #[derive(
-            Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+            Clone,
+            Copy,
+            Debug,
+            PartialEq,
+            Eq,
+            Hash,
+            PartialOrd,
+            Ord,
+            ::prost::Enumeration
         )]
         #[repr(i32)]
         pub enum Event {
@@ -130,10 +138,10 @@ pub mod session_reduce_client {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value
+        clippy::let_unit_value,
     )]
-    use tonic::codegen::http::Uri;
     use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
     #[derive(Debug, Clone)]
     pub struct SessionReduceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -177,8 +185,9 @@ pub mod session_reduce_client {
                     <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
-                Into<StdError> + std::marker::Send + std::marker::Sync,
+            <T as tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             SessionReduceClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -216,23 +225,30 @@ pub mod session_reduce_client {
         /// SessionReduceFn applies a reduce function to a request stream.
         pub async fn session_reduce_fn(
             &mut self,
-            request: impl tonic::IntoStreamingRequest<Message = super::SessionReduceRequest>,
+            request: impl tonic::IntoStreamingRequest<
+                Message = super::SessionReduceRequest,
+            >,
         ) -> std::result::Result<
             tonic::Response<tonic::codec::Streaming<super::SessionReduceResponse>>,
             tonic::Status,
         > {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/sessionreduce.v1.SessionReduce/SessionReduceFn",
             );
             let mut req = request.into_streaming_request();
-            req.extensions_mut().insert(GrpcMethod::new(
-                "sessionreduce.v1.SessionReduce",
-                "SessionReduceFn",
-            ));
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("sessionreduce.v1.SessionReduce", "SessionReduceFn"),
+                );
             self.inner.streaming(req, path, codec).await
         }
         /// IsReady is the heartbeat endpoint for gRPC.
@@ -240,12 +256,18 @@ pub mod session_reduce_client {
             &mut self,
             request: impl tonic::IntoRequest<()>,
         ) -> std::result::Result<tonic::Response<super::ReadyResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path =
-                http::uri::PathAndQuery::from_static("/sessionreduce.v1.SessionReduce/IsReady");
+            let path = http::uri::PathAndQuery::from_static(
+                "/sessionreduce.v1.SessionReduce/IsReady",
+            );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("sessionreduce.v1.SessionReduce", "IsReady"));
