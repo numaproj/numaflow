@@ -14,18 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package jetstream
+package v1alpha1
 
-import (
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+import corev1 "k8s.io/api/core/v1"
 
-	"github.com/numaproj/numaflow/pkg/metrics"
-)
-
-// jetstreamSourceReadCount is used to indicate the number of messages read by the nats source vertex
-var jetstreamSourceReadCount = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "jetstream_source",
-	Name:      "read_total",
-	Help:      "Total number of messages read",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline})
+// PulsarAuth defines how to authenticate with Pulsar
+type PulsarAuth struct {
+	// JWT Token auth
+	// +optional
+	Token *corev1.SecretKeySelector `json:"token,omitempty" protobuf:"bytes,1,opt,name=token"`
+}

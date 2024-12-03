@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"time"
 
 	"go.uber.org/zap"
@@ -120,6 +122,15 @@ func Start(namespaced bool, managedNamespace string) {
 	}
 
 	kubeClient := kubernetes.NewForConfigOrDie(restConfig)
+
+	// TODO: clean up?
+	if svrVersion, err := kubeClient.ServerVersion(); err != nil {
+		logger.Fatalw("Failed to get k8s cluster server version", zap.Error(err))
+	} else {
+		k8sVersion := fmt.Sprintf("%s.%s", svrVersion.Major, svrVersion.Minor)
+		os.Setenv(dfv1.EnvK8sServerVersion, k8sVersion)
+		logger.Infof("Kubernetes server version: %s", k8sVersion)
+	}
 
 	// Readiness probe
 	if err := mgr.AddReadyzCheck("readiness", healthz.Ping); err != nil {

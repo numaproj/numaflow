@@ -5,6 +5,7 @@ workspace = { members = [
     "serving",
     "numaflow-core",
     "numaflow-pb",
+    "numaflow-extns/pulsar",
 ] }
 
 [[bin]]
@@ -15,7 +16,6 @@ path = "src/bin/main.rs"
 name = "numaflow"
 version = "0.1.0"
 edition = "2021"
-
 
 [dependencies]
 tokio = "1.39.2"

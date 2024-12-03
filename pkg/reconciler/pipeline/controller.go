@@ -96,7 +96,7 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if !equality.Semantic.DeepEqual(pl.Finalizers, plCopy.Finalizers) {
 		patchYaml := "metadata:\n  finalizers: [" + strings.Join(plCopy.Finalizers, ",") + "]"
 		patchJson, _ := yaml.YAMLToJSON([]byte(patchYaml))
-		if err := r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil {
+		if err := r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, patchJson)); err != nil {
 			return result, err
 		}
 	}
