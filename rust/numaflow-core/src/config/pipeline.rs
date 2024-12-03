@@ -285,6 +285,8 @@ impl PipelineConfig {
 
 #[cfg(test)]
 mod tests {
+    use numaflow_pulsar::source::PulsarSourceConfig;
+
     use super::*;
     use crate::config::components::sink::{BlackholeConfig, LogConfig, SinkType};
     use crate::config::components::source::{GeneratorConfig, SourceType};
@@ -418,6 +420,58 @@ mod tests {
                         key_count: 0,
                         msg_size_bytes: 8,
                         jitter: Duration::from_secs(0),
+                    }),
+                },
+                transformer_config: None,
+            }),
+            metrics_config: Default::default(),
+        };
+
+        assert_eq!(pipeline_config, expected);
+    }
+
+    #[test]
+    fn test_pipeline_config_pulsar_source() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLWluIiwibmFtZXNwYWNlIjoiZGVmYXVsdCIsImNyZWF0aW9uVGltZXN0YW1wIjpudWxsfSwic3BlYyI6eyJuYW1lIjoiaW4iLCJzb3VyY2UiOnsicHVsc2FyIjp7InNlcnZlckFkZHIiOiJwdWxzYXI6Ly9wdWxzYXItc2VydmljZTo2NjUwIiwidG9waWMiOiJ0ZXN0X3BlcnNpc3RlbnQiLCJjb25zdW1lck5hbWUiOiJteV9wZXJzaXN0ZW50X2NvbnN1bWVyIiwic3Vic2NyaXB0aW9uTmFtZSI6Im15X3BlcnNpc3RlbnRfc3Vic2NyaXB0aW9uIn19LCJsaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH0sInNjYWxlIjp7Im1pbiI6MSwibWF4IjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJ0b0VkZ2VzIjpbeyJmcm9tIjoiaW4iLCJ0byI6Im91dCIsImNvbmRpdGlvbnMiOm51bGwsImZyb21WZXJ0ZXhUeXBlIjoiU291cmNlIiwiZnJvbVZlcnRleFBhcnRpdGlvbkNvdW50IjoxLCJmcm9tVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH19XSwid2F0ZXJtYXJrIjp7Im1heERlbGF5IjoiMHMifX0sInN0YXR1cyI6eyJwaGFzZSI6IiIsInJlcGxpY2FzIjowLCJkZXNpcmVkUmVwbGljYXMiOjAsImxhc3RTY2FsZWRBdCI6bnVsbH19";
+
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let pipeline_config =
+            PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        let expected = PipelineConfig {
+            pipeline_name: "simple-pipeline".to_string(),
+            vertex_name: "in".to_string(),
+            replica: 0,
+            batch_size: 50,
+            paf_batch_size: 30000,
+            read_timeout: Duration::from_secs(1),
+            js_client_config: isb::jetstream::ClientConfig {
+                url: "localhost:4222".to_string(),
+                user: None,
+                password: None,
+            },
+            from_vertex_config: vec![],
+            to_vertex_config: vec![ToVertexConfig {
+                name: "out".to_string(),
+                writer_config: BufferWriterConfig {
+                    streams: vec![("default-simple-pipeline-out-0".to_string(), 0)],
+                    partitions: 1,
+                    max_length: 30000,
+                    usage_limit: 0.8,
+                    ..Default::default()
+                },
+                partitions: 1,
+                conditions: None,
+            }],
+            vertex_config: VertexType::Source(SourceVtxConfig {
+                source_config: SourceConfig {
+                    source_type: SourceType::Pulsar(PulsarSourceConfig {
+                        pulsar_server_addr: "pulsar://pulsar-service:6650".to_string(),
+                        topic: "test_persistent".to_string(),
+                        consumer_name: "my_persistent_consumer".to_string(),
+                        subscription: "my_persistent_subscription".to_string(),
+                        max_unack: 1000,
+                        auth: None,
                     }),
                 },
                 transformer_config: None,

@@ -5,6 +5,7 @@ workspace = { members = [
     "serving",
     "numaflow-core",
     "numaflow-pb",
+    "numaflow-extns/pulsar",
 ] }
 
 [[bin]]

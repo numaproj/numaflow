@@ -5,6 +5,7 @@ use crate::shared::grpc;
 use crate::shared::server_info::{sdk_server_info, ContainerType};
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::generator::new_generator;
+use crate::source::pulsar::new_pulsar_source;
 use crate::source::user_defined::new_source;
 use crate::source::Source;
 use crate::transformer::Transformer;
@@ -234,7 +235,23 @@ pub async fn create_source(
                 Some(source_grpc_client),
             ))
         }
+        SourceType::Pulsar(pulsar_config) => {
+            let pulsar = new_pulsar_source(pulsar_config.clone(), batch_size, read_timeout).await?;
+            Ok((
+                Source::new(batch_size, source::SourceType::Pulsar(pulsar)),
+                None,
+            ))
+        }
     }
+}
+
+// Retrieve value from mounted secret volume
+// "/var/numaflow/secrets/${secretRef.name}/${secretRef.key}" is expected to be the file path
+pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> Result<String, String> {
+    let path = format!("/var/numaflow/secrets/{name}/{key}");
+    let val = std::fs::read_to_string(path.clone())
+        .map_err(|e| format!("Reading secret from file {path}: {e:?}"))?;
+    Ok(val.trim().into())
 }
 
 #[cfg(test)]

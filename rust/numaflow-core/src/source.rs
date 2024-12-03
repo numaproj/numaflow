@@ -15,6 +15,7 @@ use crate::{
     message::{Message, Offset},
     reader::LagReader,
 };
+use numaflow_pulsar::source::PulsarSource;
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -25,6 +26,11 @@ pub(crate) mod user_defined;
 ///
 /// [Generator]: https://numaflow.numaproj.io/user-guide/sources/generator/
 pub(crate) mod generator;
+
+/// [Pulsar] is a builtin to ingest data from a Pulsar topic
+///
+/// [Pulsar]: https://numaflow.numaproj.io/user-guide/sources/pulsar/
+pub(crate) mod pulsar;
 
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
@@ -56,80 +62,70 @@ pub(crate) enum SourceType {
         generator::GeneratorAck,
         generator::GeneratorLagReader,
     ),
+    Pulsar(PulsarSource),
 }
 
-/// ReadActorMessage is a message to the ReadActor to read messages.
-#[derive(Debug)]
-struct ReadActorMessage {
-    respond_to: oneshot::Sender<Result<Vec<Message>>>,
+enum ActorMessage {
+    #[allow(dead_code)]
+    Name {
+        respond_to: oneshot::Sender<&'static str>,
+    },
+    Read {
+        respond_to: oneshot::Sender<Result<Vec<Message>>>,
+    },
+    Ack {
+        respond_to: oneshot::Sender<Result<()>>,
+        offsets: Vec<Offset>,
+    },
+    Pending {
+        respond_to: oneshot::Sender<Result<Option<usize>>>,
+    },
 }
 
-/// ReadActor is responsible for reading messages from the source.
-struct ReadActor<R> {
+struct SourceActor<R, A, L> {
+    receiver: mpsc::Receiver<ActorMessage>,
     reader: R,
-}
-
-impl<R> ReadActor<R>
-where
-    R: SourceReader,
-{
-    fn new(reader: R) -> Self {
-        Self { reader }
-    }
-
-    async fn handle_read_message(&mut self, message: ReadActorMessage) {
-        let msgs = self.reader.read().await;
-        message.respond_to.send(msgs).unwrap();
-    }
-}
-
-/// AckActorMessage is a message to the AckActor to acknowledge the offsets.
-#[derive(Debug)]
-struct AckActorMessage {
-    respond_to: oneshot::Sender<Result<()>>,
-    offsets: Vec<Offset>,
-}
-
-/// AckActor is responsible for acknowledging the offsets.
-struct AckActor<A> {
     acker: A,
-}
-
-impl<A> AckActor<A>
-where
-    A: SourceAcker,
-{
-    fn new(acker: A) -> Self {
-        Self { acker }
-    }
-
-    async fn handle_ack_message(&mut self, message: AckActorMessage) {
-        let ack = self.acker.ack(message.offsets).await;
-        message.respond_to.send(ack).unwrap();
-    }
-}
-
-/// PendingActorMessage is a message to the PendingActor to get the pending messages count.
-#[derive(Debug)]
-struct PendingActorMessage {
-    respond_to: oneshot::Sender<Result<Option<usize>>>,
-}
-
-/// PendingActor is responsible for getting the pending messages count.
-struct PendingActor<L> {
     lag_reader: L,
 }
 
-impl<L> PendingActor<L>
+impl<R, A, L> SourceActor<R, A, L>
 where
+    R: SourceReader,
+    A: SourceAcker,
     L: LagReader,
 {
-    fn new(lag_reader: L) -> Self {
-        Self { lag_reader }
+    fn new(receiver: mpsc::Receiver<ActorMessage>, reader: R, acker: A, lag_reader: L) -> Self {
+        Self {
+            receiver,
+            reader,
+            acker,
+            lag_reader,
+        }
     }
-    async fn handle_pending_message(&mut self, message: PendingActorMessage) {
-        let pending = self.lag_reader.pending().await;
-        message.respond_to.send(pending).unwrap();
+
+    async fn handle_message(&mut self, msg: ActorMessage) {
+        match msg {
+            ActorMessage::Name { respond_to } => {
+                let name = self.reader.name();
+                let _ = respond_to.send(name);
+            }
+            ActorMessage::Read { respond_to } => {
+                let msgs = self.reader.read().await;
+                let _ = respond_to.send(msgs);
+            }
+            ActorMessage::Ack {
+                respond_to,
+                offsets,
+            } => {
+                let ack = self.acker.ack(offsets).await;
+                let _ = respond_to.send(ack);
+            }
+            ActorMessage::Pending { respond_to } => {
+                let pending = self.lag_reader.pending().await;
+                let _ = respond_to.send(pending);
+            }
+        }
     }
 }
 
@@ -137,108 +133,84 @@ where
 #[derive(Clone)]
 pub(crate) struct Source {
     read_batch_size: usize,
-    read_sender: mpsc::Sender<ReadActorMessage>,
-    ack_sender: mpsc::Sender<AckActorMessage>,
-    pending_sender: mpsc::Sender<PendingActorMessage>,
+    sender: mpsc::Sender<ActorMessage>,
 }
 
 impl Source {
     /// Create a new StreamingSource. It starts the read and ack actors in the background.
     pub(crate) fn new(batch_size: usize, src_type: SourceType) -> Self {
-        let (read_sender, mut read_receiver) = mpsc::channel(batch_size);
-        let (ack_sender, mut ack_receiver) = mpsc::channel(batch_size);
-        let (pending_sender, mut pending_receiver) = mpsc::channel(1);
-
-        // Create actors based on the source type and start the actors in the background.
+        let (sender, receiver) = mpsc::channel(batch_size);
         match src_type {
             SourceType::UserDefinedSource(reader, acker, lag_reader) => {
-                let mut read_actor = ReadActor::new(reader);
-                let mut ack_actor = AckActor::new(acker);
-                let mut pending_actor = PendingActor::new(lag_reader);
-
-                // FIXME: should we have one spawn and multiple tokio::select! for each receiver?
-                // will it impact the performance?
-
                 tokio::spawn(async move {
-                    while let Some(msg) = read_receiver.recv().await {
-                        read_actor.handle_read_message(msg).await;
-                    }
-                });
-
-                tokio::spawn(async move {
-                    while let Some(msg) = ack_receiver.recv().await {
-                        ack_actor.handle_ack_message(msg).await;
-                    }
-                });
-
-                tokio::spawn(async move {
-                    while let Some(msg) = pending_receiver.recv().await {
-                        pending_actor.handle_pending_message(msg).await;
+                    let mut actor = SourceActor::new(receiver, reader, acker, lag_reader);
+                    while let Some(msg) = actor.receiver.recv().await {
+                        actor.handle_message(msg).await;
                     }
                 });
             }
-
             SourceType::Generator(reader, acker, lag_reader) => {
-                let mut read_actor = ReadActor::new(reader);
-                let mut ack_actor = AckActor::new(acker);
-                let mut pending_actor = PendingActor::new(lag_reader);
-
                 tokio::spawn(async move {
-                    while let Some(msg) = read_receiver.recv().await {
-                        read_actor.handle_read_message(msg).await;
+                    let mut actor = SourceActor::new(receiver, reader, acker, lag_reader);
+                    while let Some(msg) = actor.receiver.recv().await {
+                        actor.handle_message(msg).await;
                     }
                 });
-
+            }
+            SourceType::Pulsar(pulsar_source) => {
                 tokio::spawn(async move {
-                    while let Some(msg) = ack_receiver.recv().await {
-                        ack_actor.handle_ack_message(msg).await;
-                    }
-                });
-
-                tokio::spawn(async move {
-                    while let Some(msg) = pending_receiver.recv().await {
-                        pending_actor.handle_pending_message(msg).await;
+                    let mut actor = SourceActor::new(
+                        receiver,
+                        pulsar_source.clone(),
+                        pulsar_source.clone(),
+                        pulsar_source,
+                    );
+                    while let Some(msg) = actor.receiver.recv().await {
+                        actor.handle_message(msg).await;
                     }
                 });
             }
         };
-
         Self {
             read_batch_size: batch_size,
-            read_sender,
-            ack_sender,
-            pending_sender,
+            sender,
         }
     }
 
     /// read messages from the source by communicating with the read actor.
-    pub(crate) async fn read(&self) -> Result<Vec<Message>> {
+    pub(crate) async fn read(&self) -> crate::Result<Vec<Message>> {
         let (sender, receiver) = oneshot::channel();
-        let msg = ReadActorMessage { respond_to: sender };
-        let _ = self.read_sender.send(msg).await;
+        let msg = ActorMessage::Read { respond_to: sender };
+        // Ignore send errors. If send fails, so does the recv.await below. There's no reason
+        // to check for the same failure twice.
+        let _ = self.sender.send(msg).await;
         receiver
             .await
             .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// ack the offsets by communicating with the ack actor.
-    pub(crate) async fn ack(&self, offsets: Vec<Offset>) -> Result<()> {
+    pub(crate) async fn ack(&self, offsets: Vec<Offset>) -> crate::Result<()> {
         let (sender, receiver) = oneshot::channel();
-        let msg = AckActorMessage {
+        let msg = ActorMessage::Ack {
             respond_to: sender,
             offsets,
         };
-        let _ = self.ack_sender.send(msg).await;
+        // Ignore send errors. If send fails, so does the recv.await below. There's no reason
+        // to check for the same failure twice.
+        let _ = self.sender.send(msg).await;
         receiver
             .await
             .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// get the pending messages count by communicating with the pending actor.
-    pub(crate) async fn pending(&self) -> Result<Option<usize>> {
+    pub(crate) async fn pending(&self) -> crate::error::Result<Option<usize>> {
         let (sender, receiver) = oneshot::channel();
-        let msg = PendingActorMessage { respond_to: sender };
-        let _ = self.pending_sender.send(msg).await;
+        let msg = ActorMessage::Pending { respond_to: sender };
+        // Ignore send errors. If send fails, so does the recv.await below. There's no reason
+        // to check for the same failure twice.
+        let _ = self.sender.send(msg).await;
         receiver
             .await
             .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?

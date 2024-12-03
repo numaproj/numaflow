@@ -105,8 +105,8 @@ impl Message {
 /// IntOffset is integer based offset enum type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntOffset {
-    offset: u64,
-    partition_idx: u16,
+    pub(crate) offset: u64,
+    pub(crate) partition_idx: u16,
 }
 
 impl IntOffset {

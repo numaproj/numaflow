@@ -8436,6 +8436,206 @@ having succeeded. Defaults to 3. Minimum value is 1.
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.PulsarAuth">
+
+PulsarAuth
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSource">PulsarSource</a>)
+</p>
+
+<p>
+
+<p>
+
+PulsarAuth defines how to authenticate with Pulsar
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>token</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+JWT Token auth
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.PulsarSource">
+
+PulsarSource
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Source">Source</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>serverAddr</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>topic</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>consumerName</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>subscriptionName</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>maxUnack</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+Maximum number of messages that are in not yet acked state. Once this
+limit is crossed, futher read requests will return empty list.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>auth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarAuth"> PulsarAuth </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Auth information
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.RedisBufferService">
 
 RedisBufferService
@@ -10444,6 +10644,22 @@ JetStreamSource </a> </em>
 <code>serving</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ServingSource"> ServingSource
 </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>pulsar</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSource"> PulsarSource </a>
+</em>
 </td>
 
 <td>
