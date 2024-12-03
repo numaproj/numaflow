@@ -26,7 +26,6 @@
 
 use tokio_util::sync::CancellationToken;
 
-
 use crate::error;
 use crate::sink::SinkWriter;
 use crate::source::Source;
@@ -293,13 +292,9 @@ mod tests {
                 .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = ForwarderBuilder::new(
-            source.clone(),
-            sink_writer,
-            cln_token.clone(),
-        )
-        .transformer(transformer)
-        .build();
+        let forwarder = ForwarderBuilder::new(source.clone(), sink_writer, cln_token.clone())
+            .transformer(transformer)
+            .build();
 
         let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             forwarder.start().await?;

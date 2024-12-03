@@ -1,3 +1,4 @@
+use std::fmt;
 use std::time::Duration;
 
 use async_nats::jetstream::{
@@ -26,6 +27,7 @@ use crate::Result;
 /// Storing the Sender end of channel in this struct would make it difficult to close the channel with `cancel` method.
 #[derive(Clone)]
 pub(crate) struct JetstreamReader {
+    stream_name: String,
     partition_idx: u16,
     config: BufferReaderConfig,
     consumer: PullConsumer,
@@ -59,6 +61,7 @@ impl JetstreamReader {
         config.wip_ack_interval = wip_ack_interval;
 
         Ok(Self {
+            stream_name,
             partition_idx,
             config: config.clone(),
             consumer,
@@ -80,22 +83,11 @@ impl JetstreamReader {
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let this = self.clone();
-            let pipeline_config = pipeline_config.clone();
             let cancel_token = cancel_token.clone();
+            let stream_name = self.stream_name.clone();
 
             async move {
-                let partition: &str = pipeline_config
-                    .from_vertex_config
-                    .first()
-                    .unwrap()
-                    .reader_config
-                    .streams
-                    .first()
-                    .unwrap()
-                    .0
-                    .as_ref();
-
-                let labels = pipeline_forward_metric_labels("Sink", Some(partition));
+                let labels = pipeline_forward_metric_labels("Sink", Some(stream_name.as_str()));
 
                 let mut message_stream = this.consumer.messages().await.map_err(|e| {
                     Error::ISB(format!(
@@ -106,31 +98,30 @@ impl JetstreamReader {
 
                 let mut start_time = Instant::now();
                 let mut total_messages = 0;
-                // TODO(code review): add which reader, because of multi-partitions 
                 loop {
                     tokio::select! {
                         _ = cancel_token.cancelled() => { // should we drain from the stream when token is cancelled?
-                            info!("Cancellation token received, stopping the reader.");
+                            info!(?stream_name, "Cancellation token received, stopping the reader.");
                             break;
                         }
                         message = message_stream.next() => {
                             let Some(message) = message else {
                                 // stream has been closed because we got none
-                                info!("Stream has been closed");
+                                info!(?stream_name, "Stream has been closed");
                                 break;
                             };
 
                             let jetstream_message = match message {
                                 Ok(message) => message,
                                 Err(e) => {
-                                    error!(?e, "Failed to fetch messages from the Jetstream");
+                                    error!(?e, ?stream_name, "Failed to fetch messages from the Jetstream");
                                     continue;
                                 }
                             };
                             let msg_info = match jetstream_message.info() {
                                 Ok(info) => info,
                                 Err(e) => {
-                                    error!(?e, "Failed to get message info from Jetstream");
+                                    error!(?e, ?stream_name, "Failed to get message info from Jetstream");
                                     continue;
                                 }
                             };
@@ -139,9 +130,8 @@ impl JetstreamReader {
                                 Ok(message) => message,
                                 Err(e) => {
                                     error!(
-                                        ?e,
-                                        "Failed to parse message payload received from Jetstream {:?}",
-                                        jetstream_message
+                                        ?e, ?stream_name, ?jetstream_message,
+                                        "Failed to parse message payload received from Jetstream",
                                     );
                                     continue;
                                 }
@@ -264,6 +254,16 @@ impl JetstreamReader {
                 }
             }
         }
+    }
+}
+
+impl fmt::Display for JetstreamReader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "JetstreamReader {{ stream_name: {}, partition_idx: {}, config: {:?} }}",
+            self.stream_name, self.partition_idx, self.config
+        )
     }
 }
 

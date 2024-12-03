@@ -1,10 +1,10 @@
 use async_nats::jetstream::Context;
 use bytes::BytesMut;
-use tracing::info;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 use crate::config::pipeline::isb::BufferWriterConfig;
 use crate::error::Error;
@@ -43,10 +43,7 @@ impl ISBWriter {
         js_ctx: Context,
         cancel_token: CancellationToken,
     ) -> Self {
-        info!(
-            ?config, paf_concurrency, "Streaming JetstreamWriter",
-            
-        );
+        info!(?config, paf_concurrency, "Streaming JetstreamWriter",);
 
         let js_writer = JetstreamWriter::new(
             // flatten the streams across the config

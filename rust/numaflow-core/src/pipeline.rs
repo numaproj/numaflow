@@ -1,9 +1,10 @@
+use std::time::Duration;
+
 use async_nats::jetstream::Context;
 use async_nats::{jetstream, ConnectOptions};
 use futures::future::try_join_all;
-use log::info;
-use std::time::Duration;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 use crate::config::pipeline;
 use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
@@ -123,6 +124,7 @@ async fn start_sink_forwarder(
     // Start a new forwarder for each buffer reader
     let mut forwarder_tasks = Vec::new();
     for (buffer_reader, (sink_writer, _, _)) in buffer_readers.into_iter().zip(sink_writers) {
+        info!(%buffer_reader, "Starting forwarder for buffer reader");
         let forwarder = forwarder::sink_forwarder::SinkForwarder::new(
             buffer_reader,
             sink_writer,
@@ -141,6 +143,7 @@ async fn start_sink_forwarder(
     try_join_all(forwarder_tasks)
         .await
         .map_err(|e| error::Error::Forwarder(e.to_string()))?;
+    info!("All forwarders have stopped successfully");
     Ok(())
 }
 
