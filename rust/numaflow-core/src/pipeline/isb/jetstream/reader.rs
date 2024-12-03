@@ -286,7 +286,7 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream_name = "test_cancellation-2";
+        let stream_name = "test_jetstream_read";
         context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),

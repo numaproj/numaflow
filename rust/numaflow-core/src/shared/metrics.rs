@@ -1,12 +1,14 @@
+use std::net::SocketAddr;
+use std::time::Duration;
+
+use tokio::task::JoinHandle;
+use tracing::error;
+
 use crate::config::components::metrics::MetricsConfig;
 use crate::metrics::{
     start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
 };
 use crate::source::Source;
-use std::net::SocketAddr;
-use std::time::Duration;
-use tokio::task::JoinHandle;
-use tracing::error;
 
 /// Starts the metrics server
 pub(crate) async fn start_metrics_server(

@@ -5,12 +5,13 @@ pub(crate) mod source {
 
     use std::{fmt::Debug, time::Duration};
 
-    use crate::error::Error;
-    use crate::Result;
     use bytes::Bytes;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use tracing::warn;
+
+    use crate::error::Error;
+    use crate::Result;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SourceConfig {

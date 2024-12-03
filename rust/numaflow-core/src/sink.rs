@@ -595,16 +595,23 @@ mod tests {
     use crate::message::{Message, MessageID};
     use crate::shared::grpc::create_rpc_channel;
 
-    struct ErrorSink;
+    struct SimpleSink;
     #[tonic::async_trait]
-    impl sink::Sinker for ErrorSink {
+    impl sink::Sinker for SimpleSink {
         async fn sink(&self, mut input: Receiver<sink::SinkRequest>) -> Vec<sink::Response> {
             let mut responses: Vec<sink::Response> = Vec::new();
             while let Some(datum) = input.recv().await {
-                responses.push(sink::Response::failure(
-                    datum.id,
-                    "simple error".to_string(),
-                ));
+                if datum.keys.first().unwrap() == "fallback" {
+                    responses.push(sink::Response::fallback(datum.id));
+                    continue;
+                } else if datum.keys.first().unwrap() == "error" {
+                    responses.push(sink::Response::failure(
+                        datum.id,
+                        "simple error".to_string(),
+                    ));
+                } else {
+                    responses.push(sink::Response::ok(datum.id));
+                }
             }
             responses
         }
@@ -699,7 +706,7 @@ mod tests {
         let server_socket = sock_file.clone();
 
         let _server_handle = tokio::spawn(async move {
-            sink::Server::new(ErrorSink)
+            sink::Server::new(SimpleSink)
                 .with_socket_file(server_socket)
                 .with_server_info_file(server_info)
                 .start_with_shutdown(shutdown_rx)
@@ -723,7 +730,7 @@ mod tests {
 
         let messages: Vec<Message> = (0..10)
             .map(|i| Message {
-                keys: vec![format!("key_{}", i)],
+                keys: vec!["error".to_string()],
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
@@ -765,6 +772,81 @@ mod tests {
         // since the writes fail, all the messages will be NAKed
         for ack_rx in ack_rxs {
             assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fallback_write() {
+        // start the server
+        let (_shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sink.sock");
+        let server_info_file = tmp_dir.path().join("sink-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+
+        let _server_handle = tokio::spawn(async move {
+            sink::Server::new(SimpleSink)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("failed to start sink server");
+        });
+
+        // wait for the server to start
+        sleep(Duration::from_millis(100)).await;
+
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::UserDefined(SinkClient::new(
+                create_rpc_channel(sock_file).await.unwrap(),
+            )),
+        )
+        .fb_sink_client(SinkClientType::Log)
+        .build()
+        .await
+        .unwrap();
+
+        let messages: Vec<Message> = (0..20)
+            .map(|i| Message {
+                keys: vec!["fallback".to_string()],
+                value: format!("message {}", i).as_bytes().to_vec().into(),
+                offset: None,
+                event_time: Utc::now(),
+                id: MessageID {
+                    vertex_name: "vertex".to_string(),
+                    offset: format!("offset_{}", i),
+                    index: i,
+                },
+                headers: HashMap::new(),
+            })
+            .collect();
+
+        let (tx, rx) = mpsc::channel(20);
+        let mut ack_rxs = vec![];
+        for msg in messages {
+            let (ack_tx, ack_rx) = oneshot::channel();
+            let _ = tx
+                .send(ReadMessage {
+                    message: msg,
+                    ack: ack_tx,
+                })
+                .await;
+            ack_rxs.push(ack_rx);
+        }
+        drop(tx);
+        let cln_token = CancellationToken::new();
+        let handle = sink_writer
+            .streaming_write(ReceiverStream::new(rx), cln_token.clone())
+            .await
+            .unwrap();
+
+        let _ = handle.await.unwrap();
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
         }
     }
 }

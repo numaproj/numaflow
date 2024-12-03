@@ -4,9 +4,6 @@ use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
-use crate::source::Source;
-use crate::Error;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Response, StatusCode};
@@ -29,6 +26,10 @@ use tokio::time;
 use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{debug, error, info};
+
+use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
+use crate::source::Source;
+use crate::Error;
 
 // SDK information
 const SDK_INFO: &str = "sdk_info";

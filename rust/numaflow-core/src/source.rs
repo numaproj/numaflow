@@ -1,3 +1,4 @@
+use numaflow_pulsar::source::PulsarSource;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
@@ -15,7 +16,6 @@ use crate::{
     message::{Message, Offset},
     reader::LagReader,
 };
-use numaflow_pulsar::source::PulsarSource;
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -485,6 +485,7 @@ mod tests {
         let server_info = server_info_file.clone();
         let server_socket = sock_file.clone();
         let server_handle = tokio::spawn(async move {
+            // a simple source which generates total of 100 messages
             source::Server::new(SimpleSource::new(100))
                 .with_socket_file(server_socket)
                 .with_server_info_file(server_info)
@@ -513,15 +514,17 @@ mod tests {
 
         let (mut stream, handle) = source.streaming_read(cln_token.clone()).unwrap();
         let mut offsets = vec![];
+        // we should read all the 100 messages
         for _ in 0..100 {
             let message = stream.next().await.unwrap();
             assert_eq!(message.message.value, "hello".as_bytes());
             offsets.push(message.message.offset.clone().unwrap());
         }
 
+        // ack all the messages
         source.ack(offsets).await.unwrap();
 
-        // get pending
+        // since we acked all the messages, pending should be 0
         let pending = source.pending().await.unwrap();
         assert_eq!(pending, Some(0));
 

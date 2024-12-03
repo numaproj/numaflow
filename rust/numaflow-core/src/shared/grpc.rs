@@ -1,5 +1,6 @@
-use crate::error;
-use crate::error::Error;
+use std::path::PathBuf;
+use std::time::Duration;
+
 use axum::http::Uri;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
@@ -8,8 +9,6 @@ use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use prost_types::Timestamp;
-use std::path::PathBuf;
-use std::time::Duration;
 use tokio::net::UnixStream;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
@@ -17,6 +16,9 @@ use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tower::service_fn;
 use tracing::info;
+
+use crate::error;
+use crate::error::Error;
 
 /// Waits until the source server is ready, by doing health checks
 pub(crate) async fn wait_until_source_ready(

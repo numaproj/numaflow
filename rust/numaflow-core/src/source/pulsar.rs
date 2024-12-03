@@ -1,10 +1,11 @@
 use std::time::Duration;
 
+use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig};
+
 use crate::config::get_vertex_name;
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, Offset};
 use crate::source;
-use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig};
 
 impl TryFrom<PulsarMessage> for Message {
     type Error = Error;

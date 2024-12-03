@@ -1,3 +1,11 @@
+use std::time::Duration;
+
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
+
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
@@ -10,12 +18,6 @@ use crate::source::user_defined::new_source;
 use crate::source::Source;
 use crate::transformer::Transformer;
 use crate::{config, error, metrics, source};
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use std::time::Duration;
-use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
 
 /// Creates a sink writer based on the configuration
 pub(crate) async fn create_sink_writer(
@@ -256,20 +258,22 @@ pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> Result<String, St
 
 #[cfg(test)]
 mod tests {
-    use crate::shared::grpc::{
-        create_rpc_channel, wait_until_sink_ready, wait_until_source_ready,
-        wait_until_transformer_ready,
-    };
+    use std::time::Duration;
+
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
     use numaflow_pb::clients::sink::sink_client::SinkClient;
     use numaflow_pb::clients::source::source_client::SourceClient;
     use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-    use std::time::Duration;
     use tokio::sync::mpsc;
     use tokio::sync::mpsc::Sender;
     use tokio::time::sleep;
     use tokio_util::sync::CancellationToken;
+
+    use crate::shared::grpc::{
+        create_rpc_channel, wait_until_sink_ready, wait_until_source_ready,
+        wait_until_transformer_ready,
+    };
 
     struct SimpleSource {}
 
