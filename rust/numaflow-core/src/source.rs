@@ -421,14 +421,23 @@ impl Source {
 
 #[cfg(test)]
 mod tests {
+    use crate::shared::utils::create_rpc_channel;
+    use crate::source::user_defined::new_source;
+    use crate::source::{Source, SourceType};
     use chrono::Utc;
+    use futures::StreamExt;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow_pb::clients::source::source_client::SourceClient;
     use std::collections::HashSet;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
     use tokio::sync::mpsc::Sender;
+    use tokio_util::sync::CancellationToken;
 
     struct SimpleSource {
         num: usize,
+        sent_count: AtomicUsize,
         yet_to_ack: std::sync::RwLock<HashSet<String>>,
     }
 
@@ -436,6 +445,7 @@ mod tests {
         fn new(num: usize) -> Self {
             Self {
                 num,
+                sent_count: AtomicUsize::new(0),
                 yet_to_ack: std::sync::RwLock::new(HashSet::new()),
             }
         }
@@ -446,11 +456,16 @@ mod tests {
         async fn read(&self, request: SourceReadRequest, transmitter: Sender<Message>) {
             let event_time = Utc::now();
             let mut message_offsets = Vec::with_capacity(request.count);
+
             for i in 0..request.count {
+                if self.sent_count.load(Ordering::SeqCst) >= self.num {
+                    return;
+                }
+
                 let offset = format!("{}-{}", event_time.timestamp_nanos_opt().unwrap(), i);
                 transmitter
                     .send(Message {
-                        value: self.num.to_le_bytes().to_vec(),
+                        value: b"hello".to_vec(),
                         event_time,
                         offset: Offset {
                             offset: offset.clone().into_bytes(),
@@ -461,9 +476,10 @@ mod tests {
                     })
                     .await
                     .unwrap();
-                message_offsets.push(offset)
+                message_offsets.push(offset);
+                self.sent_count.fetch_add(1, Ordering::SeqCst);
             }
-            self.yet_to_ack.write().unwrap().extend(message_offsets)
+            self.yet_to_ack.write().unwrap().extend(message_offsets);
         }
 
         async fn ack(&self, offsets: Vec<Offset>) {
@@ -482,5 +498,63 @@ mod tests {
         async fn partitions(&self) -> Option<Vec<i32>> {
             Some(vec![1, 2])
         }
+    }
+
+    #[tokio::test]
+    async fn test_source() {
+        // start the server
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("source.sock");
+        let server_info_file = tmp_dir.path().join("source-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let server_handle = tokio::spawn(async move {
+            source::Server::new(SimpleSource::new(100))
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .unwrap()
+        });
+
+        // wait for the server to start
+        // TODO: flaky
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+
+        let (src_read, src_ack, lag_reader) = new_source(client, 5, Duration::from_millis(1000))
+            .await
+            .map_err(|e| panic!("failed to create source reader: {:?}", e))
+            .unwrap();
+
+        let source = Source::new(
+            5,
+            SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+        );
+
+        let cln_token = CancellationToken::new();
+
+        let (mut stream, handle) = source.streaming_read(cln_token.clone()).unwrap();
+        let mut offsets = vec![];
+        for _ in 0..100 {
+            let message = stream.next().await.unwrap();
+            assert_eq!(message.message.value, "hello".as_bytes());
+            offsets.push(message.message.offset.clone().unwrap());
+        }
+
+        source.ack(offsets).await.unwrap();
+
+        // get pending
+        let pending = source.pending().await.unwrap();
+        assert_eq!(pending, Some(0));
+
+        cln_token.cancel();
+        let _ = handle.await.unwrap();
+        drop(source);
+        let _ = shutdown_tx.send(());
+        server_handle.await.unwrap();
     }
 }

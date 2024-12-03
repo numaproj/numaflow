@@ -70,10 +70,7 @@ impl SourceForwarder {
                 (read_messages_rx, None)
             };
 
-        let writer_handle = self
-            .writer
-            .streaming_write(transformed_messages_rx, self.cln_token.clone())
-            .await?;
+        let writer_handle = self.writer.streaming_write(transformed_messages_rx).await?;
 
         match tokio::try_join!(
             reader_handle,

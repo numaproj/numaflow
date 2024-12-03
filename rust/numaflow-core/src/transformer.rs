@@ -120,7 +120,7 @@ impl Transformer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{Message, MessageID, Offset, ReadAck, ReadMessage};
+    use crate::message::{Message, MessageID, Offset, ReadMessage};
     use crate::shared::utils::create_rpc_channel;
     use numaflow::sourcetransform;
     use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -182,7 +182,7 @@ mod tests {
             headers: Default::default(),
         };
 
-        let (tx, rx) = oneshot::channel();
+        let (tx, _) = oneshot::channel();
 
         let read_message = ReadMessage {
             message: message.clone(),

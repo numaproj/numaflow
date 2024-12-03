@@ -5,7 +5,6 @@ use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
 
 use crate::config::pipeline::isb::BufferWriterConfig;
 use crate::message::ReadMessage;
@@ -66,7 +65,6 @@ impl ISBWriter {
     pub(crate) async fn streaming_write(
         &self,
         messages_stream: ReceiverStream<ReadMessage>,
-        cancellation_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let this = self.clone();
@@ -80,7 +78,6 @@ impl ISBWriter {
 
             async move {
                 let paf_resolver = PafResolver::new(this.concurrency, this.writer.clone());
-
                 while let Some(read_message) = messages_stream.next().await {
                     let mut pafs = vec![];
 
@@ -111,11 +108,6 @@ impl ISBWriter {
                             ack_tx: read_message.ack,
                         })
                         .await?;
-
-                    if cancellation_token.is_cancelled() {
-                        warn!("Cancellation token is cancelled. Exiting JetstreamWriter");
-                        break;
-                    }
                 }
                 Ok(())
             }
@@ -127,17 +119,14 @@ impl ISBWriter {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::time::Duration;
 
     use async_nats::jetstream;
-    use async_nats::jetstream::stream;
+    use async_nats::jetstream::{consumer, stream};
     use chrono::Utc;
     use tokio::sync::oneshot;
-    use tokio::time::Instant;
-    use tracing::info;
 
     use super::*;
-    use crate::message::{Message, MessageID};
+    use crate::message::{Message, MessageID, ReadAck};
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -148,29 +137,43 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream_name = "default";
+        let stream_name = "test_publish_messages";
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
                 subjects: vec![stream_name.into()],
+                max_messages: 1000,
                 ..Default::default()
             })
             .await
             .unwrap();
 
-        // Create ISBMessageHandler
-        let batch_size = 500;
-        let handler = WriterHandle::new(
-            stream_name.to_string(),
-            0,
-            Default::default(),
-            context.clone(),
-            batch_size,
-            1000,
-            cln_token.clone(),
-        );
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream_name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream_name,
+            )
+            .await
+            .unwrap();
 
-        let mut result_receivers = Vec::new();
+        let writer = ISBWriter::new(
+            10,
+            vec![BufferWriterConfig {
+                streams: vec![(stream_name.to_string(), 0)],
+                max_length: 1000,
+                ..Default::default()
+            }],
+            context.clone(),
+            cln_token.clone(),
+        )
+        .await;
+
+        let mut ack_receivers = Vec::new();
+        let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
         // Publish 500 messages
         for i in 0..500 {
             let message = Message {
@@ -186,20 +189,22 @@ mod tests {
                 headers: HashMap::new(),
             };
             let (sender, receiver) = oneshot::channel();
-            let msg = ActorMessage {
+            let read_message = ReadMessage {
                 message,
-                callee_tx: sender,
+                ack: sender,
             };
-            handler.sender.send(msg).await.unwrap();
-            result_receivers.push(receiver);
+            messages_tx.send(read_message).await.unwrap();
+            ack_receivers.push(receiver);
         }
+        drop(messages_tx);
 
-        // FIXME: Uncomment after we start awaiting for PAFs
-        //for receiver in result_receivers {
-        //    let result = receiver.await.unwrap();
-        //    assert!(result.is_ok());
-        //}
+        let receiver_stream = ReceiverStream::new(messages_rx);
+        let _handle = writer.streaming_write(receiver_stream).await.unwrap();
 
+        for receiver in ack_receivers {
+            let result = receiver.await.unwrap();
+            assert_eq!(result, ReadAck::Ack);
+        }
         context.delete_stream(stream_name).await.unwrap();
     }
 
@@ -222,18 +227,32 @@ mod tests {
             .await
             .unwrap();
 
-        let cancel_token = CancellationToken::new();
-        let handler = WriterHandle::new(
-            stream_name.to_string(),
-            0,
-            Default::default(),
-            context.clone(),
-            500,
-            1000,
-            cancel_token.clone(),
-        );
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream_name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream_name,
+            )
+            .await
+            .unwrap();
 
-        let mut receivers = Vec::new();
+        let cancel_token = CancellationToken::new();
+        let writer = ISBWriter::new(
+            10,
+            vec![BufferWriterConfig {
+                streams: vec![(stream_name.to_string(), 0)],
+                ..Default::default()
+            }],
+            context.clone(),
+            cancel_token.clone(),
+        )
+        .await;
+
+        let mut ack_receivers = Vec::new();
+        let (tx, rx) = tokio::sync::mpsc::channel(500);
         // Publish 100 messages successfully
         for i in 0..100 {
             let message = Message {
@@ -248,14 +267,23 @@ mod tests {
                 },
                 headers: HashMap::new(),
             };
-            receivers.push(handler.write(message).await.unwrap());
+            let (sender, receiver) = oneshot::channel();
+            let read_message = ReadMessage {
+                message,
+                ack: sender,
+            };
+            tx.send(read_message).await.unwrap();
+            ack_receivers.push(receiver);
         }
+
+        let receiver_stream = ReceiverStream::new(rx);
+        let handle = writer.streaming_write(receiver_stream).await.unwrap();
 
         // Attempt to publish the 101th message, which should get stuck in the retry loop
         // because the max message size is set to 1024
         let message = Message {
             keys: vec!["key_101".to_string()],
-            value: vec![0; 1024].into(),
+            value: vec![0; 1025].into(),
             offset: None,
             event_time: Utc::now(),
             id: MessageID {
@@ -265,111 +293,27 @@ mod tests {
             },
             headers: HashMap::new(),
         };
-        let receiver = handler.write(message).await.unwrap();
-        receivers.push(receiver);
+        let (sender, receiver) = oneshot::channel();
+        let read_message = ReadMessage {
+            message,
+            ack: sender,
+        };
+        tx.send(read_message).await.unwrap();
+        ack_receivers.push(receiver);
+        drop(tx);
 
         // Cancel the token to exit the retry loop
         cancel_token.cancel();
 
         // Check the results
-        // FIXME: Uncomment after we start awaiting for PAFs
-        //for (i, receiver) in receivers.into_iter().enumerate() {
-        //    let result = receiver.await.unwrap();
-        //    if i < 100 {
-        //        assert!(result.is_ok());
-        //    } else {
-        //        assert!(result.is_err());
-        //    }
-        //}
-
-        context.delete_stream(stream_name).await.unwrap();
-    }
-
-    #[cfg(feature = "nats-tests")]
-    #[ignore]
-    #[tokio::test]
-    async fn benchmark_publish_messages() {
-        let js_url = "localhost:4222";
-        // Create JetStream context
-        let client = async_nats::connect(js_url).await.unwrap();
-        let context = jetstream::new(client);
-
-        let stream_name = "benchmark_publish";
-        let _stream = context
-            .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        let cancel_token = CancellationToken::new();
-        let handler = WriterHandle::new(
-            stream_name.to_string(),
-            0,
-            Default::default(),
-            context.clone(),
-            500,
-            1000,
-            cancel_token.clone(),
-        );
-
-        let (tx, mut rx) = mpsc::channel(100);
-        let test_start_time = Instant::now();
-        let duration = Duration::from_secs(10);
-
-        // Task to publish messages
-        let publish_task = tokio::spawn(async move {
-            let mut i = 0;
-            let mut sent_count = 0;
-            let mut start_time = Instant::now();
-            while Instant::now().duration_since(test_start_time) < duration {
-                let message = Message {
-                    keys: vec![format!("key_{}", i)],
-                    value: format!("message {}", i).as_bytes().to_vec().into(),
-                    offset: None,
-                    event_time: Utc::now(),
-                    id: MessageID {
-                        vertex_name: "".to_string(),
-                        offset: format!("offset_{}", i),
-                        index: i,
-                    },
-                    headers: HashMap::new(),
-                };
-                tx.send(handler.write(message).await.unwrap())
-                    .await
-                    .unwrap();
-                sent_count += 1;
-                i += 1;
-
-                if start_time.elapsed().as_secs() >= 1 {
-                    info!("Messages sent: {}", sent_count);
-                    sent_count = 0;
-                    start_time = Instant::now();
-                }
+        for (i, receiver) in ack_receivers.into_iter().enumerate() {
+            let result = receiver.await.unwrap();
+            if i < 100 {
+                assert_eq!(result, ReadAck::Ack);
+            } else {
+                assert_eq!(result, ReadAck::Nak);
             }
-        });
-
-        // Task to await responses
-        let await_task = tokio::spawn(async move {
-            let mut start_time = Instant::now();
-            let mut count = 0;
-            while let Some(receiver) = rx.recv().await {
-                if receiver.await.unwrap().is_ok() {
-                    count += 1;
-                }
-
-                if start_time.elapsed().as_secs() >= 1 {
-                    info!("Messages received: {}", count);
-                    count = 0;
-                    start_time = Instant::now();
-                }
-            }
-        });
-
-        let _ = tokio::join!(publish_task, await_task);
-
+        }
         context.delete_stream(stream_name).await.unwrap();
     }
 }
