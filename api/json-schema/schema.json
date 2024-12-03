@@ -21651,6 +21651,48 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.PulsarAuth": {
+      "description": "PulsarAuth defines how to authenticate with Pulsar",
+      "properties": {
+        "token": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
+          "description": "JWT Token auth"
+        }
+      },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.PulsarSource": {
+      "properties": {
+        "auth": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarAuth",
+          "description": "Auth information"
+        },
+        "consumerName": {
+          "type": "string"
+        },
+        "maxUnack": {
+          "description": "Maximum number of messages that are in not yet acked state. Once this limit is crossed, futher read requests will return empty list.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "serverAddr": {
+          "type": "string"
+        },
+        "subscriptionName": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "serverAddr",
+        "topic",
+        "consumerName",
+        "subscriptionName"
+      ],
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.RedisBufferService": {
       "properties": {
         "external": {
@@ -22095,6 +22137,9 @@
         },
         "nats": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsSource"
+        },
+        "pulsar": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarSource"
         },
         "serving": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingSource"

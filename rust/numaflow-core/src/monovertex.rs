@@ -18,6 +18,7 @@ use crate::shared::utils::{
 };
 use crate::sink::{SinkClientType, SinkHandle};
 use crate::source::generator::new_generator;
+use crate::source::pulsar::new_pulsar_source;
 use crate::source::user_defined::new_source;
 use crate::source::{SourceHandle, SourceType};
 use crate::transformer::user_defined::SourceTransformHandle;
@@ -219,25 +220,35 @@ async fn fetch_source(
     config: &MonovertexConfig,
     source_grpc_client: &mut Option<SourceClient<Channel>>,
 ) -> crate::Result<SourceType> {
-    // check whether the source grpc client is provided, this happens only of the source is a
-    // user defined source
-    if let Some(source_grpc_client) = source_grpc_client.clone() {
-        let (source_read, source_ack, lag_reader) =
-            new_source(source_grpc_client, config.batch_size, config.read_timeout).await?;
-        return Ok(SourceType::UserDefinedSource(
-            source_read,
-            source_ack,
-            lag_reader,
-        ));
-    }
-
-    // now that we know it is not a user-defined source, it has to be a built-in
-    if let source::SourceType::Generator(generator_config) = &config.source_config.source_type {
-        let (source_read, source_ack, lag_reader) =
-            new_generator(generator_config.clone(), config.batch_size)?;
-        Ok(SourceType::Generator(source_read, source_ack, lag_reader))
-    } else {
-        Err(Error::Config("No valid source configuration found".into()))
+    match &config.source_config.source_type {
+        source::SourceType::Generator(generator_config) => {
+            let (source_read, source_ack, lag_reader) =
+                new_generator(generator_config.clone(), config.batch_size)?;
+            Ok(SourceType::Generator(source_read, source_ack, lag_reader))
+        }
+        source::SourceType::UserDefined(_) => {
+            let Some(source_grpc_client) = source_grpc_client.clone() else {
+                return Err(Error::Config(
+                    "Configuration type is user-defined, however no grpc client is provided".into(),
+                ));
+            };
+            let (source_read, source_ack, lag_reader) =
+                new_source(source_grpc_client, config.batch_size, config.read_timeout).await?;
+            Ok(SourceType::UserDefinedSource(
+                source_read,
+                source_ack,
+                lag_reader,
+            ))
+        }
+        source::SourceType::Pulsar(pulsar_config) => {
+            let pulsar = new_pulsar_source(
+                pulsar_config.clone(),
+                config.batch_size,
+                config.read_timeout,
+            )
+            .await?;
+            Ok(SourceType::Pulsar(pulsar))
+        }
     }
 }
 
