@@ -201,6 +201,7 @@ export function Pods(props: PodsProps) {
           containerName={selectedContainer}
           pod={selectedPod}
           podDetails={selectedPodDetails}
+          vertexId={vertexId}
         />
       </Box>
     );

@@ -127,7 +127,8 @@ func Test_PopulateReqMap(t *testing.T) {
 	})
 }
 func Test_PromQueryBuilder(t *testing.T) {
-	var service = &PromQlService{
+	// tests for histogram
+	var histogram_service = &PromQlService{
 		PlaceHolders: map[string]map[string][]string{
 			"test_metric": {
 				"test_dimension": {"$quantile", "$dimension", "$metric_name", "$filters", "$duration"},
@@ -140,14 +141,14 @@ func Test_PromQueryBuilder(t *testing.T) {
 		},
 	}
 
-	tests := []struct {
+	histogram_metrics_tests := []struct {
 		name          string
 		requestBody   MetricsRequestBody
 		expectedQuery string
 		expectError   bool
 	}{
 		{
-			name: "Successful template substitution",
+			name: "Successful histogram metrics template substitution",
 			requestBody: MetricsRequestBody{
 				MetricName: "test_metric",
 				Quantile:   "0.90",
@@ -191,9 +192,75 @@ func Test_PromQueryBuilder(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range histogram_metrics_tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualQuery, err := service.BuildQuery(tt.requestBody)
+			actualQuery, err := histogram_service.BuildQuery(tt.requestBody)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if !comparePrometheusQueries(tt.expectedQuery, actualQuery) {
+					t.Errorf("Prometheus queries do not match.\nExpected: %s\nGot: %s", tt.expectedQuery, actualQuery)
+				} else {
+					t.Log("Prometheus queries match!")
+				}
+			}
+		})
+	}
+
+	// tests for counter metrics
+	var counter_service = &PromQlService{
+		PlaceHolders: map[string]map[string][]string{
+			"forwarder_data_read_total": {
+				"vertex": {"$duration", "$dimension", "$metric_name", "$filters"},
+			},
+		},
+		Expression: map[string]map[string]string{
+			"forwarder_data_read_total": {
+				"vertex": "sum(rate($metric_name{$filters}[$duration])) by ($dimension)",
+			},
+		},
+	}
+
+	counter_metrics_tests := []struct {
+		name          string
+		requestBody   MetricsRequestBody
+		expectedQuery string
+		expectError   bool
+	}{
+		{
+			name: "Successful counter metrics template substitution",
+			requestBody: MetricsRequestBody{
+				MetricName: "forwarder_data_read_total",
+				Duration:   "5m",
+				Dimension:  "vertex",
+				Filters: map[string]string{
+					"namespace": "test_namespace",
+					"pipeline":  "test_pipeline",
+					"vertex":    "test_vertex",
+				},
+			},
+			expectedQuery: `sum(rate(forwarder_data_read_total{namespace= "test_namespace", pipeline= "test_pipeline", vertex= "test_vertex"}[5m])) by (vertex)`,
+		},
+		{
+			name: "Missing metric name in service config",
+			requestBody: MetricsRequestBody{
+				MetricName: "non_existent_metric",
+				Duration:   "5m",
+				Dimension:  "vertex",
+				Filters: map[string]string{
+					"namespace": "test_namespace",
+					"pipeline":  "test_pipeline",
+					"vertex":    "test_vertex",
+				},
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range counter_metrics_tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualQuery, err := counter_service.BuildQuery(tt.requestBody)
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
@@ -207,8 +274,9 @@ func Test_PromQueryBuilder(t *testing.T) {
 		})
 	}
 }
+
 func Test_QueryPrometheus(t *testing.T) {
-	t.Run("Successful query", func(t *testing.T) {
+	t.Run("Successful histogram query", func(t *testing.T) {
 		mockAPI := &MockPrometheusAPI{}
 		promQlService := &PromQlService{
 			PrometheusClient: &Prometheus{
@@ -230,6 +298,30 @@ func Test_QueryPrometheus(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, 1, matrix.Len())
 	})
+
+	t.Run("Successful counter query", func(t *testing.T) {
+		mockAPI := &MockPrometheusAPI{}
+		promQlService := &PromQlService{
+			PrometheusClient: &Prometheus{
+				Api: mockAPI,
+			},
+		}
+		query := `sum(rate(forwarder_data_read_total{namespace="default", pipeline="test-pipeline"}[5m])) by (vertex)`
+		startTime := time.Now().Add(-30 * time.Minute)
+		endTime := time.Now()
+
+		ctx := context.Background()
+		result, err := promQlService.QueryPrometheus(ctx, query, startTime, endTime)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+
+		// for query range , response should be a matrix
+		matrix, ok := result.(model.Matrix)
+		assert.True(t, ok)
+		assert.Equal(t, 1, matrix.Len())
+	})
+
 	t.Run("Prometheus client is nil", func(t *testing.T) {
 		service := &PromQlService{
 			PrometheusClient: nil,
