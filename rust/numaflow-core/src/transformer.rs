@@ -18,7 +18,6 @@ use crate::Result;
 pub(crate) mod user_defined;
 
 /// StreamingTransformer, transforms messages in a streaming fashion.
-#[derive(Clone)]
 pub(crate) struct Transformer {
     batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,

@@ -201,6 +201,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_source_forwarder() {
         // create the source which produces x number of messages
