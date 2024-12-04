@@ -6,7 +6,8 @@ use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::sink::SinkWriter;
 use crate::Result;
 
-/// Sink forwarder reads messages from the jetstream and writes to the sink.
+/// Sink forwarder is a component which starts a streaming reader and a sink writer
+/// and manages the lifecycle of these components.
 pub(crate) struct SinkForwarder {
     jetstream_reader: JetstreamReader,
     sink_writer: SinkWriter,
@@ -29,14 +30,14 @@ impl SinkForwarder {
     pub(crate) async fn start(&self, pipeline_config: PipelineConfig) -> Result<()> {
         // Create a child cancellation token only for the reader so that we can stop the reader first
         let reader_cancellation_token = self.cln_token.child_token();
-        let (read_messages_rx, reader_handle) = self
+        let (read_messages_stream, reader_handle) = self
             .jetstream_reader
-            .start(reader_cancellation_token.clone(), &pipeline_config)
+            .streaming_read(reader_cancellation_token.clone(), &pipeline_config)
             .await?;
 
         let sink_writer_handle = self
             .sink_writer
-            .start(read_messages_rx, self.cln_token.clone())
+            .streaming_write(read_messages_stream, self.cln_token.clone())
             .await?;
 
         // Join the reader and sink writer
