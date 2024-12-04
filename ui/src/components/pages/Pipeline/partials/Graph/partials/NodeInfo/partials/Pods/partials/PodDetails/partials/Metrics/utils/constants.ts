@@ -19,10 +19,14 @@ export const dimensionMap: { [p: string]: string } = {
   "mono-vertex": "MonoVertex",
   pod: "Pod",
   pipeline: "Pipeline",
+  vertex: "Vertex"
 };
 
 export const dimensionReverseMap: { [p: string]: string } = {
   monoVertex: "mono-vertex",
+  source: "vertex",
+  udf: "vertex",
+  sink: "vertex",
   pipeline: "pipeline",
   pod: "pod",
 };
@@ -34,4 +38,6 @@ export const metricNameMap: { [p: string]: string } = {
     "Mono Vertex Processing Time Latency (in micro seconds)",
   monovtx_sink_time_bucket:
     "Mono Vertex Sink Write Time Latency (in micro seconds)",
+  forwarder_data_read_total:
+    "Vertex Read Processing Rate"
 };

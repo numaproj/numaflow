@@ -25,6 +25,7 @@ export interface FiltersDropdownProps {
   namespaceId: string;
   pipelineId: string;
   type: string;
+  vertexId?: string;
   setFilters: any;
 }
 
@@ -33,6 +34,7 @@ const FiltersDropdown = ({
   namespaceId,
   pipelineId,
   type,
+  vertexId,
   setFilters,
 }: FiltersDropdownProps) => {
   const { host } = useContext<AppContextProps>(AppContext);
@@ -62,8 +64,8 @@ const FiltersDropdown = ({
         try {
           const response = await fetch(
             `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/${
-              type === "monoVertex" ? "mono-vertices" : "pipeline"
-            }/${pipelineId}/pods`
+              type === "monoVertex" ? `mono-vertices/${pipelineId}/pods` : `pipelines/${pipelineId}/vertices/${vertexId}/pods`
+            }`
           );
           if (!response.ok) {
             callback(null);

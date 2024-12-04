@@ -26,6 +26,7 @@ export function PodDetail({
   type,
   containerName,
   pod,
+  vertexId
 }: PodDetailProps) {
   if (!pod) return null;
 
@@ -59,7 +60,7 @@ export function PodDetail({
           label="Logs"
           data-testid="logs-tab"
         />
-        {!disableMetricsCharts && type === "monoVertex" && (
+        {!disableMetricsCharts && (
           <Tab
             className={
               selectedTab === METRICS_TAB_INDEX
@@ -94,7 +95,7 @@ export function PodDetail({
           </Box>
         )}
       </div>
-      {!disableMetricsCharts && type === "monoVertex" && (
+      {!disableMetricsCharts && (
         <div
           className="vertex-details-tab-panel"
           role="tabpanel"
@@ -112,6 +113,7 @@ export function PodDetail({
                 namespaceId={namespaceId}
                 pipelineId={pipelineId}
                 type={type}
+                vertexId={vertexId}
               />
             </Box>
           )}
