@@ -5,12 +5,13 @@ pub(crate) mod source {
 
     use std::{fmt::Debug, time::Duration};
 
-    use crate::error::Error;
-    use crate::Result;
     use bytes::Bytes;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use tracing::warn;
+
+    use crate::error::Error;
+    use crate::Result;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SourceConfig {
@@ -74,9 +75,11 @@ pub(crate) mod source {
                         tracing::warn!("JWT Token authentication is specified, but token is empty");
                         break 'out None;
                     };
-                    let secret =
-                        crate::shared::utils::get_secret_from_volume(&token.name, &token.key)
-                            .unwrap();
+                    let secret = crate::shared::create_components::get_secret_from_volume(
+                        &token.name,
+                        &token.key,
+                    )
+                    .unwrap();
                     Some(PulsarAuth::JWT(secret))
                 }
                 None => None,
@@ -359,6 +362,7 @@ pub(crate) mod transformer {
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct TransformerConfig {
+        pub(crate) concurrency: usize,
         pub(crate) transformer_type: TransformerType,
     }
 
@@ -609,6 +613,7 @@ mod transformer_tests {
     fn test_transformer_config_user_defined() {
         let user_defined_config = UserDefinedConfig::default();
         let transformer_config = TransformerConfig {
+            concurrency: 1,
             transformer_type: TransformerType::UserDefined(user_defined_config.clone()),
         };
         if let TransformerType::UserDefined(config) = transformer_config.transformer_type {

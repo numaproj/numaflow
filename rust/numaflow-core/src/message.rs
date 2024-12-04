@@ -1,7 +1,6 @@
 use std::cmp::PartialEq;
 use std::collections::HashMap;
-use std::sync::OnceLock;
-use std::{env, fmt};
+use std::fmt;
 
 use async_nats::HeaderValue;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -17,35 +16,12 @@ use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
-use crate::shared::utils::{prost_timestamp_from_utc, utc_from_timestamp};
-use crate::Error;
+use crate::shared::grpc::prost_timestamp_from_utc;
+use crate::shared::grpc::utc_from_timestamp;
 use crate::Result;
+use crate::{config, Error};
 
-const NUMAFLOW_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
-const NUMAFLOW_VERTEX_NAME: &str = "NUMAFLOW_VERTEX_NAME";
-const NUMAFLOW_REPLICA: &str = "NUMAFLOW_REPLICA";
-
-static VERTEX_NAME: OnceLock<String> = OnceLock::new();
-
-pub(crate) fn get_vertex_name() -> &'static str {
-    VERTEX_NAME.get_or_init(|| {
-        env::var(NUMAFLOW_MONO_VERTEX_NAME)
-            .or_else(|_| env::var(NUMAFLOW_VERTEX_NAME))
-            .unwrap_or_default()
-    })
-}
-
-static VERTEX_REPLICA: OnceLock<u16> = OnceLock::new();
-
-// fetch the vertex replica information from the environment variable
-pub(crate) fn get_vertex_replica() -> &'static u16 {
-    VERTEX_REPLICA.get_or_init(|| {
-        env::var(NUMAFLOW_REPLICA)
-            .unwrap_or_default()
-            .parse()
-            .unwrap_or_default()
-    })
-}
+const DROP: &str = "U+005C__DROP__";
 
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,7 +79,7 @@ impl TryFrom<async_nats::Message> for Message {
         let event_time = Utc::now();
         let offset = None;
         let id = MessageID {
-            vertex_name: get_vertex_name().to_string(),
+            vertex_name: config::get_vertex_name().to_string(),
             offset: "0".to_string(),
             index: 0,
         };
@@ -116,6 +92,13 @@ impl TryFrom<async_nats::Message> for Message {
             id,
             headers,
         })
+    }
+}
+
+impl Message {
+    // Check if the message should be dropped.
+    pub(crate) fn dropped(&self) -> bool {
+        self.keys.len() == 1 && self.keys[0] == DROP
     }
 }
 
@@ -163,6 +146,7 @@ impl fmt::Display for StringOffset {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) enum ReadAck {
     /// Message was successfully processed.
     Ack,
@@ -319,7 +303,7 @@ impl TryFrom<read_response::Result> for Message {
             offset: Some(source_offset.clone()),
             event_time: utc_from_timestamp(result.event_time),
             id: MessageID {
-                vertex_name: get_vertex_name().to_string(),
+                vertex_name: config::get_vertex_name().to_string(),
                 offset: source_offset.to_string(),
                 index: 0,
             },

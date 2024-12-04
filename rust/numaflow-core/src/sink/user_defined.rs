@@ -1,7 +1,3 @@
-use crate::message::{Message, ResponseFromSink};
-use crate::sink::Sink;
-use crate::Error;
-use crate::Result;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;
@@ -9,9 +5,14 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
+use crate::message::{Message, ResponseFromSink};
+use crate::sink::Sink;
+use crate::Error;
+use crate::Result;
+
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
 
-/// User-Defined Sink code writes messages to a custom [Sink].
+/// User-Defined Sink code writes messages to a custom [SinkWriter].
 pub struct UserDefinedSink {
     sink_tx: mpsc::Sender<SinkRequest>,
     resp_stream: Streaming<SinkResponse>,
@@ -44,7 +45,7 @@ impl UserDefinedSink {
             "failed to receive handshake response".to_string(),
         ))?;
 
-        // Handshake cannot be None during the initial phase and it has to set `sot` to true.
+        // Handshake cannot be None during the initial phase, and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
             return Err(Error::Sink("invalid handshake response".to_string()));
         }
@@ -125,7 +126,7 @@ mod tests {
     use super::*;
     use crate::error::Result;
     use crate::message::{Message, MessageID};
-    use crate::shared::utils::create_rpc_channel;
+    use crate::shared::grpc::create_rpc_channel;
     use crate::sink::user_defined::UserDefinedSink;
 
     struct Logger;

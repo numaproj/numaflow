@@ -18,11 +18,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = "1.39.2"
-backoff = { path = "backoff" }
+tokio = "1.41.1"
 servesink = { path = "servesink" }
 serving = { path = "serving" }
 numaflow-core = { path = "numaflow-core" }
-numaflow-pb = { path = "numaflow-pb" }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

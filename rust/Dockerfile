@@ -20,6 +20,9 @@ COPY ./backoff/Cargo.toml ./backoff/Cargo.toml
 RUN cargo new numaflow-models
 COPY ./numaflow-models/Cargo.toml ./numaflow-models/Cargo.toml
 
+RUN cargo new numaflow-pb
+COPY ./numaflow-pb/Cargo.toml ./numaflow-pb/Cargo.toml
+
 RUN cargo new numaflow-core
 COPY numaflow-core/Cargo.toml ./numaflow-core/Cargo.toml
 
@@ -40,9 +43,7 @@ COPY ./backoff/src ./backoff/src
 COPY ./numaflow-models/src ./numaflow-models/src
 COPY ./serving/src ./serving/src
 COPY numaflow-core/src ./numaflow-core/src
-COPY numaflow-core/build.rs ./numaflow-core/build.rs
-COPY numaflow-core/proto ./numaflow-core/proto
-
+COPY ./numaflow-pb/src ./numaflow-pb/src
 # Build the real binaries
 RUN touch src/bin/main.rs && \
     cargo build --workspace --all --release
