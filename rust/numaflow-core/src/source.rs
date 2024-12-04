@@ -179,19 +179,19 @@ impl Source {
     }
 
     /// read messages from the source by communicating with the read actor.
-    pub(crate) async fn read(&self) -> Result<Vec<Message>> {
+    async fn read(source_handle: mpsc::Sender<ActorMessage>) -> Result<Vec<Message>> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Read { respond_to: sender };
         // Ignore send errors. If send fails, so does the recv.await below. There's no reason
         // to check for the same failure twice.
-        let _ = self.sender.send(msg).await;
+        let _ = source_handle.send(msg).await;
         receiver
             .await
             .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// ack the offsets by communicating with the ack actor.
-    pub(crate) async fn ack(&self, offsets: Vec<Offset>) -> Result<()> {
+    async fn ack(source_handle: mpsc::Sender<ActorMessage>, offsets: Vec<Offset>) -> Result<()> {
         let (sender, receiver) = oneshot::channel();
         let msg = ActorMessage::Ack {
             respond_to: sender,
@@ -199,7 +199,7 @@ impl Source {
         };
         // Ignore send errors. If send fails, so does the recv.await below. There's no reason
         // to check for the same failure twice.
-        let _ = self.sender.send(msg).await;
+        let _ = source_handle.send(msg).await;
         receiver
             .await
             .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
@@ -225,7 +225,7 @@ impl Source {
     ) -> Result<(ReceiverStream<ReadMessage>, JoinHandle<Result<()>>)> {
         let batch_size = self.read_batch_size;
         let (messages_tx, messages_rx) = mpsc::channel(batch_size);
-        let source_read = self.clone();
+        let source_handle = self.sender.clone();
 
         let pipeline_labels = pipeline_forward_metric_labels("Source", Some(get_vertex_name()));
         let mvtx_labels = mvtx_forward_metric_labels();
@@ -258,7 +258,7 @@ impl Source {
                 };
 
                 let read_start_time = tokio::time::Instant::now();
-                let messages = match source_read.read().await {
+                let messages = match Self::read(source_handle.clone()).await {
                     Ok(messages) => messages,
                     Err(e) => {
                         error!("Error while reading messages: {:?}", e);
@@ -316,7 +316,7 @@ impl Source {
                 // start a background task to invoke ack on the source for the offsets that are acked.
                 tokio::spawn(Self::invoke_ack(
                     read_start_time,
-                    source_read.clone(),
+                    source_handle.clone(),
                     ack_batch,
                 ));
 
@@ -336,9 +336,9 @@ impl Source {
     }
 
     /// Listens to the oneshot receivers and invokes ack on the source for the offsets that are acked.
-    pub(crate) async fn invoke_ack(
+    async fn invoke_ack(
         e2e_start_time: time::Instant,
-        streaming_source: Source,
+        source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
     ) -> Result<()> {
         let n = ack_rx_batch.len();
@@ -361,9 +361,9 @@ impl Source {
             }
         }
 
-        let start = tokio::time::Instant::now();
+        let start = time::Instant::now();
         if !offsets_to_ack.is_empty() {
-            streaming_source.ack(offsets_to_ack).await?;
+            Self::ack(source_handle, offsets_to_ack).await?;
         }
 
         if is_mono_vertex() {
@@ -535,7 +535,7 @@ mod tests {
         }
 
         // ack all the messages
-        source.ack(offsets).await.unwrap();
+        Source::ack(source.sender.clone(), offsets).await.unwrap();
 
         // since we acked all the messages, pending should be 0
         let pending = source.pending().await.unwrap();

@@ -66,12 +66,14 @@ impl ISBWriter {
         messages_stream: ReceiverStream<ReadMessage>,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
-            let this = self.clone();
+            let writer = self.writer.clone();
+            let paf_concurrency = self.paf_concurrency;
+            let config = self.config.clone();
             let mut messages_stream = messages_stream;
             let mut index = 0;
 
             async move {
-                let paf_resolver = PafResolver::new(this.paf_concurrency, this.writer.clone());
+                let paf_resolver = PafResolver::new(paf_concurrency, writer.clone());
                 while let Some(read_message) = messages_stream.next().await {
                     // if message needs to be dropped, ack and continue
                     // TODO: add metric for dropped count
@@ -85,7 +87,7 @@ impl ISBWriter {
                     let mut pafs = vec![];
 
                     // FIXME(CF): This is a temporary solution to round-robin the streams
-                    for buffer in &this.config {
+                    for buffer in &config {
                         let payload: BytesMut = read_message
                             .message
                             .clone()
@@ -94,7 +96,7 @@ impl ISBWriter {
                         let stream = buffer.streams.get(index).unwrap();
                         index = (index + 1) % buffer.streams.len();
 
-                        let paf = this.writer.write(stream.clone(), payload.into()).await;
+                        let paf = writer.write(stream.clone(), payload.into()).await;
                         pafs.push((stream.clone(), paf));
                     }
 

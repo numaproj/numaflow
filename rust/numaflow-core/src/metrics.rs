@@ -27,7 +27,7 @@ use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{debug, error, info};
 
-use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica, is_mono_vertex};
+use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
 use crate::source::Source;
 use crate::Error;
 
@@ -743,7 +743,7 @@ impl PendingReader {
     /// - Another to periodically expose the pending metrics.
     ///
     /// Dropping the PendingReaderTasks will abort the background tasks.
-    pub async fn start(&self) -> PendingReaderTasks {
+    pub async fn start(&self, is_mono_vertex: bool) -> PendingReaderTasks {
         let pending_reader = self.lag_reader.clone();
         let lag_checking_interval = self.lag_checking_interval;
         let refresh_interval = self.refresh_interval;
@@ -755,7 +755,7 @@ impl PendingReader {
 
         let pending_stats = self.pending_stats.clone();
         let expose_handle = tokio::spawn(async move {
-            expose_pending_metrics(refresh_interval, pending_stats).await;
+            expose_pending_metrics(is_mono_vertex, refresh_interval, pending_stats).await;
         });
         PendingReaderTasks {
             buildup_handle,
@@ -814,6 +814,7 @@ const LOOKBACK_SECONDS_MAP: [(&str, i64); 4] =
 
 // Periodically exposes the pending metrics by calculating the average pending messages over different intervals.
 async fn expose_pending_metrics(
+    is_mono_vertex: bool,
     refresh_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
 ) {
@@ -831,7 +832,7 @@ async fn expose_pending_metrics(
                 let mut metric_labels = mvtx_forward_metric_labels().clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
                 pending_info.insert(label, pending);
-                if is_mono_vertex() {
+                if is_mono_vertex {
                     monovertex_metrics()
                         .pending
                         .get_or_create(&metric_labels)
@@ -1075,7 +1076,7 @@ mod tests {
         tokio::spawn({
             let pending_stats = pending_stats.clone();
             async move {
-                expose_pending_metrics(refresh_interval, pending_stats).await;
+                expose_pending_metrics(true, refresh_interval, pending_stats).await;
             }
         });
         // We use tokio::time::interval() as the ticker in the expose_pending_metrics() function.

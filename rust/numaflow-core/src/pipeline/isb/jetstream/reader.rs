@@ -82,14 +82,16 @@ impl JetstreamReader {
         let (messages_tx, messages_rx) = mpsc::channel(2 * pipeline_config.batch_size);
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
-            let this = self.clone();
+            let consumer = self.consumer.clone();
+            let partition_idx = self.partition_idx;
+            let config = self.config.clone();
             let cancel_token = cancel_token.clone();
 
             let stream_name = self.stream_name;
             async move {
                 let labels = pipeline_forward_metric_labels("Sink", Some(stream_name));
 
-                let mut message_stream = this.consumer.messages().await.map_err(|e| {
+                let mut message_stream = consumer.messages().await.map_err(|e| {
                     Error::ISB(format!(
                         "Failed to get message stream from Jetstream: {:?}",
                         e
@@ -139,14 +141,14 @@ impl JetstreamReader {
 
                             message.offset = Some(Offset::Int(IntOffset::new(
                                 msg_info.stream_sequence,
-                                this.partition_idx,
+                                partition_idx,
                             )));
 
                             let (ack_tx, ack_rx) = oneshot::channel();
                             tokio::spawn(Self::start_work_in_progress(
                                 jetstream_message,
                                 ack_rx,
-                                this.config.wip_ack_interval,
+                                config.wip_ack_interval,
                             ));
 
                             let read_message = ReadMessage {

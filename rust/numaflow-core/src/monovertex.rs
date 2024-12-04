@@ -2,6 +2,7 @@ use forwarder::ForwarderBuilder;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+use crate::config::is_mono_vertex;
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
 use crate::shared::create_components;
@@ -77,7 +78,7 @@ async fn start(
     // start the pending reader to publish pending metrics
     let pending_reader =
         shared::metrics::create_pending_reader(&mvtx_config.metrics_config, source.clone()).await;
-    let _pending_reader_handle = pending_reader.start().await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     let mut forwarder_builder = ForwarderBuilder::new(source, sink, cln_token);
 
