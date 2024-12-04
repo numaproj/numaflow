@@ -18,7 +18,7 @@ import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
 
 // TODO have a check for metricReq against metric object to ensure required fields are passed
-const LineChartComponent = ({ namespaceId, pipelineId, type, metric }: any) => {
+const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }: any) => {
   const [transformedData, setTransformedData] = useState<any[]>([]);
   const [chartLabels, setChartLabels] = useState<any[]>([]);
   const [metricsReq, setMetricsReq] = useState<any>({
@@ -28,6 +28,7 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric }: any) => {
   // store all filters for each selected dimension
   const [filtersList, setFiltersList] = useState<any[]>([]);
   const [filters, setFilters] = useState<any>({});
+  const [previousDimension, setPreviousDimension] = useState(metricsReq?.dimension);
 
   const getRandomColor = useCallback((index: number) => {
     const hue = (index * 137.508) % 360;
@@ -42,6 +43,8 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric }: any) => {
         case "mvtx_name":
         case "pipeline":
           return pipelineId;
+        case "vertex":
+          return vertexId;
         default:
           return "";
       }
@@ -73,9 +76,11 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric }: any) => {
     setFilters(newFilters);
   }, [filtersList, getFilterValue, setFilters]);
 
+  //update filters only when dimension changes in metricsReq
   useEffect(() => {
-    if (metricsReq?.dimension) {
+    if (metricsReq?.dimension !== previousDimension) {
       updateFilterList(metricsReq.dimension);
+      setPreviousDimension(metricsReq?.dimension);
     }
   }, [metricsReq, updateFilterList]);
 
@@ -91,7 +96,7 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric }: any) => {
         name: param?.Name,
         required: param?.Required,
       })) || [];
-
+    
     setParamsList([...initParams, ...newParams]);
   }, [metric, setParamsList]);
 
@@ -214,6 +219,7 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric }: any) => {
             namespaceId={namespaceId}
             pipelineId={pipelineId}
             type={type}
+            vertexId={vertexId}
             setFilters={setFilters}
           />
         </Box>
