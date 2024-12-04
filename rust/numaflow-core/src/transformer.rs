@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use tokio::sync::{mpsc, oneshot, Semaphore};
+use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
@@ -22,7 +22,7 @@ pub(crate) mod user_defined;
 pub(crate) struct Transformer {
     batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,
-    semaphore: Arc<Semaphore>,
+    concurrency: usize,
 }
 impl Transformer {
     pub(crate) async fn new(
@@ -33,9 +33,6 @@ impl Transformer {
         let (sender, mut receiver) = mpsc::channel(batch_size);
         let mut client = UserDefinedTransformer::new(batch_size, client).await?;
 
-        // FIXME: batch_size should not be used, introduce a new config called udf concurrency
-        let semaphore = Arc::new(Semaphore::new(concurrency));
-
         tokio::spawn(async move {
             while let Some(msg) = receiver.recv().await {
                 client.handle_message(msg).await;
@@ -44,22 +41,24 @@ impl Transformer {
 
         Ok(Self {
             batch_size,
+            concurrency,
             sender,
-            semaphore,
         })
     }
 
     /// Applies the transformation on the message and sends it to the next stage, it blocks if the
     /// concurrency limit is reached.
     pub(crate) async fn transform(
-        &self,
+        transform_handle: mpsc::Sender<ActorMessage>,
+        permit: OwnedSemaphorePermit,
         read_msg: ReadMessage,
         output_tx: mpsc::Sender<ReadMessage>,
     ) -> Result<()> {
-        let permit = self.semaphore.clone().acquire_owned().await.unwrap();
-        let transform_handle = self.clone();
+        // only if we have tasks < max_concurrency
+
         let output_tx = output_tx.clone();
 
+        // invoke transformer and then wait for the one-shot
         tokio::spawn(async move {
             let _permit = permit;
             let message = read_msg.message.clone();
@@ -70,8 +69,10 @@ impl Transformer {
                 respond_to: sender,
             };
 
-            transform_handle.sender.send(msg).await.unwrap();
+            // invoke trf
+            transform_handle.send(msg).await.unwrap();
 
+            // wait for one-shot
             match receiver.await {
                 Ok(Ok(mut transformed_messages)) => {
                     // FIXME: handle the case where the transformer does flat map operation
@@ -93,6 +94,7 @@ impl Transformer {
 
         Ok(())
     }
+
     /// Starts reading messages in the form of chunks and transforms them and
     /// sends them to the next stage.
     pub(crate) fn transform_stream(
@@ -100,15 +102,24 @@ impl Transformer {
         input_stream: ReceiverStream<ReadMessage>,
     ) -> Result<(ReceiverStream<ReadMessage>, JoinHandle<Result<()>>)> {
         let (output_tx, output_rx) = mpsc::channel(self.batch_size);
-        let transform_handle = self.clone();
+
+        let transform_handle = self.sender.clone();
+        // FIXME: batch_size should not be used, introduce a new config called udf concurrenc
+        let semaphore = Arc::new(Semaphore::new(self.concurrency));
 
         let handle = tokio::spawn(async move {
             let mut input_stream = input_stream;
 
             while let Some(read_msg) = input_stream.next().await {
-                transform_handle
-                    .transform(read_msg, output_tx.clone())
-                    .await?;
+                let permit = semaphore.clone().acquire_owned().await.unwrap();
+
+                Self::transform(
+                    transform_handle.clone(),
+                    permit,
+                    read_msg,
+                    output_tx.clone(),
+                )
+                .await?;
             }
             Ok(())
         });
@@ -193,7 +204,9 @@ mod tests {
 
         let (output_tx, mut output_rx) = mpsc::channel(10);
 
-        transformer.transform(read_message, output_tx).await?;
+        let semaphore = Arc::new(Semaphore::new(10));
+        let permit = semaphore.clone().acquire_owned().await.unwrap();
+        Transformer::transform(transformer.sender.clone(), permit, read_message, output_tx).await?;
 
         let transformed_message = output_rx.recv().await.unwrap();
         assert_eq!(transformed_message.message.value, "hello");
