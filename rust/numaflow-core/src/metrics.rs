@@ -27,7 +27,7 @@ use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{debug, error, info};
 
-use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
+use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica, is_mono_vertex};
 use crate::source::Source;
 use crate::Error;
 
@@ -73,7 +73,7 @@ const DROPPED_TOTAL: &str = "dropped";
 const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
 
 // pending as gauge
-const SOURCE_PENDING: &str = "pending";
+const PENDING: &str = "pending";
 
 // processing times as timers
 const E2E_TIME: &str = "processing_time";
@@ -184,7 +184,7 @@ pub(crate) struct MonoVtxMetrics {
     pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
 
     // gauge
-    pub(crate) source_pending: Family<Vec<(String, String)>, Gauge>,
+    pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
 
     // timers
     pub(crate) e2e_time: Family<Vec<(String, String)>, Histogram>,
@@ -224,17 +224,15 @@ pub(crate) struct PipelineForwarderMetrics {
     pub(crate) read_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) read_time: Family<Vec<(String, String)>, Histogram>,
     pub(crate) ack_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) ack_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) read_bytes_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) processed_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
 }
 
 pub(crate) struct PipelineISBMetrics {
-    pub(crate) ack_time: Family<Vec<(String, String)>, Histogram>,
-    pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
-    pub(crate) read_total: Family<Vec<(String, String)>, Counter>,
-    pub(crate) ack_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) paf_resolution_time: Family<Vec<(String, String)>, Histogram>,
-    pub(crate) ack_tasks: Family<Vec<(String, String)>, Gauge>,
 }
 
 /// Exponential bucket distribution with range.
@@ -267,7 +265,7 @@ impl MonoVtxMetrics {
             ack_total: Family::<Vec<(String, String)>, Counter>::default(),
             dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
             // gauge
-            source_pending: Family::<Vec<(String, String)>, Gauge>::default(),
+            pending: Family::<Vec<(String, String)>, Gauge>::default(),
             // timers
             // exponential buckets in the range 100 microseconds to 15 minutes
             e2e_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
@@ -325,9 +323,9 @@ impl MonoVtxMetrics {
 
         // gauges
         registry.register(
-            SOURCE_PENDING,
+            PENDING,
             "A Gauge to keep track of the total number of pending messages for the monovtx",
-            metrics.source_pending.clone(),
+            metrics.pending.clone(),
         );
         // timers
         registry.register(
@@ -392,19 +390,17 @@ impl PipelineMetrics {
                 }),
                 read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
                 ack_total: Family::<Vec<(String, String)>, Counter>::default(),
-            },
-            isb: PipelineISBMetrics {
                 ack_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                 }),
+                pending: Family::<Vec<(String, String)>, Gauge>::default(),
                 write_total: Family::<Vec<(String, String)>, Counter>::default(),
-                read_total: Family::<Vec<(String, String)>, Counter>::default(),
-                ack_total: Family::<Vec<(String, String)>, Counter>::default(),
+            },
+            isb: PipelineISBMetrics {
                 paf_resolution_time:
                     Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                         Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                     }),
-                ack_tasks: Family::<Vec<(String, String)>, Gauge>::default(),
             },
         };
         let mut registry = global_registry().registry.lock();
@@ -417,24 +413,34 @@ impl PipelineMetrics {
             metrics.forwarder.read_total.clone(),
         );
         forwarder_registry.register(
-            "read_time",
+            READ_TIME,
             "Time taken to read data",
             metrics.forwarder.read_time.clone(),
         );
         forwarder_registry.register(
-            "read_bytes_total",
+            READ_BYTES_TOTAL,
             "Total number of bytes read",
             metrics.forwarder.read_bytes_total.clone(),
         );
         forwarder_registry.register(
-            "processed_time",
+            E2E_TIME,
             "Time taken to process data",
             metrics.forwarder.processed_time.clone(),
         );
         forwarder_registry.register(
-            "ack_total",
+            ACK_TOTAL,
             "Total number of Ack Messages",
             metrics.forwarder.ack_total.clone(),
+        );
+        forwarder_registry.register(
+            ACK_TIME,
+            "Time taken to ack data",
+            metrics.forwarder.ack_time.clone(),
+        );
+        forwarder_registry.register(
+            PENDING,
+            "Number of pending messages",
+            metrics.forwarder.pending.clone(),
         );
         metrics
     }
@@ -825,10 +831,18 @@ async fn expose_pending_metrics(
                 let mut metric_labels = mvtx_forward_metric_labels().clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
                 pending_info.insert(label, pending);
-                monovertex_metrics()
-                    .source_pending
-                    .get_or_create(&metric_labels)
-                    .set(pending);
+                if is_mono_vertex() {
+                    monovertex_metrics()
+                        .pending
+                        .get_or_create(&metric_labels)
+                        .set(pending);
+                } else {
+                    pipeline_metrics()
+                        .forwarder
+                        .pending
+                        .get_or_create(&metric_labels)
+                        .set(pending);
+                }
             }
         }
         // skip for those the pending is not implemented
@@ -983,7 +997,7 @@ mod tests {
 
         // wait for the servers to start
         // FIXME: we need to have a better way, this is flaky
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
         let metrics_state = UserDefinedContainerState::Monovertex(MonovertexContainerState {
             source_client: Some(SourceClient::new(
                 create_rpc_channel(src_sock_file).await.unwrap(),
@@ -1076,7 +1090,7 @@ mod tests {
                 let mut metric_labels = mvtx_forward_metric_labels().clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
                 let guage = monovertex_metrics()
-                    .source_pending
+                    .pending
                     .get_or_create(&metric_labels)
                     .get();
                 stored_values[i] = guage;
@@ -1160,7 +1174,7 @@ mod tests {
         metrics.read_bytes_total.get_or_create(&common_labels).inc();
         metrics.ack_total.get_or_create(&common_labels).inc();
         metrics.dropped_total.get_or_create(&common_labels).inc();
-        metrics.source_pending.get_or_create(&common_labels).set(10);
+        metrics.pending.get_or_create(&common_labels).set(10);
         metrics.e2e_time.get_or_create(&common_labels).observe(10.0);
         metrics.read_time.get_or_create(&common_labels).observe(3.0);
         metrics.ack_time.get_or_create(&common_labels).observe(2.0);

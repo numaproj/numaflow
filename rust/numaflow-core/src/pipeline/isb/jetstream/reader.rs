@@ -159,12 +159,6 @@ impl JetstreamReader {
                             })?;
 
                             pipeline_metrics()
-                                .isb
-                                .read_total
-                                .get_or_create(pipeline_isb_metric_labels())
-                                .inc();
-
-                            pipeline_metrics()
                                 .forwarder
                                 .read_total
                                 .get_or_create(labels)
@@ -199,12 +193,6 @@ impl JetstreamReader {
         let mut interval = time::interval_at(Instant::now() + tick, tick);
         let start = Instant::now();
 
-        pipeline_metrics()
-            .isb
-            .ack_tasks
-            .get_or_create(pipeline_isb_metric_labels())
-            .inc();
-
         loop {
             let wip = async {
                 interval.tick().await;
@@ -233,16 +221,16 @@ impl JetstreamReader {
                         error!(?e, "Failed to send Ack to Jetstream for message");
                     }
                     pipeline_metrics()
-                        .isb
-                        .ack_tasks
-                        .get_or_create(pipeline_isb_metric_labels())
-                        .dec();
-
-                    pipeline_metrics()
-                        .isb
+                        .forwarder
                         .ack_time
                         .get_or_create(pipeline_isb_metric_labels())
                         .observe(start.elapsed().as_micros() as f64);
+
+                    pipeline_metrics()
+                        .forwarder
+                        .ack_total
+                        .get_or_create(pipeline_isb_metric_labels())
+                        .inc();
                     return;
                 }
                 ReadAck::Nak => {

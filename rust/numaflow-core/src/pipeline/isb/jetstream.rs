@@ -99,7 +99,7 @@ impl ISBWriter {
                     }
 
                     pipeline_metrics()
-                        .isb
+                        .forwarder
                         .write_total
                         .get_or_create(pipeline_isb_metric_labels())
                         .inc();

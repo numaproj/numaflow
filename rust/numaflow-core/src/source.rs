@@ -1,6 +1,7 @@
 use numaflow_pulsar::source::PulsarSource;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
+use tokio::time;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -265,9 +266,7 @@ impl Source {
                     }
                 };
                 let n = messages.len();
-                info!("Read {} messages in {:?}", n, read_start_time.elapsed());
-
-                if *is_mono_vertex() {
+                if is_mono_vertex() {
                     monovertex_metrics()
                         .read_total
                         .get_or_create(mvtx_labels)
@@ -315,7 +314,11 @@ impl Source {
                 }
 
                 // start a background task to invoke ack on the source for the offsets that are acked.
-                tokio::spawn(Self::invoke_ack(source_read.clone(), ack_batch));
+                tokio::spawn(Self::invoke_ack(
+                    read_start_time,
+                    source_read.clone(),
+                    ack_batch,
+                ));
 
                 processed_msgs_count += n;
                 if last_logged_at.elapsed().as_secs() >= 1 {
@@ -334,17 +337,11 @@ impl Source {
 
     /// Listens to the oneshot receivers and invokes ack on the source for the offsets that are acked.
     pub(crate) async fn invoke_ack(
+        e2e_start_time: time::Instant,
         streaming_source: Source,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
     ) -> Result<()> {
-        pipeline_metrics()
-            .isb
-            .ack_tasks
-            .get_or_create(pipeline_isb_metric_labels())
-            .inc();
-
         let n = ack_rx_batch.len();
-        let start = tokio::time::Instant::now();
         let mut offsets_to_ack = Vec::with_capacity(n);
 
         for (offset, oneshot_rx) in ack_rx_batch {
@@ -364,29 +361,45 @@ impl Source {
             }
         }
 
+        let start = tokio::time::Instant::now();
         if !offsets_to_ack.is_empty() {
             streaming_source.ack(offsets_to_ack).await?;
         }
-        info!("Acked {} offsets in {:?}", n, start.elapsed());
 
-        pipeline_metrics()
-            .isb
-            .ack_time
-            .get_or_create(pipeline_isb_metric_labels())
-            .observe(start.elapsed().as_micros() as f64);
+        if is_mono_vertex() {
+            monovertex_metrics()
+                .ack_time
+                .get_or_create(mvtx_forward_metric_labels())
+                .observe(start.elapsed().as_micros() as f64);
 
-        pipeline_metrics()
-            .isb
-            .ack_total
-            .get_or_create(pipeline_isb_metric_labels())
-            .inc_by(n as u64);
+            monovertex_metrics()
+                .ack_total
+                .get_or_create(mvtx_forward_metric_labels())
+                .inc_by(n as u64);
 
-        pipeline_metrics()
-            .isb
-            .ack_tasks
-            .get_or_create(pipeline_isb_metric_labels())
-            .dec();
+            monovertex_metrics()
+                .e2e_time
+                .get_or_create(mvtx_forward_metric_labels())
+                .observe(e2e_start_time.elapsed().as_micros() as f64);
+        } else {
+            pipeline_metrics()
+                .forwarder
+                .ack_time
+                .get_or_create(pipeline_isb_metric_labels())
+                .observe(start.elapsed().as_micros() as f64);
 
+            pipeline_metrics()
+                .forwarder
+                .ack_total
+                .get_or_create(pipeline_isb_metric_labels())
+                .inc_by(n as u64);
+
+            pipeline_metrics()
+                .forwarder
+                .processed_time
+                .get_or_create(pipeline_isb_metric_labels())
+                .observe(e2e_start_time.elapsed().as_micros() as f64);
+        }
         Ok(())
     }
 }

@@ -93,8 +93,6 @@ async fn start_sink_forwarder(
     // Create buffer readers for each partition
     let buffer_readers = create_buffer_readers(&config, js_context.clone()).await?;
 
-    // TODO(code review): add more logs about starting and stopping
-
     // Create sink writers and clients
     let mut sink_writers = Vec::new();
     for _ in &buffer_readers {
@@ -153,7 +151,7 @@ async fn create_buffer_writer(
     cln_token: CancellationToken,
 ) -> ISBWriter {
     ISBWriter::new(
-        config.paf_batch_size,
+        config.paf_concurrency,
         config
             .to_vertex_config
             .iter()
@@ -289,7 +287,7 @@ mod tests {
             vertex_name: "in".to_string(),
             replica: 0,
             batch_size: 1000,
-            paf_batch_size: 30000,
+            paf_concurrency: 30000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -457,7 +455,7 @@ mod tests {
             vertex_name: "in".to_string(),
             replica: 0,
             batch_size: 1000,
-            paf_batch_size: 30000,
+            paf_concurrency: 30000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),

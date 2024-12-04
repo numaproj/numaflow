@@ -31,7 +31,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) replica: u16,
     pub(crate) batch_size: usize,
     // FIXME(cr): we cannot leak this as a paf, we need to use a different terminology.
-    pub(crate) paf_batch_size: usize,
+    pub(crate) paf_concurrency: usize,
     pub(crate) read_timeout: Duration,
     pub(crate) js_client_config: isb::jetstream::ClientConfig, // TODO: make it enum, since we can have different ISB implementations
     pub(crate) from_vertex_config: Vec<FromVertexConfig>,
@@ -47,7 +47,7 @@ impl Default for PipelineConfig {
             vertex_name: "default-vtx".to_string(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
-            paf_batch_size: (DEFAULT_BATCH_SIZE * 2) as usize,
+            paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
             read_timeout: Duration::from_secs(DEFAULT_TIMEOUT_IN_MS as u64),
             js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
@@ -266,7 +266,7 @@ impl PipelineConfig {
 
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
-            paf_batch_size: env::var("PAF_BATCH_SIZE")
+            paf_concurrency: env::var("PAF_BATCH_SIZE")
                 .unwrap_or("30000".to_string())
                 .parse()
                 .unwrap(),
@@ -298,7 +298,7 @@ mod tests {
             vertex_name: "default-vtx".to_string(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
-            paf_batch_size: (DEFAULT_BATCH_SIZE * 2) as usize,
+            paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
             read_timeout: Duration::from_secs(DEFAULT_TIMEOUT_IN_MS as u64),
             js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
@@ -344,7 +344,7 @@ mod tests {
             vertex_name: "out".to_string(),
             replica: 0,
             batch_size: 500,
-            paf_batch_size: 30000,
+            paf_concurrency: 30000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -390,7 +390,7 @@ mod tests {
             vertex_name: "in".to_string(),
             replica: 0,
             batch_size: 1000,
-            paf_batch_size: 30000,
+            paf_concurrency: 30000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -443,7 +443,7 @@ mod tests {
             vertex_name: "in".to_string(),
             replica: 0,
             batch_size: 50,
-            paf_batch_size: 30000,
+            paf_concurrency: 30000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
