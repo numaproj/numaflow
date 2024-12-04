@@ -75,7 +75,7 @@ impl fmt::Display for BufferFullStrategy {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct BufferReaderConfig {
     pub(crate) partitions: u16,
-    pub(crate) streams: Vec<(String, u16)>,
+    pub(crate) streams: Vec<(&'static str, u16)>,
     pub(crate) wip_ack_interval: Duration,
 }
 
@@ -83,7 +83,7 @@ impl Default for BufferReaderConfig {
     fn default() -> Self {
         BufferReaderConfig {
             partitions: DEFAULT_PARTITIONS,
-            streams: vec![("default-0".to_string(), DEFAULT_PARTITION_IDX)],
+            streams: vec![("default-0", DEFAULT_PARTITION_IDX)],
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
         }
     }
@@ -138,7 +138,7 @@ mod tests {
     fn test_default_buffer_reader_config() {
         let expected = BufferReaderConfig {
             partitions: DEFAULT_PARTITIONS,
-            streams: vec![("default-0".to_string(), DEFAULT_PARTITION_IDX)],
+            streams: vec![("default-0", DEFAULT_PARTITION_IDX)],
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
         };
         let config = BufferReaderConfig::default();

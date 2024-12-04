@@ -27,7 +27,7 @@ use crate::Result;
 /// Storing the Sender end of channel in this struct would make it difficult to close the channel with `cancel` method.
 #[derive(Clone)]
 pub(crate) struct JetstreamReader {
-    stream_name: String,
+    stream_name: &'static str,
     partition_idx: u16,
     config: BufferReaderConfig,
     consumer: PullConsumer,
@@ -35,7 +35,7 @@ pub(crate) struct JetstreamReader {
 
 impl JetstreamReader {
     pub(crate) async fn new(
-        stream_name: String,
+        stream_name: &'static str,
         partition_idx: u16,
         js_ctx: Context,
         config: BufferReaderConfig,
@@ -68,11 +68,11 @@ impl JetstreamReader {
         })
     }
 
-    /// streaming_read is a background task that continuously fetches messages from Jetstream and emits them on a channel.
-    ///
-    /// When we encounter an error, we log the error and return from the function. This drops the sender end of the channel.
-    /// The closing of the channel should propagate to the receiver end and the receiver should exit gracefully.
-    /// Within the loop, we only consider cancellationToken cancellation during the permit reservation and fetching messages,
+    /// streaming_read is a background task that continuously fetches messages from Jetstream and
+    /// emits them on a channel. When we encounter an error, we log the error and return from the
+    /// function. This drops the sender end of the channel. The closing of the channel should propagate
+    /// to the receiver end and the receiver should exit gracefully. Within the loop, we only consider
+    /// cancellationToken cancellation during the permit reservation and fetching messages,
     /// since rest of the operations should finish immediately.
     pub(crate) async fn streaming_read(
         &self,
@@ -84,10 +84,10 @@ impl JetstreamReader {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let this = self.clone();
             let cancel_token = cancel_token.clone();
-            let stream_name = self.stream_name.clone();
 
+            let stream_name = self.stream_name;
             async move {
-                let labels = pipeline_forward_metric_labels("Sink", Some(stream_name.as_str()));
+                let labels = pipeline_forward_metric_labels("Sink", Some(stream_name));
 
                 let mut message_stream = this.consumer.messages().await.map_err(|e| {
                     Error::ISB(format!(
@@ -305,14 +305,9 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let js_reader = JetstreamReader::new(
-            stream_name.to_string(),
-            0,
-            context.clone(),
-            buf_reader_config,
-        )
-        .await
-        .unwrap();
+        let js_reader = JetstreamReader::new(stream_name, 0, context.clone(), buf_reader_config)
+            .await
+            .unwrap();
 
         let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW91dCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im91dCIsInNpbmsiOnsiYmxhY2tob2xlIjp7fSwicmV0cnlTdHJhdGVneSI6eyJvbkZhaWx1cmUiOiJyZXRyeSJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoib3V0IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==".to_string();
 
@@ -412,14 +407,9 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let js_reader = JetstreamReader::new(
-            stream_name.to_string(),
-            0,
-            context.clone(),
-            buf_reader_config,
-        )
-        .await
-        .unwrap();
+        let js_reader = JetstreamReader::new(stream_name, 0, context.clone(), buf_reader_config)
+            .await
+            .unwrap();
 
         let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW91dCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im91dCIsInNpbmsiOnsiYmxhY2tob2xlIjp7fSwicmV0cnlTdHJhdGVneSI6eyJvbkZhaWx1cmUiOiJyZXRyeSJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoib3V0IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==".to_string();
 

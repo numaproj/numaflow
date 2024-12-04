@@ -212,8 +212,12 @@ impl PipelineConfig {
             let partition_count = edge.to_vertex_partition_count.unwrap_or_default() as u16;
             let buffer_name = format!("{}-{}-{}", namespace, pipeline_name, edge.to);
 
-            let streams: Vec<(String, u16)> = (0..partition_count)
-                .map(|i| (format!("{}-{}", buffer_name, i), i))
+            let streams: Vec<(&'static str, u16)> = (0..partition_count)
+                .map(|i| {
+                    let stream: &'static str =
+                        Box::leak(Box::new(format!("{}-{}", buffer_name, i)));
+                    (stream, i)
+                })
                 .collect();
 
             from_vertex_config.push(FromVertexConfig {

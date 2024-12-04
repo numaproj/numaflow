@@ -169,17 +169,16 @@ async fn create_buffer_readers(
 ) -> Result<Vec<JetstreamReader>> {
     // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
     // to a common buffer, in the case of a join.
-    let reader_config = config
+    let reader_config = &config
         .from_vertex_config
         .first()
         .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
-        .reader_config
-        .clone();
+        .reader_config;
 
     let mut readers = Vec::new();
     for stream in &reader_config.streams {
         let reader = JetstreamReader::new(
-            stream.0.clone(),
+            stream.0,
             stream.1,
             js_context.clone(),
             reader_config.clone(),
@@ -470,7 +469,7 @@ mod tests {
                     streams: streams
                         .iter()
                         .enumerate()
-                        .map(|(i, key)| (key.to_string(), i as u16))
+                        .map(|(i, key)| (*key, i as u16))
                         .collect(),
                     wip_ack_interval: Duration::from_secs(1),
                 },
