@@ -157,6 +157,8 @@ impl JetstreamWriter {
     pub(super) async fn write(&self, stream: Stream, payload: Vec<u8>) -> PublishAckFuture {
         let js_ctx = self.js_ctx.clone();
 
+        let mut counter = 500u64;
+
         // loop till we get a PAF, there could be other reasons why PAFs cannot be created.
         let paf = loop {
             // let's write only if the buffer is not full for the stream
@@ -167,7 +169,12 @@ impl JetstreamWriter {
             {
                 Some(true) => {
                     // FIXME: add metrics
-                    info!("stream is full {}", stream.0);
+                    if counter >= 500 {
+                        warn!(stream=?stream.0, "stream is full (throttled logging)");
+                        counter = 0;
+                    }
+                    counter += 1;
+
                     // FIXME: consider buffer-full strategy
                 }
                 Some(false) => match js_ctx
@@ -219,7 +226,7 @@ impl JetstreamWriter {
                             // should we return an error here? Because duplicate messages are not fatal
                             // But it can mess up the watermark progression because the offset will be
                             // same as the previous message offset
-                            warn!(ack = ?ack, "Duplicate message detected, ignoring");
+                            warn!(?ack, "Duplicate message detected, ignoring");
                         }
                         debug!(
                             elapsed_ms = start_time.elapsed().as_millis(),
@@ -274,6 +281,8 @@ impl PafResolver {
 
     /// resolve_pafs resolves the PAFs for the given result. It will try to resolve the PAFs
     /// asynchronously, if it fails it will do a blocking write to resolve the PAFs.
+    /// At any point in time, we will only have X PAF resolvers running, this will help us create a
+    /// natural backpressure.
     pub(crate) async fn resolve_pafs(&self, result: ResolveAndPublishResult) -> Result<()> {
         let start_time = Instant::now();
         let permit = Arc::clone(&self.sem)

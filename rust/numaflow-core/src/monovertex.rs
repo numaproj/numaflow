@@ -62,14 +62,12 @@ pub(crate) async fn start_forwarder(
     // FIXME: what to do with the handle
     shared::metrics::start_metrics_server(config.metrics_config.clone(), metrics_state).await;
 
-    start_forwarder_with_source(config.clone(), source, sink_writer, transformer, cln_token)
-        .await?;
+    start(config.clone(), source, sink_writer, transformer, cln_token).await?;
 
-    info!("Forwarder stopped gracefully");
     Ok(())
 }
 
-async fn start_forwarder_with_source(
+async fn start(
     mvtx_config: MonovertexConfig,
     source: Source,
     sink: SinkWriter,
@@ -91,10 +89,12 @@ async fn start_forwarder_with_source(
     // build the final forwarder
     let forwarder = forwarder_builder.build();
 
+    info!("Forwarder is starting...");
+
     // start the forwarder, it will return only on Signal
     forwarder.start().await?;
 
-    info!("Forwarder stopped gracefully");
+    info!("Forwarder stopped gracefully.");
     Ok(())
 }
 
