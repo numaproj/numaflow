@@ -18,6 +18,58 @@ pub(crate) mod monovertex;
 /// Pipeline specific configs.
 pub(crate) mod pipeline;
 
+pub const NUMAFLOW_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
+const NUMAFLOW_VERTEX_NAME: &str = "NUMAFLOW_VERTEX_NAME";
+const NUMAFLOW_REPLICA: &str = "NUMAFLOW_REPLICA";
+static VERTEX_NAME: OnceLock<String> = OnceLock::new();
+
+/// fetch the vertex name from the environment variable
+pub(crate) fn get_vertex_name() -> &'static str {
+    VERTEX_NAME.get_or_init(|| {
+        env::var(NUMAFLOW_MONO_VERTEX_NAME)
+            .or_else(|_| env::var(NUMAFLOW_VERTEX_NAME))
+            .unwrap_or_default()
+    })
+}
+
+static IS_MONO_VERTEX: OnceLock<bool> = OnceLock::new();
+
+/// returns true if the vertex is a mono vertex
+pub(crate) fn is_mono_vertex() -> bool {
+    *IS_MONO_VERTEX.get_or_init(|| env::var(NUMAFLOW_MONO_VERTEX_NAME).is_ok())
+}
+
+static COMPONENT_TYPE: OnceLock<String> = OnceLock::new();
+
+/// fetch the component type from the environment variable
+pub(crate) fn get_component_type() -> &'static str {
+    COMPONENT_TYPE.get_or_init(|| {
+        if is_mono_vertex() {
+            "mono-vertex".to_string()
+        } else {
+            "pipeline".to_string()
+        }
+    })
+}
+
+static PIPELINE_NAME: OnceLock<String> = OnceLock::new();
+
+pub(crate) fn get_pipeline_name() -> &'static str {
+    PIPELINE_NAME.get_or_init(|| env::var("NUMAFLOW_PIPELINE_NAME").unwrap_or_default())
+}
+
+static VERTEX_REPLICA: OnceLock<u16> = OnceLock::new();
+
+/// fetch the vertex replica information from the environment variable
+pub(crate) fn get_vertex_replica() -> &'static u16 {
+    VERTEX_REPLICA.get_or_init(|| {
+        env::var(NUMAFLOW_REPLICA)
+            .unwrap_or_default()
+            .parse()
+            .unwrap_or_default()
+    })
+}
+
 /// Exposes the [Settings] via lazy loading.
 pub fn config() -> &'static Settings {
     static CONF: OnceLock<Settings> = OnceLock::new();

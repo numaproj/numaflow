@@ -88,7 +88,7 @@ pub(crate) struct ServerInfo {
     pub(crate) metadata: Option<HashMap<String, String>>, // Metadata is optional
 }
 
-/// check_for_server_compatibility waits until the server info file is ready and check whether the
+/// sdk_server_info waits until the server info file is ready and check whether the
 /// server is compatible with Numaflow.
 pub(crate) async fn sdk_server_info(
     file_path: PathBuf,
