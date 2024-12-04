@@ -33,6 +33,9 @@ type SASL struct {
 	// SASLSCRAMSHA512 contains the sasl plain config
 	// +optional
 	SCRAMSHA512 *SASLPlain `json:"scramsha512" protobuf:"bytes,5,opt,name=scramsha512"`
+	// OAuth contains the oauth config
+	// +optional
+	OAuth *SASLOAuth `json:"oauth" protobuf:"bytes,6,opt,name=oauth"`
 }
 
 // SASLType describes the SASL type
@@ -95,4 +98,13 @@ type SASLPlain struct {
 	// +optional
 	PasswordSecret *corev1.SecretKeySelector `json:"passwordSecret" protobuf:"bytes,2,opt,name=passwordSecret"`
 	Handshake      bool                      `json:"handshake" protobuf:"bytes,3,opt,name=handshake"`
+}
+
+type SASLOAuth struct {
+	// ClientID refers to the secret that contains the client id
+	ClientID *corev1.SecretKeySelector `json:"clientID" protobuf:"bytes,1,opt,name=clientID"`
+	// ClientSecret refers to the secret that contains the client secret
+	ClientSecret *corev1.SecretKeySelector `json:"clientSecret" protobuf:"bytes,2,opt,name=clientSecret"`
+	// TokenEndpoint refers to the token endpoint
+	TokenEndpoint string `json:"tokenEndpoint" protobuf:"bytes,3,opt,name=tokenEndpoint"`
 }
