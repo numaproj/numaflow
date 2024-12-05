@@ -1,5 +1,10 @@
 use std::time::Duration;
 
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use numaflow_models::models::MonoVertex;
+use serde_json::from_slice;
+
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::source::{GeneratorConfig, SourceConfig};
@@ -10,10 +15,6 @@ use crate::config::components::{sink, source};
 use crate::config::get_vertex_replica;
 use crate::error::Error;
 use crate::Result;
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
-use numaflow_models::models::MonoVertex;
-use serde_json::from_slice;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
