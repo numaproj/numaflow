@@ -1,13 +1,14 @@
-use crate::message::{Message, ResponseFromSink};
-use crate::sink::Sink;
-use crate::Error;
-use crate::Result;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
+
+use crate::message::{Message, ResponseFromSink};
+use crate::sink::Sink;
+use crate::Error;
+use crate::Result;
 
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
 

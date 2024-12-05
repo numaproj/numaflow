@@ -3,7 +3,6 @@ use std::time::Duration;
 use async_nats::jetstream::{
     consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
 };
-
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
