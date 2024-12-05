@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use numaflow_models::models::MonoVertex;
 use serde_json::from_slice;
+
+use numaflow_models::models::MonoVertex;
 
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
@@ -18,6 +19,7 @@ use crate::Result;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
+const DEFAULT_LOOKBACK_WINDOW_IN_SECS: i64 = 120;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MonovertexConfig {
@@ -128,12 +130,19 @@ impl MonovertexConfig {
             None
         };
 
+        let look_back_window = mono_vertex_obj
+            .spec
+            .scale
+            .as_ref()
+            .and_then(|scale| scale.lookback_seconds.map(|x| x))
+            .unwrap_or(DEFAULT_LOOKBACK_WINDOW_IN_SECS);
+
         Ok(MonovertexConfig {
             name: mono_vertex_name,
             replica: *get_vertex_replica(),
             batch_size: batch_size as usize,
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
-            metrics_config: MetricsConfig::default(),
+            metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
             source_config,
             sink_config,
             transformer_config,
@@ -152,6 +161,7 @@ mod tests {
     use crate::config::components::transformer::TransformerType;
     use crate::config::monovertex::MonovertexConfig;
     use crate::error::Error;
+
     #[test]
     fn test_load_valid_config() {
         let valid_config = r#"
