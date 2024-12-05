@@ -18,7 +18,7 @@ use crate::Result;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
-const DEFAULT_LOOKBACK_WINDOW_IN_SECS: i64 = 120;
+const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MonovertexConfig {
@@ -133,7 +133,7 @@ impl MonovertexConfig {
             .spec
             .scale
             .as_ref()
-            .and_then(|scale| scale.lookback_seconds.map(|x| x))
+            .and_then(|scale| scale.lookback_seconds.map(|x| x as u16))
             .unwrap_or(DEFAULT_LOOKBACK_WINDOW_IN_SECS);
 
         Ok(MonovertexConfig {

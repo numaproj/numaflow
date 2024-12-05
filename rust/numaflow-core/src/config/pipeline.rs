@@ -18,7 +18,7 @@ use crate::Result;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
-const DEFAULT_LOOKBACK_WINDOW_IN_SECS: i64 = 120;
+const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
@@ -273,7 +273,7 @@ impl PipelineConfig {
             .spec
             .scale
             .as_ref()
-            .and_then(|scale| scale.lookback_seconds.map(|x| x))
+            .and_then(|scale| scale.lookback_seconds.map(|x| x as u16))
             .unwrap_or(DEFAULT_LOOKBACK_WINDOW_IN_SECS);
 
         Ok(PipelineConfig {

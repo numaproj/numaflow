@@ -688,7 +688,7 @@ pub(crate) struct PendingReader {
     lag_checking_interval: Duration,
     refresh_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
-    lookback_seconds: i64,
+    lookback_seconds: u16,
 }
 
 pub(crate) struct PendingReaderTasks {
@@ -701,7 +701,7 @@ pub(crate) struct PendingReaderBuilder {
     lag_reader: Source,
     lag_checking_interval: Option<Duration>,
     refresh_interval: Option<Duration>,
-    lookback_seconds: Option<i64>,
+    lookback_seconds: Option<u16>,
 }
 
 impl PendingReaderBuilder {
@@ -724,7 +724,7 @@ impl PendingReaderBuilder {
         self
     }
 
-    pub(crate) fn lookback_seconds(mut self, seconds: i64) -> Self {
+    pub(crate) fn lookback_seconds(mut self, seconds: u16) -> Self {
         self.lookback_seconds = Some(seconds);
         self
     }
@@ -830,7 +830,7 @@ async fn expose_pending_metrics(
     is_mono_vertex: bool,
     refresh_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
-    lookback_seconds: i64,
+    lookback_seconds: u16,
 ) {
     let mut ticker = time::interval(refresh_interval);
 
@@ -838,7 +838,7 @@ async fn expose_pending_metrics(
     // string concat is more efficient?
     let mut pending_info: BTreeMap<&str, i64> = BTreeMap::new();
 
-    let lookback_seconds_map: [(&str, i64); 4] = [
+    let lookback_seconds_map: [(&str, u16); 4] = [
         ("1m", 60),
         ("default", lookback_seconds),
         ("5m", 300),
@@ -848,7 +848,7 @@ async fn expose_pending_metrics(
     loop {
         ticker.tick().await;
         for (label, seconds) in lookback_seconds_map {
-            let pending = calculate_pending(seconds, &pending_stats).await;
+            let pending = calculate_pending(seconds as i64, &pending_stats).await;
             if pending != -1 {
                 let mut metric_labels = mvtx_forward_metric_labels().clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
@@ -1106,7 +1106,7 @@ mod tests {
         // The first tick happens immediately, so we don't need to wait for the refresh_interval for the first iteration to complete.
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        let lookback_seconds_map: [(&str, i64); 4] =
+        let lookback_seconds_map: [(&str, u16); 4] =
             [("1m", 60), ("default", 120), ("5m", 300), ("15m", 900)];
 
         // Get the stored values for all time intervals
