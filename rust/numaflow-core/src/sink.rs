@@ -16,7 +16,8 @@ use user_defined::UserDefinedSink;
 
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
 use crate::error::Error;
-use crate::message::{Message, ReadAck, ReadMessage, ResponseFromSink, ResponseStatusFromSink};
+use crate::message::{Message, ResponseFromSink, ResponseStatusFromSink};
+use crate::tracker::TrackerHandle;
 use crate::Result;
 
 mod blackhole;
@@ -88,6 +89,7 @@ pub(super) struct SinkWriter {
     retry_config: RetryConfig,
     sink_handle: mpsc::Sender<ActorMessage>,
     fb_sink_handle: Option<mpsc::Sender<ActorMessage>>,
+    tracker_handle: TrackerHandle,
 }
 
 /// SinkWriterBuilder is a builder to build a SinkWriter.
@@ -97,16 +99,23 @@ pub struct SinkWriterBuilder {
     retry_config: RetryConfig,
     sink_client: SinkClientType,
     fb_sink_client: Option<SinkClientType>,
+    tracker_handle: TrackerHandle,
 }
 
 impl SinkWriterBuilder {
-    pub fn new(batch_size: usize, chunk_timeout: Duration, sink_type: SinkClientType) -> Self {
+    pub fn new(
+        batch_size: usize,
+        chunk_timeout: Duration,
+        sink_type: SinkClientType,
+        tracker_handle: TrackerHandle,
+    ) -> Self {
         Self {
             batch_size,
             chunk_timeout,
             retry_config: RetryConfig::default(),
             sink_client: sink_type,
             fb_sink_client: None,
+            tracker_handle,
         }
     }
 
@@ -196,6 +205,7 @@ impl SinkWriterBuilder {
             retry_config: self.retry_config,
             sink_handle: sender,
             fb_sink_handle,
+            tracker_handle: self.tracker_handle,
         })
     }
 }
@@ -234,7 +244,7 @@ impl SinkWriter {
     /// closed or the cancellation token is triggered.
     pub(super) async fn streaming_write(
         &self,
-        messages_stream: ReceiverStream<ReadMessage>,
+        messages_stream: ReceiverStream<Message>,
         cancellation_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
@@ -261,20 +271,16 @@ impl SinkWriter {
                     }
 
                     let n = batch.len();
-                    let (messages, senders): (Vec<_>, Vec<_>) =
-                        batch.into_iter().map(|rm| (rm.message, rm.ack)).unzip();
-
-                    match this.write(messages, cancellation_token.clone()).await {
+                    match this.write(batch.clone(), cancellation_token.clone()).await {
                         Ok(_) => {
-                            for sender in senders {
-                                let _ = sender.send(ReadAck::Ack);
+                            for message in batch {
+                                // Delete the message from the tracker
+                                this.tracker_handle.delete(message.id.offset).await?;
                             }
                         }
                         Err(e) => {
                             error!(?e, "Error writing to sink");
-                            for sender in senders {
-                                let _ = sender.send(ReadAck::Nak);
-                            }
+                            //FIXME: handle error
                         }
                     }
 
@@ -619,11 +625,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_write() {
-        let mut sink_writer =
-            SinkWriterBuilder::new(10, Duration::from_secs(1), SinkClientType::Log)
-                .build()
-                .await
-                .unwrap();
+        let mut sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_secs(1),
+            SinkClientType::Log,
+            TrackerHandle::new(),
+        )
+        .build()
+        .await
+        .unwrap();
 
         let messages: Vec<Message> = (0..5)
             .map(|i| Message {
@@ -648,11 +658,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_streaming_write() {
-        let sink_writer =
-            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
-                .build()
-                .await
-                .unwrap();
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::Log,
+            TrackerHandle::new(),
+        )
+        .build()
+        .await
+        .unwrap();
 
         let messages: Vec<Message> = (0..10)
             .map(|i| Message {
@@ -670,16 +684,8 @@ mod tests {
             .collect();
 
         let (tx, rx) = mpsc::channel(10);
-        let mut ack_rxs = vec![];
         for msg in messages {
-            let (ack_tx, ack_rx) = oneshot::channel();
-            let _ = tx
-                .send(ReadMessage {
-                    message: msg,
-                    ack: ack_tx,
-                })
-                .await;
-            ack_rxs.push(ack_rx);
+            let _ = tx.send(msg).await;
         }
         drop(tx);
 
@@ -689,15 +695,12 @@ mod tests {
             .unwrap();
 
         let _ = handle.await.unwrap();
-        for ack_rx in ack_rxs {
-            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
-        }
     }
 
     #[tokio::test]
     async fn test_streaming_write_error() {
         // start the server
-        let (_shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("sink.sock");
         let server_info_file = tmp_dir.path().join("sink-server-info");
@@ -723,6 +726,7 @@ mod tests {
             SinkClientType::UserDefined(SinkClient::new(
                 create_rpc_channel(sock_file).await.unwrap(),
             )),
+            TrackerHandle::new(),
         )
         .build()
         .await
@@ -744,16 +748,8 @@ mod tests {
             .collect();
 
         let (tx, rx) = mpsc::channel(10);
-        let mut ack_rxs = vec![];
         for msg in messages {
-            let (ack_tx, ack_rx) = oneshot::channel();
-            let _ = tx
-                .send(ReadMessage {
-                    message: msg,
-                    ack: ack_tx,
-                })
-                .await;
-            ack_rxs.push(ack_rx);
+            let _ = tx.send(msg).await;
         }
         drop(tx);
         let cln_token = CancellationToken::new();
@@ -769,16 +765,12 @@ mod tests {
         });
 
         let _ = handle.await.unwrap();
-        // since the writes fail, all the messages will be NAKed
-        for ack_rx in ack_rxs {
-            assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak);
-        }
     }
 
     #[tokio::test]
     async fn test_fallback_write() {
         // start the server
-        let (_shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("sink.sock");
         let server_info_file = tmp_dir.path().join("sink-server-info");
@@ -804,6 +796,7 @@ mod tests {
             SinkClientType::UserDefined(SinkClient::new(
                 create_rpc_channel(sock_file).await.unwrap(),
             )),
+            TrackerHandle::new(),
         )
         .fb_sink_client(SinkClientType::Log)
         .build()
@@ -826,16 +819,8 @@ mod tests {
             .collect();
 
         let (tx, rx) = mpsc::channel(20);
-        let mut ack_rxs = vec![];
         for msg in messages {
-            let (ack_tx, ack_rx) = oneshot::channel();
-            let _ = tx
-                .send(ReadMessage {
-                    message: msg,
-                    ack: ack_tx,
-                })
-                .await;
-            ack_rxs.push(ack_rx);
+            let _ = tx.send(msg).await;
         }
         drop(tx);
         let cln_token = CancellationToken::new();
@@ -845,8 +830,5 @@ mod tests {
             .unwrap();
 
         let _ = handle.await.unwrap();
-        for ack_rx in ack_rxs {
-            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
-        }
     }
 }

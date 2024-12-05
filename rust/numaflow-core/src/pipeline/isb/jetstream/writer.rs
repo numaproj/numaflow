@@ -9,16 +9,17 @@ use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
 use async_nats::jetstream::Context;
 use bytes::Bytes;
-use tokio::sync::{oneshot, Semaphore};
+use tokio::sync::Semaphore;
 use tokio::time::{sleep, Instant};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::config::pipeline::isb::BufferWriterConfig;
 use crate::error::Error;
-use crate::message::{IntOffset, Offset, ReadAck};
+use crate::message::{IntOffset, Offset};
 use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
 use crate::pipeline::isb::jetstream::Stream;
+use crate::tracker::TrackerHandle;
 use crate::Result;
 
 #[derive(Clone, Debug)]
@@ -259,8 +260,7 @@ impl JetstreamWriter {
 pub(crate) struct ResolveAndPublishResult {
     pub(crate) pafs: Vec<(Stream, PublishAckFuture)>,
     pub(crate) payload: Vec<u8>,
-    // Acknowledgement oneshot to notify the reader that the message has been written
-    pub(crate) ack_tx: oneshot::Sender<ReadAck>,
+    pub(crate) offset: String,
 }
 
 /// Resolves the PAF from the write call, if not successful it will do a blocking write so that
@@ -269,13 +269,19 @@ pub(crate) struct ResolveAndPublishResult {
 pub(crate) struct PafResolver {
     sem: Arc<Semaphore>,
     js_writer: JetstreamWriter,
+    tracker_handle: TrackerHandle,
 }
 
 impl PafResolver {
-    pub(crate) fn new(concurrency: usize, js_writer: JetstreamWriter) -> Self {
+    pub(crate) fn new(
+        concurrency: usize,
+        js_writer: JetstreamWriter,
+        tracker_handle: TrackerHandle,
+    ) -> Self {
         PafResolver {
             sem: Arc::new(Semaphore::new(concurrency)), // concurrency limit for resolving PAFs
             js_writer,
+            tracker_handle,
         }
     }
 
@@ -333,27 +339,20 @@ impl PafResolver {
                             Err(e) => {
                                 error!(?e, "Blocking write failed for stream {}", stream.0);
                                 // Since we failed to write to the stream, we need to send a NAK to the reader
-                                result.ack_tx.send(ReadAck::Nak).unwrap_or_else(|e| {
-                                    error!("Failed to send error for stream {}: {:?}", stream.0, e);
-                                });
+                                // FIXME: handle error
                                 return;
                             }
                         }
                     }
                 }
             }
-
-            // Send an ack to the reader
-            result.ack_tx.send(ReadAck::Ack).unwrap_or_else(|e| {
-                error!("Failed to send ack: {:?}", e);
-            });
-
             pipeline_metrics()
                 .isb
                 .paf_resolution_time
                 .get_or_create(pipeline_isb_metric_labels())
                 .observe(start_time.elapsed().as_micros() as f64);
         });
+        self.tracker_handle.delete(result.offset).await?;
         Ok(())
     }
 }

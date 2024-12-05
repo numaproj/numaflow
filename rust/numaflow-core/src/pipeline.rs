@@ -15,6 +15,7 @@ use crate::pipeline::isb::jetstream::ISBWriter;
 use crate::shared::create_components;
 use crate::shared::create_components::create_sink_writer;
 use crate::shared::metrics::start_metrics_server;
+use crate::tracker::TrackerHandle;
 use crate::{error, Result};
 
 mod forwarder;
@@ -43,20 +44,29 @@ async fn start_source_forwarder(
     config: PipelineConfig,
     source_config: SourceVtxConfig,
 ) -> Result<()> {
+    let tracker_handle = TrackerHandle::new();
     let js_context = create_js_context(config.js_client_config.clone()).await?;
 
-    let buffer_writer = create_buffer_writer(&config, js_context.clone(), cln_token.clone()).await;
+    let buffer_writer = create_buffer_writer(
+        &config,
+        js_context.clone(),
+        tracker_handle.clone(),
+        cln_token.clone(),
+    )
+    .await;
 
     let (source, source_grpc_client) = create_components::create_source(
         config.batch_size,
         config.read_timeout,
         &source_config.source_config,
+        tracker_handle.clone(),
         cln_token.clone(),
     )
     .await?;
     let (transformer, transformer_grpc_client) = create_components::create_transformer(
         config.batch_size,
         source_config.transformer_config.clone(),
+        tracker_handle,
         cln_token.clone(),
     )
     .await?;
@@ -88,10 +98,12 @@ async fn start_sink_forwarder(
     config: PipelineConfig,
     sink: SinkVtxConfig,
 ) -> Result<()> {
+    let tracker_handle = TrackerHandle::new();
     let js_context = create_js_context(config.js_client_config.clone()).await?;
 
     // Create buffer readers for each partition
-    let buffer_readers = create_buffer_readers(&config, js_context.clone()).await?;
+    let buffer_readers =
+        create_buffer_readers(&config, js_context.clone(), tracker_handle.clone()).await?;
 
     // Create sink writers and clients
     let mut sink_writers = Vec::new();
@@ -101,6 +113,7 @@ async fn start_sink_forwarder(
             config.read_timeout,
             sink.sink_config.clone(),
             sink.fb_sink_config.clone(),
+            tracker_handle.clone(),
             &cln_token,
         )
         .await?;
@@ -148,6 +161,7 @@ async fn start_sink_forwarder(
 async fn create_buffer_writer(
     config: &PipelineConfig,
     js_context: Context,
+    tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
 ) -> ISBWriter {
     ISBWriter::new(
@@ -158,6 +172,7 @@ async fn create_buffer_writer(
             .map(|tv| tv.writer_config.clone())
             .collect(),
         js_context,
+        tracker_handle,
         cln_token,
     )
     .await
@@ -166,6 +181,7 @@ async fn create_buffer_writer(
 async fn create_buffer_readers(
     config: &PipelineConfig,
     js_context: Context,
+    tracker_handle: TrackerHandle,
 ) -> Result<Vec<JetstreamReader>> {
     // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
     // to a common buffer, in the case of a join.
@@ -182,6 +198,7 @@ async fn create_buffer_readers(
             stream.1,
             js_context.clone(),
             reader_config.clone(),
+            tracker_handle.clone(),
         )
         .await?;
         readers.push(reader);

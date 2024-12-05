@@ -142,6 +142,7 @@ mod tests {
     use crate::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
+    use crate::tracker::TrackerHandle;
     use crate::transformer::Transformer;
     use crate::Result;
 
@@ -256,10 +257,11 @@ mod tests {
             .await
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
-
+        let tracker_handle = TrackerHandle::new();
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            tracker_handle.clone(),
         );
 
         // create a transformer
@@ -283,13 +285,19 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let transformer = Transformer::new(10, 10, client).await.unwrap();
+        let transformer = Transformer::new(10, 10, client, tracker_handle.clone())
+            .await
+            .unwrap();
 
-        let sink_writer =
-            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
-                .build()
-                .await
-                .unwrap();
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::Log,
+            tracker_handle.clone(),
+        )
+        .build()
+        .await
+        .unwrap();
 
         // create the forwarder with the source, transformer, and writer
         let forwarder = ForwarderBuilder::new(source.clone(), sink_writer, cln_token.clone())

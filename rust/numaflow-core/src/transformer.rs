@@ -1,14 +1,14 @@
-use std::sync::Arc;
-
+use futures::StreamExt;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 use user_defined::ActorMessage;
 
-use crate::message::{ReadAck, ReadMessage};
+use crate::message::Message;
+use crate::tracker::TrackerHandle;
 use crate::transformer::user_defined::UserDefinedTransformer;
 use crate::Result;
 
@@ -22,12 +22,14 @@ pub(crate) struct Transformer {
     batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,
     concurrency: usize,
+    tracker_handle: TrackerHandle,
 }
 impl Transformer {
     pub(crate) async fn new(
         batch_size: usize,
         concurrency: usize,
         client: SourceTransformClient<Channel>,
+        tracker_handle: TrackerHandle,
     ) -> Result<Self> {
         let (sender, mut receiver) = mpsc::channel(batch_size);
         let mut client = UserDefinedTransformer::new(batch_size, client).await?;
@@ -42,6 +44,7 @@ impl Transformer {
             batch_size,
             concurrency,
             sender,
+            tracker_handle,
         })
     }
 
@@ -50,8 +53,9 @@ impl Transformer {
     pub(crate) async fn transform(
         transform_handle: mpsc::Sender<ActorMessage>,
         permit: OwnedSemaphorePermit,
-        read_msg: ReadMessage,
-        output_tx: mpsc::Sender<ReadMessage>,
+        read_msg: Message,
+        output_tx: mpsc::Sender<Message>,
+        tracker_handle: TrackerHandle,
     ) -> Result<()> {
         // only if we have tasks < max_concurrency
 
@@ -60,11 +64,10 @@ impl Transformer {
         // invoke transformer and then wait for the one-shot
         tokio::spawn(async move {
             let _permit = permit;
-            let message = read_msg.message.clone();
 
             let (sender, receiver) = oneshot::channel();
             let msg = ActorMessage::Transform {
-                message,
+                message: read_msg.clone(),
                 respond_to: sender,
             };
 
@@ -74,19 +77,20 @@ impl Transformer {
             // wait for one-shot
             match receiver.await {
                 Ok(Ok(mut transformed_messages)) => {
-                    // FIXME: handle the case where the transformer does flat map operation
-                    if let Some(transformed_msg) = transformed_messages.pop() {
-                        output_tx
-                            .send(ReadMessage {
-                                message: transformed_msg,
-                                ack: read_msg.ack,
-                            })
-                            .await
-                            .unwrap();
+                    tracker_handle
+                        .update(
+                            read_msg.id.offset.clone(),
+                            transformed_messages.len() as u32,
+                            false,
+                        )
+                        .await
+                        .expect("failed to update tracker");
+                    for transformed_message in transformed_messages.drain(..) {
+                        let _ = output_tx.send(transformed_message).await;
                     }
                 }
                 Err(_) | Ok(Err(_)) => {
-                    let _ = read_msg.ack.send(ReadAck::Nak);
+                    // FIXME: handle error
                 }
             }
         });
@@ -98,11 +102,12 @@ impl Transformer {
     /// sends them to the next stage.
     pub(crate) fn transform_stream(
         &self,
-        input_stream: ReceiverStream<ReadMessage>,
-    ) -> Result<(ReceiverStream<ReadMessage>, JoinHandle<Result<()>>)> {
+        input_stream: ReceiverStream<Message>,
+    ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (output_tx, output_rx) = mpsc::channel(self.batch_size);
 
         let transform_handle = self.sender.clone();
+        let tracker_handle = self.tracker_handle.clone();
         // FIXME: batch_size should not be used, introduce a new config called udf concurrenc
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
 
@@ -117,6 +122,7 @@ impl Transformer {
                     permit,
                     read_msg,
                     output_tx.clone(),
+                    tracker_handle.clone(),
                 )
                 .await?;
             }
@@ -137,7 +143,7 @@ mod tests {
     use tokio::sync::oneshot;
 
     use super::*;
-    use crate::message::{Message, MessageID, Offset, ReadMessage};
+    use crate::message::{Message, MessageID, Offset};
     use crate::shared::grpc::create_rpc_channel;
 
     struct SimpleTransformer;
@@ -174,9 +180,10 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
+        let tracker_handle = TrackerHandle::new();
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
-        let transformer = Transformer::new(500, 10, client).await?;
+        let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
 
         let message = Message {
             keys: vec!["first".into()],
@@ -194,21 +201,21 @@ mod tests {
             headers: Default::default(),
         };
 
-        let (tx, _) = oneshot::channel();
-
-        let read_message = ReadMessage {
-            message: message.clone(),
-            ack: tx,
-        };
-
         let (output_tx, mut output_rx) = mpsc::channel(10);
 
         let semaphore = Arc::new(Semaphore::new(10));
         let permit = semaphore.clone().acquire_owned().await.unwrap();
-        Transformer::transform(transformer.sender.clone(), permit, read_message, output_tx).await?;
+        Transformer::transform(
+            transformer.sender.clone(),
+            permit,
+            message,
+            output_tx,
+            tracker_handle,
+        )
+        .await?;
 
         let transformed_message = output_rx.recv().await.unwrap();
-        assert_eq!(transformed_message.message.value, "hello");
+        assert_eq!(transformed_message.value, "hello");
 
         // we need to drop the transformer, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
@@ -246,8 +253,9 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
+        let tracker_handle = TrackerHandle::new();
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
-        let transformer = Transformer::new(500, 10, client).await?;
+        let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
 
         let (input_tx, input_rx) = mpsc::channel(10);
         let input_stream = ReceiverStream::new(input_rx);
@@ -264,14 +272,11 @@ mod tests {
                 id: MessageID {
                     vertex_name: "vertex_name".to_string(),
                     offset: i.to_string(),
-                    index: i as i32,
+                    index: i,
                 },
                 headers: Default::default(),
             };
-            let (tx, _) = oneshot::channel();
-            let read_message = ReadMessage { message, ack: tx };
-
-            input_tx.send(read_message).await.unwrap();
+            input_tx.send(message).await.unwrap();
         }
         drop(input_tx);
 
@@ -281,7 +286,7 @@ mod tests {
 
         for i in 0..5 {
             let transformed_message = output_rx.recv().await.unwrap();
-            assert_eq!(transformed_message.message.value, format!("value_{}", i));
+            assert_eq!(transformed_message.value, format!("value_{}", i));
         }
 
         // we need to drop the transformer, because if there are any in-flight requests

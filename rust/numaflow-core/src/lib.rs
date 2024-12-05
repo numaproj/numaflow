@@ -47,6 +47,7 @@ pub(crate) mod metrics;
 ///
 /// [Pipeline]: https://numaflow.numaproj.io/core-concepts/pipeline/
 mod pipeline;
+mod tracker;
 
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
