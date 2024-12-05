@@ -18,6 +18,7 @@ use crate::Result;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
+const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
@@ -263,6 +264,13 @@ impl PipelineConfig {
             });
         }
 
+        let look_back_window = vertex_obj
+            .spec
+            .scale
+            .as_ref()
+            .and_then(|scale| scale.lookback_seconds.map(|x| x as u16))
+            .unwrap_or(DEFAULT_LOOKBACK_WINDOW_IN_SECS);
+
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
             paf_batch_size: env::var("PAF_BATCH_SIZE")
@@ -277,7 +285,7 @@ impl PipelineConfig {
             from_vertex_config,
             to_vertex_config,
             vertex_config: vertex,
-            metrics_config: Default::default(),
+            metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
         })
     }
 }
@@ -369,6 +377,7 @@ mod tests {
                 metrics_server_listen_port: 2469,
                 lag_check_interval_in_secs: 5,
                 lag_refresh_interval_in_secs: 3,
+                lookback_window_in_secs: 120,
             },
         };
         assert_eq!(pipeline_config, expected);

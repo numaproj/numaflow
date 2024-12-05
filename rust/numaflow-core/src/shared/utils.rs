@@ -67,6 +67,7 @@ pub(crate) async fn create_pending_reader(
             .lag_refresh_interval_in_secs
             .into(),
     ))
+    .lookback_seconds(mvtx_config.metrics_config.lookback_window_in_secs.into())
     .build()
 }
 pub(crate) async fn wait_until_source_ready(
