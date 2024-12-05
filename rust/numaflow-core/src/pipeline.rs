@@ -330,6 +330,7 @@ mod tests {
                 metrics_server_listen_port: 2469,
                 lag_check_interval_in_secs: 5,
                 lag_refresh_interval_in_secs: 3,
+                lookback_window_in_secs: 120,
             },
         };
 
@@ -486,6 +487,7 @@ mod tests {
                 metrics_server_listen_port: 2469,
                 lag_check_interval_in_secs: 5,
                 lag_refresh_interval_in_secs: 3,
+                lookback_window_in_secs: 120,
             },
         };
 
