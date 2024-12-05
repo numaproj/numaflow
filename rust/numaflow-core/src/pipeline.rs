@@ -1,11 +1,12 @@
+use std::collections::HashMap;
+use std::time::Duration;
+
 use async_nats::jetstream::Context;
 use async_nats::{jetstream, ConnectOptions};
 use futures::future::try_join_all;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use std::collections::HashMap;
-use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 
@@ -317,7 +318,6 @@ mod tests {
     use futures::StreamExt;
 
     use super::*;
-
     use crate::config::components::metrics::MetricsConfig;
     use crate::config::components::sink::{BlackholeConfig, SinkConfig, SinkType};
     use crate::config::components::source::GeneratorConfig;
@@ -506,8 +506,9 @@ mod tests {
                 .unwrap();
 
             // Publish some messages into the stream
-            use crate::message::{Message, MessageID, Offset, StringOffset};
             use chrono::{TimeZone, Utc};
+
+            use crate::message::{Message, MessageID, Offset, StringOffset};
             let message = Message {
                 keys: vec!["key1".to_string()],
                 value: vec![1, 2, 3].into(),

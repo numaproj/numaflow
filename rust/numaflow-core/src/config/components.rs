@@ -150,14 +150,29 @@ pub(crate) mod sink {
         UserDefined(UserDefinedConfig),
     }
 
-    impl TryFrom<Box<Sink>> for SinkType {
-        type Error = Error;
-
+    impl SinkType {
         // FIXME(cr): why is sink.fallback Box<AbstrackSink> vs. sink Box<Sink>. This is coming from
         //   numaflow-models. Problem is, golang has embedded structures and rust does not. We might
         //   have to AbstractSink for sink-configs while Sink for real sink types.
         //   NOTE: I do not see this problem with Source?
-        fn try_from(sink: Box<Sink>) -> Result<Self> {
+        pub(crate) fn primary_sinktype(sink: Box<Sink>) -> Result<Self> {
+            sink.udsink
+                .as_ref()
+                .map(|_| Ok(SinkType::UserDefined(UserDefinedConfig::default())))
+                .or_else(|| {
+                    sink.log
+                        .as_ref()
+                        .map(|_| Ok(SinkType::Log(LogConfig::default())))
+                })
+                .or_else(|| {
+                    sink.blackhole
+                        .as_ref()
+                        .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
+                })
+                .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
+        }
+
+        pub(crate) fn fallback_sinktype(sink: Box<Sink>) -> Result<Self> {
             if let Some(fallback) = sink.fallback {
                 fallback
                     .udsink
@@ -177,20 +192,7 @@ pub(crate) mod sink {
                     })
                     .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
             } else {
-                sink.udsink
-                    .as_ref()
-                    .map(|_| Ok(SinkType::UserDefined(UserDefinedConfig::default())))
-                    .or_else(|| {
-                        sink.log
-                            .as_ref()
-                            .map(|_| Ok(SinkType::Log(LogConfig::default())))
-                    })
-                    .or_else(|| {
-                        sink.blackhole
-                            .as_ref()
-                            .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
-                    })
-                    .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
+                Err(Error::Config("Fallback sink not found".to_string()))
             }
         }
     }
