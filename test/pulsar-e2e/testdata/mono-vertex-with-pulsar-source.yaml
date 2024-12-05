@@ -1,0 +1,27 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: mono-vertex-with-pulsar-source
+spec:
+  scale:
+    min: 1
+  source:
+    pulsar:
+      serverAddr: "pulsar://pulsar-service:6650"
+      consumerName: e2e_consumer
+      topic: e2e_topic
+      subscriptionName: e2e_subscription
+      auth:
+        token:
+          name: pulsar-source-e2e
+          key: token
+  sink:
+    udsink:
+      container:
+        # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
+        image: quay.io/numaio/numaflow-go/redis-sink:stable
+        imagePullPolicy: Always
+        env:
+          - name: SINK_HASH_KEY
+            # Use the name of the mono vertex as the key
+            value: "mono-vertex-with-pulsar-source"

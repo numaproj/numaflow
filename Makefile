@@ -114,6 +114,7 @@ test-code:
 
 test-e2e:
 test-kafka-e2e:
+test-pulsar-e2e:
 test-map-e2e:
 test-reduce-one-e2e:
 test-reduce-two-e2e:

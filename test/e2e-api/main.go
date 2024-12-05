@@ -31,6 +31,9 @@ func main() {
 	http.HandleFunc("/kafka/produce-topic", kafkaController.ProduceTopicHandler)
 	http.HandleFunc("/kafka/pump-topic", kafkaController.PumpTopicHandler)
 
+	pulsarController := NewPulsarController()
+	http.HandleFunc("/pulsar/pump-topic", pulsarController.PumpTopicHandler)
+
 	// initialize Redis handlers
 	redisController := NewRedisController()
 	http.HandleFunc("/redis/get-msg-count-contains", redisController.GetMsgCountContains)
