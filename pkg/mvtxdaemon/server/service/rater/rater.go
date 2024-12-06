@@ -273,7 +273,6 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 		rate := CalculateRate(r.timestampedPodCounts, i)
 		result[n] = wrapperspb.Double(rate)
 	}
-	r.UpdateDynamicLookBack()
 	r.log.Debugf("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result
 }
@@ -299,6 +298,8 @@ func (r *Rater) Start(ctx context.Context) error {
 			r.log.Errorw("Failed to start pod tracker", zap.Error(err))
 		}
 	}()
+
+	go r.startDynamicLookBack(ctx)
 
 	// Worker group
 	for i := 1; i <= r.options.workers; i++ {
@@ -347,42 +348,44 @@ func sleep(ctx context.Context, duration time.Duration) {
 	}
 }
 
-// UpdateDynamicLookBack updates the default lookback period of a vertex based on the processing rate
-func (r *Rater) UpdateDynamicLookBack() map[string]*wrapperspb.DoubleValue {
-	var result = make(map[string]*wrapperspb.DoubleValue)
-	// calculate rates for each lookback seconds
-
+// updateDynamicLookbackSecs updates the default lookback period of a vertex based on the processing rate
+func (r *Rater) updateDynamicLookbackSecs() {
+	// calculate rates for each look back seconds
 	vertexName := r.monoVertex.Name
-	pt := r.CalculateVertexProcessingTime(r.timestampedPodProcessingTime)
+	pt, update := r.CalculateVertexProcessingTime(r.timestampedPodProcessingTime)
+	r.log.Infof("MYDEBUG: pt %f ", pt)
+	if !update {
+		r.log.Infof("MYDEBUG: NO UPDATE pt %f ", pt)
+		return
+	}
 	// if the current calculated processing time is greater than the lookback Seconds, update it
 	currentVal := r.userSpecifiedLookBackSeconds.Load()
-	r.log.Infof("MYDEBUG: pt %f ", pt)
+
+	// TODO(adapt): We should find a suitable value for this,
+	// using 2 * pt right now
 	// adding 30 seconds for buffer
 	minute := 60*int(math.Round(pt/60)) + 30
-	if pt > currentVal {
-		// TODO(adapt): We should find a suitable value for this, using 2 * pt right now
+	if minute > int(currentVal) {
 		r.userSpecifiedLookBackSeconds.Store(float64(minute))
-		r.log.Infof("MYDEBUG: Updated for vertex %s, old %f new %f", vertexName, currentVal, minute)
+		r.log.Infof("MYDEBUG: Updated for vertex %s, old %f new %d", vertexName, currentVal, minute)
 	} else {
 		minute = int(math.Max(float64(minute), float64(r.monoVertex.Spec.Scale.GetLookbackSeconds())))
-		// TODO(adapt): We should find a suitable value for this, using 2 * pt right now
 		if minute != int(currentVal) {
 			r.userSpecifiedLookBackSeconds.Store(float64(minute))
-			r.log.Infof("MYDEBUG: Updated for vertex %s, old %f new %f", vertexName, currentVal, minute)
+			r.log.Infof("MYDEBUG: Updated for vertex %s, old %f new %d", vertexName, currentVal, minute)
 		}
-
 	}
-
-	return result
 }
 
-func (r *Rater) CalculateVertexProcessingTime(q *sharedqueue.OverflowQueue[*TimestampedProcessingTime]) float64 {
+func (r *Rater) CalculateVertexProcessingTime(q *sharedqueue.OverflowQueue[*TimestampedProcessingTime]) (float64, bool) {
 	counts := q.Items()
 	currentLookback := r.userSpecifiedLookBackSeconds.Load()
 	// If we do not have enough data points, lets send back the default from the vertex
 	if len(counts) <= 1 {
-		return currentLookback
+		return currentLookback, false
 	}
+	// Checking for 3 look back periods right now -> this will be gated to 30 mins as we have that much data
+	// present only ie 10 mins max lookback
 	startIndex := findStartIndexPt(int64(currentLookback*3), counts)
 	// we consider the last but one element as the end index because the last element might be incomplete
 	// we can be sure that the last but one element in the queue is complete.
@@ -392,7 +395,7 @@ func (r *Rater) CalculateVertexProcessingTime(q *sharedqueue.OverflowQueue[*Time
 	// This also acts as a gating where when lb * 3 > data window size, we will
 	// increase the lb beyond that
 	if startIndex == indexNotFound {
-		return currentLookback
+		return currentLookback, false
 	}
 
 	// time diff in seconds.
@@ -400,7 +403,7 @@ func (r *Rater) CalculateVertexProcessingTime(q *sharedqueue.OverflowQueue[*Time
 	if timeDiff == 0 {
 		// if the time difference is 0, we return 0 to avoid division by 0
 		// this should not happen in practice because we are using a 10s interval
-		return currentLookback
+		return currentLookback, false
 	}
 
 	//delta := float64(0)
@@ -436,7 +439,7 @@ func (r *Rater) CalculateVertexProcessingTime(q *sharedqueue.OverflowQueue[*Time
 		}
 	}
 	// Return the maximum average processing time
-	return maxAverage
+	return maxAverage, true
 }
 
 // calculatePodDelta calculates the difference between the current and previous pod count snapshots
@@ -459,4 +462,24 @@ func calculatePtDelta(tc1, tc2 *TimestampedProcessingTime) float64 {
 		delta += podDelta
 	}
 	return delta
+}
+
+func (r *Rater) startDynamicLookBack(ctx context.Context) {
+	//logger := logging.FromContext(ctx)
+	// Goroutine to listen for ticks
+	// At every tick, check and update the health status of the MonoVertex.
+	// If the context is done, return.
+	// Create a ticker to generate ticks at the interval of healthTimeStep.
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		// Get the current health status of the MonoVertex.
+		case <-ticker.C:
+			r.updateDynamicLookbackSecs()
+		// If the context is done, return.
+		case <-ctx.Done():
+			return
+		}
+	}
 }
