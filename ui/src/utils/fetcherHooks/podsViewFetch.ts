@@ -34,91 +34,83 @@ export const usePodsViewFetch = (
   const [requestKey, setRequestKey] = useState(`${Date.now()}`);
   const [loading, setLoading] = useState(true);
   const { host } = useContext<AppContextProps>(AppContext);
+  const [lastRetryTime, setLastRetryTime] = useState(0);
 
   // call to get pods for a given vertex
-  useEffect(() => {
-    const fetchPods = async () => {
-      try {
-        const response = await fetch(
-          `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}${
-            type === "monoVertex"
-              ? `/mono-vertices`
-              : `/pipelines/${pipelineId}/vertices`
-          }/${vertexId}/pods?refreshKey=${requestKey}`
-        );
-        if (response.ok) {
-          const json = await response.json();
-          if (json?.data) {
-            let data = json?.data;
-            data = data.filter(
-              (pod: any) => !pod?.metadata?.name.includes("-daemon-")
+  const fetchPods = async () => {
+    try {
+      const response = await fetch(
+        `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}${
+          type === "monoVertex"
+            ? `/mono-vertices`
+            : `/pipelines/${pipelineId}/vertices`
+        }/${vertexId}/pods?refreshKey=${requestKey}`
+      );
+      if (response.ok) {
+        const json = await response.json();
+        if (json?.data) {
+          let data = json?.data;
+          data = data.filter(
+            (pod: any) => !pod?.metadata?.name.includes("-daemon-")
+          );
+          const pList = data?.map((pod: any) => {
+            const containers: string[] = [];
+            const containerSpecMap = new Map<string, PodContainerSpec>();
+
+            const containersList = JSON.parse(
+              JSON.stringify(pod?.spec?.containers)
             );
-            const pList = data?.map((pod: any) => {
-              const containers: string[] = [];
-              const containerSpecMap = new Map<string, PodContainerSpec>();
+            pod?.spec?.initContainers
+              ?.filter((initContainer: any) => initContainer?.name !== "init")
+              ?.forEach((container: any) => containersList.push(container));
 
-              const containersList = JSON.parse(
-                JSON.stringify(pod?.spec?.containers)
-              );
-              pod?.spec?.initContainers
-                ?.filter((initContainer: any) => initContainer?.name !== "init")
-                ?.forEach((container: any) => containersList.push(container));
-
-              containersList?.forEach((container: any) => {
-                const cpu = container?.resources?.requests?.cpu;
-                let cpuParsed: undefined | number;
-                if (cpu) {
-                  try {
-                    cpuParsed = Number(quantityToScalar(cpu));
-                  } catch (e) {
-                    cpuParsed = undefined;
-                  }
+            containersList?.forEach((container: any) => {
+              const cpu = container?.resources?.requests?.cpu;
+              let cpuParsed: undefined | number;
+              if (cpu) {
+                try {
+                  cpuParsed = Number(quantityToScalar(cpu));
+                } catch (e) {
+                  cpuParsed = undefined;
                 }
-                const memory = container?.resources?.requests?.memory;
-                let memoryParsed: undefined | number;
-                if (memory) {
-                  try {
-                    memoryParsed = Number(quantityToScalar(memory));
-                  } catch (e) {
-                    memoryParsed = undefined;
-                  }
+              }
+              const memory = container?.resources?.requests?.memory;
+              let memoryParsed: undefined | number;
+              if (memory) {
+                try {
+                  memoryParsed = Number(quantityToScalar(memory));
+                } catch (e) {
+                  memoryParsed = undefined;
                 }
-                containers.push(container?.name);
-                containerSpecMap.set(container?.name, {
-                  name: container?.name,
-                  cpu,
-                  cpuParsed,
-                  memory,
-                  memoryParsed,
-                });
+              }
+              containers.push(container?.name);
+              containerSpecMap.set(container?.name, {
+                name: container?.name,
+                cpu,
+                cpuParsed,
+                memory,
+                memoryParsed,
               });
-              return {
-                name: pod?.metadata?.name,
-                containers,
-                containerSpecMap,
-              };
             });
-            setPods(pList);
-          } else if (json?.errMsg) {
-            setPodsErr([
-              {
-                error: json.errMsg,
-                options: {
-                  toastId: `${vertexId}-pod-fetch-error`,
-                  autoClose: 5000,
-                },
-              },
-            ]);
-          }
-        } else {
+            return {
+              name: pod?.metadata?.name,
+              containers,
+              containerSpecMap,
+            };
+          });
+          setPods(pList);
+        } else if (json?.errMsg) {
           setPodsErr([
             {
-              error: `Failed to get pods for ${vertexId} vertex`,
-              options: { toastId: `${vertexId}-pod-fetch`, autoClose: 5000 },
+              error: json.errMsg,
+              options: {
+                toastId: `${vertexId}-pod-fetch-error`,
+                autoClose: 5000,
+              },
             },
           ]);
         }
-      } catch {
+      } else {
         setPodsErr([
           {
             error: `Failed to get pods for ${vertexId} vertex`,
@@ -126,10 +118,19 @@ export const usePodsViewFetch = (
           },
         ]);
       }
-    };
+    } catch {
+      setPodsErr([
+        {
+          error: `Failed to get pods for ${vertexId} vertex`,
+          options: { toastId: `${vertexId}-pod-fetch`, autoClose: 5000 },
+        },
+      ]);
+    }
+  };
 
+  useEffect(() => {
     fetchPods();
-  }, [vertexId, requestKey, host]);
+  },[vertexId, requestKey, host]);
 
   useEffect(() => {
     if (pods?.length) {
@@ -145,74 +146,68 @@ export const usePodsViewFetch = (
     }
   }, [pods]);
 
-  useEffect(() => {
-    const fetchPods = async () => {
-      try {
-        const response = await fetch(
-          `${host}${getBaseHref()}/api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
-        );
-        if (response.ok) {
-          const json = await response.json();
-          if (json?.data) {
-            const data = json?.data;
-            const podsMap = new Map<string, PodDetail>();
-            data?.forEach((pod: any) => {
-              const containerMap = new Map<string, PodContainerSpec>();
-              pod?.containers?.forEach((c: any) => {
-                const cpu = c?.usage?.cpu;
-                let cpuParsed: undefined | number;
-                if (cpu) {
-                  try {
-                    cpuParsed = Number(quantityToScalar(cpu));
-                  } catch (e) {
-                    cpuParsed = undefined;
-                  }
+  // call to get pods details (metrics)
+  // to do: deprecate this and gather all metrics from pods-info
+  const fetchPodDetails = async () => {
+    try {
+      const response = await fetch(
+        `${host}${getBaseHref()}/api/v1/metrics/namespaces/${namespaceId}/pods?refreshKey=${requestKey}`
+      );
+      if (response.ok) {
+        const json = await response.json();
+        if (json?.data) {
+          const data = json?.data;
+          const podsMap = new Map<string, PodDetail>();
+          data?.forEach((pod: any) => {
+            const containerMap = new Map<string, PodContainerSpec>();
+            pod?.containers?.forEach((c: any) => {
+              const cpu = c?.usage?.cpu;
+              let cpuParsed: undefined | number;
+              if (cpu) {
+                try {
+                  cpuParsed = Number(quantityToScalar(cpu));
+                } catch (e) {
+                  cpuParsed = undefined;
                 }
-                const memory = c?.usage?.memory;
-                let memoryParsed: undefined | number;
-                if (memory) {
-                  try {
-                    memoryParsed = Number(quantityToScalar(memory));
-                  } catch (e) {
-                    memoryParsed = undefined;
-                  }
+              }
+              const memory = c?.usage?.memory;
+              let memoryParsed: undefined | number;
+              if (memory) {
+                try {
+                  memoryParsed = Number(quantityToScalar(memory));
+                } catch (e) {
+                  memoryParsed = undefined;
                 }
-                const container = {
-                  name: c?.name,
-                  cpu,
-                  cpuParsed,
-                  memory,
-                  memoryParsed,
-                };
-                containerMap.set(container.name, container);
-              });
-              const podDetail = {
-                name: pod?.metadata?.name,
-                containerMap,
+              }
+              const container = {
+                name: c?.name,
+                cpu,
+                cpuParsed,
+                memory,
+                memoryParsed,
               };
-              podsMap.set(podDetail.name, podDetail);
+              containerMap.set(container.name, container);
             });
-            setPodsDetails(podsMap);
-          } else if (json?.errMsg) {
-            setPodsDetailsErr([
-              {
-                error: json.errMsg,
-                options: {
-                  toastId: `${vertexId}-pod-fetch-error`,
-                  autoClose: 5000,
-                },
-              },
-            ]);
-          }
-        } else {
+            const podDetail = {
+              name: pod?.metadata?.name,
+              containerMap,
+            };
+            podsMap.set(podDetail.name, podDetail);
+          });
+          setPodsDetails(podsMap);
+          setPodsDetailsErr(undefined);
+        } else if (json?.errMsg) {
           setPodsDetailsErr([
             {
-              error: `Failed to get pods details for ${vertexId} vertex`,
-              options: { toastId: `${vertexId}-pod-fetch`, autoClose: 5000 },
+              error: json.errMsg,
+              options: {
+                toastId: `${vertexId}-pod-fetch-error`,
+                autoClose: 5000,
+              },
             },
           ]);
         }
-      } catch {
+      } else {
         setPodsDetailsErr([
           {
             error: `Failed to get pods details for ${vertexId} vertex`,
@@ -220,33 +215,53 @@ export const usePodsViewFetch = (
           },
         ]);
       }
-    };
+    } catch {
+      setPodsDetailsErr([
+        {
+          error: `Failed to get pods details for ${vertexId} vertex`,
+          options: { toastId: `${vertexId}-pod-fetch`, autoClose: 5000 },
+        },
+      ]);
+    }
+  };
 
-    fetchPods();
+  // Fetch pod details whenever requestKey (after every 20 sec) or host changes
+  useEffect(() => {
+    fetchPodDetails();
   }, [requestKey, host]);
 
+  // Refresh requestKey every 20 sec
   useEffect(() => {
-    // Refresh pod details every 30 sec
     const interval = setInterval(() => {
       setRequestKey(`${Date.now()}`);
-    }, 30000);
+    }, 20000);
     return () => {
       clearInterval(interval);
     };
   }, []);
 
-  // checks if all pods are present in podsDetailsMap
-  const checkPodDetails = () => {
-    if (!pods || !podsDetails) return false;
-    for (let i = 0; i < pods.length; i++) {
-      if (!podsDetails.has(pods[i]?.name)) return false;
+  // Retry fetching pods details if there is an error
+  useEffect(() => {
+    const currentTime = Date.now();
+    if (podsDetailsErr && (currentTime - lastRetryTime > 5000)) {
+      const retryFetch = setTimeout(() => {
+        fetchPodDetails(); 
+        setLastRetryTime(currentTime); 
+      }, 5000);
+
+      return () => clearTimeout(retryFetch);
     }
+  }, [podsDetailsErr, lastRetryTime]);
+
+  // return false if pods/podsDetails are still undefined
+  const checkPodDetailsResponse = () => {
+    if (!pods || !podsDetails) return false;
     return true;
   };
 
-  //sets loading variable
+  //sets loading variable true only when requests are pending
   useEffect(() => {
-    if (checkPodDetails()) {
+    if (checkPodDetailsResponse()) {
       setLoading(false);
     } else if (podsErr || podsDetailsErr) {
       setLoading(false);
