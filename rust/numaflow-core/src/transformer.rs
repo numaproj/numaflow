@@ -6,7 +6,6 @@ use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tracing::error;
-use user_defined::ActorMessage;
 
 use crate::message::Message;
 use crate::tracker::TrackerHandle;
@@ -17,6 +16,46 @@ use crate::Result;
 ///
 /// [User-Defined Transformer]: https://numaflow.numaproj.io/user-guide/sources/transformer/overview/#build-your-own-transformer
 pub(crate) mod user_defined;
+
+pub enum ActorMessage {
+    Transform {
+        message: Message,
+        respond_to: oneshot::Sender<Result<Vec<Message>>>,
+    },
+}
+
+/// TransformerActor, handles the transformation of messages.
+struct TransformerActor {
+    receiver: mpsc::Receiver<ActorMessage>,
+    transformer: UserDefinedTransformer,
+}
+
+impl TransformerActor {
+    fn new(receiver: mpsc::Receiver<ActorMessage>, transformer: UserDefinedTransformer) -> Self {
+        Self {
+            receiver,
+            transformer,
+        }
+    }
+
+    /// Handles the incoming message, unlike standard actor pattern the downstream call is not blocking
+    /// and the response is sent back to the caller using oneshot in this actor, this is because the
+    /// downstream can handle multiple messages at once.
+    async fn handle_message(&mut self, msg: ActorMessage) {
+        match msg {
+            ActorMessage::Transform {
+                message,
+                respond_to,
+            } => self.transformer.transform(message, respond_to).await,
+        }
+    }
+
+    async fn run(mut self) {
+        while let Some(msg) = self.receiver.recv().await {
+            self.handle_message(msg).await;
+        }
+    }
+}
 
 /// StreamingTransformer, transforms messages in a streaming fashion.
 pub(crate) struct Transformer {
@@ -32,13 +71,14 @@ impl Transformer {
         client: SourceTransformClient<Channel>,
         tracker_handle: TrackerHandle,
     ) -> Result<Self> {
-        let (sender, mut receiver) = mpsc::channel(batch_size);
-        let mut client = UserDefinedTransformer::new(batch_size, client).await?;
+        let (sender, receiver) = mpsc::channel(batch_size);
+        let transformer_actor = TransformerActor::new(
+            receiver,
+            UserDefinedTransformer::new(batch_size, client).await?,
+        );
 
         tokio::spawn(async move {
-            while let Some(msg) = receiver.recv().await {
-                client.handle_message(msg).await;
-            }
+            transformer_actor.run().await;
         });
 
         Ok(Self {

@@ -24,13 +24,6 @@ struct ParentMessageInfo {
     headers: HashMap<String, String>,
 }
 
-pub enum ActorMessage {
-    Transform {
-        message: Message,
-        respond_to: oneshot::Sender<Result<Vec<Message>>>,
-    },
-}
-
 /// UserDefinedTransformer exposes methods to do user-defined transformations.
 pub(super) struct UserDefinedTransformer {
     read_tx: mpsc::Sender<SourceTransformRequest>,
@@ -90,14 +83,19 @@ impl UserDefinedTransformer {
         sender_map: ResponseSenderMap,
         mut resp_stream: Streaming<SourceTransformResponse>,
     ) {
-        while let Some(resp) = resp_stream.message().await.unwrap() {
+        while let Some(resp) = resp_stream
+            .message()
+            .await
+            .expect("failed to receive response")
+        {
             let msg_id = resp.id;
-            for (i, result) in resp.results.into_iter().enumerate() {
-                if let Some((msg_info, sender)) = sender_map
-                    .lock()
-                    .expect("map entry should always be present")
-                    .remove(&msg_id)
-                {
+            if let Some((msg_info, sender)) = sender_map
+                .lock()
+                .expect("map entry should always be present")
+                .remove(&msg_id)
+            {
+                let mut response_messages = vec![];
+                for (i, result) in resp.results.into_iter().enumerate() {
                     let message = Message {
                         id: MessageID {
                             vertex_name: get_vertex_name().to_string(),
@@ -110,33 +108,33 @@ impl UserDefinedTransformer {
                         event_time: utc_from_timestamp(result.event_time),
                         headers: msg_info.headers.clone(),
                     };
-                    let _ = sender.send(Ok(vec![message]));
+                    response_messages.push(message);
                 }
+                sender
+                    .send(Ok(response_messages))
+                    .expect("failed to send response");
             }
         }
     }
 
     /// Handles the incoming message and sends it to the server for transformation.
-    pub(super) async fn handle_message(&mut self, message: ActorMessage) {
-        match message {
-            ActorMessage::Transform {
-                message,
-                respond_to,
-            } => {
-                let msg_id = message.id.to_string();
-                let msg_info = ParentMessageInfo {
-                    offset: message.offset.clone().unwrap(),
-                    headers: message.headers.clone(),
-                };
+    pub(super) async fn transform(
+        &mut self,
+        message: Message,
+        respond_to: oneshot::Sender<Result<Vec<Message>>>,
+    ) {
+        let msg_id = message.id.to_string();
+        let msg_info = ParentMessageInfo {
+            offset: message.offset.clone().unwrap(),
+            headers: message.headers.clone(),
+        };
 
-                self.senders
-                    .lock()
-                    .unwrap()
-                    .insert(msg_id, (msg_info, respond_to));
+        self.senders
+            .lock()
+            .unwrap()
+            .insert(msg_id, (msg_info, respond_to));
 
-                self.read_tx.send(message.into()).await.unwrap();
-            }
-        }
+        self.read_tx.send(message.into()).await.unwrap();
     }
 }
 
@@ -151,7 +149,7 @@ mod tests {
 
     use crate::message::{MessageID, StringOffset};
     use crate::shared::grpc::create_rpc_channel;
-    use crate::transformer::user_defined::{ActorMessage, UserDefinedTransformer};
+    use crate::transformer::user_defined::UserDefinedTransformer;
     struct NowCat;
 
     #[tonic::async_trait]
@@ -212,18 +210,13 @@ mod tests {
 
         let (tx, rx) = tokio::sync::oneshot::channel();
 
-        let _ = tokio::time::timeout(
-            Duration::from_secs(2),
-            client.handle_message(ActorMessage::Transform {
-                message,
-                respond_to: tx,
-            }),
-        )
-        .await?;
+        tokio::time::timeout(Duration::from_secs(2), client.transform(message, tx))
+            .await
+            .unwrap();
 
-        let messages = rx.await?;
+        let messages = rx.await.unwrap();
         assert!(messages.is_ok());
-        assert_eq!(messages.unwrap().len(), 1);
+        assert_eq!(messages?.len(), 1);
 
         // we need to drop the client, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
