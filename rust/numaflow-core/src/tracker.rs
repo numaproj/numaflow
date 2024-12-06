@@ -1,3 +1,12 @@
+//! Tracker is added because when do data forwarding in [MonoVertex](crate::monovertex::forwarder) or
+//! in [Pipeline](crate::pipeline::forwarder), immaterial whether we are in source, UDF, or Sink, we
+//! have to track whether the message has completely moved to the next vertex (N+1)th before we can
+//! mark that message as done in the Nth vertex. We use Tracker to let Read know that it can mark the
+//! message as Ack or NAck based on the state of the message. E.g., Ack if successfully written to ISB,
+//! NAck otherwise if ISB is failing to accept, and we are in shutdown path.
+//!
+//! In the future Watermark will also be propagated based on this.
+
 use crate::error::Error;
 use crate::message::ReadAck;
 use crate::Result;
@@ -30,6 +39,7 @@ enum ActorMessage {
     Discard {
         offset: String,
     },
+    #[cfg(test)]
     IsEmpty {
         respond_to: oneshot::Sender<bool>,
     },
@@ -89,6 +99,7 @@ impl Tracker {
             ActorMessage::Discard { offset } => {
                 self.handle_discard(offset);
             }
+            #[cfg(test)]
             ActorMessage::IsEmpty { respond_to } => {
                 let is_empty = self.entries.is_empty();
                 let _ = respond_to.send(is_empty);
@@ -206,7 +217,7 @@ impl TrackerHandle {
     }
 
     /// Checks if the Tracker is empty. Used for testing to make sure all messages are acknowledged.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) async fn is_empty(&self) -> Result<bool> {
         let (respond_to, response) = oneshot::channel();
         let message = ActorMessage::IsEmpty { respond_to };
