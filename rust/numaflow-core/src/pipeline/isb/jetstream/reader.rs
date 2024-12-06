@@ -15,7 +15,7 @@ use tracing::{error, info};
 use crate::config::pipeline::isb::BufferReaderConfig;
 use crate::config::pipeline::PipelineConfig;
 use crate::error::Error;
-use crate::message::{IntOffset, Message, Offset, ReadAck};
+use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
 use crate::metrics::{
     pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
 };
@@ -84,6 +84,7 @@ impl JetstreamReader {
         pipeline_config: &PipelineConfig,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * pipeline_config.batch_size);
+        let pipeline_config = pipeline_config.clone();
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let consumer = self.consumer.clone();
@@ -148,6 +149,12 @@ impl JetstreamReader {
                                 msg_info.stream_sequence,
                                 partition_idx,
                             )));
+
+                            message.id = MessageID {
+                                vertex_name: pipeline_config.vertex_name.clone(),
+                                offset: msg_info.stream_sequence.to_string(),
+                                index: 0,
+                            };
 
                             // Insert the message into the tracker and wait for the ack to be sent back.
                             let (ack_tx, ack_rx) = oneshot::channel();
@@ -264,14 +271,14 @@ impl fmt::Display for JetstreamReader {
 mod tests {
     use std::collections::HashMap;
 
+    use super::*;
+    use crate::message::{Message, MessageID};
+    use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
     use chrono::Utc;
-
-    use super::*;
-    use crate::message::{Message, MessageID};
-    use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+    use tokio::time::sleep;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -282,6 +289,8 @@ mod tests {
         let context = jetstream::new(client);
 
         let stream_name = "test_jetstream_read";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -388,8 +397,11 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
+        let tracker_handle = TrackerHandle::new();
 
         let stream_name = "test_ack";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -422,7 +434,7 @@ mod tests {
             0,
             context.clone(),
             buf_reader_config,
-            TrackerHandle::new(),
+            tracker_handle.clone(),
         )
         .await
         .unwrap();
@@ -445,6 +457,7 @@ mod tests {
             writer_cancel_token.clone(),
         );
 
+        let mut offsets = vec![];
         // write 5 messages
         for i in 0..5 {
             let message = Message {
@@ -454,11 +467,12 @@ mod tests {
                 event_time: Utc::now(),
                 id: MessageID {
                     vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    offset: format!("{}", i + 1),
                     index: i,
                 },
                 headers: HashMap::new(),
             };
+            offsets.push(message.id.offset.clone());
             let message_bytes: BytesMut = message.try_into().unwrap();
             writer
                 .write((stream_name.to_string(), 0), message_bytes.into())
@@ -474,6 +488,20 @@ mod tests {
                 break;
             };
         }
+
+        // after reading messages remove from the tracker so that the messages are acked
+        for offset in offsets {
+            tracker_handle.delete(offset).await.unwrap();
+        }
+
+        // wait until the tracker becomes empty, don't wait more than 1 second
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !tracker_handle.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("Tracker is not empty after 1 second");
 
         let mut consumer: PullConsumer = context
             .get_consumer_from_stream(stream_name, stream_name)

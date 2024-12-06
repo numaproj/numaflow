@@ -3,6 +3,7 @@ use crate::message::ReadAck;
 use crate::Result;
 use std::collections::HashMap;
 use tokio::sync::{mpsc, oneshot};
+use tracing::warn;
 
 /// TrackerEntry represents the state of a tracked message.
 #[derive(Debug)]
@@ -29,6 +30,9 @@ enum ActorMessage {
     Discard {
         offset: String,
     },
+    IsEmpty {
+        respond_to: oneshot::Sender<bool>,
+    },
 }
 
 /// Tracker is responsible for managing the state of messages being processed.
@@ -36,6 +40,19 @@ enum ActorMessage {
 struct Tracker {
     entries: HashMap<String, TrackerEntry>,
     receiver: mpsc::Receiver<ActorMessage>,
+}
+
+/// Implementation of Drop for Tracker to send Nak for unacknowledged messages.
+impl Drop for Tracker {
+    fn drop(&mut self) {
+        for (offset, entry) in self.entries.drain() {
+            warn!(?offset, "Sending Nak for unacknowledged message");
+            entry
+                .ack_send
+                .send(ReadAck::Nak)
+                .expect("Failed to send nak");
+        }
+    }
 }
 
 impl Tracker {
@@ -71,6 +88,10 @@ impl Tracker {
             }
             ActorMessage::Discard { offset } => {
                 self.handle_discard(offset);
+            }
+            ActorMessage::IsEmpty { respond_to } => {
+                let is_empty = self.entries.is_empty();
+                let _ = respond_to.send(is_empty);
             }
         }
     }
@@ -183,6 +204,20 @@ impl TrackerHandle {
             .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
         Ok(())
     }
+
+    /// Checks if the Tracker is empty. Used for testing to make sure all messages are acknowledged.
+    #[allow(dead_code)]
+    pub(crate) async fn is_empty(&self) -> Result<bool> {
+        let (respond_to, response) = oneshot::channel();
+        let message = ActorMessage::IsEmpty { respond_to };
+        self.sender
+            .send(message)
+            .await
+            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+        response
+            .await
+            .map_err(|e| Error::Tracker(format!("{:?}", e)))
+    }
 }
 
 #[cfg(test)]
@@ -211,7 +246,8 @@ mod tests {
         // Verify that the message was deleted and ack was received
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
         assert!(result.is_ok(), "Ack should be received");
-        assert_eq!(result.unwrap(), ReadAck::Ack)
+        assert_eq!(result.unwrap(), ReadAck::Ack);
+        assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
     }
 
     #[tokio::test]
@@ -239,7 +275,8 @@ mod tests {
         // Verify that the message was deleted and ack was received after the third delete
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
         assert!(result.is_ok(), "Ack should be received after three deletes");
-        assert_eq!(result.unwrap(), ReadAck::Ack)
+        assert_eq!(result.unwrap(), ReadAck::Ack);
+        assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
     }
 
     #[tokio::test]
@@ -260,6 +297,7 @@ mod tests {
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
         assert!(result.is_ok(), "Nak should be received");
         assert_eq!(result.unwrap(), ReadAck::Nak);
+        assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
     }
 
     #[tokio::test]
@@ -286,5 +324,6 @@ mod tests {
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
         assert!(result.is_ok(), "Nak should be received");
         assert_eq!(result.unwrap(), ReadAck::Nak);
+        assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
     }
 }

@@ -1,3 +1,4 @@
+use crate::pipeline::pipeline::isb::BufferReaderConfig;
 use std::time::Duration;
 
 use async_nats::jetstream::Context;
@@ -98,22 +99,37 @@ async fn start_sink_forwarder(
     config: PipelineConfig,
     sink: SinkVtxConfig,
 ) -> Result<()> {
-    let tracker_handle = TrackerHandle::new();
     let js_context = create_js_context(config.js_client_config.clone()).await?;
 
-    // Create buffer readers for each partition
-    let buffer_readers =
-        create_buffer_readers(&config, js_context.clone(), tracker_handle.clone()).await?;
+    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
+    // to a common buffer, in the case of a join.
+    let reader_config = &config
+        .from_vertex_config
+        .first()
+        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
+        .reader_config;
 
-    // Create sink writers and clients
-    let mut sink_writers = Vec::new();
-    for _ in &buffer_readers {
+    // Create sink writers and buffer readers for each stream
+    let mut sink_writers = vec![];
+    let mut buffer_readers = vec![];
+    for stream in reader_config.streams.clone() {
+        let tracker_handle = TrackerHandle::new();
+
+        let buffer_reader = create_buffer_reader(
+            stream,
+            reader_config.clone(),
+            js_context.clone(),
+            tracker_handle.clone(),
+        )
+        .await?;
+        buffer_readers.push(buffer_reader);
+
         let (sink_writer, sink_grpc_client, fb_sink_grpc_client) = create_sink_writer(
             config.batch_size,
             config.read_timeout,
             sink.sink_config.clone(),
             sink.fb_sink_config.clone(),
-            tracker_handle.clone(),
+            tracker_handle,
             &cln_token,
         )
         .await?;
@@ -178,33 +194,20 @@ async fn create_buffer_writer(
     .await
 }
 
-async fn create_buffer_readers(
-    config: &PipelineConfig,
+async fn create_buffer_reader(
+    stream: (&'static str, u16),
+    reader_config: BufferReaderConfig,
     js_context: Context,
     tracker_handle: TrackerHandle,
-) -> Result<Vec<JetstreamReader>> {
-    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
-    // to a common buffer, in the case of a join.
-    let reader_config = &config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
-
-    let mut readers = Vec::new();
-    for stream in &reader_config.streams {
-        let reader = JetstreamReader::new(
-            stream.0,
-            stream.1,
-            js_context.clone(),
-            reader_config.clone(),
-            tracker_handle.clone(),
-        )
-        .await?;
-        readers.push(reader);
-    }
-
-    Ok(readers)
+) -> Result<JetstreamReader> {
+    JetstreamReader::new(
+        stream.0,
+        stream.1,
+        js_context,
+        reader_config,
+        tracker_handle,
+    )
+    .await
 }
 
 /// Creates a jetstream context based on the provided configuration
@@ -273,6 +276,8 @@ mod tests {
         // that messages were actually written to the streams.
         for stream_name in &streams {
             let stream_name = *stream_name;
+            // Delete stream if it exists
+            let _ = context.delete_stream(stream_name).await;
             let _stream = context
                 .get_or_create_stream(stream::Config {
                     name: stream_name.into(),
@@ -351,7 +356,7 @@ mod tests {
             },
         };
 
-        let cancellation_token = tokio_util::sync::CancellationToken::new();
+        let cancellation_token = CancellationToken::new();
         let forwarder_task = tokio::spawn({
             let cancellation_token = cancellation_token.clone();
             async move {
@@ -367,7 +372,7 @@ mod tests {
         forwarder_task.await.unwrap();
 
         for (stream_name, stream_consumer) in consumers {
-            let messages: Vec<async_nats::jetstream::Message> = stream_consumer
+            let messages: Vec<jetstream::Message> = stream_consumer
                 .batch()
                 .max_messages(10)
                 .expires(Duration::from_millis(50))
@@ -390,9 +395,9 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "nats-tests")]
+    // #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    async fn test_forwarder_for_sink_vetex() {
+    async fn test_forwarder_for_sink_vertex() {
         // Unique names for the streams we use in this test
         let streams = vec![
             "default-test-forwarder-for-sink-vertex-out-0",
@@ -472,7 +477,7 @@ mod tests {
             vertex_name: "in".to_string(),
             replica: 0,
             batch_size: 1000,
-            paf_concurrency: 30000,
+            paf_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -508,7 +513,7 @@ mod tests {
             },
         };
 
-        let cancellation_token = tokio_util::sync::CancellationToken::new();
+        let cancellation_token = CancellationToken::new();
         let forwarder_task = tokio::spawn({
             let cancellation_token = cancellation_token.clone();
             async move {

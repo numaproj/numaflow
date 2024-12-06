@@ -606,7 +606,7 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use super::*;
-    use crate::message::{Message, MessageID};
+    use crate::message::{Message, MessageID, ReadAck};
     use crate::shared::grpc::create_rpc_channel;
 
     struct SimpleSink;
@@ -666,11 +666,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_streaming_write() {
+        let tracker_handle = TrackerHandle::new();
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
             SinkClientType::Log,
-            TrackerHandle::new(),
+            tracker_handle.clone(),
         )
         .build()
         .await
@@ -692,7 +693,14 @@ mod tests {
             .collect();
 
         let (tx, rx) = mpsc::channel(10);
+        let mut ack_rxs = vec![];
         for msg in messages {
+            let (ack_tx, ack_rx) = oneshot::channel();
+            ack_rxs.push(ack_rx);
+            tracker_handle
+                .insert(msg.id.offset.clone(), ack_tx)
+                .await
+                .unwrap();
             let _ = tx.send(msg).await;
         }
         drop(tx);
@@ -703,10 +711,16 @@ mod tests {
             .unwrap();
 
         let _ = handle.await.unwrap();
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
+        }
+        // check if the tracker is empty
+        assert!(tracker_handle.is_empty().await.unwrap());
     }
 
     #[tokio::test]
     async fn test_streaming_write_error() {
+        let tracker_handle = TrackerHandle::new();
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
@@ -734,7 +748,7 @@ mod tests {
             SinkClientType::UserDefined(SinkClient::new(
                 create_rpc_channel(sock_file).await.unwrap(),
             )),
-            TrackerHandle::new(),
+            tracker_handle.clone(),
         )
         .build()
         .await
@@ -756,7 +770,14 @@ mod tests {
             .collect();
 
         let (tx, rx) = mpsc::channel(10);
+        let mut ack_rxs = vec![];
         for msg in messages {
+            let (ack_tx, ack_rx) = oneshot::channel();
+            ack_rxs.push(ack_rx);
+            tracker_handle
+                .insert(msg.id.offset.clone(), ack_tx)
+                .await
+                .unwrap();
             let _ = tx.send(msg).await;
         }
         drop(tx);
@@ -773,10 +794,18 @@ mod tests {
         });
 
         let _ = handle.await.unwrap();
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Nak);
+        }
+
+        // check if the tracker is empty
+        assert!(tracker_handle.is_empty().await.unwrap());
     }
 
     #[tokio::test]
     async fn test_fallback_write() {
+        let tracker_handle = TrackerHandle::new();
+
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
@@ -804,7 +833,7 @@ mod tests {
             SinkClientType::UserDefined(SinkClient::new(
                 create_rpc_channel(sock_file).await.unwrap(),
             )),
-            TrackerHandle::new(),
+            tracker_handle.clone(),
         )
         .fb_sink_client(SinkClientType::Log)
         .build()
@@ -827,7 +856,14 @@ mod tests {
             .collect();
 
         let (tx, rx) = mpsc::channel(20);
+        let mut ack_rxs = vec![];
         for msg in messages {
+            let (ack_tx, ack_rx) = oneshot::channel();
+            tracker_handle
+                .insert(msg.id.offset.clone(), ack_tx)
+                .await
+                .unwrap();
+            ack_rxs.push(ack_rx);
             let _ = tx.send(msg).await;
         }
         drop(tx);
@@ -838,5 +874,11 @@ mod tests {
             .unwrap();
 
         let _ = handle.await.unwrap();
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
+        }
+
+        // check if the tracker is empty
+        assert!(tracker_handle.is_empty().await.unwrap());
     }
 }

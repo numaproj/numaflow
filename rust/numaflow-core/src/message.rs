@@ -85,7 +85,7 @@ impl TryFrom<async_nats::Message> for Message {
 
         Ok(Self {
             keys,
-            value: payload, // FIXME: use Bytes
+            value: payload,
             offset,
             event_time,
             id,

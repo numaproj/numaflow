@@ -133,7 +133,7 @@ mod tests {
     use chrono::Utc;
 
     use super::*;
-    use crate::message::{Message, MessageID};
+    use crate::message::{Message, MessageID, ReadAck};
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -143,8 +143,11 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
+        let tracker_handle = TrackerHandle::new();
 
         let stream_name = "test_publish_messages";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -175,12 +178,13 @@ mod tests {
                 ..Default::default()
             }],
             context.clone(),
-            TrackerHandle::new(),
+            tracker_handle.clone(),
             cln_token.clone(),
         )
         .await;
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
+        let mut ack_rxs = vec![];
         // Publish 500 messages
         for i in 0..500 {
             let message = Message {
@@ -195,12 +199,24 @@ mod tests {
                 },
                 headers: HashMap::new(),
             };
+            let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+            tracker_handle
+                .insert(message.id.offset.clone(), ack_tx)
+                .await
+                .unwrap();
+            ack_rxs.push(ack_rx);
             messages_tx.send(message).await.unwrap();
         }
         drop(messages_tx);
 
         let receiver_stream = ReceiverStream::new(messages_rx);
         let _handle = writer.streaming_write(receiver_stream).await.unwrap();
+
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
+        }
+        // make sure all messages are acked
+        assert!(tracker_handle.is_empty().await.unwrap());
         context.delete_stream(stream_name).await.unwrap();
     }
 
@@ -211,8 +227,11 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
+        let tracker_handle = TrackerHandle::new();
 
         let stream_name = "test_publish_cancellation";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -243,12 +262,13 @@ mod tests {
                 ..Default::default()
             }],
             context.clone(),
-            TrackerHandle::new(),
+            tracker_handle.clone(),
             cancel_token.clone(),
         )
         .await;
 
         let (tx, rx) = tokio::sync::mpsc::channel(500);
+        let mut ack_rxs = vec![];
         // Publish 100 messages successfully
         for i in 0..100 {
             let message = Message {
@@ -263,6 +283,12 @@ mod tests {
                 },
                 headers: HashMap::new(),
             };
+            let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+            tracker_handle
+                .insert(message.id.offset.clone(), ack_tx)
+                .await
+                .unwrap();
+            ack_rxs.push(ack_rx);
             tx.send(message).await.unwrap();
         }
 
@@ -283,11 +309,29 @@ mod tests {
             },
             headers: HashMap::new(),
         };
+        let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+        tracker_handle
+            .insert("offset_101".to_string(), ack_tx)
+            .await
+            .unwrap();
+        ack_rxs.push(ack_rx);
         tx.send(message).await.unwrap();
         drop(tx);
 
         // Cancel the token to exit the retry loop
         cancel_token.cancel();
+        // Check the results
+        for (i, receiver) in ack_rxs.into_iter().enumerate() {
+            let result = receiver.await.unwrap();
+            if i < 100 {
+                assert_eq!(result, ReadAck::Ack);
+            } else {
+                assert_eq!(result, ReadAck::Nak);
+            }
+        }
+
+        // make sure all messages are acked
+        assert!(tracker_handle.is_empty().await.unwrap());
         context.delete_stream(stream_name).await.unwrap();
     }
 }

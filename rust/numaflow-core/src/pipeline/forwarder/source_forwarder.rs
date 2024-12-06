@@ -251,6 +251,8 @@ mod tests {
         let context = jetstream::new(client);
 
         let stream_name = "test_source_forwarder";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),

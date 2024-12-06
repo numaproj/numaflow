@@ -387,6 +387,8 @@ mod tests {
         let context = jetstream::new(client);
 
         let stream_name = "test_async";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -447,6 +449,8 @@ mod tests {
         let context = jetstream::new(client);
 
         let stream_name = "test_sync";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -509,6 +513,8 @@ mod tests {
         let context = jetstream::new(client);
 
         let stream_name = "test_cancellation";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -612,6 +618,8 @@ mod tests {
         let context = jetstream::new(client);
 
         let stream_name = "test_fetch_buffer_usage";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -685,6 +693,8 @@ mod tests {
         let context = jetstream::new(client);
 
         let stream_name = "test_check_stream_status";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
