@@ -1,3 +1,4 @@
+use crate::config::components::sink::SinkType;
 use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
@@ -164,7 +165,7 @@ impl PipelineConfig {
         } else if let Some(sink) = vertex_obj.spec.sink {
             let fb_sink_config = if sink.fallback.as_ref().is_some() {
                 Some(SinkConfig {
-                    sink_type: sink.clone().try_into()?,
+                    sink_type: SinkType::fallback_sinktype(sink.clone())?,
                     retry_config: None,
                 })
             } else {
@@ -173,7 +174,7 @@ impl PipelineConfig {
 
             VertexType::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
-                    sink_type: sink.try_into()?,
+                    sink_type: SinkType::primary_sinktype(sink)?,
                     retry_config: None,
                 },
                 fb_sink_config,

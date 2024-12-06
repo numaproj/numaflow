@@ -1,3 +1,4 @@
+use crate::config::monovertex::sink::SinkType;
 use std::time::Duration;
 
 use base64::prelude::BASE64_STANDARD;
@@ -116,13 +117,13 @@ impl MonovertexConfig {
             .ok_or_else(|| Error::Config("Sink not found".to_string()))?;
 
         let sink_config = SinkConfig {
-            sink_type: sink.clone().try_into()?,
+            sink_type: SinkType::primary_sinktype(sink.clone())?,
             retry_config: sink.retry_strategy.clone().map(|retry| retry.into()),
         };
 
         let fb_sink_config = if sink.fallback.is_some() {
             Some(SinkConfig {
-                sink_type: sink.try_into()?,
+                sink_type: SinkType::fallback_sinktype(sink)?,
                 retry_config: None,
             })
         } else {
@@ -296,5 +297,77 @@ mod tests {
             config.transformer_config.unwrap().transformer_type,
             TransformerType::UserDefined(_)
         ));
+    }
+
+    #[test]
+    fn test_load_sink_and_fallback() {
+        let valid_config = r#"
+        {
+            "metadata": {
+                "name": "test_vertex"
+            },
+            "spec": {
+                "limits": {
+                    "readBatchSize": 1000,
+                    "readTimeout": "2s"
+                },
+                "source": {
+                    "udsource": {
+                        "container": {
+                            "image": "xxxxxxx",
+                            "resources": {}
+                        }
+                    }
+                },
+                "sink": {
+                    "udsink": {
+                        "container": {
+                            "image": "primary-sink",
+                            "resources": {}
+                        }
+                    },
+                    "fallback": {
+                        "udsink": {
+                            "container": {
+                                "image": "fallback-sink",
+                                "resources": {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        "#;
+        let encoded_invalid_config = BASE64_STANDARD.encode(valid_config);
+        let spec = encoded_invalid_config.as_str();
+
+        let config = MonovertexConfig::load(spec.to_string()).unwrap();
+
+        assert_eq!(config.name, "test_vertex");
+        assert!(matches!(
+            config.sink_config.sink_type,
+            SinkType::UserDefined(_)
+        ));
+        assert!(config.fb_sink_config.is_some());
+        assert!(matches!(
+            config.fb_sink_config.clone().unwrap().sink_type,
+            SinkType::UserDefined(_)
+        ));
+
+        if let SinkType::UserDefined(config) = config.sink_config.sink_type.clone() {
+            assert_eq!(config.socket_path, "/var/run/numaflow/sink.sock");
+            assert_eq!(
+                config.server_info_path,
+                "/var/run/numaflow/sinker-server-info"
+            );
+        }
+
+        if let SinkType::UserDefined(config) = config.fb_sink_config.unwrap().sink_type {
+            assert_eq!(config.socket_path, "/var/run/numaflow/fb-sink.sock");
+            assert_eq!(
+                config.server_info_path,
+                "/var/run/numaflow/fb-sinker-server-info"
+            );
+        }
     }
 }
