@@ -270,17 +270,25 @@ impl SinkWriter {
                         continue;
                     }
 
+                    let offsets = batch
+                        .iter()
+                        .map(|msg| msg.id.offset.clone())
+                        .collect::<Vec<_>>();
+
                     let n = batch.len();
-                    match this.write(batch.clone(), cancellation_token.clone()).await {
+                    match this.write(batch, cancellation_token.clone()).await {
                         Ok(_) => {
-                            for message in batch {
+                            for offset in offsets {
                                 // Delete the message from the tracker
-                                this.tracker_handle.delete(message.id.offset).await?;
+                                this.tracker_handle.delete(offset).await?;
                             }
                         }
                         Err(e) => {
                             error!(?e, "Error writing to sink");
-                            //FIXME: handle error
+                            for offset in offsets {
+                                // Discard the message from the tracker
+                                this.tracker_handle.discard(offset).await?;
+                            }
                         }
                     }
 

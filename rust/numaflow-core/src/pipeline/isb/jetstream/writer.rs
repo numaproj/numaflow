@@ -295,6 +295,7 @@ impl PafResolver {
             .acquire_owned()
             .await
             .map_err(|_e| Error::ISB("Failed to acquire semaphore permit".to_string()))?;
+        let tracker_handle = self.tracker_handle.clone();
         let mut offsets = Vec::new();
 
         let js_writer = self.js_writer.clone();
@@ -313,6 +314,10 @@ impl PafResolver {
                             stream.clone(),
                             Offset::Int(IntOffset::new(ack.sequence, stream.1)),
                         ));
+                        tracker_handle
+                            .delete(result.offset.clone())
+                            .await
+                            .expect("Failed to delete offset from tracker");
                     }
                     Err(e) => {
                         error!(
@@ -339,7 +344,10 @@ impl PafResolver {
                             Err(e) => {
                                 error!(?e, "Blocking write failed for stream {}", stream.0);
                                 // Since we failed to write to the stream, we need to send a NAK to the reader
-                                // FIXME: handle error
+                                tracker_handle
+                                    .discard(result.offset.clone())
+                                    .await
+                                    .expect("Failed to discard offset from the tracker");
                                 return;
                             }
                         }
@@ -352,7 +360,6 @@ impl PafResolver {
                 .get_or_create(pipeline_isb_metric_labels())
                 .observe(start_time.elapsed().as_micros() as f64);
         });
-        self.tracker_handle.delete(result.offset).await?;
         Ok(())
     }
 }

@@ -241,7 +241,7 @@ impl Source {
         info!("Started streaming source with batch size: {}", batch_size);
         let handle = tokio::spawn(async move {
             let mut processed_msgs_count: usize = 0;
-            let mut last_logged_at = tokio::time::Instant::now();
+            let mut last_logged_at = time::Instant::now();
 
             loop {
                 if cln_token.is_cancelled() {
@@ -257,7 +257,7 @@ impl Source {
                     }
                 };
 
-                let read_start_time = tokio::time::Instant::now();
+                let read_start_time = time::Instant::now();
                 let messages = match Self::read(source_handle.clone()).await {
                     Ok(messages) => messages,
                     Err(e) => {
@@ -328,7 +328,7 @@ impl Source {
                         std::time::Instant::now()
                     );
                     processed_msgs_count = 0;
-                    last_logged_at = tokio::time::Instant::now();
+                    last_logged_at = time::Instant::now();
                 }
             }
         });

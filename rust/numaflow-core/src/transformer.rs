@@ -5,6 +5,7 @@ use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
+use tracing::error;
 use user_defined::ActorMessage;
 
 use crate::message::Message;
@@ -72,7 +73,10 @@ impl Transformer {
             };
 
             // invoke trf
-            transform_handle.send(msg).await.unwrap();
+            transform_handle
+                .send(msg)
+                .await
+                .expect("failed to send message");
 
             // wait for one-shot
             match receiver.await {
@@ -90,7 +94,11 @@ impl Transformer {
                     }
                 }
                 Err(_) | Ok(Err(_)) => {
-                    // FIXME: handle error
+                    error!("Failed to transform message");
+                    tracker_handle
+                        .discard(read_msg.id.offset.clone())
+                        .await
+                        .expect("failed to discard tracker");
                 }
             }
         });
