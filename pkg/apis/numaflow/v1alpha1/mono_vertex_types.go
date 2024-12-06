@@ -481,10 +481,9 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 	if mvspec.Sink.UDSink != nil { // Only support UDSink for now.
 		sidecarContainers = append(sidecarContainers, mvspec.Sink.getUDSinkContainer(req))
 	}
-	if mvspec.Sink.Fallback != nil {
+	if mvspec.Sink.Fallback != nil && mvspec.Sink.Fallback.UDSink != nil {
 		sidecarContainers = append(sidecarContainers, mvspec.Sink.getFallbackUDSinkContainer(req))
 	}
-	// Fallback sink is not supported.
 	sidecarContainers = append(sidecarContainers, mvspec.Sidecars...)
 	return sidecarContainers, containers
 }
