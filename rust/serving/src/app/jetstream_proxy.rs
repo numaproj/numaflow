@@ -311,8 +311,6 @@ mod tests {
         let id = "foobar";
         let stream_name = "default";
 
-        // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -391,8 +389,6 @@ mod tests {
         let id = "foobar";
         let stream_name = "sync_pub";
 
-        // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -457,8 +453,6 @@ mod tests {
         let id = "foobar";
         let stream_name = "sync_serve_pub";
 
-        // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
