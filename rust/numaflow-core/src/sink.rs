@@ -30,7 +30,7 @@ mod user_defined;
 ///
 /// [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
 #[trait_variant::make(Sink: Send)]
-#[allow(unused)]
+#[allow(dead_code)]
 pub(crate) trait LocalSink {
     /// Write the messages to the Sink.
     async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>>;
