@@ -4,6 +4,7 @@
 //! mark that message as done in the Nth vertex. We use Tracker to let Read know that it can mark the
 //! message as Ack or NAck based on the state of the message. E.g., Ack if successfully written to ISB,
 //! NAck otherwise if ISB is failing to accept, and we are in shutdown path.
+//! There will be a tracker per input stream reader.
 //!
 //! In the future Watermark will also be propagated based on this.
 

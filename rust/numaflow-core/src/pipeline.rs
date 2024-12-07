@@ -395,7 +395,7 @@ mod tests {
         }
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_forwarder_for_sink_vertex() {
         // Unique names for the streams we use in this test

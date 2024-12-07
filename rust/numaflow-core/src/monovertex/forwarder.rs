@@ -4,12 +4,16 @@
 //!
 //! ```text
 //! (source) --[c]--> (transformer)* --[c]--> (sink)
+//!    |                   |                      |
+//!    |                   v                      |
+//!    +--------------> tracker <----------------+
 //!
 //! [c] - channel
 //! * - optional
 //!  ```
 //!
-//! Most of the data move forward except for the ack which can happen only after the Write.
+//! Most of the data move forward except for the `ack` which can happen only after the that the tracker
+//! has guaranteed that the processing complete.
 //! ```text
 //! (Read) +-------> (UDF) -------> (Write) +
 //!        |                                |

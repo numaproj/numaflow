@@ -4,13 +4,19 @@
 //!
 //! ```text
 //! (source) --[c]--> (transformer)* --[c]--> ==> (map)* --[c]--> ===> (reducer)* --[c]--> ===> --[c]--> (sink)
+//!    |                   |                       |                      |                                |
+//!    |                   |                       |                      |                                |
+//!    |                   |                       v                      |                                |
+//!    +-------------------+------------------> tracker <-----------------+--------------------------------+
+//!
 //!
 //! ==> - ISB
 //! [c] - channel
 //!   * - optional
 //!  ```
 //!
-//! Most of the data move forward except for the ack which can happen only after the Write.
+//! Most of the data move forward except for the `ack` which can happen only after the that the tracker
+//! has guaranteed that the processing complete.
 //! ```text
 //! (Read) +-------> (UDF) -------> (Write) +
 //!        |                                |
