@@ -1,14 +1,14 @@
+use crate::message::{Message, ResponseFromSink};
+use crate::sink::Sink;
+use crate::Error;
+use crate::Result;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
-
-use crate::message::{Message, ResponseFromSink};
-use crate::sink::Sink;
-use crate::Error;
-use crate::Result;
+use tracing::error;
 
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
 
@@ -97,7 +97,7 @@ impl Sink for UserDefinedSink {
 
             if response.status.map_or(false, |s| s.eot) {
                 if responses.len() != num_requests {
-                    log::error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
+                    error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
                 } else {
                     break;
                 }

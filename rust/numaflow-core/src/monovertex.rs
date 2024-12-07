@@ -8,6 +8,7 @@ use crate::error::{self};
 use crate::shared::create_components;
 use crate::sink::SinkWriter;
 use crate::source::Source;
+use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
 use crate::{metrics, shared};
 
@@ -23,10 +24,12 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: &MonovertexConfig,
 ) -> error::Result<()> {
+    let tracker_handle = TrackerHandle::new();
     let (source, source_grpc_client) = create_components::create_source(
         config.batch_size,
         config.read_timeout,
         &config.source_config,
+        tracker_handle.clone(),
         cln_token.clone(),
     )
     .await?;
@@ -34,6 +37,7 @@ pub(crate) async fn start_forwarder(
     let (transformer, transformer_grpc_client) = create_components::create_transformer(
         config.batch_size,
         config.transformer_config.clone(),
+        tracker_handle.clone(),
         cln_token.clone(),
     )
     .await?;
@@ -44,6 +48,7 @@ pub(crate) async fn start_forwarder(
             config.read_timeout,
             config.sink_config.clone(),
             config.fb_sink_config.clone(),
+            tracker_handle,
             &cln_token,
         )
         .await?;
