@@ -7,6 +7,9 @@ name = "numaflow-pb"
 version = "0.1.0"
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 tonic-build = "0.12.3"
 prost = "0.13.2"
