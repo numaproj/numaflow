@@ -7,11 +7,12 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::config::{get_vertex_name, is_mono_vertex};
-use crate::message::{ReadAck, ReadMessage};
+use crate::message::ReadAck;
 use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_isb_metric_labels, pipeline_metrics,
 };
+use crate::tracker::TrackerHandle;
 use crate::Result;
 use crate::{
     message::{Message, Offset},
@@ -135,11 +136,16 @@ where
 pub(crate) struct Source {
     read_batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,
+    tracker_handle: TrackerHandle,
 }
 
 impl Source {
     /// Create a new StreamingSource. It starts the read and ack actors in the background.
-    pub(crate) fn new(batch_size: usize, src_type: SourceType) -> Self {
+    pub(crate) fn new(
+        batch_size: usize,
+        src_type: SourceType,
+        tracker_handle: TrackerHandle,
+    ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
         match src_type {
             SourceType::UserDefinedSource(reader, acker, lag_reader) => {
@@ -175,6 +181,7 @@ impl Source {
         Self {
             read_batch_size: batch_size,
             sender,
+            tracker_handle,
         }
     }
 
@@ -222,10 +229,11 @@ impl Source {
     pub(crate) fn streaming_read(
         &self,
         cln_token: CancellationToken,
-    ) -> Result<(ReceiverStream<ReadMessage>, JoinHandle<Result<()>>)> {
+    ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let batch_size = self.read_batch_size;
         let (messages_tx, messages_rx) = mpsc::channel(batch_size);
         let source_handle = self.sender.clone();
+        let tracker_handle = self.tracker_handle.clone();
 
         let pipeline_labels = pipeline_forward_metric_labels("Source", Some(get_vertex_name()));
         let mvtx_labels = mvtx_forward_metric_labels();
@@ -233,31 +241,23 @@ impl Source {
         info!("Started streaming source with batch size: {}", batch_size);
         let handle = tokio::spawn(async move {
             let mut processed_msgs_count: usize = 0;
-            let mut last_logged_at = tokio::time::Instant::now();
+            let mut last_logged_at = time::Instant::now();
 
             loop {
                 if cln_token.is_cancelled() {
                     info!("Cancellation token is cancelled. Stopping the source.");
                     return Ok(());
                 }
-                let permit_time = tokio::time::Instant::now();
                 // Reserve the permits before invoking the read method.
                 let mut permit = match messages_tx.reserve_many(batch_size).await {
-                    Ok(permit) => {
-                        info!(
-                            "Reserved permits for {} messages in {:?}",
-                            batch_size,
-                            permit_time.elapsed()
-                        );
-                        permit
-                    }
+                    Ok(permit) => permit,
                     Err(e) => {
                         error!("Error while reserving permits: {:?}", e);
                         return Err(crate::error::Error::Source(e.to_string()));
                     }
                 };
 
-                let read_start_time = tokio::time::Instant::now();
+                let read_start_time = time::Instant::now();
                 let messages = match Self::read(source_handle.clone()).await {
                     Ok(messages) => messages,
                     Err(e) => {
@@ -293,17 +293,17 @@ impl Source {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
                     let offset = message.offset.clone().unwrap();
 
-                    let read_message = ReadMessage {
-                        message,
-                        ack: resp_ack_tx,
-                    };
+                    // insert the offset and the ack one shot in the tracker.
+                    tracker_handle
+                        .insert(offset.to_string(), resp_ack_tx)
+                        .await?;
 
                     // store the ack one shot in the batch to invoke ack later.
                     ack_batch.push((offset, resp_ack_rx));
 
                     match permit.next() {
                         Some(permit) => {
-                            permit.send(read_message);
+                            permit.send(message);
                         }
                         None => {
                             unreachable!(
@@ -328,7 +328,7 @@ impl Source {
                         std::time::Instant::now()
                     );
                     processed_msgs_count = 0;
-                    last_logged_at = tokio::time::Instant::now();
+                    last_logged_at = time::Instant::now();
                 }
             }
         });
@@ -421,6 +421,7 @@ mod tests {
     use crate::shared::grpc::create_rpc_channel;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
+    use crate::tracker::TrackerHandle;
 
     struct SimpleSource {
         num: usize,
@@ -521,6 +522,7 @@ mod tests {
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            TrackerHandle::new(),
         );
 
         let cln_token = CancellationToken::new();
@@ -530,8 +532,8 @@ mod tests {
         // we should read all the 100 messages
         for _ in 0..100 {
             let message = stream.next().await.unwrap();
-            assert_eq!(message.message.value, "hello".as_bytes());
-            offsets.push(message.message.offset.clone().unwrap());
+            assert_eq!(message.value, "hello".as_bytes());
+            offsets.push(message.offset.clone().unwrap());
         }
 
         // ack all the messages

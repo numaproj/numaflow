@@ -7,12 +7,12 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::config::pipeline::isb::BufferWriterConfig;
-use crate::error::Error;
-use crate::message::{ReadAck, ReadMessage};
+use crate::message::Message;
 use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
 use crate::pipeline::isb::jetstream::writer::{
     JetstreamWriter, PafResolver, ResolveAndPublishResult,
 };
+use crate::tracker::TrackerHandle;
 use crate::Result;
 
 /// JetStream Writer is responsible for writing messages to JetStream ISB.
@@ -34,6 +34,7 @@ pub(crate) struct ISBWriter {
     paf_concurrency: usize,
     config: Vec<BufferWriterConfig>,
     writer: JetstreamWriter,
+    tracker_handle: TrackerHandle,
 }
 
 impl ISBWriter {
@@ -41,6 +42,7 @@ impl ISBWriter {
         paf_concurrency: usize,
         config: Vec<BufferWriterConfig>,
         js_ctx: Context,
+        tracker_handle: TrackerHandle,
         cancel_token: CancellationToken,
     ) -> Self {
         info!(?config, paf_concurrency, "Streaming JetstreamWriter",);
@@ -57,39 +59,40 @@ impl ISBWriter {
             config,
             writer: js_writer,
             paf_concurrency,
+            tracker_handle,
         }
     }
 
     /// Starts reading messages from the stream and writes them to Jetstream ISB.
     pub(crate) async fn streaming_write(
         &self,
-        messages_stream: ReceiverStream<ReadMessage>,
+        messages_stream: ReceiverStream<Message>,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let writer = self.writer.clone();
             let paf_concurrency = self.paf_concurrency;
             let config = self.config.clone();
+            let tracker_handle = self.tracker_handle.clone();
+
             let mut messages_stream = messages_stream;
             let mut index = 0;
 
             async move {
-                let paf_resolver = PafResolver::new(paf_concurrency, writer.clone());
-                while let Some(read_message) = messages_stream.next().await {
+                let paf_resolver =
+                    PafResolver::new(paf_concurrency, writer.clone(), tracker_handle.clone());
+                while let Some(message) = messages_stream.next().await {
                     // if message needs to be dropped, ack and continue
                     // TODO: add metric for dropped count
-                    if read_message.message.dropped() {
-                        read_message
-                            .ack
-                            .send(ReadAck::Ack)
-                            .map_err(|e| Error::ISB(format!("Failed to send ack: {:?}", e)))?;
+                    if message.dropped() {
+                        // delete the entry from tracker
+                        tracker_handle.delete(message.id.offset).await?;
                         continue;
                     }
                     let mut pafs = vec![];
 
                     // FIXME(CF): This is a temporary solution to round-robin the streams
                     for buffer in &config {
-                        let payload: BytesMut = read_message
-                            .message
+                        let payload: BytesMut = message
                             .clone()
                             .try_into()
                             .expect("message serialization should not fail");
@@ -109,8 +112,8 @@ impl ISBWriter {
                     paf_resolver
                         .resolve_pafs(ResolveAndPublishResult {
                             pafs,
-                            payload: read_message.message.value.clone().into(),
-                            ack_tx: read_message.ack,
+                            payload: message.value.clone().into(),
+                            offset: message.id.offset,
                         })
                         .await?;
                 }
@@ -128,7 +131,6 @@ mod tests {
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use chrono::Utc;
-    use tokio::sync::oneshot;
 
     use super::*;
     use crate::message::{Message, MessageID, ReadAck};
@@ -141,8 +143,11 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
+        let tracker_handle = TrackerHandle::new();
 
         let stream_name = "test_publish_messages";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -173,12 +178,13 @@ mod tests {
                 ..Default::default()
             }],
             context.clone(),
+            tracker_handle.clone(),
             cln_token.clone(),
         )
         .await;
 
-        let mut ack_receivers = Vec::new();
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
+        let mut ack_rxs = vec![];
         // Publish 500 messages
         for i in 0..500 {
             let message = Message {
@@ -193,23 +199,24 @@ mod tests {
                 },
                 headers: HashMap::new(),
             };
-            let (sender, receiver) = oneshot::channel();
-            let read_message = ReadMessage {
-                message,
-                ack: sender,
-            };
-            messages_tx.send(read_message).await.unwrap();
-            ack_receivers.push(receiver);
+            let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+            tracker_handle
+                .insert(message.id.offset.clone(), ack_tx)
+                .await
+                .unwrap();
+            ack_rxs.push(ack_rx);
+            messages_tx.send(message).await.unwrap();
         }
         drop(messages_tx);
 
         let receiver_stream = ReceiverStream::new(messages_rx);
         let _handle = writer.streaming_write(receiver_stream).await.unwrap();
 
-        for receiver in ack_receivers {
-            let result = receiver.await.unwrap();
-            assert_eq!(result, ReadAck::Ack);
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
         }
+        // make sure all messages are acked
+        assert!(tracker_handle.is_empty().await.unwrap());
         context.delete_stream(stream_name).await.unwrap();
     }
 
@@ -220,8 +227,11 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
+        let tracker_handle = TrackerHandle::new();
 
         let stream_name = "test_publish_cancellation";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -252,12 +262,13 @@ mod tests {
                 ..Default::default()
             }],
             context.clone(),
+            tracker_handle.clone(),
             cancel_token.clone(),
         )
         .await;
 
-        let mut ack_receivers = Vec::new();
         let (tx, rx) = tokio::sync::mpsc::channel(500);
+        let mut ack_rxs = vec![];
         // Publish 100 messages successfully
         for i in 0..100 {
             let message = Message {
@@ -272,13 +283,13 @@ mod tests {
                 },
                 headers: HashMap::new(),
             };
-            let (sender, receiver) = oneshot::channel();
-            let read_message = ReadMessage {
-                message,
-                ack: sender,
-            };
-            tx.send(read_message).await.unwrap();
-            ack_receivers.push(receiver);
+            let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+            tracker_handle
+                .insert(message.id.offset.clone(), ack_tx)
+                .await
+                .unwrap();
+            ack_rxs.push(ack_rx);
+            tx.send(message).await.unwrap();
         }
 
         let receiver_stream = ReceiverStream::new(rx);
@@ -298,20 +309,19 @@ mod tests {
             },
             headers: HashMap::new(),
         };
-        let (sender, receiver) = oneshot::channel();
-        let read_message = ReadMessage {
-            message,
-            ack: sender,
-        };
-        tx.send(read_message).await.unwrap();
-        ack_receivers.push(receiver);
+        let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+        tracker_handle
+            .insert("offset_101".to_string(), ack_tx)
+            .await
+            .unwrap();
+        ack_rxs.push(ack_rx);
+        tx.send(message).await.unwrap();
         drop(tx);
 
         // Cancel the token to exit the retry loop
         cancel_token.cancel();
-
         // Check the results
-        for (i, receiver) in ack_receivers.into_iter().enumerate() {
+        for (i, receiver) in ack_rxs.into_iter().enumerate() {
             let result = receiver.await.unwrap();
             if i < 100 {
                 assert_eq!(result, ReadAck::Ack);
@@ -319,6 +329,9 @@ mod tests {
                 assert_eq!(result, ReadAck::Nak);
             }
         }
+
+        // make sure all messages are acked
+        assert!(tracker_handle.is_empty().await.unwrap());
         context.delete_stream(stream_name).await.unwrap();
     }
 }
