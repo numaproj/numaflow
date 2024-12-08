@@ -272,6 +272,8 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+    use crate::config::pipeline::isb::BufferWriterConfig;
+    use crate::config::pipeline::ToVertexConfig;
     use crate::message::{Message, MessageID};
     use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
     use async_nats::jetstream;
@@ -340,9 +342,17 @@ mod tests {
 
         let writer_cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
-            vec![(stream_name.to_string(), 0)],
-            Default::default(),
+            vec![ToVertexConfig {
+                name: "test-js-read".to_string(),
+                writer_config: BufferWriterConfig {
+                    streams: vec![(stream_name.to_string(), 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
             context.clone(),
+            100,
+            TrackerHandle::new(),
             writer_cancel_token.clone(),
         );
 
@@ -451,9 +461,17 @@ mod tests {
 
         let writer_cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
-            vec![(stream_name.to_string(), 0)],
-            Default::default(),
+            vec![ToVertexConfig {
+                name: "test-vertex".to_string(),
+                writer_config: BufferWriterConfig {
+                    streams: vec![(stream_name.to_string(), 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
             context.clone(),
+            100,
+            TrackerHandle::new(),
             writer_cancel_token.clone(),
         );
 

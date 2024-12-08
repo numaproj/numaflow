@@ -6,9 +6,7 @@ const DEFAULT_PARTITION_IDX: u16 = 0;
 const DEFAULT_PARTITIONS: u16 = 1;
 const DEFAULT_MAX_LENGTH: usize = 30000;
 const DEFAULT_USAGE_LIMIT: f64 = 0.8;
-const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
 const DEFAULT_BUFFER_FULL_STRATEGY: BufferFullStrategy = BufferFullStrategy::RetryUntilSuccess;
-const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 const DEFAULT_WIP_ACK_INTERVAL_MILLIS: u64 = 1000;
 
 pub(crate) mod jetstream {
@@ -36,10 +34,8 @@ pub(crate) struct BufferWriterConfig {
     pub streams: Vec<(String, u16)>,
     pub partitions: u16,
     pub max_length: usize,
-    pub refresh_interval: Duration,
     pub usage_limit: f64,
     pub buffer_full_strategy: BufferFullStrategy,
-    pub retry_interval: Duration,
 }
 
 impl Default for BufferWriterConfig {
@@ -49,9 +45,7 @@ impl Default for BufferWriterConfig {
             partitions: DEFAULT_PARTITIONS,
             max_length: DEFAULT_MAX_LENGTH,
             usage_limit: DEFAULT_USAGE_LIMIT,
-            refresh_interval: Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS),
             buffer_full_strategy: DEFAULT_BUFFER_FULL_STRATEGY,
-            retry_interval: Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS),
         }
     }
 }
@@ -116,9 +110,7 @@ mod tests {
             partitions: DEFAULT_PARTITIONS,
             max_length: DEFAULT_MAX_LENGTH,
             usage_limit: DEFAULT_USAGE_LIMIT,
-            refresh_interval: Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS),
             buffer_full_strategy: DEFAULT_BUFFER_FULL_STRATEGY,
-            retry_interval: Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS),
         };
         let config = BufferWriterConfig::default();
 

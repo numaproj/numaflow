@@ -1,9 +1,8 @@
-use futures::StreamExt;
-
 use crate::config::components::source::GeneratorConfig;
 use crate::message::{Message, Offset};
 use crate::reader;
 use crate::source;
+use tokio_stream::StreamExt;
 
 /// Stream Generator returns a set of messages for every `.next` call. It will throttle itself if
 /// the call exceeds the RPU. It will return a max (batch size, RPU) till the quota for that unit of

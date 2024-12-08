@@ -101,8 +101,7 @@ pub(crate) struct FromVertexConfig {
 pub(crate) struct ToVertexConfig {
     pub(crate) name: String,
     pub(crate) writer_config: BufferWriterConfig,
-    pub(crate) partitions: u16,
-    pub(crate) conditions: Option<ForwardConditions>,
+    pub(crate) conditions: Option<Box<ForwardConditions>>,
 }
 
 impl PipelineConfig {
@@ -265,8 +264,7 @@ impl PipelineConfig {
                         / 100.0,
                     ..default_writer_config
                 },
-                partitions: edge.to_vertex_partition_count.unwrap_or_default() as u16,
-                conditions: None,
+                conditions: edge.conditions,
             });
         }
 
@@ -421,7 +419,6 @@ mod tests {
                     usage_limit: 0.85,
                     ..Default::default()
                 },
-                partitions: 1,
                 conditions: None,
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
@@ -474,7 +471,6 @@ mod tests {
                     usage_limit: 0.8,
                     ..Default::default()
                 },
-                partitions: 1,
                 conditions: None,
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
