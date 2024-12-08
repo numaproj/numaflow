@@ -125,7 +125,7 @@ impl UserDefinedTransformer {
     ) {
         let msg_id = message.id.to_string();
         let msg_info = ParentMessageInfo {
-            offset: message.offset.clone().unwrap(),
+            offset: message.offset.clone().expect("offset can never be none"),
             headers: message.headers.clone(),
         };
 

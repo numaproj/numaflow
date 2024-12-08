@@ -233,7 +233,7 @@ mod stream_generator {
 
     #[cfg(test)]
     mod tests {
-        use futures::StreamExt;
+        use tokio_stream::StreamExt;
 
         use super::*;
 

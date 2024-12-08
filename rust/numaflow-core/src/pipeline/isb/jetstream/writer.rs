@@ -3,6 +3,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::config::pipeline::isb::BufferFullStrategy;
+use crate::config::pipeline::ToVertexConfig;
+use crate::error::Error;
+use crate::message::{IntOffset, Message, Offset};
+use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
+use crate::pipeline::isb::jetstream::Stream;
+use crate::tracker::TrackerHandle;
+use crate::Result;
+
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::publish::PublishAck;
@@ -16,14 +25,6 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
-
-use crate::config::pipeline::ToVertexConfig;
-use crate::error::Error;
-use crate::message::{IntOffset, Message, Offset};
-use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
-use crate::pipeline::isb::jetstream::Stream;
-use crate::tracker::TrackerHandle;
-use crate::Result;
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
@@ -191,16 +192,20 @@ impl JetstreamWriter {
                 let mut pafs = vec![];
 
                 // FIXME(CF): This is a temporary solution to round-robin the streams
-                for buffer in &this.config {
-                    let payload: BytesMut = message
-                        .clone()
-                        .try_into()
-                        .expect("message serialization should not fail");
-                    let stream = buffer.writer_config.streams.get(index).unwrap();
-                    index = (index + 1) % buffer.writer_config.streams.len();
+                for to_vertex in &this.config {
+                    let stream = to_vertex.writer_config.streams.get(index).unwrap();
+                    index = (index + 1) % to_vertex.writer_config.streams.len();
 
-                    let paf = this.write(stream.clone(), payload.clone().into()).await;
-                    pafs.push((stream.clone(), paf));
+                    let paf = this
+                        .write(
+                            stream.clone(),
+                            message.clone(),
+                            to_vertex.writer_config.buffer_full_strategy.clone(),
+                        )
+                        .await;
+                    if let Some(paf) = paf {
+                        pafs.push((stream.clone(), paf));
+                    }
                 }
 
                 pipeline_metrics()
@@ -208,6 +213,10 @@ impl JetstreamWriter {
                     .write_total
                     .get_or_create(pipeline_isb_metric_labels())
                     .inc();
+
+                if pafs.is_empty() {
+                    continue;
+                }
 
                 this.resolve_pafs(ResolveAndPublishResult {
                     pafs,
@@ -224,8 +233,18 @@ impl JetstreamWriter {
     /// Writes the message to the JetStream ISB and returns a future which can be
     /// awaited to get the PublishAck. It will do infinite retries until the message
     /// gets published successfully. If it returns an error it means it is fatal error
-    pub(super) async fn write(&self, stream: Stream, payload: Vec<u8>) -> PublishAckFuture {
-        let mut counter = 500u64;
+    pub(super) async fn write(
+        &self,
+        stream: Stream,
+        message: Message,
+        on_full: BufferFullStrategy,
+    ) -> Option<PublishAckFuture> {
+        let mut counter = 500u16;
+
+        let offset = message.id.offset.clone();
+        let payload: BytesMut = message
+            .try_into()
+            .expect("message serialization should not fail");
 
         // loop till we get a PAF, there could be other reasons why PAFs cannot be created.
         let paf = loop {
@@ -242,8 +261,17 @@ impl JetstreamWriter {
                         counter = 0;
                     }
                     counter += 1;
-
-                    // FIXME: consider buffer-full strategy
+                    match on_full {
+                        BufferFullStrategy::DiscardLatest => {
+                            // delete the entry from tracker
+                            self.tracker_handle
+                                .delete(offset.clone())
+                                .await
+                                .expect("Failed to delete offset from tracker");
+                            return None;
+                        }
+                        BufferFullStrategy::RetryUntilSuccess => {}
+                    }
                 }
                 Some(false) => match self
                     .js_ctx
@@ -269,7 +297,7 @@ impl JetstreamWriter {
             // sleep to avoid busy looping
             sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
         };
-        paf
+        Some(paf)
     }
 
     /// resolve_pafs resolves the PAFs for the given result. It will try to resolve the PAFs
@@ -490,11 +518,14 @@ mod tests {
             headers: HashMap::new(),
         };
 
-        let message_bytes: BytesMut = message.try_into().unwrap();
         let paf = writer
-            .write((stream_name.to_string(), 0), message_bytes.into())
+            .write(
+                (stream_name.to_string(), 0),
+                message,
+                BufferFullStrategy::RetryUntilSuccess,
+            )
             .await;
-        assert!(paf.await.is_ok());
+        assert!(paf.unwrap().await.is_ok());
 
         context.delete_stream(stream_name).await.unwrap();
     }
@@ -627,9 +658,12 @@ mod tests {
                 },
                 headers: HashMap::new(),
             };
-            let message_bytes: BytesMut = message.try_into().unwrap();
             let paf = writer
-                .write((stream_name.to_string(), 0), message_bytes.into())
+                .write(
+                    (stream_name.to_string(), 0),
+                    message,
+                    BufferFullStrategy::RetryUntilSuccess,
+                )
                 .await;
             result_receivers.push(paf);
         }
@@ -648,9 +682,12 @@ mod tests {
             },
             headers: HashMap::new(),
         };
-        let message_bytes: BytesMut = message.try_into().unwrap();
         let paf = writer
-            .write((stream_name.to_string(), 0), message_bytes.into())
+            .write(
+                (stream_name.to_string(), 0),
+                message,
+                BufferFullStrategy::RetryUntilSuccess,
+            )
             .await;
         result_receivers.push(paf);
 
@@ -661,13 +698,13 @@ mod tests {
         for (i, receiver) in result_receivers.into_iter().enumerate() {
             if i < 10 {
                 assert!(
-                    receiver.await.is_ok(),
+                    receiver.unwrap().await.is_ok(),
                     "Message {} should be published successfully",
                     i
                 );
             } else {
                 assert!(
-                    receiver.await.is_err(),
+                    receiver.unwrap().await.is_err(),
                     "Message 11 should fail with cancellation error"
                 );
             }

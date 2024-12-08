@@ -247,22 +247,23 @@ impl PipelineConfig {
                 writer_config: BufferWriterConfig {
                     streams,
                     partitions: partition_count,
-                    max_length: vertex_obj
-                        .spec
-                        .limits
+                    max_length: edge
+                        .to_vertex_limits
                         .as_ref()
                         .and_then(|l| l.buffer_max_length)
                         .unwrap_or(default_writer_config.max_length as i64)
                         as usize,
-                    usage_limit: vertex_obj
-                        .spec
-                        .limits
+                    usage_limit: edge
+                        .to_vertex_limits
                         .as_ref()
                         .and_then(|l| l.buffer_usage_limit)
                         .unwrap_or(default_writer_config.usage_limit as i64)
                         as f64
                         / 100.0,
-                    ..default_writer_config
+                    buffer_full_strategy: edge
+                        .on_full
+                        .and_then(|s| s.clone().try_into().ok())
+                        .unwrap_or(default_writer_config.buffer_full_strategy),
                 },
                 conditions: edge.conditions,
             });

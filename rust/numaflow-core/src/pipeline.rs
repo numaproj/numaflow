@@ -233,7 +233,7 @@ mod tests {
 
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
-    use futures::StreamExt;
+    use tokio_stream::StreamExt;
 
     use super::*;
     use crate::config::components::metrics::MetricsConfig;

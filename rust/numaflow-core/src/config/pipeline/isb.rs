@@ -50,11 +50,23 @@ impl Default for BufferWriterConfig {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub(crate) enum BufferFullStrategy {
+    #[default]
     RetryUntilSuccess,
-    #[allow(dead_code)]
     DiscardLatest,
+}
+
+impl TryFrom<String> for BufferFullStrategy {
+    type Error = &'static str;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "retryUntilSuccess" => Ok(BufferFullStrategy::RetryUntilSuccess),
+            "discardLatest" => Ok(BufferFullStrategy::DiscardLatest),
+            _ => Err("Invalid BufferFullStrategy string"),
+        }
+    }
 }
 
 impl fmt::Display for BufferFullStrategy {
@@ -135,5 +147,18 @@ mod tests {
         };
         let config = BufferReaderConfig::default();
         assert_eq!(config, expected);
+    }
+
+    #[test]
+    fn test_try_from_string_to_buffer_full_strategy() {
+        assert_eq!(
+            BufferFullStrategy::try_from("retryUntilSuccess".to_string()).unwrap(),
+            BufferFullStrategy::RetryUntilSuccess
+        );
+        assert_eq!(
+            BufferFullStrategy::try_from("discardLatest".to_string()).unwrap(),
+            BufferFullStrategy::DiscardLatest
+        );
+        assert!(BufferFullStrategy::try_from("invalidStrategy".to_string()).is_err());
     }
 }

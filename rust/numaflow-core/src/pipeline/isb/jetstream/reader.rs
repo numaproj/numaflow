@@ -272,10 +272,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::config::pipeline::isb::BufferWriterConfig;
-    use crate::config::pipeline::ToVertexConfig;
     use crate::message::{Message, MessageID};
-    use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
@@ -340,22 +337,6 @@ mod tests {
             .await
             .unwrap();
 
-        let writer_cancel_token = CancellationToken::new();
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
-                name: "test-js-read".to_string(),
-                writer_config: BufferWriterConfig {
-                    streams: vec![(stream_name.to_string(), 0)],
-                    ..Default::default()
-                },
-                conditions: None,
-            }],
-            context.clone(),
-            100,
-            TrackerHandle::new(),
-            writer_cancel_token.clone(),
-        );
-
         for i in 0..10 {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
@@ -370,15 +351,11 @@ mod tests {
                 headers: HashMap::new(),
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
-            writer
-                .write((stream_name.to_string(), 0), message_bytes.into())
-                .await
+            context
+                .publish(stream_name, message_bytes.into())
                 .await
                 .unwrap();
         }
-
-        // Cancel the token to exit the retry loop
-        writer_cancel_token.cancel();
 
         let mut buffer = vec![];
         for _ in 0..10 {
@@ -459,22 +436,6 @@ mod tests {
             .await
             .unwrap();
 
-        let writer_cancel_token = CancellationToken::new();
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
-                name: "test-vertex".to_string(),
-                writer_config: BufferWriterConfig {
-                    streams: vec![(stream_name.to_string(), 0)],
-                    ..Default::default()
-                },
-                conditions: None,
-            }],
-            context.clone(),
-            100,
-            TrackerHandle::new(),
-            writer_cancel_token.clone(),
-        );
-
         let mut offsets = vec![];
         // write 5 messages
         for i in 0..5 {
@@ -492,14 +453,11 @@ mod tests {
             };
             offsets.push(message.id.offset.clone());
             let message_bytes: BytesMut = message.try_into().unwrap();
-            writer
-                .write((stream_name.to_string(), 0), message_bytes.into())
-                .await
+            context
+                .publish(stream_name, message_bytes.into())
                 .await
                 .unwrap();
         }
-        // Cancel the token to exit the retry loop
-        writer_cancel_token.cancel();
 
         for _ in 0..5 {
             let Some(_val) = js_reader_rx.next().await else {
