@@ -166,6 +166,7 @@ mod stream_generator {
 
             Message {
                 keys: self.next_key_to_be_fetched(),
+                tags: None,
                 value: data.into(),
                 offset: Some(offset.clone()),
                 event_time,

@@ -15,6 +15,7 @@ impl TryFrom<PulsarMessage> for Message {
 
         Ok(Message {
             keys: vec![message.key],
+            tags: None,
             value: message.payload,
             offset: Some(offset.clone()),
             event_time: message.event_time,

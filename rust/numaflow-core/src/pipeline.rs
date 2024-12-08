@@ -429,6 +429,7 @@ mod tests {
             use crate::message::{Message, MessageID, Offset, StringOffset};
             let message = Message {
                 keys: vec!["key1".to_string()],
+                tags: None,
                 value: vec![1, 2, 3].into(),
                 offset: Some(Offset::String(StringOffset::new("123".to_string(), 0))),
                 event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),

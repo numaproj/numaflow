@@ -507,6 +507,7 @@ mod tests {
 
         let message = Message {
             keys: vec!["key_0".to_string()],
+            tags: None,
             value: "message 0".as_bytes().to_vec().into(),
             offset: None,
             event_time: Utc::now(),
@@ -565,6 +566,7 @@ mod tests {
 
         let message = Message {
             keys: vec!["key_0".to_string()],
+            tags: None,
             value: "message 0".as_bytes().to_vec().into(),
             offset: None,
             event_time: Utc::now(),
@@ -648,6 +650,7 @@ mod tests {
         for i in 0..10 {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
@@ -672,6 +675,7 @@ mod tests {
         // so that it fails and sync write will be attempted and it will be blocked
         let message = Message {
             keys: vec!["key_11".to_string()],
+            tags: None,
             value: vec![0; 1025].into(),
             offset: None,
             event_time: Utc::now(),
@@ -938,6 +942,7 @@ mod tests {
         for i in 0..500 {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
@@ -1025,6 +1030,7 @@ mod tests {
         for i in 0..100 {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
@@ -1051,6 +1057,7 @@ mod tests {
         // because the max message size is set to 1024
         let message = Message {
             keys: vec!["key_101".to_string()],
+            tags: None,
             value: vec![0; 1025].into(),
             offset: None,
             event_time: Utc::now(),

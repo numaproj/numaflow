@@ -340,6 +340,7 @@ mod tests {
         for i in 0..10 {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
@@ -441,6 +442,7 @@ mod tests {
         for i in 0..5 {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
