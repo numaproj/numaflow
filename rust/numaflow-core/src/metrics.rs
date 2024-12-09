@@ -838,7 +838,7 @@ async fn expose_pending_metrics(
     // string concat is more efficient?
     let mut pending_info: BTreeMap<&str, i64> = BTreeMap::new();
 
-    let lookback_seconds_map: [(&str, u16); 4] = [
+    let mut lookback_seconds_map: [(&str, u16); 4] = [
         ("1m", 60),
         ("default", lookback_seconds),
         ("5m", 300),
@@ -847,6 +847,8 @@ async fn expose_pending_metrics(
 
     loop {
         ticker.tick().await;
+        // call the daemon -> new_value
+        // err = default
         for (label, seconds) in lookback_seconds_map {
             let pending = calculate_pending(seconds as i64, &pending_stats).await;
             if pending != -1 {
