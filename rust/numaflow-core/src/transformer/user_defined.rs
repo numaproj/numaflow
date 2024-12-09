@@ -67,7 +67,7 @@ impl UserDefinedTransformer {
 
         let transformer = Self {
             read_tx,
-            senders: sender_map.clone(),
+            senders: Arc::clone(&sender_map),
         };
 
         // background task to receive responses from the server and send them to the appropriate
