@@ -23,6 +23,19 @@ dbg_macro = "deny"
 todo = "deny"
 # We should probably enable it in the future
 # future_not_send = "deny"
+empty_enum = "warn"
+exit = "warn"
+filter_map_next = "warn"
+fn_params_excessive_bools = "warn"
+inefficient_to_string = "warn"
+match_on_vec_items = "warn"
+match_wildcard_for_single_variants = "warn"
+needless_continue = "warn"
+option_option = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+unnested_or_patterns = "warn"
+unused_self = "warn"
+verbose_file_reads = "warn"
 
 # This profile optimizes for runtime performance and small binary size at the expense of longer build times.
 # Compared to default release profile, this profile reduced binary size from 29MB to 21MB
