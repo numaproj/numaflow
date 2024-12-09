@@ -25,6 +25,7 @@ const DROP: &str = "U+005C__DROP__";
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Message {
+    // FIXME: Arc<[Bytes]>
     /// keys of the message
     pub(crate) keys: Vec<String>,
     /// tags of the message

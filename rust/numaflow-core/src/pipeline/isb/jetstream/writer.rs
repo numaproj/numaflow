@@ -195,10 +195,7 @@ impl JetstreamWriter {
                 let mut pafs = vec![];
                 for vertex in &*this.config {
                     // check whether we need to write to this downstream vertex
-                    if !forward::evaluate_write_condition(
-                        message.tags.clone(),
-                        vertex.conditions.clone(),
-                    ) {
+                    if !forward::should_forward(message.tags.clone(), vertex.conditions.clone()) {
                         continue;
                     }
 
