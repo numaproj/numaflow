@@ -14,8 +14,12 @@ workspace = true
 [dependencies]
 tokio.workspace = true
 tracing.workspace = true
-axum = "0.7.5"
-axum-server = { version = "0.7.1", features = ["tls-rustls"] }
+numaflow-pulsar.workspace = true
+numaflow-models.workspace = true
+numaflow-pb.workspace = true
+backoff.workspace = true
+axum.workspace = true
+axum-server.workspace = true
 tonic = "0.12.3"
 bytes = "1.7.1"
 thiserror = "2.0.3"
@@ -28,15 +32,12 @@ base64 = "0.22.1"
 hyper-util = "0.1.6"
 tower = "0.4.13"
 serde_json = "1.0.122"
-numaflow-models = { path = "../numaflow-models" }
-numaflow-pb = { path = "../numaflow-pb" }
 trait-variant = "0.1.2"
 rcgen = "0.13.1"
 rustls = { version = "0.23.12", features = ["aws_lc_rs"] }
 serde = { version = "1.0.204", features = ["derive"] }
 semver = "1.0"
 pep440_rs = "0.6.6"
-backoff = { path = "../backoff" }
 parking_lot = "0.12.3"
 prometheus-client = "0.22.3"
 kube = "0.95.0"
@@ -45,7 +46,6 @@ futures = "0.3.30"
 pin-project = "1.1.5"
 rand = "0.8.5"
 async-nats = "0.38.0"
-numaflow-pulsar = {path = "../numaflow-extns/pulsar"}
 
 [dev-dependencies]
 tempfile = "3.11.0"

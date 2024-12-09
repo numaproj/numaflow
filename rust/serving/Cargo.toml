@@ -16,9 +16,9 @@ tokio.workspace = true
 tracing.workspace = true
 numaflow-models.workspace = true
 backoff.workspace = true
+axum.workspace = true
+axum-server.workspace = true
 async-nats = "0.35.1"
-axum = "0.7.5"
-axum-server = { version = "0.7.1", features = ["tls-rustls"] }
 axum-macros = "0.4.1"
 hyper-util = { version = "0.1.6", features = ["client-legacy"] }
 serde = { version = "1.0.204", features = ["derive"] }
