@@ -41,7 +41,6 @@ pep440_rs = "0.6.6"
 parking_lot = "0.12.3"
 prometheus-client = "0.22.3"
 kube = "0.95.0"
-log = "0.4.22"
 futures = "0.3.30"
 pin-project = "1.1.5"
 rand = "0.8.5"
@@ -50,6 +49,6 @@ async-nats = "0.38.0"
 [dev-dependencies]
 tempfile = "3.11.0"
 numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "ddd879588e11455921f1ca958ea2b3c076689293" }
-pulsar = {version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"]}
+pulsar = { version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"] }
 
 [build-dependencies]

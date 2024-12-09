@@ -4,12 +4,16 @@
 //!
 //! ```text
 //! (source) --[c]--> (transformer)* --[c]--> (sink)
+//!    |                   |                      |
+//!    |                   v                      |
+//!    +--------------> tracker <----------------+
 //!
 //! [c] - channel
 //! * - optional
 //!  ```
 //!
-//! Most of the data move forward except for the ack which can happen only after the Write.
+//! Most of the data move forward except for the `ack` which can happen only after the that the tracker
+//! has guaranteed that the processing complete.
 //! ```text
 //! (Read) +-------> (UDF) -------> (Write) +
 //!        |                                |
@@ -142,6 +146,7 @@ mod tests {
     use crate::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
+    use crate::tracker::TrackerHandle;
     use crate::transformer::Transformer;
     use crate::Result;
 
@@ -256,10 +261,11 @@ mod tests {
             .await
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
-
+        let tracker_handle = TrackerHandle::new();
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            tracker_handle.clone(),
         );
 
         // create a transformer
@@ -283,13 +289,148 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let transformer = Transformer::new(10, 10, client).await.unwrap();
+        let transformer = Transformer::new(10, 10, client, tracker_handle.clone())
+            .await
+            .unwrap();
 
-        let sink_writer =
-            SinkWriterBuilder::new(10, Duration::from_millis(100), SinkClientType::Log)
-                .build()
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::Log,
+            tracker_handle.clone(),
+        )
+        .build()
+        .await
+        .unwrap();
+
+        // create the forwarder with the source, transformer, and writer
+        let forwarder = ForwarderBuilder::new(source.clone(), sink_writer, cln_token.clone())
+            .transformer(transformer)
+            .build();
+
+        let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
+            forwarder.start().await?;
+            Ok(())
+        });
+
+        // wait for one sec to check if the pending becomes zero, because all the messages
+        // should be read and acked; if it doesn't, then fail the test
+        let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
+            loop {
+                let pending = source.pending().await.unwrap();
+                if pending == Some(0) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            tokio_result.is_ok(),
+            "Timeout occurred before pending became zero"
+        );
+        cln_token.cancel();
+        forwarder_handle.await.unwrap().unwrap();
+        st_shutdown_tx.send(()).unwrap();
+        src_shutdown_tx.send(()).unwrap();
+        source_handle.await.unwrap();
+        transformer_handle.await.unwrap();
+    }
+
+    struct FlatMapTransformer;
+
+    #[tonic::async_trait]
+    impl sourcetransform::SourceTransformer for FlatMapTransformer {
+        async fn transform(
+            &self,
+            _input: sourcetransform::SourceTransformRequest,
+        ) -> Vec<sourcetransform::Message> {
+            let mut output = vec![];
+            for i in 0..5 {
+                let message = sourcetransform::Message::new(i.to_string().into_bytes(), Utc::now())
+                    .keys(vec![format!("key-{}", i)])
+                    .tags(vec![]);
+                output.push(message);
+            }
+            output
+        }
+    }
+
+    #[tokio::test]
+    async fn test_flatmap_operation() {
+        let tracker_handle = TrackerHandle::new();
+        // create the source which produces x number of messages
+        let cln_token = CancellationToken::new();
+
+        let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("source.sock");
+        let server_info_file = tmp_dir.path().join("source-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let source_handle = tokio::spawn(async move {
+            // a simple source which generates total of 100 messages
+            source::Server::new(SimpleSource::new(100))
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(src_shutdown_rx)
                 .await
-                .unwrap();
+                .unwrap()
+        });
+
+        // wait for the server to start
+        // TODO: flaky
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+
+        let (src_read, src_ack, lag_reader) = new_source(client, 5, Duration::from_millis(1000))
+            .await
+            .map_err(|e| panic!("failed to create source reader: {:?}", e))
+            .unwrap();
+
+        let source = Source::new(
+            5,
+            SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            tracker_handle.clone(),
+        );
+
+        // create a transformer
+        let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sourcetransform.sock");
+        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let transformer_handle = tokio::spawn(async move {
+            sourcetransform::Server::new(FlatMapTransformer)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(st_shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let transformer = Transformer::new(10, 10, client, tracker_handle.clone())
+            .await
+            .unwrap();
+
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::Log,
+            tracker_handle.clone(),
+        )
+        .build()
+        .await
+        .unwrap();
 
         // create the forwarder with the source, transformer, and writer
         let forwarder = ForwarderBuilder::new(source.clone(), sink_writer, cln_token.clone())
