@@ -163,7 +163,7 @@ impl Transformer {
             let mut input_stream = input_stream;
 
             while let Some(read_msg) = input_stream.next().await {
-                let permit = semaphore.clone().acquire_owned().await.unwrap();
+                let permit = Arc::clone(&semaphore).acquire_owned().await.unwrap();
 
                 Self::transform(
                     transform_handle.clone(),
