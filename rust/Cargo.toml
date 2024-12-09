@@ -14,9 +14,11 @@ members = [
 [workspace.lints.rust]
 unsafe_code = "forbid"
 unused_must_use = "forbid"
+rust_2018_idioms = { level = "deny", priority = -1 }
 
 [workspace.lints.clippy]
 enum_glob_use = "deny"
+clone_on_ref_ptr = "deny"
 
 
 [workspace.dependencies]
