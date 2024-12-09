@@ -1,4 +1,5 @@
 [workspace]
+resolver = "2"
 members = [
     "backoff",
     "numaflow-models",
@@ -7,16 +8,8 @@ members = [
     "numaflow-core",
     "numaflow-pb",
     "numaflow-extns/pulsar",
+    "numaflow",
 ]
-
-[[bin]]
-name = "numaflow"
-path = "src/bin/main.rs"
-
-[package]
-name = "numaflow"
-version = "0.1.0"
-edition = "2021"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
@@ -25,21 +18,12 @@ unused_must_use = "forbid"
 [workspace.lints.clippy]
 enum_glob_use = "deny"
 
-[dependencies]
-servesink.workspace = true
-serving.workspace = true
-numaflow-core.workspace = true
-numaflow-models.workspace = true
-backoff.workspace = true
-tokio.workspace = true
-tracing.workspace = true
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [workspace.dependencies]
 servesink = { path = "servesink" }
 serving = { path = "serving" }
 numaflow-core = { path = "numaflow-core" }
 numaflow-models = { path = "numaflow-models" }
-backoff = { path = "backoff"}
+backoff = { path = "backoff" }
 tokio = "1.41.1"
 tracing = "0.1.40"
