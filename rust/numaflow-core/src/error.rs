@@ -49,6 +49,9 @@ pub enum Error {
 
     #[error("Lag cannot be fetched, {0}")]
     Lag(String),
+
+    #[error("Task Error - {0}")]
+    Tracker(String),
 }
 
 impl From<tonic::Status> for Error {

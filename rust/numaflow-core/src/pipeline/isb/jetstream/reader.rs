@@ -15,10 +15,11 @@ use tracing::{error, info};
 use crate::config::pipeline::isb::BufferReaderConfig;
 use crate::config::pipeline::PipelineConfig;
 use crate::error::Error;
-use crate::message::{IntOffset, Message, Offset, ReadAck, ReadMessage};
+use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
 use crate::metrics::{
     pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
 };
+use crate::tracker::TrackerHandle;
 use crate::Result;
 
 /// The JetstreamReader is a handle to the background actor that continuously fetches messages from Jetstream.
@@ -31,6 +32,7 @@ pub(crate) struct JetstreamReader {
     partition_idx: u16,
     config: BufferReaderConfig,
     consumer: PullConsumer,
+    tracker_handle: TrackerHandle,
 }
 
 impl JetstreamReader {
@@ -39,6 +41,7 @@ impl JetstreamReader {
         partition_idx: u16,
         js_ctx: Context,
         config: BufferReaderConfig,
+        tracker_handle: TrackerHandle,
     ) -> Result<Self> {
         let mut config = config;
 
@@ -65,6 +68,7 @@ impl JetstreamReader {
             partition_idx,
             config: config.clone(),
             consumer,
+            tracker_handle,
         })
     }
 
@@ -78,13 +82,15 @@ impl JetstreamReader {
         &self,
         cancel_token: CancellationToken,
         pipeline_config: &PipelineConfig,
-    ) -> Result<(ReceiverStream<ReadMessage>, JoinHandle<Result<()>>)> {
+    ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * pipeline_config.batch_size);
+        let pipeline_config = pipeline_config.clone();
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let consumer = self.consumer.clone();
             let partition_idx = self.partition_idx;
             let config = self.config.clone();
+            let tracker_handle = self.tracker_handle.clone();
             let cancel_token = cancel_token.clone();
 
             let stream_name = self.stream_name;
@@ -144,19 +150,23 @@ impl JetstreamReader {
                                 partition_idx,
                             )));
 
+                            message.id = MessageID {
+                                vertex_name: pipeline_config.vertex_name.clone(),
+                                offset: msg_info.stream_sequence.to_string(),
+                                index: 0,
+                            };
+
+                            // Insert the message into the tracker and wait for the ack to be sent back.
                             let (ack_tx, ack_rx) = oneshot::channel();
+                            tracker_handle.insert(message.id.offset.clone(), ack_tx).await?;
+
                             tokio::spawn(Self::start_work_in_progress(
                                 jetstream_message,
                                 ack_rx,
                                 config.wip_ack_interval,
                             ));
 
-                            let read_message = ReadMessage {
-                                message,
-                                ack: ack_tx,
-                            };
-
-                            messages_tx.send(read_message).await.map_err(|e| {
+                            messages_tx.send(message).await.map_err(|e| {
                                 Error::ISB(format!("Error while sending message to channel: {:?}", e))
                             })?;
 
@@ -261,15 +271,14 @@ impl fmt::Display for JetstreamReader {
 mod tests {
     use std::collections::HashMap;
 
+    use super::*;
+    use crate::message::{Message, MessageID};
+    use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
     use chrono::Utc;
-
-    use super::*;
-    use crate::message::ReadAck::Ack;
-    use crate::message::{Message, MessageID};
-    use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+    use tokio::time::sleep;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -280,6 +289,8 @@ mod tests {
         let context = jetstream::new(client);
 
         let stream_name = "test_jetstream_read";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -307,9 +318,15 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let js_reader = JetstreamReader::new(stream_name, 0, context.clone(), buf_reader_config)
-            .await
-            .unwrap();
+        let js_reader = JetstreamReader::new(
+            stream_name,
+            0,
+            context.clone(),
+            buf_reader_config,
+            TrackerHandle::new(),
+        )
+        .await
+        .unwrap();
 
         let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW91dCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im91dCIsInNpbmsiOnsiYmxhY2tob2xlIjp7fSwicmV0cnlTdHJhdGVneSI6eyJvbkZhaWx1cmUiOiJyZXRyeSJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoib3V0IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==".to_string();
 
@@ -380,8 +397,11 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
+        let tracker_handle = TrackerHandle::new();
 
         let stream_name = "test_ack";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -409,9 +429,15 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let js_reader = JetstreamReader::new(stream_name, 0, context.clone(), buf_reader_config)
-            .await
-            .unwrap();
+        let js_reader = JetstreamReader::new(
+            stream_name,
+            0,
+            context.clone(),
+            buf_reader_config,
+            tracker_handle.clone(),
+        )
+        .await
+        .unwrap();
 
         let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW91dCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im91dCIsInNpbmsiOnsiYmxhY2tob2xlIjp7fSwicmV0cnlTdHJhdGVneSI6eyJvbkZhaWx1cmUiOiJyZXRyeSJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoib3V0IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==".to_string();
 
@@ -431,6 +457,7 @@ mod tests {
             writer_cancel_token.clone(),
         );
 
+        let mut offsets = vec![];
         // write 5 messages
         for i in 0..5 {
             let message = Message {
@@ -440,11 +467,12 @@ mod tests {
                 event_time: Utc::now(),
                 id: MessageID {
                     vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    offset: format!("{}", i + 1),
                     index: i,
                 },
                 headers: HashMap::new(),
             };
+            offsets.push(message.id.offset.clone());
             let message_bytes: BytesMut = message.try_into().unwrap();
             writer
                 .write((stream_name.to_string(), 0), message_bytes.into())
@@ -456,11 +484,24 @@ mod tests {
         writer_cancel_token.cancel();
 
         for _ in 0..5 {
-            let Some(val) = js_reader_rx.next().await else {
+            let Some(_val) = js_reader_rx.next().await else {
                 break;
             };
-            val.ack.send(Ack).unwrap()
         }
+
+        // after reading messages remove from the tracker so that the messages are acked
+        for offset in offsets {
+            tracker_handle.delete(offset).await.unwrap();
+        }
+
+        // wait until the tracker becomes empty, don't wait more than 1 second
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !tracker_handle.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("Tracker is not empty after 1 second");
 
         let mut consumer: PullConsumer = context
             .get_consumer_from_stream(stream_name, stream_name)

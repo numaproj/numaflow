@@ -1863,7 +1863,6 @@ dependencies = [
  "futures",
  "hyper-util",
  "kube",
- "log",
  "numaflow 0.1.1",
  "numaflow-models",
  "numaflow-pb",

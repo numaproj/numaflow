@@ -16,6 +16,7 @@ use crate::source::generator::new_generator;
 use crate::source::pulsar::new_pulsar_source;
 use crate::source::user_defined::new_source;
 use crate::source::Source;
+use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
 use crate::{config, error, metrics, source};
 
@@ -25,6 +26,7 @@ pub(crate) async fn create_sink_writer(
     read_timeout: Duration,
     primary_sink: SinkConfig,
     fallback_sink: Option<SinkConfig>,
+    tracker_handle: TrackerHandle,
     cln_token: &CancellationToken,
 ) -> error::Result<(
     SinkWriter,
@@ -33,11 +35,21 @@ pub(crate) async fn create_sink_writer(
 )> {
     let (sink_writer_builder, sink_rpc_client) = match primary_sink.sink_type.clone() {
         SinkType::Log(_) => (
-            SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Log),
+            SinkWriterBuilder::new(
+                batch_size,
+                read_timeout,
+                SinkClientType::Log,
+                tracker_handle,
+            ),
             None,
         ),
         SinkType::Blackhole(_) => (
-            SinkWriterBuilder::new(batch_size, read_timeout, SinkClientType::Blackhole),
+            SinkWriterBuilder::new(
+                batch_size,
+                read_timeout,
+                SinkClientType::Blackhole,
+                tracker_handle,
+            ),
             None,
         ),
         SinkType::UserDefined(ud_config) => {
@@ -69,6 +81,7 @@ pub(crate) async fn create_sink_writer(
                     batch_size,
                     read_timeout,
                     SinkClientType::UserDefined(sink_grpc_client.clone()),
+                    tracker_handle,
                 )
                 .retry_config(primary_sink.retry_config.unwrap_or_default()),
                 Some(sink_grpc_client),
@@ -137,6 +150,7 @@ pub(crate) async fn create_sink_writer(
 pub async fn create_transformer(
     batch_size: usize,
     transformer_config: Option<TransformerConfig>,
+    tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
 ) -> error::Result<(Option<Transformer>, Option<SourceTransformClient<Channel>>)> {
     if let Some(transformer_config) = transformer_config {
@@ -172,6 +186,7 @@ pub async fn create_transformer(
                         batch_size,
                         transformer_config.concurrency,
                         transformer_grpc_client.clone(),
+                        tracker_handle,
                     )
                     .await?,
                 ),
@@ -187,6 +202,7 @@ pub async fn create_source(
     batch_size: usize,
     read_timeout: Duration,
     source_config: &SourceConfig,
+    tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
 ) -> error::Result<(Source, Option<SourceClient<Channel>>)> {
     match &source_config.source_type {
@@ -197,6 +213,7 @@ pub async fn create_source(
                 Source::new(
                     batch_size,
                     source::SourceType::Generator(generator_read, generator_ack, generator_lag),
+                    tracker_handle,
                 ),
                 None,
             ))
@@ -233,6 +250,7 @@ pub async fn create_source(
                 Source::new(
                     batch_size,
                     source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
+                    tracker_handle,
                 ),
                 Some(source_grpc_client),
             ))
@@ -240,7 +258,11 @@ pub async fn create_source(
         SourceType::Pulsar(pulsar_config) => {
             let pulsar = new_pulsar_source(pulsar_config.clone(), batch_size, read_timeout).await?;
             Ok((
-                Source::new(batch_size, source::SourceType::Pulsar(pulsar)),
+                Source::new(
+                    batch_size,
+                    source::SourceType::Pulsar(pulsar),
+                    tracker_handle,
+                ),
                 None,
             ))
         }
