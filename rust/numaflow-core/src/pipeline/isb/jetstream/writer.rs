@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::DefaultHasher;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,6 +13,7 @@ use crate::pipeline::isb::jetstream::Stream;
 use crate::tracker::TrackerHandle;
 use crate::Result;
 
+use crate::shared::forward;
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::publish::PublishAck;
@@ -179,7 +181,7 @@ impl JetstreamWriter {
 
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             let mut messages_stream = messages_stream;
-            let mut index = 0;
+            let mut hash = DefaultHasher::new();
 
             while let Some(message) = messages_stream.next().await {
                 // if message needs to be dropped, ack and continue
@@ -189,21 +191,39 @@ impl JetstreamWriter {
                     this.tracker_handle.delete(message.id.offset).await?;
                     continue;
                 }
+
                 let mut pafs = vec![];
+                for vertex in &this.config {
+                    // check whether we need to write to this downstream vertex
+                    if !forward::evaluate_write_condition(
+                        message.tags.clone(),
+                        vertex.conditions.clone(),
+                    ) {
+                        continue;
+                    }
 
-                // FIXME(CF): This is a temporary solution to round-robin the streams
-                for to_vertex in &this.config {
-                    let stream = to_vertex.writer_config.streams.get(index).unwrap();
-                    index = (index + 1) % to_vertex.writer_config.streams.len();
+                    // check to which partition the message should be written
+                    let partition = forward::determine_partition(
+                        message.id.offset.clone(),
+                        vertex.writer_config.partitions,
+                        &mut hash,
+                    );
 
-                    let paf = this
+                    // write the message to the corresponding stream
+                    let stream = vertex
+                        .writer_config
+                        .streams
+                        .get(partition as usize)
+                        .expect("stream should be present")
+                        .clone();
+                    if let Some(paf) = this
                         .write(
                             stream.clone(),
                             message.clone(),
-                            to_vertex.writer_config.buffer_full_strategy.clone(),
+                            vertex.writer_config.buffer_full_strategy.clone(),
                         )
-                        .await;
-                    if let Some(paf) = paf {
+                        .await
+                    {
                         pafs.push((stream.clone(), paf));
                     }
                 }
@@ -445,10 +465,13 @@ pub(crate) struct ResolveAndPublishResult {
 #[cfg(test)]
 mod tests {
     use crate::pipeline::pipeline::isb::BufferWriterConfig;
+    use numaflow_models::models::ForwardConditions;
+    use numaflow_models::models::TagConditions;
     use std::collections::HashMap;
     use std::time::Instant;
 
     use async_nats::jetstream;
+    use async_nats::jetstream::consumer::{Config, Consumer};
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
     use chrono::Utc;
@@ -480,7 +503,7 @@ mod tests {
 
         let _consumer = context
             .create_consumer_on_stream(
-                consumer::Config {
+                Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
@@ -554,7 +577,7 @@ mod tests {
 
         let _consumer = context
             .create_consumer_on_stream(
-                consumer::Config {
+                Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
@@ -618,7 +641,7 @@ mod tests {
 
         let _consumer = context
             .create_consumer_on_stream(
-                consumer::Config {
+                Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
@@ -743,7 +766,7 @@ mod tests {
 
         let _consumer = context
             .create_consumer_on_stream(
-                consumer::Config {
+                Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
@@ -754,7 +777,7 @@ mod tests {
 
         let _consumer = context
             .create_consumer_on_stream(
-                consumer::Config {
+                Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
@@ -819,7 +842,7 @@ mod tests {
 
         let _consumer = context
             .create_consumer_on_stream(
-                consumer::Config {
+                Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
@@ -910,7 +933,7 @@ mod tests {
 
         let _consumer = context
             .create_consumer_on_stream(
-                consumer::Config {
+                Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
@@ -998,7 +1021,7 @@ mod tests {
 
         let _consumer = context
             .create_consumer_on_stream(
-                consumer::Config {
+                Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
@@ -1092,5 +1115,179 @@ mod tests {
         // make sure all messages are acked
         assert!(tracker_handle.is_empty().await.unwrap());
         context.delete_stream(stream_name).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_streaming_write_multiple_streams_vertices() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let tracker_handle = TrackerHandle::new();
+        let cln_token = CancellationToken::new();
+
+        let vertex1_streams = vec!["vertex1-0", "vertex1-1"];
+        let vertex2_streams = vec!["vertex2-0", "vertex2-1"];
+        let vertex3_streams = vec!["vertex3-0", "vertex3-1"];
+
+        let (_, consumers1) = create_streams_and_consumers(&context, &vertex1_streams).await;
+        let (_, consumers2) = create_streams_and_consumers(&context, &vertex2_streams).await;
+        let (_, consumers3) = create_streams_and_consumers(&context, &vertex3_streams).await;
+
+        let writer = JetstreamWriter::new(
+            vec![
+                ToVertexConfig {
+                    name: "vertex1".to_string(),
+                    writer_config: BufferWriterConfig {
+                        streams: vec![
+                            (vertex1_streams[0].to_string(), 0),
+                            (vertex1_streams[1].to_string(), 1),
+                        ],
+                        partitions: 2,
+                        ..Default::default()
+                    },
+                    conditions: Some(Box::new(ForwardConditions::new(TagConditions {
+                        operator: Some("and".to_string()),
+                        values: vec!["tag1".to_string(), "tag2".to_string()],
+                    }))),
+                },
+                ToVertexConfig {
+                    name: "vertex2".to_string(),
+                    writer_config: BufferWriterConfig {
+                        streams: vec![
+                            (vertex2_streams[0].to_string(), 0),
+                            (vertex2_streams[1].to_string(), 1),
+                        ],
+                        partitions: 2,
+                        ..Default::default()
+                    },
+                    conditions: Some(Box::new(ForwardConditions::new(TagConditions {
+                        operator: Some("or".to_string()),
+                        values: vec!["tag2".to_string()],
+                    }))),
+                },
+                ToVertexConfig {
+                    name: "vertex3".to_string(),
+                    writer_config: BufferWriterConfig {
+                        streams: vec![
+                            (vertex3_streams[0].to_string(), 0),
+                            (vertex3_streams[1].to_string(), 1),
+                        ],
+                        partitions: 2,
+                        ..Default::default()
+                    },
+                    conditions: Some(Box::new(ForwardConditions::new(TagConditions {
+                        operator: Some("not".to_string()),
+                        values: vec!["tag1".to_string()],
+                    }))),
+                },
+            ],
+            context.clone(),
+            100,
+            tracker_handle.clone(),
+            cln_token.clone(),
+        );
+
+        let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
+        let mut ack_rxs = vec![];
+        for i in 0..10 {
+            let message = Message {
+                keys: vec![format!("key_{}", i)],
+                tags: Some(vec!["tag1".to_string(), "tag2".to_string()]),
+                value: format!("message {}", i).as_bytes().to_vec().into(),
+                offset: None,
+                event_time: Utc::now(),
+                id: MessageID {
+                    vertex_name: "vertex".to_string(),
+                    offset: format!("offset_{}", i),
+                    index: i,
+                },
+                headers: HashMap::new(),
+            };
+            let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+            tracker_handle
+                .insert(message.id.offset.clone(), ack_tx)
+                .await
+                .unwrap();
+            ack_rxs.push(ack_rx);
+            messages_tx.send(message).await.unwrap();
+        }
+        drop(messages_tx);
+
+        let receiver_stream = ReceiverStream::new(messages_rx);
+        let _handle = writer.streaming_write(receiver_stream).await.unwrap();
+
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
+        }
+
+        // since its and operation and both the tags match all 10 messages should be written
+        // messages will be distributed based on the message id but the total message count
+        // should be 10
+        let mut write_count = 0;
+        for mut consumer in consumers1 {
+            write_count += consumer.info().await.unwrap().num_pending;
+        }
+        assert_eq!(write_count, 10);
+
+        // since its or operation and one of the tags match all 10 messages should be written
+        write_count = 0;
+        for mut consumer in consumers2 {
+            write_count += consumer.info().await.unwrap().num_pending;
+        }
+        assert_eq!(write_count, 10);
+
+        // since it's a not operation, and none of the tags match, no messages should be written
+        write_count = 0;
+        for mut consumer in consumers3 {
+            write_count += consumer.info().await.unwrap().num_pending;
+        }
+        assert_eq!(write_count, 0);
+
+        // make sure all messages are acked
+        assert!(tracker_handle.is_empty().await.unwrap());
+
+        for stream_name in vertex1_streams
+            .iter()
+            .chain(&vertex2_streams)
+            .chain(&vertex3_streams)
+        {
+            context.delete_stream(stream_name).await.unwrap();
+        }
+    }
+
+    async fn create_streams_and_consumers(
+        context: &Context,
+        stream_names: &[&str],
+    ) -> (Vec<stream::Stream>, Vec<Consumer<Config>>) {
+        let mut streams = Vec::new();
+        let mut consumers = Vec::new();
+
+        for stream_name in stream_names {
+            let _ = context.delete_stream(stream_name).await;
+            let stream = context
+                .get_or_create_stream(stream::Config {
+                    name: stream_name.to_string(),
+                    subjects: vec![stream_name.to_string()],
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+            streams.push(stream);
+
+            let consumer = context
+                .create_consumer_on_stream(
+                    Config {
+                        name: Some(stream_name.to_string()),
+                        ack_policy: consumer::AckPolicy::Explicit,
+                        ..Default::default()
+                    },
+                    stream_name,
+                )
+                .await
+                .unwrap();
+            consumers.push(consumer);
+        }
+
+        (streams, consumers)
     }
 }
