@@ -101,8 +101,7 @@ pub(crate) struct FromVertexConfig {
 pub(crate) struct ToVertexConfig {
     pub(crate) name: String,
     pub(crate) writer_config: BufferWriterConfig,
-    pub(crate) partitions: u16,
-    pub(crate) conditions: Option<ForwardConditions>,
+    pub(crate) conditions: Option<Box<ForwardConditions>>,
 }
 
 impl PipelineConfig {
@@ -248,25 +247,25 @@ impl PipelineConfig {
                 writer_config: BufferWriterConfig {
                     streams,
                     partitions: partition_count,
-                    max_length: vertex_obj
-                        .spec
-                        .limits
+                    max_length: edge
+                        .to_vertex_limits
                         .as_ref()
                         .and_then(|l| l.buffer_max_length)
                         .unwrap_or(default_writer_config.max_length as i64)
                         as usize,
-                    usage_limit: vertex_obj
-                        .spec
-                        .limits
+                    usage_limit: edge
+                        .to_vertex_limits
                         .as_ref()
                         .and_then(|l| l.buffer_usage_limit)
                         .unwrap_or(default_writer_config.usage_limit as i64)
                         as f64
                         / 100.0,
-                    ..default_writer_config
+                    buffer_full_strategy: edge
+                        .on_full
+                        .and_then(|s| s.clone().try_into().ok())
+                        .unwrap_or(default_writer_config.buffer_full_strategy),
                 },
-                partitions: edge.to_vertex_partition_count.unwrap_or_default() as u16,
-                conditions: None,
+                conditions: edge.conditions,
             });
         }
 
@@ -421,7 +420,6 @@ mod tests {
                     usage_limit: 0.85,
                     ..Default::default()
                 },
-                partitions: 1,
                 conditions: None,
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
@@ -474,7 +472,6 @@ mod tests {
                     usage_limit: 0.8,
                     ..Default::default()
                 },
-                partitions: 1,
                 conditions: None,
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {

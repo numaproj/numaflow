@@ -160,7 +160,7 @@ impl Tracker {
 /// TrackerHandle provides an interface to interact with the Tracker.
 /// It allows inserting, updating, deleting, and discarding tracked messages.
 #[derive(Clone)]
-pub struct TrackerHandle {
+pub(crate) struct TrackerHandle {
     sender: mpsc::Sender<ActorMessage>,
 }
 

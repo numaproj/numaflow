@@ -25,8 +25,11 @@ const DROP: &str = "U+005C__DROP__";
 /// A message that is sent from the source to the sink.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Message {
+    // FIXME: Arc<[Bytes]>
     /// keys of the message
     pub(crate) keys: Vec<String>,
+    /// tags of the message
+    pub(crate) tags: Option<Vec<String>>,
     /// actual payload of the message
     pub(crate) value: Bytes,
     /// offset of the message, it is optional because offset is only
@@ -85,6 +88,7 @@ impl TryFrom<async_nats::Message> for Message {
 
         Ok(Self {
             keys,
+            tags: None,
             value: payload,
             offset,
             event_time,
@@ -97,7 +101,9 @@ impl TryFrom<async_nats::Message> for Message {
 impl Message {
     // Check if the message should be dropped.
     pub(crate) fn dropped(&self) -> bool {
-        self.keys.len() == 1 && self.keys[0] == DROP
+        self.tags
+            .as_ref()
+            .map_or(false, |tags| tags.contains(&DROP.to_string()))
     }
 }
 
@@ -250,6 +256,7 @@ impl TryFrom<Bytes> for Message {
 
         Ok(Message {
             keys: header.keys,
+            tags: None,
             value: body.payload.into(),
             offset: None,
             event_time: utc_from_timestamp(message_info.event_time),
@@ -293,6 +300,7 @@ impl TryFrom<read_response::Result> for Message {
 
         Ok(Message {
             keys: result.keys,
+            tags: None,
             value: result.payload.into(),
             offset: Some(source_offset.clone()),
             event_time: utc_from_timestamp(result.event_time),
@@ -411,6 +419,7 @@ mod tests {
     fn test_message_to_vec_u8() {
         let message = Message {
             keys: vec!["key1".to_string()],
+            tags: None,
             value: vec![1, 2, 3].into(),
             offset: Some(Offset::String(StringOffset {
                 offset: "123".to_string(),
@@ -491,6 +500,7 @@ mod tests {
     fn test_message_to_source_transform_request() {
         let message = Message {
             keys: vec!["key1".to_string()],
+            tags: None,
             value: vec![1, 2, 3].into(),
             offset: Some(Offset::String(StringOffset {
                 offset: "123".to_string(),
@@ -540,6 +550,7 @@ mod tests {
     fn test_message_to_sink_request() {
         let message = Message {
             keys: vec!["key1".to_string()],
+            tags: None,
             value: vec![1, 2, 3].into(),
             offset: Some(Offset::String(StringOffset {
                 offset: "123".to_string(),

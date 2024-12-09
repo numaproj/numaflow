@@ -291,7 +291,7 @@ impl Source {
                 let mut ack_batch = Vec::with_capacity(n);
                 for message in messages {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
-                    let offset = message.offset.clone().unwrap();
+                    let offset = message.offset.clone().expect("offset can never be none");
 
                     // insert the offset and the ack one shot in the tracker.
                     tracker_handle
@@ -411,11 +411,11 @@ mod tests {
     use std::time::Duration;
 
     use chrono::Utc;
-    use futures::StreamExt;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
     use tokio::sync::mpsc::Sender;
+    use tokio_stream::StreamExt;
     use tokio_util::sync::CancellationToken;
 
     use crate::shared::grpc::create_rpc_channel;
