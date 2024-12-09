@@ -104,8 +104,6 @@ impl JetstreamReader {
                     ))
                 })?;
 
-                let mut start_time = Instant::now();
-                let mut total_messages = 0;
                 loop {
                     tokio::select! {
                         _ = cancel_token.cancelled() => { // should we drain from the stream when token is cancelled?
@@ -175,16 +173,6 @@ impl JetstreamReader {
                                 .read_total
                                 .get_or_create(labels)
                                 .inc();
-
-                            if start_time.elapsed() >= Duration::from_millis(1000) {
-                                info!(
-                                    "Total messages read from Jetstream in {:?} seconds: {}",
-                                    start_time.elapsed(),
-                                    total_messages
-                                );
-                                start_time = Instant::now();
-                                total_messages = 0;
-                            }
                         }
                     }
                 }

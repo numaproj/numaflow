@@ -303,7 +303,7 @@ impl SinkWriter {
                         info!(
                             "Processed {} messages at {:?}",
                             processed_msgs_count,
-                            std::time::Instant::now()
+                            time::Instant::now()
                         );
                         processed_msgs_count = 0;
                         last_logged_at = std::time::Instant::now();

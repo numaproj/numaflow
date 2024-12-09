@@ -37,7 +37,7 @@ const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
 /// JetstreamWriter is one to many mapping of streams to write messages to. It also
 /// maintains the buffer usage metrics for each stream.
 pub(crate) struct JetstreamWriter {
-    config: Vec<ToVertexConfig>,
+    config: Arc<Vec<ToVertexConfig>>,
     js_ctx: Context,
     is_full: HashMap<String, Arc<AtomicBool>>,
     cancel_token: CancellationToken,
@@ -66,7 +66,7 @@ impl JetstreamWriter {
             .collect::<HashMap<_, _>>();
 
         let this = Self {
-            config,
+            config: Arc::new(config),
             js_ctx,
             is_full,
             cancel_token,
@@ -93,7 +93,7 @@ impl JetstreamWriter {
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    for config in &self.config {
+                    for config in &*self.config {
                         for stream in &config.writer_config.streams {
                             match Self::fetch_buffer_usage(self.js_ctx.clone(), stream.0.as_str(), config.writer_config.max_length).await {
                                 Ok((soft_usage, solid_usage)) => {
@@ -193,7 +193,7 @@ impl JetstreamWriter {
                 }
 
                 let mut pafs = vec![];
-                for vertex in &this.config {
+                for vertex in &*this.config {
                     // check whether we need to write to this downstream vertex
                     if !forward::evaluate_write_condition(
                         message.tags.clone(),
