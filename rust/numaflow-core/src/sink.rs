@@ -275,6 +275,12 @@ impl SinkWriter {
                         .map(|msg| msg.id.offset.clone())
                         .collect::<Vec<_>>();
 
+                    // filter out the messages which needs to be dropped
+                    let batch = batch
+                        .into_iter()
+                        .filter(|msg| !msg.dropped())
+                        .collect::<Vec<_>>();
+
                     let n = batch.len();
                     match this.write(batch, cancellation_token.clone()).await {
                         Ok(_) => {
@@ -297,7 +303,7 @@ impl SinkWriter {
                         info!(
                             "Processed {} messages at {:?}",
                             processed_msgs_count,
-                            std::time::Instant::now()
+                            time::Instant::now()
                         );
                         processed_msgs_count = 0;
                         last_logged_at = std::time::Instant::now();
@@ -645,6 +651,7 @@ mod tests {
         let messages: Vec<Message> = (0..5)
             .map(|i| Message {
                 keys: vec![format!("key_{}", i)],
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
@@ -679,6 +686,7 @@ mod tests {
         let messages: Vec<Message> = (0..10)
             .map(|i| Message {
                 keys: vec![format!("key_{}", i)],
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
@@ -756,6 +764,7 @@ mod tests {
         let messages: Vec<Message> = (0..10)
             .map(|i| Message {
                 keys: vec!["error".to_string()],
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
@@ -842,6 +851,7 @@ mod tests {
         let messages: Vec<Message> = (0..20)
             .map(|i| Message {
                 keys: vec!["fallback".to_string()],
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
