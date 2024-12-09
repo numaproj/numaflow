@@ -17,7 +17,7 @@ use crate::source;
 ///              =========================================================================> time
 ///  Read RPU=5: | :xxx:xx:  | :xxx <delay>             |:xxx:xx:| :xxx:xx:  | :xxx:xx:  |
 ///                2 batches   only 1 batch (no reread)      5         5           5
-///                 
+///
 /// ```
 /// NOTE: The minimum granularity of duration is 10ms.
 mod stream_generator {
@@ -350,7 +350,7 @@ impl source::SourceReader for GeneratorRead {
     }
 
     fn partitions(&self) -> Vec<u16> {
-        todo!()
+        unimplemented!()
     }
 }
 
