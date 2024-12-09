@@ -136,7 +136,7 @@ impl SourceReader for UserDefinedSourceRead {
     }
 
     fn partitions(&self) -> Vec<u16> {
-        todo!()
+        unimplemented!()
     }
 }
 

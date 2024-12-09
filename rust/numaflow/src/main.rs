@@ -35,6 +35,6 @@ async fn main() {
             error!("Error running rust binary: {}", e);
         }
     } else {
-        error!("Invalid argument. Use --serve, --servesink, or --rust.");
+        error!("Invalid argument. Use --serving, --servesink, or --rust.");
     }
 }

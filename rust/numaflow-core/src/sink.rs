@@ -31,7 +31,7 @@ mod user_defined;
 ///
 /// [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
 #[trait_variant::make(Sink: Send)]
-#[allow(unused)]
+#[allow(dead_code)]
 pub(crate) trait LocalSink {
     /// Write the messages to the Sink.
     async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>>;
@@ -362,7 +362,7 @@ impl SinkWriter {
             }
 
             // If after the retries we still have messages to process, handle the post retry failures
-            let need_retry = self.handle_sink_post_retry(
+            let need_retry = Self::handle_sink_post_retry(
                 &mut attempts,
                 &mut error_map,
                 &mut fallback_msgs,
@@ -394,7 +394,6 @@ impl SinkWriter {
     /// Handles the post retry failures based on the configured strategy,
     /// returns true if we need to retry, else false.
     fn handle_sink_post_retry(
-        &mut self,
         attempts: &mut u16,
         error_map: &mut HashMap<String, i32>,
         fallback_msgs: &mut Vec<Message>,
