@@ -119,6 +119,7 @@ mod tests {
     use crate::shared::grpc::create_rpc_channel;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
+    use crate::tracker::TrackerHandle;
     use crate::transformer::Transformer;
     use crate::Result;
 
@@ -204,6 +205,8 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_source_forwarder() {
+        let tracker_handle = TrackerHandle::new();
+
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
 
@@ -238,6 +241,7 @@ mod tests {
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            tracker_handle.clone(),
         );
 
         // create a js writer
@@ -247,6 +251,8 @@ mod tests {
         let context = jetstream::new(client);
 
         let stream_name = "test_source_forwarder";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -276,6 +282,7 @@ mod tests {
                 ..Default::default()
             }],
             context.clone(),
+            tracker_handle.clone(),
             cln_token.clone(),
         )
         .await;
@@ -299,9 +306,10 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let transformer = Transformer::new(10, 10, client).await.unwrap();
+        let transformer = Transformer::new(10, 10, client, tracker_handle)
+            .await
+            .unwrap();
 
         // create the forwarder with the source, transformer, and writer
         let forwarder = SourceForwarderBuilder::new(source.clone(), writer, cln_token.clone())

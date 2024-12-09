@@ -48,6 +48,9 @@ pub(crate) mod metrics;
 /// [Pipeline]: https://numaflow.numaproj.io/core-concepts/pipeline/
 mod pipeline;
 
+/// Tracker to track the completeness of message processing.
+mod tracker;
+
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();

@@ -14,7 +14,6 @@ use numaflow_pb::clients::source::read_response;
 use numaflow_pb::clients::sourcetransformer::SourceTransformRequest;
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
-use tokio::sync::oneshot;
 
 use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::shared::grpc::utc_from_timestamp;
@@ -86,7 +85,7 @@ impl TryFrom<async_nats::Message> for Message {
 
         Ok(Self {
             keys,
-            value: payload, // FIXME: use Bytes
+            value: payload,
             offset,
             event_time,
             id,
@@ -152,11 +151,6 @@ pub(crate) enum ReadAck {
     Ack,
     /// Message will not be processed now and processing can move onto the next message, NAK’d message will be retried.
     Nak,
-}
-
-pub(crate) struct ReadMessage {
-    pub(crate) message: Message,
-    pub(crate) ack: oneshot::Sender<ReadAck>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
