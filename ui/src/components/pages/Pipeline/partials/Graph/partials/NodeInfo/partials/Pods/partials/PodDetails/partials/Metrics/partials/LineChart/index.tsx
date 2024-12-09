@@ -17,6 +17,40 @@ import FiltersDropdown from "../common/FiltersDropdown";
 import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
 
+
+const getYAxisLabel = (metricName: string) => {
+  console.log("metric name: ", metricName)
+  switch(metricName){
+    case "forwarder_data_read_total":
+    case "monovtx_read_total":
+      return { value: 'messages per second', angle: -90, position: 'left', offset: 20 }
+    case "monovtx_pending":
+        return { value: 'number of pending messages', angle: -90, position: 'left', offset: 20 }
+    default:
+      return {}
+  }
+};
+
+const getTickFormatter = (metricName: string) => {
+  return (value: number) => {
+    switch(metricName){
+      case "monovtx_ack_time_bucket":
+      case "monovtx_read_time_bucket":
+      case "monovtx_processing_time_bucket":
+      case "monovtx_sink_time_bucket":
+        if (value < 1000) {
+          return `${value} μs`;
+        } else if (value < 1000000) {
+          return `${(value / 1000).toFixed(1)} ms`;
+        } else {
+          return `${(value / 1000000).toFixed(1)} s`;
+        }
+      default:
+        return value.toString();
+    }
+  }
+};
+
 // TODO have a check for metricReq against metric object to ensure required fields are passed
 const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }: any) => {
   const [transformedData, setTransformedData] = useState<any[]>([]);
@@ -252,9 +286,15 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
             }}
           >
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="time" padding={{ left: 30, right: 30 }} />
-            <YAxis />
-            <CartesianGrid stroke="#f5f5f5" />
+            <XAxis dataKey="time" padding={{ left: 30, right: 30 }} >
+            </XAxis>
+            <YAxis 
+            label={getYAxisLabel(metric?.metric_name)}
+            tickFormatter={getTickFormatter(metric?.metric_name)}
+            />
+            <CartesianGrid stroke="#f5f5f5">
+            </CartesianGrid>
+            
             {chartLabels?.map((value, index) => (
               <Line
                 key={`${value}-line-chart`}
