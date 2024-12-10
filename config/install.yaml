@@ -28563,6 +28563,33 @@ data:
     # example for local prometheus service
     # url: http://prometheus-operated.monitoring.svc.cluster.local:9090
     patterns:
+    - name: mono_vertex_gauge
+      object: mono-vertex
+      title: Pending Messages Lag
+      description: This query is the total number of pending messages for the mono vertex
+      expr: |
+        $metric_name{$filters}
+      params:
+        - name: start_time
+          required: false
+        - name: end_time
+          required: false
+      metrics:
+      - metric_name: monovtx_pending
+        required_filters:
+          - namespace
+          - mvtx_name
+        dimensions:
+          - name: pod
+            filters:
+              - name: pod
+                required: false
+              - name: period
+                required: false
+          - name: mono-vertex
+            filters:
+              - name: period
+                required: false
     - name: mono_vertex_histogram
       object: mono-vertex
       title: Processing Time Latency
