@@ -167,11 +167,14 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
-    use crate::config::cert_key_pair;
+    use crate::config::generate_certs;
+
+    type Result<T> = core::result::Result<T, Error>;
+    type Error = Box<dyn std::error::Error>;
 
     #[tokio::test]
-    async fn test_start_metrics_server() {
-        let (cert, key) = cert_key_pair();
+    async fn test_start_metrics_server() -> Result<()> {
+        let (cert, key) = generate_certs()?;
 
         let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
             .await
@@ -188,6 +191,7 @@ mod tests {
 
         // Stop the server
         server.abort();
+        Ok(())
     }
 
     #[tokio::test]

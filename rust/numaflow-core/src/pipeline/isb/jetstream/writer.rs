@@ -1114,6 +1114,7 @@ mod tests {
         context.delete_stream(stream_name).await.unwrap();
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_streaming_write_multiple_streams_vertices() {
         let js_url = "localhost:4222";

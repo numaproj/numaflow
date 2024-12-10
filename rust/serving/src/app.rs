@@ -289,11 +289,14 @@ mod tests {
 
     use super::*;
     use crate::app::callback::store::memstore::InMemoryStore;
-    use crate::config::cert_key_pair;
+    use crate::config::generate_certs;
+
+    type Result<T> = core::result::Result<T, Error>;
+    type Error = Box<dyn std::error::Error>;
 
     #[tokio::test]
-    async fn test_start_main_server() {
-        let (cert, key) = cert_key_pair();
+    async fn test_start_main_server() -> Result<()> {
+        let (cert, key) = generate_certs()?;
 
         let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
             .await
@@ -310,12 +313,13 @@ mod tests {
 
         // Stop the server
         server.abort();
+        Ok(())
     }
 
     #[cfg(feature = "all-tests")]
     #[tokio::test]
-    async fn test_setup_app() {
-        let client = async_nats::connect(&config().jetstream.url).await.unwrap();
+    async fn test_setup_app() -> Result<()> {
+        let client = async_nats::connect(&config().jetstream.url).await?;
         let context = jetstream::new(client);
         let stream_name = &config().jetstream.stream;
 
@@ -330,18 +334,19 @@ mod tests {
         assert!(stream.is_ok());
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec())?;
 
-        let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
+        let callback_state = CallbackState::new(msg_graph, mem_store).await?;
 
         let result = setup_app(context, callback_state).await;
         assert!(result.is_ok());
+        Ok(())
     }
 
     #[cfg(feature = "all-tests")]
     #[tokio::test]
-    async fn test_livez() {
-        let client = async_nats::connect(&config().jetstream.url).await.unwrap();
+    async fn test_livez() -> Result<()> {
+        let client = async_nats::connect(&config().jetstream.url).await?;
         let context = jetstream::new(client);
         let stream_name = &config().jetstream.stream;
 
@@ -356,25 +361,23 @@ mod tests {
         assert!(stream.is_ok());
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec())?;
 
-        let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
+        let callback_state = CallbackState::new(msg_graph, mem_store).await?;
 
         let result = setup_app(context, callback_state).await;
 
-        let request = Request::builder()
-            .uri("/livez")
-            .body(Body::empty())
-            .unwrap();
+        let request = Request::builder().uri("/livez").body(Body::empty())?;
 
-        let response = result.unwrap().oneshot(request).await.unwrap();
+        let response = result?.oneshot(request).await?;
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        Ok(())
     }
 
     #[cfg(feature = "all-tests")]
     #[tokio::test]
-    async fn test_readyz() {
-        let client = async_nats::connect(&config().jetstream.url).await.unwrap();
+    async fn test_readyz() -> Result<()> {
+        let client = async_nats::connect(&config().jetstream.url).await?;
         let context = jetstream::new(client);
         let stream_name = &config().jetstream.stream;
 
@@ -389,19 +392,17 @@ mod tests {
         assert!(stream.is_ok());
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec())?;
 
-        let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
+        let callback_state = CallbackState::new(msg_graph, mem_store).await?;
 
         let result = setup_app(context, callback_state).await;
 
-        let request = Request::builder()
-            .uri("/readyz")
-            .body(Body::empty())
-            .unwrap();
+        let request = Request::builder().uri("/readyz").body(Body::empty())?;
 
-        let response = result.unwrap().oneshot(request).await.unwrap();
+        let response = result.unwrap().oneshot(request).await?;
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        Ok(())
     }
 
     #[tokio::test]
@@ -413,8 +414,8 @@ mod tests {
 
     #[cfg(feature = "all-tests")]
     #[tokio::test]
-    async fn test_auth_middleware() {
-        let client = async_nats::connect(&config().jetstream.url).await.unwrap();
+    async fn test_auth_middleware() -> Result<()> {
+        let client = async_nats::connect(&config().jetstream.url).await?;
         let context = jetstream::new(client);
         let stream_name = &config().jetstream.stream;
 
@@ -429,8 +430,8 @@ mod tests {
         assert!(stream.is_ok());
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
-        let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
+        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec())?;
+        let callback_state = CallbackState::new(msg_graph, mem_store).await?;
 
         let app = Router::new()
             .nest(
@@ -447,10 +448,10 @@ mod tests {
                     .body(Body::empty())
                     .unwrap(),
             )
-            .await
-            .unwrap();
+            .await?;
 
         assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
         env::remove_var(ENV_NUMAFLOW_SERVING_AUTH_TOKEN);
+        Ok(())
     }
 }
