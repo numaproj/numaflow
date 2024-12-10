@@ -1,6 +1,7 @@
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::Arc;
 
 use async_nats::HeaderValue;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -23,13 +24,13 @@ use crate::{config, Error};
 const DROP: &str = "U+005C__DROP__";
 
 /// A message that is sent from the source to the sink.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub(crate) struct Message {
     // FIXME: Arc<[Bytes]>
     /// keys of the message
-    pub(crate) keys: Vec<String>,
+    pub(crate) keys: Arc<[String]>,
     /// tags of the message
-    pub(crate) tags: Option<Vec<String>>,
+    pub(crate) tags: Option<Arc<[String]>>,
     /// actual payload of the message
     pub(crate) value: Bytes,
     /// offset of the message, it is optional because offset is only
@@ -230,7 +231,7 @@ impl TryFrom<Message> for BytesMut {
                 }),
                 kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
                 id: Some(message.id.into()),
-                keys: message.keys,
+                keys: message.keys.to_vec(),
                 headers: message.headers,
             }),
             body: Some(numaflow_pb::objects::isb::Body {
@@ -265,7 +266,7 @@ impl TryFrom<Bytes> for Message {
         let id = header.id.ok_or(Error::Proto("Missing id".to_string()))?;
 
         Ok(Message {
-            keys: header.keys,
+            keys: Arc::from(header.keys.into_boxed_slice()),
             tags: None,
             value: body.payload.into(),
             offset: None,
@@ -283,7 +284,7 @@ impl From<Message> for SourceTransformRequest {
             request: Some(
                 numaflow_pb::clients::sourcetransformer::source_transform_request::Request {
                     id: message.id.to_string(),
-                    keys: message.keys,
+                    keys: message.keys.to_vec(),
                     value: message.value.to_vec(),
                     event_time: prost_timestamp_from_utc(message.event_time),
                     watermark: None,
@@ -309,7 +310,7 @@ impl TryFrom<read_response::Result> for Message {
         };
 
         Ok(Message {
-            keys: result.keys,
+            keys: Arc::from(result.keys),
             tags: None,
             value: result.payload.into(),
             offset: Some(source_offset.clone()),
@@ -329,7 +330,7 @@ impl From<Message> for SinkRequest {
     fn from(message: Message) -> Self {
         Self {
             request: Some(Request {
-                keys: message.keys,
+                keys: message.keys.to_vec(),
                 value: message.value.to_vec(),
                 event_time: prost_timestamp_from_utc(message.event_time),
                 watermark: None,
@@ -428,7 +429,7 @@ mod tests {
     #[test]
     fn test_message_to_vec_u8() {
         let message = Message {
-            keys: vec!["key1".to_string()],
+            keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),
             offset: Some(Offset::String(StringOffset {
@@ -455,7 +456,7 @@ mod tests {
                 }),
                 kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
                 id: Some(message.id.into()),
-                keys: message.keys,
+                keys: message.keys.to_vec(),
                 headers: message.headers,
             }),
             body: Some(Body {
@@ -498,7 +499,7 @@ mod tests {
         assert!(result.is_ok());
 
         let message = result.unwrap();
-        assert_eq!(message.keys, vec!["key1".to_string()]);
+        assert_eq!(message.keys.to_vec(), vec!["key1".to_string()]);
         assert_eq!(message.value, vec![1, 2, 3]);
         assert_eq!(
             message.event_time,
@@ -509,7 +510,7 @@ mod tests {
     #[test]
     fn test_message_to_source_transform_request() {
         let message = Message {
-            keys: vec!["key1".to_string()],
+            keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),
             offset: Some(Offset::String(StringOffset {
@@ -548,7 +549,7 @@ mod tests {
         assert!(message.is_ok());
 
         let message = message.unwrap();
-        assert_eq!(message.keys, vec!["key1".to_string()]);
+        assert_eq!(message.keys.to_vec(), vec!["key1".to_string()]);
         assert_eq!(message.value, vec![1, 2, 3]);
         assert_eq!(
             message.event_time,
@@ -559,7 +560,7 @@ mod tests {
     #[test]
     fn test_message_to_sink_request() {
         let message = Message {
-            keys: vec!["key1".to_string()],
+            keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),
             offset: Some(Offset::String(StringOffset {

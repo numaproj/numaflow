@@ -607,6 +607,7 @@ impl Drop for SinkWriter {
 mod tests {
     use chrono::Utc;
     use numaflow::sink;
+    use std::sync::Arc;
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
 
@@ -650,7 +651,7 @@ mod tests {
 
         let messages: Vec<Message> = (0..5)
             .map(|i| Message {
-                keys: vec![format!("key_{}", i)],
+                keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
@@ -685,7 +686,7 @@ mod tests {
 
         let messages: Vec<Message> = (0..10)
             .map(|i| Message {
-                keys: vec![format!("key_{}", i)],
+                keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
@@ -763,7 +764,7 @@ mod tests {
 
         let messages: Vec<Message> = (0..10)
             .map(|i| Message {
-                keys: vec!["error".to_string()],
+                keys: Arc::from(vec!["error".to_string()]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
@@ -850,7 +851,7 @@ mod tests {
 
         let messages: Vec<Message> = (0..20)
             .map(|i| Message {
-                keys: vec!["fallback".to_string()],
+                keys: Arc::from(vec!["fallback".to_string()]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,

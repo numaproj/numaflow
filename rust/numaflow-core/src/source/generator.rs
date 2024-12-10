@@ -21,6 +21,7 @@ use tokio_stream::StreamExt;
 /// NOTE: The minimum granularity of duration is 10ms.
 mod stream_generator {
     use std::pin::Pin;
+    use std::sync::Arc;
     use std::task::{Context, Poll};
     use std::time::Duration;
 
@@ -165,7 +166,7 @@ mod stream_generator {
             }
 
             Message {
-                keys: self.next_key_to_be_fetched(),
+                keys: Arc::from(self.next_key_to_be_fetched()),
                 tags: None,
                 value: data.into(),
                 offset: Some(offset.clone()),

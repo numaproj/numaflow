@@ -120,6 +120,7 @@ impl Sink for UserDefinedSink {
 mod tests {
     use chrono::offset::Utc;
     use numaflow::sink;
+    use std::sync::Arc;
     use tokio::sync::mpsc;
     use tracing::info;
 
@@ -179,7 +180,7 @@ mod tests {
 
         let messages = vec![
             Message {
-                keys: vec![],
+                keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
                 offset: None,
@@ -192,7 +193,7 @@ mod tests {
                 },
             },
             Message {
-                keys: vec![],
+                keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
                 offset: None,

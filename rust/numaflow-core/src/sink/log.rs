@@ -36,6 +36,7 @@ impl Sink for LogSink {
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
+    use std::sync::Arc;
 
     use super::LogSink;
     use crate::message::IntOffset;
@@ -47,7 +48,7 @@ mod tests {
         let mut sink = LogSink;
         let messages = vec![
             Message {
-                keys: vec![],
+                keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
                 offset: Some(Offset::Int(IntOffset::new(1, 0))),
@@ -60,7 +61,7 @@ mod tests {
                 },
             },
             Message {
-                keys: vec![],
+                keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
                 offset: Some(Offset::Int(IntOffset::new(1, 0))),

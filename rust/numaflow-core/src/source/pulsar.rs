@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig};
@@ -14,7 +15,7 @@ impl TryFrom<PulsarMessage> for Message {
         let offset = Offset::Int(IntOffset::new(message.offset, 1)); // FIXME: partition id
 
         Ok(Message {
-            keys: vec![message.key],
+            keys: Arc::from(vec![message.key]),
             tags: None,
             value: message.payload,
             offset: Some(offset.clone()),

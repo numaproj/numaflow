@@ -234,7 +234,7 @@ mod tests {
         let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
 
         let message = Message {
-            keys: vec!["first".into()],
+            keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
             offset: Some(Offset::String(crate::message::StringOffset::new(
@@ -311,7 +311,7 @@ mod tests {
 
         for i in 0..5 {
             let message = Message {
-                keys: vec![format!("key_{}", i)],
+                keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("value_{}", i).into(),
                 offset: Some(Offset::String(crate::message::StringOffset::new(
