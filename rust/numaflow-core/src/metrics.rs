@@ -853,9 +853,8 @@ async fn expose_pending_metrics(
 
         let server_root_ca_cert = std::fs::read_to_string("").expect("CA should be present");
         let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
-        let tls = ClientTlsConfig::new()
-            .domain_name("localhost")
-            .ca_certificate(server_root_ca_cert);
+        let _ = server_root_ca_cert;
+        let tls = ClientTlsConfig::new().domain_name("localhost");
 
         // create an RPC channel to the daemon using an insecure verify true tls
         let channel = Endpoint::try_from(server_url.clone())
