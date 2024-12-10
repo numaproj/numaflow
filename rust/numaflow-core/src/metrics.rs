@@ -1,15 +1,20 @@
 use std::collections::BTreeMap;
-use std::{env, iter};
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
+use std::{env, iter};
 
+use crate::config::{config, get_pipeline_name, get_vertex_name, get_vertex_replica};
+use crate::source::Source;
+use crate::Error;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
-use tokio_rustls;
+use axum_server::tls_rustls::RustlsConfig;
+use numaflow_models::models::tls;
+use numaflow_pb::clients::mvtxdaemon::mono_vertex_daemon_service_client::MonoVertexDaemonServiceClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -20,16 +25,13 @@ use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::Histogram;
 use prometheus_client::registry::Registry;
 use rcgen::{generate_simple_self_signed, CertifiedKey};
+use rustls::ClientConfig;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
-use tonic::transport::{Channel, Endpoint};
+use tonic::transport::{Certificate, Channel, ClientTlsConfig, Endpoint};
 use tonic::Request;
 use tracing::{debug, error, info};
-use numaflow_pb::clients::mvtxdaemon::mono_vertex_daemon_service_client::MonoVertexDaemonServiceClient;
-use crate::config::{config, get_pipeline_name, get_vertex_name, get_vertex_replica};
-use crate::source::Source;
-use crate::Error;
 
 // SDK information
 const SDK_INFO: &str = "sdk_info";
@@ -869,11 +871,35 @@ async fn expose_pending_metrics(
 
     loop {
         let server_url = env::var("SERVER_URL").expect("NO SERVER");
-        info!("MYDEBUG: Server URL: {}", server_url);
+        info!("Server URL: {}", server_url);
+
+        let server_root_ca_cert = std::fs::read_to_string("").expect("CA should be present");
+        let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
+        let tls = ClientTlsConfig::new()
+            .domain_name("localhost")
+            .ca_certificate(server_root_ca_cert);
 
         // create an RPC channel to the daemon using an insecure verify true tls
+        let channel = Endpoint::try_from(server_url.clone())
+            .map_err(|e| Error::Connection(format!("Failed to create endpoint: {:?}", e)))
+            .unwrap()
+            .tls_config(tls)
+            .expect("TLS config should not fail")
+            .connect()
+            .await
+            .unwrap();
 
-        let mut config = rustls::ClientConfig::
+        let mut daemon_client = MonoVertexDaemonServiceClient::new(channel);
+
+        let res = daemon_client
+            .get_mono_vertex_status(Request::new(()))
+            .await
+            .expect("daemon should be up");
+
+        let status = res.into_inner().status.expect("cannot be none").status;
+        info!(?status, "mvtx daemon status");
+
+        // let mut config = rustls::ClientConfig::
         // TODO(mvtx-adapt):  Create TLS client
         // if channel.is_err() {
         //     info!("MYDEBUG: Failed to connect to the daemon {}", channel.unwrap_err());
@@ -897,7 +923,7 @@ async fn expose_pending_metrics(
         //     let status = res.into_inner().status;
         //     info!("MYDEBUG: Status: {:?}", status.unwrap().status);
         // }
-        ticker.tick().await;
+        // ticker.tick().await;
         // call the daemon -> new_value
         // err = default
         for (label, seconds) in lookback_seconds_map {
