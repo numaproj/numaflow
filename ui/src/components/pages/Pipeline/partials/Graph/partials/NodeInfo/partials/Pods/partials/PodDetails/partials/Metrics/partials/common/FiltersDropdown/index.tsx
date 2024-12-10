@@ -29,6 +29,13 @@ export interface FiltersDropdownProps {
   setFilters: any;
 }
 
+const periodData = [
+  { name: "default" },
+  { name: "1m" },
+  { name: "5m" },
+  { name: "15m" },
+];
+
 const FiltersDropdown = ({
   items,
   namespaceId,
@@ -64,7 +71,9 @@ const FiltersDropdown = ({
         try {
           const response = await fetch(
             `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/${
-              type === "monoVertex" ? `mono-vertices/${pipelineId}/pods` : `pipelines/${pipelineId}/vertices/${vertexId}/pods`
+              type === "monoVertex"
+                ? `mono-vertices/${pipelineId}/pods`
+                : `pipelines/${pipelineId}/vertices/${vertexId}/pods`
             }`
           );
           if (!response.ok) {
@@ -101,6 +110,8 @@ const FiltersDropdown = ({
       switch (filterName) {
         case "pod":
           return podsData;
+        case "period":
+          return periodData;
         default:
           return null;
       }
