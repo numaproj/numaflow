@@ -194,7 +194,7 @@ pub(crate) mod sink {
         //   numaflow-models. Problem is, golang has embedded structures and rust does not. We might
         //   have to AbstractSink for sink-configs while Sink for real sink types.
         //   NOTE: I do not see this problem with Source?
-        pub(crate) fn primary_sinktype(sink: Box<Sink>) -> Result<Self> {
+        pub(crate) fn primary_sinktype(sink: &Sink) -> Result<Self> {
             sink.udsink
                 .as_ref()
                 .map(|_| Ok(SinkType::UserDefined(UserDefinedConfig::default())))
@@ -211,8 +211,8 @@ pub(crate) mod sink {
                 .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
         }
 
-        pub(crate) fn fallback_sinktype(sink: Box<Sink>) -> Result<Self> {
-            if let Some(fallback) = sink.fallback {
+        pub(crate) fn fallback_sinktype(sink: &Sink) -> Result<Self> {
+            if let Some(fallback) = sink.fallback.as_ref() {
                 fallback
                     .udsink
                     .as_ref()
@@ -423,9 +423,10 @@ pub(crate) mod metrics {
 
     impl MetricsConfig {
         pub(crate) fn with_lookback_window_in_secs(lookback_window_in_secs: u16) -> Self {
-            let mut default_config = Self::default();
-            default_config.lookback_window_in_secs = lookback_window_in_secs;
-            default_config
+            MetricsConfig {
+                lookback_window_in_secs,
+                ..Default::default()
+            }
         }
     }
 }

@@ -10,3 +10,6 @@ pub(crate) mod metrics;
 /// Shared methods for creating Sources, Sinks, Transformers, etc. as they are required for both
 /// MonoVertex and Pipeline.
 pub(crate) mod create_components;
+
+/// Shared methods for forwarding messages.
+pub(crate) mod forward;

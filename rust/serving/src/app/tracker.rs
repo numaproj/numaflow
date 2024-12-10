@@ -79,7 +79,7 @@ impl MessageGraph {
                 .entry(callback.vertex.clone())
                 .or_default()
                 .push(CallbackRequestWrapper {
-                    callback_request: callback.clone(),
+                    callback_request: Arc::clone(&callback),
                     visited: false,
                 });
         }
@@ -142,7 +142,7 @@ impl MessageGraph {
         for callback in callbacks {
             if callback.callback_request.from_vertex == from && !callback.visited {
                 callback.visited = true;
-                current_callback = Some(callback.callback_request.clone());
+                current_callback = Some(Arc::clone(&callback.callback_request));
                 break;
             }
         }

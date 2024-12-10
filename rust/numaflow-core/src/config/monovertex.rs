@@ -117,13 +117,13 @@ impl MonovertexConfig {
             .ok_or_else(|| Error::Config("Sink not found".to_string()))?;
 
         let sink_config = SinkConfig {
-            sink_type: SinkType::primary_sinktype(sink.clone())?,
+            sink_type: SinkType::primary_sinktype(&sink)?,
             retry_config: sink.retry_strategy.clone().map(|retry| retry.into()),
         };
 
         let fb_sink_config = if sink.fallback.is_some() {
             Some(SinkConfig {
-                sink_type: SinkType::fallback_sinktype(sink)?,
+                sink_type: SinkType::fallback_sinktype(&sink)?,
                 retry_config: None,
             })
         } else {

@@ -5,7 +5,7 @@ use tracing::info;
 
 pub use self::error::{Error, Result};
 use crate::app::start_main_server;
-use crate::config::{cert_key_pair, config};
+use crate::config::{config, generate_certs};
 use crate::metrics::start_https_metrics_server;
 use crate::pipeline::min_pipeline_spec;
 
@@ -16,8 +16,9 @@ mod error;
 mod metrics;
 mod pipeline;
 
-pub async fn serve() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let (cert, key) = cert_key_pair();
+pub async fn serve() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
+{
+    let (cert, key) = generate_certs()?;
 
     let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
         .await

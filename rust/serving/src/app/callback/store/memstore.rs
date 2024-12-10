@@ -116,7 +116,7 @@ mod tests {
         store
             .save(vec![PayloadToSave::Callback {
                 key: key.clone(),
-                value: value.clone(),
+                value: Arc::clone(&value),
             }])
             .await
             .unwrap();
@@ -191,7 +191,7 @@ mod tests {
         let result = store
             .save(vec![PayloadToSave::Callback {
                 key: "".to_string(),
-                value: value.clone(),
+                value: Arc::clone(&value),
             }])
             .await;
 

@@ -67,7 +67,7 @@ impl UserDefinedTransformer {
 
         let transformer = Self {
             read_tx,
-            senders: sender_map.clone(),
+            senders: Arc::clone(&sender_map),
         };
 
         // background task to receive responses from the server and send them to the appropriate
@@ -103,6 +103,7 @@ impl UserDefinedTransformer {
                             offset: msg_info.offset.to_string(),
                         },
                         keys: result.keys,
+                        tags: Some(result.tags),
                         value: result.value.into(),
                         offset: None,
                         event_time: utc_from_timestamp(result.event_time),
@@ -125,7 +126,7 @@ impl UserDefinedTransformer {
     ) {
         let msg_id = message.id.to_string();
         let msg_info = ParentMessageInfo {
-            offset: message.offset.clone().unwrap(),
+            offset: message.offset.clone().expect("offset can never be none"),
             headers: message.headers.clone(),
         };
 
@@ -194,6 +195,7 @@ mod tests {
 
         let message = crate::message::Message {
             keys: vec!["first".into()],
+            tags: None,
             value: "hello".into(),
             offset: Some(crate::message::Offset::String(StringOffset::new(
                 "0".to_string(),

@@ -1,60 +1,77 @@
 use std::collections::HashMap;
+use std::hash::DefaultHasher;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_nats::jetstream::consumer::PullConsumer;
-use async_nats::jetstream::context::PublishAckFuture;
-use async_nats::jetstream::publish::PublishAck;
-use async_nats::jetstream::stream::RetentionPolicy::Limits;
-use async_nats::jetstream::Context;
-use bytes::Bytes;
-use tokio::sync::Semaphore;
-use tokio::time::{sleep, Instant};
-use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
-
-use crate::config::pipeline::isb::BufferWriterConfig;
+use crate::config::pipeline::isb::BufferFullStrategy;
+use crate::config::pipeline::ToVertexConfig;
 use crate::error::Error;
-use crate::message::{IntOffset, Offset};
+use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
 use crate::pipeline::isb::jetstream::Stream;
 use crate::tracker::TrackerHandle;
 use crate::Result;
 
-#[derive(Clone, Debug)]
+use crate::shared::forward;
+use async_nats::jetstream::consumer::PullConsumer;
+use async_nats::jetstream::context::PublishAckFuture;
+use async_nats::jetstream::publish::PublishAck;
+use async_nats::jetstream::stream::RetentionPolicy::Limits;
+use async_nats::jetstream::Context;
+use bytes::{Bytes, BytesMut};
+use tokio::sync::Semaphore;
+use tokio::task::JoinHandle;
+use tokio::time::{sleep, Instant};
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, error, info, warn};
+
+const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
+const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
+
+#[derive(Clone)]
 /// Writes to JetStream ISB. Exposes both write and blocking methods to write messages.
 /// It accepts a cancellation token to stop infinite retries during shutdown.
 /// JetstreamWriter is one to many mapping of streams to write messages to. It also
 /// maintains the buffer usage metrics for each stream.
 pub(crate) struct JetstreamWriter {
-    streams: Vec<Stream>,
-    config: BufferWriterConfig,
+    config: Arc<Vec<ToVertexConfig>>,
     js_ctx: Context,
     is_full: HashMap<String, Arc<AtomicBool>>,
     cancel_token: CancellationToken,
+    tracker_handle: TrackerHandle,
+    sem: Arc<Semaphore>,
 }
 
 impl JetstreamWriter {
     /// Creates a JetStream Writer and a background task to make sure the Write futures (PAFs) are
     /// successful. Batch Size determines the maximum pending futures.
     pub(crate) fn new(
-        streams: Vec<Stream>,
-        config: BufferWriterConfig,
+        config: Vec<ToVertexConfig>,
         js_ctx: Context,
+        paf_concurrency: usize,
+        tracker_handle: TrackerHandle,
         cancel_token: CancellationToken,
     ) -> Self {
+        let streams = config
+            .iter()
+            .flat_map(|c| c.writer_config.streams.clone())
+            .collect::<Vec<Stream>>();
+
         let is_full = streams
             .iter()
             .map(|stream| (stream.0.clone(), Arc::new(AtomicBool::new(false))))
             .collect::<HashMap<_, _>>();
 
         let this = Self {
-            streams,
-            config,
+            config: Arc::new(config),
             js_ctx,
             is_full,
             cancel_token,
+            tracker_handle,
+            sem: Arc::new(Semaphore::new(paf_concurrency)),
         };
 
         // spawn a task for checking whether buffer is_full
@@ -71,25 +88,28 @@ impl JetstreamWriter {
     /// Checks the buffer usage metrics (soft and solid usage) for each stream in the streams vector.
     /// If the usage is greater than the bufferUsageLimit, it sets the is_full flag to true.
     async fn check_stream_status(&mut self) {
-        let mut interval = tokio::time::interval(self.config.refresh_interval);
+        let mut interval =
+            tokio::time::interval(Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS));
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    for stream in &self.streams {
-                        match Self::fetch_buffer_usage(self.js_ctx.clone(), stream.0.as_str(), self.config.max_length).await {
-                            Ok((soft_usage, solid_usage)) => {
-                                if solid_usage >= self.config.usage_limit && soft_usage >= self.config.usage_limit {
+                    for config in &*self.config {
+                        for stream in &config.writer_config.streams {
+                            match Self::fetch_buffer_usage(self.js_ctx.clone(), stream.0.as_str(), config.writer_config.max_length).await {
+                                Ok((soft_usage, solid_usage)) => {
+                                    if solid_usage >= config.writer_config.usage_limit && soft_usage >= config.writer_config.usage_limit {
+                                        if let Some(is_full) = self.is_full.get(stream.0.as_str()) {
+                                            is_full.store(true, Ordering::Relaxed);
+                                        }
+                                    } else if let Some(is_full) = self.is_full.get(stream.0.as_str()) {
+                                        is_full.store(false, Ordering::Relaxed);
+                                    }
+                                }
+                                Err(e) => {
+                                    error!(?e, "Failed to fetch buffer usage for stream {}, updating isFull to true", stream.0.as_str());
                                     if let Some(is_full) = self.is_full.get(stream.0.as_str()) {
                                         is_full.store(true, Ordering::Relaxed);
                                     }
-                                } else if let Some(is_full) = self.is_full.get(stream.0.as_str()) {
-                                    is_full.store(false, Ordering::Relaxed);
-                                }
-                            }
-                            Err(e) => {
-                                error!(?e, "Failed to fetch buffer usage for stream {}, updating isFull to true", stream.0.as_str());
-                                if let Some(is_full) = self.is_full.get(stream.0.as_str()) {
-                                    is_full.store(true, Ordering::Relaxed);
                                 }
                             }
                         }
@@ -152,13 +172,96 @@ impl JetstreamWriter {
         Ok((soft_usage, solid_usage))
     }
 
+    /// Starts reading messages from the stream and writes them to Jetstream ISB.
+    pub(crate) async fn streaming_write(
+        &self,
+        messages_stream: ReceiverStream<Message>,
+    ) -> Result<JoinHandle<Result<()>>> {
+        let this = self.clone();
+
+        let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
+            let mut messages_stream = messages_stream;
+            let mut hash = DefaultHasher::new();
+
+            while let Some(message) = messages_stream.next().await {
+                // if message needs to be dropped, ack and continue
+                // TODO: add metric for dropped count
+                if message.dropped() {
+                    // delete the entry from tracker
+                    this.tracker_handle.delete(message.id.offset).await?;
+                    continue;
+                }
+
+                let mut pafs = vec![];
+                for vertex in &*this.config {
+                    // check whether we need to write to this downstream vertex
+                    if !forward::should_forward(message.tags.clone(), vertex.conditions.clone()) {
+                        continue;
+                    }
+
+                    // check to which partition the message should be written
+                    let partition = forward::determine_partition(
+                        message.id.offset.clone(),
+                        vertex.writer_config.partitions,
+                        &mut hash,
+                    );
+
+                    // write the message to the corresponding stream
+                    let stream = vertex
+                        .writer_config
+                        .streams
+                        .get(partition as usize)
+                        .expect("stream should be present")
+                        .clone();
+                    if let Some(paf) = this
+                        .write(
+                            stream.clone(),
+                            message.clone(),
+                            vertex.writer_config.buffer_full_strategy.clone(),
+                        )
+                        .await
+                    {
+                        pafs.push((stream.clone(), paf));
+                    }
+                }
+
+                pipeline_metrics()
+                    .forwarder
+                    .write_total
+                    .get_or_create(pipeline_isb_metric_labels())
+                    .inc();
+
+                if pafs.is_empty() {
+                    continue;
+                }
+
+                this.resolve_pafs(ResolveAndPublishResult {
+                    pafs,
+                    payload: message.value.clone().into(),
+                    offset: message.id.offset,
+                })
+                .await?;
+            }
+            Ok(())
+        });
+        Ok(handle)
+    }
+
     /// Writes the message to the JetStream ISB and returns a future which can be
     /// awaited to get the PublishAck. It will do infinite retries until the message
     /// gets published successfully. If it returns an error it means it is fatal error
-    pub(super) async fn write(&self, stream: Stream, payload: Vec<u8>) -> PublishAckFuture {
-        let js_ctx = self.js_ctx.clone();
+    pub(super) async fn write(
+        &self,
+        stream: Stream,
+        message: Message,
+        on_full: BufferFullStrategy,
+    ) -> Option<PublishAckFuture> {
+        let mut counter = 500u16;
 
-        let mut counter = 500u64;
+        let offset = message.id.offset.clone();
+        let payload: BytesMut = message
+            .try_into()
+            .expect("message serialization should not fail");
 
         // loop till we get a PAF, there could be other reasons why PAFs cannot be created.
         let paf = loop {
@@ -175,10 +278,20 @@ impl JetstreamWriter {
                         counter = 0;
                     }
                     counter += 1;
-
-                    // FIXME: consider buffer-full strategy
+                    match on_full {
+                        BufferFullStrategy::DiscardLatest => {
+                            // delete the entry from tracker
+                            self.tracker_handle
+                                .delete(offset.clone())
+                                .await
+                                .expect("Failed to delete offset from tracker");
+                            return None;
+                        }
+                        BufferFullStrategy::RetryUntilSuccess => {}
+                    }
                 }
-                Some(false) => match js_ctx
+                Some(false) => match self
+                    .js_ctx
                     .publish(stream.0.clone(), Bytes::from(payload.clone()))
                     .await
                 {
@@ -199,106 +312,27 @@ impl JetstreamWriter {
             }
 
             // sleep to avoid busy looping
-            sleep(self.config.retry_interval).await;
+            sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
         };
-
-        paf
-    }
-
-    /// Writes the message to the JetStream ISB and returns the PublishAck. It will do
-    /// infinite retries until the message gets published successfully. If it returns
-    /// an error it means it is fatal non-retryable error.
-    pub(super) async fn blocking_write(
-        &self,
-        stream: Stream,
-        payload: Vec<u8>,
-    ) -> Result<PublishAck> {
-        let js_ctx = self.js_ctx.clone();
-        let start_time = Instant::now();
-        info!("Blocking write for stream {}", stream.0);
-        loop {
-            match js_ctx
-                .publish(stream.0.clone(), Bytes::from(payload.clone()))
-                .await
-            {
-                Ok(paf) => match paf.await {
-                    Ok(ack) => {
-                        if ack.duplicate {
-                            // should we return an error here? Because duplicate messages are not fatal
-                            // But it can mess up the watermark progression because the offset will be
-                            // same as the previous message offset
-                            warn!(?ack, "Duplicate message detected, ignoring");
-                        }
-                        debug!(
-                            elapsed_ms = start_time.elapsed().as_millis(),
-                            "Blocking write successful in",
-                        );
-                        return Ok(ack);
-                    }
-                    Err(e) => {
-                        error!(?e, "awaiting publish ack failed, retrying");
-                        sleep(Duration::from_millis(10)).await;
-                    }
-                },
-                Err(e) => {
-                    error!(?e, "publishing failed, retrying");
-                    sleep(self.config.retry_interval).await;
-                }
-            }
-            if self.cancel_token.is_cancelled() {
-                return Err(Error::ISB("Shutdown signal received".to_string()));
-            }
-        }
-    }
-}
-
-/// ResolveAndPublishResult resolves the result of the write PAF operation.
-/// It contains the list of pafs(one message can be written to multiple streams)
-/// and the payload that was written. Once the PAFs for all the streams have been
-/// resolved, the information is published to callee_tx.
-#[derive(Debug)]
-pub(crate) struct ResolveAndPublishResult {
-    pub(crate) pafs: Vec<(Stream, PublishAckFuture)>,
-    pub(crate) payload: Vec<u8>,
-    pub(crate) offset: String,
-}
-
-/// Resolves the PAF from the write call, if not successful it will do a blocking write so that
-/// it is eventually successful. Once the PAF has been resolved (by either means) it will notify
-/// the top-level callee via the oneshot rx.
-pub(crate) struct PafResolver {
-    sem: Arc<Semaphore>,
-    js_writer: JetstreamWriter,
-    tracker_handle: TrackerHandle,
-}
-
-impl PafResolver {
-    pub(crate) fn new(
-        concurrency: usize,
-        js_writer: JetstreamWriter,
-        tracker_handle: TrackerHandle,
-    ) -> Self {
-        PafResolver {
-            sem: Arc::new(Semaphore::new(concurrency)), // concurrency limit for resolving PAFs
-            js_writer,
-            tracker_handle,
-        }
+        Some(paf)
     }
 
     /// resolve_pafs resolves the PAFs for the given result. It will try to resolve the PAFs
     /// asynchronously, if it fails it will do a blocking write to resolve the PAFs.
     /// At any point in time, we will only have X PAF resolvers running, this will help us create a
     /// natural backpressure.
-    pub(crate) async fn resolve_pafs(&self, result: ResolveAndPublishResult) -> Result<()> {
+    pub(super) async fn resolve_pafs(&self, result: ResolveAndPublishResult) -> Result<()> {
         let start_time = Instant::now();
         let permit = Arc::clone(&self.sem)
             .acquire_owned()
             .await
             .map_err(|_e| Error::ISB("Failed to acquire semaphore permit".to_string()))?;
-        let tracker_handle = self.tracker_handle.clone();
-        let mut offsets = Vec::new();
 
-        let js_writer = self.js_writer.clone();
+        let mut offsets = Vec::new();
+        let js_ctx = self.js_ctx.clone();
+        let cancel_token = self.cancel_token.clone();
+        let tracker_handle = self.tracker_handle.clone();
+
         tokio::spawn(async move {
             let _permit = permit;
             for (stream, paf) in result.pafs {
@@ -325,9 +359,13 @@ impl PafResolver {
                             "Failed to resolve the future for stream {}, trying blocking write",
                             stream.0
                         );
-                        match js_writer
-                            .blocking_write(stream.clone(), result.payload.clone())
-                            .await
+                        match JetstreamWriter::blocking_write(
+                            stream.clone(),
+                            result.payload.clone(),
+                            js_ctx.clone(),
+                            cancel_token.clone(),
+                        )
+                        .await
                         {
                             Ok(ack) => {
                                 if ack.duplicate {
@@ -362,24 +400,86 @@ impl PafResolver {
         });
         Ok(())
     }
+
+    /// Writes the message to the JetStream ISB and returns the PublishAck. It will do
+    /// infinite retries until the message gets published successfully. If it returns
+    /// an error it means it is fatal non-retryable error.
+    async fn blocking_write(
+        stream: Stream,
+        payload: Vec<u8>,
+        js_ctx: Context,
+        cln_token: CancellationToken,
+    ) -> Result<PublishAck> {
+        let start_time = Instant::now();
+        info!("Blocking write for stream {}", stream.0);
+        loop {
+            match js_ctx
+                .publish(stream.0.clone(), Bytes::from(payload.clone()))
+                .await
+            {
+                Ok(paf) => match paf.await {
+                    Ok(ack) => {
+                        if ack.duplicate {
+                            // should we return an error here? Because duplicate messages are not fatal
+                            // But it can mess up the watermark progression because the offset will be
+                            // same as the previous message offset
+                            warn!(?ack, "Duplicate message detected, ignoring");
+                        }
+                        debug!(
+                            elapsed_ms = start_time.elapsed().as_millis(),
+                            "Blocking write successful in",
+                        );
+                        return Ok(ack);
+                    }
+                    Err(e) => {
+                        error!(?e, "awaiting publish ack failed, retrying");
+                        sleep(Duration::from_millis(10)).await;
+                    }
+                },
+                Err(e) => {
+                    error!(?e, "publishing failed, retrying");
+                    sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
+                }
+            }
+            if cln_token.is_cancelled() {
+                return Err(Error::ISB("Shutdown signal received".to_string()));
+            }
+        }
+    }
+}
+
+/// ResolveAndPublishResult resolves the result of the write PAF operation.
+/// It contains the list of pafs(one message can be written to multiple streams)
+/// and the payload that was written. Once the PAFs for all the streams have been
+/// resolved, the information is published to callee_tx.
+#[derive(Debug)]
+pub(crate) struct ResolveAndPublishResult {
+    pub(crate) pafs: Vec<(Stream, PublishAckFuture)>,
+    pub(crate) payload: Vec<u8>,
+    pub(crate) offset: String,
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::pipeline::pipeline::isb::BufferWriterConfig;
+    use numaflow_models::models::ForwardConditions;
+    use numaflow_models::models::TagConditions;
     use std::collections::HashMap;
     use std::time::Instant;
 
     use async_nats::jetstream;
+    use async_nats::jetstream::consumer::{Config, Consumer};
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
     use chrono::Utc;
 
     use super::*;
-    use crate::message::{Message, MessageID};
+    use crate::message::{Message, MessageID, ReadAck};
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_async_write() {
+        let tracker_handle = TrackerHandle::new();
         let cln_token = CancellationToken::new();
         let js_url = "localhost:4222";
         // Create JetStream context
@@ -400,7 +500,7 @@ mod tests {
 
         let _consumer = context
             .create_consumer_on_stream(
-                consumer::Config {
+                Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
@@ -411,14 +511,23 @@ mod tests {
             .unwrap();
 
         let writer = JetstreamWriter::new(
-            vec![(stream_name.to_string(), 0)],
-            Default::default(),
+            vec![ToVertexConfig {
+                name: "test-vertex".to_string(),
+                writer_config: BufferWriterConfig {
+                    streams: vec![(stream_name.to_string(), 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
             context.clone(),
+            100,
+            tracker_handle,
             cln_token.clone(),
         );
 
         let message = Message {
             keys: vec!["key_0".to_string()],
+            tags: None,
             value: "message 0".as_bytes().to_vec().into(),
             offset: None,
             event_time: Utc::now(),
@@ -430,11 +539,14 @@ mod tests {
             headers: HashMap::new(),
         };
 
-        let message_bytes: BytesMut = message.try_into().unwrap();
         let paf = writer
-            .write((stream_name.to_string(), 0), message_bytes.into())
+            .write(
+                (stream_name.to_string(), 0),
+                message,
+                BufferFullStrategy::RetryUntilSuccess,
+            )
             .await;
-        assert!(paf.await.is_ok());
+        assert!(paf.unwrap().await.is_ok());
 
         context.delete_stream(stream_name).await.unwrap();
     }
@@ -462,7 +574,7 @@ mod tests {
 
         let _consumer = context
             .create_consumer_on_stream(
-                consumer::Config {
+                Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
@@ -472,15 +584,9 @@ mod tests {
             .await
             .unwrap();
 
-        let writer = JetstreamWriter::new(
-            vec![(stream_name.to_string(), 0)],
-            Default::default(),
-            context.clone(),
-            cln_token.clone(),
-        );
-
         let message = Message {
             keys: vec!["key_0".to_string()],
+            tags: None,
             value: "message 0".as_bytes().to_vec().into(),
             offset: None,
             event_time: Utc::now(),
@@ -493,9 +599,13 @@ mod tests {
         };
 
         let message_bytes: BytesMut = message.try_into().unwrap();
-        let result = writer
-            .blocking_write((stream_name.to_string(), 0), message_bytes.into())
-            .await;
+        let result = JetstreamWriter::blocking_write(
+            (stream_name.to_string(), 0),
+            message_bytes.into(),
+            context.clone(),
+            cln_token.clone(),
+        )
+        .await;
         assert!(result.is_ok());
 
         let publish_ack = result.unwrap();
@@ -507,6 +617,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_write_with_cancellation() {
+        let tracker_handle = TrackerHandle::new();
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
@@ -527,7 +638,7 @@ mod tests {
 
         let _consumer = context
             .create_consumer_on_stream(
-                consumer::Config {
+                Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
@@ -538,10 +649,19 @@ mod tests {
             .unwrap();
 
         let cancel_token = CancellationToken::new();
+
         let writer = JetstreamWriter::new(
-            vec![(stream_name.to_string(), 0)],
-            Default::default(),
+            vec![ToVertexConfig {
+                name: "test-vertex".to_string(),
+                writer_config: BufferWriterConfig {
+                    streams: vec![(stream_name.to_string(), 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
             context.clone(),
+            100,
+            tracker_handle,
             cancel_token.clone(),
         );
 
@@ -550,6 +670,7 @@ mod tests {
         for i in 0..10 {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
@@ -560,9 +681,12 @@ mod tests {
                 },
                 headers: HashMap::new(),
             };
-            let message_bytes: BytesMut = message.try_into().unwrap();
             let paf = writer
-                .write((stream_name.to_string(), 0), message_bytes.into())
+                .write(
+                    (stream_name.to_string(), 0),
+                    message,
+                    BufferFullStrategy::RetryUntilSuccess,
+                )
                 .await;
             result_receivers.push(paf);
         }
@@ -571,6 +695,7 @@ mod tests {
         // so that it fails and sync write will be attempted and it will be blocked
         let message = Message {
             keys: vec!["key_11".to_string()],
+            tags: None,
             value: vec![0; 1025].into(),
             offset: None,
             event_time: Utc::now(),
@@ -581,9 +706,12 @@ mod tests {
             },
             headers: HashMap::new(),
         };
-        let message_bytes: BytesMut = message.try_into().unwrap();
         let paf = writer
-            .write((stream_name.to_string(), 0), message_bytes.into())
+            .write(
+                (stream_name.to_string(), 0),
+                message,
+                BufferFullStrategy::RetryUntilSuccess,
+            )
             .await;
         result_receivers.push(paf);
 
@@ -594,13 +722,13 @@ mod tests {
         for (i, receiver) in result_receivers.into_iter().enumerate() {
             if i < 10 {
                 assert!(
-                    receiver.await.is_ok(),
+                    receiver.unwrap().await.is_ok(),
                     "Message {} should be published successfully",
                     i
                 );
             } else {
                 assert!(
-                    receiver.await.is_err(),
+                    receiver.unwrap().await.is_err(),
                     "Message 11 should fail with cancellation error"
                 );
             }
@@ -635,7 +763,7 @@ mod tests {
 
         let _consumer = context
             .create_consumer_on_stream(
-                consumer::Config {
+                Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
@@ -646,7 +774,7 @@ mod tests {
 
         let _consumer = context
             .create_consumer_on_stream(
-                consumer::Config {
+                Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
@@ -687,6 +815,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_check_stream_status() {
+        let tracker_handle = TrackerHandle::new();
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
@@ -710,7 +839,7 @@ mod tests {
 
         let _consumer = context
             .create_consumer_on_stream(
-                consumer::Config {
+                Config {
                     name: Some(stream_name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
@@ -722,12 +851,18 @@ mod tests {
 
         let cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
-            vec![(stream_name.to_string(), 0)],
-            BufferWriterConfig {
-                max_length: 100,
-                ..Default::default()
-            },
+            vec![ToVertexConfig {
+                name: "test-vertex".to_string(),
+                writer_config: BufferWriterConfig {
+                    streams: vec![(stream_name.to_string(), 0)],
+                    max_length: 100,
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
             context.clone(),
+            100,
+            tracker_handle,
             cancel_token.clone(),
         );
 
@@ -768,5 +903,389 @@ mod tests {
 
         // Clean up
         context.delete_stream(stream_name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_streaming_write() {
+        let cln_token = CancellationToken::new();
+        let js_url = "localhost:4222";
+        // Create JetStream context
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let tracker_handle = TrackerHandle::new();
+
+        let stream_name = "test_publish_messages";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
+        let _stream = context
+            .get_or_create_stream(stream::Config {
+                name: stream_name.into(),
+                subjects: vec![stream_name.into()],
+                max_messages: 1000,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                Config {
+                    name: Some(stream_name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream_name,
+            )
+            .await
+            .unwrap();
+
+        let writer = JetstreamWriter::new(
+            vec![ToVertexConfig {
+                name: "test-vertex".to_string(),
+                writer_config: BufferWriterConfig {
+                    streams: vec![(stream_name.to_string(), 0)],
+                    max_length: 1000,
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
+            context.clone(),
+            100,
+            tracker_handle.clone(),
+            cln_token.clone(),
+        );
+
+        let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
+        let mut ack_rxs = vec![];
+        // Publish 500 messages
+        for i in 0..500 {
+            let message = Message {
+                keys: vec![format!("key_{}", i)],
+                tags: None,
+                value: format!("message {}", i).as_bytes().to_vec().into(),
+                offset: None,
+                event_time: Utc::now(),
+                id: MessageID {
+                    vertex_name: "vertex".to_string(),
+                    offset: format!("offset_{}", i),
+                    index: i,
+                },
+                headers: HashMap::new(),
+            };
+            let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+            tracker_handle
+                .insert(message.id.offset.clone(), ack_tx)
+                .await
+                .unwrap();
+            ack_rxs.push(ack_rx);
+            messages_tx.send(message).await.unwrap();
+        }
+        drop(messages_tx);
+
+        let receiver_stream = ReceiverStream::new(messages_rx);
+        let _handle = writer.streaming_write(receiver_stream).await.unwrap();
+
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
+        }
+        // make sure all messages are acked
+        assert!(tracker_handle.is_empty().await.unwrap());
+        context.delete_stream(stream_name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_streaming_write_with_cancellation() {
+        let js_url = "localhost:4222";
+        // Create JetStream context
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let tracker_handle = TrackerHandle::new();
+
+        let stream_name = "test_publish_cancellation";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
+        let _stream = context
+            .get_or_create_stream(stream::Config {
+                name: stream_name.into(),
+                subjects: vec![stream_name.into()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                Config {
+                    name: Some(stream_name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream_name,
+            )
+            .await
+            .unwrap();
+
+        let cancel_token = CancellationToken::new();
+        let writer = JetstreamWriter::new(
+            vec![ToVertexConfig {
+                name: "test-vertex".to_string(),
+                writer_config: BufferWriterConfig {
+                    streams: vec![(stream_name.to_string(), 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
+            context.clone(),
+            100,
+            tracker_handle.clone(),
+            cancel_token.clone(),
+        );
+
+        let (tx, rx) = tokio::sync::mpsc::channel(500);
+        let mut ack_rxs = vec![];
+        // Publish 100 messages successfully
+        for i in 0..100 {
+            let message = Message {
+                keys: vec![format!("key_{}", i)],
+                tags: None,
+                value: format!("message {}", i).as_bytes().to_vec().into(),
+                offset: None,
+                event_time: Utc::now(),
+                id: MessageID {
+                    vertex_name: "vertex".to_string(),
+                    offset: format!("offset_{}", i),
+                    index: i,
+                },
+                headers: HashMap::new(),
+            };
+            let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+            tracker_handle
+                .insert(message.id.offset.clone(), ack_tx)
+                .await
+                .unwrap();
+            ack_rxs.push(ack_rx);
+            tx.send(message).await.unwrap();
+        }
+
+        let receiver_stream = ReceiverStream::new(rx);
+        let _handle = writer.streaming_write(receiver_stream).await.unwrap();
+
+        // Attempt to publish the 101st message, which should get stuck in the retry loop
+        // because the max message size is set to 1024
+        let message = Message {
+            keys: vec!["key_101".to_string()],
+            tags: None,
+            value: vec![0; 1025].into(),
+            offset: None,
+            event_time: Utc::now(),
+            id: MessageID {
+                vertex_name: "vertex".to_string(),
+                offset: "offset_101".to_string(),
+                index: 101,
+            },
+            headers: HashMap::new(),
+        };
+        let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+        tracker_handle
+            .insert("offset_101".to_string(), ack_tx)
+            .await
+            .unwrap();
+        ack_rxs.push(ack_rx);
+        tx.send(message).await.unwrap();
+        drop(tx);
+
+        // Cancel the token to exit the retry loop
+        cancel_token.cancel();
+        // Check the results
+        for (i, receiver) in ack_rxs.into_iter().enumerate() {
+            let result = receiver.await.unwrap();
+            if i < 100 {
+                assert_eq!(result, ReadAck::Ack);
+            } else {
+                assert_eq!(result, ReadAck::Nak);
+            }
+        }
+
+        // make sure all messages are acked
+        assert!(tracker_handle.is_empty().await.unwrap());
+        context.delete_stream(stream_name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_streaming_write_multiple_streams_vertices() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let tracker_handle = TrackerHandle::new();
+        let cln_token = CancellationToken::new();
+
+        let vertex1_streams = vec!["vertex1-0", "vertex1-1"];
+        let vertex2_streams = vec!["vertex2-0", "vertex2-1"];
+        let vertex3_streams = vec!["vertex3-0", "vertex3-1"];
+
+        let (_, consumers1) = create_streams_and_consumers(&context, &vertex1_streams).await;
+        let (_, consumers2) = create_streams_and_consumers(&context, &vertex2_streams).await;
+        let (_, consumers3) = create_streams_and_consumers(&context, &vertex3_streams).await;
+
+        let writer = JetstreamWriter::new(
+            vec![
+                ToVertexConfig {
+                    name: "vertex1".to_string(),
+                    writer_config: BufferWriterConfig {
+                        streams: vec![
+                            (vertex1_streams[0].to_string(), 0),
+                            (vertex1_streams[1].to_string(), 1),
+                        ],
+                        partitions: 2,
+                        ..Default::default()
+                    },
+                    conditions: Some(Box::new(ForwardConditions::new(TagConditions {
+                        operator: Some("and".to_string()),
+                        values: vec!["tag1".to_string(), "tag2".to_string()],
+                    }))),
+                },
+                ToVertexConfig {
+                    name: "vertex2".to_string(),
+                    writer_config: BufferWriterConfig {
+                        streams: vec![
+                            (vertex2_streams[0].to_string(), 0),
+                            (vertex2_streams[1].to_string(), 1),
+                        ],
+                        partitions: 2,
+                        ..Default::default()
+                    },
+                    conditions: Some(Box::new(ForwardConditions::new(TagConditions {
+                        operator: Some("or".to_string()),
+                        values: vec!["tag2".to_string()],
+                    }))),
+                },
+                ToVertexConfig {
+                    name: "vertex3".to_string(),
+                    writer_config: BufferWriterConfig {
+                        streams: vec![
+                            (vertex3_streams[0].to_string(), 0),
+                            (vertex3_streams[1].to_string(), 1),
+                        ],
+                        partitions: 2,
+                        ..Default::default()
+                    },
+                    conditions: Some(Box::new(ForwardConditions::new(TagConditions {
+                        operator: Some("not".to_string()),
+                        values: vec!["tag1".to_string()],
+                    }))),
+                },
+            ],
+            context.clone(),
+            100,
+            tracker_handle.clone(),
+            cln_token.clone(),
+        );
+
+        let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
+        let mut ack_rxs = vec![];
+        for i in 0..10 {
+            let message = Message {
+                keys: vec![format!("key_{}", i)],
+                tags: Some(vec!["tag1".to_string(), "tag2".to_string()]),
+                value: format!("message {}", i).as_bytes().to_vec().into(),
+                offset: None,
+                event_time: Utc::now(),
+                id: MessageID {
+                    vertex_name: "vertex".to_string(),
+                    offset: format!("offset_{}", i),
+                    index: i,
+                },
+                headers: HashMap::new(),
+            };
+            let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+            tracker_handle
+                .insert(message.id.offset.clone(), ack_tx)
+                .await
+                .unwrap();
+            ack_rxs.push(ack_rx);
+            messages_tx.send(message).await.unwrap();
+        }
+        drop(messages_tx);
+
+        let receiver_stream = ReceiverStream::new(messages_rx);
+        let _handle = writer.streaming_write(receiver_stream).await.unwrap();
+
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
+        }
+
+        // since its and operation and both the tags match all 10 messages should be written
+        // messages will be distributed based on the message id but the total message count
+        // should be 10
+        let mut write_count = 0;
+        for mut consumer in consumers1 {
+            write_count += consumer.info().await.unwrap().num_pending;
+        }
+        assert_eq!(write_count, 10);
+
+        // since its or operation and one of the tags match all 10 messages should be written
+        write_count = 0;
+        for mut consumer in consumers2 {
+            write_count += consumer.info().await.unwrap().num_pending;
+        }
+        assert_eq!(write_count, 10);
+
+        // since it's a not operation, and none of the tags match, no messages should be written
+        write_count = 0;
+        for mut consumer in consumers3 {
+            write_count += consumer.info().await.unwrap().num_pending;
+        }
+        assert_eq!(write_count, 0);
+
+        // make sure all messages are acked
+        assert!(tracker_handle.is_empty().await.unwrap());
+
+        for stream_name in vertex1_streams
+            .iter()
+            .chain(&vertex2_streams)
+            .chain(&vertex3_streams)
+        {
+            context.delete_stream(stream_name).await.unwrap();
+        }
+    }
+
+    async fn create_streams_and_consumers(
+        context: &Context,
+        stream_names: &[&str],
+    ) -> (Vec<stream::Stream>, Vec<Consumer<Config>>) {
+        let mut streams = Vec::new();
+        let mut consumers = Vec::new();
+
+        for stream_name in stream_names {
+            let _ = context.delete_stream(stream_name).await;
+            let stream = context
+                .get_or_create_stream(stream::Config {
+                    name: stream_name.to_string(),
+                    subjects: vec![stream_name.to_string()],
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+            streams.push(stream);
+
+            let consumer = context
+                .create_consumer_on_stream(
+                    Config {
+                        name: Some(stream_name.to_string()),
+                        ack_policy: consumer::AckPolicy::Explicit,
+                        ..Default::default()
+                    },
+                    stream_name,
+                )
+                .await
+                .unwrap();
+            consumers.push(consumer);
+        }
+
+        (streams, consumers)
     }
 }

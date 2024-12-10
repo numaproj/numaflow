@@ -1,9 +1,9 @@
-use futures::StreamExt;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 use tracing::error;
 
@@ -163,7 +163,7 @@ impl Transformer {
             let mut input_stream = input_stream;
 
             while let Some(read_msg) = input_stream.next().await {
-                let permit = semaphore.clone().acquire_owned().await.unwrap();
+                let permit = Arc::clone(&semaphore).acquire_owned().await.unwrap();
 
                 Self::transform(
                     transform_handle.clone(),
@@ -235,6 +235,7 @@ mod tests {
 
         let message = Message {
             keys: vec!["first".into()],
+            tags: None,
             value: "hello".into(),
             offset: Some(Offset::String(crate::message::StringOffset::new(
                 "0".to_string(),
@@ -252,7 +253,7 @@ mod tests {
         let (output_tx, mut output_rx) = mpsc::channel(10);
 
         let semaphore = Arc::new(Semaphore::new(10));
-        let permit = semaphore.clone().acquire_owned().await.unwrap();
+        let permit = semaphore.acquire_owned().await.unwrap();
         Transformer::transform(
             transformer.sender.clone(),
             permit,
@@ -311,6 +312,7 @@ mod tests {
         for i in 0..5 {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
+                tags: None,
                 value: format!("value_{}", i).into(),
                 offset: Some(Offset::String(crate::message::StringOffset::new(
                     i.to_string(),

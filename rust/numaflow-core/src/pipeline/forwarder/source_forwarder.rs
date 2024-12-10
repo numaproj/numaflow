@@ -2,7 +2,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error;
 use crate::error::Error;
-use crate::pipeline::isb::jetstream::ISBWriter;
+use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::source::Source;
 use crate::transformer::Transformer;
 
@@ -11,7 +11,7 @@ use crate::transformer::Transformer;
 pub(crate) struct SourceForwarder {
     source: Source,
     transformer: Option<Transformer>,
-    writer: ISBWriter,
+    writer: JetstreamWriter,
     cln_token: CancellationToken,
 }
 
@@ -19,14 +19,14 @@ pub(crate) struct SourceForwarder {
 pub(crate) struct SourceForwarderBuilder {
     streaming_source: Source,
     transformer: Option<Transformer>,
-    writer: ISBWriter,
+    writer: JetstreamWriter,
     cln_token: CancellationToken,
 }
 
 impl SourceForwarderBuilder {
     pub(crate) fn new(
         streaming_source: Source,
-        writer: ISBWriter,
+        writer: JetstreamWriter,
         cln_token: CancellationToken,
     ) -> Self {
         Self {
@@ -114,7 +114,8 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use crate::config::pipeline::isb::BufferWriterConfig;
-    use crate::pipeline::isb::jetstream::ISBWriter;
+    use crate::config::pipeline::ToVertexConfig;
+    use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
     use crate::pipeline::source_forwarder::SourceForwarderBuilder;
     use crate::shared::grpc::create_rpc_channel;
     use crate::source::user_defined::new_source;
@@ -275,17 +276,20 @@ mod tests {
             .await
             .unwrap();
 
-        let writer = ISBWriter::new(
-            10,
-            vec![BufferWriterConfig {
-                streams: vec![(stream_name.to_string(), 0)],
-                ..Default::default()
+        let writer = JetstreamWriter::new(
+            vec![ToVertexConfig {
+                writer_config: BufferWriterConfig {
+                    streams: vec![(stream_name.to_string(), 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+                name: "test-vertex".to_string(),
             }],
             context.clone(),
+            100,
             tracker_handle.clone(),
             cln_token.clone(),
-        )
-        .await;
+        );
 
         // create a transformer
         let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();

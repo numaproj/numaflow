@@ -104,8 +104,6 @@ impl JetstreamReader {
                     ))
                 })?;
 
-                let mut start_time = Instant::now();
-                let mut total_messages = 0;
                 loop {
                     tokio::select! {
                         _ = cancel_token.cancelled() => { // should we drain from the stream when token is cancelled?
@@ -175,16 +173,6 @@ impl JetstreamReader {
                                 .read_total
                                 .get_or_create(labels)
                                 .inc();
-
-                            if start_time.elapsed() >= Duration::from_millis(1000) {
-                                info!(
-                                    "Total messages read from Jetstream in {:?} seconds: {}",
-                                    start_time.elapsed(),
-                                    total_messages
-                                );
-                                start_time = Instant::now();
-                                total_messages = 0;
-                            }
                         }
                     }
                 }
@@ -273,7 +261,6 @@ mod tests {
 
     use super::*;
     use crate::message::{Message, MessageID};
-    use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
@@ -338,17 +325,10 @@ mod tests {
             .await
             .unwrap();
 
-        let writer_cancel_token = CancellationToken::new();
-        let writer = JetstreamWriter::new(
-            vec![(stream_name.to_string(), 0)],
-            Default::default(),
-            context.clone(),
-            writer_cancel_token.clone(),
-        );
-
         for i in 0..10 {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
@@ -360,15 +340,11 @@ mod tests {
                 headers: HashMap::new(),
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
-            writer
-                .write((stream_name.to_string(), 0), message_bytes.into())
-                .await
+            context
+                .publish(stream_name, message_bytes.into())
                 .await
                 .unwrap();
         }
-
-        // Cancel the token to exit the retry loop
-        writer_cancel_token.cancel();
 
         let mut buffer = vec![];
         for _ in 0..10 {
@@ -449,19 +425,12 @@ mod tests {
             .await
             .unwrap();
 
-        let writer_cancel_token = CancellationToken::new();
-        let writer = JetstreamWriter::new(
-            vec![(stream_name.to_string(), 0)],
-            Default::default(),
-            context.clone(),
-            writer_cancel_token.clone(),
-        );
-
         let mut offsets = vec![];
         // write 5 messages
         for i in 0..5 {
             let message = Message {
                 keys: vec![format!("key_{}", i)],
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
@@ -474,14 +443,11 @@ mod tests {
             };
             offsets.push(message.id.offset.clone());
             let message_bytes: BytesMut = message.try_into().unwrap();
-            writer
-                .write((stream_name.to_string(), 0), message_bytes.into())
-                .await
+            context
+                .publish(stream_name, message_bytes.into())
                 .await
                 .unwrap();
         }
-        // Cancel the token to exit the retry loop
-        writer_cancel_token.cancel();
 
         for _ in 0..5 {
             let Some(_val) = js_reader_rx.next().await else {
