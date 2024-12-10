@@ -28340,7 +28340,7 @@ metadata:
 ---
 apiVersion: v1
 data:
-  config.yaml: |
+  config.yaml: |-
     # url is a required field, it should be the url of the service to which the metrics proxy will connect
     # url: service_name + "." + service_namespace + ".svc.cluster.local" + ":" + port
     # example for local prometheus service
@@ -28394,28 +28394,30 @@ data:
             - namespace
             - mvtx_name
           dimensions:
+            - name: mono-vertex
+              # expr: optional expression for prometheus query
+              # overrides the default expression
             - name: pod
               # expr: optional expression for prometheus query
               # overrides the default expression
               filters:
                 - name: pod
                   required: false
+        - metric_name: monovtx_sink_time_bucket
+          required_filters:
+            - namespace
+            - mvtx_name
+          dimensions:
             - name: mono-vertex
               # expr: optional expression for prometheus query
               # overrides the default expression
+            - name: pod
+              # expr: optional expression for prometheus query
+              # overrides the default expression
+              filters:
+                - name: pod
+                  required: false
         # Add histogram metrics similar to the pattern above
-        #- metric_name: monovtx_sink_time_bucket
-        #  required_filters:
-        #    - namespace
-        #    - mvtx_name
-        #  dimensions:
-        #    - name: pod
-        #      #expr: optional
-        #      filters:
-        #        - name: pod
-        #          required: false
-        #    - name: mono-vertex
-        #      #expr: optional
     - name: vertex_throughput
       object: vertex
       title: Vertex Throughput and Message Rates
@@ -28439,6 +28441,33 @@ data:
               # expr: optional expression for prometheus query
               # overrides the default expression
             - name: pod
+              filters:
+                - name: pod
+                  required: false
+    - name: mono_vertex_throughput
+      object: mono-vertex
+      title: Mono-Vertex Throughput and Message Rates
+      description: This pattern measures the throughput of a mono-vertex in messages per second across different dimensions
+      expr: sum(rate($metric_name{$filters}[$duration])) by ($dimension)
+      params:
+        - name: duration
+          required: true
+        - name: start_time
+          required: false
+        - name: end_time
+          required: false
+      metrics:
+        - metric_name: monovtx_read_total
+          required_filters:
+            - namespace
+            - mvtx_name
+          dimensions:
+            - name: mono-vertex
+              # expr: optional expression for prometheus query
+              # overrides the default expression
+            - name: pod
+              # expr: optional expression for prometheus query
+              # overrides the default expression
               filters:
                 - name: pod
                   required: false
