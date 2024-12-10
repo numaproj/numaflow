@@ -144,7 +144,7 @@ metadata:
 ---
 apiVersion: v1
 data:
-  config.yaml: |
+  config.yaml: |-
     # url is a required field, it should be the url of the service to which the metrics proxy will connect
     # url: service_name + "." + service_namespace + ".svc.cluster.local" + ":" + port
     # example for local prometheus service
@@ -193,6 +193,32 @@ data:
         #          required: false
         #    - name: mono-vertex
         #      #expr: optional
+    - name: vertex_throughput
+      object: vertex
+      title: Vertex Throughput and Message Rates
+      description: This pattern measures the throughput of a vertex in messages per second across different dimensions
+      expr: sum(rate($metric_name{$filters}[$duration])) by ($dimension)
+      params:
+        - name: duration
+          required: true
+        - name: start_time
+          required: false
+        - name: end_time
+          required: false
+      metrics:
+        - metric_name: forwarder_data_read_total
+          required_filters:
+            - namespace
+            - pipeline
+            - vertex
+          dimensions:
+            - name: vertex
+              # expr: optional expression for prometheus query
+              # overrides the default expression
+            - name: pod
+              filters:
+                - name: pod
+                  required: false
 kind: ConfigMap
 metadata:
   name: numaflow-server-metrics-proxy-config

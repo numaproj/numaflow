@@ -1,197 +1,352 @@
-use std::collections::HashMap;
-
-use chrono::Utc;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info};
 
-use crate::config::pipeline::PipelineConfig;
 use crate::error;
 use crate::error::Error;
-use crate::message::{Message, Offset};
-use crate::metrics::{forward_pipeline_metrics, pipeline_forward_read_metric_labels};
-use crate::pipeline::isb::jetstream::WriterHandle;
-use crate::source::SourceHandle;
-use crate::transformer::user_defined::SourceTransformHandle;
+use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+use crate::source::Source;
+use crate::transformer::Transformer;
 
-/// Simple source forwarder that reads messages from the source, applies transformation if present
-/// and writes to the messages to ISB.
-pub(crate) struct Forwarder {
-    source_reader: SourceHandle,
-    transformer: Option<SourceTransformHandle>,
-    buffer_writers: HashMap<String, Vec<WriterHandle>>,
+/// Source forwarder is the orchestrator which starts streaming source, a transformer, and an isb writer
+/// and manages the lifecycle of these components.
+pub(crate) struct SourceForwarder {
+    source: Source,
+    transformer: Option<Transformer>,
+    writer: JetstreamWriter,
     cln_token: CancellationToken,
-    config: PipelineConfig,
 }
 
-pub(crate) struct ForwarderBuilder {
-    source_reader: SourceHandle,
-    transformer: Option<SourceTransformHandle>,
-    buffer_writers: HashMap<String, Vec<WriterHandle>>,
+/// ForwarderBuilder is a builder for Forwarder.
+pub(crate) struct SourceForwarderBuilder {
+    streaming_source: Source,
+    transformer: Option<Transformer>,
+    writer: JetstreamWriter,
     cln_token: CancellationToken,
-    config: PipelineConfig,
 }
 
-impl ForwarderBuilder {
+impl SourceForwarderBuilder {
     pub(crate) fn new(
-        source_reader: SourceHandle,
-        transformer: Option<SourceTransformHandle>,
-        buffer_writers: HashMap<String, Vec<WriterHandle>>,
+        streaming_source: Source,
+        writer: JetstreamWriter,
         cln_token: CancellationToken,
-        config: PipelineConfig,
     ) -> Self {
         Self {
-            source_reader,
-            transformer,
-            buffer_writers,
+            streaming_source,
+            transformer: None,
+            writer,
             cln_token,
-            config,
         }
     }
 
-    pub(crate) fn build(self) -> Forwarder {
-        Forwarder {
-            source_reader: self.source_reader,
+    pub(crate) fn with_transformer(mut self, transformer: Transformer) -> Self {
+        self.transformer = Some(transformer);
+        self
+    }
+
+    pub(crate) fn build(self) -> SourceForwarder {
+        SourceForwarder {
+            source: self.streaming_source,
             transformer: self.transformer,
-            buffer_writers: self.buffer_writers,
+            writer: self.writer,
             cln_token: self.cln_token,
-            config: self.config,
         }
     }
 }
 
-impl Forwarder {
-    pub(crate) async fn start(&mut self) -> Result<(), Error> {
-        let mut processed_msgs_count: usize = 0;
-        let mut last_forwarded_at = std::time::Instant::now();
-        info!("Forwarder has started");
-        loop {
-            tokio::time::Instant::now();
-            if self.cln_token.is_cancelled() {
-                break;
+impl SourceForwarder {
+    /// Start the forwarder by starting the streaming source, transformer, and writer.
+    pub(crate) async fn start(&self) -> error::Result<()> {
+        // RETHINK: only source should stop when the token is cancelled, transformer and writer should drain the streams
+        // and then stop.
+        let (read_messages_stream, reader_handle) =
+            self.source.streaming_read(self.cln_token.clone())?;
+
+        // start the transformer if it is present
+        let (transformed_messages_stream, transformer_handle) =
+            if let Some(transformer) = &self.transformer {
+                let (transformed_messages_stream, transformer_handle) =
+                    transformer.transform_stream(read_messages_stream)?;
+                (transformed_messages_stream, Some(transformer_handle))
+            } else {
+                (read_messages_stream, None)
+            };
+
+        let writer_handle = self
+            .writer
+            .streaming_write(transformed_messages_stream)
+            .await?;
+
+        match tokio::try_join!(
+            reader_handle,
+            transformer_handle.unwrap_or_else(|| tokio::spawn(async { Ok(()) })),
+            writer_handle,
+        ) {
+            Ok((reader_result, transformer_result, sink_writer_result)) => {
+                reader_result?;
+                transformer_result?;
+                sink_writer_result?;
+                Ok(())
             }
-            processed_msgs_count += self.read_and_process_messages().await?;
-
-            if last_forwarded_at.elapsed().as_millis() >= 1000 {
-                info!(
-                    "Forwarded {} messages at time in the pipeline {}",
-                    processed_msgs_count,
-                    Utc::now()
-                );
-                processed_msgs_count = 0;
-                last_forwarded_at = std::time::Instant::now();
-            }
-        }
-        Ok(())
-    }
-
-    async fn read_and_process_messages(&mut self) -> Result<usize, Error> {
-        let start_time = tokio::time::Instant::now();
-        let messages = self.source_reader.read().await.map_err(|e| {
-            Error::Forwarder(format!("Failed to read messages from source {:?}", e))
-        })?;
-
-        debug!(
-            "Read batch size: {} and latency - {}ms",
-            messages.len(),
-            start_time.elapsed().as_millis()
-        );
-
-        let labels = pipeline_forward_read_metric_labels(
-            self.config.pipeline_name.as_ref(),
-            self.config.vertex_name.as_ref(),
-            self.config.vertex_name.as_ref(),
-            "Source",
-            self.config.replica,
-        );
-        forward_pipeline_metrics()
-            .forwarder
-            .data_read
-            .get_or_create(labels)
-            .inc_by(messages.len() as u64);
-
-        if messages.is_empty() {
-            return Ok(0);
-        }
-
-        let msg_count = messages.len() as u64;
-        let offsets: Vec<Offset> =
-            messages
-                .iter()
-                .try_fold(Vec::with_capacity(messages.len()), |mut offsets, msg| {
-                    if let Some(offset) = &msg.offset {
-                        offsets.push(offset.clone());
-                        Ok(offsets)
-                    } else {
-                        Err(Error::Forwarder("Message offset is missing".to_string()))
-                    }
-                })?;
-
-        // Apply transformation if transformer is present
-        // FIXME: we should stream the responses back and write it to the jetstream writer
-        let transformed_messages = self.apply_transformer(messages).await.map_err(|e| {
-            Error::Forwarder(format!(
-                "Failed to apply transformation to messages {:?}",
+            Err(e) => Err(Error::Forwarder(format!(
+                "Error while joining reader, transformer, and sink writer: {:?}",
                 e
-            ))
-        })?;
+            ))),
+        }
+    }
+}
 
-        self.write_to_jetstream(transformed_messages).await?;
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
 
-        self.source_reader.ack(offsets).await?;
+    use async_nats::jetstream;
+    use async_nats::jetstream::{consumer, stream};
+    use chrono::Utc;
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{source, sourcetransform};
+    use numaflow_pb::clients::source::source_client::SourceClient;
+    use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+    use tempfile::TempDir;
+    use tokio::sync::mpsc::Sender;
+    use tokio::sync::oneshot;
+    use tokio::task::JoinHandle;
+    use tokio_util::sync::CancellationToken;
 
-        Ok(msg_count as usize)
+    use crate::config::pipeline::isb::BufferWriterConfig;
+    use crate::config::pipeline::ToVertexConfig;
+    use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+    use crate::pipeline::source_forwarder::SourceForwarderBuilder;
+    use crate::shared::grpc::create_rpc_channel;
+    use crate::source::user_defined::new_source;
+    use crate::source::{Source, SourceType};
+    use crate::tracker::TrackerHandle;
+    use crate::transformer::Transformer;
+    use crate::Result;
+
+    struct SimpleSource {
+        num: usize,
+        sent_count: AtomicUsize,
+        yet_to_ack: std::sync::RwLock<HashSet<String>>,
     }
 
-    /// Applies the transformer to the messages.
-    async fn apply_transformer(&mut self, messages: Vec<Message>) -> error::Result<Vec<Message>> {
-        let Some(client) = &mut self.transformer else {
-            // return early if there is no transformer
-            return Ok(messages);
-        };
-
-        let start_time = tokio::time::Instant::now();
-        let results = client.transform(messages).await?;
-
-        debug!(
-            "Transformer latency - {}ms",
-            start_time.elapsed().as_millis()
-        );
-
-        Ok(results)
+    impl SimpleSource {
+        fn new(num: usize) -> Self {
+            Self {
+                num,
+                sent_count: AtomicUsize::new(0),
+                yet_to_ack: std::sync::RwLock::new(HashSet::new()),
+            }
+        }
     }
 
-    /// Writes messages to the jetstream, it writes to all the downstream buffers.
-    async fn write_to_jetstream(&mut self, messages: Vec<Message>) -> Result<(), Error> {
-        let start_time = tokio::time::Instant::now();
-        if messages.is_empty() {
-            return Ok(());
+    #[tonic::async_trait]
+    impl source::Sourcer for SimpleSource {
+        async fn read(&self, request: SourceReadRequest, transmitter: Sender<Message>) {
+            let event_time = Utc::now();
+            let mut message_offsets = Vec::with_capacity(request.count);
+
+            for i in 0..request.count {
+                if self.sent_count.load(Ordering::SeqCst) >= self.num {
+                    return;
+                }
+
+                let offset = format!("{}-{}", event_time.timestamp_nanos_opt().unwrap(), i);
+                transmitter
+                    .send(Message {
+                        value: b"hello".to_vec(),
+                        event_time,
+                        offset: Offset {
+                            offset: offset.clone().into_bytes(),
+                            partition_id: 0,
+                        },
+                        keys: vec![],
+                        headers: Default::default(),
+                    })
+                    .await
+                    .unwrap();
+                message_offsets.push(offset);
+                self.sent_count.fetch_add(1, Ordering::SeqCst);
+            }
+            self.yet_to_ack.write().unwrap().extend(message_offsets);
         }
 
-        let mut results = Vec::new();
-
-        // write to all the buffers
-        for i in 0..messages.len() {
-            for writers in self.buffer_writers.values() {
-                // write to the stream writers in round-robin fashion
-                let writer = &writers[i % writers.len()]; // FIXME: we need to shuffle based on the message id hash
-                let result = writer.write(messages[i].clone()).await?;
-                results.push(result);
+        async fn ack(&self, offsets: Vec<Offset>) {
+            for offset in offsets {
+                self.yet_to_ack
+                    .write()
+                    .unwrap()
+                    .remove(&String::from_utf8(offset.offset).unwrap());
             }
         }
 
-        // await for all the result futures to complete
-        // FIXME: we should not await for the results to complete, that will make it sequential
-        for result in results {
-            // we can use the ack to publish watermark etc
-            result
-                .await
-                .map_err(|e| Error::Forwarder(format!("Failed to write to jetstream {:?}", e)))??;
+        async fn pending(&self) -> usize {
+            self.num - self.sent_count.load(Ordering::SeqCst)
+                + self.yet_to_ack.read().unwrap().len()
         }
-        debug!(
-            len = messages.len(),
-            elapsed_ms = start_time.elapsed().as_millis(),
-            "Wrote messages to jetstream",
+
+        async fn partitions(&self) -> Option<Vec<i32>> {
+            Some(vec![1, 2])
+        }
+    }
+
+    struct SimpleTransformer;
+
+    #[tonic::async_trait]
+    impl sourcetransform::SourceTransformer for SimpleTransformer {
+        async fn transform(
+            &self,
+            input: sourcetransform::SourceTransformRequest,
+        ) -> Vec<sourcetransform::Message> {
+            let message = sourcetransform::Message::new(input.value, Utc::now()).keys(input.keys);
+            vec![message]
+        }
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_source_forwarder() {
+        let tracker_handle = TrackerHandle::new();
+
+        // create the source which produces x number of messages
+        let cln_token = CancellationToken::new();
+
+        let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("source.sock");
+        let server_info_file = tmp_dir.path().join("source-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let source_handle = tokio::spawn(async move {
+            // a simple source which generates total of 100 messages
+            source::Server::new(SimpleSource::new(100))
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(src_shutdown_rx)
+                .await
+                .unwrap()
+        });
+
+        // wait for the server to start
+        // TODO: flaky
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceClient::new(create_rpc_channel(sock_file).await.unwrap());
+
+        let (src_read, src_ack, lag_reader) = new_source(client, 5, Duration::from_millis(1000))
+            .await
+            .map_err(|e| panic!("failed to create source reader: {:?}", e))
+            .unwrap();
+
+        let source = Source::new(
+            5,
+            SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            tracker_handle.clone(),
         );
-        Ok(())
+
+        // create a js writer
+        let js_url = "localhost:4222";
+        // Create JetStream context
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream_name = "test_source_forwarder";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
+        let _stream = context
+            .get_or_create_stream(stream::Config {
+                name: stream_name.into(),
+                subjects: vec![stream_name.into()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream_name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream_name,
+            )
+            .await
+            .unwrap();
+
+        let writer = JetstreamWriter::new(
+            vec![ToVertexConfig {
+                writer_config: BufferWriterConfig {
+                    streams: vec![(stream_name.to_string(), 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+                name: "test-vertex".to_string(),
+            }],
+            context.clone(),
+            100,
+            tracker_handle.clone(),
+            cln_token.clone(),
+        );
+
+        // create a transformer
+        let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sourcetransform.sock");
+        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let transformer_handle = tokio::spawn(async move {
+            sourcetransform::Server::new(SimpleTransformer)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(st_shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let transformer = Transformer::new(10, 10, client, tracker_handle)
+            .await
+            .unwrap();
+
+        // create the forwarder with the source, transformer, and writer
+        let forwarder = SourceForwarderBuilder::new(source.clone(), writer, cln_token.clone())
+            .with_transformer(transformer)
+            .build();
+
+        let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
+            forwarder.start().await?;
+            Ok(())
+        });
+
+        // wait for one sec to check if the pending becomes zero, because all the messages
+        // should be read and acked; if it doesn't, then fail the test
+        let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
+            loop {
+                let pending = source.pending().await.unwrap();
+                if pending == Some(0) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            tokio_result.is_ok(),
+            "Timeout occurred before pending became zero"
+        );
+        cln_token.cancel();
+        forwarder_handle.await.unwrap().unwrap();
+        st_shutdown_tx.send(()).unwrap();
+        src_shutdown_tx.send(()).unwrap();
+        source_handle.await.unwrap();
+        transformer_handle.await.unwrap();
     }
 }

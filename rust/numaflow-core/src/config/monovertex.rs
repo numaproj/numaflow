@@ -1,3 +1,4 @@
+use crate::config::monovertex::sink::SinkType;
 use std::time::Duration;
 
 use base64::prelude::BASE64_STANDARD;
@@ -12,12 +13,13 @@ use crate::config::components::transformer::{
     TransformerConfig, TransformerType, UserDefinedConfig,
 };
 use crate::config::components::{sink, source};
+use crate::config::get_vertex_replica;
 use crate::error::Error;
-use crate::message::get_vertex_replica;
 use crate::Result;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
+const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MonovertexConfig {
@@ -94,6 +96,7 @@ impl MonovertexConfig {
             .as_ref()
             .and_then(|source| source.transformer.as_ref())
             .map(|_| TransformerConfig {
+                concurrency: batch_size as usize, // FIXME: introduce a new config called udf concurrency in the spec
                 transformer_type: TransformerType::UserDefined(UserDefinedConfig::default()),
             });
 
@@ -114,25 +117,32 @@ impl MonovertexConfig {
             .ok_or_else(|| Error::Config("Sink not found".to_string()))?;
 
         let sink_config = SinkConfig {
-            sink_type: sink.clone().try_into()?,
+            sink_type: SinkType::primary_sinktype(&sink)?,
             retry_config: sink.retry_strategy.clone().map(|retry| retry.into()),
         };
 
         let fb_sink_config = if sink.fallback.is_some() {
             Some(SinkConfig {
-                sink_type: sink.try_into()?,
+                sink_type: SinkType::fallback_sinktype(&sink)?,
                 retry_config: None,
             })
         } else {
             None
         };
 
+        let look_back_window = mono_vertex_obj
+            .spec
+            .scale
+            .as_ref()
+            .and_then(|scale| scale.lookback_seconds.map(|x| x as u16))
+            .unwrap_or(DEFAULT_LOOKBACK_WINDOW_IN_SECS);
+
         Ok(MonovertexConfig {
             name: mono_vertex_name,
             replica: *get_vertex_replica(),
             batch_size: batch_size as usize,
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
-            metrics_config: MetricsConfig::default(),
+            metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
             source_config,
             sink_config,
             transformer_config,
@@ -151,6 +161,7 @@ mod tests {
     use crate::config::components::transformer::TransformerType;
     use crate::config::monovertex::MonovertexConfig;
     use crate::error::Error;
+
     #[test]
     fn test_load_valid_config() {
         let valid_config = r#"
@@ -286,5 +297,77 @@ mod tests {
             config.transformer_config.unwrap().transformer_type,
             TransformerType::UserDefined(_)
         ));
+    }
+
+    #[test]
+    fn test_load_sink_and_fallback() {
+        let valid_config = r#"
+        {
+            "metadata": {
+                "name": "test_vertex"
+            },
+            "spec": {
+                "limits": {
+                    "readBatchSize": 1000,
+                    "readTimeout": "2s"
+                },
+                "source": {
+                    "udsource": {
+                        "container": {
+                            "image": "xxxxxxx",
+                            "resources": {}
+                        }
+                    }
+                },
+                "sink": {
+                    "udsink": {
+                        "container": {
+                            "image": "primary-sink",
+                            "resources": {}
+                        }
+                    },
+                    "fallback": {
+                        "udsink": {
+                            "container": {
+                                "image": "fallback-sink",
+                                "resources": {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        "#;
+        let encoded_invalid_config = BASE64_STANDARD.encode(valid_config);
+        let spec = encoded_invalid_config.as_str();
+
+        let config = MonovertexConfig::load(spec.to_string()).unwrap();
+
+        assert_eq!(config.name, "test_vertex");
+        assert!(matches!(
+            config.sink_config.sink_type,
+            SinkType::UserDefined(_)
+        ));
+        assert!(config.fb_sink_config.is_some());
+        assert!(matches!(
+            config.fb_sink_config.clone().unwrap().sink_type,
+            SinkType::UserDefined(_)
+        ));
+
+        if let SinkType::UserDefined(config) = config.sink_config.sink_type.clone() {
+            assert_eq!(config.socket_path, "/var/run/numaflow/sink.sock");
+            assert_eq!(
+                config.server_info_path,
+                "/var/run/numaflow/sinker-server-info"
+            );
+        }
+
+        if let SinkType::UserDefined(config) = config.fb_sink_config.unwrap().sink_type {
+            assert_eq!(config.socket_path, "/var/run/numaflow/fb-sink.sock");
+            assert_eq!(
+                config.server_info_path,
+                "/var/run/numaflow/fb-sinker-server-info"
+            );
+        }
     }
 }

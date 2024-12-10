@@ -23,10 +23,8 @@ mod tests {
 
     use super::BlackholeSink;
     use crate::message::IntOffset;
-    use crate::{
-        message::{Message, MessageID, Offset, ResponseFromSink, ResponseStatusFromSink},
-        sink::Sink,
-    };
+    use crate::message::{Message, MessageID, Offset, ResponseFromSink, ResponseStatusFromSink};
+    use crate::sink::Sink;
 
     #[tokio::test]
     async fn test_black_hole() {
@@ -34,6 +32,7 @@ mod tests {
         let messages = vec![
             Message {
                 keys: vec![],
+                tags: None,
                 value: b"Hello, World!".to_vec().into(),
                 offset: Some(Offset::Int(IntOffset::new(1, 0))),
                 event_time: Utc::now(),
@@ -46,6 +45,7 @@ mod tests {
             },
             Message {
                 keys: vec![],
+                tags: None,
                 value: b"Hello, World!".to_vec().into(),
                 offset: Some(Offset::Int(IntOffset::new(1, 0))),
                 event_time: Utc::now(),

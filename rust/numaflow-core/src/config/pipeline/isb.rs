@@ -6,9 +6,7 @@ const DEFAULT_PARTITION_IDX: u16 = 0;
 const DEFAULT_PARTITIONS: u16 = 1;
 const DEFAULT_MAX_LENGTH: usize = 30000;
 const DEFAULT_USAGE_LIMIT: f64 = 0.8;
-const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
 const DEFAULT_BUFFER_FULL_STRATEGY: BufferFullStrategy = BufferFullStrategy::RetryUntilSuccess;
-const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 const DEFAULT_WIP_ACK_INTERVAL_MILLIS: u64 = 1000;
 
 pub(crate) mod jetstream {
@@ -36,10 +34,8 @@ pub(crate) struct BufferWriterConfig {
     pub streams: Vec<(String, u16)>,
     pub partitions: u16,
     pub max_length: usize,
-    pub refresh_interval: Duration,
     pub usage_limit: f64,
     pub buffer_full_strategy: BufferFullStrategy,
-    pub retry_interval: Duration,
 }
 
 impl Default for BufferWriterConfig {
@@ -49,18 +45,28 @@ impl Default for BufferWriterConfig {
             partitions: DEFAULT_PARTITIONS,
             max_length: DEFAULT_MAX_LENGTH,
             usage_limit: DEFAULT_USAGE_LIMIT,
-            refresh_interval: Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS),
             buffer_full_strategy: DEFAULT_BUFFER_FULL_STRATEGY,
-            retry_interval: Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS),
         }
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub(crate) enum BufferFullStrategy {
+    #[default]
     RetryUntilSuccess,
-    #[allow(dead_code)]
     DiscardLatest,
+}
+
+impl TryFrom<String> for BufferFullStrategy {
+    type Error = &'static str;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "retryUntilSuccess" => Ok(BufferFullStrategy::RetryUntilSuccess),
+            "discardLatest" => Ok(BufferFullStrategy::DiscardLatest),
+            _ => Err("Invalid BufferFullStrategy string"),
+        }
+    }
 }
 
 impl fmt::Display for BufferFullStrategy {
@@ -75,7 +81,7 @@ impl fmt::Display for BufferFullStrategy {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct BufferReaderConfig {
     pub(crate) partitions: u16,
-    pub(crate) streams: Vec<(String, u16)>,
+    pub(crate) streams: Vec<(&'static str, u16)>,
     pub(crate) wip_ack_interval: Duration,
 }
 
@@ -83,7 +89,7 @@ impl Default for BufferReaderConfig {
     fn default() -> Self {
         BufferReaderConfig {
             partitions: DEFAULT_PARTITIONS,
-            streams: vec![("default-0".to_string(), DEFAULT_PARTITION_IDX)],
+            streams: vec![("default-0", DEFAULT_PARTITION_IDX)],
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
         }
     }
@@ -116,9 +122,7 @@ mod tests {
             partitions: DEFAULT_PARTITIONS,
             max_length: DEFAULT_MAX_LENGTH,
             usage_limit: DEFAULT_USAGE_LIMIT,
-            refresh_interval: Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS),
             buffer_full_strategy: DEFAULT_BUFFER_FULL_STRATEGY,
-            retry_interval: Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS),
         };
         let config = BufferWriterConfig::default();
 
@@ -138,10 +142,23 @@ mod tests {
     fn test_default_buffer_reader_config() {
         let expected = BufferReaderConfig {
             partitions: DEFAULT_PARTITIONS,
-            streams: vec![("default-0".to_string(), DEFAULT_PARTITION_IDX)],
+            streams: vec![("default-0", DEFAULT_PARTITION_IDX)],
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
         };
         let config = BufferReaderConfig::default();
         assert_eq!(config, expected);
+    }
+
+    #[test]
+    fn test_try_from_string_to_buffer_full_strategy() {
+        assert_eq!(
+            BufferFullStrategy::try_from("retryUntilSuccess".to_string()).unwrap(),
+            BufferFullStrategy::RetryUntilSuccess
+        );
+        assert_eq!(
+            BufferFullStrategy::try_from("discardLatest".to_string()).unwrap(),
+            BufferFullStrategy::DiscardLatest
+        );
+        assert!(BufferFullStrategy::try_from("invalidStrategy".to_string()).is_err());
     }
 }

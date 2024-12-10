@@ -9,9 +9,10 @@ use crate::config::{config, CustomResourceType};
 mod error;
 pub(crate) use crate::error::{Error, Result};
 
-/// MonoVertex is a simplified version of the [Pipeline] spec which is ideal for high TPS, low latency
+/// [MonoVertex] is a simplified version of the [Pipeline] spec which is ideal for high TPS, low latency
 /// use-cases which do not require [ISB].
 ///
+/// [MonoVertex]: https://numaflow.numaproj.io/core-concepts/monovertex/
 /// [Pipeline]: https://numaflow.numaproj.io/core-concepts/pipeline/
 /// [ISB]: https://numaflow.numaproj.io/core-concepts/inter-step-buffer/
 pub mod monovertex;
@@ -46,6 +47,9 @@ pub(crate) mod metrics;
 ///
 /// [Pipeline]: https://numaflow.numaproj.io/core-concepts/pipeline/
 mod pipeline;
+
+/// Tracker to track the completeness of message processing.
+mod tracker;
 
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();

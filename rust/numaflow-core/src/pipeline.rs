@@ -1,30 +1,23 @@
-use crate::config::components::source::SourceType;
-use crate::config::pipeline;
-use crate::config::pipeline::PipelineConfig;
-use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
-use crate::pipeline::isb::jetstream::reader::JetstreamReader;
-use crate::pipeline::isb::jetstream::WriterHandle;
-use crate::shared::server_info::sdk_server_info;
-use crate::shared::utils;
-use crate::shared::utils::{
-    create_rpc_channel, start_metrics_server, wait_until_source_ready, wait_until_transformer_ready,
-};
-use crate::sink::SinkWriter;
-use crate::source::generator::new_generator;
-use crate::source::pulsar::new_pulsar_source;
-use crate::source::user_defined::new_source;
-use crate::transformer::user_defined::SourceTransformHandle;
-use crate::{config, error, source, Result};
+use crate::pipeline::pipeline::isb::BufferReaderConfig;
+use std::time::Duration;
+
 use async_nats::jetstream::Context;
 use async_nats::{jetstream, ConnectOptions};
 use futures::future::try_join_all;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use std::collections::HashMap;
-use std::time::Duration;
 use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
+use tracing::info;
+
+use crate::config::pipeline;
+use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
+use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
+use crate::pipeline::forwarder::source_forwarder;
+use crate::pipeline::isb::jetstream::reader::JetstreamReader;
+use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+use crate::shared::create_components;
+use crate::shared::create_components::create_sink_writer;
+use crate::shared::metrics::start_metrics_server;
+use crate::tracker::TrackerHandle;
+use crate::{error, Result};
 
 mod forwarder;
 mod isb;
@@ -34,268 +27,182 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: PipelineConfig,
 ) -> Result<()> {
-    let js_context = create_js_context(config.js_client_config.clone()).await?;
-
     match &config.vertex_config {
         pipeline::VertexType::Source(source) => {
-            let buffer_writers =
-                create_buffer_writers(&config, js_context.clone(), cln_token.clone()).await?;
-
-            let (source_type, source_grpc_client) =
-                create_source_type(source, &config, cln_token.clone()).await?;
-            let (transformer, transformer_grpc_client) =
-                create_transformer(source, cln_token.clone()).await?;
-
-            start_metrics_server(
-                config.metrics_config.clone(),
-                UserDefinedContainerState::Pipeline(PipelineContainerState::Source((
-                    source_grpc_client.clone(),
-                    transformer_grpc_client.clone(),
-                ))),
-            )
-            .await;
-
-            let source_handle = source::SourceHandle::new(source_type, config.batch_size);
-            let mut forwarder = forwarder::source_forwarder::ForwarderBuilder::new(
-                source_handle,
-                transformer,
-                buffer_writers,
-                cln_token.clone(),
-                config.clone(),
-            )
-            .build();
-            forwarder.start().await?;
+            info!("Starting source forwarder");
+            start_source_forwarder(cln_token, config.clone(), source.clone()).await?;
         }
         pipeline::VertexType::Sink(sink) => {
-            // Create buffer readers for each partition
-            let buffer_readers = create_buffer_readers(&config, js_context.clone()).await?;
-
-            // Create sink writers and clients
-            let mut sink_writers = Vec::new();
-            for _ in &buffer_readers {
-                let (sink_writer, sink_grpc_client, fb_sink_grpc_client) =
-                    create_sink_writer(&config, sink, cln_token.clone()).await?;
-                sink_writers.push((sink_writer, sink_grpc_client, fb_sink_grpc_client));
-            }
-
-            // Start the metrics server with one of the clients
-            if let Some((_, sink, fb_sink)) = sink_writers.first() {
-                start_metrics_server(
-                    config.metrics_config.clone(),
-                    UserDefinedContainerState::Pipeline(PipelineContainerState::Sink((
-                        sink.clone(),
-                        fb_sink.clone(),
-                    ))),
-                )
-                .await;
-            }
-
-            // Start a new forwarder for each buffer reader
-            let mut forwarder_tasks = Vec::new();
-            for (buffer_reader, (sink_writer, _, _)) in buffer_readers.into_iter().zip(sink_writers)
-            {
-                let forwarder = forwarder::sink_forwarder::SinkForwarder::new(
-                    buffer_reader,
-                    sink_writer,
-                    cln_token.clone(),
-                )
-                .await;
-
-                let task = tokio::spawn({
-                    let config = config.clone();
-                    async move { forwarder.start(config.clone()).await }
-                });
-
-                forwarder_tasks.push(task);
-            }
-
-            try_join_all(forwarder_tasks)
-                .await
-                .map_err(|e| error::Error::Forwarder(e.to_string()))?;
+            info!("Starting sink forwarder");
+            start_sink_forwarder(cln_token, config.clone(), sink.clone()).await?;
         }
     }
     Ok(())
 }
 
-/// Creates the required buffer writers based on the pipeline configuration, it creates a map
-/// of vertex name to a list of writer handles.
-async fn create_buffer_writers(
-    config: &PipelineConfig,
-    js_context: Context,
+async fn start_source_forwarder(
     cln_token: CancellationToken,
-) -> Result<HashMap<String, Vec<WriterHandle>>> {
-    let mut buffer_writers = HashMap::new();
-    for to_vertex in &config.to_vertex_config {
-        let writers = to_vertex
-            .writer_config
-            .streams
-            .iter()
-            .map(|stream| {
-                WriterHandle::new(
-                    stream.0.clone(),
-                    stream.1,
-                    to_vertex.writer_config.clone(),
-                    js_context.clone(),
-                    config.batch_size,
-                    config.paf_batch_size,
-                    cln_token.clone(),
-                )
-            })
-            .collect();
-        buffer_writers.insert(to_vertex.name.clone(), writers);
-    }
-    Ok(buffer_writers)
+    config: PipelineConfig,
+    source_config: SourceVtxConfig,
+) -> Result<()> {
+    let tracker_handle = TrackerHandle::new();
+    let js_context = create_js_context(config.js_client_config.clone()).await?;
+
+    let buffer_writer = create_buffer_writer(
+        &config,
+        js_context.clone(),
+        tracker_handle.clone(),
+        cln_token.clone(),
+    )
+    .await;
+
+    let (source, source_grpc_client) = create_components::create_source(
+        config.batch_size,
+        config.read_timeout,
+        &source_config.source_config,
+        tracker_handle.clone(),
+        cln_token.clone(),
+    )
+    .await?;
+    let (transformer, transformer_grpc_client) = create_components::create_transformer(
+        config.batch_size,
+        source_config.transformer_config.clone(),
+        tracker_handle,
+        cln_token.clone(),
+    )
+    .await?;
+
+    start_metrics_server(
+        config.metrics_config.clone(),
+        UserDefinedContainerState::Pipeline(PipelineContainerState::Source((
+            source_grpc_client.clone(),
+            transformer_grpc_client.clone(),
+        ))),
+    )
+    .await;
+
+    let forwarder =
+        source_forwarder::SourceForwarderBuilder::new(source, buffer_writer, cln_token.clone());
+
+    let forwarder = if let Some(transformer) = transformer {
+        forwarder.with_transformer(transformer).build()
+    } else {
+        forwarder.build()
+    };
+
+    forwarder.start().await?;
+    Ok(())
 }
 
-async fn create_buffer_readers(
-    config: &PipelineConfig,
-    js_context: Context,
-) -> Result<Vec<JetstreamReader>> {
+async fn start_sink_forwarder(
+    cln_token: CancellationToken,
+    config: PipelineConfig,
+    sink: SinkVtxConfig,
+) -> Result<()> {
+    let js_context = create_js_context(config.js_client_config.clone()).await?;
+
     // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
     // to a common buffer, in the case of a join.
-    let reader_config = config
+    let reader_config = &config
         .from_vertex_config
         .first()
         .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
-        .reader_config
-        .clone();
+        .reader_config;
 
-    let mut readers = Vec::new();
-    for stream in &reader_config.streams {
-        let reader = JetstreamReader::new(
-            stream.0.clone(),
-            stream.1,
-            js_context.clone(),
+    // Create sink writers and buffer readers for each stream
+    let mut sink_writers = vec![];
+    let mut buffer_readers = vec![];
+    for stream in reader_config.streams.clone() {
+        let tracker_handle = TrackerHandle::new();
+
+        let buffer_reader = create_buffer_reader(
+            stream,
             reader_config.clone(),
+            js_context.clone(),
+            tracker_handle.clone(),
         )
         .await?;
-        readers.push(reader);
-    }
+        buffer_readers.push(buffer_reader);
 
-    Ok(readers)
-}
-
-// Creates a sink writer based on the pipeline configuration
-async fn create_sink_writer(
-    config: &PipelineConfig,
-    sink_vtx_config: &pipeline::SinkVtxConfig,
-    cln_token: CancellationToken,
-) -> Result<(
-    SinkWriter,
-    Option<SinkClient<Channel>>,
-    Option<SinkClient<Channel>>,
-)> {
-    let (sink_handle, sink_grpc_client) = utils::create_sink_handle(
-        config.batch_size,
-        &sink_vtx_config.sink_config.sink_type,
-        &cln_token,
-    )
-    .await?;
-    let (fb_sink_handle, fb_sink_grpc_client) = match &sink_vtx_config.fb_sink_config {
-        None => (None, None),
-        Some(fb_sink_config) => {
-            let (handle, client) =
-                utils::create_sink_handle(config.batch_size, &fb_sink_config.sink_type, &cln_token)
-                    .await?;
-            (Some(handle), client)
-        }
-    };
-
-    Ok((
-        SinkWriter::new(
+        let (sink_writer, sink_grpc_client, fb_sink_grpc_client) = create_sink_writer(
             config.batch_size,
             config.read_timeout,
-            sink_vtx_config.clone(),
-            sink_handle,
-            fb_sink_handle,
+            sink.sink_config.clone(),
+            sink.fb_sink_config.clone(),
+            tracker_handle,
+            &cln_token,
         )
-        .await?,
-        sink_grpc_client,
-        fb_sink_grpc_client,
-    ))
+        .await?;
+        sink_writers.push((sink_writer, sink_grpc_client, fb_sink_grpc_client));
+    }
+
+    // Start the metrics server with one of the clients
+    if let Some((_, sink, fb_sink)) = sink_writers.first() {
+        start_metrics_server(
+            config.metrics_config.clone(),
+            UserDefinedContainerState::Pipeline(PipelineContainerState::Sink((
+                sink.clone(),
+                fb_sink.clone(),
+            ))),
+        )
+        .await;
+    }
+
+    // Start a new forwarder for each buffer reader
+    let mut forwarder_tasks = Vec::new();
+    for (buffer_reader, (sink_writer, _, _)) in buffer_readers.into_iter().zip(sink_writers) {
+        info!(%buffer_reader, "Starting forwarder for buffer reader");
+        let forwarder = forwarder::sink_forwarder::SinkForwarder::new(
+            buffer_reader,
+            sink_writer,
+            cln_token.clone(),
+        )
+        .await;
+
+        let task = tokio::spawn({
+            let config = config.clone();
+            async move { forwarder.start(config.clone()).await }
+        });
+
+        forwarder_tasks.push(task);
+    }
+
+    try_join_all(forwarder_tasks)
+        .await
+        .map_err(|e| error::Error::Forwarder(e.to_string()))?;
+    info!("All forwarders have stopped successfully");
+    Ok(())
 }
 
-/// Creates a source type based on the pipeline configuration
-async fn create_source_type(
-    source: &pipeline::SourceVtxConfig,
+async fn create_buffer_writer(
     config: &PipelineConfig,
+    js_context: Context,
+    tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
-) -> Result<(source::SourceType, Option<SourceClient<Channel>>)> {
-    match &source.source_config.source_type {
-        SourceType::Generator(generator_config) => {
-            let (generator_read, generator_ack, generator_lag) =
-                new_generator(generator_config.clone(), config.batch_size)?;
-            Ok((
-                source::SourceType::Generator(generator_read, generator_ack, generator_lag),
-                None,
-            ))
-        }
-        SourceType::UserDefined(udsource_config) => {
-            _ = sdk_server_info(
-                udsource_config.server_info_path.clone().into(),
-                cln_token.clone(),
-            )
-            .await?;
-
-            // TODO: Add sdk info metric
-
-            let mut source_grpc_client = SourceClient::new(
-                create_rpc_channel(udsource_config.socket_path.clone().into()).await?,
-            )
-            .max_encoding_message_size(udsource_config.grpc_max_message_size)
-            .max_encoding_message_size(udsource_config.grpc_max_message_size);
-            wait_until_source_ready(&cln_token, &mut source_grpc_client).await?;
-            let (ud_read, ud_ack, ud_lag) = new_source(
-                source_grpc_client.clone(),
-                config.batch_size,
-                config.read_timeout,
-            )
-            .await?;
-            Ok((
-                source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
-                Some(source_grpc_client),
-            ))
-        }
-        SourceType::Pulsar(pulsar_config) => {
-            let pulsar_source = new_pulsar_source(
-                pulsar_config.clone(),
-                config.batch_size,
-                config.read_timeout,
-            )
-            .await?;
-            Ok((source::SourceType::Pulsar(pulsar_source), None))
-        }
-    }
+) -> JetstreamWriter {
+    JetstreamWriter::new(
+        config.to_vertex_config.clone(),
+        js_context,
+        config.paf_concurrency,
+        tracker_handle,
+        cln_token,
+    )
 }
-/// Creates a transformer if it is configured in the pipeline
-async fn create_transformer(
-    source: &pipeline::SourceVtxConfig,
-    cln_token: CancellationToken,
-) -> Result<(
-    Option<SourceTransformHandle>,
-    Option<SourceTransformClient<Channel>>,
-)> {
-    if let Some(transformer_config) = &source.transformer_config {
-        if let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
-            &transformer_config.transformer_type
-        {
-            _ = sdk_server_info(ud_transformer.socket_path.clone().into(), cln_token.clone())
-                .await?;
-            // TODO: Add sdk info metric
 
-            let mut transformer_grpc_client = SourceTransformClient::new(
-                create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
-            )
-            .max_encoding_message_size(ud_transformer.grpc_max_message_size)
-            .max_encoding_message_size(ud_transformer.grpc_max_message_size);
-            wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
-            return Ok((
-                Some(SourceTransformHandle::new(transformer_grpc_client.clone()).await?),
-                Some(transformer_grpc_client),
-            ));
-        }
-    }
-    Ok((None, None))
+async fn create_buffer_reader(
+    stream: (&'static str, u16),
+    reader_config: BufferReaderConfig,
+    js_context: Context,
+    tracker_handle: TrackerHandle,
+) -> Result<JetstreamReader> {
+    JetstreamReader::new(
+        stream.0,
+        stream.1,
+        js_context,
+        reader_config,
+        tracker_handle,
+    )
+    .await
 }
 
 /// Creates a jetstream context based on the provided configuration
@@ -305,6 +212,7 @@ async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Re
         .max_reconnects(None) // -1 for unlimited reconnects
         .ping_interval(Duration::from_secs(3))
         .max_reconnects(None)
+        .ping_interval(Duration::from_secs(3))
         .retry_on_initial_connect();
 
     if let (Some(user), Some(password)) = (config.user, config.password) {
@@ -320,14 +228,14 @@ async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Re
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::time::Duration;
 
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
-    use futures::StreamExt;
+    use tokio_stream::StreamExt;
 
     use super::*;
-
     use crate::config::components::metrics::MetricsConfig;
     use crate::config::components::sink::{BlackholeConfig, SinkConfig, SinkType};
     use crate::config::components::source::GeneratorConfig;
@@ -363,6 +271,8 @@ mod tests {
         // that messages were actually written to the streams.
         for stream_name in &streams {
             let stream_name = *stream_name;
+            // Delete stream if it exists
+            let _ = context.delete_stream(stream_name).await;
             let _stream = context
                 .get_or_create_stream(stream::Config {
                     name: stream_name.into(),
@@ -393,7 +303,7 @@ mod tests {
             vertex_name: "in".to_string(),
             replica: 0,
             batch_size: 1000,
-            paf_batch_size: 30000,
+            paf_concurrency: 30000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -411,12 +321,9 @@ mod tests {
                         .collect(),
                     partitions: 5,
                     max_length: 30000,
-                    refresh_interval: Duration::from_secs(1),
                     usage_limit: 0.8,
                     buffer_full_strategy: RetryUntilSuccess,
-                    retry_interval: Duration::from_millis(10),
                 },
-                partitions: 5,
                 conditions: None,
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
@@ -437,10 +344,11 @@ mod tests {
                 metrics_server_listen_port: 2469,
                 lag_check_interval_in_secs: 5,
                 lag_refresh_interval_in_secs: 3,
+                lookback_window_in_secs: 120,
             },
         };
 
-        let cancellation_token = tokio_util::sync::CancellationToken::new();
+        let cancellation_token = CancellationToken::new();
         let forwarder_task = tokio::spawn({
             let cancellation_token = cancellation_token.clone();
             async move {
@@ -456,7 +364,7 @@ mod tests {
         forwarder_task.await.unwrap();
 
         for (stream_name, stream_consumer) in consumers {
-            let messages: Vec<async_nats::jetstream::Message> = stream_consumer
+            let messages: Vec<jetstream::Message> = stream_consumer
                 .batch()
                 .max_messages(10)
                 .expires(Duration::from_millis(50))
@@ -481,7 +389,7 @@ mod tests {
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    async fn test_forwarder_for_sink_vetex() {
+    async fn test_forwarder_for_sink_vertex() {
         // Unique names for the streams we use in this test
         let streams = vec![
             "default-test-forwarder-for-sink-vertex-out-0",
@@ -516,10 +424,12 @@ mod tests {
                 .unwrap();
 
             // Publish some messages into the stream
-            use crate::message::{Message, MessageID, Offset, StringOffset};
             use chrono::{TimeZone, Utc};
+
+            use crate::message::{Message, MessageID, Offset, StringOffset};
             let message = Message {
                 keys: vec!["key1".to_string()],
+                tags: None,
                 value: vec![1, 2, 3].into(),
                 offset: Some(Offset::String(StringOffset::new("123".to_string(), 0))),
                 event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
@@ -560,7 +470,7 @@ mod tests {
             vertex_name: "in".to_string(),
             replica: 0,
             batch_size: 1000,
-            paf_batch_size: 30000,
+            paf_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -575,7 +485,7 @@ mod tests {
                     streams: streams
                         .iter()
                         .enumerate()
-                        .map(|(i, key)| (key.to_string(), i as u16))
+                        .map(|(i, key)| (*key, i as u16))
                         .collect(),
                     wip_ack_interval: Duration::from_secs(1),
                 },
@@ -592,10 +502,11 @@ mod tests {
                 metrics_server_listen_port: 2469,
                 lag_check_interval_in_secs: 5,
                 lag_refresh_interval_in_secs: 3,
+                lookback_window_in_secs: 120,
             },
         };
 
-        let cancellation_token = tokio_util::sync::CancellationToken::new();
+        let cancellation_token = CancellationToken::new();
         let forwarder_task = tokio::spawn({
             let cancellation_token = cancellation_token.clone();
             async move {

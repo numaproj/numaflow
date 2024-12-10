@@ -293,6 +293,6 @@ impl PulsarSource {
     }
 
     pub fn partitions(&self) -> Vec<u16> {
-        todo!()
+        unimplemented!()
     }
 }

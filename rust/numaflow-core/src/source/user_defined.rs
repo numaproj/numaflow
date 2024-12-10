@@ -136,7 +136,7 @@ impl SourceReader for UserDefinedSourceRead {
     }
 
     fn partitions(&self) -> Vec<u16> {
-        todo!()
+        unimplemented!()
     }
 }
 
@@ -242,7 +242,7 @@ mod tests {
     use tokio::sync::mpsc::Sender;
 
     use super::*;
-    use crate::shared::utils::create_rpc_channel;
+    use crate::shared::grpc::create_rpc_channel;
 
     struct SimpleSource {
         num: usize,

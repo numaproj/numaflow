@@ -5,12 +5,13 @@ pub(crate) mod source {
 
     use std::{fmt::Debug, time::Duration};
 
-    use crate::error::Error;
-    use crate::Result;
     use bytes::Bytes;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use tracing::warn;
+
+    use crate::error::Error;
+    use crate::Result;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SourceConfig {
@@ -74,9 +75,11 @@ pub(crate) mod source {
                         tracing::warn!("JWT Token authentication is specified, but token is empty");
                         break 'out None;
                     };
-                    let secret =
-                        crate::shared::utils::get_secret_from_volume(&token.name, &token.key)
-                            .unwrap();
+                    let secret = crate::shared::create_components::get_secret_from_volume(
+                        &token.name,
+                        &token.key,
+                    )
+                    .unwrap();
                     Some(PulsarAuth::JWT(secret))
                 }
                 None => None,
@@ -186,15 +189,30 @@ pub(crate) mod sink {
         UserDefined(UserDefinedConfig),
     }
 
-    impl TryFrom<Box<Sink>> for SinkType {
-        type Error = Error;
-
+    impl SinkType {
         // FIXME(cr): why is sink.fallback Box<AbstrackSink> vs. sink Box<Sink>. This is coming from
         //   numaflow-models. Problem is, golang has embedded structures and rust does not. We might
         //   have to AbstractSink for sink-configs while Sink for real sink types.
         //   NOTE: I do not see this problem with Source?
-        fn try_from(sink: Box<Sink>) -> Result<Self> {
-            if let Some(fallback) = sink.fallback {
+        pub(crate) fn primary_sinktype(sink: &Sink) -> Result<Self> {
+            sink.udsink
+                .as_ref()
+                .map(|_| Ok(SinkType::UserDefined(UserDefinedConfig::default())))
+                .or_else(|| {
+                    sink.log
+                        .as_ref()
+                        .map(|_| Ok(SinkType::Log(LogConfig::default())))
+                })
+                .or_else(|| {
+                    sink.blackhole
+                        .as_ref()
+                        .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
+                })
+                .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
+        }
+
+        pub(crate) fn fallback_sinktype(sink: &Sink) -> Result<Self> {
+            if let Some(fallback) = sink.fallback.as_ref() {
                 fallback
                     .udsink
                     .as_ref()
@@ -213,20 +231,7 @@ pub(crate) mod sink {
                     })
                     .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
             } else {
-                sink.udsink
-                    .as_ref()
-                    .map(|_| Ok(SinkType::UserDefined(UserDefinedConfig::default())))
-                    .or_else(|| {
-                        sink.log
-                            .as_ref()
-                            .map(|_| Ok(SinkType::Log(LogConfig::default())))
-                    })
-                    .or_else(|| {
-                        sink.blackhole
-                            .as_ref()
-                            .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
-                    })
-                    .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
+                Err(Error::Config("Fallback sink not found".to_string()))
             }
         }
     }
@@ -359,6 +364,7 @@ pub(crate) mod transformer {
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct TransformerConfig {
+        pub(crate) concurrency: usize,
         pub(crate) transformer_type: TransformerType,
     }
 
@@ -394,12 +400,14 @@ pub(crate) mod metrics {
     const DEFAULT_METRICS_PORT: u16 = 2469;
     const DEFAULT_LAG_CHECK_INTERVAL_IN_SECS: u16 = 5;
     const DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS: u16 = 3;
+    const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct MetricsConfig {
         pub metrics_server_listen_port: u16,
         pub lag_check_interval_in_secs: u16,
         pub lag_refresh_interval_in_secs: u16,
+        pub lookback_window_in_secs: u16,
     }
 
     impl Default for MetricsConfig {
@@ -408,6 +416,16 @@ pub(crate) mod metrics {
                 metrics_server_listen_port: DEFAULT_METRICS_PORT,
                 lag_check_interval_in_secs: DEFAULT_LAG_CHECK_INTERVAL_IN_SECS,
                 lag_refresh_interval_in_secs: DEFAULT_LAG_REFRESH_INTERVAL_IN_SECS,
+                lookback_window_in_secs: DEFAULT_LOOKBACK_WINDOW_IN_SECS,
+            }
+        }
+    }
+
+    impl MetricsConfig {
+        pub(crate) fn with_lookback_window_in_secs(lookback_window_in_secs: u16) -> Self {
+            MetricsConfig {
+                lookback_window_in_secs,
+                ..Default::default()
             }
         }
     }
@@ -609,6 +627,7 @@ mod transformer_tests {
     fn test_transformer_config_user_defined() {
         let user_defined_config = UserDefinedConfig::default();
         let transformer_config = TransformerConfig {
+            concurrency: 1,
             transformer_type: TransformerType::UserDefined(user_defined_config.clone()),
         };
         if let TransformerType::UserDefined(config) = transformer_config.transformer_type {

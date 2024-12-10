@@ -17,7 +17,7 @@ export interface MetricsProps {
   vertexId?: string;
 }
 
-export function Metrics({ namespaceId, pipelineId, type }: MetricsProps) {
+export function Metrics({ namespaceId, pipelineId, type, vertexId }: MetricsProps) {
   const {
     metricsDiscoveryData: discoveredMetrics,
     error: discoveredMetricsError,
@@ -88,6 +88,7 @@ export function Metrics({ namespaceId, pipelineId, type }: MetricsProps) {
                   pipelineId={pipelineId}
                   type={type}
                   metric={metric}
+                  vertexId={vertexId}
                 />
               )}
             </AccordionDetails>

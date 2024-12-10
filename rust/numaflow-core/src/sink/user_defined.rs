@@ -8,10 +8,11 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
+use tracing::error;
 
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
 
-/// User-Defined Sink code writes messages to a custom [Sink].
+/// User-Defined Sink code writes messages to a custom [SinkWriter].
 pub struct UserDefinedSink {
     sink_tx: mpsc::Sender<SinkRequest>,
     resp_stream: Streaming<SinkResponse>,
@@ -44,7 +45,7 @@ impl UserDefinedSink {
             "failed to receive handshake response".to_string(),
         ))?;
 
-        // Handshake cannot be None during the initial phase and it has to set `sot` to true.
+        // Handshake cannot be None during the initial phase, and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
             return Err(Error::Sink("invalid handshake response".to_string()));
         }
@@ -96,7 +97,7 @@ impl Sink for UserDefinedSink {
 
             if response.status.map_or(false, |s| s.eot) {
                 if responses.len() != num_requests {
-                    log::error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
+                    error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
                 } else {
                     break;
                 }
@@ -125,7 +126,7 @@ mod tests {
     use super::*;
     use crate::error::Result;
     use crate::message::{Message, MessageID};
-    use crate::shared::utils::create_rpc_channel;
+    use crate::shared::grpc::create_rpc_channel;
     use crate::sink::user_defined::UserDefinedSink;
 
     struct Logger;
@@ -179,6 +180,7 @@ mod tests {
         let messages = vec![
             Message {
                 keys: vec![],
+                tags: None,
                 value: b"Hello, World!".to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
@@ -191,6 +193,7 @@ mod tests {
             },
             Message {
                 keys: vec![],
+                tags: None,
                 value: b"Hello, World!".to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),

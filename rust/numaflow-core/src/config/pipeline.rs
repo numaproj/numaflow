@@ -1,3 +1,4 @@
+use crate::config::components::sink::SinkType;
 use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
@@ -11,13 +12,14 @@ use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::source::SourceConfig;
 use crate::config::components::transformer::{TransformerConfig, TransformerType};
+use crate::config::get_vertex_replica;
 use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
 use crate::error::Error;
-use crate::message::get_vertex_replica;
 use crate::Result;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
+const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
@@ -31,7 +33,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) replica: u16,
     pub(crate) batch_size: usize,
     // FIXME(cr): we cannot leak this as a paf, we need to use a different terminology.
-    pub(crate) paf_batch_size: usize,
+    pub(crate) paf_concurrency: usize,
     pub(crate) read_timeout: Duration,
     pub(crate) js_client_config: isb::jetstream::ClientConfig, // TODO: make it enum, since we can have different ISB implementations
     pub(crate) from_vertex_config: Vec<FromVertexConfig>,
@@ -47,7 +49,7 @@ impl Default for PipelineConfig {
             vertex_name: "default-vtx".to_string(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
-            paf_batch_size: (DEFAULT_BATCH_SIZE * 2) as usize,
+            paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
             read_timeout: Duration::from_secs(DEFAULT_TIMEOUT_IN_MS as u64),
             js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
@@ -99,8 +101,7 @@ pub(crate) struct FromVertexConfig {
 pub(crate) struct ToVertexConfig {
     pub(crate) name: String,
     pub(crate) writer_config: BufferWriterConfig,
-    pub(crate) partitions: u16,
-    pub(crate) conditions: Option<ForwardConditions>,
+    pub(crate) conditions: Option<Box<ForwardConditions>>,
 }
 
 impl PipelineConfig {
@@ -150,6 +151,7 @@ impl PipelineConfig {
 
         let vertex: VertexType = if let Some(source) = vertex_obj.spec.source {
             let transformer_config = source.transformer.as_ref().map(|_| TransformerConfig {
+                concurrency: batch_size as usize, // FIXME: introduce a separate field in the spec
                 transformer_type: TransformerType::UserDefined(Default::default()),
             });
 
@@ -162,7 +164,7 @@ impl PipelineConfig {
         } else if let Some(sink) = vertex_obj.spec.sink {
             let fb_sink_config = if sink.fallback.as_ref().is_some() {
                 Some(SinkConfig {
-                    sink_type: sink.clone().try_into()?,
+                    sink_type: SinkType::fallback_sinktype(&sink)?,
                     retry_config: None,
                 })
             } else {
@@ -171,7 +173,7 @@ impl PipelineConfig {
 
             VertexType::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
-                    sink_type: sink.try_into()?,
+                    sink_type: SinkType::primary_sinktype(&sink)?,
                     retry_config: None,
                 },
                 fb_sink_config,
@@ -211,8 +213,12 @@ impl PipelineConfig {
             let partition_count = edge.to_vertex_partition_count.unwrap_or_default() as u16;
             let buffer_name = format!("{}-{}-{}", namespace, pipeline_name, edge.to);
 
-            let streams: Vec<(String, u16)> = (0..partition_count)
-                .map(|i| (format!("{}-{}", buffer_name, i), i))
+            let streams: Vec<(&'static str, u16)> = (0..partition_count)
+                .map(|i| {
+                    let stream: &'static str =
+                        Box::leak(Box::new(format!("{}-{}", buffer_name, i)));
+                    (stream, i)
+                })
                 .collect();
 
             from_vertex_config.push(FromVertexConfig {
@@ -241,31 +247,38 @@ impl PipelineConfig {
                 writer_config: BufferWriterConfig {
                     streams,
                     partitions: partition_count,
-                    max_length: vertex_obj
-                        .spec
-                        .limits
+                    max_length: edge
+                        .to_vertex_limits
                         .as_ref()
                         .and_then(|l| l.buffer_max_length)
                         .unwrap_or(default_writer_config.max_length as i64)
                         as usize,
-                    usage_limit: vertex_obj
-                        .spec
-                        .limits
+                    usage_limit: edge
+                        .to_vertex_limits
                         .as_ref()
                         .and_then(|l| l.buffer_usage_limit)
                         .unwrap_or(default_writer_config.usage_limit as i64)
                         as f64
                         / 100.0,
-                    ..default_writer_config
+                    buffer_full_strategy: edge
+                        .on_full
+                        .and_then(|s| s.clone().try_into().ok())
+                        .unwrap_or(default_writer_config.buffer_full_strategy),
                 },
-                partitions: edge.to_vertex_partition_count.unwrap_or_default() as u16,
-                conditions: None,
+                conditions: edge.conditions,
             });
         }
 
+        let look_back_window = vertex_obj
+            .spec
+            .scale
+            .as_ref()
+            .and_then(|scale| scale.lookback_seconds.map(|x| x as u16))
+            .unwrap_or(DEFAULT_LOOKBACK_WINDOW_IN_SECS);
+
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
-            paf_batch_size: env::var("PAF_BATCH_SIZE")
+            paf_concurrency: env::var("PAF_BATCH_SIZE")
                 .unwrap_or("30000".to_string())
                 .parse()
                 .unwrap(),
@@ -277,7 +290,7 @@ impl PipelineConfig {
             from_vertex_config,
             to_vertex_config,
             vertex_config: vertex,
-            metrics_config: Default::default(),
+            metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
         })
     }
 }
@@ -297,7 +310,7 @@ mod tests {
             vertex_name: "default-vtx".to_string(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
-            paf_batch_size: (DEFAULT_BATCH_SIZE * 2) as usize,
+            paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
             read_timeout: Duration::from_secs(DEFAULT_TIMEOUT_IN_MS as u64),
             js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
@@ -343,7 +356,7 @@ mod tests {
             vertex_name: "out".to_string(),
             replica: 0,
             batch_size: 500,
-            paf_batch_size: 30000,
+            paf_concurrency: 30000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -371,6 +384,7 @@ mod tests {
                 metrics_server_listen_port: 2469,
                 lag_check_interval_in_secs: 5,
                 lag_refresh_interval_in_secs: 3,
+                lookback_window_in_secs: 120,
             },
         };
         assert_eq!(pipeline_config, expected);
@@ -389,7 +403,7 @@ mod tests {
             vertex_name: "in".to_string(),
             replica: 0,
             batch_size: 1000,
-            paf_batch_size: 30000,
+            paf_concurrency: 30000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -406,7 +420,6 @@ mod tests {
                     usage_limit: 0.85,
                     ..Default::default()
                 },
-                partitions: 1,
                 conditions: None,
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
@@ -442,7 +455,7 @@ mod tests {
             vertex_name: "in".to_string(),
             replica: 0,
             batch_size: 50,
-            paf_batch_size: 30000,
+            paf_concurrency: 30000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -459,7 +472,6 @@ mod tests {
                     usage_limit: 0.8,
                     ..Default::default()
                 },
-                partitions: 1,
                 conditions: None,
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
