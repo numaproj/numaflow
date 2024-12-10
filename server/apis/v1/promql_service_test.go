@@ -273,6 +273,70 @@ func Test_PromQueryBuilder(t *testing.T) {
 			}
 		})
 	}
+
+	// tests for gauge metrics
+	var gauge_service = &PromQlService{
+		PlaceHolders: map[string]map[string][]string{
+			"monovtx_pending": {
+				"mono-vertex": {"$dimension", "$metric_name", "$filters"},
+			},
+		},
+		Expression: map[string]map[string]string{
+			"monovtx_pending": {
+				"mono-vertex": "$metric_name{$filters}",
+			},
+		},
+	}
+
+	gauge_metrics_tests := []struct {
+		name          string
+		requestBody   MetricsRequestBody
+		expectedQuery string
+		expectError   bool
+	}{
+		{
+			name: "Successful gauge metrics template substitution",
+			requestBody: MetricsRequestBody{
+				MetricName: "monovtx_pending",
+				Dimension:  "mono-vertex",
+				Filters: map[string]string{
+					"namespace": "test_namespace",
+					"mvtx_name": "test_mvtx",
+					"period":    "5m",
+				},
+			},
+			expectedQuery: `monovtx_pending{namespace= "test_namespace", mvtx_name= "test_mvtx", period= "5m"}`,
+		},
+		{
+			name: "Missing metric name in service config",
+			requestBody: MetricsRequestBody{
+				MetricName: "non_existent_metric",
+				Dimension:  "mono-vertex",
+				Filters: map[string]string{
+					"namespace": "test_namespace",
+					"mvtx_name": "test_mvtx",
+					"period":    "5m",
+				},
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range gauge_metrics_tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualQuery, err := gauge_service.BuildQuery(tt.requestBody)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if !comparePrometheusQueries(tt.expectedQuery, actualQuery) {
+					t.Errorf("Prometheus queries do not match.\nExpected: %s\nGot: %s", tt.expectedQuery, actualQuery)
+				} else {
+					t.Log("Prometheus queries match!")
+				}
+			}
+		})
+	}
 }
 
 func Test_QueryPrometheus(t *testing.T) {
@@ -307,6 +371,29 @@ func Test_QueryPrometheus(t *testing.T) {
 			},
 		}
 		query := `sum(rate(forwarder_data_read_total{namespace="default", pipeline="test-pipeline"}[5m])) by (vertex)`
+		startTime := time.Now().Add(-30 * time.Minute)
+		endTime := time.Now()
+
+		ctx := context.Background()
+		result, err := promQlService.QueryPrometheus(ctx, query, startTime, endTime)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+
+		// for query range , response should be a matrix
+		matrix, ok := result.(model.Matrix)
+		assert.True(t, ok)
+		assert.Equal(t, 1, matrix.Len())
+	})
+
+	t.Run("Successful gauge query", func(t *testing.T) {
+		mockAPI := &MockPrometheusAPI{}
+		promQlService := &PromQlService{
+			PrometheusClient: &Prometheus{
+				Api: mockAPI,
+			},
+		}
+		query := `monovtx_pending{namespace="default", mvtx_name="test-mvtx", pending="5m"}`
 		startTime := time.Now().Add(-30 * time.Minute)
 		endTime := time.Now()
 
