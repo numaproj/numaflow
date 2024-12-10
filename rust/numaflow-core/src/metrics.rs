@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::iter;
+use std::{env, iter};
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -9,7 +9,7 @@ use axum::extract::State;
 use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
-use axum_server::tls_rustls::RustlsConfig;
+use tokio_rustls;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -23,11 +23,11 @@ use rcgen::{generate_simple_self_signed, CertifiedKey};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
-use tonic::transport::Channel;
+use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tracing::{debug, error, info};
-
-use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
+use numaflow_pb::clients::mvtxdaemon::mono_vertex_daemon_service_client::MonoVertexDaemonServiceClient;
+use crate::config::{config, get_pipeline_name, get_vertex_name, get_vertex_replica};
 use crate::source::Source;
 use crate::Error;
 
@@ -868,6 +868,35 @@ async fn expose_pending_metrics(
     ];
 
     loop {
+        let server_url = env::var("SERVER_URL").expect("NO SERVER");
+        info!("MYDEBUG: Server URL: {}", server_url);
+
+        // create an RPC channel to the daemon using an insecure verify true tls
+
+        let mut config = rustls::ClientConfig::
+        // TODO(mvtx-adapt):  Create TLS client
+        // if channel.is_err() {
+        //     info!("MYDEBUG: Failed to connect to the daemon {}", channel.unwrap_err());
+        // } else {
+        //     let mut daemon_client = MonoVertexDaemonServiceClient::new(server_url.clone());
+        //     let res = daemon_client.get_mono_vertex_status(Request::new(())).await.expect("TODO: panic message");
+        //     // extract the status from the response
+        //     let status = res.into_inner().status;
+        //     info!("MYDEBUG: Status: {:?}", status.unwrap().status);
+        // }
+
+        // // let channel = Endpoint::try_from(server_url.clone())
+        // //     .map_err(|e| Error::Connection(format!("Failed to create endpoint: {:?}", e))).unwrap()
+        // //     .connect().await.unwrap();
+        // let daemon_client = MonoVertexDaemonServiceClient::connect(server_url.clone()).await;
+        // if daemon_client.is_err() {
+        //     info!("MYDEBUG: Failed to connect to the daemon {} {}", server_url.clone(), daemon_client.unwrap_err());
+        // } else {
+        //     let res = daemon_client.unwrap().get_mono_vertex_status(Request::new(())).await.expect("TODO: panic message");
+        //     // extract the status from the response
+        //     let status = res.into_inner().status;
+        //     info!("MYDEBUG: Status: {:?}", status.unwrap().status);
+        // }
         ticker.tick().await;
         // call the daemon -> new_value
         // err = default
