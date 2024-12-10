@@ -243,8 +243,8 @@ mod tests {
             ))),
             event_time: chrono::Utc::now(),
             id: MessageID {
-                vertex_name: "vertex_name".to_string(),
-                offset: "0".to_string(),
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
                 index: 0,
             },
             headers: Default::default(),
@@ -320,8 +320,8 @@ mod tests {
                 ))),
                 event_time: chrono::Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex_name".to_string(),
-                    offset: i.to_string(),
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: i.to_string().into(),
                     index: i,
                 },
                 headers: Default::default(),

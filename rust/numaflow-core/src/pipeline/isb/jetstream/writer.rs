@@ -201,7 +201,7 @@ impl JetstreamWriter {
 
                     // check to which partition the message should be written
                     let partition = forward::determine_partition(
-                        message.id.offset.clone(),
+                        String::from_utf8_lossy(&message.id.offset).to_string(),
                         vertex.writer_config.partitions,
                         &mut hash,
                     );
@@ -238,7 +238,7 @@ impl JetstreamWriter {
                 this.resolve_pafs(ResolveAndPublishResult {
                     pafs,
                     payload: message.value.clone().into(),
-                    offset: message.id.offset,
+                    offset: message.id.offset.into(),
                 })
                 .await?;
             }
@@ -456,7 +456,7 @@ impl JetstreamWriter {
 pub(crate) struct ResolveAndPublishResult {
     pub(crate) pafs: Vec<(Stream, PublishAckFuture)>,
     pub(crate) payload: Vec<u8>,
-    pub(crate) offset: String,
+    pub(crate) offset: Bytes,
 }
 
 #[cfg(test)]
@@ -532,8 +532,8 @@ mod tests {
             offset: None,
             event_time: Utc::now(),
             id: MessageID {
-                vertex_name: "vertex".to_string(),
-                offset: "offset_0".to_string(),
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_0".to_string().into(),
                 index: 0,
             },
             headers: HashMap::new(),
@@ -591,8 +591,8 @@ mod tests {
             offset: None,
             event_time: Utc::now(),
             id: MessageID {
-                vertex_name: "vertex".to_string(),
-                offset: "offset_0".to_string(),
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_0".to_string().into(),
                 index: 0,
             },
             headers: HashMap::new(),
@@ -675,8 +675,8 @@ mod tests {
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
@@ -700,8 +700,8 @@ mod tests {
             offset: None,
             event_time: Utc::now(),
             id: MessageID {
-                vertex_name: "vertex".to_string(),
-                offset: "offset_11".to_string(),
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_11".to_string().into(),
                 index: 11,
             },
             headers: HashMap::new(),
@@ -967,8 +967,8 @@ mod tests {
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
@@ -1055,8 +1055,8 @@ mod tests {
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
@@ -1082,15 +1082,15 @@ mod tests {
             offset: None,
             event_time: Utc::now(),
             id: MessageID {
-                vertex_name: "vertex".to_string(),
-                offset: "offset_101".to_string(),
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_101".to_string().into(),
                 index: 101,
             },
             headers: HashMap::new(),
         };
         let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
         tracker_handle
-            .insert("offset_101".to_string(), ack_tx)
+            .insert("offset_101".to_string().into(), ack_tx)
             .await
             .unwrap();
         ack_rxs.push(ack_rx);
@@ -1195,8 +1195,8 @@ mod tests {
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),

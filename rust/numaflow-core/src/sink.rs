@@ -656,8 +656,8 @@ mod tests {
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
@@ -691,8 +691,8 @@ mod tests {
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
@@ -769,8 +769,8 @@ mod tests {
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
@@ -856,8 +856,8 @@ mod tests {
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),

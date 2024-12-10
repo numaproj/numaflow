@@ -81,8 +81,8 @@ impl TryFrom<async_nats::Message> for Message {
         let event_time = Utc::now();
         let offset = None;
         let id = MessageID {
-            vertex_name: config::get_vertex_name().to_string(),
-            offset: "0".to_string(),
+            vertex_name: config::get_vertex_name().to_string().into(),
+            offset: "0".to_string().into(),
             index: 0,
         };
 
@@ -132,14 +132,14 @@ impl fmt::Display for IntOffset {
 /// StringOffset is string based offset enum type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StringOffset {
-    offset: String,
+    offset: Bytes,
     partition_idx: u16,
 }
 
 impl StringOffset {
     pub fn new(seq: String, partition_idx: u16) -> Self {
         Self {
-            offset: seq,
+            offset: seq.into(),
             partition_idx,
         }
     }
@@ -147,7 +147,12 @@ impl StringOffset {
 
 impl fmt::Display for StringOffset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}-{}", self.offset, self.partition_idx)
+        write!(
+            f,
+            "{}-{}",
+            std::str::from_utf8(&self.offset).expect("it should be valid utf-8"),
+            self.partition_idx
+        )
     }
 }
 
@@ -161,16 +166,16 @@ pub(crate) enum ReadAck {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct MessageID {
-    pub(crate) vertex_name: String,
-    pub(crate) offset: String,
+    pub(crate) vertex_name: Bytes,
+    pub(crate) offset: Bytes,
     pub(crate) index: i32,
 }
 
 impl From<numaflow_pb::objects::isb::MessageId> for MessageID {
     fn from(id: numaflow_pb::objects::isb::MessageId) -> Self {
         Self {
-            vertex_name: id.vertex_name,
-            offset: id.offset,
+            vertex_name: id.vertex_name.into(),
+            offset: id.offset.into(),
             index: id.index,
         }
     }
@@ -179,16 +184,21 @@ impl From<numaflow_pb::objects::isb::MessageId> for MessageID {
 impl From<MessageID> for numaflow_pb::objects::isb::MessageId {
     fn from(id: MessageID) -> Self {
         Self {
-            vertex_name: id.vertex_name,
-            offset: id.offset,
+            vertex_name: String::from_utf8_lossy(&id.vertex_name).to_string(),
+            offset: String::from_utf8_lossy(&id.offset).to_string(),
             index: id.index,
         }
     }
 }
-
 impl fmt::Display for MessageID {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}-{}-{}", self.vertex_name, self.offset, self.index)
+        write!(
+            f,
+            "{}-{}-{}",
+            std::str::from_utf8(&self.vertex_name).expect("it should be valid utf-8"),
+            std::str::from_utf8(&self.offset).expect("it should be valid utf-8"),
+            self.index
+        )
     }
 }
 
@@ -220,8 +230,8 @@ impl TryFrom<Message> for BytesMut {
                 }),
                 kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
                 id: Some(message.id.into()),
-                keys: message.keys.clone(),
-                headers: message.headers.clone(),
+                keys: message.keys,
+                headers: message.headers,
             }),
             body: Some(numaflow_pb::objects::isb::Body {
                 payload: message.value.to_vec(),
@@ -292,7 +302,7 @@ impl TryFrom<read_response::Result> for Message {
     fn try_from(result: read_response::Result) -> Result<Self> {
         let source_offset = match result.offset {
             Some(o) => Offset::String(StringOffset {
-                offset: BASE64_STANDARD.encode(o.offset),
+                offset: BASE64_STANDARD.encode(o.offset).into(),
                 partition_idx: o.partition_id as u16,
             }),
             None => return Err(Error::Source("Offset not found".to_string())),
@@ -305,8 +315,8 @@ impl TryFrom<read_response::Result> for Message {
             offset: Some(source_offset.clone()),
             event_time: utc_from_timestamp(result.event_time),
             id: MessageID {
-                vertex_name: config::get_vertex_name().to_string(),
-                offset: source_offset.to_string(),
+                vertex_name: config::get_vertex_name().to_string().into(),
+                offset: source_offset.to_string().into(),
                 index: 0,
             },
             headers: result.headers,
@@ -399,7 +409,7 @@ mod tests {
     #[test]
     fn test_offset_display() {
         let offset = Offset::String(StringOffset {
-            offset: "123".to_string(),
+            offset: "123".to_string().into(),
             partition_idx: 1,
         });
         assert_eq!(format!("{}", offset), "123-1");
@@ -408,8 +418,8 @@ mod tests {
     #[test]
     fn test_message_id_display() {
         let message_id = MessageID {
-            vertex_name: "vertex".to_string(),
-            offset: "123".to_string(),
+            vertex_name: "vertex".to_string().into(),
+            offset: "123".to_string().into(),
             index: 0,
         };
         assert_eq!(format!("{}", message_id), "vertex-123-0");
@@ -422,13 +432,13 @@ mod tests {
             tags: None,
             value: vec![1, 2, 3].into(),
             offset: Some(Offset::String(StringOffset {
-                offset: "123".to_string(),
+                offset: "123".to_string().into(),
                 partition_idx: 0,
             })),
             event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
             id: MessageID {
-                vertex_name: "vertex".to_string(),
-                offset: "123".to_string(),
+                vertex_name: "vertex".to_string().into(),
+                offset: "123".to_string().into(),
                 index: 0,
             },
             headers: HashMap::new(),
@@ -445,8 +455,8 @@ mod tests {
                 }),
                 kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
                 id: Some(message.id.into()),
-                keys: message.keys.clone(),
-                headers: message.headers.clone(),
+                keys: message.keys,
+                headers: message.headers,
             }),
             body: Some(Body {
                 payload: message.value.clone().into(),
@@ -503,13 +513,13 @@ mod tests {
             tags: None,
             value: vec![1, 2, 3].into(),
             offset: Some(Offset::String(StringOffset {
-                offset: "123".to_string(),
+                offset: "123".to_string().into(),
                 partition_idx: 0,
             })),
             event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
             id: MessageID {
-                vertex_name: "vertex".to_string(),
-                offset: "123".to_string(),
+                vertex_name: "vertex".to_string().into(),
+                offset: "123".to_string().into(),
                 index: 0,
             },
             headers: HashMap::new(),
@@ -553,13 +563,13 @@ mod tests {
             tags: None,
             value: vec![1, 2, 3].into(),
             offset: Some(Offset::String(StringOffset {
-                offset: "123".to_string(),
+                offset: "123".to_string().into(),
                 partition_idx: 0,
             })),
             event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
             id: MessageID {
-                vertex_name: "vertex".to_string(),
-                offset: "123".to_string(),
+                vertex_name: "vertex".to_string().into(),
+                offset: "123".to_string().into(),
                 index: 0,
             },
             headers: HashMap::new(),
@@ -622,8 +632,8 @@ mod tests {
     #[test]
     fn test_message_id_to_proto() {
         let message_id = MessageID {
-            vertex_name: "vertex".to_string(),
-            offset: "123".to_string(),
+            vertex_name: "vertex".to_string().into(),
+            offset: "123".to_string().into(),
             index: 0,
         };
         let proto_id: MessageId = message_id.into();

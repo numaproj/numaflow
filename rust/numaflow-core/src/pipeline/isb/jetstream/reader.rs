@@ -149,8 +149,8 @@ impl JetstreamReader {
                             )));
 
                             message.id = MessageID {
-                                vertex_name: pipeline_config.vertex_name.clone(),
-                                offset: msg_info.stream_sequence.to_string(),
+                                vertex_name: pipeline_config.vertex_name.clone().into(),
+                                offset: msg_info.stream_sequence.to_string().into(),
                                 index: 0,
                             };
 
@@ -333,8 +333,8 @@ mod tests {
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
@@ -435,8 +435,8 @@ mod tests {
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("{}", i + 1),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("{}", i + 1).into(),
                     index: i,
                 },
                 headers: HashMap::new(),

@@ -171,8 +171,8 @@ mod stream_generator {
                 offset: Some(offset.clone()),
                 event_time,
                 id: MessageID {
-                    vertex_name: get_vertex_name().to_string(),
-                    offset: offset.to_string(),
+                    vertex_name: get_vertex_name().to_string().into(),
+                    offset: offset.to_string().into(),
                     index: Default::default(),
                 },
                 headers: Default::default(),

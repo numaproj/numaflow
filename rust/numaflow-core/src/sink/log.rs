@@ -54,8 +54,8 @@ mod tests {
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: "1".to_string(),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: "1".to_string().into(),
                     index: 0,
                 },
             },
@@ -67,8 +67,8 @@ mod tests {
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: "2".to_string(),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: "2".to_string().into(),
                     index: 1,
                 },
             },

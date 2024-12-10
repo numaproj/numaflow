@@ -434,8 +434,8 @@ mod tests {
                 offset: Some(Offset::String(StringOffset::new("123".to_string(), 0))),
                 event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: "123".to_string(),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: "123".to_string().into(),
                     index: 0,
                 },
                 headers: HashMap::new(),

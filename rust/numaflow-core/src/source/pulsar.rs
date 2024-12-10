@@ -20,8 +20,8 @@ impl TryFrom<PulsarMessage> for Message {
             offset: Some(offset.clone()),
             event_time: message.event_time,
             id: MessageID {
-                vertex_name: get_vertex_name().to_string(),
-                offset: offset.to_string(),
+                vertex_name: get_vertex_name().to_string().into(),
+                offset: offset.to_string().into(),
                 index: 0,
             },
             headers: message.headers,
@@ -153,6 +153,7 @@ mod tests {
         assert_eq!(messages.len(), 10);
 
         let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset.unwrap()).collect();
+        println!("offsets: {offsets:?}");
         pulsar.ack(offsets).await?;
 
         Ok(())
