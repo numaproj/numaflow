@@ -18,7 +18,13 @@ import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
 
 // TODO have a check for metricReq against metric object to ensure required fields are passed
-const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }: any) => {
+const LineChartComponent = ({
+  namespaceId,
+  pipelineId,
+  type,
+  metric,
+  vertexId,
+}: any) => {
   const [transformedData, setTransformedData] = useState<any[]>([]);
   const [chartLabels, setChartLabels] = useState<any[]>([]);
   const [metricsReq, setMetricsReq] = useState<any>({
@@ -28,7 +34,9 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
   // store all filters for each selected dimension
   const [filtersList, setFiltersList] = useState<any[]>([]);
   const [filters, setFilters] = useState<any>({});
-  const [previousDimension, setPreviousDimension] = useState(metricsReq?.dimension);
+  const [previousDimension, setPreviousDimension] = useState<string>(
+    metricsReq?.dimension
+  );
 
   const getRandomColor = useCallback((index: number) => {
     const hue = (index * 137.508) % 360;
@@ -96,7 +104,7 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
         name: param?.Name,
         required: param?.Required,
       })) || [];
-    
+
     setParamsList([...initParams, ...newParams]);
   }, [metric, setParamsList]);
 
@@ -110,7 +118,12 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
     filters,
   });
 
-  const groupByLabel = useCallback((dimension: string) => {
+  const groupByLabel = useCallback((dimension: string, metricName: string) => {
+    switch (metricName) {
+      case "monovtx_pending":
+        return "period";
+    }
+
     switch (dimension) {
       case "mono-vertex":
         return "mvtx_name";
@@ -123,7 +136,10 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
     if (chartData) {
       const labels: any[] = [];
       const transformedData: any[] = [];
-      const label = groupByLabel(metricsReq?.dimension);
+      const label = groupByLabel(
+        metricsReq?.dimension,
+        metricsReq?.metric_name
+      );
       chartData?.forEach((item) => {
         const labelVal = item?.metric?.[label];
         labels.push(labelVal);
