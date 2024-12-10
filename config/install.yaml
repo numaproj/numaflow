@@ -28599,9 +28599,11 @@ data:
             - mvtx_name
           dimensions:
             - name: mono-vertex
-              #expr: optional
+              # expr: optional expression for prometheus query
+              # overrides the default expression
             - name: pod
-              #expr: optional
+              # expr: optional expression for prometheus query
+              # overrides the default expression
               filters:
                 - name: pod
                   required: false
