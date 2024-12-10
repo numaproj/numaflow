@@ -1096,7 +1096,7 @@ mod tests {
         }
 
         tokio::spawn({
-            let pending_stats = pending_stats.clone();
+            let pending_stats = Arc::clone(&pending_stats);
             async move {
                 expose_pending_metrics(true, refresh_interval, pending_stats, lookback_seconds)
                     .await;
