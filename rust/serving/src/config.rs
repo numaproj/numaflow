@@ -36,17 +36,11 @@ pub fn config() -> &'static Settings {
     })
 }
 
-static GLOBAL_TLS_CONFIG: OnceLock<(Certificate, KeyPair)> = OnceLock::new();
-
-fn init_cert_key_pair() -> std::result::Result<(Certificate, KeyPair), String> {
+pub fn generate_certs() -> std::result::Result<(Certificate, KeyPair), String> {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| format!("Failed to generate cert {:?}", e))?;
     Ok((cert, key_pair))
-}
-
-pub fn cert_key_pair() -> &'static (Certificate, KeyPair) {
-    GLOBAL_TLS_CONFIG.get_or_init(|| init_cert_key_pair().expect("Failed to initialize TLS config"))
 }
 
 #[derive(Debug, Deserialize)]

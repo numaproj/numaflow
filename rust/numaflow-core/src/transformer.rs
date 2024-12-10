@@ -253,7 +253,7 @@ mod tests {
         let (output_tx, mut output_rx) = mpsc::channel(10);
 
         let semaphore = Arc::new(Semaphore::new(10));
-        let permit = semaphore.clone().acquire_owned().await.unwrap();
+        let permit = semaphore.acquire_owned().await.unwrap();
         Transformer::transform(
             transformer.sender.clone(),
             permit,
