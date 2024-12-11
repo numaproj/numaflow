@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -13,7 +14,6 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
-use numaflow_models::models::tls;
 use numaflow_pb::clients::mvtxdaemon::mono_vertex_daemon_service_client::MonoVertexDaemonServiceClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
@@ -25,13 +25,12 @@ use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::Histogram;
 use prometheus_client::registry::Registry;
 use rcgen::{generate_simple_self_signed, CertifiedKey};
-use rustls::ClientConfig;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
-use tonic::transport::{Certificate, Channel, ClientTlsConfig, Endpoint};
+use tonic::transport::Channel;
 use tonic::Request;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 // SDK information
 const SDK_INFO: &str = "sdk_info";
@@ -840,7 +839,7 @@ async fn expose_pending_metrics(
     // string concat is more efficient?
     let mut pending_info: BTreeMap<&str, i64> = BTreeMap::new();
 
-    let mut lookback_seconds_map: [(&str, u16); 4] = [
+    let lookback_seconds_map: [(&str, u16); 4] = [
         ("1m", 60),
         ("default", lookback_seconds),
         ("5m", 300),
@@ -851,22 +850,45 @@ async fn expose_pending_metrics(
         let server_url = env::var("SERVER_URL").expect("NO SERVER");
         info!("Server URL: {}", server_url);
 
-        let server_root_ca_cert = std::fs::read_to_string("").expect("CA should be present");
-        let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
-        let _ = server_root_ca_cert;
-        let tls = ClientTlsConfig::new().domain_name("localhost");
+        let client = crate::shared::tls::new_https_client().unwrap();
 
-        // create an RPC channel to the daemon using an insecure verify true tls
-        let channel = Endpoint::try_from(server_url.clone())
-            .map_err(|e| Error::Connection(format!("Failed to create endpoint: {:?}", e)))
-            .unwrap()
-            .tls_config(tls)
-            .expect("TLS config should not fail")
-            .connect()
+        let addr = tokio::net::lookup_host(server_url)
             .await
+            .unwrap()
+            .find_map(|addr| {
+                if let SocketAddr::V4(ip) = addr {
+                    Some(ip.to_string())
+                } else {
+                    None
+                }
+            })
             .unwrap();
 
-        let mut daemon_client = MonoVertexDaemonServiceClient::new(channel);
+        // Wait for the service to be ready
+        loop {
+            match tokio::net::TcpStream::connect(&addr).await {
+                Ok(_) => break,
+                Err(err) => {
+                    if err.kind() == ErrorKind::ConnectionRefused {
+                        warn!(addr, "Monovertex deamon server is not ready yet");
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        continue;
+                    } else {
+                        panic!("{err:?}")
+                    }
+                }
+            }
+        }
+
+        let uri = hyper::Uri::builder()
+            .authority(addr)
+            .scheme("https")
+            .path_and_query("/")
+            .build()
+            .unwrap();
+
+        info!(?uri, "Connecting to Monovertex daemon");
+        let mut daemon_client = MonoVertexDaemonServiceClient::with_origin(client, uri);
 
         let res = daemon_client
             .get_mono_vertex_status(Request::new(()))
