@@ -154,7 +154,7 @@ mod tests {
         assert_eq!(messages.len(), 10);
 
         let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset.unwrap()).collect();
-        println!("offsets: {offsets:?}");
+
         pulsar.ack(offsets).await?;
 
         Ok(())

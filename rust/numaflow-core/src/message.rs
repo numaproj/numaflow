@@ -24,6 +24,7 @@ use crate::{config, Error};
 const DROP: &str = "U+005C__DROP__";
 
 /// A message that is sent from the source to the sink.
+/// It is cheap to clone.
 #[derive(Debug, Clone)]
 pub(crate) struct Message {
     /// keys of the message
@@ -131,7 +132,8 @@ impl fmt::Display for IntOffset {
 
 /// StringOffset is string based offset enum type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StringOffset {
+pub(crate) struct StringOffset {
+    /// offset could be a complex base64 string.
     offset: Bytes,
     partition_idx: u16,
 }
@@ -164,6 +166,7 @@ pub(crate) enum ReadAck {
     Nak,
 }
 
+/// Message ID which is used to uniquely identify a message. It cheap to clone this.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct MessageID {
     pub(crate) vertex_name: Bytes,
