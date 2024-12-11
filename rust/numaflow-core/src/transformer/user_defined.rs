@@ -98,12 +98,12 @@ impl UserDefinedTransformer {
                 for (i, result) in resp.results.into_iter().enumerate() {
                     let message = Message {
                         id: MessageID {
-                            vertex_name: get_vertex_name().to_string(),
+                            vertex_name: get_vertex_name().to_string().into(),
                             index: i as i32,
-                            offset: msg_info.offset.to_string(),
+                            offset: msg_info.offset.to_string().into(),
                         },
-                        keys: result.keys,
-                        tags: Some(result.tags),
+                        keys: Arc::from(result.keys),
+                        tags: Some(Arc::from(result.tags)),
                         value: result.value.into(),
                         offset: None,
                         event_time: utc_from_timestamp(result.event_time),
@@ -142,6 +142,7 @@ impl UserDefinedTransformer {
 #[cfg(test)]
 mod tests {
     use std::error::Error;
+    use std::sync::Arc;
     use std::time::Duration;
 
     use numaflow::sourcetransform;
@@ -194,7 +195,7 @@ mod tests {
         .await?;
 
         let message = crate::message::Message {
-            keys: vec!["first".into()],
+            keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
             offset: Some(crate::message::Offset::String(StringOffset::new(
@@ -203,8 +204,8 @@ mod tests {
             ))),
             event_time: chrono::Utc::now(),
             id: MessageID {
-                vertex_name: "vertex_name".to_string(),
-                offset: "0".to_string(),
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
                 index: 0,
             },
             headers: Default::default(),

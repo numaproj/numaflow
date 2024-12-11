@@ -295,7 +295,7 @@ impl Source {
 
                     // insert the offset and the ack one shot in the tracker.
                     tracker_handle
-                        .insert(offset.to_string(), resp_ack_tx)
+                        .insert(offset.to_string().into(), resp_ack_tx)
                         .await?;
 
                     // store the ack one shot in the batch to invoke ack later.

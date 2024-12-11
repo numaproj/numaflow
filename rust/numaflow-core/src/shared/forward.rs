@@ -1,11 +1,12 @@
 use numaflow_models::models::ForwardConditions;
 use std::hash::{DefaultHasher, Hasher};
+use std::sync::Arc;
 
 /// Checks if the message should to written to downstream vertex based the conditions
 /// and message tags. If not tags are provided by there are edge conditions present, we will
 /// still forward to all vertices.
 pub(crate) fn should_forward(
-    tags: Option<Vec<String>>,
+    tags: Option<Arc<[String]>>,
     conditions: Option<Box<ForwardConditions>>,
 ) -> bool {
     conditions.map_or(true, |conditions| {
@@ -81,7 +82,7 @@ mod tests {
         let mut tag_conditions = TagConditions::new(vec!["tag1".to_string(), "tag2".to_string()]);
         tag_conditions.operator = Some("and".to_string());
         let conditions = ForwardConditions::new(tag_conditions);
-        let tags = Some(vec!["tag1".to_string(), "tag2".to_string()]);
+        let tags = Some(Arc::from(vec!["tag1".to_string(), "tag2".to_string()]));
         let result = should_forward(tags, Some(Box::new(conditions)));
         assert!(result);
     }
@@ -91,7 +92,7 @@ mod tests {
         let mut tag_conditions = TagConditions::new(vec!["tag1".to_string()]);
         tag_conditions.operator = Some("or".to_string());
         let conditions = ForwardConditions::new(tag_conditions);
-        let tags = Some(vec!["tag2".to_string(), "tag1".to_string()]);
+        let tags = Some(Arc::from(vec!["tag2".to_string(), "tag1".to_string()]));
         let result = should_forward(tags, Some(Box::new(conditions)));
         assert!(result);
     }
@@ -101,7 +102,7 @@ mod tests {
         let mut tag_conditions = TagConditions::new(vec!["tag1".to_string()]);
         tag_conditions.operator = Some("not".to_string());
         let conditions = ForwardConditions::new(tag_conditions);
-        let tags = Some(vec!["tag2".to_string()]);
+        let tags = Some(Arc::from(vec!["tag2".to_string()]));
         let result = should_forward(tags, Some(Box::new(conditions)));
         assert!(result);
     }

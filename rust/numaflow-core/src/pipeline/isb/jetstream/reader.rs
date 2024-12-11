@@ -149,8 +149,8 @@ impl JetstreamReader {
                             )));
 
                             message.id = MessageID {
-                                vertex_name: pipeline_config.vertex_name.clone(),
-                                offset: msg_info.stream_sequence.to_string(),
+                                vertex_name: pipeline_config.vertex_name.clone().into(),
+                                offset: msg_info.stream_sequence.to_string().into(),
                                 index: 0,
                             };
 
@@ -258,6 +258,7 @@ impl fmt::Display for JetstreamReader {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     use super::*;
     use crate::message::{Message, MessageID};
@@ -327,14 +328,14 @@ mod tests {
 
         for i in 0..10 {
             let message = Message {
-                keys: vec![format!("key_{}", i)],
+                keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
@@ -429,14 +430,14 @@ mod tests {
         // write 5 messages
         for i in 0..5 {
             let message = Message {
-                keys: vec![format!("key_{}", i)],
+                keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("{}", i + 1),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("{}", i + 1).into(),
                     index: i,
                 },
                 headers: HashMap::new(),

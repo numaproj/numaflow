@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig};
@@ -14,14 +15,14 @@ impl TryFrom<PulsarMessage> for Message {
         let offset = Offset::Int(IntOffset::new(message.offset, 1)); // FIXME: partition id
 
         Ok(Message {
-            keys: vec![message.key],
+            keys: Arc::from(vec![message.key]),
             tags: None,
             value: message.payload,
             offset: Some(offset.clone()),
             event_time: message.event_time,
             id: MessageID {
-                vertex_name: get_vertex_name().to_string(),
-                offset: offset.to_string(),
+                vertex_name: get_vertex_name().to_string().into(),
+                offset: offset.to_string().into(),
                 index: 0,
             },
             headers: message.headers,
@@ -153,6 +154,7 @@ mod tests {
         assert_eq!(messages.len(), 10);
 
         let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset.unwrap()).collect();
+
         pulsar.ack(offsets).await?;
 
         Ok(())
