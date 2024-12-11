@@ -31,7 +31,7 @@ mod user_defined;
 ///
 /// [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
 #[trait_variant::make(Sink: Send)]
-#[allow(unused)]
+#[allow(dead_code)]
 pub(crate) trait LocalSink {
     /// Write the messages to the Sink.
     async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>>;
@@ -275,6 +275,12 @@ impl SinkWriter {
                         .map(|msg| msg.id.offset.clone())
                         .collect::<Vec<_>>();
 
+                    // filter out the messages which needs to be dropped
+                    let batch = batch
+                        .into_iter()
+                        .filter(|msg| !msg.dropped())
+                        .collect::<Vec<_>>();
+
                     let n = batch.len();
                     match this.write(batch, cancellation_token.clone()).await {
                         Ok(_) => {
@@ -297,7 +303,7 @@ impl SinkWriter {
                         info!(
                             "Processed {} messages at {:?}",
                             processed_msgs_count,
-                            std::time::Instant::now()
+                            time::Instant::now()
                         );
                         processed_msgs_count = 0;
                         last_logged_at = std::time::Instant::now();
@@ -362,7 +368,7 @@ impl SinkWriter {
             }
 
             // If after the retries we still have messages to process, handle the post retry failures
-            let need_retry = self.handle_sink_post_retry(
+            let need_retry = Self::handle_sink_post_retry(
                 &mut attempts,
                 &mut error_map,
                 &mut fallback_msgs,
@@ -394,7 +400,6 @@ impl SinkWriter {
     /// Handles the post retry failures based on the configured strategy,
     /// returns true if we need to retry, else false.
     fn handle_sink_post_retry(
-        &mut self,
         attempts: &mut u16,
         error_map: &mut HashMap<String, i32>,
         fallback_msgs: &mut Vec<Message>,
@@ -602,6 +607,7 @@ impl Drop for SinkWriter {
 mod tests {
     use chrono::Utc;
     use numaflow::sink;
+    use std::sync::Arc;
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
 
@@ -645,13 +651,14 @@ mod tests {
 
         let messages: Vec<Message> = (0..5)
             .map(|i| Message {
-                keys: vec![format!("key_{}", i)],
+                keys: Arc::from(vec![format!("key_{}", i)]),
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
@@ -679,13 +686,14 @@ mod tests {
 
         let messages: Vec<Message> = (0..10)
             .map(|i| Message {
-                keys: vec![format!("key_{}", i)],
+                keys: Arc::from(vec![format!("key_{}", i)]),
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
@@ -756,13 +764,14 @@ mod tests {
 
         let messages: Vec<Message> = (0..10)
             .map(|i| Message {
-                keys: vec!["error".to_string()],
+                keys: Arc::from(vec!["error".to_string()]),
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
@@ -842,13 +851,14 @@ mod tests {
 
         let messages: Vec<Message> = (0..20)
             .map(|i| Message {
-                keys: vec!["fallback".to_string()],
+                keys: Arc::from(vec!["fallback".to_string()]),
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),

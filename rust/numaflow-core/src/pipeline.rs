@@ -12,7 +12,7 @@ use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
 use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
-use crate::pipeline::isb::jetstream::ISBWriter;
+use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::shared::create_components;
 use crate::shared::create_components::create_sink_writer;
 use crate::shared::metrics::start_metrics_server;
@@ -179,19 +179,14 @@ async fn create_buffer_writer(
     js_context: Context,
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
-) -> ISBWriter {
-    ISBWriter::new(
-        config.paf_concurrency,
-        config
-            .to_vertex_config
-            .iter()
-            .map(|tv| tv.writer_config.clone())
-            .collect(),
+) -> JetstreamWriter {
+    JetstreamWriter::new(
+        config.to_vertex_config.clone(),
         js_context,
+        config.paf_concurrency,
         tracker_handle,
         cln_token,
     )
-    .await
 }
 
 async fn create_buffer_reader(
@@ -234,11 +229,12 @@ async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Re
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::sync::Arc;
     use std::time::Duration;
 
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
-    use futures::StreamExt;
+    use tokio_stream::StreamExt;
 
     use super::*;
     use crate::config::components::metrics::MetricsConfig;
@@ -326,12 +322,9 @@ mod tests {
                         .collect(),
                     partitions: 5,
                     max_length: 30000,
-                    refresh_interval: Duration::from_secs(1),
                     usage_limit: 0.8,
                     buffer_full_strategy: RetryUntilSuccess,
-                    retry_interval: Duration::from_millis(10),
                 },
-                partitions: 5,
                 conditions: None,
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
@@ -436,13 +429,14 @@ mod tests {
 
             use crate::message::{Message, MessageID, Offset, StringOffset};
             let message = Message {
-                keys: vec!["key1".to_string()],
+                keys: Arc::from(vec!["key1".to_string()]),
+                tags: None,
                 value: vec![1, 2, 3].into(),
                 offset: Some(Offset::String(StringOffset::new("123".to_string(), 0))),
                 event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: "123".to_string(),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: "123".to_string().into(),
                     index: 0,
                 },
                 headers: HashMap::new(),

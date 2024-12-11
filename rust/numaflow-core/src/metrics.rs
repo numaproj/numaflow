@@ -756,14 +756,14 @@ impl PendingReader {
         let pending_reader = self.lag_reader.clone();
         let lag_checking_interval = self.lag_checking_interval;
         let refresh_interval = self.refresh_interval;
-        let pending_stats = self.pending_stats.clone();
+        let pending_stats = Arc::clone(&self.pending_stats);
         let lookback_seconds = self.lookback_seconds;
 
         let buildup_handle = tokio::spawn(async move {
             build_pending_info(pending_reader, lag_checking_interval, pending_stats).await;
         });
 
-        let pending_stats = self.pending_stats.clone();
+        let pending_stats = Arc::clone(&self.pending_stats);
         let expose_handle = tokio::spawn(async move {
             expose_pending_metrics(
                 is_mono_vertex,
@@ -1096,7 +1096,7 @@ mod tests {
         }
 
         tokio::spawn({
-            let pending_stats = pending_stats.clone();
+            let pending_stats = Arc::clone(&pending_stats);
             async move {
                 expose_pending_metrics(true, refresh_interval, pending_stats, lookback_seconds)
                     .await;

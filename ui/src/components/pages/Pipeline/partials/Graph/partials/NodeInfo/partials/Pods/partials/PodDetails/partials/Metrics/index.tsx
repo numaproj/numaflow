@@ -77,7 +77,7 @@ export function Metrics({ namespaceId, pipelineId, type, vertexId }: MetricsProp
               aria-controls={`${metric?.metric_name}-content`}
               id={`${metric?.metric_name}-header`}
             >
-              <Box sx={{ textTransform: "capitalize" }}>
+              <Box>
                 {metricNameMap[metric?.metric_name] || metric?.metric_name}
               </Box>
             </AccordionSummary>
