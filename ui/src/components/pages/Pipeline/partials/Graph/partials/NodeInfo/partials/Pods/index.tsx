@@ -30,6 +30,7 @@ import {
   PodsProps,
 } from "../../../../../../../../../types/declarations/pods";
 
+// TODO: calculate podsDetails from pods-info API
 export function Pods(props: PodsProps) {
   const { host } = useContext<AppContextProps>(AppContext);
   const { namespaceId, pipelineId, vertexId, type } = props;
