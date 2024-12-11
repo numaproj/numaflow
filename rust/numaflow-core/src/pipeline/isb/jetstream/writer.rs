@@ -201,7 +201,7 @@ impl JetstreamWriter {
 
                     // check to which partition the message should be written
                     let partition = forward::determine_partition(
-                        message.id.offset.clone(),
+                        String::from_utf8_lossy(&message.id.offset).to_string(),
                         vertex.writer_config.partitions,
                         &mut hash,
                     );
@@ -456,7 +456,7 @@ impl JetstreamWriter {
 pub(crate) struct ResolveAndPublishResult {
     pub(crate) pafs: Vec<(Stream, PublishAckFuture)>,
     pub(crate) payload: Vec<u8>,
-    pub(crate) offset: String,
+    pub(crate) offset: Bytes,
 }
 
 #[cfg(test)]
@@ -526,14 +526,14 @@ mod tests {
         );
 
         let message = Message {
-            keys: vec!["key_0".to_string()],
+            keys: Arc::from(vec!["key_0".to_string()]),
             tags: None,
             value: "message 0".as_bytes().to_vec().into(),
             offset: None,
             event_time: Utc::now(),
             id: MessageID {
-                vertex_name: "vertex".to_string(),
-                offset: "offset_0".to_string(),
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_0".to_string().into(),
                 index: 0,
             },
             headers: HashMap::new(),
@@ -585,14 +585,14 @@ mod tests {
             .unwrap();
 
         let message = Message {
-            keys: vec!["key_0".to_string()],
+            keys: Arc::from(vec!["key_0".to_string()]),
             tags: None,
             value: "message 0".as_bytes().to_vec().into(),
             offset: None,
             event_time: Utc::now(),
             id: MessageID {
-                vertex_name: "vertex".to_string(),
-                offset: "offset_0".to_string(),
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_0".to_string().into(),
                 index: 0,
             },
             headers: HashMap::new(),
@@ -669,14 +669,14 @@ mod tests {
         // Publish 10 messages successfully
         for i in 0..10 {
             let message = Message {
-                keys: vec![format!("key_{}", i)],
+                keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
@@ -694,14 +694,14 @@ mod tests {
         // Attempt to publish a message which has a payload size greater than the max_message_size
         // so that it fails and sync write will be attempted and it will be blocked
         let message = Message {
-            keys: vec!["key_11".to_string()],
+            keys: Arc::from(vec!["key_11".to_string()]),
             tags: None,
             value: vec![0; 1025].into(),
             offset: None,
             event_time: Utc::now(),
             id: MessageID {
-                vertex_name: "vertex".to_string(),
-                offset: "offset_11".to_string(),
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_11".to_string().into(),
                 index: 11,
             },
             headers: HashMap::new(),
@@ -961,14 +961,14 @@ mod tests {
         // Publish 500 messages
         for i in 0..500 {
             let message = Message {
-                keys: vec![format!("key_{}", i)],
+                keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
@@ -1049,14 +1049,14 @@ mod tests {
         // Publish 100 messages successfully
         for i in 0..100 {
             let message = Message {
-                keys: vec![format!("key_{}", i)],
+                keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
@@ -1076,21 +1076,21 @@ mod tests {
         // Attempt to publish the 101st message, which should get stuck in the retry loop
         // because the max message size is set to 1024
         let message = Message {
-            keys: vec!["key_101".to_string()],
+            keys: Arc::from(vec!["key_101".to_string()]),
             tags: None,
             value: vec![0; 1025].into(),
             offset: None,
             event_time: Utc::now(),
             id: MessageID {
-                vertex_name: "vertex".to_string(),
-                offset: "offset_101".to_string(),
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_101".to_string().into(),
                 index: 101,
             },
             headers: HashMap::new(),
         };
         let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
         tracker_handle
-            .insert("offset_101".to_string(), ack_tx)
+            .insert("offset_101".to_string().into(), ack_tx)
             .await
             .unwrap();
         ack_rxs.push(ack_rx);
@@ -1189,14 +1189,14 @@ mod tests {
         let mut ack_rxs = vec![];
         for i in 0..10 {
             let message = Message {
-                keys: vec![format!("key_{}", i)],
-                tags: Some(vec!["tag1".to_string(), "tag2".to_string()]),
+                keys: Arc::from(vec![format!("key_{}", i)]),
+                tags: Some(Arc::from(vec!["tag1".to_string(), "tag2".to_string()])),
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),

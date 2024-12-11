@@ -234,7 +234,7 @@ mod tests {
         let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
 
         let message = Message {
-            keys: vec!["first".into()],
+            keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
             offset: Some(Offset::String(crate::message::StringOffset::new(
@@ -243,8 +243,8 @@ mod tests {
             ))),
             event_time: chrono::Utc::now(),
             id: MessageID {
-                vertex_name: "vertex_name".to_string(),
-                offset: "0".to_string(),
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
                 index: 0,
             },
             headers: Default::default(),
@@ -311,7 +311,7 @@ mod tests {
 
         for i in 0..5 {
             let message = Message {
-                keys: vec![format!("key_{}", i)],
+                keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("value_{}", i).into(),
                 offset: Some(Offset::String(crate::message::StringOffset::new(
@@ -320,8 +320,8 @@ mod tests {
                 ))),
                 event_time: chrono::Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex_name".to_string(),
-                    offset: i.to_string(),
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: i.to_string().into(),
                     index: i,
                 },
                 headers: Default::default(),

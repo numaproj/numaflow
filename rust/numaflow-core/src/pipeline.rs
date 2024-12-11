@@ -229,6 +229,7 @@ async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Re
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::sync::Arc;
     use std::time::Duration;
 
     use async_nats::jetstream;
@@ -428,14 +429,14 @@ mod tests {
 
             use crate::message::{Message, MessageID, Offset, StringOffset};
             let message = Message {
-                keys: vec!["key1".to_string()],
+                keys: Arc::from(vec!["key1".to_string()]),
                 tags: None,
                 value: vec![1, 2, 3].into(),
                 offset: Some(Offset::String(StringOffset::new("123".to_string(), 0))),
                 event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: "123".to_string(),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: "123".to_string().into(),
                     index: 0,
                 },
                 headers: HashMap::new(),
