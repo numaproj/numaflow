@@ -59,7 +59,7 @@ pub(crate) async fn start_forwarder(
         let mut source_grpc_client =
             SourceClient::new(create_rpc_channel(source_config.socket_path.clone().into()).await?)
                 .max_encoding_message_size(source_config.grpc_max_message_size)
-                .max_encoding_message_size(source_config.grpc_max_message_size);
+                .max_decoding_message_size(source_config.grpc_max_message_size);
 
         wait_until_source_ready(&cln_token, &mut source_grpc_client).await?;
         Some(source_grpc_client)
@@ -92,7 +92,7 @@ pub(crate) async fn start_forwarder(
         let mut sink_grpc_client =
             SinkClient::new(create_rpc_channel(udsink_config.socket_path.clone().into()).await?)
                 .max_encoding_message_size(udsink_config.grpc_max_message_size)
-                .max_encoding_message_size(udsink_config.grpc_max_message_size);
+                .max_decoding_message_size(udsink_config.grpc_max_message_size);
 
         wait_until_sink_ready(&cln_token, &mut sink_grpc_client).await?;
         Some(sink_grpc_client)
@@ -125,7 +125,7 @@ pub(crate) async fn start_forwarder(
                 create_rpc_channel(fb_sink_config.socket_path.clone().into()).await?,
             )
             .max_encoding_message_size(fb_sink_config.grpc_max_message_size)
-            .max_encoding_message_size(fb_sink_config.grpc_max_message_size);
+            .max_decoding_message_size(fb_sink_config.grpc_max_message_size);
 
             wait_until_sink_ready(&cln_token, &mut fb_sink_grpc_client).await?;
             Some(fb_sink_grpc_client)
@@ -164,7 +164,7 @@ pub(crate) async fn start_forwarder(
                 create_rpc_channel(transformer_config.socket_path.clone().into()).await?,
             )
             .max_encoding_message_size(transformer_config.grpc_max_message_size)
-            .max_encoding_message_size(transformer_config.grpc_max_message_size);
+            .max_decoding_message_size(transformer_config.grpc_max_message_size);
 
             wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
             Some(transformer_grpc_client.clone())

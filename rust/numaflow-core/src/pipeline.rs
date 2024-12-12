@@ -244,7 +244,7 @@ async fn create_source_type(
                 create_rpc_channel(udsource_config.socket_path.clone().into()).await?,
             )
             .max_encoding_message_size(udsource_config.grpc_max_message_size)
-            .max_encoding_message_size(udsource_config.grpc_max_message_size);
+            .max_decoding_message_size(udsource_config.grpc_max_message_size);
             wait_until_source_ready(&cln_token, &mut source_grpc_client).await?;
             let (ud_read, ud_ack, ud_lag) = new_source(
                 source_grpc_client.clone(),
@@ -279,7 +279,7 @@ async fn create_transformer(
                 create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
             )
             .max_encoding_message_size(ud_transformer.grpc_max_message_size)
-            .max_encoding_message_size(ud_transformer.grpc_max_message_size);
+            .max_decoding_message_size(ud_transformer.grpc_max_message_size);
             wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
             return Ok((
                 Some(SourceTransformHandle::new(transformer_grpc_client.clone()).await?),
