@@ -91,7 +91,6 @@ pub fn new_https_client() -> Result<HTTPSClient, Box<dyn std::error::Error + Sen
             hyper_rustls::HttpsConnectorBuilder::new()
                 .with_tls_config(tls)
                 .https_only()
-                .enable_http1()
                 .enable_http2()
                 .wrap_connector(s)
         })

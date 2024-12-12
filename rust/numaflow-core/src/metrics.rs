@@ -847,6 +847,7 @@ async fn expose_pending_metrics(
     ];
 
     loop {
+        ticker.tick().await;
         let server_url = env::var("SERVER_URL").expect("NO SERVER");
         info!("Server URL: {}", server_url);
 
