@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.4.2 (2024-12-11)
+
+ * [c9dc38f4](https://github.com/numaproj/numaflow/commit/c9dc38f4cce2b5db598536a7539f2a35febcf1ca) Update manifests to v1.4.2
+ * [fea792b3](https://github.com/numaproj/numaflow/commit/fea792b36bd342adcdcdd96768b6fdd68921bfd2) fix: set max decode size of proto message (#2275)
+
+### Contributors
+
+ * Sidhant Kohli
+
 ## v1.4.1 (2024-12-05)
 
  * [346f2a73](https://github.com/numaproj/numaflow/commit/346f2a7321d158fa9ce9392cfdcc76d671d6f577) Update manifests to v1.4.1
