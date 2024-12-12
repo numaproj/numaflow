@@ -12,7 +12,7 @@ resources:
 
 images:
   - name: quay.io/numaproj/numaflow
-    newTag: v1.4.1
+    newTag: v1.4.2
 
 patches:
   # For release scripts
@@ -28,7 +28,7 @@ patches:
               - name: controller-manager
                 env:
                   - name: NUMAFLOW_IMAGE
-                    value: quay.io/numaproj/numaflow:v1.4.1
+                    value: quay.io/numaproj/numaflow:v1.4.2
   - patch: |-
       apiVersion: v1
       kind: ConfigMap
