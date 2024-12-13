@@ -101,7 +101,7 @@ pub(crate) async fn sdk_server_info(
     let container_type = get_container_type(&file_path).unwrap_or(ContainerType::Unknown);
 
     // Log the server info
-    info!(?container_type, "Server info file: {:?}", server_info);
+    info!(?container_type, ?server_info, "Server info file");
 
     // Extract relevant fields from server info
     let sdk_version = &server_info.version;
