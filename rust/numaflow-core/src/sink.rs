@@ -15,8 +15,13 @@ use tracing::{debug, error, info, warn};
 use user_defined::UserDefinedSink;
 
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+use crate::config::is_mono_vertex;
 use crate::error::Error;
 use crate::message::{Message, ResponseFromSink, ResponseStatusFromSink};
+use crate::metrics::{
+    monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
+    pipeline_metrics,
+};
 use crate::tracker::TrackerHandle;
 use crate::Result;
 
@@ -275,13 +280,15 @@ impl SinkWriter {
                         .map(|msg| msg.id.offset.clone())
                         .collect::<Vec<_>>();
 
+                    let total_msgs = batch.len();
                     // filter out the messages which needs to be dropped
                     let batch = batch
                         .into_iter()
                         .filter(|msg| !msg.dropped())
                         .collect::<Vec<_>>();
 
-                    let n = batch.len();
+                    let sink_start = time::Instant::now();
+                    let total_valid_msgs = batch.len();
                     match this.write(batch, cancellation_token.clone()).await {
                         Ok(_) => {
                             for offset in offsets {
@@ -298,7 +305,31 @@ impl SinkWriter {
                         }
                     }
 
-                    processed_msgs_count += n;
+                    // publish sink metrics
+                    if is_mono_vertex() {
+                        monovertex_metrics()
+                            .sink
+                            .time
+                            .get_or_create(mvtx_forward_metric_labels())
+                            .observe(sink_start.elapsed().as_micros() as f64);
+                        monovertex_metrics()
+                            .dropped_total
+                            .get_or_create(mvtx_forward_metric_labels())
+                            .inc_by((total_msgs - total_valid_msgs) as u64);
+                    } else {
+                        pipeline_metrics()
+                            .forwarder
+                            .write_time
+                            .get_or_create(pipeline_forward_metric_labels("Sink", None))
+                            .observe(sink_start.elapsed().as_micros() as f64);
+                        pipeline_metrics()
+                            .forwarder
+                            .dropped_total
+                            .get_or_create(pipeline_forward_metric_labels("Sink", None))
+                            .inc_by((total_msgs - total_valid_msgs) as u64);
+                    }
+
+                    processed_msgs_count += total_msgs;
                     if last_logged_at.elapsed().as_millis() >= 1000 {
                         info!(
                             "Processed {} messages at {:?}",
@@ -326,6 +357,7 @@ impl SinkWriter {
             return Ok(());
         }
 
+        let total_msgs = messages.len();
         let mut attempts = 0;
         let mut error_map = HashMap::new();
         let mut fallback_msgs = Vec::new();
@@ -388,10 +420,30 @@ impl SinkWriter {
             }
         }
 
+        let fb_msgs_total = fallback_msgs.len();
         // If there are fallback messages, write them to the fallback sink
         if !fallback_msgs.is_empty() {
             self.handle_fallback_messages(fallback_msgs, retry_config)
                 .await?;
+        }
+
+        if is_mono_vertex() {
+            monovertex_metrics()
+                .sink
+                .write_total
+                .get_or_create(mvtx_forward_metric_labels())
+                .inc_by((total_msgs - fb_msgs_total) as u64);
+            monovertex_metrics()
+                .fb_sink
+                .write_total
+                .get_or_create(mvtx_forward_metric_labels())
+                .inc_by(fb_msgs_total as u64);
+        } else {
+            pipeline_metrics()
+                .forwarder
+                .write_total
+                .get_or_create(pipeline_forward_metric_labels("Sink", None))
+                .inc_by((total_msgs) as u64);
         }
 
         Ok(())

@@ -8,6 +8,7 @@ use tonic::transport::Channel;
 use tracing::error;
 
 use crate::message::Message;
+use crate::metrics::{monovertex_metrics, mvtx_forward_metric_labels};
 use crate::tracker::TrackerHandle;
 use crate::transformer::user_defined::UserDefinedTransformer;
 use crate::Result;
@@ -104,6 +105,7 @@ impl Transformer {
 
         // invoke transformer and then wait for the one-shot
         tokio::spawn(async move {
+            let start_time = tokio::time::Instant::now();
             let _permit = permit;
 
             let (sender, receiver) = oneshot::channel();
@@ -141,6 +143,11 @@ impl Transformer {
                         .expect("failed to discard tracker");
                 }
             }
+            monovertex_metrics()
+                .transformer
+                .time
+                .get_or_create(mvtx_forward_metric_labels())
+                .observe(start_time.elapsed().as_micros() as f64);
         });
 
         Ok(())

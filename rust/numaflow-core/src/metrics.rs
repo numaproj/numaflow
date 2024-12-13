@@ -78,6 +78,7 @@ const PENDING: &str = "pending";
 // processing times as timers
 const E2E_TIME: &str = "processing_time";
 const READ_TIME: &str = "read_time";
+const WRITE_TIME: &str = "write_time";
 const TRANSFORM_TIME: &str = "time";
 const ACK_TIME: &str = "ack_time";
 const SINK_TIME: &str = "time";
@@ -226,9 +227,11 @@ pub(crate) struct PipelineForwarderMetrics {
     pub(crate) ack_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) ack_time: Family<Vec<(String, String)>, Histogram>,
     pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) write_time: Family<Vec<(String, String)>, Histogram>,
     pub(crate) read_bytes_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) processed_time: Family<Vec<(String, String)>, Histogram>,
     pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
+    pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
 }
 
 pub(crate) struct PipelineISBMetrics {
@@ -395,6 +398,10 @@ impl PipelineMetrics {
                 }),
                 pending: Family::<Vec<(String, String)>, Gauge>::default(),
                 write_total: Family::<Vec<(String, String)>, Counter>::default(),
+                write_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                    || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10)),
+                ),
+                dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
             },
             isb: PipelineISBMetrics {
                 paf_resolution_time:
@@ -441,6 +448,21 @@ impl PipelineMetrics {
             PENDING,
             "Number of pending messages",
             metrics.forwarder.pending.clone(),
+        );
+        forwarder_registry.register(
+            SINK_WRITE_TOTAL,
+            "Total number of Data Messages Written",
+            metrics.forwarder.write_total.clone(),
+        );
+        forwarder_registry.register(
+            DROPPED_TOTAL,
+            "Total number of dropped messages",
+            metrics.forwarder.dropped_total.clone(),
+        );
+        forwarder_registry.register(
+            WRITE_TIME,
+            "Time taken to write data",
+            metrics.forwarder.write_time.clone(),
         );
         metrics
     }
