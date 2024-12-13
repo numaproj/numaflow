@@ -274,7 +274,7 @@ func Test_PromQueryBuilder(t *testing.T) {
 		})
 	}
 
-	// tests for gauge metrics
+	// tests for mono-vertex gauge metrics
 	var gauge_service = &PromQlService{
 		PlaceHolders: map[string]map[string][]string{
 			"monovtx_pending": {
@@ -305,7 +305,7 @@ func Test_PromQueryBuilder(t *testing.T) {
 					"period":    "5m",
 				},
 			},
-			expectedQuery: `monovtx_pending{namespace= "test_namespace", mvtx_name= "test_mvtx", period= "5m"}`,
+			expectedQuery: `sum(monovtx_pending{namespace= "test_namespace", mvtx_name= "test_mvtx", period= "5m"}) by (mvtx_name, period)`,
 		},
 		{
 			name: "Missing metric name in service config",
@@ -325,6 +325,72 @@ func Test_PromQueryBuilder(t *testing.T) {
 	for _, tt := range gauge_metrics_tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actualQuery, err := gauge_service.BuildQuery(tt.requestBody)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if !comparePrometheusQueries(tt.expectedQuery, actualQuery) {
+					t.Errorf("Prometheus queries do not match.\nExpected: %s\nGot: %s", tt.expectedQuery, actualQuery)
+				} else {
+					t.Log("Prometheus queries match!")
+				}
+			}
+		})
+	}
+
+	// tests for pipeline gauge metrics
+	var pl_gauge_service = &PromQlService{
+		PlaceHolders: map[string]map[string][]string{
+			"vertex_pending_messages": {
+				"vertex": {"$dimension", "$metric_name", "$filters"},
+			},
+		},
+		Expression: map[string]map[string]string{
+			"vertex_pending_messages": {
+				"vertex": "$metric_name{$filters}",
+			},
+		},
+	}
+
+	pl_gauge_metrics_tests := []struct {
+		name          string
+		requestBody   MetricsRequestBody
+		expectedQuery string
+		expectError   bool
+	}{
+		{
+			name: "Successful pipeline gauge metrics template substitution",
+			requestBody: MetricsRequestBody{
+				MetricName: "vertex_pending_messages",
+				Dimension:  "vertex",
+				Filters: map[string]string{
+					"namespace": "test_namespace",
+					"pipeline":  "test_pipeline",
+					"vertex":    "test_vertex",
+					"period":    "5m",
+				},
+			},
+			expectedQuery: `sum(vertex_pending_messages{namespace= "test_namespace", pipeline= "test_pipeline", vertex= "test_vertex", period= "5m"}) by (vertex, period)`,
+		},
+		{
+			name: "Missing metric name in service config",
+			requestBody: MetricsRequestBody{
+				MetricName: "non_existent_metric",
+				Dimension:  "mono-vertex",
+				Filters: map[string]string{
+					"namespace": "test_namespace",
+					"pipeline":  "test_pipeline",
+					"vertex":    "test_vertex",
+					"period":    "5m",
+				},
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range pl_gauge_metrics_tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualQuery, err := pl_gauge_service.BuildQuery(tt.requestBody)
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
@@ -386,14 +452,37 @@ func Test_QueryPrometheus(t *testing.T) {
 		assert.Equal(t, 1, matrix.Len())
 	})
 
-	t.Run("Successful gauge query", func(t *testing.T) {
+	t.Run("Successful mono-vertex gauge query", func(t *testing.T) {
 		mockAPI := &MockPrometheusAPI{}
 		promQlService := &PromQlService{
 			PrometheusClient: &Prometheus{
 				Api: mockAPI,
 			},
 		}
-		query := `monovtx_pending{namespace="default", mvtx_name="test-mvtx", pending="5m"}`
+		query := `sum(monovtx_pending{namespace="default", mvtx_name="test-mvtx", pending="5m"}) by (mvtx_name, period)`
+		startTime := time.Now().Add(-30 * time.Minute)
+		endTime := time.Now()
+
+		ctx := context.Background()
+		result, err := promQlService.QueryPrometheus(ctx, query, startTime, endTime)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+
+		// for query range , response should be a matrix
+		matrix, ok := result.(model.Matrix)
+		assert.True(t, ok)
+		assert.Equal(t, 1, matrix.Len())
+	})
+
+	t.Run("Successful pipeline gauge query", func(t *testing.T) {
+		mockAPI := &MockPrometheusAPI{}
+		promQlService := &PromQlService{
+			PrometheusClient: &Prometheus{
+				Api: mockAPI,
+			},
+		}
+		query := `sum(vertex_pending_messages{namespace="default", pipeline="test-pipeline", vertex="test-vertex", pending="5m"}) by (vertex, period)`
 		startTime := time.Now().Add(-30 * time.Minute)
 		endTime := time.Now()
 
