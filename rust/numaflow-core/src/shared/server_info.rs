@@ -101,7 +101,7 @@ pub(crate) async fn sdk_server_info(
     let container_type = get_container_type(&file_path).unwrap_or(ContainerType::Unknown);
 
     // Log the server info
-    info!("{:?} Server info file: {:?}", container_type, server_info);
+    info!(?container_type, "Server info file: {:?}", server_info);
 
     // Extract relevant fields from server info
     let sdk_version = &server_info.version;
@@ -511,8 +511,8 @@ mod version {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, fs::File};
     use std::io::{Read, Write};
+    use std::{collections::HashMap, fs::File};
 
     use serde_json::json;
     use tempfile::tempdir;
