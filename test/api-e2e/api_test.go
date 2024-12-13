@@ -280,3 +280,52 @@ func (s *APISuite) TestAPIsForMetricsAndWatermarkAndPods() {
 func TestAPISuite(t *testing.T) {
 	suite.Run(t, new(APISuite))
 }
+
+func (s *APISuite) TestDiscoverMetricsForPipeline() {
+	_, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	// Create a pipeline using the simple-pipeline.yaml
+	w := s.Given().Pipeline("@testdata/simple-pipeline.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+
+	pipelineName := "simple-pipeline"
+
+	w.Expect().
+		VertexPodsRunning().DaemonPodsRunning().
+		VertexPodLogContains("input", LogSourceVertexStarted).
+		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("output", SinkVertexStarted).
+		DaemonPodLogContains(pipelineName, LogDaemonStarted).
+		VertexPodLogContains("output", `"Data":.*,"Createdts":.*`)
+
+	defer w.UXServerPodPortForward(8146, 8443).TerminateAllPodPortForwards()
+
+	// Wait for the pipeline to be healthy
+	getPipelineBody := HTTPExpect(s.T(), "https://localhost:8146").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, pipelineName)).
+		Expect().
+		Status(200).Body().Raw()
+	assert.Contains(s.T(), getPipelineBody, `"name":"simple-pipeline"`)
+	assert.Contains(s.T(), getPipelineBody, `"status":"healthy"`)
+
+	// Call the DiscoverMetrics API for the vertex object
+	discoverMetricsBodyForVertex := HTTPExpect(s.T(), "https://localhost:8146").GET("/api/v1/metrics-discovery/object/vertex").
+		Expect().
+		Status(200).Body().Raw()
+
+	// Check that the response contains expected metrics for vertex object
+	assert.Contains(s.T(), discoverMetricsBodyForVertex, "forwarder_data_read_total")
+
+	// Call the DiscoverMetrics API for mono-vertex (ideally following url will be hit for a mono-vertex but should return response for a running pipeline as well)
+	discoverMetricsBodyForMonoVertex := HTTPExpect(s.T(), "https://localhost:8146").GET("/api/v1/metrics-discovery/object/mono-vertex").
+		Expect().
+		Status(200).Body().Raw()
+
+	// Check that the response contains expected metrics for mono-vertex
+	assert.Contains(s.T(), discoverMetricsBodyForMonoVertex, "monovtx_processing_time_bucket")
+	assert.Contains(s.T(), discoverMetricsBodyForMonoVertex, "monovtx_sink_time_bucket")
+	assert.Contains(s.T(), discoverMetricsBodyForMonoVertex, "monovtx_read_total")
+	assert.Contains(s.T(), discoverMetricsBodyForMonoVertex, "monovtx_pending")
+}
