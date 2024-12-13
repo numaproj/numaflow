@@ -282,36 +282,25 @@ func TestAPISuite(t *testing.T) {
 }
 
 func (s *APISuite) TestDiscoverMetricsForPipeline() {
-	_, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
-	// Create a pipeline using the simple-pipeline.yaml
-	w := s.Given().Pipeline("@testdata/simple-pipeline.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-
-	pipelineName := "simple-pipeline"
-
-	w.Expect().
-		VertexPodsRunning().DaemonPodsRunning().
-		VertexPodLogContains("input", LogSourceVertexStarted).
-		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("output", SinkVertexStarted).
-		DaemonPodLogContains(pipelineName, LogDaemonStarted).
-		VertexPodLogContains("output", `"Data":.*,"Createdts":.*`)
-
-	defer w.UXServerPodPortForward(8146, 8443).TerminateAllPodPortForwards()
-
-	// Wait for the pipeline to be healthy
-	getPipelineBody := HTTPExpect(s.T(), "https://localhost:8146").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, pipelineName)).
+	defer s.Given().When().UXServerPodPortForward(8147, 8443).TerminateAllPodPortForwards()
+	namespaceBody := HTTPExpect(s.T(), "https://localhost:8147").GET("/api/v1/namespaces").
 		Expect().
 		Status(200).Body().Raw()
-	assert.Contains(s.T(), getPipelineBody, `"name":"simple-pipeline"`)
-	assert.Contains(s.T(), getPipelineBody, `"status":"healthy"`)
+	var namespaceExpect = `numaflow-system`
+	assert.Contains(s.T(), namespaceBody, namespaceExpect)
+
+	var pl1 v1alpha1.Pipeline
+	err := json.Unmarshal(testPipeline1, &pl1)
+	assert.NoError(s.T(), err)
+	createPipeline1 := HTTPExpect(s.T(), "https://localhost:8147").POST(fmt.Sprintf("/api/v1/namespaces/%s/pipelines", Namespace)).WithJSON(pl1).
+		Expect().
+		Status(200).Body().Raw()
+
+	var createPipelineSuccessExpect = `"data":null`
+	assert.Contains(s.T(), createPipeline1, createPipelineSuccessExpect)
 
 	// Call the DiscoverMetrics API for the vertex object
-	discoverMetricsBodyForVertex := HTTPExpect(s.T(), "https://localhost:8146").GET("/api/v1/metrics-discovery/object/vertex").
+	discoverMetricsBodyForVertex := HTTPExpect(s.T(), "https://localhost:8147").GET("/api/v1/metrics-discovery/object/vertex").
 		Expect().
 		Status(200).Body().Raw()
 
@@ -319,7 +308,7 @@ func (s *APISuite) TestDiscoverMetricsForPipeline() {
 	assert.Contains(s.T(), discoverMetricsBodyForVertex, "forwarder_data_read_total")
 
 	// Call the DiscoverMetrics API for mono-vertex (ideally following url will be hit for a mono-vertex but should return response for a running pipeline as well)
-	discoverMetricsBodyForMonoVertex := HTTPExpect(s.T(), "https://localhost:8146").GET("/api/v1/metrics-discovery/object/mono-vertex").
+	discoverMetricsBodyForMonoVertex := HTTPExpect(s.T(), "https://localhost:8147").GET("/api/v1/metrics-discovery/object/mono-vertex").
 		Expect().
 		Status(200).Body().Raw()
 
@@ -328,4 +317,93 @@ func (s *APISuite) TestDiscoverMetricsForPipeline() {
 	assert.Contains(s.T(), discoverMetricsBodyForMonoVertex, "monovtx_sink_time_bucket")
 	assert.Contains(s.T(), discoverMetricsBodyForMonoVertex, "monovtx_read_total")
 	assert.Contains(s.T(), discoverMetricsBodyForMonoVertex, "monovtx_pending")
+}
+
+func (s *APISuite) TestGetVertexPodsInfo() {
+
+	defer s.Given().When().UXServerPodPortForward(8148, 8443).TerminateAllPodPortForwards()
+
+	namespaceBody := HTTPExpect(s.T(), "https://localhost:8148").GET("/api/v1/namespaces").
+		Expect().
+		Status(200).Body().Raw()
+	var namespaceExpect = `numaflow-system`
+	assert.Contains(s.T(), namespaceBody, namespaceExpect)
+
+	var pl1 v1alpha1.Pipeline
+	err := json.Unmarshal(testPipeline1, &pl1)
+	assert.NoError(s.T(), err)
+	createPipeline1 := HTTPExpect(s.T(), "https://localhost:8148").POST(fmt.Sprintf("/api/v1/namespaces/%s/pipelines", Namespace)).WithJSON(pl1).
+		Expect().
+		Status(200).Body().Raw()
+
+	var createPipelineSuccessExpect = `"data":null`
+	assert.Contains(s.T(), createPipeline1, createPipelineSuccessExpect)
+
+	// Call the API to get vertex pods info
+	getVertexPodsInfoBody := HTTPExpect(s.T(), "https://localhost:8148").
+		GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/%s/pods-info", Namespace, pl1.Name, pl1.Spec.Vertices[0].Name)).
+		Expect().
+		Status(200).Body().Raw()
+
+	// Check that the response contains expected pod details
+	assert.Contains(s.T(), getVertexPodsInfoBody, `"name":`)                // Check for pod name
+	assert.Contains(s.T(), getVertexPodsInfoBody, `"status":`)              // Check for pod status
+	assert.Contains(s.T(), getVertexPodsInfoBody, `"totalCPU":`)            // Check for pod's cpu usage
+	assert.Contains(s.T(), getVertexPodsInfoBody, `"totalMemory":`)         // Check for pod's memory usage
+	assert.Contains(s.T(), getVertexPodsInfoBody, `"containerDetailsMap":`) // Check for pod's containers
+}
+
+func (s *APISuite) TestGetMonoVertexPodsInfo() {
+
+	defer s.Given().When().UXServerPodPortForward(8149, 8443).TerminateAllPodPortForwards()
+
+	namespaceBody := HTTPExpect(s.T(), "https://localhost:8149").GET("/api/v1/namespaces").
+		Expect().
+		Status(200).Body().Raw()
+	var namespaceExpect = `numaflow-system`
+	assert.Contains(s.T(), namespaceBody, namespaceExpect)
+
+	// Create a mono vertex
+	var mv1 v1alpha1.MonoVertex
+	err := json.Unmarshal(testMonoVertex1, &mv1)
+	assert.NoError(s.T(), err)
+	createMonoVertex := HTTPExpect(s.T(), "https://localhost:8149").POST(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices", Namespace)).WithJSON(mv1).
+		Expect().
+		Status(200).Body().Raw()
+	var createMonoVertexSuccessExpect = `"data":null`
+	assert.Contains(s.T(), createMonoVertex, createMonoVertexSuccessExpect)
+
+	// Wait for the mono vertex to be healthy
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	getMonoVertexBody := HTTPExpect(s.T(), "https://localhost:8149").GET(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s", Namespace, mv1.Name)).
+		Expect().
+		Status(200).Body().Raw()
+	for !strings.Contains(getMonoVertexBody, `"status":"healthy"`) {
+		select {
+		case <-ctx.Done():
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				s.T().Fatalf("failed to get namespaces/mono-vertices: %v", ctx.Err())
+			}
+		default:
+			time.Sleep(100 * time.Millisecond)
+			getMonoVertexBody = HTTPExpect(s.T(), "https://localhost:8149").GET(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s", Namespace, mv1.Name)).
+				Expect().
+				Status(200).Body().Raw()
+		}
+	}
+	assert.Contains(s.T(), getMonoVertexBody, fmt.Sprintf(`"name":"%s"`, mv1.Name))
+
+	// Call the API to get mono vertex pods info
+	getMonoVertexPodsInfoBody := HTTPExpect(s.T(), "https://localhost:8149").
+		GET(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s/pods-info", Namespace, mv1.Name)).
+		Expect().
+		Status(200).Body().Raw()
+
+	// Check that the response contains expected pod details
+	assert.Contains(s.T(), getMonoVertexPodsInfoBody, `"name":`)                // Check for pod name
+	assert.Contains(s.T(), getMonoVertexPodsInfoBody, `"status":`)              // Check for pod status
+	assert.Contains(s.T(), getMonoVertexPodsInfoBody, `"totalCPU":`)            // Check for pod's cpu usage
+	assert.Contains(s.T(), getMonoVertexPodsInfoBody, `"totalMemory":`)         // Check for pod's memory usage
+	assert.Contains(s.T(), getMonoVertexPodsInfoBody, `"containerDetailsMap":`) // Check for pod's containers
 }
