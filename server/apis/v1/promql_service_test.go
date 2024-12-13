@@ -459,7 +459,7 @@ func Test_QueryPrometheus(t *testing.T) {
 				Api: mockAPI,
 			},
 		}
-		query := `sum(monovtx_pending{namespace="default", mvtx_name="test-mvtx", pending="5m"}) by (mvtx_name, period)`
+		query := `sum(monovtx_pending{namespace="default", mvtx_name="test-mvtx", period="5m"}) by (mvtx_name, period)`
 		startTime := time.Now().Add(-30 * time.Minute)
 		endTime := time.Now()
 
@@ -482,7 +482,7 @@ func Test_QueryPrometheus(t *testing.T) {
 				Api: mockAPI,
 			},
 		}
-		query := `sum(vertex_pending_messages{namespace="default", pipeline="test-pipeline", vertex="test-vertex", pending="5m"}) by (vertex, period)`
+		query := `sum(vertex_pending_messages{namespace="default", pipeline="test-pipeline", vertex="test-vertex", period="5m"}) by (vertex, period)`
 		startTime := time.Now().Add(-30 * time.Minute)
 		endTime := time.Now()
 
