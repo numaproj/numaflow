@@ -168,7 +168,7 @@ var (
 	  "source": {
 		"udsource": {
 		  "container": {
-			"image": "quay.io/numaio/numaflow-java/source-simple-source:stable"
+			"image": "quay.io/numaio/numaflow-rs/simple-source:stable"
 		  }
 		},
 		"transformer": {
@@ -180,7 +180,7 @@ var (
 	  "sink": {
 		"udsink": {
 		  "container": {
-			"image": "quay.io/numaio/numaflow-java/simple-sink:stable"
+			"image": "quay.io/numaio/numaflow-rs/sink-log:stable"
 		  }
 		}
 	  }
