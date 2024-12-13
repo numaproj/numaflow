@@ -76,7 +76,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to generate cert: %w", err)
 	}
 
-	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12, NextProtos: []string{"h2", "http/1.1"}}
+	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12}
 	grpcServer, err := ds.newGRPCServer(rater)
 	if err != nil {
 		return fmt.Errorf("failed to create grpc server: %w", err)

@@ -5,7 +5,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::{env, iter};
 
-use crate::config::{config, get_pipeline_name, get_vertex_name, get_vertex_replica};
+use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
 use crate::source::Source;
 use crate::Error;
 use axum::body::Body;
@@ -851,7 +851,7 @@ async fn expose_pending_metrics(
         let server_url = env::var("SERVER_URL").expect("NO SERVER");
         info!("Server URL: {}", server_url);
 
-        let client = crate::shared::tls::new_https_client().unwrap();
+        let client = crate::shared::insecure_tls::new_https_client().unwrap();
 
         let addr = tokio::net::lookup_host(server_url)
             .await

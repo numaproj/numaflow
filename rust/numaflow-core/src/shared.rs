@@ -14,4 +14,6 @@ pub(crate) mod create_components;
 /// Shared methods for forwarding messages.
 pub(crate) mod forward;
 
-pub(crate) mod tls;
+/// Provides a hyper HTTPS connector with custom server certificate validation implementation.
+/// It can be used to create gRPC clients where the gRPC server uses self-signed certificates.
+pub(crate) mod insecure_tls;
