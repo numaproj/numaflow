@@ -97,14 +97,17 @@ pub(crate) async fn sdk_server_info(
     // Read the server info file
     let server_info = read_server_info(&file_path, cln_token).await?;
 
+    // Get the container type from the server info file
+    let container_type = get_container_type(&file_path).unwrap_or(ContainerType::Unknown);
+
     // Log the server info
-    info!("Server info file: {:?}", server_info);
+    info!("{:?} Server info file: {:?}", container_type, server_info);
 
     // Extract relevant fields from server info
     let sdk_version = &server_info.version;
     let min_numaflow_version = &server_info.minimum_numaflow_version;
     let sdk_language = &server_info.language;
-    let container_type = get_container_type(&file_path).unwrap_or(ContainerType::Unknown);
+
     // Get version information
     let version_info = version::get_version_info();
     let numaflow_version = &version_info.version;
@@ -508,8 +511,8 @@ mod version {
 
 #[cfg(test)]
 mod tests {
-    use std::io::{Read, Write};
     use std::{collections::HashMap, fs::File};
+    use std::io::{Read, Write};
 
     use serde_json::json;
     use tempfile::tempdir;
