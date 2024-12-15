@@ -121,14 +121,15 @@ const LineChartComponent = ({
   const groupByLabel = useCallback((dimension: string, metricName: string) => {
     switch (metricName) {
       case "monovtx_pending":
-        return "period";
+      case "vertex_pending_messages":
+        return dimension === "pod" ? ["pod", "period"] : ["period"];
     }
 
     switch (dimension) {
       case "mono-vertex":
-        return "mvtx_name";
+        return ["mvtx_name"];
       default:
-        return dimension;
+        return [dimension];
     }
   }, []);
 
@@ -141,7 +142,18 @@ const LineChartComponent = ({
         metricsReq?.metric_name
       );
       chartData?.forEach((item) => {
-        const labelVal = item?.metric?.[label];
+        let labelVal = "";
+        label?.forEach((eachLabel: string) => {
+          if (item?.metric?.[eachLabel] !== undefined) {
+            labelVal += (labelVal ? "-" : "") + item.metric[eachLabel];
+          }
+        });
+
+        // Remove initial hyphen if labelVal is not empty
+        if (labelVal.startsWith("-") && labelVal.length > 1) {
+          labelVal = labelVal.substring(1);
+        }
+
         labels.push(labelVal);
         item?.values?.forEach(([timestamp, value]: [number, string]) => {
           const date = new Date(timestamp * 1000);
