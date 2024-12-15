@@ -293,7 +293,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 	}
 
 	// Always publish the watermark to SINK OT even though we do not use it today.
-	// There's no offset return from sink writer.
+	// There's no offset returned from sink writer.
 	df.wmPublisher.PublishWatermark(processorWM, nil, int32(0))
 	// reset because the toBuffer is no longer idling
 	df.idleManager.MarkActive(df.fromBufferPartition.GetPartitionIdx(), df.sinkWriter.GetName())
