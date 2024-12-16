@@ -1,17 +1,19 @@
-use crate::error::Error;
-use crate::message::Message;
-use crate::metrics::{monovertex_metrics, mvtx_forward_metric_labels};
-use crate::tracker::TrackerHandle;
-use crate::transformer::user_defined::UserDefinedTransformer;
-use crate::Result;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use std::sync::Arc;
+
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 use tracing::error;
+
+use crate::error::Error;
+use crate::message::Message;
+use crate::metrics::{monovertex_metrics, mvtx_forward_metric_labels};
+use crate::tracker::TrackerHandle;
+use crate::transformer::user_defined::UserDefinedTransformer;
+use crate::Result;
 
 /// User-Defined Transformer extends Numaflow to add custom sources supported outside the builtins.
 ///

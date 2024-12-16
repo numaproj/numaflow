@@ -651,9 +651,10 @@ impl Drop for SinkWriter {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use chrono::Utc;
     use numaflow::sink;
-    use std::sync::Arc;
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
 
