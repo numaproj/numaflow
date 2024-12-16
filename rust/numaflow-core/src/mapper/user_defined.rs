@@ -132,3 +132,94 @@ impl UserDefinedMap {
         self.read_tx.send(message.into()).await.unwrap();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use numaflow::map;
+    use numaflow_pb::clients::map::map_client::MapClient;
+    use tempfile::TempDir;
+
+    use crate::mapper::user_defined::UserDefinedMap;
+    use crate::message::{MessageID, StringOffset};
+    use crate::shared::grpc::create_rpc_channel;
+
+    struct Cat;
+
+    #[tonic::async_trait]
+    impl map::Mapper for Cat {
+        async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
+            let message = map::Message::new(input.value).keys(input.keys).tags(vec![]);
+            vec![message]
+        }
+    }
+
+    #[tokio::test]
+    async fn map_operations() -> Result<(), Box<dyn Error>> {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new()?;
+        let sock_file = tmp_dir.path().join("map.sock");
+        let server_info_file = tmp_dir.path().join("map-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            map::Server::new(Cat)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let mut client =
+            UserDefinedMap::new(500, MapClient::new(create_rpc_channel(sock_file).await?)).await?;
+
+        let message = crate::message::Message {
+            keys: Arc::from(vec!["first".into()]),
+            tags: None,
+            value: "hello".into(),
+            offset: Some(crate::message::Offset::String(StringOffset::new(
+                "0".to_string(),
+                0,
+            ))),
+            event_time: chrono::Utc::now(),
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
+                index: 0,
+            },
+            headers: Default::default(),
+        };
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        tokio::time::timeout(Duration::from_secs(2), client.map(message, tx))
+            .await
+            .unwrap();
+
+        let messages = rx.await.unwrap();
+        assert!(messages.is_ok());
+        assert_eq!(messages?.len(), 1);
+
+        // we need to drop the client, because if there are any in-flight requests
+        // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
+        drop(client);
+
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+        Ok(())
+    }
+}
