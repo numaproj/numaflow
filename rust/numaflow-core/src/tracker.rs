@@ -8,13 +8,15 @@
 //!
 //! In the future Watermark will also be propagated based on this.
 
+use std::collections::HashMap;
+
+use bytes::Bytes;
+use tokio::sync::{mpsc, oneshot};
+use tracing::warn;
+
 use crate::error::Error;
 use crate::message::ReadAck;
 use crate::Result;
-use bytes::Bytes;
-use std::collections::HashMap;
-use tokio::sync::{mpsc, oneshot};
-use tracing::warn;
 
 /// TrackerEntry represents the state of a tracked message.
 #[derive(Debug)]
@@ -246,9 +248,10 @@ impl TrackerHandle {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tokio::sync::oneshot;
     use tokio::time::{timeout, Duration};
+
+    use super::*;
 
     #[tokio::test]
     async fn test_insert_update_delete() {

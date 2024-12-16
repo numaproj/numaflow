@@ -1,4 +1,3 @@
-use crate::pipeline::pipeline::isb::BufferReaderConfig;
 use std::time::Duration;
 
 use async_nats::jetstream::Context;
@@ -13,6 +12,7 @@ use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+use crate::pipeline::pipeline::isb::BufferReaderConfig;
 use crate::shared::create_components;
 use crate::shared::create_components::create_sink_writer;
 use crate::shared::metrics::start_metrics_server;

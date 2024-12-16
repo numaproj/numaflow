@@ -4,16 +4,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::config::pipeline::isb::BufferFullStrategy;
-use crate::config::pipeline::ToVertexConfig;
-use crate::error::Error;
-use crate::message::{IntOffset, Message, Offset};
-use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
-use crate::pipeline::isb::jetstream::Stream;
-use crate::tracker::TrackerHandle;
-use crate::Result;
-
-use crate::shared::forward;
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::publish::PublishAck;
@@ -27,6 +17,16 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
+
+use crate::config::pipeline::isb::BufferFullStrategy;
+use crate::config::pipeline::ToVertexConfig;
+use crate::error::Error;
+use crate::message::{IntOffset, Message, Offset};
+use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
+use crate::pipeline::isb::jetstream::Stream;
+use crate::shared::forward;
+use crate::tracker::TrackerHandle;
+use crate::Result;
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
@@ -461,9 +461,6 @@ pub(crate) struct ResolveAndPublishResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::pipeline::pipeline::isb::BufferWriterConfig;
-    use numaflow_models::models::ForwardConditions;
-    use numaflow_models::models::TagConditions;
     use std::collections::HashMap;
     use std::time::Instant;
 
@@ -472,9 +469,12 @@ mod tests {
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
     use chrono::Utc;
+    use numaflow_models::models::ForwardConditions;
+    use numaflow_models::models::TagConditions;
 
     use super::*;
     use crate::message::{Message, MessageID, ReadAck};
+    use crate::pipeline::pipeline::isb::BufferWriterConfig;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
