@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -9,6 +10,9 @@ use tonic::transport::Channel;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
+use crate::config::pipeline::map::{MapType, MapVtxConfig};
+use crate::error::Error;
+use crate::mapper::Mapper;
 use crate::shared::grpc;
 use crate::shared::server_info::{sdk_server_info, ContainerType};
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
@@ -147,7 +151,7 @@ pub(crate) async fn create_sink_writer(
 }
 
 /// Creates a transformer if it is configured
-pub async fn create_transformer(
+pub(crate) async fn create_transformer(
     batch_size: usize,
     transformer_config: Option<TransformerConfig>,
     tracker_handle: TrackerHandle,
@@ -195,6 +199,48 @@ pub async fn create_transformer(
         }
     }
     Ok((None, None))
+}
+
+pub(crate) async fn create_mapper(
+    batch_size: usize,
+    map_config: MapVtxConfig,
+    tracker_handle: TrackerHandle,
+    cln_token: CancellationToken,
+) -> error::Result<(Mapper, Option<MapClient<Channel>>)> {
+    match map_config.map_type {
+        MapType::UserDefined(config) => {
+            let server_info =
+                sdk_server_info(config.server_info_path.clone().into(), cln_token.clone()).await?;
+            let metric_labels = metrics::sdk_info_labels(
+                config::get_component_type().to_string(),
+                config::get_vertex_name().to_string(),
+                server_info.language,
+                server_info.version,
+                ContainerType::Sourcer.to_string(),
+            );
+            metrics::global_metrics()
+                .sdk_info
+                .get_or_create(&metric_labels)
+                .set(1);
+
+            let mut map_grpc_client =
+                MapClient::new(grpc::create_rpc_channel(config.socket_path.clone().into()).await?)
+                    .max_encoding_message_size(config.grpc_max_message_size)
+                    .max_decoding_message_size(config.grpc_max_message_size);
+            grpc::wait_until_mapper_ready(&cln_token, &mut map_grpc_client).await?;
+            Ok((
+                Mapper::new(
+                    batch_size,
+                    map_config.concurrency,
+                    map_grpc_client.clone(),
+                    tracker_handle,
+                )
+                .await?,
+                Some(map_grpc_client),
+            ))
+        }
+        MapType::Builtin(_) => Err(Error::Mapper("Builtin mapper is not supported".to_string())),
+    }
 }
 
 /// Creates a source type based on the configuration

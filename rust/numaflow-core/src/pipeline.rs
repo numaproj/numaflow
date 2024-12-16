@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::config::pipeline;
+use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
 use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::forwarder::source_forwarder;
@@ -35,6 +36,10 @@ pub(crate) async fn start_forwarder(
         pipeline::VertexType::Sink(sink) => {
             info!("Starting sink forwarder");
             start_sink_forwarder(cln_token, config.clone(), sink.clone()).await?;
+        }
+        pipeline::VertexType::Map(map) => {
+            info!("Starting map forwarder");
+            start_map_forwarder(cln_token, config.clone(), map.clone()).await?;
         }
     }
     Ok(())
@@ -75,8 +80,8 @@ async fn start_source_forwarder(
     start_metrics_server(
         config.metrics_config.clone(),
         UserDefinedContainerState::Pipeline(PipelineContainerState::Source((
-            source_grpc_client.clone(),
-            transformer_grpc_client.clone(),
+            source_grpc_client,
+            transformer_grpc_client,
         ))),
     )
     .await;
@@ -91,6 +96,84 @@ async fn start_source_forwarder(
     };
 
     forwarder.start().await?;
+    Ok(())
+}
+
+async fn start_map_forwarder(
+    cln_token: CancellationToken,
+    config: PipelineConfig,
+    map_vtx_config: MapVtxConfig,
+) -> Result<()> {
+    let js_context = create_js_context(config.js_client_config.clone()).await?;
+
+    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
+    // to a common buffer, in the case of a join.
+    let reader_config = &config
+        .from_vertex_config
+        .first()
+        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
+        .reader_config;
+
+    // Create buffer writers and buffer readers
+    let mut forwarder_components = vec![];
+    let mut mapper_grpc_client = None;
+    for stream in reader_config.streams.clone() {
+        let tracker_handle = TrackerHandle::new();
+
+        let buffer_reader = create_buffer_reader(
+            stream,
+            reader_config.clone(),
+            js_context.clone(),
+            tracker_handle.clone(),
+            config.batch_size,
+        )
+        .await?;
+
+        let (mapper, mapper_rpc_client) = create_components::create_mapper(
+            config.batch_size,
+            map_vtx_config.clone(),
+            tracker_handle.clone(),
+            cln_token.clone(),
+        )
+        .await?;
+
+        if let Some(mapper_rpc_client) = mapper_rpc_client {
+            mapper_grpc_client = Some(mapper_rpc_client);
+        }
+
+        let buffer_writer = create_buffer_writer(
+            &config,
+            js_context.clone(),
+            tracker_handle.clone(),
+            cln_token.clone(),
+        )
+        .await;
+        forwarder_components.push((buffer_reader, buffer_writer, mapper));
+    }
+
+    start_metrics_server(
+        config.metrics_config.clone(),
+        UserDefinedContainerState::Pipeline(PipelineContainerState::Map(mapper_grpc_client)),
+    )
+    .await;
+
+    let mut forwarder_tasks = vec![];
+    for (buffer_reader, buffer_writer, mapper) in forwarder_components {
+        let forwarder = forwarder::map_forwarder::MapForwarder::new(
+            buffer_reader,
+            mapper,
+            buffer_writer,
+            cln_token.clone(),
+        )
+        .await;
+        let task = tokio::spawn(async move { forwarder.start().await });
+        forwarder_tasks.push(task);
+    }
+
+    try_join_all(forwarder_tasks)
+        .await
+        .map_err(|e| error::Error::Forwarder(e.to_string()))?;
+
     Ok(())
 }
 
@@ -120,6 +203,7 @@ async fn start_sink_forwarder(
             reader_config.clone(),
             js_context.clone(),
             tracker_handle.clone(),
+            config.batch_size,
         )
         .await?;
         buffer_readers.push(buffer_reader);
@@ -159,11 +243,7 @@ async fn start_sink_forwarder(
         )
         .await;
 
-        let task = tokio::spawn({
-            let config = config.clone();
-            async move { forwarder.start(config.clone()).await }
-        });
-
+        let task = tokio::spawn(async move { forwarder.start().await });
         forwarder_tasks.push(task);
     }
 
@@ -194,6 +274,7 @@ async fn create_buffer_reader(
     reader_config: BufferReaderConfig,
     js_context: Context,
     tracker_handle: TrackerHandle,
+    batch_size: usize,
 ) -> Result<JetstreamReader> {
     JetstreamReader::new(
         stream.0,
@@ -201,6 +282,7 @@ async fn create_buffer_reader(
         js_context,
         reader_config,
         tracker_handle,
+        batch_size,
     )
     .await
 }

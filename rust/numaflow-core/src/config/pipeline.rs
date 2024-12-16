@@ -14,6 +14,7 @@ use crate::config::components::source::SourceConfig;
 use crate::config::components::transformer::{TransformerConfig, TransformerType};
 use crate::config::get_vertex_replica;
 use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
+use crate::config::pipeline::map::MapVtxConfig;
 use crate::error::Error;
 use crate::Result;
 
@@ -23,6 +24,9 @@ const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
+const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
+const DEFAULT_MAP_SOCKET: &str = "/var/run/numaflow/map.sock";
+const DEFAULT_MAP_SERVER_INFO_FILE: &str = "/var/run/numaflow/mapper-server-info";
 
 pub(crate) mod isb;
 
@@ -69,6 +73,64 @@ pub(crate) struct SourceVtxConfig {
     pub(crate) transformer_config: Option<TransformerConfig>,
 }
 
+pub(crate) mod map {
+    use std::collections::HashMap;
+
+    use numaflow_models::models::Udf;
+
+    use crate::config::pipeline::{
+        DEFAULT_GRPC_MAX_MESSAGE_SIZE, DEFAULT_MAP_SERVER_INFO_FILE, DEFAULT_MAP_SOCKET,
+    };
+    use crate::error::Error;
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct MapVtxConfig {
+        pub(crate) concurrency: usize,
+        pub(crate) map_type: MapType,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) enum MapType {
+        UserDefined(UserDefinedConfig),
+        Builtin(BuiltinConfig),
+    }
+
+    impl TryFrom<Box<Udf>> for MapType {
+        type Error = Error;
+        fn try_from(udf: Box<Udf>) -> std::result::Result<Self, Self::Error> {
+            if let Some(builtin) = udf.builtin {
+                Ok(MapType::Builtin(BuiltinConfig {
+                    name: builtin.name,
+                    kwargs: builtin.kwargs,
+                    args: builtin.args,
+                }))
+            } else if let Some(_container) = udf.container {
+                Ok(MapType::UserDefined(UserDefinedConfig {
+                    grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                    socket_path: DEFAULT_MAP_SOCKET.to_string(),
+                    server_info_path: DEFAULT_MAP_SERVER_INFO_FILE.to_string(),
+                }))
+            } else {
+                Err(Error::Config("Invalid UDF".to_string()))
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct UserDefinedConfig {
+        pub grpc_max_message_size: usize,
+        pub socket_path: String,
+        pub server_info_path: String,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct BuiltinConfig {
+        pub(crate) name: String,
+        pub(crate) kwargs: Option<HashMap<String, String>>,
+        pub(crate) args: Option<Vec<String>>,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct SinkVtxConfig {
     pub(crate) sink_config: SinkConfig,
@@ -79,6 +141,7 @@ pub(crate) struct SinkVtxConfig {
 pub(crate) enum VertexType {
     Source(SourceVtxConfig),
     Sink(SinkVtxConfig),
+    Map(MapVtxConfig),
 }
 
 impl std::fmt::Display for VertexType {
@@ -86,6 +149,7 @@ impl std::fmt::Display for VertexType {
         match self {
             VertexType::Source(_) => write!(f, "Source"),
             VertexType::Sink(_) => write!(f, "Sink"),
+            VertexType::Map(_) => write!(f, "Map"),
         }
     }
 }
@@ -177,6 +241,11 @@ impl PipelineConfig {
                     retry_config: None,
                 },
                 fb_sink_config,
+            })
+        } else if let Some(map) = vertex_obj.spec.udf {
+            VertexType::Map(MapVtxConfig {
+                concurrency: batch_size as usize,
+                map_type: map.try_into()?,
             })
         } else {
             return Err(Error::Config(
@@ -279,7 +348,7 @@ impl PipelineConfig {
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
             paf_concurrency: env::var("PAF_BATCH_SIZE")
-                .unwrap_or("30000".to_string())
+                .unwrap_or((DEFAULT_BATCH_SIZE * 2).to_string())
                 .parse()
                 .unwrap(),
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
@@ -356,7 +425,7 @@ mod tests {
             vertex_name: "out".to_string(),
             replica: 0,
             batch_size: 500,
-            paf_concurrency: 30000,
+            paf_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -367,7 +436,7 @@ mod tests {
                 name: "in".to_string(),
                 reader_config: BufferReaderConfig {
                     partitions: 1,
-                    streams: vec![("default-simple-pipeline-out-0".into(), 0)],
+                    streams: vec![("default-simple-pipeline-out-0", 0)],
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
@@ -403,7 +472,7 @@ mod tests {
             vertex_name: "in".to_string(),
             replica: 0,
             batch_size: 1000,
-            paf_concurrency: 30000,
+            paf_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -455,7 +524,7 @@ mod tests {
             vertex_name: "in".to_string(),
             replica: 0,
             batch_size: 50,
-            paf_concurrency: 30000,
+            paf_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),

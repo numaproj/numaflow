@@ -62,7 +62,7 @@ impl UserDefinedTransformer {
             return Err(Error::Transformer("invalid handshake response".to_string()));
         }
 
-        // map to track the oneshot sender for each request along with the message info
+        // mapper to track the oneshot sender for each request along with the message info
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
 
         let transformer = Self {
@@ -77,7 +77,7 @@ impl UserDefinedTransformer {
         Ok(transformer)
     }
 
-    // receive responses from the server and gets the corresponding oneshot sender from the map
+    // receive responses from the server and gets the corresponding oneshot sender from the mapper
     // and sends the response.
     async fn receive_responses(
         sender_map: ResponseSenderMap,
@@ -91,7 +91,7 @@ impl UserDefinedTransformer {
             let msg_id = resp.id;
             if let Some((msg_info, sender)) = sender_map
                 .lock()
-                .expect("map entry should always be present")
+                .expect("mapper entry should always be present")
                 .remove(&msg_id)
             {
                 let mut response_messages = vec![];

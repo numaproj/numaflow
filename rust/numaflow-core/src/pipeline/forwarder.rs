@@ -3,7 +3,7 @@
 //! [Actor Pattern].
 //!
 //! ```text
-//! (source) --[c]--> (transformer)* --[c]--> ==> (map)* --[c]--> ===> (reducer)* --[c]--> ===> --[c]--> (sink)
+//! (source) --[c]--> (transformer)* --[c]--> ==> (mapper)* --[c]--> ===> (reducer)* --[c]--> ===> --[c]--> (sink)
 //!    |                   |                       |                      |                                |
 //!    |                   |                       |                      |                                |
 //!    |                   |                       v                      |                                |
@@ -34,6 +34,10 @@
 /// Forwarder specific to Sink where reader is ISB, UDF is not present, while
 /// the Write is User-defined Sink or builtin.
 pub(crate) mod sink_forwarder;
+
+/// Forwarder specific to Mapper where Reader is ISB, UDF is User-defined Mapper,
+/// Write is ISB.
+pub(crate) mod map_forwarder;
 
 /// Source where the Reader is builtin or User-defined Source, Write is ISB,
 /// with an optional Transformer.

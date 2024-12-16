@@ -12,12 +12,16 @@ spec:
         generator:
           rpu: 5
           duration: 1s
+        transformer:
+          container:
+            image: quay.io/numaio/numaflow-rs/source-transformer-now:stable
     - name: cat
       scale:
         min: 1
       udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message
+        container:
+          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
+          image: quay.io/numaio/numaflow-rs/map-cat:stable
     - name: out
       scale:
         min: 1

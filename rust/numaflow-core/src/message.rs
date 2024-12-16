@@ -8,6 +8,7 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
 use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
+use numaflow_pb::clients::map::MapRequest;
 use numaflow_pb::clients::sink::sink_request::Request;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, Success};
 use numaflow_pb::clients::sink::{sink_response, SinkRequest};
@@ -294,6 +295,23 @@ impl From<Message> for SourceTransformRequest {
                 },
             ),
             handshake: None,
+        }
+    }
+}
+
+impl From<Message> for MapRequest {
+    fn from(message: Message) -> Self {
+        Self {
+            request: Some(numaflow_pb::clients::map::map_request::Request {
+                keys: message.keys.to_vec(),
+                value: message.value.to_vec(),
+                event_time: prost_timestamp_from_utc(message.event_time),
+                watermark: None,
+                headers: message.headers,
+            }),
+            id: message.id.to_string(),
+            handshake: None,
+            status: None,
         }
     }
 }

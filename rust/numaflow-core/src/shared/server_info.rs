@@ -406,7 +406,7 @@ mod version {
     // MINIMUM_SUPPORTED_SDK_VERSIONS is the minimum supported version of each SDK for the current numaflow version.
     static MINIMUM_SUPPORTED_SDK_VERSIONS: LazyLock<SdkConstraints> = LazyLock::new(|| {
         // TODO: populate this from a static file and make it part of the release process
-        // the value of the map matches `minimumSupportedSDKVersions` in pkg/sdkclient/serverinfo/types.go
+        // the value of the mapper matches `minimumSupportedSDKVersions` in pkg/sdkclient/serverinfo/types.go
         // please follow the instruction there to update the value
         // NOTE: the string content of the keys matches the corresponding server info file name.
         // DO NOT change it unless the server info file name is changed.
@@ -415,21 +415,25 @@ mod version {
         go_version_map.insert(ContainerType::SourceTransformer, "0.9.0-z".to_string());
         go_version_map.insert(ContainerType::Sinker, "0.9.0-z".to_string());
         go_version_map.insert(ContainerType::FbSinker, "0.9.0-z".to_string());
+        go_version_map.insert(ContainerType::Mapper, "0.9.0-z".to_string());
         let mut python_version_map = HashMap::new();
         python_version_map.insert(ContainerType::Sourcer, "0.9.0rc100".to_string());
         python_version_map.insert(ContainerType::SourceTransformer, "0.9.0rc100".to_string());
         python_version_map.insert(ContainerType::Sinker, "0.9.0rc100".to_string());
         python_version_map.insert(ContainerType::FbSinker, "0.9.0rc100".to_string());
+        python_version_map.insert(ContainerType::Mapper, "0.9.0rc100".to_string());
         let mut java_version_map = HashMap::new();
         java_version_map.insert(ContainerType::Sourcer, "0.9.0-z".to_string());
         java_version_map.insert(ContainerType::SourceTransformer, "0.9.0-z".to_string());
         java_version_map.insert(ContainerType::Sinker, "0.9.0-z".to_string());
         java_version_map.insert(ContainerType::FbSinker, "0.9.0-z".to_string());
+        java_version_map.insert(ContainerType::Mapper, "0.9.0-z".to_string());
         let mut rust_version_map = HashMap::new();
         rust_version_map.insert(ContainerType::Sourcer, "0.1.0-z".to_string());
         rust_version_map.insert(ContainerType::SourceTransformer, "0.1.0-z".to_string());
         rust_version_map.insert(ContainerType::Sinker, "0.1.0-z".to_string());
         rust_version_map.insert(ContainerType::FbSinker, "0.1.0-z".to_string());
+        rust_version_map.insert(ContainerType::Mapper, "0.1.0-z".to_string());
 
         let mut m = HashMap::new();
         m.insert("go".to_string(), go_version_map);
@@ -439,7 +443,7 @@ mod version {
         m
     });
 
-    // Function to get the minimum supported SDK version hash map
+    // Function to get the minimum supported SDK version hash mapper
     pub(crate) fn get_minimum_supported_sdk_versions() -> &'static SdkConstraints {
         &MINIMUM_SUPPORTED_SDK_VERSIONS
     }

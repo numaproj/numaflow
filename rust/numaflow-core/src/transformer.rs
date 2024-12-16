@@ -15,7 +15,7 @@ use crate::tracker::TrackerHandle;
 use crate::transformer::user_defined::UserDefinedTransformer;
 use crate::Result;
 
-/// User-Defined Transformer extends Numaflow to add custom sources supported outside the builtins.
+/// User-Defined Transformer is a custom transformer that can be built by the user.
 ///
 /// [User-Defined Transformer]: https://numaflow.numaproj.io/user-guide/sources/transformer/overview/#build-your-own-transformer
 pub(crate) mod user_defined;
@@ -60,7 +60,7 @@ impl TransformerActor {
     }
 }
 
-/// StreamingTransformer, transforms messages in a streaming fashion.
+/// Transformer, transforms messages in a streaming fashion.
 pub(crate) struct Transformer {
     batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,
@@ -102,7 +102,6 @@ impl Transformer {
         tracker_handle: TrackerHandle,
     ) -> Result<()> {
         // only if we have tasks < max_concurrency
-
         let output_tx = output_tx.clone();
 
         // invoke transformer and then wait for the one-shot
@@ -155,8 +154,7 @@ impl Transformer {
         Ok(())
     }
 
-    /// Starts reading messages in the form of chunks and transforms them and
-    /// sends them to the next stage.
+    /// Starts the transformation of the stream of messages and returns the transformed stream.
     pub(crate) fn transform_stream(
         &self,
         input_stream: ReceiverStream<Message>,
