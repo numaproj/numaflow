@@ -11,7 +11,6 @@ use hyper_util::client::legacy::connect::HttpConnector;
 use tracing::error;
 
 use crate::app::response::ApiError;
-use crate::config;
 
 pub(crate) type Client = hyper_util::client::legacy::Client<HttpConnector, Body>;
 
@@ -24,11 +23,15 @@ pub(crate) type Client = hyper_util::client::legacy::Client<HttpConnector, Body>
 #[derive(Clone, Debug)]
 struct ProxyState {
     client: Client,
+    upstream_addr: String,
 }
 
 /// Router for direct proxy.
-pub(crate) fn direct_proxy(client: Client) -> Router {
-    let proxy_state = ProxyState { client };
+pub(crate) fn direct_proxy(client: Client, upstream_addr: String) -> Router {
+    let proxy_state = ProxyState {
+        client,
+        upstream_addr,
+    };
 
     Router::new()
         // https://docs.rs/axum/latest/axum/struct.Router.html#wildcards
@@ -44,7 +47,7 @@ async fn proxy(
     // This handler is registered with wildcard capture /*upstream. So the path here will never be empty.
     let path_query = request.uri().path_and_query().unwrap();
 
-    let upstream_uri = format!("http://{}{}", &config().upstream_addr, path_query);
+    let upstream_uri = format!("http://{}{}", &proxy_state.upstream_addr, path_query);
     *request.uri_mut() = Uri::try_from(&upstream_uri)
         .inspect_err(|e| error!(?e, upstream_uri, "Parsing URI for upstream"))
         .map_err(|e| ApiError::BadRequest(e.to_string()))?;

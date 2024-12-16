@@ -1,4 +1,4 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, sync::Arc};
 
 use async_nats::{jetstream::Context, HeaderMap as JSHeaderMap};
 use axum::{
@@ -12,10 +12,9 @@ use axum::{
 use tracing::error;
 use uuid::Uuid;
 
-use super::callback::{state::State as CallbackState, store::Store};
+use super::{callback::store::Store, AppState};
 use crate::app::callback::state;
 use crate::app::response::{ApiError, ServeResponse};
-use crate::config;
 
 // TODO:
 // - [ ] better health check
@@ -39,28 +38,27 @@ const CALLBACK_URL_KEY: &str = "X-Numaflow-Callback-Url";
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
 
-#[derive(Clone)]
 struct ProxyState<T> {
+    tid_header: String,
     context: Context,
     callback: state::State<T>,
-    stream: &'static str,
+    stream: String,
     callback_url: String,
 }
 
 pub(crate) async fn jetstream_proxy<T: Clone + Send + Sync + Store + 'static>(
-    context: Context,
-    callback_store: CallbackState<T>,
+    state: AppState<T>,
 ) -> crate::Result<Router> {
-    let proxy_state = ProxyState {
-        context,
-        callback: callback_store,
-        stream: &config().jetstream.stream,
+    let proxy_state = Arc::new(ProxyState {
+        tid_header: state.settings.tid_header.clone(),
+        context: state.context.clone(),
+        callback: state.callback_state.clone(),
+        stream: state.settings.jetstream.stream.clone(),
         callback_url: format!(
             "https://{}:{}/v1/process/callback",
-            config().host_ip,
-            config().app_listen_port
+            state.settings.host_ip, state.settings.app_listen_port
         ),
-    };
+    });
 
     let router = Router::new()
         .route("/async", post(async_publish))
@@ -71,27 +69,27 @@ pub(crate) async fn jetstream_proxy<T: Clone + Send + Sync + Store + 'static>(
 }
 
 async fn sync_publish_serve<T: Send + Sync + Clone + Store>(
-    State(mut proxy_state): State<ProxyState<T>>,
+    State(proxy_state): State<Arc<ProxyState<T>>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    let id = extract_id_from_headers(&headers);
+    let id = extract_id_from_headers(&proxy_state.tid_header, &headers);
 
     // Register the ID in the callback proxy state
-    let notify = proxy_state.callback.register(id.clone());
+    let notify = proxy_state.callback.clone().register(id.clone());
 
     if let Err(e) = publish_to_jetstream(
-        proxy_state.stream,
+        proxy_state.stream.clone(),
         &proxy_state.callback_url,
         headers,
         body,
-        proxy_state.context,
+        proxy_state.context.clone(),
         id.clone(),
     )
     .await
     {
         // Deregister the ID in the callback proxy state if writing to Jetstream fails
-        let _ = proxy_state.callback.deregister(&id).await;
+        let _ = proxy_state.callback.clone().deregister(&id).await;
         error!(error = ?e, "Publishing message to Jetstream for sync serve request");
         return Err(ApiError::BadGateway(
             "Failed to write message to Jetstream".to_string(),
@@ -106,7 +104,7 @@ async fn sync_publish_serve<T: Send + Sync + Clone + Store>(
         ));
     }
 
-    let result = match proxy_state.callback.retrieve_saved(&id).await {
+    let result = match proxy_state.callback.clone().retrieve_saved(&id).await {
         Ok(result) => result,
         Err(e) => {
             error!(error = ?e, "Failed to retrieve from redis");
@@ -140,27 +138,27 @@ async fn sync_publish_serve<T: Send + Sync + Clone + Store>(
 }
 
 async fn sync_publish<T: Send + Sync + Clone + Store>(
-    State(mut proxy_state): State<ProxyState<T>>,
+    State(proxy_state): State<Arc<ProxyState<T>>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Json<ServeResponse>, ApiError> {
-    let id = extract_id_from_headers(&headers);
+    let id = extract_id_from_headers(&proxy_state.tid_header, &headers);
 
     // Register the ID in the callback proxy state
-    let notify = proxy_state.callback.register(id.clone());
+    let notify = proxy_state.callback.clone().register(id.clone());
 
     if let Err(e) = publish_to_jetstream(
-        proxy_state.stream,
+        proxy_state.stream.clone(),
         &proxy_state.callback_url,
         headers,
         body,
-        proxy_state.context,
+        proxy_state.context.clone(),
         id.clone(),
     )
     .await
     {
         // Deregister the ID in the callback proxy state if writing to Jetstream fails
-        let _ = proxy_state.callback.deregister(&id).await;
+        let _ = proxy_state.callback.clone().deregister(&id).await;
         error!(error = ?e, "Publishing message to Jetstream for sync request");
         return Err(ApiError::BadGateway(
             "Failed to write message to Jetstream".to_string(),
@@ -189,18 +187,18 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
 }
 
 async fn async_publish<T: Send + Sync + Clone + Store>(
-    State(proxy_state): State<ProxyState<T>>,
+    State(proxy_state): State<Arc<ProxyState<T>>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Json<ServeResponse>, ApiError> {
-    let id = extract_id_from_headers(&headers);
+    let id = extract_id_from_headers(&proxy_state.tid_header, &headers);
 
     let result = publish_to_jetstream(
-        proxy_state.stream,
+        proxy_state.stream.clone(),
         &proxy_state.callback_url,
         headers,
         body,
-        proxy_state.context,
+        proxy_state.context.clone(),
         id.clone(),
     )
     .await;
@@ -222,7 +220,7 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
 
 /// Write to JetStream and return the metadata. It is responsible for getting the ID from the header.
 async fn publish_to_jetstream(
-    stream: &'static str,
+    stream: String,
     callback_url: &str,
     headers: HeaderMap,
     body: Bytes,
@@ -242,18 +240,16 @@ async fn publish_to_jetstream(
     js_context
         .publish_with_headers(stream, js_headers, body)
         .await
-        .inspect_err(|e| error!(stream, error=?e, "Publishing message to stream"))?
+        .map_err(|e| format!("Publishing message to stream: {e:?}"))?
         .await
-        .inspect_err(
-            |e| error!(stream, error=?e, "Waiting for acknowledgement of published message"),
-        )?;
+        .map_err(|e| format!("Waiting for acknowledgement of published message: {e:?}"))?;
 
     Ok(())
 }
 
 // extracts the ID from the headers, if not found, generates a new UUID
-fn extract_id_from_headers(headers: &HeaderMap) -> String {
-    headers.get(&config().tid_header).map_or_else(
+fn extract_id_from_headers(tid_header: &str, headers: &HeaderMap) -> String {
+    headers.get(tid_header).map_or_else(
         || Uuid::new_v4().to_string(),
         |v| String::from_utf8_lossy(v.as_bytes()).to_string(),
     )
@@ -278,7 +274,7 @@ mod tests {
     use crate::app::callback::CallbackRequest;
     use crate::app::tracker::MessageGraph;
     use crate::pipeline::min_pipeline_spec;
-    use crate::Error;
+    use crate::{Error, Settings};
 
     #[derive(Clone)]
     struct MockStore;
@@ -303,7 +299,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_async_publish() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let client = async_nats::connect(&config().jetstream.url)
+        let settings = Settings::load().unwrap();
+        let settings = Arc::new(settings);
+        let client = async_nats::connect(&settings.jetstream.url)
             .await
             .map_err(|e| format!("Connecting to Jetstream: {:?}", e))?;
 
@@ -318,14 +316,19 @@ mod tests {
                 ..Default::default()
             })
             .await
-            .map_err(|e| format!("creating stream {}: {}", &config().jetstream.url, e))?;
+            .map_err(|e| format!("creating stream {}: {}", &settings.jetstream.url, e))?;
 
         let mock_store = MockStore {};
         let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec())
             .map_err(|e| format!("Failed to create message graph from pipeline spec: {:?}", e))?;
 
         let callback_state = CallbackState::new(msg_graph, mock_store).await?;
-        let app = jetstream_proxy(context, callback_state).await?;
+        let app_state = AppState {
+            callback_state,
+            context,
+            settings,
+        };
+        let app = jetstream_proxy(app_state).await?;
         let res = Request::builder()
             .method("POST")
             .uri("/async")

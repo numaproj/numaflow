@@ -1,11 +1,11 @@
 use axum::{body::Bytes, extract::State, http::HeaderMap, routing, Json, Router};
 use serde::{Deserialize, Serialize};
-use state::State as CallbackState;
 use tracing::error;
 
 use self::store::Store;
 use crate::app::response::ApiError;
-use crate::config;
+
+use super::AppState;
 
 /// in-memory state store including connection tracking
 pub(crate) mod state;
@@ -22,37 +22,46 @@ pub(crate) struct CallbackRequest {
 }
 
 pub fn callback_handler<T: Send + Sync + Clone + Store + 'static>(
-    callback_store: CallbackState<T>,
+    app_state: AppState<T>,
 ) -> Router {
     Router::new()
         .route("/callback", routing::post(callback))
         .route("/callback_save", routing::post(callback_save))
-        .with_state(callback_store)
+        .with_state(app_state)
 }
 
 async fn callback_save<T: Send + Sync + Clone + Store>(
-    State(mut proxy_state): State<CallbackState<T>>,
+    State(app_state): State<AppState<T>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<(), ApiError> {
     let id = headers
-        .get(&config().tid_header)
+        .get(&app_state.settings.tid_header)
         .map(|id| String::from_utf8_lossy(id.as_bytes()).to_string())
         .ok_or_else(|| ApiError::BadRequest("Missing id header".to_string()))?;
 
-    proxy_state.save_response(id, body).await.map_err(|e| {
-        error!(error=?e, "Saving body from callback save request");
-        ApiError::InternalServerError("Failed to save body from callback save request".to_string())
-    })?;
+    app_state
+        .callback_state
+        .clone()
+        .save_response(id, body)
+        .await
+        .map_err(|e| {
+            error!(error=?e, "Saving body from callback save request");
+            ApiError::InternalServerError(
+                "Failed to save body from callback save request".to_string(),
+            )
+        })?;
 
     Ok(())
 }
 
 async fn callback<T: Send + Sync + Clone + Store>(
-    State(mut proxy_state): State<CallbackState<T>>,
+    State(app_state): State<AppState<T>>,
     Json(payload): Json<Vec<CallbackRequest>>,
 ) -> Result<(), ApiError> {
-    proxy_state
+    app_state
+        .callback_state
+        .clone()
         .insert_callback_requests(payload)
         .await
         .map_err(|e| {

@@ -31,6 +31,7 @@ pub(crate) mod source {
         Generator(GeneratorConfig),
         UserDefined(UserDefinedConfig),
         Pulsar(PulsarSourceConfig),
+        Serving(serving::Settings),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -93,6 +94,51 @@ pub(crate) mod source {
                 auth,
             };
             Ok(SourceType::Pulsar(pulsar_config))
+        }
+    }
+
+    impl TryFrom<Box<numaflow_models::models::ServingSource>> for SourceType {
+        type Error = Error;
+        // FIXME: Currently, the same settings comes from user-defined settings and env variables.
+        // We parse both, with user-defined values having higher precedence.
+        // There should be only one option (user-defined) to define the settings.
+        fn try_from(cfg: Box<numaflow_models::models::ServingSource>) -> Result<Self> {
+            let mut setting =
+                serving::Settings::load().map_err(|e| Error::Config(e.to_string()))?;
+            setting.tid_header = cfg.msg_id_header_key; // FIXME: check if this is correct
+
+            if let Some(auth) = cfg.auth {
+                if let Some(token) = auth.token {
+                    let secret = crate::shared::create_components::get_secret_from_volume(
+                        &token.name,
+                        &token.key,
+                    )
+                    .map_err(|e| Error::Config(format!("Reading API auth token secret: {e:?}")))?;
+                    setting.api_auth_token = Some(secret);
+                } else {
+                    tracing::warn!("Authentication token for Serving API is specified, but the secret is empty");
+                };
+            }
+
+            if let Some(ttl) = cfg.store.ttl {
+                if ttl.is_negative() {
+                    return Err(Error::Config(format!(
+                        "TTL value for Redis store can not be negative. Provided value = {ttl:?}"
+                    )));
+                }
+                let ttl: std::time::Duration = ttl.into();
+                let ttl_secs = ttl.as_secs() as u32;
+                // TODO: Identify a minimum value
+                if ttl_secs < 1 {
+                    return Err(Error::Config(format!(
+                        "TTL value for Redis store must not be less than 1 second. Provided value = {ttl:?}"
+                    )));
+                }
+                setting.redis.ttl_secs = Some(ttl_secs);
+            }
+            setting.redis.addr = cfg.store.url;
+
+            Ok(SourceType::Serving(setting))
         }
     }
 

@@ -1,5 +1,5 @@
-use std::env;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_nats::jetstream;
@@ -26,9 +26,11 @@ use self::{
 };
 use crate::app::callback::store::Store;
 use crate::app::tracker::MessageGraph;
+use crate::config::JetStreamConfig;
 use crate::pipeline::min_pipeline_spec;
-use crate::Error::{InitError, MetricsServer};
-use crate::{app::callback::state::State as CallbackState, config, metrics::capture_metrics};
+use crate::Error::{self, InitError, MetricsServer};
+use crate::Settings;
+use crate::{app::callback::state::State as CallbackState, metrics::capture_metrics};
 
 /// manage callbacks
 pub(crate) mod callback;
@@ -41,10 +43,6 @@ mod message_path; // TODO: merge message_path and tracker
 mod response;
 mod tracker;
 
-const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
-const ENV_NUMAFLOW_SERVING_AUTH_TOKEN: &str = "NUMAFLOW_SERVING_AUTH_TOKEN";
-
 /// Everything for numaserve starts here. The routing, middlewares, proxying, etc.
 // TODO
 // - [ ] implement an proxy and pass in UUID in the header if not present
@@ -52,19 +50,23 @@ const ENV_NUMAFLOW_SERVING_AUTH_TOKEN: &str = "NUMAFLOW_SERVING_AUTH_TOKEN";
 
 /// Start the main application Router and the axum server.
 pub(crate) async fn start_main_server(
-    addr: SocketAddr,
+    settings: Arc<Settings>,
     tls_config: RustlsConfig,
 ) -> crate::Result<()> {
-    debug!(?addr, "App server started");
+    let app_addr: SocketAddr = format!("0.0.0.0:{}", &settings.app_listen_port)
+        .parse()
+        .map_err(|e| Error::Other(format!("{e:?}")))?;
+    debug!(?app_addr, "App server started");
 
+    let tid_header = settings.tid_header.clone();
     let layers = ServiceBuilder::new()
         // Add tracing to all requests
         .layer(
             TraceLayer::new_for_http()
-                .make_span_with(|req: &Request<Body>| {
+                .make_span_with(move |req: &Request<Body>| {
                     let tid = req
                         .headers()
-                        .get(&config().tid_header)
+                        .get(&tid_header)
                         .and_then(|v| v.to_str().ok())
                         .map(|v| v.to_string())
                         .unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -83,10 +85,13 @@ pub(crate) async fn start_main_server(
         .layer(
             // Graceful shutdown will wait for outstanding requests to complete. Add a timeout so
             // requests don't hang forever.
-            TimeoutLayer::new(Duration::from_secs(config().drain_timeout_secs)),
+            TimeoutLayer::new(Duration::from_secs(settings.drain_timeout_secs)),
         )
         // Add auth middleware to all user facing routes
-        .layer(middleware::from_fn(auth_middleware));
+        .layer(middleware::from_fn_with_state(
+            settings.api_auth_token.clone(),
+            auth_middleware,
+        ));
 
     // Create the message graph from the pipeline spec and the redis store
     let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).map_err(|e| {
@@ -97,11 +102,8 @@ pub(crate) async fn start_main_server(
     })?;
 
     // Create a redis store to store the callbacks and the custom responses
-    let redis_store = callback::store::redisstore::RedisConnection::new(
-        &config().redis.addr,
-        config().redis.max_tasks,
-    )
-    .await?;
+    let redis_store =
+        callback::store::redisstore::RedisConnection::new(settings.redis.clone()).await?;
     let state = CallbackState::new(msg_graph, redis_store).await?;
 
     let handle = Handle::new();
@@ -109,10 +111,10 @@ pub(crate) async fn start_main_server(
     tokio::spawn(graceful_shutdown(handle.clone()));
 
     // Create a Jetstream context
-    let js_context = create_js_context().await?;
+    let js_context = create_js_context(&settings.jetstream).await?;
 
-    let router = setup_app(js_context, state).await?.layer(layers);
-    axum_server::bind_rustls(addr, tls_config)
+    let router = setup_app(settings, js_context, state).await?.layer(layers);
+    axum_server::bind_rustls(app_addr, tls_config)
         .handle(handle)
         .serve(router.into_make_service())
         .await
@@ -149,19 +151,16 @@ async fn graceful_shutdown(handle: Handle) {
     handle.graceful_shutdown(Some(Duration::from_secs(30)));
 }
 
-async fn create_js_context() -> crate::Result<Context> {
-    // Check for user and password in the Jetstream configuration
-    let js_config = &config().jetstream;
-
+async fn create_js_context(js_config: &JetStreamConfig) -> crate::Result<Context> {
     // Connect to Jetstream with user and password if they are set
-    let js_client = match (
-        env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_USER),
-        env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD),
-    ) {
-        (Ok(user), Ok(password)) => {
+    let js_client = match js_config.auth.as_ref() {
+        Some(auth) => {
             async_nats::connect_with_options(
                 &js_config.url,
-                async_nats::ConnectOptions::with_user_and_password(user, password),
+                async_nats::ConnectOptions::with_user_and_password(
+                    auth.username.clone(),
+                    auth.password.clone(),
+                ),
             )
             .await
         }
@@ -170,8 +169,7 @@ async fn create_js_context() -> crate::Result<Context> {
     .map_err(|e| {
         InitError(format!(
             "Connecting to jetstream server {}: {}",
-            &config().jetstream.url,
-            e
+            &js_config.url, e
         ))
     })?;
     Ok(jetstream::new(js_client))
@@ -185,7 +183,11 @@ const PUBLISH_ENDPOINTS: [&str; 3] = [
 
 // auth middleware to do token based authentication for all user facing routes
 // if auth is enabled.
-async fn auth_middleware(request: axum::extract::Request, next: Next) -> Response {
+async fn auth_middleware(
+    State(api_auth_token): State<Option<String>>,
+    request: axum::extract::Request,
+    next: Next,
+) -> Response {
     let path = request.uri().path();
 
     // we only need to check for the presence of the auth token in the request headers for the publish endpoints
@@ -193,8 +195,8 @@ async fn auth_middleware(request: axum::extract::Request, next: Next) -> Respons
         return next.run(request).await;
     }
 
-    match env::var(ENV_NUMAFLOW_SERVING_AUTH_TOKEN) {
-        Ok(token) => {
+    match api_auth_token {
+        Some(token) => {
             // Check for the presence of the auth token in the request headers
             let auth_token = match request.headers().get("Authorization") {
                 Some(token) => token,
@@ -216,22 +218,35 @@ async fn auth_middleware(request: axum::extract::Request, next: Next) -> Respons
                 next.run(request).await
             }
         }
-        Err(_) => {
+        None => {
             // If the auth token is not set, we don't need to check for the presence of the auth token in the request headers
             next.run(request).await
         }
     }
 }
 
+#[derive(Clone)]
+pub(crate) struct AppState<T> {
+    pub(crate) settings: Arc<Settings>,
+    pub(crate) callback_state: CallbackState<T>,
+    pub(crate) context: Context,
+}
+
 async fn setup_app<T: Clone + Send + Sync + Store + 'static>(
+    settings: Arc<Settings>,
     context: Context,
-    state: CallbackState<T>,
+    callback_state: CallbackState<T>,
 ) -> crate::Result<Router> {
+    let app_state = AppState {
+        settings,
+        callback_state: callback_state.clone(),
+        context: context.clone(),
+    };
     let parent = Router::new()
         .route("/health", get(health_check))
         .route("/livez", get(livez)) // Liveliness check
         .route("/readyz", get(readyz))
-        .with_state((state.clone(), context.clone())); // Readiness check
+        .with_state(app_state.clone()); // Readiness check
 
     // a pool based client implementation for direct proxy, this client is cloneable.
     let client: direct_proxy::Client =
@@ -240,8 +255,11 @@ async fn setup_app<T: Clone + Send + Sync + Store + 'static>(
 
     // let's nest each endpoint
     let app = parent
-        .nest("/v1/direct", direct_proxy(client))
-        .nest("/v1/process", routes(context, state).await?);
+        .nest(
+            "/v1/direct",
+            direct_proxy(client, app_state.settings.upstream_addr.clone()),
+        )
+        .nest("/v1/process", routes(app_state).await?);
 
     Ok(app)
 }
@@ -250,16 +268,20 @@ async fn health_check() -> impl IntoResponse {
     "ok"
 }
 
-async fn livez<T: Send + Sync + Clone + Store + 'static>(
-    State((_state, _context)): State<(CallbackState<T>, Context)>,
-) -> impl IntoResponse {
+async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
 async fn readyz<T: Send + Sync + Clone + Store + 'static>(
-    State((mut state, context)): State<(CallbackState<T>, Context)>,
+    State(app): State<AppState<T>>,
 ) -> impl IntoResponse {
-    if state.ready().await && context.get_stream(&config().jetstream.stream).await.is_ok() {
+    if app.callback_state.clone().ready().await
+        && app
+            .context
+            .get_stream(&app.settings.jetstream.stream)
+            .await
+            .is_ok()
+    {
         StatusCode::NO_CONTENT
     } else {
         StatusCode::INTERNAL_SERVER_ERROR
@@ -267,11 +289,11 @@ async fn readyz<T: Send + Sync + Clone + Store + 'static>(
 }
 
 async fn routes<T: Clone + Send + Sync + Store + 'static>(
-    context: Context,
-    state: CallbackState<T>,
+    app_state: AppState<T>,
 ) -> crate::Result<Router> {
-    let jetstream_proxy = jetstream_proxy(context, state.clone()).await?;
-    let callback_router = callback_handler(state.clone());
+    let state = app_state.callback_state.clone();
+    let jetstream_proxy = jetstream_proxy(app_state.clone()).await?;
+    let callback_router = callback_handler(app_state);
     let message_path_handler = get_message_path(state);
     Ok(jetstream_proxy
         .merge(callback_router)
@@ -280,8 +302,6 @@ async fn routes<T: Clone + Send + Sync + Store + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddr;
-
     use async_nats::jetstream::stream;
     use axum::http::StatusCode;
     use tokio::time::{sleep, Duration};
@@ -302,9 +322,12 @@ mod tests {
             .await
             .unwrap();
 
-        let addr = SocketAddr::from(([127, 0, 0, 1], 0));
+        let mut settings = Settings::load().unwrap();
+        settings.app_listen_port = 0;
+        let settings = Arc::new(settings);
+
         let server = tokio::spawn(async move {
-            let result = start_main_server(addr, tls_config).await;
+            let result = start_main_server(settings, tls_config).await;
             assert!(result.is_ok())
         });
 
@@ -319,9 +342,10 @@ mod tests {
     #[cfg(feature = "all-tests")]
     #[tokio::test]
     async fn test_setup_app() -> Result<()> {
-        let client = async_nats::connect(&config().jetstream.url).await?;
+        let settings = Settings::load().unwrap();
+        let client = async_nats::connect(&settings.jetstream.url).await?;
         let context = jetstream::new(client);
-        let stream_name = &config().jetstream.stream;
+        let stream_name = &settings.jetstream.stream;
 
         let stream = context
             .get_or_create_stream(stream::Config {
@@ -346,9 +370,10 @@ mod tests {
     #[cfg(feature = "all-tests")]
     #[tokio::test]
     async fn test_livez() -> Result<()> {
-        let client = async_nats::connect(&config().jetstream.url).await?;
+        let settings = Settings::load().unwrap();
+        let client = async_nats::connect(&settings.jetstream.url).await?;
         let context = jetstream::new(client);
-        let stream_name = &config().jetstream.stream;
+        let stream_name = &settings.jetstream.stream;
 
         let stream = context
             .get_or_create_stream(stream::Config {
@@ -377,9 +402,10 @@ mod tests {
     #[cfg(feature = "all-tests")]
     #[tokio::test]
     async fn test_readyz() -> Result<()> {
-        let client = async_nats::connect(&config().jetstream.url).await?;
+        let settings = Settings::load().unwrap();
+        let client = async_nats::connect(&settings.jetstream.url).await?;
         let context = jetstream::new(client);
-        let stream_name = &config().jetstream.stream;
+        let stream_name = &settings.jetstream.stream;
 
         let stream = context
             .get_or_create_stream(stream::Config {
@@ -415,9 +441,10 @@ mod tests {
     #[cfg(feature = "all-tests")]
     #[tokio::test]
     async fn test_auth_middleware() -> Result<()> {
-        let client = async_nats::connect(&config().jetstream.url).await?;
+        let settings = Settings::load().unwrap();
+        let client = async_nats::connect(&settings.jetstream.url).await?;
         let context = jetstream::new(client);
-        let stream_name = &config().jetstream.stream;
+        let stream_name = &settings.jetstream.stream;
 
         let stream = context
             .get_or_create_stream(stream::Config {
@@ -438,9 +465,11 @@ mod tests {
                 "/v1/process",
                 routes(context, callback_state).await.unwrap(),
             )
-            .layer(middleware::from_fn(auth_middleware));
+            .layer(middleware::from_fn_with_state(
+                Some("test_token".to_owned()),
+                auth_middleware,
+            ));
 
-        env::set_var(ENV_NUMAFLOW_SERVING_AUTH_TOKEN, "test_token");
         let res = app
             .oneshot(
                 axum::extract::Request::builder()
@@ -451,7 +480,6 @@ mod tests {
             .await?;
 
         assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
-        env::remove_var(ENV_NUMAFLOW_SERVING_AUTH_TOKEN);
         Ok(())
     }
 }
