@@ -70,7 +70,7 @@ impl UserDefinedMap {
         Ok(mapper)
     }
 
-    // receive responses from the server and gets the corresponding oneshot sender from the mapper
+    // receive responses from the server and gets the corresponding oneshot sender from the map
     // and sends the response.
     async fn receive_responses(
         sender_map: ResponseSenderMap,
@@ -84,7 +84,7 @@ impl UserDefinedMap {
             let msg_id = resp.id;
             if let Some((msg_info, sender)) = sender_map
                 .lock()
-                .expect("mapper entry should always be present")
+                .expect("map entry should always be present")
                 .remove(&msg_id)
             {
                 let mut response_messages = vec![];

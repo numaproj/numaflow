@@ -406,7 +406,7 @@ mod version {
     // MINIMUM_SUPPORTED_SDK_VERSIONS is the minimum supported version of each SDK for the current numaflow version.
     static MINIMUM_SUPPORTED_SDK_VERSIONS: LazyLock<SdkConstraints> = LazyLock::new(|| {
         // TODO: populate this from a static file and make it part of the release process
-        // the value of the mapper matches `minimumSupportedSDKVersions` in pkg/sdkclient/serverinfo/types.go
+        // the value of the map matches `minimumSupportedSDKVersions` in pkg/sdkclient/serverinfo/types.go
         // please follow the instruction there to update the value
         // NOTE: the string content of the keys matches the corresponding server info file name.
         // DO NOT change it unless the server info file name is changed.
@@ -443,7 +443,7 @@ mod version {
         m
     });
 
-    // Function to get the minimum supported SDK version hash mapper
+    // Function to get the minimum supported SDK version hash map
     pub(crate) fn get_minimum_supported_sdk_versions() -> &'static SdkConstraints {
         &MINIMUM_SUPPORTED_SDK_VERSIONS
     }

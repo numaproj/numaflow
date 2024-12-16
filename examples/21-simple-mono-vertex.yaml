@@ -14,5 +14,4 @@ spec:
   sink:
     udsink:
       container:
-        image: numaflow-java-examples/simple-sink:stable
-        imagePullPolicy: Never
+        image: quay.io/numaio/numaflow-rs/sink-log:stable

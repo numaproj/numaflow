@@ -3,7 +3,7 @@
 //! [Actor Pattern].
 //!
 //! ```text
-//! (source) --[c]--> (transformer)* --[c]--> ==> (mapper)* --[c]--> ===> (reducer)* --[c]--> ===> --[c]--> (sink)
+//! (source) --[c]--> (transformer)* --[c]--> ==> (map)* --[c]--> ===> (reducer)* --[c]--> ===> --[c]--> (sink)
 //!    |                   |                       |                      |                                |
 //!    |                   |                       |                      |                                |
 //!    |                   |                       v                      |                                |

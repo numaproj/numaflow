@@ -303,7 +303,7 @@ impl JetstreamWriter {
                     }
                 },
                 None => {
-                    error!("Stream {} not found in is_full mapper", stream.0);
+                    error!("Stream {} not found in is_full map", stream.0);
                 }
             }
             // short-circuit out in failure mode if shutdown has been initiated

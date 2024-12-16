@@ -501,7 +501,7 @@ impl SinkWriter {
     ) -> Result<bool> {
         match self.sink(messages_to_send.clone()).await {
             Ok(response) => {
-                // create a mapper of id to result, since there is no strict requirement
+                // create a map of id to result, since there is no strict requirement
                 // for the udsink to return the results in the same order as the requests
                 let result_map = response
                     .into_iter()
@@ -511,7 +511,7 @@ impl SinkWriter {
                 error_map.clear();
                 // drain all the messages that were successfully written
                 // and keep only the failed messages to send again
-                // construct the error mapper for the failed messages
+                // construct the error map for the failed messages
                 messages_to_send.retain(|msg| {
                     if let Some(result) = result_map.get(&msg.id.to_string()) {
                         return match result {
@@ -582,7 +582,7 @@ impl SinkWriter {
                         start_time.elapsed().as_millis()
                     );
 
-                    // create a mapper of id to result, since there is no strict requirement
+                    // create a map of id to result, since there is no strict requirement
                     // for the udsink to return the results in the same order as the requests
                     let result_map = fb_response
                         .into_iter()
@@ -594,7 +594,7 @@ impl SinkWriter {
                     fallback_error_map.clear();
                     // drain all the messages that were successfully written
                     // and keep only the failed messages to send again
-                    // construct the error mapper for the failed messages
+                    // construct the error map for the failed messages
                     messages_to_send.retain(|msg| {
                         if let Some(result) = result_map.get(&msg.id.to_string()) {
                             return match result {

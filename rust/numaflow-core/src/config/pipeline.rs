@@ -366,11 +366,13 @@ impl PipelineConfig {
 
 #[cfg(test)]
 mod tests {
+    use numaflow_models::models::{Container, Function, Udf};
     use numaflow_pulsar::source::PulsarSourceConfig;
 
     use super::*;
     use crate::config::components::sink::{BlackholeConfig, LogConfig, SinkType};
     use crate::config::components::source::{GeneratorConfig, SourceType};
+    use crate::config::pipeline::map::{MapType, UserDefinedConfig};
 
     #[test]
     fn test_default_pipeline_config() {
@@ -557,6 +559,119 @@ mod tests {
                 transformer_config: None,
             }),
             metrics_config: Default::default(),
+        };
+
+        assert_eq!(pipeline_config, expected);
+    }
+
+    #[test]
+    fn test_map_vertex_config_user_defined() {
+        let udf = Udf {
+            builtin: None,
+            container: Some(Box::from(Container {
+                args: None,
+                command: None,
+                env: None,
+                env_from: None,
+                image: None,
+                image_pull_policy: None,
+                liveness_probe: None,
+                ports: None,
+                readiness_probe: None,
+                resources: None,
+                security_context: None,
+                volume_mounts: None,
+            })),
+            group_by: None,
+        };
+
+        let map_type = MapType::try_from(Box::new(udf)).unwrap();
+        assert!(matches!(map_type, MapType::UserDefined(_)));
+
+        let map_vtx_config = MapVtxConfig {
+            concurrency: 10,
+            map_type,
+        };
+
+        assert_eq!(map_vtx_config.concurrency, 10);
+        if let MapType::UserDefined(config) = map_vtx_config.map_type {
+            assert_eq!(config.grpc_max_message_size, DEFAULT_GRPC_MAX_MESSAGE_SIZE);
+            assert_eq!(config.socket_path, DEFAULT_MAP_SOCKET);
+            assert_eq!(config.server_info_path, DEFAULT_MAP_SERVER_INFO_FILE);
+        } else {
+            panic!("Expected UserDefined map type");
+        }
+    }
+
+    #[test]
+    fn test_map_vertex_config_builtin() {
+        let udf = Udf {
+            builtin: Some(Box::from(Function {
+                args: None,
+                kwargs: None,
+                name: "cat".to_string(),
+            })),
+            container: None,
+            group_by: None,
+        };
+
+        let map_type = MapType::try_from(Box::new(udf)).unwrap();
+        assert!(matches!(map_type, MapType::Builtin(_)));
+
+        let map_vtx_config = MapVtxConfig {
+            concurrency: 5,
+            map_type,
+        };
+
+        assert_eq!(map_vtx_config.concurrency, 5);
+        if let MapType::Builtin(config) = map_vtx_config.map_type {
+            assert_eq!(config.name, "cat");
+            assert!(config.kwargs.is_none());
+            assert!(config.args.is_none());
+        } else {
+            panic!("Expected Builtin map type");
+        }
+    }
+
+    #[test]
+    fn test_pipeline_config_load_map_vertex() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW1hcCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im1hcCIsInVkZiI6eyJjb250YWluZXIiOnsidGVtcGxhdGUiOiJkZWZhdWx0In19LCJsaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJzY2FsZSI6eyJtaW4iOjF9LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoibWFwIiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJNYXAiLCJ0b1ZlcnRleFBhcnRpdGlvbkNvdW50IjoxLCJ0b1ZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH19XSwid2F0ZXJtYXJrIjp7Im1heERlbGF5IjoiMHMifX0sInN0YXR1cyI6eyJwaGFzZSI6IiIsInJlcGxpY2FzIjowLCJkZXNpcmVkUmVwbGljYXMiOjAsImxhc3RTY2FsZWRBdCI6bnVsbH19";
+
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let pipeline_config =
+            PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        let expected = PipelineConfig {
+            pipeline_name: "simple-pipeline".to_string(),
+            vertex_name: "map".to_string(),
+            replica: 0,
+            batch_size: 500,
+            paf_concurrency: 1000,
+            read_timeout: Duration::from_secs(1),
+            js_client_config: isb::jetstream::ClientConfig {
+                url: "localhost:4222".to_string(),
+                user: None,
+                password: None,
+            },
+            from_vertex_config: vec![FromVertexConfig {
+                name: "in".to_string(),
+                reader_config: BufferReaderConfig {
+                    partitions: 1,
+                    streams: vec![("default-simple-pipeline-map-0", 0)],
+                    wip_ack_interval: Duration::from_secs(1),
+                },
+                partitions: 0,
+            }],
+            to_vertex_config: vec![],
+            vertex_config: VertexType::Map(MapVtxConfig {
+                concurrency: 500,
+                map_type: MapType::UserDefined(UserDefinedConfig {
+                    grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                    socket_path: DEFAULT_MAP_SOCKET.to_string(),
+                    server_info_path: DEFAULT_MAP_SERVER_INFO_FILE.to_string(),
+                }),
+            }),
+            metrics_config: MetricsConfig::default(),
         };
 
         assert_eq!(pipeline_config, expected);
