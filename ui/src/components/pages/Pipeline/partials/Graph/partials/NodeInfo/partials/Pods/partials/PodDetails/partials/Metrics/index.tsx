@@ -65,6 +65,11 @@ export function Metrics({ namespaceId, pipelineId, type, vertexId }: MetricsProp
   return (
     <Box sx={{ height: "100%" }}>
       {discoveredMetrics?.data?.map((metric: any) => {
+        if (
+          type === "source" &&
+          metric?.metric_name === "vertex_pending_messages"
+        )
+          return null;
         const panelId = `${metric?.metric_name}-panel`;
         return (
           <Accordion
