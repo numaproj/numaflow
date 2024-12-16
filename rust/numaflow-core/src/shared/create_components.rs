@@ -329,7 +329,7 @@ mod tests {
 
     #[tonic::async_trait]
     impl sink::Sinker for InMemorySink {
-        async fn sink(&self, mut _input: mpsc::Receiver<sink::SinkRequest>) -> Vec<sink::Response> {
+        async fn sink(&self, _input: mpsc::Receiver<sink::SinkRequest>) -> Vec<sink::Response> {
             vec![]
         }
     }

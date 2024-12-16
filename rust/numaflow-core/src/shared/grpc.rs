@@ -15,7 +15,7 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tower::service_fn;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::error;
 use crate::error::Error;
@@ -96,7 +96,15 @@ pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> error::Result<Ch
 
     let channel = Retry::retry(
         interval,
-        || async { connect_with_uds(socket_path.clone()).await },
+        || async {
+            match connect_with_uds(socket_path.clone()).await {
+                Ok(channel) => Ok(channel),
+                Err(e) => {
+                    warn!(?e, "Failed to connect to UDS socket");
+                    Err(Error::Connection(format!("Failed to connect: {:?}", e)))
+                }
+            }
+        },
         |_: &Error| true,
     )
     .await?;

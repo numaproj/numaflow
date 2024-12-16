@@ -129,6 +129,12 @@ where
             }
         }
     }
+
+    async fn run(mut self) {
+        while let Some(msg) = self.receiver.recv().await {
+            self.handle_message(msg).await;
+        }
+    }
 }
 
 /// Source is used to read, ack, and get the pending messages count from the source.
@@ -150,31 +156,25 @@ impl Source {
         match src_type {
             SourceType::UserDefinedSource(reader, acker, lag_reader) => {
                 tokio::spawn(async move {
-                    let mut actor = SourceActor::new(receiver, reader, acker, lag_reader);
-                    while let Some(msg) = actor.receiver.recv().await {
-                        actor.handle_message(msg).await;
-                    }
+                    let actor = SourceActor::new(receiver, reader, acker, lag_reader);
+                    actor.run().await;
                 });
             }
             SourceType::Generator(reader, acker, lag_reader) => {
                 tokio::spawn(async move {
-                    let mut actor = SourceActor::new(receiver, reader, acker, lag_reader);
-                    while let Some(msg) = actor.receiver.recv().await {
-                        actor.handle_message(msg).await;
-                    }
+                    let actor = SourceActor::new(receiver, reader, acker, lag_reader);
+                    actor.run().await;
                 });
             }
             SourceType::Pulsar(pulsar_source) => {
                 tokio::spawn(async move {
-                    let mut actor = SourceActor::new(
+                    let actor = SourceActor::new(
                         receiver,
                         pulsar_source.clone(),
                         pulsar_source.clone(),
                         pulsar_source,
                     );
-                    while let Some(msg) = actor.receiver.recv().await {
-                        actor.handle_message(msg).await;
-                    }
+                    actor.run().await;
                 });
             }
         };

@@ -78,6 +78,12 @@ where
             }
         }
     }
+
+    async fn run(mut self) {
+        while let Some(msg) = self.actor_messages.recv().await {
+            self.handle_message(msg).await;
+        }
+    }
 }
 
 pub(crate) enum SinkClientType {
@@ -142,28 +148,22 @@ impl SinkWriterBuilder {
             SinkClientType::Log => {
                 let log_sink = log::LogSink;
                 tokio::spawn(async {
-                    let mut actor = SinkActor::new(receiver, log_sink);
-                    while let Some(msg) = actor.actor_messages.recv().await {
-                        actor.handle_message(msg).await;
-                    }
+                    let actor = SinkActor::new(receiver, log_sink);
+                    actor.run().await;
                 });
             }
             SinkClientType::Blackhole => {
                 let blackhole_sink = blackhole::BlackholeSink;
                 tokio::spawn(async {
-                    let mut actor = SinkActor::new(receiver, blackhole_sink);
-                    while let Some(msg) = actor.actor_messages.recv().await {
-                        actor.handle_message(msg).await;
-                    }
+                    let actor = SinkActor::new(receiver, blackhole_sink);
+                    actor.run().await;
                 });
             }
             SinkClientType::UserDefined(sink_client) => {
                 let sink = UserDefinedSink::new(sink_client).await?;
                 tokio::spawn(async {
-                    let mut actor = SinkActor::new(receiver, sink);
-                    while let Some(msg) = actor.actor_messages.recv().await {
-                        actor.handle_message(msg).await;
-                    }
+                    let actor = SinkActor::new(receiver, sink);
+                    actor.run().await;
                 });
             }
         };
@@ -174,28 +174,22 @@ impl SinkWriterBuilder {
                 SinkClientType::Log => {
                     let log_sink = log::LogSink;
                     tokio::spawn(async {
-                        let mut actor = SinkActor::new(fb_receiver, log_sink);
-                        while let Some(msg) = actor.actor_messages.recv().await {
-                            actor.handle_message(msg).await;
-                        }
+                        let actor = SinkActor::new(fb_receiver, log_sink);
+                        actor.run().await;
                     });
                 }
                 SinkClientType::Blackhole => {
                     let blackhole_sink = blackhole::BlackholeSink;
                     tokio::spawn(async {
-                        let mut actor = SinkActor::new(fb_receiver, blackhole_sink);
-                        while let Some(msg) = actor.actor_messages.recv().await {
-                            actor.handle_message(msg).await;
-                        }
+                        let actor = SinkActor::new(fb_receiver, blackhole_sink);
+                        actor.run().await;
                     });
                 }
                 SinkClientType::UserDefined(sink_client) => {
                     let sink = UserDefinedSink::new(sink_client).await?;
                     tokio::spawn(async {
-                        let mut actor = SinkActor::new(fb_receiver, sink);
-                        while let Some(msg) = actor.actor_messages.recv().await {
-                            actor.handle_message(msg).await;
-                        }
+                        let actor = SinkActor::new(fb_receiver, sink);
+                        actor.run().await;
                     });
                 }
             };
@@ -443,7 +437,7 @@ impl SinkWriter {
                 .forwarder
                 .write_total
                 .get_or_create(pipeline_forward_metric_labels("Sink", None))
-                .inc_by((total_msgs) as u64);
+                .inc_by(total_msgs as u64);
         }
 
         Ok(())
