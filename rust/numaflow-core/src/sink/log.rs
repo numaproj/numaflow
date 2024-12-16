@@ -35,8 +35,9 @@ impl Sink for LogSink {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
     use std::sync::Arc;
+
+    use chrono::Utc;
 
     use super::LogSink;
     use crate::message::IntOffset;
