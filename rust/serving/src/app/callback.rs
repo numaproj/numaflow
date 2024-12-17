@@ -5,10 +5,10 @@ use tracing::error;
 use self::store::Store;
 use crate::app::response::ApiError;
 
-use super::AppState;
-
 /// in-memory state store including connection tracking
 pub(crate) mod state;
+use state::State as CallbackState;
+
 /// store for storing the state
 pub(crate) mod store;
 
@@ -21,9 +21,20 @@ pub(crate) struct CallbackRequest {
     pub(crate) tags: Option<Vec<String>>,
 }
 
+#[derive(Clone)]
+struct CallbackAppState<T: Clone> {
+    tid_header: String,
+    callback_state: CallbackState<T>,
+}
+
 pub fn callback_handler<T: Send + Sync + Clone + Store + 'static>(
-    app_state: AppState<T>,
+    tid_header: String,
+    callback_state: CallbackState<T>,
 ) -> Router {
+    let app_state = CallbackAppState {
+        tid_header,
+        callback_state,
+    };
     Router::new()
         .route("/callback", routing::post(callback))
         .route("/callback_save", routing::post(callback_save))
@@ -31,12 +42,12 @@ pub fn callback_handler<T: Send + Sync + Clone + Store + 'static>(
 }
 
 async fn callback_save<T: Send + Sync + Clone + Store>(
-    State(app_state): State<AppState<T>>,
+    State(app_state): State<CallbackAppState<T>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<(), ApiError> {
     let id = headers
-        .get(&app_state.settings.tid_header)
+        .get(&app_state.tid_header)
         .map(|id| String::from_utf8_lossy(id.as_bytes()).to_string())
         .ok_or_else(|| ApiError::BadRequest("Missing id header".to_string()))?;
 
@@ -56,7 +67,7 @@ async fn callback_save<T: Send + Sync + Clone + Store>(
 }
 
 async fn callback<T: Send + Sync + Clone + Store>(
-    State(app_state): State<AppState<T>>,
+    State(app_state): State<CallbackAppState<T>>,
     Json(payload): Json<Vec<CallbackRequest>>,
 ) -> Result<(), ApiError> {
     app_state
@@ -81,6 +92,7 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
+    use crate::app::callback::state::State as CallbackState;
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::app::tracker::MessageGraph;
     use crate::pipeline::min_pipeline_spec;
@@ -90,7 +102,7 @@ mod tests {
         let store = InMemoryStore::new();
         let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
         let state = CallbackState::new(msg_graph, store).await.unwrap();
-        let app = callback_handler(state);
+        let app = callback_handler("ID".to_owned(), state);
 
         let payload = vec![CallbackRequest {
             id: "test_id".to_string(),
@@ -124,7 +136,7 @@ mod tests {
             let _ = x.await.unwrap();
         });
 
-        let app = callback_handler(state);
+        let app = callback_handler("ID".to_owned(), state);
 
         let payload = vec![
             CallbackRequest {
@@ -168,7 +180,7 @@ mod tests {
         let store = InMemoryStore::new();
         let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
         let state = CallbackState::new(msg_graph, store).await.unwrap();
-        let app = callback_handler(state);
+        let app = callback_handler("ID".to_owned(), state);
 
         let res = Request::builder()
             .method("POST")
@@ -187,7 +199,7 @@ mod tests {
         let store = InMemoryStore::new();
         let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
         let state = CallbackState::new(msg_graph, store).await.unwrap();
-        let app = callback_handler(state);
+        let app = callback_handler("ID".to_owned(), state);
 
         let res = Request::builder()
             .method("POST")

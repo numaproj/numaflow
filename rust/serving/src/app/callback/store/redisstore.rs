@@ -209,12 +209,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_redis_store() {
-        let redis_connection = RedisConnection::new("no_such_redis://127.0.0.1:6379", 10).await;
+        let redis_config = RedisConfig {
+            addr: "no_such_redis://127.0.0.1:6379".to_owned(),
+            max_tasks: 10,
+            ..Default::default()
+        };
+        let redis_connection = RedisConnection::new(redis_config).await;
         assert!(redis_connection.is_err());
 
         // Test Redis connection
-        let redis_connection =
-            RedisConnection::new(format!("redis://127.0.0.1:{}", "6379").as_str(), 10).await;
+        let redis_connection = RedisConnection::new(RedisConfig::default()).await;
         assert!(redis_connection.is_ok());
 
         let key = uuid::Uuid::new_v4().to_string();
@@ -277,7 +281,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_redis_ttl() {
-        let redis_connection = RedisConnection::new("redis://127.0.0.1:6379", 10)
+        let redis_config = RedisConfig {
+            max_tasks: 10,
+            ..Default::default()
+        };
+        let redis_connection = RedisConnection::new(redis_config)
             .await
             .expect("Failed to connect to Redis");
 
@@ -291,14 +299,12 @@ mod tests {
         });
 
         // Save with TTL of 1 second
+        redis_connection
+            .write_to_redis(&key, &serde_json::to_vec(&*value).unwrap())
+            .await
+            .expect("Failed to write to Redis");
+
         let mut conn_manager = redis_connection.conn_manager.clone();
-        RedisConnection::write_to_redis(
-            &mut conn_manager,
-            &key,
-            &serde_json::to_vec(&*value).unwrap(),
-        )
-        .await
-        .expect("Failed to write to Redis");
 
         let exists: bool = conn_manager
             .exists(&key)

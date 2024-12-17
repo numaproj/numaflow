@@ -78,7 +78,7 @@ pub struct RedisConfig {
 impl Default for RedisConfig {
     fn default() -> Self {
         Self {
-            addr: "redis://127.0.0.1/".to_owned(),
+            addr: "redis://127.0.0.1:6379".to_owned(),
             max_tasks: 50,
             retries: 5,
             retries_duration_millis: 100,
@@ -108,7 +108,7 @@ impl Default for Settings {
             tid_header: "ID".to_owned(),
             app_listen_port: 3000,
             metrics_server_listen_port: 3001,
-            upstream_addr: "localhost:888".to_owned(),
+            upstream_addr: "localhost:8888".to_owned(),
             drain_timeout_secs: 10,
             jetstream: JetStreamConfig::default(),
             redis: RedisConfig::default(),
@@ -208,7 +208,7 @@ mod tests {
         env::set_var("CONFIG_PATH", "config");
 
         // Call the config method
-        let settings = Settings::load().unwrap();
+        let settings = Settings::default();
 
         // Assert that the settings are as expected
         assert_eq!(settings.tid_header, "ID");
@@ -218,7 +218,7 @@ mod tests {
         assert_eq!(settings.drain_timeout_secs, 10);
         assert_eq!(settings.jetstream.stream, "default");
         assert_eq!(settings.jetstream.url, "localhost:4222");
-        assert_eq!(settings.redis.addr, "redis://127.0.0.1/");
+        assert_eq!(settings.redis.addr, "redis://127.0.0.1:6379");
         assert_eq!(settings.redis.max_tasks, 50);
         assert_eq!(settings.redis.retries, 5);
         assert_eq!(settings.redis.retries_duration_millis, 100);

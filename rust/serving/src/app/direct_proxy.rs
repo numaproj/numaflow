@@ -72,10 +72,8 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::app::direct_proxy::direct_proxy;
-    use crate::config;
 
-    async fn start_server() {
-        let addr = config().upstream_addr.to_string();
+    async fn start_server(addr: String) {
         let listener = TcpListener::bind(&addr).await.unwrap();
         tokio::spawn(async move {
             loop {
@@ -101,11 +99,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_direct_proxy() {
-        start_server().await;
+        let upstream_addr = "localhost:4321".to_owned();
+        start_server(upstream_addr.clone()).await;
         let client = hyper_util::client::legacy::Client::<(), ()>::builder(TokioExecutor::new())
             .build(HttpConnector::new());
 
-        let app = direct_proxy(client);
+        let app = direct_proxy(client, upstream_addr.clone());
 
         // Test valid request
         let res = Request::builder()

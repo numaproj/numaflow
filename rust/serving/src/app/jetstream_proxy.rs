@@ -269,6 +269,7 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
+    use crate::app::callback::state::State as CallbackState;
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::app::callback::store::PayloadToSave;
     use crate::app::callback::CallbackRequest;
@@ -299,7 +300,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_async_publish() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let settings = Settings::load().unwrap();
+        let settings = Settings::default();
         let settings = Arc::new(settings);
         let client = async_nats::connect(&settings.jetstream.url)
             .await
@@ -387,7 +388,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_sync_publish() {
-        let client = async_nats::connect(&config().jetstream.url).await.unwrap();
+        let settings = Settings::default();
+        let client = async_nats::connect(&settings.jetstream.url).await.unwrap();
         let context = jetstream::new(client);
         let id = "foobar";
         let stream_name = "sync_pub";
@@ -399,16 +401,20 @@ mod tests {
                 ..Default::default()
             })
             .await
-            .map_err(|e| format!("creating stream {}: {}", &config().jetstream.url, e));
+            .map_err(|e| format!("creating stream {}: {}", &settings.jetstream.url, e));
 
         let mem_store = InMemoryStore::new();
         let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
 
         let mut callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
-        let app = jetstream_proxy(context, callback_state.clone())
-            .await
-            .unwrap();
+        let settings = Arc::new(settings);
+        let app_state = AppState {
+            settings,
+            callback_state: callback_state.clone(),
+            context,
+        };
+        let app = jetstream_proxy(app_state).await.unwrap();
 
         tokio::spawn(async move {
             let cbs = create_default_callbacks(id);
@@ -451,7 +457,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_sync_publish_serve() {
-        let client = async_nats::connect(&config().jetstream.url).await.unwrap();
+        let settings = Arc::new(Settings::default());
+        let client = async_nats::connect(&settings.jetstream.url).await.unwrap();
         let context = jetstream::new(client);
         let id = "foobar";
         let stream_name = "sync_serve_pub";
@@ -463,16 +470,20 @@ mod tests {
                 ..Default::default()
             })
             .await
-            .map_err(|e| format!("creating stream {}: {}", &config().jetstream.url, e));
+            .map_err(|e| format!("creating stream {}: {}", &settings.jetstream.url, e));
 
         let mem_store = InMemoryStore::new();
         let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
 
         let mut callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
-        let app = jetstream_proxy(context, callback_state.clone())
-            .await
-            .unwrap();
+        let app_state = AppState {
+            settings,
+            callback_state: callback_state.clone(),
+            context,
+        };
+
+        let app = jetstream_proxy(app_state).await.unwrap();
 
         // pipeline is in -> cat -> out, so we will have 3 callback requests
         let cbs = create_default_callbacks(id);

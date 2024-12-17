@@ -293,7 +293,10 @@ async fn routes<T: Clone + Send + Sync + Store + 'static>(
 ) -> crate::Result<Router> {
     let state = app_state.callback_state.clone();
     let jetstream_proxy = jetstream_proxy(app_state.clone()).await?;
-    let callback_router = callback_handler(app_state);
+    let callback_router = callback_handler(
+        app_state.settings.tid_header.clone(),
+        app_state.callback_state.clone(),
+    );
     let message_path_handler = get_message_path(state);
     Ok(jetstream_proxy
         .merge(callback_router)
@@ -322,9 +325,10 @@ mod tests {
             .await
             .unwrap();
 
-        let mut settings = Settings::load().unwrap();
-        settings.app_listen_port = 0;
-        let settings = Arc::new(settings);
+        let settings = Arc::new(Settings {
+            app_listen_port: 0,
+            ..Settings::default()
+        });
 
         let server = tokio::spawn(async move {
             let result = start_main_server(settings, tls_config).await;
@@ -342,7 +346,7 @@ mod tests {
     #[cfg(feature = "all-tests")]
     #[tokio::test]
     async fn test_setup_app() -> Result<()> {
-        let settings = Settings::load().unwrap();
+        let settings = Arc::new(Settings::default());
         let client = async_nats::connect(&settings.jetstream.url).await?;
         let context = jetstream::new(client);
         let stream_name = &settings.jetstream.stream;
@@ -362,7 +366,7 @@ mod tests {
 
         let callback_state = CallbackState::new(msg_graph, mem_store).await?;
 
-        let result = setup_app(context, callback_state).await;
+        let result = setup_app(settings, context, callback_state).await;
         assert!(result.is_ok());
         Ok(())
     }
@@ -370,7 +374,7 @@ mod tests {
     #[cfg(feature = "all-tests")]
     #[tokio::test]
     async fn test_livez() -> Result<()> {
-        let settings = Settings::load().unwrap();
+        let settings = Arc::new(Settings::default());
         let client = async_nats::connect(&settings.jetstream.url).await?;
         let context = jetstream::new(client);
         let stream_name = &settings.jetstream.stream;
@@ -390,7 +394,7 @@ mod tests {
 
         let callback_state = CallbackState::new(msg_graph, mem_store).await?;
 
-        let result = setup_app(context, callback_state).await;
+        let result = setup_app(settings, context, callback_state).await;
 
         let request = Request::builder().uri("/livez").body(Body::empty())?;
 
@@ -402,7 +406,7 @@ mod tests {
     #[cfg(feature = "all-tests")]
     #[tokio::test]
     async fn test_readyz() -> Result<()> {
-        let settings = Settings::load().unwrap();
+        let settings = Arc::new(Settings::default());
         let client = async_nats::connect(&settings.jetstream.url).await?;
         let context = jetstream::new(client);
         let stream_name = &settings.jetstream.stream;
@@ -422,7 +426,7 @@ mod tests {
 
         let callback_state = CallbackState::new(msg_graph, mem_store).await?;
 
-        let result = setup_app(context, callback_state).await;
+        let result = setup_app(settings, context, callback_state).await;
 
         let request = Request::builder().uri("/readyz").body(Body::empty())?;
 
@@ -441,7 +445,7 @@ mod tests {
     #[cfg(feature = "all-tests")]
     #[tokio::test]
     async fn test_auth_middleware() -> Result<()> {
-        let settings = Settings::load().unwrap();
+        let settings = Arc::new(Settings::default());
         let client = async_nats::connect(&settings.jetstream.url).await?;
         let context = jetstream::new(client);
         let stream_name = &settings.jetstream.stream;
@@ -460,11 +464,14 @@ mod tests {
         let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec())?;
         let callback_state = CallbackState::new(msg_graph, mem_store).await?;
 
+        let app_state = AppState {
+            settings,
+            callback_state,
+            context,
+        };
+
         let app = Router::new()
-            .nest(
-                "/v1/process",
-                routes(context, callback_state).await.unwrap(),
-            )
+            .nest("/v1/process", routes(app_state).await.unwrap())
             .layer(middleware::from_fn_with_state(
                 Some("test_token".to_owned()),
                 auth_middleware,
