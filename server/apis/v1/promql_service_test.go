@@ -40,6 +40,13 @@ func (m *MockPrometheusAPI) QueryRange(ctx context.Context, query string, r v1.R
 	return mockResponse, nil, nil
 }
 
+func compareFilters(query1, query2 string) bool {
+	//Extract the filter portions of the queries
+	filters1 := extractfilters(query1)
+	filters2 := extractfilters(query2)
+	return reflect.DeepEqual(filters1, filters2)
+}
+
 // comparePrometheusQueries compares two Prometheus queries, ignoring the order of filters within the curly braces
 func comparePrometheusQueries(query1, query2 string) bool {
 	//Extract the filter portions of the queries
@@ -125,7 +132,7 @@ func Test_PopulateReqMap(t *testing.T) {
 		assert.Equal(t, actualMap["$quantile"], expectedMap["$quantile"])
 		assert.Equal(t, actualMap["$duration"], expectedMap["$duration"])
 		assert.Equal(t, actualMap["$dimension"], expectedMap["$dimension"])
-		if !comparePrometheusQueries(expectedMap["$filters"], actualMap["$filters"]) {
+		if !compareFilters(expectedMap["$filters"], actualMap["$filters"]) {
 			t.Errorf("filters do not match")
 		}
 	})
@@ -149,7 +156,7 @@ func Test_PopulateReqMap(t *testing.T) {
 		assert.Equal(t, actualMap["$duration"], expectedMap["$duration"])
 		assert.Equal(t, actualMap["$dimension"], expectedMap["$dimension"])
 
-		if !comparePrometheusQueries(expectedMap["$filters"], actualMap["$filters"]) {
+		if !compareFilters(expectedMap["$filters"], actualMap["$filters"]) {
 			t.Errorf("filters do not match")
 		}
 	})
