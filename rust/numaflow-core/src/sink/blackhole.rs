@@ -19,8 +19,9 @@ impl Sink for BlackholeSink {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
     use std::sync::Arc;
+
+    use chrono::Utc;
 
     use super::BlackholeSink;
     use crate::message::IntOffset;

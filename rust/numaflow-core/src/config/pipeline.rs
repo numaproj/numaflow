@@ -1,4 +1,3 @@
-use crate::config::components::sink::SinkType;
 use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
@@ -10,6 +9,7 @@ use serde_json::from_slice;
 
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
+use crate::config::components::sink::SinkType;
 use crate::config::components::source::SourceConfig;
 use crate::config::components::transformer::{TransformerConfig, TransformerType};
 use crate::config::get_vertex_replica;

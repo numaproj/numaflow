@@ -74,7 +74,7 @@ pub(crate) async fn create_sink_writer(
                 grpc::create_rpc_channel(ud_config.socket_path.clone().into()).await?,
             )
             .max_encoding_message_size(ud_config.grpc_max_message_size)
-            .max_encoding_message_size(ud_config.grpc_max_message_size);
+            .max_decoding_message_size(ud_config.grpc_max_message_size);
             grpc::wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
             (
                 SinkWriterBuilder::new(
@@ -129,7 +129,7 @@ pub(crate) async fn create_sink_writer(
                     grpc::create_rpc_channel(ud_config.socket_path.clone().into()).await?,
                 )
                 .max_encoding_message_size(ud_config.grpc_max_message_size)
-                .max_encoding_message_size(ud_config.grpc_max_message_size);
+                .max_decoding_message_size(ud_config.grpc_max_message_size);
                 grpc::wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
 
                 Ok((
@@ -178,7 +178,7 @@ pub async fn create_transformer(
                 grpc::create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
             )
             .max_encoding_message_size(ud_transformer.grpc_max_message_size)
-            .max_encoding_message_size(ud_transformer.grpc_max_message_size);
+            .max_decoding_message_size(ud_transformer.grpc_max_message_size);
             grpc::wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
             return Ok((
                 Some(
@@ -242,7 +242,7 @@ pub async fn create_source(
                 grpc::create_rpc_channel(udsource_config.socket_path.clone().into()).await?,
             )
             .max_encoding_message_size(udsource_config.grpc_max_message_size)
-            .max_encoding_message_size(udsource_config.grpc_max_message_size);
+            .max_decoding_message_size(udsource_config.grpc_max_message_size);
             grpc::wait_until_source_ready(&cln_token, &mut source_grpc_client).await?;
             let (ud_read, ud_ack, ud_lag) =
                 new_source(source_grpc_client.clone(), batch_size, read_timeout).await?;
@@ -329,7 +329,7 @@ mod tests {
 
     #[tonic::async_trait]
     impl sink::Sinker for InMemorySink {
-        async fn sink(&self, mut _input: mpsc::Receiver<sink::SinkRequest>) -> Vec<sink::Response> {
+        async fn sink(&self, _input: mpsc::Receiver<sink::SinkRequest>) -> Vec<sink::Response> {
             vec![]
         }
     }

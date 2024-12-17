@@ -1,6 +1,7 @@
-use numaflow_models::models::ForwardConditions;
 use std::hash::{DefaultHasher, Hasher};
 use std::sync::Arc;
+
+use numaflow_models::models::ForwardConditions;
 
 /// Checks if the message should to written to downstream vertex based the conditions
 /// and message tags. If not tags are provided by there are edge conditions present, we will
@@ -61,8 +62,9 @@ fn check_operator_condition(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use numaflow_models::models::TagConditions;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_evaluate_write_condition_no_conditions() {

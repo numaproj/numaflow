@@ -1,5 +1,6 @@
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use std::sync::Arc;
+
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
@@ -7,7 +8,9 @@ use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 use tracing::error;
 
+use crate::error::Error;
 use crate::message::Message;
+use crate::metrics::{monovertex_metrics, mvtx_forward_metric_labels};
 use crate::tracker::TrackerHandle;
 use crate::transformer::user_defined::UserDefinedTransformer;
 use crate::Result;
@@ -104,6 +107,7 @@ impl Transformer {
 
         // invoke transformer and then wait for the one-shot
         tokio::spawn(async move {
+            let start_time = tokio::time::Instant::now();
             let _permit = permit;
 
             let (sender, receiver) = oneshot::channel();
@@ -141,6 +145,11 @@ impl Transformer {
                         .expect("failed to discard tracker");
                 }
             }
+            monovertex_metrics()
+                .transformer
+                .time
+                .get_or_create(mvtx_forward_metric_labels())
+                .observe(start_time.elapsed().as_micros() as f64);
         });
 
         Ok(())
@@ -156,14 +165,16 @@ impl Transformer {
 
         let transform_handle = self.sender.clone();
         let tracker_handle = self.tracker_handle.clone();
-        // FIXME: batch_size should not be used, introduce a new config called udf concurrenc
+        // FIXME: batch_size should not be used, introduce a new config called udf concurrency
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
 
         let handle = tokio::spawn(async move {
             let mut input_stream = input_stream;
 
             while let Some(read_msg) = input_stream.next().await {
-                let permit = Arc::clone(&semaphore).acquire_owned().await.unwrap();
+                let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| {
+                    Error::Transformer(format!("failed to acquire semaphore: {}", e))
+                })?;
 
                 Self::transform(
                     transform_handle.clone(),
