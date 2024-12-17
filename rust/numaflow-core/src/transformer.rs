@@ -6,7 +6,6 @@ use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
-use tracing::error;
 
 use crate::error::Error;
 use crate::message::Message;
@@ -61,6 +60,7 @@ impl TransformerActor {
 }
 
 /// Transformer, transforms messages in a streaming fashion.
+#[derive(Clone)]
 pub(crate) struct Transformer {
     batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,
@@ -94,13 +94,14 @@ impl Transformer {
 
     /// Applies the transformation on the message and sends it to the next stage, it blocks if the
     /// concurrency limit is reached.
-    pub(crate) async fn transform(
+    async fn transform(
         transform_handle: mpsc::Sender<ActorMessage>,
         permit: OwnedSemaphorePermit,
         read_msg: Message,
         output_tx: mpsc::Sender<Message>,
         tracker_handle: TrackerHandle,
-    ) -> Result<()> {
+        error_tx: mpsc::Sender<Error>,
+    ) {
         // only if we have tasks < max_concurrency
         let output_tx = output_tx.clone();
 
@@ -116,32 +117,41 @@ impl Transformer {
             };
 
             // invoke trf
-            transform_handle
-                .send(msg)
-                .await
-                .expect("failed to send message");
+            if let Err(e) = transform_handle.send(msg).await {
+                let _ = error_tx
+                    .send(Error::Transformer(format!("failed to send message: {}", e)))
+                    .await;
+                return;
+            }
 
             // wait for one-shot
             match receiver.await {
                 Ok(Ok(mut transformed_messages)) => {
-                    tracker_handle
+                    if let Err(e) = tracker_handle
                         .update(
                             read_msg.id.offset.clone(),
                             transformed_messages.len() as u32,
                             false,
                         )
                         .await
-                        .expect("failed to update tracker");
+                    {
+                        let _ = error_tx.send(e).await;
+                        return;
+                    }
                     for transformed_message in transformed_messages.drain(..) {
                         let _ = output_tx.send(transformed_message).await;
                     }
                 }
-                Err(_) | Ok(Err(_)) => {
-                    error!("Failed to transform message");
-                    tracker_handle
-                        .discard(read_msg.id.offset.clone())
-                        .await
-                        .expect("failed to discard tracker");
+                Ok(Err(e)) => {
+                    let _ = error_tx.send(e).await;
+                }
+                Err(e) => {
+                    let _ = error_tx
+                        .send(Error::Transformer(format!(
+                            "failed to receive message: {}",
+                            e
+                        )))
+                        .await;
                 }
             }
             monovertex_metrics()
@@ -150,8 +160,6 @@ impl Transformer {
                 .get_or_create(mvtx_forward_metric_labels())
                 .observe(start_time.elapsed().as_micros() as f64);
         });
-
-        Ok(())
     }
 
     /// Starts the transformation of the stream of messages and returns the transformed stream.
@@ -161,28 +169,50 @@ impl Transformer {
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (output_tx, output_rx) = mpsc::channel(self.batch_size);
 
+        // channel to transmit errors from the transformer tasks to the main task
+        let (error_tx, mut error_rx) = mpsc::channel(1);
+
         let transform_handle = self.sender.clone();
         let tracker_handle = self.tracker_handle.clone();
-        // FIXME: batch_size should not be used, introduce a new config called udf concurrency
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
 
         let handle = tokio::spawn(async move {
             let mut input_stream = input_stream;
 
-            while let Some(read_msg) = input_stream.next().await {
-                let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| {
-                    Error::Transformer(format!("failed to acquire semaphore: {}", e))
-                })?;
+            // we do a tokio::select! loop to handle the input stream and the error channel
+            // in case of any errors in the transformer tasks we need to shut down the mapper
+            // and discard all the messages in the tracker.
+            loop {
+                tokio::select! {
+                    x = input_stream.next() => {
+                        if let Some(read_msg) = x {
+                            let permit = Arc::clone(&semaphore)
+                                .acquire_owned()
+                                .await
+                                .map_err(|e| Error::Transformer(format!("failed to acquire semaphore: {}", e)))?;
 
-                Self::transform(
-                    transform_handle.clone(),
-                    permit,
-                    read_msg,
-                    output_tx.clone(),
-                    tracker_handle.clone(),
-                )
-                .await?;
+                            let error_tx = error_tx.clone();
+                            Self::transform(
+                                transform_handle.clone(),
+                                permit,
+                                read_msg,
+                                output_tx.clone(),
+                                tracker_handle.clone(),
+                                error_tx,
+                            ).await;
+                        } else {
+                            break;
+                        }
+                    },
+                    Some(error) = error_rx.recv() => {
+                        // discard all the messages in the tracker since it's a critical error, and
+                        // we are shutting down
+                        tracker_handle.discard_all().await?;
+                        return Err(error);
+                    },
+                }
             }
+
             Ok(())
         });
 
@@ -200,6 +230,7 @@ mod tests {
     use tokio::sync::oneshot;
 
     use super::*;
+    use crate::message::StringOffset;
     use crate::message::{Message, MessageID, Offset};
     use crate::shared::grpc::create_rpc_channel;
 
@@ -263,14 +294,19 @@ mod tests {
 
         let semaphore = Arc::new(Semaphore::new(10));
         let permit = semaphore.acquire_owned().await.unwrap();
+        let (error_tx, mut error_rx) = mpsc::channel(1);
         Transformer::transform(
             transformer.sender.clone(),
             permit,
             message,
             output_tx,
             tracker_handle,
+            error_tx,
         )
-        .await?;
+        .await;
+
+        // check for errors
+        assert!(error_rx.recv().await.is_none());
 
         let transformed_message = output_rx.recv().await.unwrap();
         assert_eq!(transformed_message.value, "hello");
@@ -323,10 +359,7 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("value_{}", i).into(),
-                offset: Some(Offset::String(crate::message::StringOffset::new(
-                    i.to_string(),
-                    0,
-                ))),
+                offset: Some(Offset::String(StringOffset::new(i.to_string(), 0))),
                 event_time: chrono::Utc::now(),
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
@@ -363,6 +396,80 @@ mod tests {
         assert!(
             transform_handle.is_finished(),
             "Expected transformer to have shut down"
+        );
+        Ok(())
+    }
+
+    struct SimpleTransformerPanic;
+
+    #[tonic::async_trait]
+    impl sourcetransform::SourceTransformer for SimpleTransformerPanic {
+        async fn transform(
+            &self,
+            _input: sourcetransform::SourceTransformRequest,
+        ) -> Vec<sourcetransform::Message> {
+            panic!("SimpleTransformerPanic panicked!");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_transform_stream_with_panic() -> Result<()> {
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sourcetransform.sock");
+        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            sourcetransform::Server::new(SimpleTransformerPanic)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start()
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let tracker_handle = TrackerHandle::new();
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
+        let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
+
+        let (input_tx, input_rx) = mpsc::channel(10);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        let message = Message {
+            keys: Arc::from(vec!["first".into()]),
+            tags: None,
+            value: "hello".into(),
+            offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+            event_time: chrono::Utc::now(),
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
+                index: 0,
+            },
+            headers: Default::default(),
+        };
+
+        input_tx.send(message).await.unwrap();
+
+        let (_output_stream, transform_handle) = transformer.transform_stream(input_stream)?;
+
+        // Await the join handle and expect an error due to the panic
+        let result = transform_handle.await.unwrap();
+        assert!(result.is_err(), "Expected an error due to panic");
+        assert!(result.unwrap_err().to_string().contains("panic"));
+
+        // we need to drop the transformer, because if there are any in-flight requests
+        // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
+        drop(transformer);
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            handle.is_finished(),
+            "Expected gRPC server to have shut down"
         );
         Ok(())
     }

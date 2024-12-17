@@ -159,6 +159,7 @@ async fn start_map_forwarder(
 
     let mut forwarder_tasks = vec![];
     for (buffer_reader, buffer_writer, mapper) in forwarder_components {
+        info!(%buffer_reader, "Starting forwarder for buffer reader");
         let forwarder = forwarder::map_forwarder::MapForwarder::new(
             buffer_reader,
             mapper,
@@ -170,10 +171,16 @@ async fn start_map_forwarder(
         forwarder_tasks.push(task);
     }
 
-    try_join_all(forwarder_tasks)
+    let results = try_join_all(forwarder_tasks)
         .await
         .map_err(|e| error::Error::Forwarder(e.to_string()))?;
 
+    for result in results {
+        error!(?result, "Forwarder task failed");
+        result?;
+    }
+
+    info!("All forwarders have stopped successfully");
     Ok(())
 }
 
@@ -247,9 +254,15 @@ async fn start_sink_forwarder(
         forwarder_tasks.push(task);
     }
 
-    try_join_all(forwarder_tasks)
+    let results = try_join_all(forwarder_tasks)
         .await
         .map_err(|e| error::Error::Forwarder(e.to_string()))?;
+
+    for result in results {
+        error!(?result, "Forwarder task failed");
+        result?;
+    }
+
     info!("All forwarders have stopped successfully");
     Ok(())
 }

@@ -49,9 +49,9 @@ impl MapForwarder {
         // Join the reader, mapper, and writer
         match tokio::try_join!(reader_handle, mapper_handle, writer_handle) {
             Ok((reader_result, mapper_result, writer_result)) => {
-                reader_result?;
-                mapper_result?;
                 writer_result?;
+                mapper_result?;
+                reader_result?;
                 Ok(())
             }
             Err(e) => Err(Error::Forwarder(format!(

@@ -240,9 +240,6 @@ impl Source {
 
         info!("Started streaming source with batch size: {}", batch_size);
         let handle = tokio::spawn(async move {
-            let mut processed_msgs_count: usize = 0;
-            let mut last_logged_at = time::Instant::now();
-
             loop {
                 if cln_token.is_cancelled() {
                     info!("Cancellation token is cancelled. Stopping the source.");
@@ -319,17 +316,6 @@ impl Source {
                     source_handle.clone(),
                     ack_batch,
                 ));
-
-                processed_msgs_count += n;
-                if last_logged_at.elapsed().as_secs() >= 1 {
-                    info!(
-                        "Processed {} messages in {:?}",
-                        processed_msgs_count,
-                        std::time::Instant::now()
-                    );
-                    processed_msgs_count = 0;
-                    last_logged_at = time::Instant::now();
-                }
             }
         });
         Ok((ReceiverStream::new(messages_rx), handle))

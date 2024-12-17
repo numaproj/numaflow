@@ -55,7 +55,7 @@ impl UserDefinedMap {
             return Err(Error::Mapper("invalid handshake response".to_string()));
         }
 
-        // mapper to track the oneshot sender for each request along with the message info
+        // map to track the oneshot sender for each request along with the message info
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
 
         let mapper = Self {
@@ -76,11 +76,17 @@ impl UserDefinedMap {
         sender_map: ResponseSenderMap,
         mut resp_stream: Streaming<MapResponse>,
     ) {
-        while let Some(resp) = resp_stream
-            .message()
-            .await
-            .expect("failed to receive response")
-        {
+        while let Some(resp) = resp_stream.message().await.unwrap_or_else(|e| {
+            // If there is an error, send the error to all oneshot senders and break the loop
+            // by returning None.
+            let error = Error::Mapper(format!("failed to receive map response: {}", e));
+
+            let mut senders = sender_map.lock().unwrap();
+            for (_, (_, sender)) in senders.drain() {
+                let _ = sender.send(Err(error.clone()));
+            }
+            None
+        }) {
             let msg_id = resp.id;
             if let Some((msg_info, sender)) = sender_map
                 .lock()

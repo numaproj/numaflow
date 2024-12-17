@@ -12,6 +12,7 @@ use async_nats::jetstream::Context;
 use bytes::{Bytes, BytesMut};
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
+use tokio::time;
 use tokio::time::{sleep, Instant};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
@@ -31,11 +32,11 @@ use crate::Result;
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
 
-#[derive(Clone)]
 /// Writes to JetStream ISB. Exposes both write and blocking methods to write messages.
 /// It accepts a cancellation token to stop infinite retries during shutdown.
 /// JetstreamWriter is one to many mapping of streams to write messages to. It also
 /// maintains the buffer usage metrics for each stream.
+#[derive(Clone)]
 pub(crate) struct JetstreamWriter {
     config: Arc<Vec<ToVertexConfig>>,
     js_ctx: Context,
@@ -183,6 +184,9 @@ impl JetstreamWriter {
             let mut messages_stream = messages_stream;
             let mut hash = DefaultHasher::new();
 
+            let mut processed_msgs_count: usize = 0;
+            let mut last_logged_at = time::Instant::now();
+
             while let Some(message) = messages_stream.next().await {
                 // if message needs to be dropped, ack and continue
                 // TODO: add metric for dropped count
@@ -241,6 +245,17 @@ impl JetstreamWriter {
                     offset: message.id.offset,
                 })
                 .await?;
+
+                processed_msgs_count += 1;
+                if last_logged_at.elapsed().as_secs() >= 1 {
+                    info!(
+                        "Processed {} messages in {:?}",
+                        processed_msgs_count,
+                        std::time::Instant::now()
+                    );
+                    processed_msgs_count = 0;
+                    last_logged_at = Instant::now();
+                }
             }
             Ok(())
         });
@@ -905,7 +920,7 @@ mod tests {
         context.delete_stream(stream_name).await.unwrap();
     }
 
-    #[cfg(feature = "nats-tests")]
+    // #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_streaming_write() {
         let cln_token = CancellationToken::new();

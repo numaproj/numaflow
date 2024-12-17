@@ -12,7 +12,6 @@ use std::collections::HashMap;
 
 use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
-use tracing::warn;
 
 use crate::error::Error;
 use crate::message::ReadAck;
@@ -43,6 +42,7 @@ enum ActorMessage {
     Discard {
         offset: String,
     },
+    DiscardAll, // New variant for discarding all messages
     #[cfg(test)]
     IsEmpty {
         respond_to: oneshot::Sender<bool>,
@@ -56,17 +56,8 @@ struct Tracker {
     receiver: mpsc::Receiver<ActorMessage>,
 }
 
-/// Implementation of Drop for Tracker to send Nak for unacknowledged messages.
 impl Drop for Tracker {
-    fn drop(&mut self) {
-        for (offset, entry) in self.entries.drain() {
-            warn!(?offset, "Sending Nak for unacknowledged message");
-            entry
-                .ack_send
-                .send(ReadAck::Nak)
-                .expect("Failed to send nak");
-        }
-    }
+    fn drop(&mut self) {}
 }
 
 impl Tracker {
@@ -83,6 +74,7 @@ impl Tracker {
         while let Some(message) = self.receiver.recv().await {
             self.handle_message(message).await;
         }
+        self.handle_discard_all().await;
     }
 
     /// Handles incoming actor messages to update the state of tracked messages.
@@ -102,6 +94,9 @@ impl Tracker {
             }
             ActorMessage::Discard { offset } => {
                 self.handle_discard(offset);
+            }
+            ActorMessage::DiscardAll => {
+                self.handle_discard_all().await;
             }
             #[cfg(test)]
             ActorMessage::IsEmpty { respond_to } => {
@@ -152,6 +147,16 @@ impl Tracker {
     /// Discards an entry from the tracker and sends a nak.
     fn handle_discard(&mut self, offset: String) {
         if let Some(entry) = self.entries.remove(&offset) {
+            entry
+                .ack_send
+                .send(ReadAck::Nak)
+                .expect("Failed to send nak");
+        }
+    }
+
+    /// Discards all entries from the tracker and sends a nak for each.
+    async fn handle_discard_all(&mut self) {
+        for (_, entry) in self.entries.drain() {
             entry
                 .ack_send
                 .send(ReadAck::Nak)
@@ -231,6 +236,15 @@ impl TrackerHandle {
         Ok(())
     }
 
+    /// Discards all messages from the Tracker and sends a nak for each.
+    pub(crate) async fn discard_all(&self) -> Result<()> {
+        let message = ActorMessage::DiscardAll;
+        self.sender
+            .send(message)
+            .await
+            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+        Ok(())
+    }
     /// Checks if the Tracker is empty. Used for testing to make sure all messages are acknowledged.
     #[cfg(test)]
     pub(crate) async fn is_empty(&self) -> Result<bool> {

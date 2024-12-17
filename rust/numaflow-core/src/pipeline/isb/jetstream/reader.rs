@@ -149,16 +149,18 @@ impl JetstreamReader {
                                 partition_idx,
                             ));
 
-                            message.offset = Some(offset.clone());
-                            message.id = MessageID {
+                            let message_id = MessageID {
                                 vertex_name: get_vertex_name().to_string().into(),
                                 offset: offset.to_string().into(),
                                 index: 0,
                             };
 
+                            message.offset = Some(offset.clone());
+                            message.id = message_id.clone();
+
                             // Insert the message into the tracker and wait for the ack to be sent back.
                             let (ack_tx, ack_rx) = oneshot::channel();
-                            tracker_handle.insert(message.id.offset.clone(), ack_tx).await?;
+                            tracker_handle.insert(message_id.offset.clone(), ack_tx).await?;
 
                             tokio::spawn(Self::start_work_in_progress(
                                 jetstream_message,
@@ -166,9 +168,14 @@ impl JetstreamReader {
                                 config.wip_ack_interval,
                             ));
 
-                            messages_tx.send(message).await.map_err(|e| {
-                                Error::ISB(format!("Error while sending message to channel: {:?}", e))
-                            })?;
+                            if let Err(e) = messages_tx.send(message).await {
+                                // nak the read message and return
+                                tracker_handle.discard(message_id.offset.clone()).await?;
+                                return Err(Error::ISB(format!(
+                                    "Failed to send message to receiver: {:?}",
+                                    e
+                                )));
+                            }
 
                             pipeline_metrics()
                                 .forwarder

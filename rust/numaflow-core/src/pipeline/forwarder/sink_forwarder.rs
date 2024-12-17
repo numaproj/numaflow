@@ -42,8 +42,8 @@ impl SinkForwarder {
         // Join the reader and sink writer
         match tokio::try_join!(reader_handle, sink_writer_handle) {
             Ok((reader_result, sink_writer_result)) => {
-                reader_result?;
                 sink_writer_result?;
+                reader_result?;
                 Ok(())
             }
             Err(e) => Err(Error::Forwarder(format!(
