@@ -15,6 +15,7 @@ const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL"
 const ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM: &str = "NUMAFLOW_SERVING_JETSTREAM_STREAM";
 const ENV_NUMAFLOW_SERVING_STORE_TTL: &str = "NUMAFLOW_SERVING_STORE_TTL";
 const ENV_NUMAFLOW_SERVING_HOST_IP: &str = "NUMAFLOW_SERVING_HOST_IP";
+const ENV_NUMAFLOW_SERVING_APP_PORT: &str = "NUMAFLOW_SERVING_APP_LISTEN_PORT";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
 const ENV_NUMAFLOW_SERVING_AUTH_TOKEN: &str = "NUMAFLOW_SERVING_AUTH_TOKEN";
@@ -154,6 +155,14 @@ impl Settings {
 
         if let Ok(auth_token) = env::var(ENV_NUMAFLOW_SERVING_AUTH_TOKEN) {
             settings.api_auth_token = Some(auth_token);
+        }
+
+        if let Ok(port) = env::var(ENV_NUMAFLOW_SERVING_APP_PORT) {
+            settings.app_listen_port = port.parse().map_err(|e| {
+                ParseConfig(format!(
+                    "Parsing {ENV_NUMAFLOW_SERVING_APP_PORT}(set to '{port}'): {e:?}"
+                ))
+            })?;
         }
 
         // If username is set, we expect password too.

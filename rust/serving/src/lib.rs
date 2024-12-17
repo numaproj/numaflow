@@ -29,7 +29,7 @@ pub async fn serve(
         .await
         .map_err(|e| format!("Failed to create tls config {:?}", e))?;
 
-    info!(config = ?settings, pipeline_spec = ? min_pipeline_spec(), "Starting server with config and pipeline spec");
+    info!(config = ?settings, pipeline_spec = ?min_pipeline_spec(), "Starting server with config and pipeline spec");
 
     // Start the metrics server, which serves the prometheus metrics.
     let metrics_addr: SocketAddr =

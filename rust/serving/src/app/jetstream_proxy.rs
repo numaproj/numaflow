@@ -32,9 +32,7 @@ use crate::app::response::{ApiError, ServeResponse};
 //   "from_vertex": "a"
 // }
 
-const ID_HEADER_KEY: &str = "X-Numaflow-Id";
 const CALLBACK_URL_KEY: &str = "X-Numaflow-Callback-Url";
-
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
 
@@ -84,7 +82,8 @@ async fn sync_publish_serve<T: Send + Sync + Clone + Store>(
         headers,
         body,
         proxy_state.context.clone(),
-        id.clone(),
+        proxy_state.tid_header.as_str(),
+        id.as_str(),
     )
     .await
     {
@@ -153,7 +152,8 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
         headers,
         body,
         proxy_state.context.clone(),
-        id.clone(),
+        &proxy_state.tid_header,
+        id.as_str(),
     )
     .await
     {
@@ -192,14 +192,14 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
     body: Bytes,
 ) -> Result<Json<ServeResponse>, ApiError> {
     let id = extract_id_from_headers(&proxy_state.tid_header, &headers);
-
     let result = publish_to_jetstream(
         proxy_state.stream.clone(),
         &proxy_state.callback_url,
         headers,
         body,
         proxy_state.context.clone(),
-        id.clone(),
+        &proxy_state.tid_header,
+        id.as_str(),
     )
     .await;
 
@@ -225,7 +225,8 @@ async fn publish_to_jetstream(
     headers: HeaderMap,
     body: Bytes,
     js_context: Context,
-    id: String, // Added ID as a parameter
+    id_header: &str,
+    id_header_value: &str,
 ) -> Result<(), async_nats::Error> {
     let mut js_headers = JSHeaderMap::new();
 
@@ -234,7 +235,7 @@ async fn publish_to_jetstream(
         js_headers.append(k.as_ref(), String::from_utf8_lossy(v.as_bytes()).borrow())
     }
 
-    js_headers.append(ID_HEADER_KEY, id.as_str()); // Use the passed ID
+    js_headers.append(id_header, id_header_value); // Use the passed ID
     js_headers.append(CALLBACK_URL_KEY, callback_url);
 
     js_context

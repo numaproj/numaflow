@@ -17,7 +17,7 @@ use tokio::signal;
 use tower::ServiceBuilder;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
-use tracing::{debug, info, info_span, Level};
+use tracing::{info, info_span, Level};
 use uuid::Uuid;
 
 use self::{
@@ -28,7 +28,7 @@ use crate::app::callback::store::Store;
 use crate::app::tracker::MessageGraph;
 use crate::config::JetStreamConfig;
 use crate::pipeline::min_pipeline_spec;
-use crate::Error::{self, InitError, MetricsServer};
+use crate::Error::InitError;
 use crate::Settings;
 use crate::{app::callback::state::State as CallbackState, metrics::capture_metrics};
 
@@ -55,8 +55,7 @@ pub(crate) async fn start_main_server(
 ) -> crate::Result<()> {
     let app_addr: SocketAddr = format!("0.0.0.0:{}", &settings.app_listen_port)
         .parse()
-        .map_err(|e| Error::Other(format!("{e:?}")))?;
-    debug!(?app_addr, "App server started");
+        .map_err(|e| InitError(format!("{e:?}")))?;
 
     let tid_header = settings.tid_header.clone();
     let layers = ServiceBuilder::new()
@@ -114,11 +113,14 @@ pub(crate) async fn start_main_server(
     let js_context = create_js_context(&settings.jetstream).await?;
 
     let router = setup_app(settings, js_context, state).await?.layer(layers);
+
+    info!(?app_addr, "Starting application server");
+
     axum_server::bind_rustls(app_addr, tls_config)
         .handle(handle)
         .serve(router.into_make_service())
         .await
-        .map_err(|e| MetricsServer(format!("Starting web server for metrics: {}", e)))?;
+        .map_err(|e| InitError(format!("Starting web server for metrics: {}", e)))?;
 
     Ok(())
 }
