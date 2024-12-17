@@ -16,6 +16,7 @@ import TimeRange from "../common/TimeRange";
 import FiltersDropdown from "../common/FiltersDropdown";
 import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
+import TimePresetSelector from "../common/TimeRange";
 
 // TODO have a check for metricReq against metric object to ensure required fields are passed
 const LineChartComponent = ({
@@ -188,6 +189,8 @@ const LineChartComponent = ({
 
   if (paramsList?.length === 0) return <></>;
 
+  const hasTimeParams = paramsList?.some((param) => ["start_time", "end_time"].includes(param.name)); 
+
   return (
     <Box>
       <Box
@@ -215,16 +218,11 @@ const LineChartComponent = ({
               </Box>
             );
           })}
-
-        {paramsList
-          ?.filter((param) => ["start_time", "end_time"]?.includes(param.name))
-          ?.map((param: any) => {
-            return (
-              <Box key={`line-chart-${param.name}`}>
-                <TimeRange field={param.name} setMetricReq={setMetricsReq} />
-              </Box>
-            );
-          })}
+          {hasTimeParams && (
+          <Box key="line-chart-preset">
+            <TimePresetSelector setMetricReq={setMetricsReq} />
+          </Box>
+          )}
       </Box>
 
       {filtersList?.filter((filterEle: any) => !filterEle?.required)?.length >
