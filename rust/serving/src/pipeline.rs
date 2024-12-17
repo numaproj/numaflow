@@ -89,25 +89,19 @@ pub struct Vertex {
 
 impl PipelineDCG {
     pub fn load() -> crate::Result<Self> {
-        let full_pipeline_spec = match env::var(ENV_MIN_PIPELINE_SPEC) {
-            Ok(env_value) => {
-                // If the environment variable is set, decode and parse the pipeline
-                let decoded = BASE64_STANDARD
-                    .decode(env_value.as_bytes())
-                    .map_err(|e| ParseConfig(format!("decoding pipeline from env: {e:?}")))?;
-
-                serde_json::from_slice::<PipelineSpec>(&decoded)
-                    .map_err(|e| ParseConfig(format!("parsing pipeline from env: {e:?}")))?
-            }
-            Err(_) => {
-                // If the environment variable is not set, read the pipeline from a file
-                let file_path = "./config/pipeline_spec.json";
-                let file_contents = std::fs::read_to_string(file_path)
-                    .map_err(|e| ParseConfig(format!("reading pipeline file: {e:?}")))?;
-                serde_json::from_str::<PipelineSpec>(&file_contents)
-                    .map_err(|e| ParseConfig(format!("parsing pipeline file: {e:?}")))?
-            }
+        let Ok(full_pipeline_spec_encoded) = env::var(ENV_MIN_PIPELINE_SPEC) else {
+            return Err(ParseConfig(format!(
+                "Pipeline spec is not set using environment variable {ENV_MIN_PIPELINE_SPEC}"
+            )));
         };
+
+        let full_pipeline_spec_decoded = BASE64_STANDARD
+            .decode(full_pipeline_spec_encoded.as_bytes())
+            .map_err(|e| ParseConfig(format!("Decoding pipeline from env: {e:?}")))?;
+
+        let full_pipeline_spec =
+            serde_json::from_slice::<PipelineSpec>(&full_pipeline_spec_decoded)
+                .map_err(|e| ParseConfig(format!("parsing pipeline from env: {e:?}")))?;
 
         let vertices: Vec<Vertex> = full_pipeline_spec
             .vertices
