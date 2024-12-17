@@ -171,6 +171,8 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/namespaces/:namespace/mono-vertices", handler.ListMonoVertices)
 	// Get the mono vertex information.
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex", handler.GetMonoVertex)
+	// Delete a mono-vertex.
+	r.DELETE("/namespaces/:namespace/mono-vertices/:mono-vertex", handler.DeleteMonoVertex)
 	// Get all the pods of a mono vertex.
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/pods", handler.ListMonoVertexPods)
 	// Create a mono vertex.
