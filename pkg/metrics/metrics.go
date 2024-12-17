@@ -41,6 +41,11 @@ const (
 )
 
 var (
+	BuildInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "build_info",
+		Help: "A metric with a constant value '1', labeled by Numaflow binary version, platform, and other information",
+	}, []string{LabelComponent, LabelComponentName, LabelVersion, LabelPlatform})
+
 	SDKInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "sdk_info",
 		Help: "A metric with a constant value '1', labeled by SDK information such as version, language, and type",
