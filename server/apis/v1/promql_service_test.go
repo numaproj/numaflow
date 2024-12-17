@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/assert"
@@ -38,13 +40,46 @@ func (m *MockPrometheusAPI) QueryRange(ctx context.Context, query string, r v1.R
 	return mockResponse, nil, nil
 }
 
-// comparePrometheusQueries compares two Prometheus queries, ignoring the order of filters within the curly braces
-func comparePrometheusQueries(query1, query2 string) bool {
-	// Extract the filter portions of the queries
+func compareFilters(query1, query2 string) bool {
+	//Extract the filter portions of the queries
 	filters1 := extractfilters(query1)
 	filters2 := extractfilters(query2)
-	// Compare the filter portions using reflect.DeepEqual, which ignores order
 	return reflect.DeepEqual(filters1, filters2)
+}
+
+// comparePrometheusQueries compares two Prometheus queries, ignoring the order of filters within the curly braces
+func comparePrometheusQueries(query1, query2 string) bool {
+	//Extract the filter portions of the queries
+	filters1 := extractfilters(query1)
+	filters2 := extractfilters(query2)
+	//Compare the filter portions using reflect.DeepEqual, which ignores order
+	if !reflect.DeepEqual(filters1, filters2) {
+		return false // Filters don't match
+	}
+
+	//Remove filter portions from the queries
+	query1 = removeFilters(query1)
+	query2 = removeFilters(query2)
+
+	//Normalize the remaining parts of the queries
+	query1 = normalizeQuery(query1)
+	query2 = normalizeQuery(query2)
+
+	//Compare the normalized queries
+	return cmp.Equal(query1, query2, cmpopts.IgnoreUnexported(struct{}{}))
+
+}
+
+func normalizeQuery(query string) string {
+	// Remove extra whitespace and normalize case
+	query = strings.TrimSpace(strings.ToLower(query))
+	return query
+}
+
+// remove filters within {}
+func removeFilters(query string) string {
+	re := regexp.MustCompile(`\{(.*?)\}`)
+	return re.ReplaceAllString(query, "")
 }
 
 // extractfilters extracts the key-value pairs within the curly braces
@@ -97,7 +132,7 @@ func Test_PopulateReqMap(t *testing.T) {
 		assert.Equal(t, actualMap["$quantile"], expectedMap["$quantile"])
 		assert.Equal(t, actualMap["$duration"], expectedMap["$duration"])
 		assert.Equal(t, actualMap["$dimension"], expectedMap["$dimension"])
-		if !comparePrometheusQueries(expectedMap["$filters"], actualMap["$filters"]) {
+		if !compareFilters(expectedMap["$filters"], actualMap["$filters"]) {
 			t.Errorf("filters do not match")
 		}
 	})
@@ -121,7 +156,7 @@ func Test_PopulateReqMap(t *testing.T) {
 		assert.Equal(t, actualMap["$duration"], expectedMap["$duration"])
 		assert.Equal(t, actualMap["$dimension"], expectedMap["$dimension"])
 
-		if !comparePrometheusQueries(expectedMap["$filters"], actualMap["$filters"]) {
+		if !compareFilters(expectedMap["$filters"], actualMap["$filters"]) {
 			t.Errorf("filters do not match")
 		}
 	})
@@ -160,7 +195,7 @@ func Test_PromQueryBuilder(t *testing.T) {
 					"pod":       "test-pod",
 				},
 			},
-			expectedQuery: `histogram_quantile(0.90, sum by(test_dimension,le) (rate(test_bucket{namespace= "test_namespace", mvtx_name= "test-mono-vertex", pod= "test-pod"}[5m])))`,
+			expectedQuery: `histogram_quantile(0.90, sum by(test_dimension,le) (rate(test_metric{namespace= "test_namespace", mvtx_name= "test-mono-vertex", pod= "test-pod"}[5m])))`,
 		},
 		{
 			name: "Missing placeholder in req",
@@ -283,7 +318,7 @@ func Test_PromQueryBuilder(t *testing.T) {
 		},
 		Expression: map[string]map[string]string{
 			"monovtx_pending": {
-				"mono-vertex": "$metric_name{$filters}",
+				"mono-vertex": "sum($metric_name{$filters}) by ($dimension, period)",
 			},
 		},
 	}
@@ -347,7 +382,7 @@ func Test_PromQueryBuilder(t *testing.T) {
 		},
 		Expression: map[string]map[string]string{
 			"vertex_pending_messages": {
-				"vertex": "$metric_name{$filters}",
+				"vertex": "sum($metric_name{$filters}) by ($dimension, period)",
 			},
 		},
 	}
