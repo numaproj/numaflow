@@ -71,7 +71,7 @@ func (tc *TimestampedProcessingTime) PodProcessingTimeSnapshot() map[string]floa
 	return counts
 }
 
-// String returns a string representation of the TimestampedCounts
+// String returns a string representation of the TimestampedProcessingTime
 // it's used for debugging purpose
 func (tc *TimestampedProcessingTime) String() string {
 	tc.lock.RLock()

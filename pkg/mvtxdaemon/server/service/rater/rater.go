@@ -41,6 +41,7 @@ const monoVtxReadMetricName = "monovtx_read_total"
 type MonoVtxRatable interface {
 	Start(ctx context.Context) error
 	GetRates() map[string]*wrapperspb.DoubleValue
+	GetLookBack() *wrapperspb.DoubleValue
 }
 
 var _ MonoVtxRatable = (*Rater)(nil)
@@ -70,6 +71,11 @@ type Rater struct {
 	// userSpecifiedLookBackSeconds is a map between vertex name and the user-specified lookback seconds for that vertex
 	userSpecifiedLookBackSeconds *atomic.Float64
 	options                      *options
+}
+
+// GetLookBack is used
+func (r *Rater) GetLookBack() *wrapperspb.DoubleValue {
+	return wrapperspb.Double(r.userSpecifiedLookBackSeconds.Load())
 }
 
 // PodReadCount is a struct to maintain count of messages read by a pod of MonoVertex
@@ -348,7 +354,9 @@ func sleep(ctx context.Context, duration time.Duration) {
 	}
 }
 
-// updateDynamicLookbackSecs updates the default lookback period of a vertex based on the processing rate
+// updateDynamicLookbackSecs updates the default lookback period of a vertex based on the processing rate.
+// It is intended to optimize the responsiveness of the system to changes based on its
+// current load and performance characteristics.
 func (r *Rater) updateDynamicLookbackSecs() {
 	// calculate rates for each look back seconds
 	vertexName := r.monoVertex.Name
@@ -406,12 +414,6 @@ func (r *Rater) CalculateVertexProcessingTime(q *sharedqueue.OverflowQueue[*Time
 		return currentLookback, false
 	}
 
-	//delta := float64(0)
-	//for i := startIndex; i < endIndex; i++ {
-	//	// calculate the difference between the current and previous pod count snapshots
-	//	delta += calculatePtDelta(counts[i], counts[i+1])
-	//}
-
 	cumulativeTime := make(map[string]float64)
 	count := make(map[string]int)
 
@@ -442,43 +444,20 @@ func (r *Rater) CalculateVertexProcessingTime(q *sharedqueue.OverflowQueue[*Time
 	return maxAverage, true
 }
 
-// calculatePodDelta calculates the difference between the current and previous pod count snapshots
-func calculatePtDelta(tc1, tc2 *TimestampedProcessingTime) float64 {
-	delta := float64(0)
-	if tc1 == nil || tc2 == nil {
-		// we calculate delta only when both input timestamped counts are non-nil
-		return delta
-	}
-	prevPodReadCount := tc1.PodProcessingTimeSnapshot()
-	currPodReadCount := tc2.PodProcessingTimeSnapshot()
-	for podName, readCount := range currPodReadCount {
-		currCount := readCount
-		prevCount := prevPodReadCount[podName]
-		// pod delta will be equal to current count in case of restart
-		podDelta := currCount
-		if currCount >= prevCount {
-			podDelta = currCount - prevCount
-		}
-		delta += podDelta
-	}
-	return delta
-}
-
+// startDynamicLookBack continuously adjusts ths lookback duration based on the current
+// processing time of the MonoVertex system.
 func (r *Rater) startDynamicLookBack(ctx context.Context) {
-	//logger := logging.FromContext(ctx)
-	// Goroutine to listen for ticks
-	// At every tick, check and update the health status of the MonoVertex.
-	// If the context is done, return.
-	// Create a ticker to generate ticks at the interval of healthTimeStep.
 	ticker := time.NewTicker(30 * time.Second)
+	// Ensure the ticker is stopped to prevent a resource leak.
 	defer ticker.Stop()
 	for {
 		select {
-		// Get the current health status of the MonoVertex.
 		case <-ticker.C:
+			// The updateDynamicLookbackSecs method is called which adjusts the
+			// lookback duration based on current conditions.
 			r.updateDynamicLookbackSecs()
-		// If the context is done, return.
 		case <-ctx.Done():
+			// If the context is canceled or expires exit
 			return
 		}
 	}
