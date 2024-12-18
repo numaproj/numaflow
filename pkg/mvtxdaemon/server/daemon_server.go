@@ -65,12 +65,10 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	rater := rateServer.NewRater(ctx, ds.monoVtx)
 
 	// Start listener
-	var conn net.Listener
-	var listerErr error
 	address := fmt.Sprintf(":%d", v1alpha1.MonoVertexDaemonServicePort)
-	conn, err = net.Listen("tcp", address)
+	conn, err := net.Listen("tcp", address)
 	if err != nil {
-		return fmt.Errorf("failed to listen: %v", listerErr)
+		return fmt.Errorf("failed to listen: %v", err)
 	}
 
 	cer, err := sharedtls.GenerateX509KeyPair()
