@@ -1,37 +1,36 @@
-use std::collections::BTreeMap;
+use std::{env, iter};
+use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
-use std::{env, iter};
 
-use crate::config::{config, get_pipeline_name, get_vertex_name, get_vertex_replica};
-use crate::source::Source;
-use crate::Error;
+use axum::{Router, routing::get};
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
-use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
-use numaflow_models::models::tls;
-use numaflow_pb::clients::mvtxdaemon::mono_vertex_daemon_service_client::MonoVertexDaemonServiceClient;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::Histogram;
 use prometheus_client::registry::Registry;
-use rcgen::{generate_simple_self_signed, CertifiedKey};
-use rustls::ClientConfig;
+use rcgen::{CertifiedKey, generate_simple_self_signed};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
-use tonic::transport::{Certificate, Channel, ClientTlsConfig, Endpoint};
 use tonic::Request;
+use tonic::transport::Channel;
 use tracing::{debug, error, info};
+
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+
+use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
+use crate::Error;
+use crate::source::Source;
 
 // SDK information
 const SDK_INFO: &str = "sdk_info";
@@ -870,61 +869,24 @@ async fn expose_pending_metrics(
     ];
 
     loop {
+        ticker.tick().await;
         let server_url = env::var("SERVER_URL").expect("NO SERVER");
         info!("Server URL: {}", server_url);
 
-        let server_root_ca_cert = std::fs::read_to_string("").expect("CA should be present");
-        let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
-        let _ = server_root_ca_cert;
-        let tls = ClientTlsConfig::new().domain_name("localhost");
-
-        // create an RPC channel to the daemon using an insecure verify true tls
-        let channel = Endpoint::try_from(server_url.clone())
-            .map_err(|e| Error::Connection(format!("Failed to create endpoint: {:?}", e)))
-            .unwrap()
-            .tls_config(tls)
-            .expect("TLS config should not fail")
-            .connect()
-            .await
+        let client = reqwest::ClientBuilder::new()
+            .danger_accept_invalid_certs(true)
+            .build()
             .unwrap();
+        let resp = client.get(server_url).send().await;
+        if resp.is_ok() {
+            // Parse the JSON into a HashMap
+            let json_map: HashMap<String, f64> = resp.unwrap().json().await.unwrap();
+            // extract the lookback seconds from the json
+            let lookback_seconds = json_map.get("lookback").unwrap();
+            // update the key with the new lookback seconds
+            lookback_seconds_map[1] = ("default", *lookback_seconds as u16);
+        }
 
-        let mut daemon_client = MonoVertexDaemonServiceClient::new(channel);
-
-        let res = daemon_client
-            .get_mono_vertex_status(Request::new(()))
-            .await
-            .expect("daemon should be up");
-
-        let status = res.into_inner().status.expect("cannot be none").status;
-        info!(?status, "mvtx daemon status");
-
-        // let mut config = rustls::ClientConfig::
-        // TODO(mvtx-adapt):  Create TLS client
-        // if channel.is_err() {
-        //     info!("MYDEBUG: Failed to connect to the daemon {}", channel.unwrap_err());
-        // } else {
-        //     let mut daemon_client = MonoVertexDaemonServiceClient::new(server_url.clone());
-        //     let res = daemon_client.get_mono_vertex_status(Request::new(())).await.expect("TODO: panic message");
-        //     // extract the status from the response
-        //     let status = res.into_inner().status;
-        //     info!("MYDEBUG: Status: {:?}", status.unwrap().status);
-        // }
-
-        // // let channel = Endpoint::try_from(server_url.clone())
-        // //     .map_err(|e| Error::Connection(format!("Failed to create endpoint: {:?}", e))).unwrap()
-        // //     .connect().await.unwrap();
-        // let daemon_client = MonoVertexDaemonServiceClient::connect(server_url.clone()).await;
-        // if daemon_client.is_err() {
-        //     info!("MYDEBUG: Failed to connect to the daemon {} {}", server_url.clone(), daemon_client.unwrap_err());
-        // } else {
-        //     let res = daemon_client.unwrap().get_mono_vertex_status(Request::new(())).await.expect("TODO: panic message");
-        //     // extract the status from the response
-        //     let status = res.into_inner().status;
-        //     info!("MYDEBUG: Status: {:?}", status.unwrap().status);
-        // }
-        // ticker.tick().await;
-        // call the daemon -> new_value
-        // err = default
         for (label, seconds) in lookback_seconds_map {
             let pending = calculate_pending(seconds as i64, &pending_stats).await;
             if pending != -1 {
@@ -943,6 +905,9 @@ async fn expose_pending_metrics(
                         .get_or_create(&metric_labels)
                         .set(pending);
                 }
+            }
+            if label == "default" {
+                info!("MYDEBUG Seconds {}", seconds);
             }
         }
         // skip for those the pending is not implemented
@@ -985,12 +950,13 @@ mod tests {
     use std::net::SocketAddr;
     use std::time::Instant;
 
-    use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
+    use numaflow::source::{Message, Offset, SourceReadRequest};
     use tokio::sync::mpsc::Sender;
 
-    use super::*;
     use crate::shared::grpc::create_rpc_channel;
+
+    use super::*;
 
     struct SimpleSource;
     #[tonic::async_trait]
