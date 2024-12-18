@@ -34,6 +34,11 @@ pub struct GetMonoVertexStatusResponse {
     #[prost(message, optional, tag = "1")]
     pub status: ::core::option::Option<MonoVertexStatus>,
 }
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct GetMonoVertexLookbackResponse {
+    #[prost(message, optional, tag = "1")]
+    pub lookback: ::core::option::Option<f64>,
+}
 /// Generated client implementations.
 pub mod mono_vertex_daemon_service_client {
     #![allow(
@@ -182,6 +187,35 @@ pub mod mono_vertex_daemon_service_client {
                     GrpcMethod::new(
                         "mvtxdaemon.MonoVertexDaemonService",
                         "GetMonoVertexStatus",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_mono_vertex_lookback(
+            &mut self,
+            request: impl tonic::IntoRequest<()>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetMonoVertexLookbackResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexLookback",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "mvtxdaemon.MonoVertexDaemonService",
+                        "GetMonoVertexLookback",
                     ),
                 );
             self.inner.unary(req, path, codec).await

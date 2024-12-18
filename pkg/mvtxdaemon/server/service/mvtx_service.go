@@ -178,3 +178,9 @@ func (mvs *MonoVertexService) startHealthCheck(ctx context.Context) {
 		}
 	}
 }
+
+func (mvs *MonoVertexService) GetMonoVertexLookback(ctx context.Context, empty *emptypb.Empty) (*mvtxdaemon.GetMonoVertexLookbackResponse, error) {
+	return &mvtxdaemon.GetMonoVertexLookbackResponse{
+		Lookback: mvs.rater.GetLookBack(),
+	}, nil
+}
