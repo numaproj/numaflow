@@ -12,7 +12,7 @@ use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 
 use crate::config::pipeline::map::MapMode;
-use crate::mapper::user_defined::{UserDefinedBatchMap, UserDefinedMap};
+use crate::mapper::user_defined::{UserDefinedBatchMap, UserDefinedStreamMap, UserDefinedUnaryMap};
 use crate::message::Message;
 use crate::tracker::TrackerHandle;
 use crate::Error;
@@ -20,35 +20,37 @@ use crate::Result;
 
 pub(crate) mod user_defined;
 
+/// UnaryActorMessage is a message that is sent to the UnaryMapperActor.
 struct UnaryActorMessage {
     message: Message,
     respond_to: oneshot::Sender<Result<Vec<Message>>>,
 }
 
+/// BatchActorMessage is a message that is sent to the BatchMapperActor.
 struct BatchActorMessage {
     messages: Vec<Message>,
     respond_to: Vec<oneshot::Sender<Result<Vec<Message>>>>,
 }
 
+/// StreamActorMessage is a message that is sent to the StreamMapperActor.
 struct StreamActorMessage {
     message: Message,
     respond_to: mpsc::Sender<Result<Message>>,
 }
 
-/// MapperActor that handles mapping messages. It receives messages from the sender and
-/// invokes the user-defined map function.
-struct MapperActor {
+/// UnaryMapperActor is responsible for handling the unary map operation.
+struct UnaryMapperActor {
     receiver: mpsc::Receiver<UnaryActorMessage>,
-    mapper: UserDefinedMap,
+    mapper: UserDefinedUnaryMap,
 }
 
-impl MapperActor {
-    fn new(receiver: mpsc::Receiver<UnaryActorMessage>, mapper: UserDefinedMap) -> Self {
+impl UnaryMapperActor {
+    fn new(receiver: mpsc::Receiver<UnaryActorMessage>, mapper: UserDefinedUnaryMap) -> Self {
         Self { receiver, mapper }
     }
 
     async fn handle_message(&mut self, msg: UnaryActorMessage) {
-        self.mapper.map(msg.message, msg.respond_to).await;
+        self.mapper.unary_map(msg.message, msg.respond_to).await;
     }
 
     async fn run(mut self) {
@@ -58,6 +60,7 @@ impl MapperActor {
     }
 }
 
+/// BatchMapActor is responsible for handling the batch map operation.
 struct BatchMapActor {
     receiver: mpsc::Receiver<BatchActorMessage>,
     mapper: UserDefinedBatchMap,
@@ -69,11 +72,7 @@ impl BatchMapActor {
     }
 
     async fn handle_message(&mut self, msg: BatchActorMessage) {
-        let BatchActorMessage {
-            messages,
-            respond_to,
-        } = msg;
-        self.mapper.batch_map(messages, respond_to).await;
+        self.mapper.batch_map(msg.messages, msg.respond_to).await;
     }
 
     async fn run(mut self) {
@@ -83,10 +82,34 @@ impl BatchMapActor {
     }
 }
 
+/// StreamMapActor is responsible for handling the stream map operation.
+struct StreamMapActor {
+    receiver: mpsc::Receiver<StreamActorMessage>,
+    mapper: UserDefinedStreamMap,
+}
+
+impl StreamMapActor {
+    fn new(receiver: mpsc::Receiver<StreamActorMessage>, mapper: UserDefinedStreamMap) -> Self {
+        Self { receiver, mapper }
+    }
+
+    async fn handle_message(&mut self, msg: StreamActorMessage) {
+        self.mapper.stream_map(msg.message, msg.respond_to).await;
+    }
+
+    async fn run(mut self) {
+        while let Some(msg) = self.receiver.recv().await {
+            self.handle_message(msg).await;
+        }
+    }
+}
+
+/// ActorSender is an enum to store the handles to different types of actors.
 #[derive(Clone)]
 enum ActorSender {
     Unary(mpsc::Sender<UnaryActorMessage>),
     Batch(mpsc::Sender<BatchActorMessage>),
+    Stream(mpsc::Sender<StreamActorMessage>),
 }
 
 /// Mapper is responsible for reading messages from the stream and invoke the map operation
@@ -101,7 +124,7 @@ pub(crate) struct Mapper {
 
 impl Mapper {
     /// Creates a new mapper with the given batch size, concurrency, client, and tracker handle.
-    /// The mapper actor is spawned in the background to handle the messages.
+    /// It spawns the appropriate actor based on the map mode.
     pub(crate) async fn new(
         map_mode: MapMode,
         batch_size: usize,
@@ -113,8 +136,10 @@ impl Mapper {
         let actor_sender = match map_mode {
             MapMode::Unary => {
                 let (sender, receiver) = mpsc::channel(batch_size);
-                let mapper_actor =
-                    MapperActor::new(receiver, UserDefinedMap::new(batch_size, client).await?);
+                let mapper_actor = UnaryMapperActor::new(
+                    receiver,
+                    UserDefinedUnaryMap::new(batch_size, client).await?,
+                );
 
                 tokio::spawn(async move {
                     mapper_actor.run().await;
@@ -134,7 +159,19 @@ impl Mapper {
 
                 ActorSender::Batch(batch_sender)
             }
-            MapMode::Stream => unimplemented!(),
+            MapMode::Stream => {
+                let (stream_sender, stream_receiver) = mpsc::channel(batch_size);
+                let stream_mapper_actor = StreamMapActor::new(
+                    stream_receiver,
+                    UserDefinedStreamMap::new(batch_size, client).await?,
+                );
+
+                tokio::spawn(async move {
+                    stream_mapper_actor.run().await;
+                });
+
+                ActorSender::Stream(stream_sender)
+            }
         };
 
         Ok(Self {
@@ -146,7 +183,9 @@ impl Mapper {
         })
     }
 
-    async fn map(
+    /// performs unary map operation on the given message and sends the mapped messages to the output
+    /// stream.
+    async fn perform_unary(
         map_handle: mpsc::Sender<UnaryActorMessage>,
         permit: OwnedSemaphorePermit,
         read_msg: Message,
@@ -201,7 +240,8 @@ impl Mapper {
     }
 
     /// Maps the input stream of messages and returns the output stream and the handle to the
-    /// background task.
+    /// background task. In case of critical errors it stops reading from the input stream and
+    /// returns the error using the join handle.
     pub(crate) async fn map_stream(
         &self,
         input_stream: ReceiverStream<Message>,
@@ -218,6 +258,7 @@ impl Mapper {
         let handle = tokio::spawn(async move {
             let mut input_stream = input_stream;
 
+            // based on the map mode, send the message to the appropriate actor handle.
             match actor_handle {
                 ActorSender::Unary(map_handle) => loop {
                     tokio::select! {
@@ -225,7 +266,7 @@ impl Mapper {
                             if let Some(read_msg) = read_msg {
                                 let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
                                 let error_tx = error_tx.clone();
-                                Self::map(
+                                Self::perform_unary(
                                     map_handle.clone(),
                                     permit,
                                     read_msg,
@@ -253,7 +294,7 @@ impl Mapper {
                             batch = chunked_stream.next() => {
                                 if let Some(batch) = batch {
                                     if !batch.is_empty() {
-                                        Self::process_batch(
+                                        Self::perform_batch(
                                             map_handle.clone(),
                                             batch,
                                             output_tx.clone(),
@@ -272,15 +313,54 @@ impl Mapper {
                         }
                     }
                 }
-            }
+                ActorSender::Stream(map_handle) => {
+                    while let Some(read_msg) = input_stream.next().await {
+                        let (sender, mut receiver) = mpsc::channel(100);
+                        let id = read_msg.id.clone();
+                        let msg = StreamActorMessage {
+                            message: read_msg,
+                            respond_to: sender,
+                        };
 
+                        if let Err(e) = map_handle.send(msg).await {
+                            let _ = error_tx
+                                .send(Error::Mapper(format!("failed to send message: {}", e)))
+                                .await;
+                            return Err(Error::Mapper("failed to send message".to_string()));
+                        }
+
+                        loop {
+                            match receiver.recv().await {
+                                Some(Ok(mapped_message)) => {
+                                    let offset = mapped_message.id.offset.clone();
+                                    if let Err(e) =
+                                        tracker_handle.update(offset.clone(), 1, false).await
+                                    {
+                                        let _ = error_tx.send(e.clone()).await;
+                                        return Err(e);
+                                    }
+                                    let _ = output_tx.send(mapped_message).await;
+                                }
+                                Some(Err(e)) => {
+                                    let _ = error_tx.send(e.clone()).await;
+                                    return Err(e);
+                                }
+                                None => {
+                                    break;
+                                }
+                            }
+                        }
+                        tracker_handle.update(id.offset, 0, true).await?
+                    }
+                }
+            }
             Ok(())
         });
 
         Ok((ReceiverStream::new(output_rx), handle))
     }
 
-    async fn process_batch(
+    async fn perform_batch(
         map_handle: mpsc::Sender<BatchActorMessage>,
         batch: Vec<Message>,
         output_tx: mpsc::Sender<Message>,
@@ -333,7 +413,7 @@ impl Mapper {
 mod tests {
     use std::time::Duration;
 
-    use numaflow::map;
+    use numaflow::{batchmap, map};
     use numaflow_pb::clients::map::map_client::MapClient;
     use tempfile::TempDir;
     use tokio::sync::oneshot;
@@ -415,7 +495,7 @@ mod tests {
             panic!("Expected Unary actor sender");
         };
 
-        Mapper::map(
+        Mapper::perform_unary(
             input_tx,
             permit,
             message,
@@ -471,8 +551,8 @@ mod tests {
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = Mapper::new(
             MapMode::Unary,
-            500,
-            Duration::from_millis(1000),
+            10,
+            Duration::from_millis(10),
             10,
             client,
             tracker_handle.clone(),
@@ -487,10 +567,7 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("value_{}", i).into(),
-                offset: Some(Offset::String(crate::message::StringOffset::new(
-                    i.to_string(),
-                    0,
-                ))),
+                offset: Some(Offset::String(StringOffset::new(i.to_string(), 0))),
                 event_time: chrono::Utc::now(),
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
@@ -609,6 +686,126 @@ mod tests {
         assert!(
             handle.is_finished(),
             "Expected gRPC server to have shut down"
+        );
+        Ok(())
+    }
+
+    struct SimpleBatchMap;
+
+    #[tonic::async_trait]
+    impl batchmap::BatchMapper for SimpleBatchMap {
+        async fn batchmap(
+            &self,
+            mut input: tokio::sync::mpsc::Receiver<batchmap::Datum>,
+        ) -> Vec<batchmap::BatchResponse> {
+            let mut responses: Vec<batchmap::BatchResponse> = Vec::new();
+            while let Some(datum) = input.recv().await {
+                let mut response = batchmap::BatchResponse::from_id(datum.id);
+                response.append(batchmap::Message {
+                    keys: Option::from(datum.keys),
+                    value: datum.value,
+                    tags: None,
+                });
+                responses.push(response);
+            }
+            responses
+        }
+    }
+
+    #[tokio::test]
+    async fn batch_mapper_operations() -> Result<()> {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("batch_map.sock");
+        let server_info_file = tmp_dir.path().join("batch_map-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            batchmap::Server::new(SimpleBatchMap)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let tracker_handle = TrackerHandle::new();
+
+        let client = MapClient::new(create_rpc_channel(sock_file).await?);
+        let mapper = Mapper::new(
+            MapMode::Batch,
+            500,
+            Duration::from_millis(1000),
+            10,
+            client,
+            tracker_handle.clone(),
+        )
+        .await?;
+
+        let messages = vec![
+            Message {
+                keys: Arc::from(vec!["first".into()]),
+                tags: None,
+                value: "hello".into(),
+                offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+                event_time: chrono::Utc::now(),
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: "0".to_string().into(),
+                    index: 0,
+                },
+                headers: Default::default(),
+            },
+            Message {
+                keys: Arc::from(vec!["second".into()]),
+                tags: None,
+                value: "world".into(),
+                offset: Some(Offset::String(StringOffset::new("1".to_string(), 1))),
+                event_time: chrono::Utc::now(),
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: "1".to_string().into(),
+                    index: 1,
+                },
+                headers: Default::default(),
+            },
+        ];
+
+        let (input_tx, input_rx) = mpsc::channel(10);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        for message in messages {
+            input_tx.send(message).await.unwrap();
+        }
+        drop(input_tx);
+
+        let (output_stream, map_handle) = mapper.map_stream(input_stream).await?;
+        let mut output_rx = output_stream.into_inner();
+
+        let mapped_message1 = output_rx.recv().await.unwrap();
+        assert_eq!(mapped_message1.value, "hello");
+
+        let mapped_message2 = output_rx.recv().await.unwrap();
+        assert_eq!(mapped_message2.value, "world");
+
+        // we need to drop the mapper, because if there are any in-flight requests
+        // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
+        drop(mapper);
+
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+        assert!(
+            map_handle.is_finished(),
+            "Expected mapper to have shut down"
         );
         Ok(())
     }

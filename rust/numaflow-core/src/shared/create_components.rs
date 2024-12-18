@@ -11,6 +11,7 @@ use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
+use crate::config::pipeline::{DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET};
 use crate::error::Error;
 use crate::mapper::Mapper;
 use crate::shared::grpc;
@@ -209,14 +210,29 @@ pub(crate) async fn create_mapper(
     cln_token: CancellationToken,
 ) -> error::Result<(Mapper, Option<MapClient<Channel>>)> {
     match map_config.map_type {
-        MapType::UserDefined(config) => {
+        MapType::UserDefined(mut config) => {
             let server_info =
                 sdk_server_info(config.server_info_path.clone().into(), cln_token.clone()).await?;
+
+            // based on the map mode that is set in the server info, we will override the socket path
+            // so that the clients can connect to the appropriate socket.
+            let config = match server_info.get_map_mode().unwrap_or(MapMode::Unary) {
+                MapMode::Unary => config,
+                MapMode::Batch => {
+                    config.socket_path = DEFAULT_BATCH_MAP_SOCKET.into();
+                    config
+                }
+                MapMode::Stream => {
+                    config.socket_path = DEFAULT_STREAM_MAP_SOCKET.into();
+                    config
+                }
+            };
+
             let metric_labels = metrics::sdk_info_labels(
                 config::get_component_type().to_string(),
                 config::get_vertex_name().to_string(),
-                server_info.language,
-                server_info.version,
+                server_info.language.clone(),
+                server_info.version.clone(),
                 ContainerType::Sourcer.to_string(),
             );
             metrics::global_metrics()
@@ -231,7 +247,7 @@ pub(crate) async fn create_mapper(
             grpc::wait_until_mapper_ready(&cln_token, &mut map_grpc_client).await?;
             Ok((
                 Mapper::new(
-                    MapMode::Unary,
+                    server_info.get_map_mode().unwrap_or(MapMode::Unary),
                     batch_size,
                     read_timeout,
                     map_config.concurrency,

@@ -1,11 +1,11 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use numaflow_pb::clients::sourcetransformer::{
     self, source_transform_client::SourceTransformClient, SourceTransformRequest,
     SourceTransformResponse,
 };
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
@@ -83,36 +83,32 @@ impl UserDefinedTransformer {
         sender_map: ResponseSenderMap,
         mut resp_stream: Streaming<SourceTransformResponse>,
     ) {
-        while let Some(resp) = resp_stream.message().await.unwrap_or_else(|e| {
-            // If there is an error, send the error to all oneshot senders and break the loop
-            // by returning None.
-            let error =
-                Error::Transformer(format!("failed to receive transformer response: {}", e));
-
-            let mut senders = sender_map.lock().unwrap();
-            for (_, (_, sender)) in senders.drain() {
-                let _ = sender.send(Err(error.clone()));
+        while let Some(resp) = match resp_stream.message().await {
+            Ok(message) => message,
+            Err(e) => {
+                let error =
+                    Error::Transformer(format!("failed to receive transformer response: {}", e));
+                let mut senders = sender_map.lock().await;
+                for (_, (_, sender)) in senders.drain() {
+                    let _ = sender.send(Err(error.clone()));
+                }
+                None
             }
-            None
-        }) {
+        } {
             let msg_id = resp.id;
-            if let Some((msg_info, sender)) = sender_map
-                .lock()
-                .expect("map entry should always be present")
-                .remove(&msg_id)
-            {
+            if let Some((msg_info, sender)) = sender_map.lock().await.remove(&msg_id) {
                 let mut response_messages = vec![];
                 for (i, result) in resp.results.into_iter().enumerate() {
                     let message = Message {
                         id: MessageID {
                             vertex_name: get_vertex_name().to_string().into(),
                             index: i as i32,
-                            offset: msg_info.offset.to_string().into(),
+                            offset: msg_info.offset.clone().to_string().into(),
                         },
                         keys: Arc::from(result.keys),
                         tags: Some(Arc::from(result.tags)),
                         value: result.value.into(),
-                        offset: None,
+                        offset: Some(msg_info.offset.clone()),
                         event_time: utc_from_timestamp(result.event_time),
                         headers: msg_info.headers.clone(),
                     };
@@ -131,7 +127,12 @@ impl UserDefinedTransformer {
         message: Message,
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
     ) {
-        let msg_id = message.id.to_string();
+        let key = message
+            .offset
+            .clone()
+            .expect("offset should be present")
+            .to_string();
+
         let msg_info = ParentMessageInfo {
             offset: message.offset.clone().expect("offset can never be none"),
             headers: message.headers.clone(),
@@ -139,10 +140,13 @@ impl UserDefinedTransformer {
 
         self.senders
             .lock()
-            .unwrap()
-            .insert(msg_id, (msg_info, respond_to));
+            .await
+            .insert(key, (msg_info, respond_to));
 
-        self.read_tx.send(message.into()).await.unwrap();
+        self.read_tx
+            .send(message.into())
+            .await
+            .expect("failed to send message");
     }
 }
 

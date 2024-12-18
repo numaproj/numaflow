@@ -277,10 +277,7 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Some(Offset::String(crate::message::StringOffset::new(
-                "0".to_string(),
-                0,
-            ))),
+            offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
             event_time: chrono::Utc::now(),
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),

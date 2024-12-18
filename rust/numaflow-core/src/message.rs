@@ -286,7 +286,10 @@ impl From<Message> for SourceTransformRequest {
         Self {
             request: Some(
                 numaflow_pb::clients::sourcetransformer::source_transform_request::Request {
-                    id: message.id.to_string(),
+                    id: message
+                        .offset
+                        .expect("offset should be present")
+                        .to_string(),
                     keys: message.keys.to_vec(),
                     value: message.value.to_vec(),
                     event_time: prost_timestamp_from_utc(message.event_time),
@@ -309,7 +312,7 @@ impl From<Message> for MapRequest {
                 watermark: None,
                 headers: message.headers,
             }),
-            id: message.id.to_string(),
+            id: message.offset.unwrap().to_string(),
             handshake: None,
             status: None,
         }

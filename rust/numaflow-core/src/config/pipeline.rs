@@ -27,6 +27,8 @@ const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USE
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_MAP_SOCKET: &str = "/var/run/numaflow/map.sock";
+pub(crate) const DEFAULT_BATCH_MAP_SOCKET: &str = "/var/run/numaflow/batchmap.sock";
+pub(crate) const DEFAULT_STREAM_MAP_SOCKET: &str = "/var/run/numaflow/mapstream.sock";
 const DEFAULT_MAP_SERVER_INFO_FILE: &str = "/var/run/numaflow/mapper-server-info";
 
 pub(crate) mod isb;
@@ -89,6 +91,17 @@ pub(crate) mod map {
         Unary,
         Batch,
         Stream,
+    }
+
+    impl MapMode {
+        pub(crate) fn from_str(s: &str) -> Option<MapMode> {
+            match s {
+                "unary-map" => Some(MapMode::Unary),
+                "stream-map" => Some(MapMode::Stream),
+                "batch-map" => Some(MapMode::Batch),
+                _ => None,
+            }
+        }
     }
 
     #[derive(Debug, Clone, PartialEq)]

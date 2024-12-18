@@ -12,12 +12,14 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
+use crate::config::pipeline::map::MapMode;
 use crate::error::{self, Error};
 use crate::shared::server_info::version::SdkConstraints;
 
 // Constant to represent the end of the server info.
 // Equivalent to U+005C__END__.
 const END: &str = "U+005C__END__";
+const MAP_MODE_KEY: &str = "MAP_MODE";
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum ContainerType {
@@ -86,6 +88,17 @@ pub(crate) struct ServerInfo {
     pub(crate) version: String,
     #[serde(default)]
     pub(crate) metadata: Option<HashMap<String, String>>, // Metadata is optional
+}
+
+impl ServerInfo {
+    pub(crate) fn get_map_mode(&self) -> Option<MapMode> {
+        if let Some(metadata) = &self.metadata {
+            if let Some(map_mode) = metadata.get(MAP_MODE_KEY) {
+                return MapMode::from_str(map_mode);
+            }
+        }
+        None
+    }
 }
 
 /// sdk_server_info waits until the server info file is ready and check whether the
