@@ -60,13 +60,21 @@ impl TransformerActor {
 }
 
 /// Transformer, transforms messages in a streaming fashion.
-#[derive(Clone)]
 pub(crate) struct Transformer {
     batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,
     concurrency: usize,
     tracker_handle: TrackerHandle,
+    task_handle: JoinHandle<()>,
 }
+
+/// Aborts the actor task when the transformer is dropped.
+impl Drop for Transformer {
+    fn drop(&mut self) {
+        self.task_handle.abort();
+    }
+}
+
 impl Transformer {
     pub(crate) async fn new(
         batch_size: usize,
@@ -80,7 +88,7 @@ impl Transformer {
             UserDefinedTransformer::new(batch_size, client).await?,
         );
 
-        tokio::spawn(async move {
+        let task_handle = tokio::spawn(async move {
             transformer_actor.run().await;
         });
 
@@ -89,6 +97,7 @@ impl Transformer {
             concurrency,
             sender,
             tracker_handle,
+            task_handle,
         })
     }
 
@@ -106,6 +115,7 @@ impl Transformer {
         let output_tx = output_tx.clone();
 
         // invoke transformer and then wait for the one-shot
+        // short-lived tokio spawns we don't need structured concurrency here
         tokio::spawn(async move {
             let start_time = tokio::time::Instant::now();
             let _permit = permit;
@@ -131,7 +141,7 @@ impl Transformer {
                         .update(
                             read_msg.id.offset.clone(),
                             transformed_messages.len() as u32,
-                            false,
+                            true,
                         )
                         .await
                     {

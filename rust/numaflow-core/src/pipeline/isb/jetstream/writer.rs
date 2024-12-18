@@ -920,7 +920,7 @@ mod tests {
         context.delete_stream(stream_name).await.unwrap();
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_streaming_write() {
         let cln_token = CancellationToken::new();

@@ -374,7 +374,7 @@ mod tests {
         context.delete_stream(stream_name).await.unwrap();
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_jetstream_ack() {
         let js_url = "localhost:4222";

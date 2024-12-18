@@ -31,6 +31,14 @@ struct ParentMessageInfo {
 pub(super) struct UserDefinedUnaryMap {
     read_tx: mpsc::Sender<MapRequest>,
     senders: ResponseSenderMap,
+    task_handle: tokio::task::JoinHandle<()>,
+}
+
+/// Abort the background task that receives responses when the UserDefinedBatchMap is dropped.
+impl Drop for UserDefinedUnaryMap {
+    fn drop(&mut self) {
+        self.task_handle.abort();
+    }
 }
 
 impl UserDefinedUnaryMap {
@@ -42,14 +50,18 @@ impl UserDefinedUnaryMap {
         // map to track the oneshot sender for each request along with the message info
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
 
-        let mapper = Self {
-            read_tx,
-            senders: Arc::clone(&sender_map),
-        };
-
         // background task to receive responses from the server and send them to the appropriate
         // oneshot sender based on the message id
-        tokio::spawn(Self::receive_unary_responses(sender_map, resp_stream));
+        let task_handle = tokio::spawn(Self::receive_unary_responses(
+            Arc::clone(&sender_map),
+            resp_stream,
+        ));
+
+        let mapper = Self {
+            read_tx,
+            senders: sender_map,
+            task_handle,
+        };
 
         Ok(mapper)
     }
@@ -107,6 +119,14 @@ impl UserDefinedUnaryMap {
 pub(super) struct UserDefinedBatchMap {
     read_tx: mpsc::Sender<MapRequest>,
     senders: ResponseSenderMap,
+    task_handle: tokio::task::JoinHandle<()>,
+}
+
+/// Abort the background task that receives responses when the UserDefinedBatchMap is dropped.
+impl Drop for UserDefinedBatchMap {
+    fn drop(&mut self) {
+        self.task_handle.abort();
+    }
 }
 
 impl UserDefinedBatchMap {
@@ -116,17 +136,20 @@ impl UserDefinedBatchMap {
         let resp_stream = perform_handshake(read_tx.clone(), read_rx, &mut client).await?;
 
         // map to track the oneshot sender for each request along with the message info
-        let sender_map = std::sync::Arc::new(tokio::sync::Mutex::new(HashMap::new()));
-
-        let mapper = Self {
-            read_tx,
-            senders: Arc::clone(&sender_map),
-        };
+        let sender_map = Arc::new(Mutex::new(HashMap::new()));
 
         // background task to receive responses from the server and send them to the appropriate
         // oneshot sender based on the message id
-        tokio::spawn(Self::receive_batch_responses(sender_map, resp_stream));
+        let task_handle = tokio::spawn(Self::receive_batch_responses(
+            Arc::clone(&sender_map),
+            resp_stream,
+        ));
 
+        let mapper = Self {
+            read_tx,
+            senders: sender_map,
+            task_handle,
+        };
         Ok(mapper)
     }
 
@@ -264,6 +287,14 @@ async fn perform_handshake(
 pub(super) struct UserDefinedStreamMap {
     read_tx: mpsc::Sender<MapRequest>,
     senders: StreamResponseSenderMap,
+    task_handle: tokio::task::JoinHandle<()>,
+}
+
+/// Abort the background task that receives responses when the UserDefinedBatchMap is dropped.
+impl Drop for UserDefinedStreamMap {
+    fn drop(&mut self) {
+        self.task_handle.abort();
+    }
 }
 
 impl UserDefinedStreamMap {
@@ -275,15 +306,18 @@ impl UserDefinedStreamMap {
         // map to track the oneshot sender for each request along with the message info
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
 
-        let mapper = Self {
-            read_tx,
-            senders: Arc::clone(&sender_map),
-        };
-
         // background task to receive responses from the server and send them to the appropriate
         // oneshot sender based on the message id
-        tokio::spawn(Self::receive_stream_responses(sender_map, resp_stream));
+        let task_handle = tokio::spawn(Self::receive_stream_responses(
+            Arc::clone(&sender_map),
+            resp_stream,
+        ));
 
+        let mapper = Self {
+            read_tx,
+            senders: sender_map,
+            task_handle,
+        };
         Ok(mapper)
     }
 

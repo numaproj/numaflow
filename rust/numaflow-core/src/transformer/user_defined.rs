@@ -28,6 +28,14 @@ struct ParentMessageInfo {
 pub(super) struct UserDefinedTransformer {
     read_tx: mpsc::Sender<SourceTransformRequest>,
     senders: ResponseSenderMap,
+    task_handle: tokio::task::JoinHandle<()>,
+}
+
+/// Aborts the background task when the UserDefinedTransformer is dropped.
+impl Drop for UserDefinedTransformer {
+    fn drop(&mut self) {
+        self.task_handle.abort();
+    }
 }
 
 impl UserDefinedTransformer {
@@ -65,14 +73,18 @@ impl UserDefinedTransformer {
         // map to track the oneshot sender for each request along with the message info
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
 
-        let transformer = Self {
-            read_tx,
-            senders: Arc::clone(&sender_map),
-        };
-
         // background task to receive responses from the server and send them to the appropriate
         // oneshot sender based on the message id
-        tokio::spawn(Self::receive_responses(sender_map, resp_stream));
+        let task_handle = tokio::spawn(Self::receive_responses(
+            Arc::clone(&sender_map),
+            resp_stream,
+        ));
+
+        let transformer = Self {
+            read_tx,
+            senders: sender_map,
+            task_handle,
+        };
 
         Ok(transformer)
     }

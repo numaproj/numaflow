@@ -120,7 +120,7 @@ impl Tracker {
             TrackerEntry {
                 ack_send: respond_to,
                 count: 0,
-                eof: false,
+                eof: true,
             },
         );
     }
@@ -130,6 +130,16 @@ impl Tracker {
         if let Some(entry) = self.entries.get_mut(&offset) {
             entry.count += count;
             entry.eof = eof;
+            // if the count is zero, we can send an ack immediately
+            // this is case where map stream will send eof true after
+            // receiving all the messages.
+            if entry.count == 0 {
+                let entry = self.entries.remove(&offset).unwrap();
+                entry
+                    .ack_send
+                    .send(ReadAck::Ack)
+                    .expect("Failed to send ack");
+            }
         }
     }
 
@@ -140,7 +150,7 @@ impl Tracker {
             if entry.count > 0 {
                 entry.count -= 1;
             }
-            if entry.count == 0 || entry.eof {
+            if entry.count == 0 && entry.eof {
                 entry
                     .ack_send
                     .send(ReadAck::Ack)
@@ -314,7 +324,7 @@ mod tests {
 
         // Update the message with a count of 3
         handle
-            .update("offset1".to_string().into(), 3, false)
+            .update("offset1".to_string().into(), 3, true)
             .await
             .unwrap();
 

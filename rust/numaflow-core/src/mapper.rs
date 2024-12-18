@@ -120,6 +120,16 @@ pub(crate) struct Mapper {
     concurrency: usize,
     tracker_handle: TrackerHandle,
     actor_sender: ActorSender,
+    task_handles: Vec<JoinHandle<()>>,
+}
+
+/// Abort all the background tasks when the mapper is dropped.
+impl Drop for Mapper {
+    fn drop(&mut self) {
+        for handle in &self.task_handles {
+            handle.abort();
+        }
+    }
 }
 
 impl Mapper {
@@ -133,6 +143,10 @@ impl Mapper {
         client: MapClient<Channel>,
         tracker_handle: TrackerHandle,
     ) -> Result<Self> {
+        let mut task_handles = Vec::new();
+
+        // Based on the map mode, spawn the appropriate map actor
+        // and store the sender handle in the actor_sender.
         let actor_sender = match map_mode {
             MapMode::Unary => {
                 let (sender, receiver) = mpsc::channel(batch_size);
@@ -141,9 +155,10 @@ impl Mapper {
                     UserDefinedUnaryMap::new(batch_size, client).await?,
                 );
 
-                tokio::spawn(async move {
+                let handle = tokio::spawn(async move {
                     mapper_actor.run().await;
                 });
+                task_handles.push(handle);
                 ActorSender::Unary(sender)
             }
             MapMode::Batch => {
@@ -153,10 +168,10 @@ impl Mapper {
                     UserDefinedBatchMap::new(batch_size, client).await?,
                 );
 
-                tokio::spawn(async move {
+                let handle = tokio::spawn(async move {
                     batch_mapper_actor.run().await;
                 });
-
+                task_handles.push(handle);
                 ActorSender::Batch(batch_sender)
             }
             MapMode::Stream => {
@@ -166,10 +181,10 @@ impl Mapper {
                     UserDefinedStreamMap::new(batch_size, client).await?,
                 );
 
-                tokio::spawn(async move {
+                let handle = tokio::spawn(async move {
                     stream_mapper_actor.run().await;
                 });
-
+                task_handles.push(handle);
                 ActorSender::Stream(stream_sender)
             }
         };
@@ -180,6 +195,7 @@ impl Mapper {
             read_timeout,
             concurrency,
             tracker_handle,
+            task_handles,
         })
     }
 
@@ -194,6 +210,8 @@ impl Mapper {
         error_tx: mpsc::Sender<Error>,
     ) {
         let output_tx = output_tx.clone();
+
+        // short-lived tokio spawns we don't need structured concurrency here
         tokio::spawn(async move {
             let _permit = permit;
 
@@ -216,7 +234,7 @@ impl Mapper {
                         .update(
                             read_msg.id.offset.clone(),
                             mapped_messages.len() as u32,
-                            false,
+                            true,
                         )
                         .await
                     {
@@ -284,38 +302,28 @@ impl Mapper {
                         },
                     }
                 },
+
                 ActorSender::Batch(map_handle) => {
                     let timeout_duration = read_timeout;
                     let chunked_stream = input_stream.chunks_timeout(batch_size, timeout_duration);
-
                     tokio::pin!(chunked_stream);
-                    loop {
-                        tokio::select! {
-                            batch = chunked_stream.next() => {
-                                if let Some(batch) = batch {
-                                    if !batch.is_empty() {
-                                        Self::perform_batch(
-                                            map_handle.clone(),
-                                            batch,
-                                            output_tx.clone(),
-                                            tracker_handle.clone(),
-                                            error_tx.clone(),
-                                        ).await;
-                                    }
-                                } else {
-                                    break;
-                                }
-                            },
-                            Some(error) = error_rx.recv() => {
-                                tracker_handle.discard_all().await?;
-                                return Err(error);
-                            },
+
+                    while let Some(batch) = chunked_stream.next().await {
+                        if !batch.is_empty() {
+                            Self::perform_batch(
+                                map_handle.clone(),
+                                batch,
+                                output_tx.clone(),
+                                tracker_handle.clone(),
+                            )
+                            .await?;
                         }
                     }
                 }
+
                 ActorSender::Stream(map_handle) => {
                     while let Some(read_msg) = input_stream.next().await {
-                        let (sender, mut receiver) = mpsc::channel(100);
+                        let (sender, mut receiver) = mpsc::channel(10);
                         let id = read_msg.id.clone();
                         let msg = StreamActorMessage {
                             message: read_msg,
@@ -323,34 +331,26 @@ impl Mapper {
                         };
 
                         if let Err(e) = map_handle.send(msg).await {
-                            let _ = error_tx
-                                .send(Error::Mapper(format!("failed to send message: {}", e)))
-                                .await;
-                            return Err(Error::Mapper("failed to send message".to_string()));
+                            return Err(Error::Mapper(format!("failed to send message: {}", e)));
                         }
 
-                        loop {
-                            match receiver.recv().await {
-                                Some(Ok(mapped_message)) => {
+                        while let Some(result) = receiver.recv().await {
+                            match result {
+                                Ok(mapped_message) => {
                                     let offset = mapped_message.id.offset.clone();
-                                    if let Err(e) =
-                                        tracker_handle.update(offset.clone(), 1, false).await
-                                    {
-                                        let _ = error_tx.send(e.clone()).await;
-                                        return Err(e);
-                                    }
-                                    let _ = output_tx.send(mapped_message).await;
+                                    tracker_handle.update(offset.clone(), 1, false).await?;
+                                    output_tx.send(mapped_message).await.map_err(|e| {
+                                        Error::Mapper(format!("failed to send message: {}", e))
+                                    })?;
                                 }
-                                Some(Err(e)) => {
-                                    let _ = error_tx.send(e.clone()).await;
+                                Err(e) => {
                                     return Err(e);
-                                }
-                                None => {
-                                    break;
                                 }
                             }
                         }
-                        tracker_handle.update(id.offset, 0, true).await?
+
+                        // update the tracker with eof status, since we are done receiving messages
+                        tracker_handle.update(id.offset, 0, true).await?;
                     }
                 }
             }
@@ -365,8 +365,7 @@ impl Mapper {
         batch: Vec<Message>,
         output_tx: mpsc::Sender<Message>,
         tracker_handle: TrackerHandle,
-        error_tx: mpsc::Sender<Error>,
-    ) {
+    ) -> Result<()> {
         let (senders, receivers): (Vec<_>, Vec<_>) =
             batch.iter().map(|_| oneshot::channel()).unzip();
         let msg = BatchActorMessage {
@@ -374,38 +373,31 @@ impl Mapper {
             respond_to: senders,
         };
 
-        if let Err(e) = map_handle.send(msg).await {
-            let _ = error_tx
-                .send(Error::Mapper(format!("failed to send message: {}", e)))
-                .await;
-            return;
-        }
+        map_handle
+            .send(msg)
+            .await
+            .map_err(|e| Error::Mapper(format!("failed to send message: {}", e)))?;
 
         for receiver in receivers {
             match receiver.await {
                 Ok(Ok(mut mapped_messages)) => {
                     let offset = mapped_messages.first().unwrap().id.offset.clone();
-                    if let Err(e) = tracker_handle
-                        .update(offset.clone(), mapped_messages.len() as u32, false)
-                        .await
-                    {
-                        let _ = error_tx.send(e).await;
-                        return;
-                    }
+                    tracker_handle
+                        .update(offset.clone(), mapped_messages.len() as u32, true)
+                        .await?;
                     for mapped_message in mapped_messages.drain(..) {
                         let _ = output_tx.send(mapped_message).await;
                     }
                 }
                 Ok(Err(e)) => {
-                    let _ = error_tx.send(e).await;
+                    return Err(e);
                 }
                 Err(e) => {
-                    let _ = error_tx
-                        .send(Error::Mapper(format!("failed to receive message: {}", e)))
-                        .await;
+                    return Err(Error::Mapper(format!("failed to receive message: {}", e)));
                 }
             }
         }
+        Ok(())
     }
 }
 
