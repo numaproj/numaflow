@@ -14,6 +14,7 @@ use crate::config::components::source::SourceConfig;
 use crate::config::components::transformer::{TransformerConfig, TransformerType};
 use crate::config::get_vertex_replica;
 use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
+use crate::config::pipeline::map::MapMode;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::error::Error;
 use crate::Result;
@@ -84,9 +85,17 @@ pub(crate) mod map {
     use crate::error::Error;
 
     #[derive(Debug, Clone, PartialEq)]
+    pub enum MapMode {
+        Unary,
+        Batch,
+        Stream,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct MapVtxConfig {
         pub(crate) concurrency: usize,
         pub(crate) map_type: MapType,
+        pub(crate) map_mode: MapMode,
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -246,6 +255,7 @@ impl PipelineConfig {
             VertexType::Map(MapVtxConfig {
                 concurrency: batch_size as usize,
                 map_type: map.try_into()?,
+                map_mode: MapMode::Unary,
             })
         } else {
             return Err(Error::Config(
@@ -591,6 +601,7 @@ mod tests {
         let map_vtx_config = MapVtxConfig {
             concurrency: 10,
             map_type,
+            map_mode: MapMode::Unary,
         };
 
         assert_eq!(map_vtx_config.concurrency, 10);
@@ -621,6 +632,7 @@ mod tests {
         let map_vtx_config = MapVtxConfig {
             concurrency: 5,
             map_type,
+            map_mode: MapMode::Unary,
         };
 
         assert_eq!(map_vtx_config.concurrency, 5);
@@ -670,6 +682,7 @@ mod tests {
                     socket_path: DEFAULT_MAP_SOCKET.to_string(),
                     server_info_path: DEFAULT_MAP_SERVER_INFO_FILE.to_string(),
                 }),
+                map_mode: MapMode::Unary,
             }),
             metrics_config: MetricsConfig::default(),
         };

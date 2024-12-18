@@ -131,6 +131,7 @@ async fn start_map_forwarder(
 
         let (mapper, mapper_rpc_client) = create_components::create_mapper(
             config.batch_size,
+            config.read_timeout,
             map_vtx_config.clone(),
             tracker_handle.clone(),
             cln_token.clone(),

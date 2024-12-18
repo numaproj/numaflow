@@ -10,7 +10,7 @@ use tonic::transport::Channel;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
-use crate::config::pipeline::map::{MapType, MapVtxConfig};
+use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::error::Error;
 use crate::mapper::Mapper;
 use crate::shared::grpc;
@@ -203,6 +203,7 @@ pub(crate) async fn create_transformer(
 
 pub(crate) async fn create_mapper(
     batch_size: usize,
+    read_timeout: Duration,
     map_config: MapVtxConfig,
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
@@ -230,7 +231,9 @@ pub(crate) async fn create_mapper(
             grpc::wait_until_mapper_ready(&cln_token, &mut map_grpc_client).await?;
             Ok((
                 Mapper::new(
+                    MapMode::Unary,
                     batch_size,
+                    read_timeout,
                     map_config.concurrency,
                     map_grpc_client.clone(),
                     tracker_handle,

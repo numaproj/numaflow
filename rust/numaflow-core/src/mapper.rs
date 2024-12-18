@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use numaflow_pb::clients::map::map_client::MapClient;
 use tokio::sync::mpsc;
@@ -10,7 +11,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 
-use crate::mapper::user_defined::UserDefinedMap;
+use crate::config::pipeline::map::MapMode;
+use crate::mapper::user_defined::{UserDefinedBatchMap, UserDefinedMap};
 use crate::message::Message;
 use crate::tracker::TrackerHandle;
 use crate::Error;
@@ -18,33 +20,35 @@ use crate::Result;
 
 pub(crate) mod user_defined;
 
-/// Actor message to be sent to the mapper actor.
-pub enum ActorMessage {
-    Map {
-        message: Message,
-        respond_to: oneshot::Sender<Result<Vec<Message>>>,
-    },
+struct UnaryActorMessage {
+    message: Message,
+    respond_to: oneshot::Sender<Result<Vec<Message>>>,
 }
 
-/// Mapper actor that handles mapping messages. It receives messages from the sender and
+struct BatchActorMessage {
+    messages: Vec<Message>,
+    respond_to: Vec<oneshot::Sender<Result<Vec<Message>>>>,
+}
+
+struct StreamActorMessage {
+    message: Message,
+    respond_to: mpsc::Sender<Result<Message>>,
+}
+
+/// MapperActor that handles mapping messages. It receives messages from the sender and
 /// invokes the user-defined map function.
 struct MapperActor {
-    receiver: mpsc::Receiver<ActorMessage>,
+    receiver: mpsc::Receiver<UnaryActorMessage>,
     mapper: UserDefinedMap,
 }
 
 impl MapperActor {
-    fn new(receiver: mpsc::Receiver<ActorMessage>, mapper: UserDefinedMap) -> Self {
+    fn new(receiver: mpsc::Receiver<UnaryActorMessage>, mapper: UserDefinedMap) -> Self {
         Self { receiver, mapper }
     }
 
-    async fn handle_message(&mut self, msg: ActorMessage) {
-        match msg {
-            ActorMessage::Map {
-                message,
-                respond_to,
-            } => self.mapper.map(message, respond_to).await,
-        }
+    async fn handle_message(&mut self, msg: UnaryActorMessage) {
+        self.mapper.map(msg.message, msg.respond_to).await;
     }
 
     async fn run(mut self) {
@@ -54,42 +58,96 @@ impl MapperActor {
     }
 }
 
+struct BatchMapActor {
+    receiver: mpsc::Receiver<BatchActorMessage>,
+    mapper: UserDefinedBatchMap,
+}
+
+impl BatchMapActor {
+    fn new(receiver: mpsc::Receiver<BatchActorMessage>, mapper: UserDefinedBatchMap) -> Self {
+        Self { receiver, mapper }
+    }
+
+    async fn handle_message(&mut self, msg: BatchActorMessage) {
+        let BatchActorMessage {
+            messages,
+            respond_to,
+        } = msg;
+        self.mapper.batch_map(messages, respond_to).await;
+    }
+
+    async fn run(mut self) {
+        while let Some(msg) = self.receiver.recv().await {
+            self.handle_message(msg).await;
+        }
+    }
+}
+
+#[derive(Clone)]
+enum ActorSender {
+    Unary(mpsc::Sender<UnaryActorMessage>),
+    Batch(mpsc::Sender<BatchActorMessage>),
+}
+
 /// Mapper is responsible for reading messages from the stream and invoke the map operation
 /// on those messages and send the mapped messages to the output stream.
 pub(crate) struct Mapper {
     batch_size: usize,
-    sender: mpsc::Sender<ActorMessage>,
+    read_timeout: Duration,
     concurrency: usize,
     tracker_handle: TrackerHandle,
+    actor_sender: ActorSender,
 }
 
 impl Mapper {
     /// Creates a new mapper with the given batch size, concurrency, client, and tracker handle.
     /// The mapper actor is spawned in the background to handle the messages.
     pub(crate) async fn new(
+        map_mode: MapMode,
         batch_size: usize,
+        read_timeout: Duration,
         concurrency: usize,
         client: MapClient<Channel>,
         tracker_handle: TrackerHandle,
     ) -> Result<Self> {
-        let (sender, receiver) = mpsc::channel(batch_size);
-        let mapper_actor =
-            MapperActor::new(receiver, UserDefinedMap::new(batch_size, client).await?);
+        let actor_sender = match map_mode {
+            MapMode::Unary => {
+                let (sender, receiver) = mpsc::channel(batch_size);
+                let mapper_actor =
+                    MapperActor::new(receiver, UserDefinedMap::new(batch_size, client).await?);
 
-        tokio::spawn(async move {
-            mapper_actor.run().await;
-        });
+                tokio::spawn(async move {
+                    mapper_actor.run().await;
+                });
+                ActorSender::Unary(sender)
+            }
+            MapMode::Batch => {
+                let (batch_sender, batch_receiver) = mpsc::channel(batch_size);
+                let batch_mapper_actor = BatchMapActor::new(
+                    batch_receiver,
+                    UserDefinedBatchMap::new(batch_size, client).await?,
+                );
+
+                tokio::spawn(async move {
+                    batch_mapper_actor.run().await;
+                });
+
+                ActorSender::Batch(batch_sender)
+            }
+            MapMode::Stream => unimplemented!(),
+        };
 
         Ok(Self {
+            actor_sender,
             batch_size,
+            read_timeout,
             concurrency,
-            sender,
             tracker_handle,
         })
     }
 
     async fn map(
-        map_handle: mpsc::Sender<ActorMessage>,
+        map_handle: mpsc::Sender<UnaryActorMessage>,
         permit: OwnedSemaphorePermit,
         read_msg: Message,
         output_tx: mpsc::Sender<Message>,
@@ -101,7 +159,7 @@ impl Mapper {
             let _permit = permit;
 
             let (sender, receiver) = oneshot::channel();
-            let msg = ActorMessage::Map {
+            let msg = UnaryActorMessage {
                 message: read_msg.clone(),
                 respond_to: sender,
             };
@@ -149,48 +207,70 @@ impl Mapper {
         input_stream: ReceiverStream<Message>,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (output_tx, output_rx) = mpsc::channel(self.batch_size);
-
-        // channel to transmit errors from the mapper tasks to the main task
         let (error_tx, mut error_rx) = mpsc::channel(1);
 
-        let map_handle = self.sender.clone();
+        let actor_handle = self.actor_sender.clone();
         let tracker_handle = self.tracker_handle.clone();
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
+        let batch_size = self.batch_size;
+        let read_timeout = self.read_timeout;
 
         let handle = tokio::spawn(async move {
             let mut input_stream = input_stream;
 
-            // we do a tokio::select! loop to handle the input stream and the error channel
-            // in case of any errors in the mapper tasks we need to shut down the mapper
-            // and discard all the messages in the tracker.
-            loop {
-                tokio::select! {
-                    read_msg = input_stream.next() => {
-                        if let Some(read_msg) = read_msg {
-                            let permit = Arc::clone(&semaphore)
-                                .acquire_owned()
-                                .await
-                                .map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
+            match actor_handle {
+                ActorSender::Unary(map_handle) => loop {
+                    tokio::select! {
+                        read_msg = input_stream.next() => {
+                            if let Some(read_msg) = read_msg {
+                                let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
+                                let error_tx = error_tx.clone();
+                                Self::map(
+                                    map_handle.clone(),
+                                    permit,
+                                    read_msg,
+                                    output_tx.clone(),
+                                    tracker_handle.clone(),
+                                    error_tx,
+                                ).await;
+                            } else {
+                                break;
+                            }
+                        },
+                        Some(error) = error_rx.recv() => {
+                            tracker_handle.discard_all().await?;
+                            return Err(error);
+                        },
+                    }
+                },
+                ActorSender::Batch(map_handle) => {
+                    let timeout_duration = read_timeout;
+                    let chunked_stream = input_stream.chunks_timeout(batch_size, timeout_duration);
 
-                            let error_tx = error_tx.clone();
-                            Self::map(
-                                map_handle.clone(),
-                                permit,
-                                read_msg,
-                                output_tx.clone(),
-                                tracker_handle.clone(),
-                                error_tx,
-                            ).await;
-                        } else {
-                            break;
+                    tokio::pin!(chunked_stream);
+                    loop {
+                        tokio::select! {
+                            batch = chunked_stream.next() => {
+                                if let Some(batch) = batch {
+                                    if !batch.is_empty() {
+                                        Self::process_batch(
+                                            map_handle.clone(),
+                                            batch,
+                                            output_tx.clone(),
+                                            tracker_handle.clone(),
+                                            error_tx.clone(),
+                                        ).await;
+                                    }
+                                } else {
+                                    break;
+                                }
+                            },
+                            Some(error) = error_rx.recv() => {
+                                tracker_handle.discard_all().await?;
+                                return Err(error);
+                            },
                         }
-                    },
-                    Some(error) = error_rx.recv() => {
-                        // discard all the messages in the tracker since it's a critical error, and
-                        // we are shutting down
-                        tracker_handle.discard_all().await?;
-                        return Err(error);
-                    },
+                    }
                 }
             }
 
@@ -198,6 +278,54 @@ impl Mapper {
         });
 
         Ok((ReceiverStream::new(output_rx), handle))
+    }
+
+    async fn process_batch(
+        map_handle: mpsc::Sender<BatchActorMessage>,
+        batch: Vec<Message>,
+        output_tx: mpsc::Sender<Message>,
+        tracker_handle: TrackerHandle,
+        error_tx: mpsc::Sender<Error>,
+    ) {
+        let (senders, receivers): (Vec<_>, Vec<_>) =
+            batch.iter().map(|_| oneshot::channel()).unzip();
+        let msg = BatchActorMessage {
+            messages: batch,
+            respond_to: senders,
+        };
+
+        if let Err(e) = map_handle.send(msg).await {
+            let _ = error_tx
+                .send(Error::Mapper(format!("failed to send message: {}", e)))
+                .await;
+            return;
+        }
+
+        for receiver in receivers {
+            match receiver.await {
+                Ok(Ok(mut mapped_messages)) => {
+                    let offset = mapped_messages.first().unwrap().id.offset.clone();
+                    if let Err(e) = tracker_handle
+                        .update(offset.clone(), mapped_messages.len() as u32, false)
+                        .await
+                    {
+                        let _ = error_tx.send(e).await;
+                        return;
+                    }
+                    for mapped_message in mapped_messages.drain(..) {
+                        let _ = output_tx.send(mapped_message).await;
+                    }
+                }
+                Ok(Err(e)) => {
+                    let _ = error_tx.send(e).await;
+                }
+                Err(e) => {
+                    let _ = error_tx
+                        .send(Error::Mapper(format!("failed to receive message: {}", e)))
+                        .await;
+                }
+            }
+        }
     }
 }
 
@@ -250,7 +378,15 @@ mod tests {
         let tracker_handle = TrackerHandle::new();
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let mapper = Mapper::new(500, 10, client, tracker_handle.clone()).await?;
+        let mapper = Mapper::new(
+            MapMode::Unary,
+            500,
+            Duration::from_millis(1000),
+            10,
+            client,
+            tracker_handle.clone(),
+        )
+        .await?;
 
         let message = Message {
             keys: Arc::from(vec!["first".into()]),
@@ -275,8 +411,12 @@ mod tests {
         let permit = semaphore.acquire_owned().await.unwrap();
         let (error_tx, mut error_rx) = mpsc::channel(1);
 
+        let ActorSender::Unary(input_tx) = mapper.actor_sender.clone() else {
+            panic!("Expected Unary actor sender");
+        };
+
         Mapper::map(
-            mapper.sender.clone(),
+            input_tx,
             permit,
             message,
             output_tx,
@@ -329,7 +469,15 @@ mod tests {
 
         let tracker_handle = TrackerHandle::new();
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let mapper = Mapper::new(500, 10, client, tracker_handle.clone()).await?;
+        let mapper = Mapper::new(
+            MapMode::Unary,
+            500,
+            Duration::from_millis(1000),
+            10,
+            client,
+            tracker_handle.clone(),
+        )
+        .await?;
 
         let (input_tx, input_rx) = mpsc::channel(10);
         let input_stream = ReceiverStream::new(input_rx);
@@ -414,7 +562,15 @@ mod tests {
 
         let tracker_handle = TrackerHandle::new();
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let mapper = mapper::Mapper::new(500, 10, client, tracker_handle.clone()).await?;
+        let mapper = mapper::Mapper::new(
+            MapMode::Unary,
+            500,
+            Duration::from_millis(1000),
+            10,
+            client,
+            tracker_handle.clone(),
+        )
+        .await?;
 
         let (input_tx, input_rx) = mpsc::channel(10);
         let input_stream = ReceiverStream::new(input_rx);

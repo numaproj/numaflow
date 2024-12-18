@@ -57,7 +57,15 @@ struct Tracker {
 }
 
 impl Drop for Tracker {
-    fn drop(&mut self) {}
+    fn drop(&mut self) {
+        // clear the entries from the map and send nak
+        for (_, entry) in self.entries.drain() {
+            entry
+                .ack_send
+                .send(ReadAck::Nak)
+                .expect("Failed to send nak");
+        }
+    }
 }
 
 impl Tracker {
@@ -74,7 +82,6 @@ impl Tracker {
         while let Some(message) = self.receiver.recv().await {
             self.handle_message(message).await;
         }
-        self.handle_discard_all().await;
     }
 
     /// Handles incoming actor messages to update the state of tracked messages.
@@ -121,7 +128,7 @@ impl Tracker {
     /// Updates an existing entry in the tracker with the number of expected messages and EOF status.
     fn handle_update(&mut self, offset: String, count: u32, eof: bool) {
         if let Some(entry) = self.entries.get_mut(&offset) {
-            entry.count = count;
+            entry.count += count;
             entry.eof = eof;
         }
     }
