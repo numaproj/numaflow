@@ -1,78 +1,85 @@
-import {useState } from "react";
-import Box from "@mui/material/Box";
+import * as React from "react";
+import Datetime from 'react-datetime';
+import 'react-datetime/css/react-datetime.css';
 
-import React from "react";
-import Select from "@mui/material/Select";
-import MenuItem from "@mui/material/MenuItem";
-import FormControl from "@mui/material/FormControl";
-import InputLabel from "@mui/material/InputLabel";
-
-interface DropdownProps {
-  options: string[];
-  selected: string;
-  onChange: (value: string) => void;
-}
-
-const Dropdown: React.FC<DropdownProps> = ({ options, selected, onChange }) => {
-  return (
-    <FormControl fullWidth>
-      <InputLabel sx={{ fontSize: "1.4rem" }}>Time Range </InputLabel>
-      <Select
-        value={selected}
-        onChange={(event) => onChange(event.target.value as string)}
-        label="Preset"
-        sx={{ fontSize: "1.6rem" }}
-      >
-        {options.map((option) => (
-          <MenuItem key={option} value={option} sx={{ fontSize: "1.4rem" }}>
-            {option}
-          </MenuItem>
-        ))}
-        
-      </Select>
-    </FormControl>
-  );
-};
-
-interface TimePreset {
-  label: string;
-  start: Date;
-  end: Date;
-}
-
-interface TimePresetSelectorProps {
+interface TimeSelectorProps {
   setMetricReq: any;
 }
 
-const timePresets: TimePreset[] = [
-  // { label: "2H Dec 13 2024 05:45 am to Dec 13 2024 07:45 am", start: new Date("2024-12-13T05:45:00"), end: new Date("2024-12-13T07:45:00") },
-  { label: "1 H", start: new Date(Date.now() - 3600 * 1000), end: new Date() },
-  { label: "30 mins", start: new Date(Date.now() - 1800 * 1000), end: new Date() },
-];
+const TimeSelector = ({setMetricReq}: TimeSelectorProps) => {
+  const [startValue, setStartValue] = React.useState(new Date(Date.now() - 30 * 60000));
+  const [endValue, setEndValue] = React.useState(new Date());
 
-const TimePresetSelector = ({setMetricReq}: TimePresetSelectorProps) => {
-  const [selectedPreset, setSelectedPreset] = useState<TimePreset>(timePresets[0]);
+  const handleStartChange = (newValue: any) => {
+    setStartValue(newValue);
+    setMetricReq((prev: any) => ({ 
+      ...prev, 
+      start_time: newValue, 
+      end_time: endValue 
+    }));
+  };
 
-  const handlePresetChange = (preset: TimePreset) => {
-    setSelectedPreset(preset);
-    setMetricReq((prev: any) => ({ ...prev, ["start_time"]: preset.start, ["end_time"]: preset.end }));
+  const handleEndChange = (newValue: any) => {
+    setEndValue(newValue);
+    setMetricReq((prev: any) => ({ 
+      ...prev, 
+      start_time: startValue, 
+      end_time: newValue 
+    }));
+  };
+
+  const presets = [
+    {
+      label: '10m',
+      value: [new Date(Date.now() - 10 * 60000), new Date()]
+    },
+    {
+      label: '30m',
+      value: [new Date(Date.now() - 30 * 60000), new Date()]
+    },
+    {
+      label: '1h',
+      value: [new Date(Date.now() - 60 * 60000), new Date()]
+    },
+    {
+      label: '2h',
+      value: [new Date(Date.now() - 120 * 60000), new Date()]
+    }
+  ];
+
+  const applyPreset = (preset: any) => {
+    setStartValue(preset.value[0]);
+    setEndValue(preset.value[1]);
+    setMetricReq((prev: any) => ({ 
+      ...prev, 
+      start_time: preset.value[0], 
+      end_time: preset.value[1] 
+    }));
   };
 
   return (
-    <Box>
-      <Dropdown
-        options={timePresets.map((preset) => preset.label)}
-        selected={selectedPreset.label}
-        onChange={(label: string) => {
-          const preset = timePresets.find((p) => p.label === label);
-          if (preset) {
-            handlePresetChange(preset);
-          }
-        }}
+    <div style={{ display: 'flex', gap: '10px' }}>
+      <Datetime
+        value={startValue}
+        onChange={handleStartChange}
+        dateFormat="YYYY-MM-DD"
+        timeFormat="HH:mm"
       />
-      {/* Add custom time window setter here*/}
-    </Box>
+      <Datetime
+        value={endValue}
+        onChange={handleEndChange}
+        dateFormat="YYYY-MM-DD"
+        timeFormat="HH:mm"
+      />
+      <div>
+        {presets.map((preset) => (
+          <button key={preset.label} onClick={() => applyPreset(preset)}>
+            {preset.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 };
 
-export default TimePresetSelector;
+export default TimeSelector;

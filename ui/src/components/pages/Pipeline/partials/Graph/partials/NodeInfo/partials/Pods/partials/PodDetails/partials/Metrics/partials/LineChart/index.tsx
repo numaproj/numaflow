@@ -12,11 +12,10 @@ import {
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dropdown from "../common/Dropdown";
-import TimeRange from "../common/TimeRange";
 import FiltersDropdown from "../common/FiltersDropdown";
 import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
-import TimePresetSelector from "../common/TimeRange";
+import TimeSelector from "../common/TimeRange";
 
 // TODO have a check for metricReq against metric object to ensure required fields are passed
 const LineChartComponent = ({
@@ -220,7 +219,7 @@ const LineChartComponent = ({
           })}
           {hasTimeParams && (
           <Box key="line-chart-preset">
-            <TimePresetSelector setMetricReq={setMetricsReq} />
+              <TimeSelector setMetricReq={setMetricsReq} />
           </Box>
           )}
       </Box>

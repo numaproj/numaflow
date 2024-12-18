@@ -39,7 +39,10 @@ const Dropdown = ({
   }, [field, dimensionReverseMap, type, quantileOptions, durationOptions]);
 
   const [value, setValue] = useState<string>(getInitialValue);
-  const fieldName = field.charAt(0).toUpperCase() + field.slice(1);
+  let fieldName = field.charAt(0).toUpperCase() + field.slice(1);
+  if (fieldName == "Duration"){
+    fieldName = "Query Window"
+  }
 
   // Update metricsReq with the initial value
   useEffect(() => {
