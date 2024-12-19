@@ -17,6 +17,8 @@ pub(crate) mod source {
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SourceConfig {
+        /// for high-throughput use-cases we read-ahead the next batch before the previous batch has
+        /// been acked (or completed). For most cases it should be set to false.
         pub(crate) read_ahead: bool,
         pub(crate) source_type: SourceType,
     }

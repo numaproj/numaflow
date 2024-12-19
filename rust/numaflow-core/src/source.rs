@@ -249,6 +249,8 @@ impl Source {
         let handle = tokio::spawn(async move {
             let mut processed_msgs_count: usize = 0;
             let mut last_logged_at = time::Instant::now();
+            // this semaphore is used only if read-ahead is disabled. we hold this semaphore to
+            // make sure we can read only if the current inflight ones are ack'ed.
             let semaphore = Arc::new(Semaphore::new(1));
 
             loop {
