@@ -110,7 +110,7 @@ impl MonovertexConfig {
 
         let source_config = SourceConfig {
             read_ahead: env::var("READ_AHEAD")
-                .unwrap_or("true".to_string())
+                .unwrap_or("false".to_string())
                 .parse()
                 .unwrap(),
             source_type: source.try_into()?,
