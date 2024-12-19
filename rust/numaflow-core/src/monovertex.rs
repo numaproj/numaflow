@@ -243,7 +243,6 @@ mod tests {
         };
 
         let result = start_forwarder(cln_token.clone(), &config).await;
-        dbg!(&result);
         assert!(result.is_ok());
 
         // stop the source and sink servers
