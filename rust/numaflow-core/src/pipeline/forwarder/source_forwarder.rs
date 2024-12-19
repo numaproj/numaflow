@@ -180,9 +180,11 @@ mod tests {
             }
         }
 
-        async fn pending(&self) -> usize {
-            self.num - self.sent_count.load(Ordering::SeqCst)
-                + self.yet_to_ack.read().unwrap().len()
+        async fn pending(&self) -> Option<usize> {
+            Some(
+                self.num - self.sent_count.load(Ordering::SeqCst)
+                    + self.yet_to_ack.read().unwrap().len(),
+            )
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {

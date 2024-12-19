@@ -370,8 +370,8 @@ mod tests {
 
         async fn ack(&self, _offset: Vec<Offset>) {}
 
-        async fn pending(&self) -> usize {
-            0
+        async fn pending(&self) -> Option<usize> {
+            Some(0)
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {
