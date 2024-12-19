@@ -36,6 +36,7 @@ import (
 
 const CountWindow = time.Second * 10
 const monoVtxReadMetricName = "monovtx_read_total"
+const MaxLookback = time.Minute * 10
 
 // MonoVtxRatable is the interface for the Rater struct.
 type MonoVtxRatable interface {
@@ -360,27 +361,27 @@ func sleep(ctx context.Context, duration time.Duration) {
 func (r *Rater) updateDynamicLookbackSecs() {
 	// calculate rates for each look back seconds
 	vertexName := r.monoVertex.Name
-	pt, update := r.CalculateVertexProcessingTime(r.timestampedPodProcessingTime)
-	r.log.Infof("MYDEBUG: pt %f ", pt)
+	processingTimeSeconds, update := r.CalculateVertexProcessingTime(r.timestampedPodProcessingTime)
+	r.log.Infof("MYDEBUG: processingTimeSeconds %f ", processingTimeSeconds)
 	if !update {
-		r.log.Infof("MYDEBUG: NO UPDATE pt %f ", pt)
+		r.log.Infof("MYDEBUG: NO UPDATE processingTimeSeconds %f ", processingTimeSeconds)
 		return
 	}
 	// if the current calculated processing time is greater than the lookback Seconds, update it
 	currentVal := r.userSpecifiedLookBackSeconds.Load()
 
-	// TODO(adapt): We should find a suitable value for this,
-	// using 2 * pt right now
-	// adding 30 seconds for buffer
-	minute := 60*int(math.Round(pt/60)) + 30
-	if minute > int(currentVal) {
-		r.userSpecifiedLookBackSeconds.Store(float64(minute))
-		r.log.Infof("MYDEBUG: Updated for vertex %s, old %f new %d", vertexName, currentVal, minute)
+	// round up to the nearest minute, also ensure that while going up and down we have the consistent value for
+	// a given processingTimeSeconds
+	roundedProcessingTime := 60 * int(math.Ceil(processingTimeSeconds/60))
+	if roundedProcessingTime > int(currentVal) {
+		r.userSpecifiedLookBackSeconds.Store(float64(roundedProcessingTime))
+		r.log.Infof("MYDEBUG: Updated for vertex %s, old %f new %d", vertexName, currentVal, roundedProcessingTime)
 	} else {
-		minute = int(math.Max(float64(minute), float64(r.monoVertex.Spec.Scale.GetLookbackSeconds())))
-		if minute != int(currentVal) {
-			r.userSpecifiedLookBackSeconds.Store(float64(minute))
-			r.log.Infof("MYDEBUG: Updated for vertex %s, old %f new %d", vertexName, currentVal, minute)
+		// We should not be setting values lower than the lookBackSeconds defined in the spec
+		roundedProcessingTime = int(math.Max(float64(roundedProcessingTime), float64(r.monoVertex.Spec.Scale.GetLookbackSeconds())))
+		if roundedProcessingTime != int(currentVal) {
+			r.userSpecifiedLookBackSeconds.Store(float64(roundedProcessingTime))
+			r.log.Infof("MYDEBUG: Updated for vertex %s, old %f new %d", vertexName, currentVal, roundedProcessingTime)
 		}
 	}
 }
@@ -389,11 +390,11 @@ func (r *Rater) CalculateVertexProcessingTime(q *sharedqueue.OverflowQueue[*Time
 	counts := q.Items()
 	currentLookback := r.userSpecifiedLookBackSeconds.Load()
 	// If we do not have enough data points, lets send back the default from the vertex
-	if len(counts) <= 1 {
+	// or if we are gating at the max lookback
+	if len(counts) <= 1 || (time.Duration(currentLookback) >= MaxLookback) {
 		return currentLookback, false
 	}
 	// Checking for 3 look back periods right now -> this will be gated to 30 mins as we have that much data
-	// present only ie 10 mins max lookback
 	startIndex := findStartIndexPt(int64(currentLookback*3), counts)
 	// we consider the last but one element as the end index because the last element might be incomplete
 	// we can be sure that the last but one element in the queue is complete.
@@ -430,6 +431,7 @@ func (r *Rater) CalculateVertexProcessingTime(q *sharedqueue.OverflowQueue[*Time
 		}
 	}
 
+	// TODO(mvtx-adapt): Check with EWMA if that helps better
 	maxAverage := 0.0
 	// Calculate averages and find the maximum
 	for pod, totalTime := range cumulativeTime {
