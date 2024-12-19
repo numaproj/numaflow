@@ -10,6 +10,7 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
+use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -116,6 +117,7 @@ pub(crate) enum PipelineContainerState {
         ),
     ),
     Sink((Option<SinkClient<Channel>>, Option<SinkClient<Channel>>)),
+    Map(Option<MapClient<Channel>>),
 }
 
 /// The global register of all metrics.
@@ -689,6 +691,14 @@ async fn sidecar_livez(State(state): State<UserDefinedContainerState>) -> impl I
                     }
                 }
             }
+            PipelineContainerState::Map(map_client) => {
+                if let Some(mut map_client) = map_client {
+                    if map_client.is_ready(Request::new(())).await.is_err() {
+                        error!("Pipeline map client is not ready");
+                        return StatusCode::INTERNAL_SERVER_ERROR;
+                    }
+                }
+            }
         },
     }
     StatusCode::NO_CONTENT
@@ -943,8 +953,8 @@ mod tests {
 
         async fn ack(&self, _: Vec<Offset>) {}
 
-        async fn pending(&self) -> usize {
-            0
+        async fn pending(&self) -> Option<usize> {
+            Some(0)
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {

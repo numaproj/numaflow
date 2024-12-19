@@ -292,8 +292,8 @@ mod tests {
             }
         }
 
-        async fn pending(&self) -> usize {
-            self.yet_to_ack.read().unwrap().len()
+        async fn pending(&self) -> Option<usize> {
+            Some(self.yet_to_ack.read().unwrap().len())
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {

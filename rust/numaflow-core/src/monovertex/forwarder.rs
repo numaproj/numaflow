@@ -111,9 +111,9 @@ impl Forwarder {
             sink_writer_handle,
         ) {
             Ok((reader_result, transformer_result, sink_writer_result)) => {
-                reader_result?;
-                transformer_result?;
                 sink_writer_result?;
+                transformer_result?;
+                reader_result?;
                 Ok(())
             }
             Err(e) => Err(Error::Forwarder(format!(
@@ -206,9 +206,11 @@ mod tests {
             }
         }
 
-        async fn pending(&self) -> usize {
-            self.num - self.sent_count.load(Ordering::SeqCst)
-                + self.yet_to_ack.read().unwrap().len()
+        async fn pending(&self) -> Option<usize> {
+            Some(
+                self.num - self.sent_count.load(Ordering::SeqCst)
+                    + self.yet_to_ack.read().unwrap().len(),
+            )
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {

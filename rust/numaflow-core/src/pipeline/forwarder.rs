@@ -35,6 +35,10 @@
 /// the Write is User-defined Sink or builtin.
 pub(crate) mod sink_forwarder;
 
+/// Forwarder specific to Mapper where Reader is ISB, UDF is User-defined Mapper,
+/// Write is ISB.
+pub(crate) mod map_forwarder;
+
 /// Source where the Reader is builtin or User-defined Source, Write is ISB,
 /// with an optional Transformer.
 pub(crate) mod source_forwarder;

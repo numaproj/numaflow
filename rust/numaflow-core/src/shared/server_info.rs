@@ -12,12 +12,14 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
+use crate::config::pipeline::map::MapMode;
 use crate::error::{self, Error};
 use crate::shared::server_info::version::SdkConstraints;
 
 // Constant to represent the end of the server info.
 // Equivalent to U+005C__END__.
 const END: &str = "U+005C__END__";
+const MAP_MODE_KEY: &str = "MAP_MODE";
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum ContainerType {
@@ -86,6 +88,17 @@ pub(crate) struct ServerInfo {
     pub(crate) version: String,
     #[serde(default)]
     pub(crate) metadata: Option<HashMap<String, String>>, // Metadata is optional
+}
+
+impl ServerInfo {
+    pub(crate) fn get_map_mode(&self) -> Option<MapMode> {
+        if let Some(metadata) = &self.metadata {
+            if let Some(map_mode) = metadata.get(MAP_MODE_KEY) {
+                return MapMode::from_str(map_mode);
+            }
+        }
+        None
+    }
 }
 
 /// sdk_server_info waits until the server info file is ready and check whether the
@@ -415,21 +428,25 @@ mod version {
         go_version_map.insert(ContainerType::SourceTransformer, "0.9.0-z".to_string());
         go_version_map.insert(ContainerType::Sinker, "0.9.0-z".to_string());
         go_version_map.insert(ContainerType::FbSinker, "0.9.0-z".to_string());
+        go_version_map.insert(ContainerType::Mapper, "0.9.0-z".to_string());
         let mut python_version_map = HashMap::new();
         python_version_map.insert(ContainerType::Sourcer, "0.9.0rc100".to_string());
         python_version_map.insert(ContainerType::SourceTransformer, "0.9.0rc100".to_string());
         python_version_map.insert(ContainerType::Sinker, "0.9.0rc100".to_string());
         python_version_map.insert(ContainerType::FbSinker, "0.9.0rc100".to_string());
+        python_version_map.insert(ContainerType::Mapper, "0.9.0rc100".to_string());
         let mut java_version_map = HashMap::new();
         java_version_map.insert(ContainerType::Sourcer, "0.9.0-z".to_string());
         java_version_map.insert(ContainerType::SourceTransformer, "0.9.0-z".to_string());
         java_version_map.insert(ContainerType::Sinker, "0.9.0-z".to_string());
         java_version_map.insert(ContainerType::FbSinker, "0.9.0-z".to_string());
+        java_version_map.insert(ContainerType::Mapper, "0.9.0-z".to_string());
         let mut rust_version_map = HashMap::new();
         rust_version_map.insert(ContainerType::Sourcer, "0.1.0-z".to_string());
         rust_version_map.insert(ContainerType::SourceTransformer, "0.1.0-z".to_string());
         rust_version_map.insert(ContainerType::Sinker, "0.1.0-z".to_string());
         rust_version_map.insert(ContainerType::FbSinker, "0.1.0-z".to_string());
+        rust_version_map.insert(ContainerType::Mapper, "0.1.0-z".to_string());
 
         let mut m = HashMap::new();
         m.insert("go".to_string(), go_version_map);
