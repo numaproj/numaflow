@@ -30,17 +30,3 @@ export const dimensionReverseMap: { [p: string]: string } = {
   pipeline: "pipeline",
   pod: "pod",
 };
-
-export const metricNameMap: { [p: string]: string } = {
-  monovtx_ack_time_bucket: "Mono Vertex Ack Time Latency",
-  monovtx_read_time_bucket: "Mono Vertex Read Time Latency",
-  monovtx_processing_time_bucket:
-    "Mono Vertex Processing Time Latency",
-  monovtx_sink_time_bucket:
-    "Mono Vertex Sink Write Time Latency",
-  forwarder_data_read_total:
-    "Vertex Read Processing Rate (messages per second)",
-  monovtx_read_total: "Mono Vertex Read Processing Rate (messages per second)",
-  monovtx_pending: "Mono Vertex Pending Messages",
-  vertex_pending_messages: "Vertex Pending Messages",
-};
