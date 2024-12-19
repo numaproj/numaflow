@@ -280,6 +280,12 @@ impl Source {
                     }
                 };
                 let n = messages.len();
+
+                // If no messages are read, continue to read the next batch.
+                if n == 0 {
+                    continue;
+                }
+
                 if is_mono_vertex() {
                     monovertex_metrics()
                         .read_total
