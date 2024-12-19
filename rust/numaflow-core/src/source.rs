@@ -1,4 +1,7 @@
 use numaflow_pulsar::source::PulsarSource;
+use std::sync::Arc;
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time;
@@ -143,6 +146,7 @@ pub(crate) struct Source {
     read_batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,
     tracker_handle: TrackerHandle,
+    read_ahead: bool,
 }
 
 impl Source {
@@ -151,6 +155,7 @@ impl Source {
         batch_size: usize,
         src_type: SourceType,
         tracker_handle: TrackerHandle,
+        read_ahead: bool,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
         match src_type {
@@ -182,6 +187,7 @@ impl Source {
             read_batch_size: batch_size,
             sender,
             tracker_handle,
+            read_ahead,
         }
     }
 
@@ -234,6 +240,7 @@ impl Source {
         let (messages_tx, messages_rx) = mpsc::channel(batch_size);
         let source_handle = self.sender.clone();
         let tracker_handle = self.tracker_handle.clone();
+        let read_ahead_enabled = self.read_ahead;
 
         let pipeline_labels = pipeline_forward_metric_labels("Source", Some(get_vertex_name()));
         let mvtx_labels = mvtx_forward_metric_labels();
@@ -242,11 +249,17 @@ impl Source {
         let handle = tokio::spawn(async move {
             let mut processed_msgs_count: usize = 0;
             let mut last_logged_at = time::Instant::now();
+            let semaphore = Arc::new(Semaphore::new(1));
 
             loop {
                 if cln_token.is_cancelled() {
                     info!("Cancellation token is cancelled. Stopping the source.");
                     return Ok(());
+                }
+
+                if !read_ahead_enabled {
+                    // Acquire the semaphore permit before reading the next batch
+                    let _permit = Arc::clone(&semaphore).acquire_owned().await.unwrap();
                 }
                 // Reserve the permits before invoking the read method.
                 let mut permit = match messages_tx.reserve_many(batch_size).await {
@@ -318,6 +331,11 @@ impl Source {
                     read_start_time,
                     source_handle.clone(),
                     ack_batch,
+                    if !read_ahead_enabled {
+                        Some(Arc::clone(&semaphore).acquire_owned().await.unwrap())
+                    } else {
+                        None
+                    },
                 ));
 
                 processed_msgs_count += n;
@@ -340,6 +358,7 @@ impl Source {
         e2e_start_time: time::Instant,
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
+        _permit: Option<OwnedSemaphorePermit>,
     ) -> Result<()> {
         let n = ack_rx_batch.len();
         let mut offsets_to_ack = Vec::with_capacity(n);
@@ -523,6 +542,7 @@ mod tests {
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
             TrackerHandle::new(),
+            true,
         );
 
         let cln_token = CancellationToken::new();

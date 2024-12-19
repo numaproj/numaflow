@@ -4,14 +4,13 @@ metadata:
   name: simple-mono-vertex
 spec:
   source:
-    udsource:
-      container:
-        image: quay.io/numaio/numaflow-rs/simple-source:stable
+    generator:
+      rpu: 5
+      duration: 1s
     # transformer is an optional container to do any transformation to the incoming data before passing to the sink
     transformer:
       container:
-        image: quay.io/numaio/numaflow-rs/source-transformer-now:stable
+        image: quay.io/numaio/numaflow-go/mapt-assign-event-time:stable
+        imagePullPolicy: Never
   sink:
-    udsink:
-      container:
-        image: quay.io/numaio/numaflow-rs/sink-log:stable
+    log: {}
