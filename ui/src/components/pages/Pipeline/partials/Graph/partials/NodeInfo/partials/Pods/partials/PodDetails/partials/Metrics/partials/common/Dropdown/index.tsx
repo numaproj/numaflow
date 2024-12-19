@@ -108,7 +108,7 @@ const Dropdown = ({
           setValue(e.target.value);
           setMetricReq((prev: any) => ({ ...prev, [field]: e.target.value }));
         }}
-        sx={{ fontSize: "1.6rem" }}
+        sx={{ fontSize: "1.6rem",  height: '50px' }}
       >
         {getDropDownEntries}
       </Select>

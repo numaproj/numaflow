@@ -217,7 +217,7 @@ const LineChartComponent = ({
               </Box>
             );
           })}
-          {hasTimeParams && (
+        {hasTimeParams && (
           <Box key="line-chart-preset">
               <TimeSelector setMetricReq={setMetricsReq} />
           </Box>
