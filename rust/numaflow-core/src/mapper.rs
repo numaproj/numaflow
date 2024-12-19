@@ -1123,7 +1123,6 @@ mod tests {
         let input_stream = ReceiverStream::new(input_rx);
 
         input_tx.send(message).await.unwrap();
-        drop(input_tx);
 
         let (_output_stream, map_handle) = mapper.map_stream(input_stream).await?;
 
