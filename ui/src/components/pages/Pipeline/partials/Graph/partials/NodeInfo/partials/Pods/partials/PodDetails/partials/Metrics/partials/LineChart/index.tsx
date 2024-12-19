@@ -266,7 +266,7 @@ const LineChartComponent = ({
         </Box>
       )}
 
-      {!isLoading && error && <EmptyChart />}
+      {!isLoading && error && <EmptyChart message={error.toString() || "No data for the selected filters."}/>}
 
       {!isLoading && !error && transformedData?.length > 0 && (
         <ResponsiveContainer width="100%" height={400}>
@@ -299,7 +299,7 @@ const LineChartComponent = ({
         </ResponsiveContainer>
       )}
 
-      {!isLoading && !error && transformedData?.length === 0 && <EmptyChart />}
+      {!isLoading && !error && transformedData?.length === 0 && <EmptyChart/>}
     </Box>
   );
 };
