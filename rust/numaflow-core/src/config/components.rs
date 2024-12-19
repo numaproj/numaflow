@@ -3,6 +3,8 @@ pub(crate) mod source {
     const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
     const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
+    use std::collections::HashMap;
+    use std::env;
     use std::{fmt::Debug, time::Duration};
 
     use bytes::Bytes;
@@ -103,9 +105,13 @@ pub(crate) mod source {
         // We parse both, with user-defined values having higher precedence.
         // There should be only one option (user-defined) to define the settings.
         fn try_from(cfg: Box<numaflow_models::models::ServingSource>) -> Result<Self> {
-            let mut setting =
-                serving::Settings::load().map_err(|e| Error::Config(e.to_string()))?;
-            setting.tid_header = cfg.msg_id_header_key; // FIXME: check if this is correct
+            let env_vars = env::vars().collect::<HashMap<String, String>>();
+
+            let mut settings: serving::Settings = env_vars
+                .try_into()
+                .map_err(|e: serving::Error| Error::Config(e.to_string()))?;
+
+            settings.tid_header = cfg.msg_id_header_key;
 
             if let Some(auth) = cfg.auth {
                 if let Some(token) = auth.token {
@@ -114,7 +120,7 @@ pub(crate) mod source {
                         &token.key,
                     )
                     .map_err(|e| Error::Config(format!("Reading API auth token secret: {e:?}")))?;
-                    setting.api_auth_token = Some(secret);
+                    settings.api_auth_token = Some(secret);
                 } else {
                     tracing::warn!("Authentication token for Serving API is specified, but the secret is empty");
                 };
@@ -134,11 +140,11 @@ pub(crate) mod source {
                         "TTL value for Redis store must not be less than 1 second. Provided value = {ttl:?}"
                     )));
                 }
-                setting.redis.ttl_secs = Some(ttl_secs);
+                settings.redis.ttl_secs = Some(ttl_secs);
             }
-            setting.redis.addr = cfg.store.url;
+            settings.redis.addr = cfg.store.url;
 
-            Ok(SourceType::Serving(setting))
+            Ok(SourceType::Serving(settings))
         }
     }
 

@@ -1,4 +1,4 @@
-use std::env;
+use std::collections::HashMap;
 use std::fmt::Debug;
 
 use async_nats::rustls;
@@ -8,7 +8,6 @@ use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
 use serde::{Deserialize, Serialize};
 
 use crate::Error::ParseConfig;
-use crate::Result;
 
 const ENV_NUMAFLOW_SERVING_SOURCE_OBJECT: &str = "NUMAFLOW_SERVING_SOURCE_OBJECT";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
@@ -132,48 +131,64 @@ pub struct CallbackStorageConfig {
     pub url: String,
 }
 
-impl Settings {
-    pub fn load() -> Result<Self> {
-        let Ok(host_ip) = env::var(ENV_NUMAFLOW_SERVING_HOST_IP) else {
-            return Err(ParseConfig(format!(
-                "Environment variable {ENV_NUMAFLOW_SERVING_HOST_IP} is not set"
-            )));
-        };
+/// This implementation is to load settings from env variables
+impl TryFrom<HashMap<String, String>> for Settings {
+    type Error = crate::Error;
+    fn try_from(env_vars: HashMap<String, String>) -> std::result::Result<Self, Self::Error> {
+        let host_ip = env_vars
+            .get(ENV_NUMAFLOW_SERVING_HOST_IP)
+            .ok_or_else(|| {
+                ParseConfig(format!(
+                    "Environment variable {ENV_NUMAFLOW_SERVING_HOST_IP} is not set"
+                ))
+            })?
+            .to_owned();
 
-        let mut settings = Self {
+        let mut settings = Settings {
             host_ip,
             ..Default::default()
         };
 
-        // Update JetStreamConfig from environment variables
-        if let Ok(url) = env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_URL) {
-            settings.jetstream.url = url;
-        }
-        if let Ok(stream) = env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM) {
-            settings.jetstream.stream = stream;
+        if let Some(jetstream_url) = env_vars.get(ENV_NUMAFLOW_SERVING_JETSTREAM_URL) {
+            settings.jetstream.url = jetstream_url.to_owned();
         }
 
-        if let Ok(auth_token) = env::var(ENV_NUMAFLOW_SERVING_AUTH_TOKEN) {
-            settings.api_auth_token = Some(auth_token);
+        if let Some(jetstream_stream) = env_vars.get(ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM) {
+            settings.jetstream.stream = jetstream_stream.to_owned();
         }
 
-        if let Ok(port) = env::var(ENV_NUMAFLOW_SERVING_APP_PORT) {
-            settings.app_listen_port = port.parse().map_err(|e| {
+        if let Some(api_auth_token) = env_vars.get(ENV_NUMAFLOW_SERVING_AUTH_TOKEN) {
+            settings.api_auth_token = Some(api_auth_token.to_owned());
+        }
+
+        if let Some(app_port) = env_vars.get(ENV_NUMAFLOW_SERVING_APP_PORT) {
+            settings.app_listen_port = app_port.parse().map_err(|e| {
                 ParseConfig(format!(
-                    "Parsing {ENV_NUMAFLOW_SERVING_APP_PORT}(set to '{port}'): {e:?}"
+                    "Parsing {ENV_NUMAFLOW_SERVING_APP_PORT}(set to '{app_port}'): {e:?}"
                 ))
             })?;
         }
 
-        // If username is set, we expect password too.
-        if let Ok(username) = env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_USER) {
-            let Ok(password) = env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD) else {
+        // If username is set, the password also must be set
+        if let Some(username) = env_vars.get(ENV_NUMAFLOW_SERVING_JETSTREAM_USER) {
+            let Some(password) = env_vars.get(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD) else {
                 return Err(ParseConfig(format!("Env variable {ENV_NUMAFLOW_SERVING_JETSTREAM_USER} is set, but {ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD} is not set")));
             };
-            settings.jetstream.auth = Some(BasicAuth { username, password })
+            settings.jetstream.auth = Some(BasicAuth {
+                username: username.to_owned(),
+                password: password.to_owned(),
+            });
         }
 
-        let Ok(source_spec_encoded) = env::var(ENV_NUMAFLOW_SERVING_SOURCE_OBJECT) else {
+        // Update redis.ttl_secs from environment variable
+        if let Some(ttl_secs) = env_vars.get(ENV_NUMAFLOW_SERVING_STORE_TTL) {
+            let ttl_secs: u32 = ttl_secs.parse().map_err(|e| {
+                ParseConfig(format!("parsing {ENV_NUMAFLOW_SERVING_STORE_TTL}: {e:?}"))
+            })?;
+            settings.redis.ttl_secs = Some(ttl_secs);
+        }
+
+        let Some(source_spec_encoded) = env_vars.get(ENV_NUMAFLOW_SERVING_SOURCE_OBJECT) else {
             return Ok(settings);
         };
 
@@ -192,34 +207,18 @@ impl Settings {
         // Update redis.addr from source_spec, currently we only support redis as callback storage
         settings.redis.addr = source_spec.callback_storage.url;
 
-        // Update redis.ttl_secs from environment variable
-        if let Ok(ttl_secs) = env::var(ENV_NUMAFLOW_SERVING_STORE_TTL) {
-            let ttl_secs: u32 = ttl_secs.parse().map_err(|e| {
-                ParseConfig(format!("parsing {ENV_NUMAFLOW_SERVING_STORE_TTL}: {e:?}"))
-            })?;
-            settings.redis.ttl_secs = Some(ttl_secs);
-        }
         Ok(settings)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::env;
-
     use super::*;
 
     #[test]
-    fn test_config() {
-        // Set up the environment variable for the config directory
-        env::set_var("RUN_ENV", "Development");
-        env::set_var("APP_HOST_IP", "10.244.0.6");
-        env::set_var("CONFIG_PATH", "config");
-
-        // Call the config method
+    fn test_default_config() {
         let settings = Settings::default();
 
-        // Assert that the settings are as expected
         assert_eq!(settings.tid_header, "ID");
         assert_eq!(settings.app_listen_port, 3000);
         assert_eq!(settings.metrics_server_listen_port, 3001);
@@ -231,5 +230,62 @@ mod tests {
         assert_eq!(settings.redis.max_tasks, 50);
         assert_eq!(settings.redis.retries, 5);
         assert_eq!(settings.redis.retries_duration_millis, 100);
+    }
+
+    #[test]
+    fn test_config_parse() {
+        // Set up the environment variables
+        let env_vars = [
+            (
+                ENV_NUMAFLOW_SERVING_JETSTREAM_URL,
+                "nats://isbsvc-default-js-svc.default.svc:4222",
+            ),
+            (
+                ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM,
+                "ascii-art-pipeline-in-serving-source",
+            ),
+            (ENV_NUMAFLOW_SERVING_JETSTREAM_USER, "js-auth-user"),
+            (ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD, "js-user-password"),
+            (ENV_NUMAFLOW_SERVING_HOST_IP, "10.2.3.5"),
+            (ENV_NUMAFLOW_SERVING_AUTH_TOKEN, "api-auth-token"),
+            (ENV_NUMAFLOW_SERVING_APP_PORT, "8443"),
+            (ENV_NUMAFLOW_SERVING_STORE_TTL, "86400"),
+            (ENV_NUMAFLOW_SERVING_SOURCE_OBJECT, "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQiLCJzdG9yZSI6eyJ1cmwiOiJyZWRpczovL3JlZGlzOjYzNzkifX0=")
+        ];
+
+        // Call the config method
+        let settings: Settings = env_vars
+            .into_iter()
+            .map(|(key, val)| (key.to_owned(), val.to_owned()))
+            .collect::<HashMap<String, String>>()
+            .try_into()
+            .unwrap();
+
+        let expected_config = Settings {
+            tid_header: "X-Numaflow-Id".into(),
+            app_listen_port: 8443,
+            metrics_server_listen_port: 3001,
+            upstream_addr: "localhost:8888".into(),
+            drain_timeout_secs: 10,
+            jetstream: JetStreamConfig {
+                stream: "ascii-art-pipeline-in-serving-source".into(),
+                url: "nats://isbsvc-default-js-svc.default.svc:4222".into(),
+                auth: Some(BasicAuth {
+                    username: "js-auth-user".into(),
+                    password: "js-user-password".into(),
+                }),
+            },
+            redis: RedisConfig {
+                addr: "redis://redis:6379".into(),
+                max_tasks: 50,
+                retries: 5,
+                retries_duration_millis: 100,
+                ttl_secs: Some(86400),
+            },
+            host_ip: "10.2.3.5".into(),
+            api_auth_token: Some("api-auth-token".into()),
+        };
+
+        assert_eq!(settings, expected_config);
     }
 }

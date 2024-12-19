@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::sync::Arc;
@@ -31,7 +32,9 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     // Based on the argument, run the appropriate component.
     if args.contains(&"--serving".to_string()) {
-        let settings = Arc::new(serving::Settings::load()?);
+        let env_vars: HashMap<String, String> = env::vars().collect();
+        let settings: serving::Settings = env_vars.try_into()?;
+        let settings = Arc::new(settings);
         serving::serve(settings)
             .await
             .map_err(|e| format!("Error running serving: {e:?}"))?;
