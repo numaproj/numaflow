@@ -129,7 +129,7 @@ pub(crate) mod source {
             if let Some(ttl) = cfg.store.ttl {
                 if ttl.is_negative() {
                     return Err(Error::Config(format!(
-                        "TTL value for Redis store can not be negative. Provided value = {ttl:?}"
+                        "TTL value for the store can not be negative. Provided value = {ttl:?}"
                     )));
                 }
                 let ttl: std::time::Duration = ttl.into();
@@ -137,7 +137,7 @@ pub(crate) mod source {
                 // TODO: Identify a minimum value
                 if ttl_secs < 1 {
                     return Err(Error::Config(format!(
-                        "TTL value for Redis store must not be less than 1 second. Provided value = {ttl:?}"
+                        "TTL value for the store must not be less than 1 second. Provided value = {ttl:?}"
                     )));
                 }
                 settings.redis.ttl_secs = Some(ttl_secs);

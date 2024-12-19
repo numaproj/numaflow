@@ -216,6 +216,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_basic_auth_debug_print() {
+        let auth = BasicAuth {
+            username: "js-auth-user".into(),
+            password: "js-auth-password".into(),
+        };
+        let auth_debug = format!("{auth:?}");
+        assert_eq!(auth_debug, "js-auth-user:***rd");
+    }
+
+    #[test]
     fn test_default_config() {
         let settings = Settings::default();
 
