@@ -1619,24 +1619,24 @@ func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
 			memQuantity := container.Usage.Memory()
 			details, ok := containerDetails[containerName]
 			if !ok {
-				details = ContainerDetails{Name: container.Name} // Initialize if not found
+				details = ContainerDetails{Name: container.Name}
 			}
 			if cpuQuantity != nil {
-				details.TotalCPU = strconv.FormatInt(cpuQuantity.MilliValue(), 10) + "m"
+				details.TotalCPU = cpuToMillicores(cpuQuantity.String())
 				totalCPU.Add(*cpuQuantity)
 			}
 			if memQuantity != nil {
-				details.TotalMemory = strconv.FormatInt(memQuantity.Value()/(1024*1024), 10) + "Mi"
+				details.TotalMemory = fmt.Sprintf("%.2fMi", float64(memQuantity.Value())/(1024*1024))
 				totalMemory.Add(*memQuantity)
 			}
 			containerDetails[containerName] = details
 		}
 		if totalCPU != nil {
-			podDetails.TotalCPU = strconv.FormatInt(totalCPU.MilliValue(), 10) + "m"
+			podDetails.TotalCPU = cpuToMillicores(totalCPU.String())
 		}
 
 		if totalMemory != nil {
-			podDetails.TotalMemory = strconv.FormatInt(totalMemory.Value()/(1024*1024), 10) + "Mi"
+			podDetails.TotalMemory = fmt.Sprintf("%.2fMi", float64(totalMemory.Value())/(1024*1024))
 		}
 	}
 	return podDetails, nil
@@ -1704,4 +1704,25 @@ func (h *handler) getContainerStatus(state corev1.ContainerState) string {
 	} else {
 		return "Unknown"
 	}
+}
+
+func cpuToMillicores(quantityStr string) string {
+	var value float64
+	var format string
+
+	// Parse the quantity string
+	if _, err := fmt.Sscanf(quantityStr, "%f%s", &value, &format); err != nil {
+		fmt.Println("Error parsing cpu quantity string:", err)
+		return "0m"
+	}
+
+	// Adjust value based on the format suffix
+	switch {
+	case strings.HasSuffix(format, "n"):
+		value /= 1e6
+	case !strings.HasSuffix(format, "m"):
+		fmt.Println("Error parsing quantity string: invalid format")
+		return "0m"
+	}
+	return fmt.Sprintf("%.2fm", value)
 }
