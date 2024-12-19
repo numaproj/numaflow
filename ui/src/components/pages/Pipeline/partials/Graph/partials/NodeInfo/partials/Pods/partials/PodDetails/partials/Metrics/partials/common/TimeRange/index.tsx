@@ -11,7 +11,7 @@ interface TimeSelectorProps {
 }
 
 const TimeSelector = ({setMetricReq}: TimeSelectorProps) => {
-  const [startDate, setStartDate] = useState(moment().subtract(29, 'days'));
+  const [startDate, setStartDate] = useState(moment().subtract(1, 'hour'));
   const [endDate, setEndDate] = useState(moment());
 
   const handleCallback = (start: moment.Moment, end: moment.Moment) => {
@@ -52,7 +52,7 @@ const TimeSelector = ({setMetricReq}: TimeSelectorProps) => {
         onCallback={handleCallback}
       >
         <input type="text" 
-         id="dateRangeInput" // Added id for accessibility
+         id="dateRangeInput"
           className="form-control date-input" 
           style={{ fontSize: '1.6rem', width: '300px', paddingRight: '10px', height: '50px' }} 
         />
