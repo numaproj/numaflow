@@ -221,6 +221,7 @@ mod tests {
 
         let config = MonovertexConfig {
             source_config: components::source::SourceConfig {
+                read_ahead: true,
                 source_type: components::source::SourceType::UserDefined(
                     components::source::UserDefinedConfig {
                         socket_path: src_sock_file.to_str().unwrap().to_string(),

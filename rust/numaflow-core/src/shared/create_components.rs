@@ -214,6 +214,7 @@ pub async fn create_source(
                     batch_size,
                     source::SourceType::Generator(generator_read, generator_ack, generator_lag),
                     tracker_handle,
+                    source_config.read_ahead,
                 ),
                 None,
             ))
@@ -251,6 +252,7 @@ pub async fn create_source(
                     batch_size,
                     source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
                     tracker_handle,
+                    source_config.read_ahead,
                 ),
                 Some(source_grpc_client),
             ))
@@ -262,6 +264,7 @@ pub async fn create_source(
                     batch_size,
                     source::SourceType::Pulsar(pulsar),
                     tracker_handle,
+                    source_config.read_ahead,
                 ),
                 None,
             ))
