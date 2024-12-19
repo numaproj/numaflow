@@ -69,8 +69,6 @@ COPY --from=base /bin/numaflow /bin/numaflow
 COPY --from=base /bin/numaflow-rs /bin/numaflow-rs
 COPY ui/build /ui/build
 
-COPY ./rust/serving/config config
-
 ENTRYPOINT [ "/bin/numaflow" ]
 
 ####################################################################################################

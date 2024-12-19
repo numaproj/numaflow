@@ -17,6 +17,7 @@ tracing.workspace = true
 numaflow-pulsar.workspace = true
 numaflow-models.workspace = true
 numaflow-pb.workspace = true
+serving.workspace = true
 backoff.workspace = true
 axum.workspace = true
 axum-server.workspace = true

@@ -27,7 +27,6 @@ tower = "0.4.13"
 tower-http = { version = "0.5.2", features = ["trace", "timeout"] }
 uuid = { version = "1.10.0", features = ["v4"] }
 redis = { version = "0.26.0", features = ["tokio-comp", "aio", "connection-manager"] }
-config = "0.14.0"
 trait-variant = "0.1.2"
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22.1"
