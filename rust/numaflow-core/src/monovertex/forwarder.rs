@@ -111,9 +111,9 @@ impl Forwarder {
             sink_writer_handle,
         ) {
             Ok((reader_result, transformer_result, sink_writer_result)) => {
-                reader_result?;
-                transformer_result?;
                 sink_writer_result?;
+                transformer_result?;
+                reader_result?;
                 Ok(())
             }
             Err(e) => Err(Error::Forwarder(format!(
