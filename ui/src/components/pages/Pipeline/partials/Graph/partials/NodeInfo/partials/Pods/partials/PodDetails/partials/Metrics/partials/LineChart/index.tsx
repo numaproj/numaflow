@@ -8,6 +8,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  Text
 } from "recharts";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -16,6 +17,24 @@ import TimeRange from "../common/TimeRange";
 import FiltersDropdown from "../common/FiltersDropdown";
 import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
+
+
+const getYAxisLabel = (metricName: string) => {
+  switch(metricName) {
+    case "monovtx_ack_time_bucket":
+    case "monovtx_read_time_bucket":
+    case "monovtx_processing_time_bucket":
+    case "monovtx_sink_time_bucket":
+      return "Latency (in μs)"
+    case "forwarder_data_read_total":
+    case "monovtx_read_total":
+      return "Rate (messages/second)"
+    case "monovtx_pending":
+      return "Number of pending messages"
+    default:
+      return ""
+  }
+};
 
 // TODO have a check for metricReq against metric object to ensure required fields are passed
 const LineChartComponent = ({
@@ -280,9 +299,14 @@ const LineChartComponent = ({
             }}
           >
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="time" padding={{ left: 30, right: 30 }} />
-            <YAxis />
-            <CartesianGrid stroke="#f5f5f5" />
+            <XAxis dataKey="time" padding={{ left: 30, right: 30 }} >
+            </XAxis>
+            <YAxis 
+              label={<Text x={-160} y={5} dy={5} transform="rotate(-90)" fontSize={14} textAnchor="middle">{getYAxisLabel(metric?.metric_name)}</Text>}
+            />
+            <CartesianGrid stroke="#f5f5f5">
+            </CartesianGrid>
+            
             {chartLabels?.map((value, index) => (
               <Line
                 key={`${value}-line-chart`}

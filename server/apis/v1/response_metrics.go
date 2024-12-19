@@ -32,7 +32,8 @@ type Dimension struct {
 }
 
 type Metric struct {
-	Name string `yaml:"metric_name"`
+	Name        string `yaml:"metric_name"`
+	DisplayName string `yaml:"display_name"`
 	// array of required labels.
 	Filters []string `yaml:"required_filters"`
 	//array of dimensions and their data
