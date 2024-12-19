@@ -3,6 +3,8 @@ pub(crate) mod source {
     const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
     const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
+    use std::collections::HashMap;
+    use std::env;
     use std::{fmt::Debug, time::Duration};
 
     use bytes::Bytes;
@@ -31,6 +33,7 @@ pub(crate) mod source {
         Generator(GeneratorConfig),
         UserDefined(UserDefinedConfig),
         Pulsar(PulsarSourceConfig),
+        Serving(serving::Settings),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -93,6 +96,55 @@ pub(crate) mod source {
                 auth,
             };
             Ok(SourceType::Pulsar(pulsar_config))
+        }
+    }
+
+    impl TryFrom<Box<numaflow_models::models::ServingSource>> for SourceType {
+        type Error = Error;
+        // FIXME: Currently, the same settings comes from user-defined settings and env variables.
+        // We parse both, with user-defined values having higher precedence.
+        // There should be only one option (user-defined) to define the settings.
+        fn try_from(cfg: Box<numaflow_models::models::ServingSource>) -> Result<Self> {
+            let env_vars = env::vars().collect::<HashMap<String, String>>();
+
+            let mut settings: serving::Settings = env_vars
+                .try_into()
+                .map_err(|e: serving::Error| Error::Config(e.to_string()))?;
+
+            settings.tid_header = cfg.msg_id_header_key;
+
+            if let Some(auth) = cfg.auth {
+                if let Some(token) = auth.token {
+                    let secret = crate::shared::create_components::get_secret_from_volume(
+                        &token.name,
+                        &token.key,
+                    )
+                    .map_err(|e| Error::Config(format!("Reading API auth token secret: {e:?}")))?;
+                    settings.api_auth_token = Some(secret);
+                } else {
+                    tracing::warn!("Authentication token for Serving API is specified, but the secret is empty");
+                };
+            }
+
+            if let Some(ttl) = cfg.store.ttl {
+                if ttl.is_negative() {
+                    return Err(Error::Config(format!(
+                        "TTL value for the store can not be negative. Provided value = {ttl:?}"
+                    )));
+                }
+                let ttl: std::time::Duration = ttl.into();
+                let ttl_secs = ttl.as_secs() as u32;
+                // TODO: Identify a minimum value
+                if ttl_secs < 1 {
+                    return Err(Error::Config(format!(
+                        "TTL value for the store must not be less than 1 second. Provided value = {ttl:?}"
+                    )));
+                }
+                settings.redis.ttl_secs = Some(ttl_secs);
+            }
+            settings.redis.addr = cfg.store.url;
+
+            Ok(SourceType::Serving(settings))
         }
     }
 

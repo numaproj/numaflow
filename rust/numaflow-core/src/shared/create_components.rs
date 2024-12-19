@@ -266,6 +266,9 @@ pub async fn create_source(
                 None,
             ))
         }
+        SourceType::Serving(_) => {
+            unimplemented!("Serving as built-in source is not yet implemented")
+        }
     }
 }
 
