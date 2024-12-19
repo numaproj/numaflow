@@ -1,4 +1,3 @@
-use crate::config::monovertex::sink::SinkType;
 use std::time::Duration;
 
 use base64::prelude::BASE64_STANDARD;
@@ -14,6 +13,7 @@ use crate::config::components::transformer::{
 };
 use crate::config::components::{sink, source};
 use crate::config::get_vertex_replica;
+use crate::config::monovertex::sink::SinkType;
 use crate::error::Error;
 use crate::Result;
 

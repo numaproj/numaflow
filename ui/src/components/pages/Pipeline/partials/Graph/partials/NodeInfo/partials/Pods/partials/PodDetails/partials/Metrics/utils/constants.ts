@@ -39,8 +39,8 @@ export const metricNameMap: { [p: string]: string } = {
   monovtx_sink_time_bucket:
     "Mono Vertex Sink Write Time Latency",
   forwarder_data_read_total:
-    "Vertex Read Processing Rate",
-  monovtx_read_total:
-    "Mono Vertex Read Processing Rate",
-  monovtx_pending: "Mono Vertex Pending",
+    "Vertex Read Processing Rate (messages per second)",
+  monovtx_read_total: "Mono Vertex Read Processing Rate (messages per second)",
+  monovtx_pending: "Mono Vertex Pending Messages",
+  vertex_pending_messages: "Vertex Pending Messages",
 };

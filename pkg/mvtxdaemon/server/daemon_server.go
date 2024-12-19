@@ -38,6 +38,7 @@ import (
 	"github.com/numaproj/numaflow"
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service"
 	rateServer "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -108,7 +109,9 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	}()
 
 	version := numaflow.GetVersion()
-	monoVertexInfo.WithLabelValues(version.Version, version.Platform, ds.monoVtx.Name).Set(1)
+	// Todo: clean it up in v1.6
+	deprecatedMonoVertexInfo.WithLabelValues(version.Version, version.Platform, ds.monoVtx.Name).Set(1)
+	metrics.BuildInfo.WithLabelValues(v1alpha1.ComponentMonoVertexDaemon, ds.monoVtx.Name, version.Version, version.Platform).Set(1)
 
 	log.Infof("MonoVertex daemon server started successfully on %s", address)
 	<-ctx.Done()

@@ -97,6 +97,7 @@ pub(crate) async fn start_https_metrics_server(
 ) -> crate::Result<()> {
     let metrics_app = Router::new().route("/metrics", get(metrics_handler));
 
+    tracing::info!(?addr, "Starting metrics server");
     axum_server::bind_rustls(addr, tls_config)
         .serve(metrics_app.into_make_service())
         .await
