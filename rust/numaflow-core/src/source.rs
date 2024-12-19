@@ -258,7 +258,8 @@ impl Source {
                 }
 
                 if !read_ahead_enabled {
-                    // Acquire the semaphore permit before reading the next batch
+                    // Acquire the semaphore permit before reading the next batch to make
+                    // sure we are not reading ahead and all the inflight messages are acked.
                     let _permit = Arc::clone(&semaphore).acquire_owned().await.unwrap();
                 }
                 // Reserve the permits before invoking the read method.
@@ -327,6 +328,8 @@ impl Source {
                 }
 
                 // start a background task to invoke ack on the source for the offsets that are acked.
+                // if read ahead is disabled, acquire the semaphore permit before invoking ack so that
+                // we wait for all the inflight messages to be acked before reading the next batch.
                 tokio::spawn(Self::invoke_ack(
                     read_start_time,
                     source_handle.clone(),
@@ -358,7 +361,7 @@ impl Source {
         e2e_start_time: time::Instant,
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
-        _permit: Option<OwnedSemaphorePermit>,
+        _permit: Option<OwnedSemaphorePermit>, // permit to release after acking the offsets.
     ) -> Result<()> {
         let n = ack_rx_batch.len();
         let mut offsets_to_ack = Vec::with_capacity(n);
