@@ -1,84 +1,55 @@
-import * as React from "react";
-import Datetime from 'react-datetime';
-import 'react-datetime/css/react-datetime.css';
+import moment from 'moment';
+import React, { useState } from 'react';
+import 'bootstrap/dist/css/bootstrap.min.css';
+import 'bootstrap-daterangepicker/daterangepicker.css';
+import DateRangePicker from 'react-bootstrap-daterangepicker';
+import 'jquery';
 
 interface TimeSelectorProps {
   setMetricReq: any;
 }
 
 const TimeSelector = ({setMetricReq}: TimeSelectorProps) => {
-  const [startValue, setStartValue] = React.useState(new Date(Date.now() - 30 * 60000));
-  const [endValue, setEndValue] = React.useState(new Date());
 
-  const handleStartChange = (newValue: any) => {
-    setStartValue(newValue);
+
+  const [startDate, setStartDate] = useState(moment().subtract(29, 'days'));
+  const [endDate, setEndDate] = useState(moment());
+
+  const handleCallback = (start: moment.Moment, end: moment.Moment) => {
+    setStartDate(start);
+    setEndDate(end);
     setMetricReq((prev: any) => ({ 
       ...prev, 
-      start_time: newValue, 
-      end_time: endValue 
+      start_time: start, 
+      end_time: end 
     }));
   };
 
-  const handleEndChange = (newValue: any) => {
-    setEndValue(newValue);
-    setMetricReq((prev: any) => ({ 
-      ...prev, 
-      start_time: startValue, 
-      end_time: newValue 
-    }));
-  };
-
-  const presets = [
-    {
-      label: '10m',
-      value: [new Date(Date.now() - 10 * 60000), new Date()]
-    },
-    {
-      label: '30m',
-      value: [new Date(Date.now() - 30 * 60000), new Date()]
-    },
-    {
-      label: '1h',
-      value: [new Date(Date.now() - 60 * 60000), new Date()]
-    },
-    {
-      label: '2h',
-      value: [new Date(Date.now() - 120 * 60000), new Date()]
-    }
-  ];
-
-  const applyPreset = (preset: any) => {
-    setStartValue(preset.value[0]);
-    setEndValue(preset.value[1]);
-    setMetricReq((prev: any) => ({ 
-      ...prev, 
-      start_time: preset.value[0], 
-      end_time: preset.value[1] 
-    }));
+  const ranges: { [key: string]: [moment.Moment, moment.Moment] } = {
+    'Last 30 Minutes': [moment().subtract(30, 'minutes'), moment()],
+    'Last Hour': [moment().subtract(1, 'hour'), moment()],
+    'Last 2 Hours': [moment().subtract(2, 'hours'), moment()],
+    'Last 6 Hours': [moment().subtract(6, 'hours'), moment()],
+    'Last 12 Hours': [moment().subtract(12, 'hours'), moment()],
+    'Last 24 Hours': [moment().subtract(24, 'hours'), moment()]
   };
 
   return (
-    <div style={{ display: 'flex', gap: '10px' }}>
-      <Datetime
-        value={startValue}
-        onChange={handleStartChange}
-        dateFormat="YYYY-MM-DD"
-        timeFormat="HH:mm"
-      />
-      <Datetime
-        value={endValue}
-        onChange={handleEndChange}
-        dateFormat="YYYY-MM-DD"
-        timeFormat="HH:mm"
-      />
-      <div>
-        {presets.map((preset) => (
-          <button key={preset.label} onClick={() => applyPreset(preset)}>
-            {preset.label}
-          </button>
-        ))}
-      </div>
-    </div>
+    <DateRangePicker
+      initialSettings={{
+        startDate: startDate,
+        endDate: endDate,
+        ranges: ranges,
+        timePicker: true,
+        timePicker24Hour: true,
+        locale: {
+          format: 'DD/MM hh:mm A'
+        }
+      }}
+      onCallback={handleCallback}
+    >
+      <input type="text" className="form-control" />
+    </DateRangePicker>
   );
 };
 
