@@ -43,7 +43,7 @@ impl Default for MonovertexConfig {
             read_timeout: Duration::from_millis(DEFAULT_TIMEOUT_IN_MS as u64),
             replica: 0,
             source_config: SourceConfig {
-                read_ahead: true,
+                read_ahead: false,
                 source_type: source::SourceType::Generator(GeneratorConfig::default()),
             },
             sink_config: SinkConfig {

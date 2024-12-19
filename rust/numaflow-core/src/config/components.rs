@@ -26,7 +26,7 @@ pub(crate) mod source {
     impl Default for SourceConfig {
         fn default() -> Self {
             Self {
-                read_ahead: true,
+                read_ahead: false,
                 source_type: SourceType::Generator(GeneratorConfig::default()),
             }
         }
@@ -522,7 +522,7 @@ mod source_tests {
     fn test_source_config_generator() {
         let generator_config = GeneratorConfig::default();
         let source_config = SourceConfig {
-            read_ahead: true,
+            read_ahead: false,
             source_type: SourceType::Generator(generator_config.clone()),
         };
         if let SourceType::Generator(config) = source_config.source_type {
@@ -536,7 +536,7 @@ mod source_tests {
     fn test_source_config_user_defined() {
         let user_defined_config = UserDefinedConfig::default();
         let source_config = SourceConfig {
-            read_ahead: true,
+            read_ahead: false,
             source_type: SourceType::UserDefined(user_defined_config.clone()),
         };
         if let SourceType::UserDefined(config) = source_config.source_type {
