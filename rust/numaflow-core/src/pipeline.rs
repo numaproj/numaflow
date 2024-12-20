@@ -324,12 +324,15 @@ async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Re
 
 #[cfg(test)]
 mod tests {
+    use crate::pipeline::pipeline::map::MapMode;
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
 
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
+    use numaflow::map;
+    use tempfile::TempDir;
     use tokio_stream::StreamExt;
 
     use super::*;
@@ -338,6 +341,7 @@ mod tests {
     use crate::config::components::source::GeneratorConfig;
     use crate::config::components::source::SourceConfig;
     use crate::config::components::source::SourceType;
+    use crate::config::pipeline::map::{MapType, UserDefinedConfig};
     use crate::config::pipeline::PipelineConfig;
     use crate::pipeline::pipeline::isb;
     use crate::pipeline::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
@@ -346,6 +350,8 @@ mod tests {
     use crate::pipeline::pipeline::{SinkVtxConfig, SourceVtxConfig};
     use crate::pipeline::tests::isb::BufferFullStrategy::RetryUntilSuccess;
 
+    // e2e test for source forwarder, reads from generator and writes to
+    // multi-partitioned buffer.
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_forwarder_for_source_vertex() {
@@ -485,6 +491,8 @@ mod tests {
         }
     }
 
+    // e2e test for sink forwarder, reads from multi-partitioned buffer and
+    // writes to sink.
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_forwarder_for_sink_vertex() {
@@ -503,9 +511,6 @@ mod tests {
 
         const MESSAGE_COUNT: usize = 10;
         let mut consumers = vec![];
-        // Create streams to which the generator source vertex we create later will forward
-        // messages to. The consumers created for the corresponding streams will be used to ensure
-        // that messages were actually written to the streams.
         for stream_name in &streams {
             let stream_name = *stream_name;
             // Delete stream if it exists
@@ -639,6 +644,248 @@ mod tests {
 
         // Delete all streams created in this test
         for stream_name in streams {
+            context.delete_stream(stream_name).await.unwrap();
+        }
+    }
+
+    struct SimpleCat;
+
+    #[tonic::async_trait]
+    impl map::Mapper for SimpleCat {
+        async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
+            let message = map::Message::new(input.value)
+                .keys(input.keys)
+                .tags(vec!["test-forwarder".to_string()]);
+            vec![message]
+        }
+    }
+
+    // e2e test for map forwarder, reads from multi-partitioned buffer, invokes map
+    // and writes to multi-partitioned buffer.
+    #[tokio::test]
+    async fn test_forwarder_for_map_vertex() {
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("map.sock");
+        let server_info_file = tmp_dir.path().join("mapper-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let _handle = tokio::spawn(async move {
+            map::Server::new(SimpleCat)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start()
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Unique names for the streams we use in this test
+        let input_streams = vec![
+            "default-test-forwarder-for-map-vertex-in-0",
+            "default-test-forwarder-for-map-vertex-in-1",
+            "default-test-forwarder-for-map-vertex-in-2",
+            "default-test-forwarder-for-map-vertex-in-3",
+            "default-test-forwarder-for-map-vertex-in-4",
+        ];
+
+        let output_streams = vec![
+            "default-test-forwarder-for-map-vertex-out-0",
+            "default-test-forwarder-for-map-vertex-out-1",
+            "default-test-forwarder-for-map-vertex-out-2",
+            "default-test-forwarder-for-map-vertex-out-3",
+            "default-test-forwarder-for-map-vertex-out-4",
+        ];
+
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        const MESSAGE_COUNT: usize = 10;
+        let mut input_consumers = vec![];
+        let mut output_consumers = vec![];
+        for stream_name in &input_streams {
+            let stream_name = *stream_name;
+            // Delete stream if it exists
+            let _ = context.delete_stream(stream_name).await;
+            let _stream = context
+                .get_or_create_stream(stream::Config {
+                    name: stream_name.into(),
+                    subjects: vec![stream_name.into()],
+                    max_message_size: 64 * 1024,
+                    max_messages: 10000,
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+
+            // Publish some messages into the stream
+            use chrono::{TimeZone, Utc};
+
+            use crate::message::{Message, MessageID, Offset, StringOffset};
+            let message = Message {
+                keys: Arc::from(vec!["key1".to_string()]),
+                tags: None,
+                value: vec![1, 2, 3].into(),
+                offset: Some(Offset::String(StringOffset::new("123".to_string(), 0))),
+                event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+                id: MessageID {
+                    vertex_name: "vertex".to_string().into(),
+                    offset: "123".to_string().into(),
+                    index: 0,
+                },
+                headers: HashMap::new(),
+            };
+            let message: bytes::BytesMut = message.try_into().unwrap();
+
+            for _ in 0..MESSAGE_COUNT {
+                context
+                    .publish(stream_name.to_string(), message.clone().into())
+                    .await
+                    .unwrap()
+                    .await
+                    .unwrap();
+            }
+
+            let c: consumer::PullConsumer = context
+                .create_consumer_on_stream(
+                    consumer::pull::Config {
+                        name: Some(stream_name.to_string()),
+                        ack_policy: consumer::AckPolicy::Explicit,
+                        ..Default::default()
+                    },
+                    stream_name,
+                )
+                .await
+                .unwrap();
+
+            input_consumers.push((stream_name.to_string(), c));
+        }
+
+        // Create output streams and consumers
+        for stream_name in &output_streams {
+            let stream_name = *stream_name;
+            // Delete stream if it exists
+            let _ = context.delete_stream(stream_name).await;
+            let _stream = context
+                .get_or_create_stream(stream::Config {
+                    name: stream_name.into(),
+                    subjects: vec![stream_name.into()],
+                    max_message_size: 64 * 1024,
+                    max_messages: 1000,
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+
+            let c: consumer::PullConsumer = context
+                .create_consumer_on_stream(
+                    consumer::pull::Config {
+                        name: Some(stream_name.to_string()),
+                        ack_policy: consumer::AckPolicy::Explicit,
+                        ..Default::default()
+                    },
+                    stream_name,
+                )
+                .await
+                .unwrap();
+            output_consumers.push((stream_name.to_string(), c));
+        }
+
+        let pipeline_config = PipelineConfig {
+            pipeline_name: "simple-map-pipeline".to_string(),
+            vertex_name: "in".to_string(),
+            replica: 0,
+            batch_size: 1000,
+            paf_concurrency: 1000,
+            read_timeout: Duration::from_secs(1),
+            js_client_config: isb::jetstream::ClientConfig {
+                url: "localhost:4222".to_string(),
+                user: None,
+                password: None,
+            },
+            to_vertex_config: vec![ToVertexConfig {
+                name: "map-out".to_string(),
+                writer_config: BufferWriterConfig {
+                    streams: output_streams
+                        .iter()
+                        .enumerate()
+                        .map(|(i, stream_name)| ((*stream_name).to_string(), i as u16))
+                        .collect(),
+                    partitions: 5,
+                    max_length: 30000,
+                    usage_limit: 0.8,
+                    buffer_full_strategy: RetryUntilSuccess,
+                },
+                conditions: None,
+            }],
+            from_vertex_config: vec![FromVertexConfig {
+                name: "map-in".to_string(),
+                reader_config: BufferReaderConfig {
+                    partitions: 5,
+                    streams: input_streams
+                        .iter()
+                        .enumerate()
+                        .map(|(i, key)| (*key, i as u16))
+                        .collect(),
+                    wip_ack_interval: Duration::from_secs(1),
+                },
+                partitions: 0,
+            }],
+            vertex_config: VertexType::Map(MapVtxConfig {
+                concurrency: 10,
+                map_type: MapType::UserDefined(UserDefinedConfig {
+                    grpc_max_message_size: 4 * 1024 * 1024,
+                    socket_path: sock_file.to_str().unwrap().to_string(),
+                    server_info_path: server_info_file.to_str().unwrap().to_string(),
+                }),
+                map_mode: MapMode::Unary,
+            }),
+            metrics_config: MetricsConfig {
+                metrics_server_listen_port: 2469,
+                lag_check_interval_in_secs: 5,
+                lag_refresh_interval_in_secs: 3,
+                lookback_window_in_secs: 120,
+            },
+        };
+
+        let cancellation_token = CancellationToken::new();
+        let forwarder_task = tokio::spawn({
+            let cancellation_token = cancellation_token.clone();
+            async move {
+                start_forwarder(cancellation_token, pipeline_config)
+                    .await
+                    .unwrap();
+            }
+        });
+
+        // Wait for a few messages to be forwarded
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        cancellation_token.cancel();
+        // token cancellation is not aborting the forwarder since we fetch messages from jetstream
+        // as a stream of messages (not using `consumer.batch()`).
+        // See `JetstreamReader::start` method in src/pipeline/isb/jetstream/reader.rs
+        //forwarder_task.await.unwrap();
+        forwarder_task.abort();
+
+        // make sure we have mapped and written all messages to downstream
+        let mut written_count = 0;
+        for (_, mut stream_consumer) in output_consumers {
+            written_count += stream_consumer.info().await.unwrap().num_pending;
+        }
+        assert_eq!(written_count, (MESSAGE_COUNT * input_streams.len()) as u64);
+
+        // make sure all the upstream messages are read and acked
+        for (_, mut stream_consumer) in input_consumers {
+            let con_info = stream_consumer.info().await.unwrap();
+            assert_eq!(con_info.num_pending, 0);
+            assert_eq!(con_info.num_ack_pending, 0);
+        }
+
+        // Delete all streams created in this test
+        for stream_name in input_streams.iter().chain(output_streams.iter()) {
             context.delete_stream(stream_name).await.unwrap();
         }
     }
