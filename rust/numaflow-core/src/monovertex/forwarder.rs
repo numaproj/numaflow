@@ -268,6 +268,7 @@ mod tests {
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
             tracker_handle.clone(),
+            true,
         );
 
         // create a transformer
@@ -397,6 +398,7 @@ mod tests {
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
             tracker_handle.clone(),
+            true,
         );
 
         // create a transformer

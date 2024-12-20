@@ -425,6 +425,7 @@ mod tests {
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
+                    read_ahead: false,
                     source_type: SourceType::Generator(GeneratorConfig {
                         rpu: 10,
                         content: bytes::Bytes::new(),

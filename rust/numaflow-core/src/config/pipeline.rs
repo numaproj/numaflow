@@ -243,6 +243,10 @@ impl PipelineConfig {
 
             VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
+                    read_ahead: env::var("READ_AHEAD")
+                        .unwrap_or("false".to_string())
+                        .parse()
+                        .unwrap(),
                     source_type: source.try_into()?,
                 },
                 transformer_config,
@@ -518,6 +522,7 @@ mod tests {
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
+                    read_ahead: false,
                     source_type: SourceType::Generator(GeneratorConfig {
                         rpu: 100000,
                         content: Default::default(),
@@ -570,6 +575,7 @@ mod tests {
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
+                    read_ahead: false,
                     source_type: SourceType::Pulsar(PulsarSourceConfig {
                         pulsar_server_addr: "pulsar://pulsar-service:6650".to_string(),
                         topic: "test_persistent".to_string(),
