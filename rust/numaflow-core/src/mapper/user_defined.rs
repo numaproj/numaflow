@@ -8,7 +8,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
-use tracing::warn;
+use tracing::error;
 
 use crate::config::get_vertex_name;
 use crate::error::{Error, Result};
@@ -45,7 +45,7 @@ impl UserDefinedUnaryMap {
     /// Performs handshake with the server and creates a new UserDefinedMap.
     pub(super) async fn new(batch_size: usize, mut client: MapClient<Channel>) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
-        let resp_stream = perform_handshake(read_tx.clone(), read_rx, &mut client).await?;
+        let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
         // map to track the oneshot sender for each request along with the message info
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
@@ -66,8 +66,8 @@ impl UserDefinedUnaryMap {
         Ok(mapper)
     }
 
-    // receive responses from the server and gets the corresponding oneshot sender from the map
-    // and sends the response.
+    /// receive responses from the server and gets the corresponding oneshot response sender from the map
+    /// and sends the response.
     async fn receive_unary_responses(
         sender_map: ResponseSenderMap,
         mut resp_stream: Streaming<MapResponse>,
@@ -83,9 +83,7 @@ impl UserDefinedUnaryMap {
                 None
             }
         } {
-            if let Err(e) = process_response(&sender_map, resp).await {
-                warn!("Error processing response: {}", e);
-            }
+            process_response(&sender_map, resp).await
         }
     }
 
@@ -133,13 +131,13 @@ impl UserDefinedBatchMap {
     /// Performs handshake with the server and creates a new UserDefinedMap.
     pub(super) async fn new(batch_size: usize, mut client: MapClient<Channel>) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
-        let resp_stream = perform_handshake(read_tx.clone(), read_rx, &mut client).await?;
+        let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
-        // map to track the oneshot sender for each request along with the message info
+        // map to track the oneshot response sender for each request along with the message info
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
 
         // background task to receive responses from the server and send them to the appropriate
-        // oneshot sender based on the message id
+        // oneshot response sender based on the id
         let task_handle = tokio::spawn(Self::receive_batch_responses(
             Arc::clone(&sender_map),
             resp_stream,
@@ -153,7 +151,7 @@ impl UserDefinedBatchMap {
         Ok(mapper)
     }
 
-    /// receive responses from the server and gets the corresponding oneshot sender from the map
+    /// receive responses from the server and gets the corresponding oneshot response sender from the map
     /// and sends the response.
     async fn receive_batch_responses(
         sender_map: ResponseSenderMap,
@@ -165,21 +163,21 @@ impl UserDefinedBatchMap {
                 let error = Error::Mapper(format!("failed to receive map response: {}", e));
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(error.clone()));
+                    sender
+                        .send(Err(error.clone()))
+                        .expect("failed to send error response");
                 }
                 None
             }
         } {
             if let Some(map::TransmissionStatus { eot: true }) = resp.status {
                 if !sender_map.lock().await.is_empty() {
-                    warn!("received EOT but not all responses have been received");
+                    error!("received EOT but not all responses have been received");
                 }
                 continue;
             }
 
-            if let Err(e) = process_response(&sender_map, resp).await {
-                warn!("Error processing response: {}", e);
-            }
+            process_response(&sender_map, resp).await
         }
     }
 
@@ -222,7 +220,7 @@ impl UserDefinedBatchMap {
 
 /// Processes the response from the server and sends it to the appropriate oneshot sender
 /// based on the message id entry in the map.
-async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) -> Result<()> {
+async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
     let msg_id = resp.id;
     if let Some((msg_info, sender)) = sender_map.lock().await.remove(&msg_id) {
         let mut response_messages = vec![];
@@ -246,11 +244,10 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) -> 
             .send(Ok(response_messages))
             .expect("failed to send response");
     }
-    Ok(())
 }
 
 /// Performs handshake with the server and returns the response stream to receive responses.
-async fn perform_handshake(
+async fn create_response_stream(
     read_tx: mpsc::Sender<MapRequest>,
     read_rx: mpsc::Receiver<MapRequest>,
     client: &mut MapClient<Channel>,
@@ -301,13 +298,13 @@ impl UserDefinedStreamMap {
     /// Performs handshake with the server and creates a new UserDefinedMap.
     pub(super) async fn new(batch_size: usize, mut client: MapClient<Channel>) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
-        let resp_stream = perform_handshake(read_tx.clone(), read_rx, &mut client).await?;
+        let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
-        // map to track the oneshot sender for each request along with the message info
+        // map to track the oneshot response sender for each request along with the message info
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
 
         // background task to receive responses from the server and send them to the appropriate
-        // oneshot sender based on the message id
+        // mpsc sender based on the id
         let task_handle = tokio::spawn(Self::receive_stream_responses(
             Arc::clone(&sender_map),
             resp_stream,
@@ -344,7 +341,8 @@ impl UserDefinedStreamMap {
                 .remove(&resp.id)
                 .expect("map entry should always be present");
 
-            // when we get eot remove the entry from the map
+            // once we get eot, we can drop the sender to let the callee
+            // know that we are done sending responses
             if let Some(map::TransmissionStatus { eot: true }) = resp.status {
                 continue;
             }
@@ -369,7 +367,8 @@ impl UserDefinedStreamMap {
                     .expect("failed to send response");
             }
 
-            // Write the sender back to the map
+            // Write the sender back to the map, because we need to send
+            // more responses for the same request
             sender_map
                 .lock()
                 .await

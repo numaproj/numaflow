@@ -221,6 +221,9 @@ impl Mapper {
             // based on the map mode, send the message to the appropriate actor handle.
             match actor_handle {
                 ActorSender::Unary(map_handle) => loop {
+                    // we need tokio select here because we have to listen to both the input stream
+                    // and the error channel. If there is an error, we need to discard all the messages
+                    // in the tracker and stop processing the input stream.
                     tokio::select! {
                         read_msg = input_stream.next() => {
                             if let Some(read_msg) = read_msg {
@@ -239,6 +242,7 @@ impl Mapper {
                             }
                         },
                         Some(error) = error_rx.recv() => {
+                            // if there is an error, discard all the messages in the tracker and return the error.
                             tracker_handle.discard_all().await?;
                             return Err(error);
                         },
@@ -252,18 +256,26 @@ impl Mapper {
 
                     while let Some(batch) = chunked_stream.next().await {
                         if !batch.is_empty() {
-                            Self::perform_batch(
+                            if let Err(e) = Self::perform_batch(
                                 map_handle.clone(),
                                 batch,
                                 output_tx.clone(),
                                 tracker_handle.clone(),
                             )
-                            .await?;
+                            .await
+                            {
+                                // if there is an error, discard all the messages in the tracker and return the error.
+                                tracker_handle.discard_all().await?;
+                                return Err(e);
+                            }
                         }
                     }
                 }
 
                 ActorSender::Stream(map_handle) => loop {
+                    // we need tokio select here because we have to listen to both the input stream
+                    // and the error channel. If there is an error, we need to discard all the messages
+                    // in the tracker and stop processing the input stream.
                     tokio::select! {
                         read_msg = input_stream.next() => {
                             if let Some(read_msg) = read_msg {
@@ -282,6 +294,7 @@ impl Mapper {
                             }
                         },
                         Some(error) = error_rx.recv() => {
+                            // if there is an error, discard all the messages in the tracker and return the error.
                             tracker_handle.discard_all().await?;
                             return Err(error);
                         },
@@ -295,7 +308,8 @@ impl Mapper {
     }
 
     /// performs unary map operation on the given message and sends the mapped messages to the output
-    /// stream.
+    /// stream. It updates the tracker with the number of messages sent. If there are any errors, it
+    /// sends the error to the error channel.
     async fn perform_unary(
         map_handle: mpsc::Sender<UnaryActorMessage>,
         permit: OwnedSemaphorePermit,
@@ -325,6 +339,7 @@ impl Mapper {
 
             match receiver.await {
                 Ok(Ok(mut mapped_messages)) => {
+                    // update the tracker with the number of messages sent and send the mapped messages
                     if let Err(e) = tracker_handle
                         .update(
                             read_msg.id.offset.clone(),
@@ -333,27 +348,31 @@ impl Mapper {
                         )
                         .await
                     {
-                        let _ = error_tx.send(e).await;
+                        error_tx.send(e).await.expect("failed to send error");
                         return;
                     }
                     for mapped_message in mapped_messages.drain(..) {
-                        let _ = output_tx.send(mapped_message).await;
+                        output_tx
+                            .send(mapped_message)
+                            .await
+                            .expect("failed to send response");
                     }
                 }
                 Ok(Err(e)) => {
-                    let _ = error_tx.send(e).await;
+                    error_tx.send(e).await.expect("failed to send error");
                 }
                 Err(e) => {
-                    let _ = error_tx
+                    error_tx
                         .send(Error::Mapper(format!("failed to receive message: {}", e)))
-                        .await;
+                        .await
+                        .expect("failed to send error");
                 }
             }
         });
     }
 
     /// performs batch map operation on the given batch of messages and sends the mapped messages to
-    /// the output stream.
+    /// the output stream. It updates the tracker with the number of messages sent.
     async fn perform_batch(
         map_handle: mpsc::Sender<BatchActorMessage>,
         batch: Vec<Message>,
@@ -380,7 +399,10 @@ impl Mapper {
                         .update(offset.clone(), mapped_messages.len() as u32, true)
                         .await?;
                     for mapped_message in mapped_messages.drain(..) {
-                        let _ = output_tx.send(mapped_message).await;
+                        output_tx
+                            .send(mapped_message)
+                            .await
+                            .expect("failed to send response");
                     }
                 }
                 Ok(Err(e)) => {
@@ -395,7 +417,8 @@ impl Mapper {
     }
 
     /// performs stream map operation on the given message and sends the mapped messages to the output
-    /// stream.
+    /// stream. It updates the tracker with the number of messages sent. If there are any errors,
+    /// it sends the error to the error channel.
     async fn perform_stream(
         map_handle: mpsc::Sender<StreamActorMessage>,
         permit: OwnedSemaphorePermit,
@@ -427,25 +450,26 @@ impl Mapper {
                     Ok(mapped_message) => {
                         let offset = mapped_message.id.offset.clone();
                         if let Err(e) = tracker_handle.update(offset.clone(), 1, false).await {
-                            let _ = error_tx.send(e).await;
+                            error_tx.send(e).await.expect("failed to send error");
                             return;
                         }
                         if let Err(e) = output_tx.send(mapped_message).await {
-                            let _ = error_tx
+                            error_tx
                                 .send(Error::Mapper(format!("failed to send message: {}", e)))
-                                .await;
+                                .await
+                                .expect("failed to send error");
                             return;
                         }
                     }
                     Err(e) => {
-                        let _ = error_tx.send(e).await;
+                        error_tx.send(e).await.expect("failed to send error");
                         return;
                     }
                 }
             }
 
             if let Err(e) = tracker_handle.update(read_msg.id.offset, 0, true).await {
-                let _ = error_tx.send(e).await;
+                error_tx.send(e).await.expect("failed to send error");
             }
         });
     }
