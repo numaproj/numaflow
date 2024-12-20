@@ -5,6 +5,7 @@ import 'bootstrap-daterangepicker/daterangepicker.css';
 import DateRangePicker from 'react-bootstrap-daterangepicker';
 import 'jquery';
 import './TimeSelector.css';
+import { ArrowDropDown } from '@mui/icons-material'; 
 
 interface TimeSelectorProps {
   setMetricReq: any;
@@ -46,7 +47,7 @@ const TimeSelector = ({setMetricReq}: TimeSelectorProps) => {
           timePicker: true,
           timePicker24Hour: true,
           locale: {
-            format: 'DD/MM hh:mm A'
+            format: 'DD/MM/YYYY hh:mm A'
           }
         }}
         onCallback={handleCallback}
@@ -54,10 +55,10 @@ const TimeSelector = ({setMetricReq}: TimeSelectorProps) => {
         <input type="text" 
          id="dateRangeInput"
           className="form-control date-input" 
-          style={{ fontSize: '1.6rem', width: '300px', paddingRight: '10px', height: '50px' }} 
+          style={{ fontSize: '1.6rem', width: '400px', paddingRight: '10px', height: '50px' }} 
         />
       </DateRangePicker>
-      <span className="caret">&#9662;</span>
+      <span className="caret"><ArrowDropDown/></span>
     </div>
   );
 };

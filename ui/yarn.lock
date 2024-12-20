@@ -2875,6 +2875,13 @@
   resolved "https://registry.yarnpkg.com/@types/range-parser/-/range-parser-1.2.7.tgz#50ae4353eaaddc04044279812f52c8c65857dbcb"
   integrity sha512-hKormJbkJqzQGhziax5PItDUTMAM9uE2XXQmM37dyd4hVM+5aVl7oVxMVUiVQn2oCQFN/LKCZdvSM0pFRqbSmQ==
 
+"@types/react-bootstrap-daterangepicker@^7.0.0":
+  version "7.0.0"
+  resolved "https://registry.yarnpkg.com/@types/react-bootstrap-daterangepicker/-/react-bootstrap-daterangepicker-7.0.0.tgz#445ddaaa5e38c7d98130ed9c43d4c391c027cc4a"
+  integrity sha512-x6d7FBbW6kDNI84UgB+l1GpPiRRPuHaXokpc+JHayvoCFVRYwB1NHCD9n0JsC9aUA1Zuvgy4Mo4wjgK9g+fDsg==
+  dependencies:
+    react-bootstrap-daterangepicker "*"
+
 "@types/react-dom@*", "@types/react-dom@^18.0.0":
   version "18.3.0"
   resolved "https://registry.yarnpkg.com/@types/react-dom/-/react-dom-18.3.0.tgz#0cbc818755d87066ab6ca74fbedb2547d74a82b0"
@@ -9633,7 +9640,7 @@ react-base16-styling@^0.6.0:
     lodash.flow "^3.3.0"
     pure-color "^1.2.0"
 
-react-bootstrap-daterangepicker@^8.0.0:
+react-bootstrap-daterangepicker@*, react-bootstrap-daterangepicker@^8.0.0:
   version "8.0.0"
   resolved "https://registry.yarnpkg.com/react-bootstrap-daterangepicker/-/react-bootstrap-daterangepicker-8.0.0.tgz#5c60670fae3cf9193fa274e4e12d9c878cb40d63"
   integrity sha512-zwEMHq93/a0f2C2Cc/Q1zxN+jYWF4JsWEwVkJ2xVGp++Oc3Ck/fI2F9kiEqY1n8oKV0WFT4+cTcoagG7sWuXXw==
