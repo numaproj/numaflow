@@ -1,7 +1,9 @@
-use forwarder::ForwarderBuilder;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+use forwarder::ForwarderBuilder;
+
+use crate::{metrics, shared};
 use crate::config::is_mono_vertex;
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
@@ -10,7 +12,6 @@ use crate::sink::SinkWriter;
 use crate::source::Source;
 use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
-use crate::{metrics, shared};
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
@@ -83,7 +84,9 @@ async fn start(
     // start the pending reader to publish pending metrics
     let pending_reader =
         shared::metrics::create_pending_reader(&mvtx_config.metrics_config, source.clone()).await;
-    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+    let _pending_reader_handle = pending_reader
+        .start(is_mono_vertex(), mvtx_config.daemon_server_address.clone())
+        .await;
 
     let mut forwarder_builder = ForwarderBuilder::new(source, sink, cln_token);
 
@@ -109,8 +112,8 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
 
-    use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source};
+    use numaflow::source::{Message, Offset, SourceReadRequest};
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
 

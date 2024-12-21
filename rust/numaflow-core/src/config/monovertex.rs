@@ -1,18 +1,19 @@
 use std::env;
 use std::time::Duration;
 
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use numaflow_models::models::MonoVertex;
+use base64::prelude::BASE64_STANDARD;
 use serde_json::from_slice;
 
+use numaflow_models::models::MonoVertex;
+
+use crate::config::components::{sink, source};
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::source::{GeneratorConfig, SourceConfig};
 use crate::config::components::transformer::{
     TransformerConfig, TransformerType, UserDefinedConfig,
 };
-use crate::config::components::{sink, source};
 use crate::config::get_vertex_replica;
 use crate::config::monovertex::sink::SinkType;
 use crate::error::Error;
@@ -21,6 +22,7 @@ use crate::Result;
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
 const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
+const DAEMON_SERVICE_PORT: i16 = 4327;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MonovertexConfig {
@@ -33,6 +35,7 @@ pub(crate) struct MonovertexConfig {
     pub(crate) transformer_config: Option<TransformerConfig>,
     pub(crate) fb_sink_config: Option<SinkConfig>,
     pub(crate) metrics_config: MetricsConfig,
+    pub(crate) daemon_server_address: String,
 }
 
 impl Default for MonovertexConfig {
@@ -53,6 +56,7 @@ impl Default for MonovertexConfig {
             transformer_config: None,
             fb_sink_config: None,
             metrics_config: MetricsConfig::default(),
+            daemon_server_address: "".to_string(),
         }
     }
 }
@@ -143,12 +147,22 @@ impl MonovertexConfig {
             .and_then(|scale| scale.lookback_seconds.map(|x| x as u16))
             .unwrap_or(DEFAULT_LOOKBACK_WINDOW_IN_SECS);
 
+        let mono_vertex_namespace = mono_vertex_obj
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.namespace.clone())
+            .unwrap_or("default".to_string());
+
         Ok(MonovertexConfig {
-            name: mono_vertex_name,
+            name: mono_vertex_name.clone(),
             replica: *get_vertex_replica(),
             batch_size: batch_size as usize,
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
+            daemon_server_address: get_daemon_server_address(
+                mono_vertex_name,
+                mono_vertex_namespace,
+            ),
             source_config,
             sink_config,
             transformer_config,
@@ -157,10 +171,19 @@ impl MonovertexConfig {
     }
 }
 
+fn get_daemon_server_address(mvtx_name: String, mvtx_namespace: String) -> String {
+    format!(
+        "https://{}-mv-daemon-svc.{}.svc:{}",
+        mvtx_name.to_lowercase(),
+        mvtx_namespace.to_lowercase(),
+        DAEMON_SERVICE_PORT
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    use base64::prelude::BASE64_STANDARD;
     use base64::Engine;
+    use base64::prelude::BASE64_STANDARD;
 
     use crate::config::components::sink::SinkType;
     use crate::config::components::source::SourceType;
@@ -375,5 +398,92 @@ mod tests {
                 "/var/run/numaflow/fb-sinker-server-info"
             );
         }
+    }
+
+    #[test]
+    fn test_load_with_lookback_window() {
+        let valid_config = r#"
+        {
+            "metadata": {
+                "name": "test_vertex"
+            },
+            "spec": {
+                "limits": {
+                    "readBatchSize": 1000,
+                    "readTimeout": "2s"
+                },
+                "source": {
+                    "udsource": {
+                        "container": {
+                            "image": "xxxxxxx",
+                            "resources": {}
+                        }
+                    }
+                },
+                "sink": {
+                    "log": {}
+                },
+                "scale": {
+                    "lookbackSeconds": 300
+                }
+            }
+        }
+        "#;
+        let encoded_invalid_config = BASE64_STANDARD.encode(valid_config);
+        let spec = encoded_invalid_config.as_str();
+
+        let config = MonovertexConfig::load(spec.to_string()).unwrap();
+
+        assert_eq!(config.name, "test_vertex");
+        assert_eq!(config.metrics_config.lookback_window_in_secs, 300);
+    }
+
+    #[test]
+    fn test_daeomon_server_address() {
+        let mvtx_name = "test_vertex".to_string();
+        let mvtx_namespace = "test_namespace".to_string();
+        let valid_config = r#"
+        {
+            "metadata": {
+                "name": "test_vertex",
+                "namespace": "test_namespace"
+            },
+            "spec": {
+                "limits": {
+                    "readBatchSize": 1000,
+                    "readTimeout": "2s"
+                },
+                "source": {
+                    "udsource": {
+                        "container": {
+                            "image": "xxxxxxx",
+                            "resources": {}
+                        }
+                    }
+                },
+                "sink": {
+                    "log": {}
+                },
+                "scale": {
+                    "lookbackSeconds": 300
+                }
+            }
+        }
+        "#;
+        let encoded_invalid_config = BASE64_STANDARD.encode(valid_config);
+        let spec = encoded_invalid_config.as_str();
+
+        let config = MonovertexConfig::load(spec.to_string()).unwrap();
+        let daemon_server_address = config.daemon_server_address;
+
+        assert_eq!(
+            daemon_server_address,
+            format!(
+                "https://{}-mv-daemon-svc.{}.svc:{}",
+                mvtx_name.to_lowercase(),
+                mvtx_namespace.to_lowercase(),
+                4327
+            )
+        );
     }
 }

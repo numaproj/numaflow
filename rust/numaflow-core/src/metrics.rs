@@ -775,7 +775,11 @@ impl PendingReader {
     /// - Another to periodically expose the pending metrics.
     ///
     /// Dropping the PendingReaderTasks will abort the background tasks.
-    pub async fn start(&self, is_mono_vertex: bool) -> PendingReaderTasks {
+    pub async fn start(
+        &self,
+        is_mono_vertex: bool,
+        daemon_server_address: String,
+    ) -> PendingReaderTasks {
         let pending_reader = self.lag_reader.clone();
         let lag_checking_interval = self.lag_checking_interval;
         let refresh_interval = self.refresh_interval;
@@ -793,6 +797,7 @@ impl PendingReader {
                 refresh_interval,
                 pending_stats,
                 lookback_seconds,
+                daemon_server_address,
             )
             .await;
         });
@@ -854,6 +859,7 @@ async fn expose_pending_metrics(
     refresh_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
     lookback_seconds: u16,
+    daemon_server_address: String,
 ) {
     let mut ticker = time::interval(refresh_interval);
 
@@ -870,21 +876,24 @@ async fn expose_pending_metrics(
 
     loop {
         ticker.tick().await;
-        let server_url = env::var("SERVER_URL").expect("NO SERVER");
-        info!("Server URL: {}", server_url);
 
-        let client = reqwest::ClientBuilder::new()
-            .danger_accept_invalid_certs(true)
-            .build()
-            .unwrap();
-        let resp = client.get(server_url).send().await;
-        if resp.is_ok() {
-            // Parse the JSON into a HashMap
-            let json_map: HashMap<String, f64> = resp.unwrap().json().await.unwrap();
-            // extract the lookback seconds from the json
-            let lookback_seconds = json_map.get("lookback").unwrap();
-            // update the key with the new lookback seconds
-            lookback_seconds_map[1] = ("default", *lookback_seconds as u16);
+        /// Update the lookback seconds from the daemon server
+        /// Currently only monovertex is supported
+        if !daemon_server_address.is_empty() && is_mono_vertex {
+            let server_url = format!("{}/api/v1/lookback", daemon_server_address);
+
+            let client = reqwest::ClientBuilder::new()
+                .danger_accept_invalid_certs(true)
+                .build()
+                .unwrap();
+            let resp = client.get(server_url).send().await;
+            if resp.is_ok() {
+                // Parse the JSON into a HashMap, extract the lookback seconds from the json
+                let json_map: HashMap<String, f64> = resp.unwrap().json().await.unwrap();
+                let lookback_seconds = json_map.get("lookback").unwrap();
+                // update the key with the new lookback seconds
+                lookback_seconds_map[1] = ("default", *lookback_seconds as u16);
+            }
         }
 
         for (label, seconds) in lookback_seconds_map {
@@ -1142,8 +1151,14 @@ mod tests {
         tokio::spawn({
             let pending_stats = Arc::clone(&pending_stats);
             async move {
-                expose_pending_metrics(true, refresh_interval, pending_stats, lookback_seconds)
-                    .await;
+                expose_pending_metrics(
+                    true,
+                    refresh_interval,
+                    pending_stats,
+                    lookback_seconds,
+                    "".to_string(),
+                )
+                .await;
             }
         });
         // We use tokio::time::interval() as the ticker in the expose_pending_metrics() function.
