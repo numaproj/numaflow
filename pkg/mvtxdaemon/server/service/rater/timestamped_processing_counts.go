@@ -40,14 +40,6 @@ func (tc *TimestampedProcessingTime) Update(podReadCount *PodProcessingTime) {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
 	if podReadCount == nil {
-		// we choose to skip updating when podReadCount is nil, instead of removing the pod from the map.
-		// imagine if the getPodReadCounts call fails to scrape the partitionReadCounts metric, and it's NOT because the pod is down.
-		// in this case getPodReadCounts returns nil.
-		// if we remove the pod from the map and then the next scrape successfully gets the partitionReadCounts, we can reach a state that in the timestamped counts,
-		// for this single pod, at t1, partitionReadCounts is 123456, at t2, the map doesn't contain this pod and t3, partitionReadCounts is 123457.
-		// when calculating the rate, as we sum up deltas among timestamps, we will get 123457 total delta instead of the real delta 1.
-		// one occurrence of such case can lead to extremely high rate and mess up the autoscaling.
-		// hence we'd rather keep the partitionReadCounts as it is to avoid wrong rate calculation.
 		return
 	}
 	sum, count := podReadCount.processingTime()
