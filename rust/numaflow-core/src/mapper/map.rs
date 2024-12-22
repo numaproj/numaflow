@@ -1,17 +1,21 @@
-use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
-use std::time::Duration;
-use tokio::task::JoinHandle;
-use numaflow_pb::clients::map::map_client::MapClient;
-use tonic::transport::Channel;
-use tokio_stream::wrappers::ReceiverStream;
-use std::sync::Arc;
-use tokio_stream::StreamExt;
 use crate::config::pipeline::map::MapMode;
 use crate::error;
 use crate::error::Error;
-use crate::mapper::user_defined::{UserDefinedBatchMap, UserDefinedStreamMap, UserDefinedUnaryMap};
+use crate::mapper::map::user_defined::{
+    UserDefinedBatchMap, UserDefinedStreamMap, UserDefinedUnaryMap,
+};
 use crate::message::Message;
 use crate::tracker::TrackerHandle;
+use numaflow_pb::clients::map::map_client::MapClient;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
+use tokio::task::JoinHandle;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
+use tonic::transport::Channel;
+
+pub(super) mod user_defined;
 
 /// UnaryActorMessage is a message that is sent to the UnaryMapperActor.
 struct UnaryActorMessage {
@@ -105,9 +109,9 @@ enum ActorSender {
     Stream(mpsc::Sender<StreamActorMessage>),
 }
 
-/// FlatMapHandle is responsible for reading messages from the stream and invoke the map operation
+/// MapHandle is responsible for reading messages from the stream and invoke the map operation
 /// on those messages and send the mapped messages to the output stream.
-pub(crate) struct FlatMapHandle {
+pub(crate) struct MapHandle {
     batch_size: usize,
     read_timeout: Duration,
     concurrency: usize,
@@ -117,7 +121,7 @@ pub(crate) struct FlatMapHandle {
 }
 
 /// Abort all the background tasks when the mapper is dropped.
-impl Drop for FlatMapHandle {
+impl Drop for MapHandle {
     fn drop(&mut self) {
         for handle in &self.task_handles {
             handle.abort();
@@ -128,7 +132,7 @@ impl Drop for FlatMapHandle {
 /// Response channel size for streaming map.
 const STREAMING_MAP_RESP_CHANNEL_SIZE: usize = 10;
 
-impl FlatMapHandle {
+impl MapHandle {
     /// Creates a new mapper with the given batch size, concurrency, client, and tracker handle.
     /// It spawns the appropriate actor based on the map mode.
     pub(crate) async fn new(
@@ -477,14 +481,14 @@ mod tests {
     use crate::Result;
     use std::time::Duration;
 
+    use crate::message::{MessageID, Offset, StringOffset};
+    use crate::shared::grpc::create_rpc_channel;
     use numaflow::mapstream;
     use numaflow::{batchmap, map};
     use numaflow_pb::clients::map::map_client::MapClient;
     use tempfile::TempDir;
     use tokio::sync::mpsc::Sender;
     use tokio::sync::oneshot;
-    use crate::message::{MessageID, Offset, StringOffset};
-    use crate::shared::grpc::create_rpc_channel;
 
     struct SimpleMapper;
 
@@ -521,7 +525,7 @@ mod tests {
         let tracker_handle = TrackerHandle::new();
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let mapper = FlatMapHandle::new(
+        let mapper = MapHandle::new(
             MapMode::Unary,
             500,
             Duration::from_millis(1000),
@@ -558,7 +562,7 @@ mod tests {
             panic!("Expected Unary actor sender");
         };
 
-        FlatMapHandle::unary(
+        MapHandle::unary(
             input_tx,
             permit,
             message,
@@ -612,7 +616,7 @@ mod tests {
 
         let tracker_handle = TrackerHandle::new();
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let mapper = FlatMapHandle::new(
+        let mapper = MapHandle::new(
             MapMode::Unary,
             10,
             Duration::from_millis(10),
@@ -702,7 +706,7 @@ mod tests {
 
         let tracker_handle = TrackerHandle::new();
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let mapper = FlatMapHandle::new(
+        let mapper = MapHandle::new(
             MapMode::Unary,
             500,
             Duration::from_millis(1000),
@@ -798,7 +802,7 @@ mod tests {
         let tracker_handle = TrackerHandle::new();
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let mapper = FlatMapHandle::new(
+        let mapper = MapHandle::new(
             MapMode::Batch,
             500,
             Duration::from_millis(1000),
@@ -908,7 +912,7 @@ mod tests {
 
         let tracker_handle = TrackerHandle::new();
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let mapper = FlatMapHandle::new(
+        let mapper = MapHandle::new(
             MapMode::Batch,
             500,
             Duration::from_millis(1000),
@@ -1019,7 +1023,7 @@ mod tests {
         let tracker_handle = TrackerHandle::new();
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let mapper = FlatMapHandle::new(
+        let mapper = MapHandle::new(
             MapMode::Stream,
             500,
             Duration::from_millis(1000),
@@ -1115,7 +1119,7 @@ mod tests {
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let tracker_handle = TrackerHandle::new();
-        let mapper = FlatMapHandle::new(
+        let mapper = MapHandle::new(
             MapMode::Stream,
             500,
             Duration::from_millis(1000),

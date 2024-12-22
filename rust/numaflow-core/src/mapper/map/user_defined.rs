@@ -28,7 +28,7 @@ struct ParentMessageInfo {
 
 /// UserDefinedUnaryMap is a grpc client that sends unary requests to the map server
 /// and forwards the responses.
-pub(super) struct UserDefinedUnaryMap {
+pub(in crate::mapper) struct UserDefinedUnaryMap {
     read_tx: mpsc::Sender<MapRequest>,
     senders: ResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
@@ -43,7 +43,10 @@ impl Drop for UserDefinedUnaryMap {
 
 impl UserDefinedUnaryMap {
     /// Performs handshake with the server and creates a new UserDefinedMap.
-    pub(super) async fn new(batch_size: usize, mut client: MapClient<Channel>) -> Result<Self> {
+    pub(in crate::mapper) async fn new(
+        batch_size: usize,
+        mut client: MapClient<Channel>,
+    ) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
@@ -88,7 +91,7 @@ impl UserDefinedUnaryMap {
     }
 
     /// Handles the incoming message and sends it to the server for mapping.
-    pub(super) async fn unary_map(
+    pub(in crate::mapper) async fn unary_map(
         &mut self,
         message: Message,
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
@@ -114,7 +117,7 @@ impl UserDefinedUnaryMap {
 
 /// UserDefinedBatchMap is a grpc client that sends batch requests to the map server
 /// and forwards the responses.
-pub(super) struct UserDefinedBatchMap {
+pub(in crate::mapper) struct UserDefinedBatchMap {
     read_tx: mpsc::Sender<MapRequest>,
     senders: ResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
@@ -129,7 +132,10 @@ impl Drop for UserDefinedBatchMap {
 
 impl UserDefinedBatchMap {
     /// Performs handshake with the server and creates a new UserDefinedMap.
-    pub(super) async fn new(batch_size: usize, mut client: MapClient<Channel>) -> Result<Self> {
+    pub(in crate::mapper) async fn new(
+        batch_size: usize,
+        mut client: MapClient<Channel>,
+    ) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
@@ -182,7 +188,7 @@ impl UserDefinedBatchMap {
     }
 
     /// Handles the incoming message and sends it to the server for mapping.
-    pub(super) async fn batch_map(
+    pub(in crate::mapper) async fn batch_map(
         &mut self,
         messages: Vec<Message>,
         respond_to: Vec<oneshot::Sender<Result<Vec<Message>>>>,
@@ -281,7 +287,7 @@ async fn create_response_stream(
 }
 
 /// UserDefinedStreamMap is a grpc client that sends stream requests to the map server
-pub(super) struct UserDefinedStreamMap {
+pub(in crate::mapper) struct UserDefinedStreamMap {
     read_tx: mpsc::Sender<MapRequest>,
     senders: StreamResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
@@ -296,7 +302,10 @@ impl Drop for UserDefinedStreamMap {
 
 impl UserDefinedStreamMap {
     /// Performs handshake with the server and creates a new UserDefinedMap.
-    pub(super) async fn new(batch_size: usize, mut client: MapClient<Channel>) -> Result<Self> {
+    pub(in crate::mapper) async fn new(
+        batch_size: usize,
+        mut client: MapClient<Channel>,
+    ) -> Result<Self> {
         let (read_tx, read_rx) = mpsc::channel(batch_size);
         let resp_stream = create_response_stream(read_tx.clone(), read_rx, &mut client).await?;
 
@@ -377,7 +386,7 @@ impl UserDefinedStreamMap {
     }
 
     /// Handles the incoming message and sends it to the server for mapping.
-    pub(super) async fn stream_map(
+    pub(in crate::mapper) async fn stream_map(
         &mut self,
         message: Message,
         respond_to: mpsc::Sender<Result<Message>>,
@@ -413,7 +422,7 @@ mod tests {
     use numaflow_pb::clients::map::map_client::MapClient;
     use tempfile::TempDir;
 
-    use crate::mapper::user_defined::{
+    use crate::mapper::map::user_defined::{
         UserDefinedBatchMap, UserDefinedStreamMap, UserDefinedUnaryMap,
     };
     use crate::message::{MessageID, StringOffset};

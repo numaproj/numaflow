@@ -13,7 +13,7 @@ use crate::config::components::transformer::TransformerConfig;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::{DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET};
 use crate::error::Error;
-use crate::mapper::flatmap::FlatMapHandle;
+use crate::mapper::map::MapHandle;
 use crate::shared::grpc;
 use crate::shared::server_info::{sdk_server_info, ContainerType};
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
@@ -208,7 +208,7 @@ pub(crate) async fn create_mapper(
     map_config: MapVtxConfig,
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
-) -> error::Result<(FlatMapHandle, Option<MapClient<Channel>>)> {
+) -> error::Result<(MapHandle, Option<MapClient<Channel>>)> {
     match map_config.map_type {
         MapType::UserDefined(mut config) => {
             let server_info =
@@ -246,7 +246,7 @@ pub(crate) async fn create_mapper(
                     .max_decoding_message_size(config.grpc_max_message_size);
             grpc::wait_until_mapper_ready(&cln_token, &mut map_grpc_client).await?;
             Ok((
-                FlatMapHandle::new(
+                MapHandle::new(
                     server_info.get_map_mode().unwrap_or(MapMode::Unary),
                     batch_size,
                     read_timeout,
