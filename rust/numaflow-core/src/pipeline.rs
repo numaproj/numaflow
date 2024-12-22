@@ -662,6 +662,7 @@ mod tests {
 
     // e2e test for map forwarder, reads from multi-partitioned buffer, invokes map
     // and writes to multi-partitioned buffer.
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_forwarder_for_map_vertex() {
         let tmp_dir = TempDir::new().unwrap();

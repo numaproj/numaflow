@@ -1,7 +1,7 @@
 use tokio_util::sync::CancellationToken;
 
 use crate::error::Error;
-use crate::mapper::Mapper;
+use crate::mapper::flatmap::FlatMapHandle;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::Result;
@@ -10,7 +10,7 @@ use crate::Result;
 /// and manages the lifecycle of these components.
 pub(crate) struct MapForwarder {
     jetstream_reader: JetstreamReader,
-    mapper: Mapper,
+    mapper: FlatMapHandle,
     jetstream_writer: JetstreamWriter,
     cln_token: CancellationToken,
 }
@@ -18,7 +18,7 @@ pub(crate) struct MapForwarder {
 impl MapForwarder {
     pub(crate) async fn new(
         jetstream_reader: JetstreamReader,
-        mapper: Mapper,
+        mapper: FlatMapHandle,
         jetstream_writer: JetstreamWriter,
         cln_token: CancellationToken,
     ) -> Self {
@@ -39,7 +39,7 @@ impl MapForwarder {
             .await?;
 
         let (mapped_messages_stream, mapper_handle) =
-            self.mapper.map_stream(read_messages_stream).await?;
+            self.mapper.streaming_map(read_messages_stream).await?;
 
         let writer_handle = self
             .jetstream_writer
