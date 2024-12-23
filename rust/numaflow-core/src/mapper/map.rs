@@ -1,3 +1,22 @@
+//! The `MapHandle` orchestrates reading messages from the input stream, invoking the map operation,
+//! and sending the mapped messages to the output stream.
+//!
+//! ```text
+//!         Batch
+//!       /
+//! (Read) -- Unary
+//!       \
+//!         Stream
+//! ```
+//!
+//! The `MapHandle` reads messages from the input stream and invokes the map operation based on the mode:
+//! - Unary: Concurrent operations controlled using permits and `tokio::spawn`.
+//! - Batch: Synchronous operations, one batch at a time, followed by an invoke.
+//! - Stream: Concurrent operations controlled using permits and `tokio::spawn`, followed by an invoke.
+//!
+//! In case of errors in unary/stream, tasks will write to the error channel (`error_tx`), and the `MapHandle`
+//! will stop reading new requests and return an error.
+
 use crate::config::pipeline::map::MapMode;
 use crate::error;
 use crate::error::Error;
@@ -14,7 +33,6 @@ use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
-
 pub(super) mod user_defined;
 
 /// UnaryActorMessage is a message that is sent to the UnaryMapperActor.
@@ -115,17 +133,15 @@ pub(crate) struct MapHandle {
     batch_size: usize,
     read_timeout: Duration,
     concurrency: usize,
-    tracker_handle: TrackerHandle,
+    tracker: TrackerHandle,
     actor_sender: ActorSender,
-    task_handles: Vec<JoinHandle<()>>,
+    task_handle: JoinHandle<()>,
 }
 
 /// Abort all the background tasks when the mapper is dropped.
 impl Drop for MapHandle {
     fn drop(&mut self) {
-        for handle in &self.task_handles {
-            handle.abort();
-        }
+        self.task_handle.abort();
     }
 }
 
@@ -143,7 +159,7 @@ impl MapHandle {
         client: MapClient<Channel>,
         tracker_handle: TrackerHandle,
     ) -> error::Result<Self> {
-        let mut task_handles = Vec::new();
+        let task_handle;
 
         // Based on the map mode, spawn the appropriate map actor
         // and store the sender handle in the actor_sender.
@@ -158,7 +174,7 @@ impl MapHandle {
                 let handle = tokio::spawn(async move {
                     mapper_actor.run().await;
                 });
-                task_handles.push(handle);
+                task_handle = handle;
                 ActorSender::Unary(sender)
             }
             MapMode::Batch => {
@@ -171,7 +187,7 @@ impl MapHandle {
                 let handle = tokio::spawn(async move {
                     batch_mapper_actor.run().await;
                 });
-                task_handles.push(handle);
+                task_handle = handle;
                 ActorSender::Batch(batch_sender)
             }
             MapMode::Stream => {
@@ -184,7 +200,7 @@ impl MapHandle {
                 let handle = tokio::spawn(async move {
                     stream_mapper_actor.run().await;
                 });
-                task_handles.push(handle);
+                task_handle = handle;
                 ActorSender::Stream(stream_sender)
             }
         };
@@ -194,8 +210,8 @@ impl MapHandle {
             batch_size,
             read_timeout,
             concurrency,
-            tracker_handle,
-            task_handles,
+            tracker: tracker_handle,
+            task_handle,
         })
     }
 
@@ -210,7 +226,7 @@ impl MapHandle {
         let (error_tx, mut error_rx) = mpsc::channel(1);
 
         let actor_handle = self.actor_sender.clone();
-        let tracker_handle = self.tracker_handle.clone();
+        let tracker = self.tracker.clone();
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
         let batch_size = self.batch_size;
         let read_timeout = self.read_timeout;
@@ -234,7 +250,7 @@ impl MapHandle {
                                     permit,
                                     read_msg,
                                     output_tx.clone(),
-                                    tracker_handle.clone(),
+                                    tracker.clone(),
                                     error_tx,
                                 ).await;
                             } else {
@@ -243,7 +259,7 @@ impl MapHandle {
                         },
                         Some(error) = error_rx.recv() => {
                             // if there is an error, discard all the messages in the tracker and return the error.
-                            tracker_handle.discard_all().await?;
+                            tracker.discard_all().await?;
                             return Err(error);
                         },
                     }
@@ -253,19 +269,20 @@ impl MapHandle {
                     let timeout_duration = read_timeout;
                     let chunked_stream = input_stream.chunks_timeout(batch_size, timeout_duration);
                     tokio::pin!(chunked_stream);
-
+                    // we don't need to tokio spawn here because, unlike unary and stream, batch is a blocking operation,
+                    // and we process one batch at a time.
                     while let Some(batch) = chunked_stream.next().await {
                         if !batch.is_empty() {
                             if let Err(e) = Self::batch(
                                 map_handle.clone(),
                                 batch,
                                 output_tx.clone(),
-                                tracker_handle.clone(),
+                                tracker.clone(),
                             )
                             .await
                             {
                                 // if there is an error, discard all the messages in the tracker and return the error.
-                                tracker_handle.discard_all().await?;
+                                tracker.discard_all().await?;
                                 return Err(e);
                             }
                         }
@@ -286,7 +303,7 @@ impl MapHandle {
                                     permit,
                                     read_msg,
                                     output_tx.clone(),
-                                    tracker_handle.clone(),
+                                    tracker.clone(),
                                     error_tx,
                                 ).await;
                             } else {
@@ -295,7 +312,7 @@ impl MapHandle {
                         },
                         Some(error) = error_rx.recv() => {
                             // if there is an error, discard all the messages in the tracker and return the error.
-                            tracker_handle.discard_all().await?;
+                            tracker.discard_all().await?;
                             return Err(error);
                         },
                     }
@@ -310,6 +327,9 @@ impl MapHandle {
     /// performs unary map operation on the given message and sends the mapped messages to the output
     /// stream. It updates the tracker with the number of messages sent. If there are any errors, it
     /// sends the error to the error channel.
+    ///
+    /// We use permit to limit the number of concurrent map unary operations, so that at any point in time
+    /// we don't have more than `concurrency` number of map operations running.
     async fn unary(
         map_handle: mpsc::Sender<UnaryActorMessage>,
         permit: OwnedSemaphorePermit,
@@ -419,6 +439,9 @@ impl MapHandle {
     /// performs stream map operation on the given message and sends the mapped messages to the output
     /// stream. It updates the tracker with the number of messages sent. If there are any errors,
     /// it sends the error to the error channel.
+    ///
+    /// We use permit to limit the number of concurrent map unary operations, so that at any point in time
+    /// we don't have more than `concurrency` number of map operations running.
     async fn stream(
         map_handle: mpsc::Sender<StreamActorMessage>,
         permit: OwnedSemaphorePermit,

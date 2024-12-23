@@ -86,6 +86,7 @@ pub(crate) mod map {
     };
     use crate::error::Error;
 
+    /// A map can be run in different modes.
     #[derive(Debug, Clone, PartialEq)]
     pub enum MapMode {
         Unary,
