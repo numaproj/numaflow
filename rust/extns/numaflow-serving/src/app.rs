@@ -34,7 +34,7 @@ pub(crate) mod tracker;
 use self::callback::store::Store;
 use self::response::{ApiError, ServeResponse};
 
-pub fn generate_certs() -> crate::Result<(Certificate, KeyPair)> {
+fn generate_certs() -> crate::Result<(Certificate, KeyPair)> {
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| Error::InitError(format!("Failed to generate cert {:?}", e)))?;
     Ok((cert, key_pair))

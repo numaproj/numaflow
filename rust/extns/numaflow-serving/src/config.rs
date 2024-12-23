@@ -222,3 +222,109 @@ impl TryFrom<HashMap<String, String>> for Settings {
         Ok(settings)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::pipeline::{Edge, Vertex};
+
+    use super::*;
+
+    #[test]
+    fn test_basic_auth_debug_print() {
+        let auth = BasicAuth {
+            username: "js-auth-user".into(),
+            password: "js-auth-password".into(),
+        };
+        let auth_debug = format!("{auth:?}");
+        assert_eq!(auth_debug, "js-auth-user:***rd");
+    }
+
+    #[test]
+    fn test_default_config() {
+        let settings = Settings::default();
+
+        assert_eq!(settings.tid_header, "ID");
+        assert_eq!(settings.app_listen_port, 3000);
+        assert_eq!(settings.metrics_server_listen_port, 3001);
+        assert_eq!(settings.upstream_addr, "localhost:8888");
+        assert_eq!(settings.drain_timeout_secs, 10);
+        assert_eq!(settings.jetstream.stream, "default");
+        assert_eq!(settings.jetstream.url, "localhost:4222");
+        assert_eq!(settings.redis.addr, "redis://127.0.0.1:6379");
+        assert_eq!(settings.redis.max_tasks, 50);
+        assert_eq!(settings.redis.retries, 5);
+        assert_eq!(settings.redis.retries_duration_millis, 100);
+    }
+
+    #[test]
+    fn test_config_parse() {
+        // Set up the environment variables
+        let env_vars = [
+            (
+                ENV_NUMAFLOW_SERVING_JETSTREAM_URL,
+                "nats://isbsvc-default-js-svc.default.svc:4222",
+            ),
+            (
+                ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM,
+                "ascii-art-pipeline-in-serving-source",
+            ),
+            (ENV_NUMAFLOW_SERVING_JETSTREAM_USER, "js-auth-user"),
+            (ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD, "js-user-password"),
+            (ENV_NUMAFLOW_SERVING_HOST_IP, "10.2.3.5"),
+            (ENV_NUMAFLOW_SERVING_AUTH_TOKEN, "api-auth-token"),
+            (ENV_NUMAFLOW_SERVING_APP_PORT, "8443"),
+            (ENV_NUMAFLOW_SERVING_STORE_TTL, "86400"),
+            (ENV_NUMAFLOW_SERVING_SOURCE_OBJECT, "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQiLCJzdG9yZSI6eyJ1cmwiOiJyZWRpczovL3JlZGlzOjYzNzkifX0="),
+            (ENV_MIN_PIPELINE_SPEC, "eyJ2ZXJ0aWNlcyI6W3sibmFtZSI6InNlcnZpbmctaW4iLCJzb3VyY2UiOnsic2VydmluZyI6eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQiLCJzdG9yZSI6eyJ1cmwiOiJyZWRpczovL3JlZGlzOjYzNzkifX19LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciIsImVudiI6W3sibmFtZSI6IlJVU1RfTE9HIiwidmFsdWUiOiJpbmZvIn1dfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fSx7Im5hbWUiOiJzZXJ2aW5nLXNpbmsiLCJzaW5rIjp7InVkc2luayI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJxdWF5LmlvL251bWFpby9udW1hZmxvdy1ycy9zaW5rLWxvZzpzdGFibGUiLCJlbnYiOlt7Im5hbWUiOiJOVU1BRkxPV19DQUxMQkFDS19VUkxfS0VZIiwidmFsdWUiOiJYLU51bWFmbG93LUNhbGxiYWNrLVVybCJ9LHsibmFtZSI6Ik5VTUFGTE9XX01TR19JRF9IRUFERVJfS0VZIiwidmFsdWUiOiJYLU51bWFmbG93LUlkIn1dLCJyZXNvdXJjZXMiOnt9fX0sInJldHJ5U3RyYXRlZ3kiOnt9fSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fV0sImVkZ2VzIjpbeyJmcm9tIjoic2VydmluZy1pbiIsInRvIjoic2VydmluZy1zaW5rIiwiY29uZGl0aW9ucyI6bnVsbH1dLCJsaWZlY3ljbGUiOnt9LCJ3YXRlcm1hcmsiOnt9fQ==")
+        ];
+
+        // Call the config method
+        let settings: Settings = env_vars
+            .into_iter()
+            .map(|(key, val)| (key.to_owned(), val.to_owned()))
+            .collect::<HashMap<String, String>>()
+            .try_into()
+            .unwrap();
+
+        let expected_config = Settings {
+            tid_header: "X-Numaflow-Id".into(),
+            app_listen_port: 8443,
+            metrics_server_listen_port: 3001,
+            upstream_addr: "localhost:8888".into(),
+            drain_timeout_secs: 10,
+            jetstream: JetStreamConfig {
+                stream: "ascii-art-pipeline-in-serving-source".into(),
+                url: "nats://isbsvc-default-js-svc.default.svc:4222".into(),
+                auth: Some(BasicAuth {
+                    username: "js-auth-user".into(),
+                    password: "js-user-password".into(),
+                }),
+            },
+            redis: RedisConfig {
+                addr: "redis://redis:6379".into(),
+                max_tasks: 50,
+                retries: 5,
+                retries_duration_millis: 100,
+                ttl_secs: Some(86400),
+            },
+            host_ip: "10.2.3.5".into(),
+            api_auth_token: Some("api-auth-token".into()),
+            pipeline_spec: PipelineDCG {
+                vertices: vec![
+                    Vertex {
+                        name: "serving-in".into(),
+                    },
+                    Vertex {
+                        name: "serving-sink".into(),
+                    },
+                ],
+                edges: vec![Edge {
+                    from: "serving-in".into(),
+                    to: "serving-sink".into(),
+                    conditions: None,
+                }],
+            },
+        };
+        assert_eq!(settings, expected_config);
+    }
+}
