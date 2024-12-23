@@ -1,25 +1,32 @@
 # Fallback Sink
 
-A `Fallback` Sink functions as a `Dead Letter Queue (DLQ)` Sink and can be configured to serve as a backup when the primary sink is down, 
-unavailable, or under maintenance. This is particularly useful when multiple sinks are in a pipeline; if a sink fails, the resulting 
-back-pressure will back-propagate and stop the source vertex from reading more data. A `Fallback` Sink can beset up to prevent this from happening. 
-This backup sink stores data while the primary sink is offline. The stored data can be replayed once the primary sink is back online.
+A `Fallback` Sink functions as a `Dead Letter Queue (DLQ)` Sink.
+It can be configured to serve as a backup sink when the primary sink fails processing messages. 
 
-Note: The `fallback` field is optional. 
+## The Use Case
 
-Users are required to return a fallback response from the [user-defined sink](https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/) when the primary sink fails; only
-then the messages will be directed to the fallback sink. 
+Fallback Sink is useful to prevent back pressures caused by failed messages in the primary sink.
 
-Example of a fallback response in a user-defined sink: [here](https://github.com/numaproj/numaflow-go/blob/main/pkg/sinker/examples/fallback/main.go)
+In a pipeline without fallback sinks, if a sink fails to process certain messages, 
+the failed messages, by default, can get retried indefinitely, 
+causing back pressures propagated all the way back to the source vertex.
+Eventually, the pipeline will be blocked, and no new messages will be processed.
+A fallback sink can be set up to prevent this from happening, by storing the failed messages in a separate sink.
 
-## CAVEATs
-The `fallback` field can only be utilized when the primary sink is a `User Defined Sink.`
+## Caveats
 
+A fallback sink can only be configured when the primary sink is a user-defined sink.
 
-## Example
+## How to use
 
-### Builtin Kafka
-An example using builtin kafka as fallback sink:
+To configure a fallback sink,
+changes need to be made on both the pipeline specification and the user-defined sink implementation.
+
+### Step 1 - update the specification
+
+Add a `fallback` field to the sink configuration in the pipeline specification file.
+
+The following example uses the builtin kafka as a fallback sink.
 
 ```yaml
     - name: out
@@ -34,10 +41,9 @@ An example using builtin kafka as fallback sink:
               - my-broker2:19700
             topic: my-topic
 ```
-### UD Sink
-An example using custom user-defined sink as fallback sink.
 
-User Defined Sink as a fallback sink:
+A fallback sink can also be a user-defined sink.
+
 ```yaml
     - name: out
       sink:
@@ -49,3 +55,12 @@ User Defined Sink as a fallback sink:
             container:
               image: my-sink:latest
 ```
+### Step 2 - update the user-defined sink implementation
+
+Make code changes in the primary sink to return either a **failed** response or a **fallback** response.
+
+* a **failed** response gets processed following the [retry strategy](https://numaflow.numaproj.io/user-guide/sinks/retry-strategy/), and if the retry strategy is set to `fallback`, the message will be directed to the fallback sink after the retries are exhausted.
+* a **fallback** response doesn't respect the sink retry strategy. It gets immediately directed to the fallback sink without getting retried.
+
+SDKs to generate a fallback/failed response in a primary user-defined sink:
+[Golang](https://github.com/numaproj/numaflow-go/blob/main/pkg/sinker/types.go), [Java](https://github.com/numaproj/numaflow-java/blob/main/src/main/java/io/numaproj/numaflow/sinker/Response.java), [Python](https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sinker/_dtypes.py)
