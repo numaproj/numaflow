@@ -1,8 +1,10 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use numaflow_serving::ServingSource;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 
@@ -266,8 +268,16 @@ pub async fn create_source(
                 None,
             ))
         }
-        SourceType::Serving(_) => {
-            unimplemented!("Serving as built-in source is not yet implemented")
+        SourceType::Serving(config) => {
+            let serving = ServingSource::new(Arc::clone(config), batch_size, read_timeout).await?;
+            Ok((
+                Source::new(
+                    batch_size,
+                    source::SourceType::Serving(serving),
+                    tracker_handle,
+                ),
+                None,
+            ))
         }
     }
 }

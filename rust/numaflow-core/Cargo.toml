@@ -19,10 +19,12 @@ numaflow-models.workspace = true
 numaflow-pb.workspace = true
 serving.workspace = true
 backoff.workspace = true
+numaflow-serving.workspace = true
 axum.workspace = true
 axum-server.workspace = true
+bytes.workspace = true
+serde.workspace = true
 tonic = "0.12.3"
-bytes = "1.7.1"
 thiserror = "2.0.3"
 tokio-util = "0.7.11"
 tokio-stream = "0.1.15"
@@ -36,7 +38,6 @@ serde_json = "1.0.122"
 trait-variant = "0.1.2"
 rcgen = "0.13.1"
 rustls = { version = "0.23.12", features = ["aws_lc_rs"] }
-serde = { version = "1.0.204", features = ["derive"] }
 semver = "1.0"
 pep440_rs = "0.6.6"
 parking_lot = "0.12.3"

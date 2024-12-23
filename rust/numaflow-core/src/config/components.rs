@@ -5,6 +5,7 @@ pub(crate) mod source {
 
     use std::collections::HashMap;
     use std::env;
+    use std::sync::Arc;
     use std::{fmt::Debug, time::Duration};
 
     use bytes::Bytes;
@@ -33,7 +34,7 @@ pub(crate) mod source {
         Generator(GeneratorConfig),
         UserDefined(UserDefinedConfig),
         Pulsar(PulsarSourceConfig),
-        Serving(serving::Settings),
+        Serving(Arc<numaflow_serving::Settings>),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -106,10 +107,7 @@ pub(crate) mod source {
         // There should be only one option (user-defined) to define the settings.
         fn try_from(cfg: Box<numaflow_models::models::ServingSource>) -> Result<Self> {
             let env_vars = env::vars().collect::<HashMap<String, String>>();
-
-            let mut settings: serving::Settings = env_vars
-                .try_into()
-                .map_err(|e: serving::Error| Error::Config(e.to_string()))?;
+            let mut settings: numaflow_serving::Settings = env_vars.try_into()?;
 
             settings.tid_header = cfg.msg_id_header_key;
 
@@ -144,7 +142,7 @@ pub(crate) mod source {
             }
             settings.redis.addr = cfg.store.url;
 
-            Ok(SourceType::Serving(settings))
+            Ok(SourceType::Serving(Arc::new(settings)))
         }
     }
 
@@ -162,6 +160,10 @@ pub(crate) mod source {
 
             if let Some(pulsar) = source.pulsar.take() {
                 return pulsar.try_into();
+            }
+
+            if let Some(serving) = source.serving.take() {
+                return serving.try_into();
             }
 
             Err(Error::Config(format!("Invalid source type: {source:?}")))

@@ -1,4 +1,5 @@
 use numaflow_pulsar::source::PulsarSource;
+use numaflow_serving::ServingSource;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time;
@@ -34,6 +35,8 @@ pub(crate) mod generator;
 /// [Pulsar]: https://numaflow.numaproj.io/user-guide/sources/pulsar/
 pub(crate) mod pulsar;
 
+pub(crate) mod serving;
+
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
     #[allow(dead_code)]
@@ -65,6 +68,7 @@ pub(crate) enum SourceType {
         generator::GeneratorLagReader,
     ),
     Pulsar(PulsarSource),
+    Serving(ServingSource),
 }
 
 enum ActorMessage {
@@ -174,6 +178,13 @@ impl Source {
                         pulsar_source.clone(),
                         pulsar_source,
                     );
+                    actor.run().await;
+                });
+            }
+            SourceType::Serving(serving) => {
+                tokio::spawn(async move {
+                    let actor =
+                        SourceActor::new(receiver, serving.clone(), serving.clone(), serving);
                     actor.run().await;
                 });
             }
