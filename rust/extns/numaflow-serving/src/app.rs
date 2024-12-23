@@ -220,7 +220,6 @@ const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
 struct ProxyState<T> {
     tid_header: String,
     callback: CallbackState<T>,
-    stream: String,
     callback_url: String,
     messages: mpsc::Sender<MessageWrapper>,
 }
@@ -231,7 +230,6 @@ pub(crate) fn jetstream_proxy<T: Clone + Send + Sync + Store + 'static>(
     let proxy_state = Arc::new(ProxyState {
         tid_header: state.settings.tid_header.clone(),
         callback: state.callback_state.clone(),
-        stream: state.settings.jetstream.stream.clone(),
         messages: state.message.clone(),
         callback_url: format!(
             "https://{}:{}/v1/process/callback",

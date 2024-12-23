@@ -20,46 +20,6 @@ const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 
 pub(crate) const SAVED: &str = "SAVED";
 
-#[derive(Deserialize, Clone, PartialEq)]
-pub struct BasicAuth {
-    pub username: String,
-    pub password: String,
-}
-
-impl std::fmt::Debug for BasicAuth {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let passwd_printable = if self.password.len() > 4 {
-            let passwd: String = self
-                .password
-                .chars()
-                .skip(self.password.len() - 2)
-                .take(2)
-                .collect();
-            format!("***{}", passwd)
-        } else {
-            "*****".to_owned()
-        };
-        write!(f, "{}:{}", self.username, passwd_printable)
-    }
-}
-
-#[derive(Debug, Deserialize, Clone, PartialEq)]
-pub struct JetStreamConfig {
-    pub stream: String,
-    pub url: String,
-    pub auth: Option<BasicAuth>,
-}
-
-impl Default for JetStreamConfig {
-    fn default() -> Self {
-        Self {
-            stream: "default".to_owned(),
-            url: "localhost:4222".to_owned(),
-            auth: None,
-        }
-    }
-}
-
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct RedisConfig {
     pub addr: String,
@@ -93,7 +53,6 @@ pub struct Settings {
     pub host_ip: String,
     pub api_auth_token: Option<String>,
     pub redis: RedisConfig,
-    pub jetstream: JetStreamConfig,
     pub pipeline_spec: PipelineDCG,
 }
 
@@ -108,7 +67,6 @@ impl Default for Settings {
             host_ip: "127.0.0.1".to_owned(),
             api_auth_token: None,
             redis: RedisConfig::default(),
-            jetstream: JetStreamConfig::default(),
             pipeline_spec: Default::default(),
         }
     }
@@ -161,14 +119,6 @@ impl TryFrom<HashMap<String, String>> for Settings {
             ..Default::default()
         };
 
-        if let Some(jetstream_url) = env_vars.get(ENV_NUMAFLOW_SERVING_JETSTREAM_URL) {
-            settings.jetstream.url = jetstream_url.to_owned();
-        }
-
-        if let Some(jetstream_stream) = env_vars.get(ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM) {
-            settings.jetstream.stream = jetstream_stream.to_owned();
-        }
-
         if let Some(api_auth_token) = env_vars.get(ENV_NUMAFLOW_SERVING_AUTH_TOKEN) {
             settings.api_auth_token = Some(api_auth_token.to_owned());
         }
@@ -179,17 +129,6 @@ impl TryFrom<HashMap<String, String>> for Settings {
                     "Parsing {ENV_NUMAFLOW_SERVING_APP_PORT}(set to '{app_port}'): {e:?}"
                 ))
             })?;
-        }
-
-        // If username is set, the password also must be set
-        if let Some(username) = env_vars.get(ENV_NUMAFLOW_SERVING_JETSTREAM_USER) {
-            let Some(password) = env_vars.get(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD) else {
-                return Err(Error::ParseConfig(format!("Env variable {ENV_NUMAFLOW_SERVING_JETSTREAM_USER} is set, but {ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD} is not set")));
-            };
-            settings.jetstream.auth = Some(BasicAuth {
-                username: username.to_owned(),
-                password: password.to_owned(),
-            });
         }
 
         // Update redis.ttl_secs from environment variable
@@ -230,16 +169,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_basic_auth_debug_print() {
-        let auth = BasicAuth {
-            username: "js-auth-user".into(),
-            password: "js-auth-password".into(),
-        };
-        let auth_debug = format!("{auth:?}");
-        assert_eq!(auth_debug, "js-auth-user:***rd");
-    }
-
-    #[test]
     fn test_default_config() {
         let settings = Settings::default();
 
@@ -248,8 +177,6 @@ mod tests {
         assert_eq!(settings.metrics_server_listen_port, 3001);
         assert_eq!(settings.upstream_addr, "localhost:8888");
         assert_eq!(settings.drain_timeout_secs, 10);
-        assert_eq!(settings.jetstream.stream, "default");
-        assert_eq!(settings.jetstream.url, "localhost:4222");
         assert_eq!(settings.redis.addr, "redis://127.0.0.1:6379");
         assert_eq!(settings.redis.max_tasks, 50);
         assert_eq!(settings.redis.retries, 5);
@@ -292,14 +219,6 @@ mod tests {
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
             drain_timeout_secs: 10,
-            jetstream: JetStreamConfig {
-                stream: "ascii-art-pipeline-in-serving-source".into(),
-                url: "nats://isbsvc-default-js-svc.default.svc:4222".into(),
-                auth: Some(BasicAuth {
-                    username: "js-auth-user".into(),
-                    password: "js-user-password".into(),
-                }),
-            },
             redis: RedisConfig {
                 addr: "redis://redis:6379".into(),
                 max_tasks: 50,
