@@ -14,8 +14,21 @@
 //! - Batch: Synchronous operations, one batch at a time, followed by an invoke.
 //! - Stream: Concurrent operations controlled using permits and `tokio::spawn`, followed by an invoke.
 //!
+//! Error handling in unary and stream operations with concurrency 3:
+//! ```text
+//! (Read) <----- (error_tx) <-------- +
+//!  |                                 |
+//!  | ----- (tokio map task 1) ------ +
+//!  |                                 |
+//!  | ----- (tokio map task 2) ------ +
+//!  |                                 |
+//!  | ----- (tokio map task 3) ------ +
+//! ```
 //! In case of errors in unary/stream, tasks will write to the error channel (`error_tx`), and the `MapHandle`
 //! will stop reading new requests and return an error.
+//!
+//! Error handling in batch operation is easier because it is synchronous and one batch at a time. If there
+//! is an error, the `MapHandle` will stop reading new requests and return an error.
 
 use crate::config::pipeline::map::MapMode;
 use crate::error;
