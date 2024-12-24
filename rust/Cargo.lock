@@ -55,39 +55,6 @@ checksum = "69f7f8c3906b62b754cd5326047894316021dcfe5a194c8ea52bdd94934a3457"
 
 [[package]]
 name = "async-nats"
-version = "0.35.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab8df97cb8fc4a884af29ab383e9292ea0939cfcdd7d2a17179086dc6c427e7f"
-dependencies = [
- "base64 0.22.1",
- "bytes",
- "futures",
- "memchr",
- "nkeys",
- "nuid",
- "once_cell",
- "portable-atomic",
- "rand",
- "regex",
- "ring",
- "rustls-native-certs 0.7.3",
- "rustls-pemfile 2.2.0",
- "rustls-webpki 0.102.8",
- "serde",
- "serde_json",
- "serde_nanos",
- "serde_repr",
- "thiserror 1.0.69",
- "time",
- "tokio",
- "tokio-rustls 0.26.0",
- "tracing",
- "tryhard",
- "url",
-]
-
-[[package]]
-name = "async-nats"
 version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76433c4de73442daedb3a59e991d94e85c14ebfc33db53dfcd347a21cd6ef4f8"
@@ -1748,7 +1715,7 @@ dependencies = [
 name = "numaflow-core"
 version = "0.1.0"
 dependencies = [
- "async-nats 0.38.0",
+ "async-nats",
  "axum",
  "axum-server",
  "backoff",
@@ -1762,7 +1729,6 @@ dependencies = [
  "numaflow-models",
  "numaflow-pb",
  "numaflow-pulsar",
- "numaflow-serving",
  "parking_lot",
  "pep440_rs",
  "pin-project",
@@ -1826,30 +1792,6 @@ dependencies = [
  "tokio",
  "tonic",
  "tracing",
-]
-
-[[package]]
-name = "numaflow-serving"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-server",
- "backoff",
- "base64 0.22.1",
- "bytes",
- "chrono",
- "numaflow-models",
- "rcgen",
- "redis",
- "serde",
- "serde_json",
- "thiserror 2.0.8",
- "tokio",
- "tower 0.4.13",
- "tower-http",
- "tracing",
- "trait-variant",
- "uuid",
 ]
 
 [[package]]
@@ -2885,7 +2827,6 @@ dependencies = [
 name = "serving"
 version = "0.1.0"
 dependencies = [
- "async-nats 0.35.1",
  "axum",
  "axum-macros",
  "axum-server",

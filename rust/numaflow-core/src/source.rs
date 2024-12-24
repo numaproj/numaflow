@@ -1,5 +1,4 @@
 use numaflow_pulsar::source::PulsarSource;
-use numaflow_serving::ServingSource;
 use std::sync::Arc;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
@@ -39,6 +38,7 @@ pub(crate) mod generator;
 pub(crate) mod pulsar;
 
 pub(crate) mod serving;
+use serving::ServingSource;
 
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {

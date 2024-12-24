@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use numaflow_serving::ServingSource;
+pub(crate) use serving::ServingSource;
 
 use crate::message::{MessageID, StringOffset};
 use crate::Error;
@@ -8,10 +8,10 @@ use crate::Result;
 
 use super::{get_vertex_name, Message, Offset};
 
-impl TryFrom<numaflow_serving::Message> for Message {
+impl TryFrom<serving::Message> for Message {
     type Error = Error;
 
-    fn try_from(message: numaflow_serving::Message) -> Result<Self> {
+    fn try_from(message: serving::Message) -> Result<Self> {
         let offset = Offset::String(StringOffset::new(message.id.clone(), 0));
 
         Ok(Message {
@@ -30,8 +30,8 @@ impl TryFrom<numaflow_serving::Message> for Message {
     }
 }
 
-impl From<numaflow_serving::Error> for Error {
-    fn from(value: numaflow_serving::Error) -> Self {
+impl From<serving::Error> for Error {
+    fn from(value: serving::Error) -> Self {
         Error::Source(value.to_string())
     }
 }

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use async_nats::rustls;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
@@ -20,7 +19,6 @@ const ENV_NUMAFLOW_SERVING_AUTH_TOKEN: &str = "NUMAFLOW_SERVING_AUTH_TOKEN";
 const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 
 pub fn generate_certs() -> std::result::Result<(Certificate, KeyPair), String> {
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| format!("Failed to generate cert {:?}", e))?;
     Ok((cert, key_pair))

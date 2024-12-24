@@ -38,7 +38,7 @@ pub(crate) mod source {
         Generator(GeneratorConfig),
         UserDefined(UserDefinedConfig),
         Pulsar(PulsarSourceConfig),
-        Serving(Arc<numaflow_serving::Settings>),
+        Serving(Arc<serving::Settings>),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -111,7 +111,7 @@ pub(crate) mod source {
         // There should be only one option (user-defined) to define the settings.
         fn try_from(cfg: Box<numaflow_models::models::ServingSource>) -> Result<Self> {
             let env_vars = env::vars().collect::<HashMap<String, String>>();
-            let mut settings: numaflow_serving::Settings = env_vars.try_into()?;
+            let mut settings: serving::Settings = env_vars.try_into()?;
 
             settings.tid_header = cfg.msg_id_header_key;
 

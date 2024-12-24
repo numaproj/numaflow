@@ -9,7 +9,6 @@ members = [
     "numaflow-pb",
     "extns/numaflow-pulsar",
     "numaflow",
-    "extns/numaflow-serving",
 ]
 
 [workspace.lints.rust]
@@ -60,7 +59,6 @@ numaflow-models = { path = "numaflow-models" }
 backoff = { path = "backoff" }
 numaflow-pb = { path = "numaflow-pb" }
 numaflow-pulsar = {path = "extns/numaflow-pulsar"}
-numaflow-serving = {path = "extns/numaflow-serving"}
 tokio = "1.41.1"
 bytes = "1.7.1"
 tracing = "0.1.40"

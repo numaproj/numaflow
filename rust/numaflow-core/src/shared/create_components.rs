@@ -5,7 +5,7 @@ use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use numaflow_serving::ServingSource;
+use serving::ServingSource;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 
