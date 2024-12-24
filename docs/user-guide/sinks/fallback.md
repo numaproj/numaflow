@@ -57,10 +57,11 @@ A fallback sink can also be a user-defined sink.
 ```
 ### Step 2 - update the user-defined sink implementation
 
-Make code changes in the primary sink to return either a **failed** response or a **fallback** response.
+Code changes have to be made in the primary sink to generate either a **failed** response or a **fallback** response,
+based on the use case.
 
 * a **failed** response gets processed following the [retry strategy](https://numaflow.numaproj.io/user-guide/sinks/retry-strategy/), and if the retry strategy is set to `fallback`, the message will be directed to the fallback sink after the retries are exhausted.
 * a **fallback** response doesn't respect the sink retry strategy. It gets immediately directed to the fallback sink without getting retried.
 
-SDKs to generate a fallback/failed response in a primary user-defined sink:
+SDK methods to generate either a fallback or a failed response in a primary user-defined sink can be found here:
 [Golang](https://github.com/numaproj/numaflow-go/blob/main/pkg/sinker/types.go), [Java](https://github.com/numaproj/numaflow-java/blob/main/src/main/java/io/numaproj/numaflow/sinker/Response.java), [Python](https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sinker/_dtypes.py)
