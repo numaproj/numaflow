@@ -64,20 +64,10 @@ pub struct Edge {
 
 /// DCG (directed compute graph) of the pipeline with minimal information build using vertices and edges
 /// from the pipeline spec
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde()]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct PipelineDCG {
     pub vertices: Vec<Vertex>,
     pub edges: Vec<Edge>,
-}
-
-impl Default for PipelineDCG {
-    fn default() -> Self {
-        Self {
-            vertices: vec![],
-            edges: vec![],
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

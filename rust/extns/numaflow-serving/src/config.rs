@@ -8,13 +8,9 @@ use crate::pipeline::PipelineDCG;
 use crate::Error;
 
 const ENV_NUMAFLOW_SERVING_SOURCE_OBJECT: &str = "NUMAFLOW_SERVING_SOURCE_OBJECT";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM: &str = "NUMAFLOW_SERVING_JETSTREAM_STREAM";
 const ENV_NUMAFLOW_SERVING_STORE_TTL: &str = "NUMAFLOW_SERVING_STORE_TTL";
 const ENV_NUMAFLOW_SERVING_HOST_IP: &str = "NUMAFLOW_SERVING_HOST_IP";
 const ENV_NUMAFLOW_SERVING_APP_PORT: &str = "NUMAFLOW_SERVING_APP_LISTEN_PORT";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
 const ENV_NUMAFLOW_SERVING_AUTH_TOKEN: &str = "NUMAFLOW_SERVING_AUTH_TOKEN";
 const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 
@@ -187,16 +183,6 @@ mod tests {
     fn test_config_parse() {
         // Set up the environment variables
         let env_vars = [
-            (
-                ENV_NUMAFLOW_SERVING_JETSTREAM_URL,
-                "nats://isbsvc-default-js-svc.default.svc:4222",
-            ),
-            (
-                ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM,
-                "ascii-art-pipeline-in-serving-source",
-            ),
-            (ENV_NUMAFLOW_SERVING_JETSTREAM_USER, "js-auth-user"),
-            (ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD, "js-user-password"),
             (ENV_NUMAFLOW_SERVING_HOST_IP, "10.2.3.5"),
             (ENV_NUMAFLOW_SERVING_AUTH_TOKEN, "api-auth-token"),
             (ENV_NUMAFLOW_SERVING_APP_PORT, "8443"),
