@@ -1397,7 +1397,12 @@ message RetryStrategy {
   // +optional
   optional Backoff backoff = 1;
 
-  // OnFailure specifies the action to take when a retry fails. The default action is to retry.
+  // OnFailure specifies the action to take when the specified retry strategy fails.
+  // The possible values are:
+  // 1. "retry": start another round of retrying the operation,
+  // 2. "fallback": re-route the operation to a fallback sink and
+  // 3. "drop": drop the operation and perform no further action.
+  // The default action is to retry.
   // +optional
   // +kubebuilder:default="retry"
   optional string onFailure = 2;

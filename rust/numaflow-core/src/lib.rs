@@ -51,6 +51,9 @@ mod pipeline;
 /// Tracker to track the completeness of message processing.
 mod tracker;
 
+/// Map is a feature that allows users to execute custom code to transform their data.
+mod mapper;
+
 pub async fn run() -> Result<()> {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let cln_token = CancellationToken::new();

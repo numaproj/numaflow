@@ -4524,7 +4524,7 @@ func schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref common.ReferenceCallbac
 					},
 					"onFailure": {
 						SchemaProps: spec.SchemaProps{
-							Description: "OnFailure specifies the action to take when a retry fails. The default action is to retry.",
+							Description: "OnFailure specifies the action to take when the specified retry strategy fails. The possible values are: 1. \"retry\": start another round of retrying the operation, 2. \"fallback\": re-route the operation to a fallback sink and 3. \"drop\": drop the operation and perform no further action. The default action is to retry.",
 							Type:        []string{"string"},
 							Format:      "",
 						},

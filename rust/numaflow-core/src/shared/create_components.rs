@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -11,6 +12,10 @@ use tonic::transport::Channel;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
+use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
+use crate::config::pipeline::{DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET};
+use crate::error::Error;
+use crate::mapper::map::MapHandle;
 use crate::shared::grpc;
 use crate::shared::server_info::{sdk_server_info, ContainerType};
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
@@ -149,7 +154,7 @@ pub(crate) async fn create_sink_writer(
 }
 
 /// Creates a transformer if it is configured
-pub async fn create_transformer(
+pub(crate) async fn create_transformer(
     batch_size: usize,
     transformer_config: Option<TransformerConfig>,
     tracker_handle: TrackerHandle,
@@ -199,6 +204,66 @@ pub async fn create_transformer(
     Ok((None, None))
 }
 
+pub(crate) async fn create_mapper(
+    batch_size: usize,
+    read_timeout: Duration,
+    map_config: MapVtxConfig,
+    tracker_handle: TrackerHandle,
+    cln_token: CancellationToken,
+) -> error::Result<(MapHandle, Option<MapClient<Channel>>)> {
+    match map_config.map_type {
+        MapType::UserDefined(mut config) => {
+            let server_info =
+                sdk_server_info(config.server_info_path.clone().into(), cln_token.clone()).await?;
+
+            // based on the map mode that is set in the server info, we will override the socket path
+            // so that the clients can connect to the appropriate socket.
+            let config = match server_info.get_map_mode().unwrap_or(MapMode::Unary) {
+                MapMode::Unary => config,
+                MapMode::Batch => {
+                    config.socket_path = DEFAULT_BATCH_MAP_SOCKET.into();
+                    config
+                }
+                MapMode::Stream => {
+                    config.socket_path = DEFAULT_STREAM_MAP_SOCKET.into();
+                    config
+                }
+            };
+
+            let metric_labels = metrics::sdk_info_labels(
+                config::get_component_type().to_string(),
+                config::get_vertex_name().to_string(),
+                server_info.language.clone(),
+                server_info.version.clone(),
+                ContainerType::Sourcer.to_string(),
+            );
+            metrics::global_metrics()
+                .sdk_info
+                .get_or_create(&metric_labels)
+                .set(1);
+
+            let mut map_grpc_client =
+                MapClient::new(grpc::create_rpc_channel(config.socket_path.clone().into()).await?)
+                    .max_encoding_message_size(config.grpc_max_message_size)
+                    .max_decoding_message_size(config.grpc_max_message_size);
+            grpc::wait_until_mapper_ready(&cln_token, &mut map_grpc_client).await?;
+            Ok((
+                MapHandle::new(
+                    server_info.get_map_mode().unwrap_or(MapMode::Unary),
+                    batch_size,
+                    read_timeout,
+                    map_config.concurrency,
+                    map_grpc_client.clone(),
+                    tracker_handle,
+                )
+                .await?,
+                Some(map_grpc_client),
+            ))
+        }
+        MapType::Builtin(_) => Err(Error::Mapper("Builtin mapper is not supported".to_string())),
+    }
+}
+
 /// Creates a source type based on the configuration
 pub async fn create_source(
     batch_size: usize,
@@ -216,6 +281,7 @@ pub async fn create_source(
                     batch_size,
                     source::SourceType::Generator(generator_read, generator_ack, generator_lag),
                     tracker_handle,
+                    source_config.read_ahead,
                 ),
                 None,
             ))
@@ -253,6 +319,7 @@ pub async fn create_source(
                     batch_size,
                     source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
                     tracker_handle,
+                    source_config.read_ahead,
                 ),
                 Some(source_grpc_client),
             ))
@@ -264,6 +331,7 @@ pub async fn create_source(
                     batch_size,
                     source::SourceType::Pulsar(pulsar),
                     tracker_handle,
+                    source_config.read_ahead,
                 ),
                 None,
             ))
@@ -318,8 +386,8 @@ mod tests {
 
         async fn ack(&self, _offset: Vec<Offset>) {}
 
-        async fn pending(&self) -> usize {
-            0
+        async fn pending(&self) -> Option<usize> {
+            Some(0)
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {

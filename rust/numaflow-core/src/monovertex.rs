@@ -127,8 +127,8 @@ mod tests {
 
         async fn ack(&self, _: Vec<Offset>) {}
 
-        async fn pending(&self) -> usize {
-            0
+        async fn pending(&self) -> Option<usize> {
+            Some(0)
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {
@@ -221,6 +221,7 @@ mod tests {
 
         let config = MonovertexConfig {
             source_config: components::source::SourceConfig {
+                read_ahead: false,
                 source_type: components::source::SourceType::UserDefined(
                     components::source::UserDefinedConfig {
                         socket_path: src_sock_file.to_str().unwrap().to_string(),
