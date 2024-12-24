@@ -65,3 +65,4 @@ tracing = "0.1.40"
 axum = "0.7.5"
 axum-server = { version = "0.7.1", features = ["tls-rustls"] }
 serde = { version = "1.0.204", features = ["derive"] }
+rustls = { version = "0.23.12", features = ["aws_lc_rs"] }

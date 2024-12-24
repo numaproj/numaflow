@@ -5,8 +5,7 @@ edition = "2021"
 
 [features]
 redis-tests = []
-nats-tests = []
-all-tests = ["redis-tests", "nats-tests"]
+all-tests = ["redis-tests"]
 
 [lints]
 workspace = true
@@ -35,3 +34,5 @@ parking_lot = "0.12.3"
 prometheus-client = "0.22.3"
 thiserror = "1.0.63"
 
+[dev-dependencies]
+rustls.workspace = true

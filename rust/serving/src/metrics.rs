@@ -175,6 +175,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_start_metrics_server() -> Result<()> {
+        rustls::crypto::aws_lc_rs::default_provider()
+            .install_default()
+            .unwrap();
         let (cert, key) = generate_certs()?;
 
         let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())

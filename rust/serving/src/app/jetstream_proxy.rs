@@ -251,7 +251,6 @@ fn extract_id_from_headers(tid_header: &str, headers: &HeaderMap) -> String {
     )
 }
 
-#[cfg(feature = "nats-tests")]
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -308,7 +307,17 @@ mod tests {
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
         let callback_state = CallbackState::new(msg_graph, mock_store).await?;
 
-        let (messages_tx, mut messages_rx) = mpsc::channel(10);
+        let (messages_tx, mut messages_rx) = mpsc::channel::<MessageWrapper>(10);
+        let response_collector = tokio::spawn(async move {
+            let message = messages_rx.recv().await.unwrap();
+            let MessageWrapper {
+                confirm_save,
+                message,
+            } = message;
+            confirm_save.send(()).unwrap();
+            message
+        });
+
         let app_state = AppState {
             message: messages_tx,
             settings: Arc::new(settings),
@@ -325,9 +334,8 @@ mod tests {
             .unwrap();
 
         let response = app.oneshot(res).await.unwrap();
-        let message = messages_rx.recv().await.unwrap();
-        assert_eq!(message.message.id, ID_VALUE);
-        message.confirm_save.send(()).unwrap();
+        let message = response_collector.await.unwrap();
+        assert_eq!(message.id, ID_VALUE);
         assert_eq!(response.status(), StatusCode::OK);
 
         let result = extract_response_from_body(response.into_body()).await;
@@ -335,7 +343,7 @@ mod tests {
             result,
             json!({
                 "message": "Successfully published message",
-                "id": ID_HEADER,
+                "id": ID_VALUE,
                 "code": 200
             })
         );
@@ -391,6 +399,17 @@ mod tests {
         let mut callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
         let (messages_tx, mut messages_rx) = mpsc::channel(10);
+
+        let response_collector = tokio::spawn(async move {
+            let message = messages_rx.recv().await.unwrap();
+            let MessageWrapper {
+                confirm_save,
+                message,
+            } = message;
+            confirm_save.send(()).unwrap();
+            message
+        });
+
         let app_state = AppState {
             message: messages_tx,
             settings: Arc::new(settings),
@@ -425,8 +444,8 @@ mod tests {
             .unwrap();
 
         let response = app.clone().oneshot(res).await.unwrap();
-        let message = messages_rx.recv().await.unwrap();
-        message.confirm_save.send(()).unwrap();
+        let message = response_collector.await.unwrap();
+        assert_eq!(message.id, ID_VALUE);
         assert_eq!(response.status(), StatusCode::OK);
 
         let result = extract_response_from_body(response.into_body()).await;
@@ -452,6 +471,17 @@ mod tests {
         let mut callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
         let (messages_tx, mut messages_rx) = mpsc::channel(10);
+
+        let response_collector = tokio::spawn(async move {
+            let message = messages_rx.recv().await.unwrap();
+            let MessageWrapper {
+                confirm_save,
+                message,
+            } = message;
+            confirm_save.send(()).unwrap();
+            message
+        });
+
         let app_state = AppState {
             message: messages_tx,
             settings,
@@ -505,8 +535,9 @@ mod tests {
             .unwrap();
 
         let response = app.oneshot(res).await.unwrap();
-        let message = messages_rx.recv().await.unwrap();
-        message.confirm_save.send(()).unwrap();
+        let message = response_collector.await.unwrap();
+        assert_eq!(message.id, ID_VALUE);
+
         assert_eq!(response.status(), StatusCode::OK);
 
         let content_len = response.headers().get(CONTENT_LENGTH).unwrap();

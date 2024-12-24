@@ -54,6 +54,27 @@ where
         .parse()
         .map_err(|e| InitError(format!("{e:?}")))?;
 
+    let handle = Handle::new();
+    // Spawn a task to gracefully shutdown server.
+    tokio::spawn(graceful_shutdown(handle.clone()));
+
+    info!(?app_addr, "Starting application server");
+
+    let router = router_with_auth(app).await?;
+
+    axum_server::bind_rustls(app_addr, tls_config)
+        .handle(handle)
+        .serve(router.into_make_service())
+        .await
+        .map_err(|e| InitError(format!("Starting web server for metrics: {}", e)))?;
+
+    Ok(())
+}
+
+pub(crate) async fn router_with_auth<T>(app: AppState<T>) -> crate::Result<Router>
+where
+    T: Clone + Send + Sync + Store + 'static,
+{
     let tid_header = app.settings.tid_header.clone();
     let layers = ServiceBuilder::new()
         // Add tracing to all requests
@@ -88,22 +109,7 @@ where
             app.settings.api_auth_token.clone(),
             auth_middleware,
         ));
-
-    let handle = Handle::new();
-    // Spawn a task to gracefully shutdown server.
-    tokio::spawn(graceful_shutdown(handle.clone()));
-
-    let router = setup_app(app).await?.layer(layers);
-
-    info!(?app_addr, "Starting application server");
-
-    axum_server::bind_rustls(app_addr, tls_config)
-        .handle(handle)
-        .serve(router.into_make_service())
-        .await
-        .map_err(|e| InitError(format!("Starting web server for metrics: {}", e)))?;
-
-    Ok(())
+    Ok(setup_app(app).await?.layer(layers))
 }
 
 // Gracefully shutdown the server on receiving SIGINT or SIGTERM
@@ -261,7 +267,6 @@ mod tests {
     type Result<T> = core::result::Result<T, Error>;
     type Error = Box<dyn std::error::Error>;
 
-    #[cfg(feature = "all-tests")]
     #[tokio::test]
     async fn test_setup_app() -> Result<()> {
         let settings = Arc::new(Settings::default());
@@ -283,7 +288,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "all-tests")]
     #[tokio::test]
     async fn test_health_check_endpoints() -> Result<()> {
         let settings = Arc::new(Settings::default());
@@ -315,7 +319,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "all-tests")]
     #[tokio::test]
     async fn test_auth_middleware() -> Result<()> {
         let settings = Settings {
@@ -329,16 +332,18 @@ mod tests {
         let callback_state = CallbackState::new(msg_graph, mem_store).await?;
 
         let (messages_tx, _messages_rx) = mpsc::channel(10);
+
         let app_state = AppState {
             message: messages_tx,
             settings: Arc::new(settings),
             callback_state,
         };
 
-        let router = setup_app(app_state).await.unwrap();
+        let router = router_with_auth(app_state).await.unwrap();
         let res = router
             .oneshot(
                 axum::extract::Request::builder()
+                    .method("POST")
                     .uri("/v1/process/sync")
                     .body(Body::empty())
                     .unwrap(),

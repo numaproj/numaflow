@@ -2840,6 +2840,7 @@ dependencies = [
  "prometheus-client",
  "rcgen",
  "redis",
+ "rustls 0.23.19",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
