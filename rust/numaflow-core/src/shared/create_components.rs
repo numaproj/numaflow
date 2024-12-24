@@ -343,6 +343,7 @@ pub async fn create_source(
                     batch_size,
                     source::SourceType::Serving(serving),
                     tracker_handle,
+                    source_config.read_ahead,
                 ),
                 None,
             ))
