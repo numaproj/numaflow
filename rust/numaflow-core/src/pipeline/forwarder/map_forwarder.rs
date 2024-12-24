@@ -1,27 +1,31 @@
 use tokio_util::sync::CancellationToken;
 
 use crate::error::Error;
+use crate::mapper::map::MapHandle;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
-use crate::sink::SinkWriter;
+use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::Result;
 
-/// Sink forwarder is a component which starts a streaming reader and a sink writer
+/// Map forwarder is a component which starts a streaming reader, a mapper, and a writer
 /// and manages the lifecycle of these components.
-pub(crate) struct SinkForwarder {
+pub(crate) struct MapForwarder {
     jetstream_reader: JetstreamReader,
-    sink_writer: SinkWriter,
+    mapper: MapHandle,
+    jetstream_writer: JetstreamWriter,
     cln_token: CancellationToken,
 }
 
-impl SinkForwarder {
+impl MapForwarder {
     pub(crate) async fn new(
         jetstream_reader: JetstreamReader,
-        sink_writer: SinkWriter,
+        mapper: MapHandle,
+        jetstream_writer: JetstreamWriter,
         cln_token: CancellationToken,
     ) -> Self {
         Self {
             jetstream_reader,
-            sink_writer,
+            mapper,
+            jetstream_writer,
             cln_token,
         }
     }
@@ -34,20 +38,24 @@ impl SinkForwarder {
             .streaming_read(reader_cancellation_token.clone())
             .await?;
 
-        let sink_writer_handle = self
-            .sink_writer
-            .streaming_write(read_messages_stream, self.cln_token.clone())
+        let (mapped_messages_stream, mapper_handle) =
+            self.mapper.streaming_map(read_messages_stream).await?;
+
+        let writer_handle = self
+            .jetstream_writer
+            .streaming_write(mapped_messages_stream)
             .await?;
 
-        // Join the reader and sink writer
-        match tokio::try_join!(reader_handle, sink_writer_handle) {
-            Ok((reader_result, sink_writer_result)) => {
-                sink_writer_result?;
+        // Join the reader, mapper, and writer
+        match tokio::try_join!(reader_handle, mapper_handle, writer_handle) {
+            Ok((reader_result, mapper_result, writer_result)) => {
+                writer_result?;
+                mapper_result?;
                 reader_result?;
                 Ok(())
             }
             Err(e) => Err(Error::Forwarder(format!(
-                "Error while joining reader and sink writer: {:?}",
+                "Error while joining reader, mapper, and writer: {:?}",
                 e
             ))),
         }

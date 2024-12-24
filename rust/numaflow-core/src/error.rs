@@ -16,6 +16,9 @@ pub enum Error {
     #[error("Transformer Error - {0}")]
     Transformer(String),
 
+    #[error("Mapper Error - {0}")]
+    Mapper(String),
+
     #[error("Forwarder Error - {0}")]
     Forwarder(String),
 

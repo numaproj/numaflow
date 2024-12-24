@@ -81,9 +81,9 @@ impl SourceForwarder {
             writer_handle,
         ) {
             Ok((reader_result, transformer_result, sink_writer_result)) => {
-                reader_result?;
-                transformer_result?;
                 sink_writer_result?;
+                transformer_result?;
+                reader_result?;
                 Ok(())
             }
             Err(e) => Err(Error::Forwarder(format!(
@@ -180,9 +180,11 @@ mod tests {
             }
         }
 
-        async fn pending(&self) -> usize {
-            self.num - self.sent_count.load(Ordering::SeqCst)
-                + self.yet_to_ack.read().unwrap().len()
+        async fn pending(&self) -> Option<usize> {
+            Some(
+                self.num - self.sent_count.load(Ordering::SeqCst)
+                    + self.yet_to_ack.read().unwrap().len(),
+            )
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {
@@ -212,7 +214,7 @@ mod tests {
         let cln_token = CancellationToken::new();
 
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
-        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let tmp_dir = TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("source.sock");
         let server_info_file = tmp_dir.path().join("source-server-info");
 

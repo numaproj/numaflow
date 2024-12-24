@@ -247,8 +247,6 @@ impl Source {
 
         info!("Started streaming source with batch size: {}", batch_size);
         let handle = tokio::spawn(async move {
-            let mut processed_msgs_count: usize = 0;
-            let mut last_logged_at = time::Instant::now();
             // this semaphore is used only if read-ahead is disabled. we hold this semaphore to
             // make sure we can read only if the current inflight ones are ack'ed.
             let semaphore = Arc::new(Semaphore::new(1));
@@ -312,7 +310,7 @@ impl Source {
 
                     // insert the offset and the ack one shot in the tracker.
                     tracker_handle
-                        .insert(offset.to_string().into(), resp_ack_tx)
+                        .insert(message.id.offset.clone(), resp_ack_tx)
                         .await?;
 
                     // store the ack one shot in the batch to invoke ack later.
@@ -343,17 +341,6 @@ impl Source {
                         None
                     },
                 ));
-
-                processed_msgs_count += n;
-                if last_logged_at.elapsed().as_secs() >= 1 {
-                    info!(
-                        "Processed {} messages in {:?}",
-                        processed_msgs_count,
-                        std::time::Instant::now()
-                    );
-                    processed_msgs_count = 0;
-                    last_logged_at = time::Instant::now();
-                }
             }
         });
         Ok((ReceiverStream::new(messages_rx), handle))
@@ -504,8 +491,8 @@ mod tests {
             }
         }
 
-        async fn pending(&self) -> usize {
-            self.yet_to_ack.read().unwrap().len()
+        async fn pending(&self) -> Option<usize> {
+            Some(self.yet_to_ack.read().unwrap().len())
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {
