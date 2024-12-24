@@ -2411,6 +2411,10 @@
 <p>The <code>RetryStrategy</code> is used to configure the behavior for a sink after encountering failures during a write operation. 
 This structure allows the user to specify how Numaflow should respond to different fail-over scenarios for Sinks, ensuring that the writing can be resilient and handle 
 unexpected issues efficiently.</p>
+<p><code>RetryStrategy</code> ONLY gets applied to failed messages. To return a failed messages, use the methods provided by the SDKs.
+- <code>ResponseFailure</code>for <a href="https://github.com/numaproj/numaflow-go/blob/main/pkg/sinker/types.go">Golang</a>
+- <code>responseFailure</code> for <a href="https://github.com/numaproj/numaflow-java/blob/main/src/main/java/io/numaproj/numaflow/sinker/Response.java#L40">Java</a>
+- <code>as_fallback</code> for <a href="https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sinker/_dtypes.py">Python</a></p>
 <h3 id="struct-explanation">Struct Explanation<a class="headerlink" href="#struct-explanation" title="Permanent link">&para;</a></h3>
 <p><code>retryStrategy</code> is optional, and can be added to the Sink spec configurations where retry logic is necessary.</p>
 <p><div class="highlight"><pre><span></span><code><span class="nt">sink</span><span class="p">:</span>

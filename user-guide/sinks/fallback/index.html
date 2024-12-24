@@ -954,30 +954,37 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#caveats" class="md-nav__link">
-    CAVEATs
+  <a href="#the-use-case" class="md-nav__link">
+    The Use Case
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#example" class="md-nav__link">
-    Example
+  <a href="#caveats" class="md-nav__link">
+    Caveats
   </a>
   
-    <nav class="md-nav" aria-label="Example">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-use" class="md-nav__link">
+    How to use
+  </a>
+  
+    <nav class="md-nav" aria-label="How to use">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#builtin-kafka" class="md-nav__link">
-    Builtin Kafka
+  <a href="#step-1-update-the-specification" class="md-nav__link">
+    Step 1 - update the specification
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#ud-sink" class="md-nav__link">
-    UD Sink
+  <a href="#step-2-update-the-user-defined-sink-implementation" class="md-nav__link">
+    Step 2 - update the user-defined sink implementation
   </a>
   
 </li>
@@ -2341,30 +2348,37 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#caveats" class="md-nav__link">
-    CAVEATs
+  <a href="#the-use-case" class="md-nav__link">
+    The Use Case
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#example" class="md-nav__link">
-    Example
+  <a href="#caveats" class="md-nav__link">
+    Caveats
   </a>
   
-    <nav class="md-nav" aria-label="Example">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-use" class="md-nav__link">
+    How to use
+  </a>
+  
+    <nav class="md-nav" aria-label="How to use">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#builtin-kafka" class="md-nav__link">
-    Builtin Kafka
+  <a href="#step-1-update-the-specification" class="md-nav__link">
+    Step 1 - update the specification
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#ud-sink" class="md-nav__link">
-    UD Sink
+  <a href="#step-2-update-the-user-defined-sink-implementation" class="md-nav__link">
+    Step 2 - update the user-defined sink implementation
   </a>
   
 </li>
@@ -2393,19 +2407,23 @@
 
 
 <h1 id="fallback-sink">Fallback Sink<a class="headerlink" href="#fallback-sink" title="Permanent link">&para;</a></h1>
-<p>A <code>Fallback</code> Sink functions as a <code>Dead Letter Queue (DLQ)</code> Sink and can be configured to serve as a backup when the primary sink is down, 
-unavailable, or under maintenance. This is particularly useful when multiple sinks are in a pipeline; if a sink fails, the resulting 
-back-pressure will back-propagate and stop the source vertex from reading more data. A <code>Fallback</code> Sink can beset up to prevent this from happening. 
-This backup sink stores data while the primary sink is offline. The stored data can be replayed once the primary sink is back online.</p>
-<p>Note: The <code>fallback</code> field is optional. </p>
-<p>Users are required to return a fallback response from the <a href="https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/">user-defined sink</a> when the primary sink fails; only
-then the messages will be directed to the fallback sink. </p>
-<p>Example of a fallback response in a user-defined sink: <a href="https://github.com/numaproj/numaflow-go/blob/main/pkg/sinker/examples/fallback/main.go">here</a></p>
-<h2 id="caveats">CAVEATs<a class="headerlink" href="#caveats" title="Permanent link">&para;</a></h2>
-<p>The <code>fallback</code> field can only be utilized when the primary sink is a <code>User Defined Sink.</code></p>
-<h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
-<h3 id="builtin-kafka">Builtin Kafka<a class="headerlink" href="#builtin-kafka" title="Permanent link">&para;</a></h3>
-<p>An example using builtin kafka as fallback sink:</p>
+<p>A <code>Fallback</code> Sink functions as a <code>Dead Letter Queue (DLQ)</code> Sink.
+It can be configured to serve as a backup sink when the primary sink fails processing messages. </p>
+<h2 id="the-use-case">The Use Case<a class="headerlink" href="#the-use-case" title="Permanent link">&para;</a></h2>
+<p>Fallback Sink is useful to prevent back pressures caused by failed messages in the primary sink.</p>
+<p>In a pipeline without fallback sinks, if a sink fails to process certain messages, 
+the failed messages, by default, can get retried indefinitely, 
+causing back pressures propagated all the way back to the source vertex.
+Eventually, the pipeline will be blocked, and no new messages will be processed.
+A fallback sink can be set up to prevent this from happening, by storing the failed messages in a separate sink.</p>
+<h2 id="caveats">Caveats<a class="headerlink" href="#caveats" title="Permanent link">&para;</a></h2>
+<p>A fallback sink can only be configured when the primary sink is a user-defined sink.</p>
+<h2 id="how-to-use">How to use<a class="headerlink" href="#how-to-use" title="Permanent link">&para;</a></h2>
+<p>To configure a fallback sink,
+changes need to be made on both the pipeline specification and the user-defined sink implementation.</p>
+<h3 id="step-1-update-the-specification">Step 1 - update the specification<a class="headerlink" href="#step-1-update-the-specification" title="Permanent link">&para;</a></h3>
+<p>Add a <code>fallback</code> field to the sink configuration in the pipeline specification file.</p>
+<p>The following example uses the builtin kafka as a fallback sink.</p>
 <div class="highlight"><pre><span></span><code><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 <span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">udsink</span><span class="p">:</span>
@@ -2418,9 +2436,7 @@ then the messages will be directed to the fallback sink. </p>
 <span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-broker2:19700</span>
 <span class="w">            </span><span class="nt">topic</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-topic</span>
 </code></pre></div>
-<h3 id="ud-sink">UD Sink<a class="headerlink" href="#ud-sink" title="Permanent link">&para;</a></h3>
-<p>An example using custom user-defined sink as fallback sink.</p>
-<p>User Defined Sink as a fallback sink:
+<p>A fallback sink can also be a user-defined sink.</p>
 <div class="highlight"><pre><span></span><code><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 <span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">udsink</span><span class="p">:</span>
@@ -2430,7 +2446,16 @@ then the messages will be directed to the fallback sink. </p>
 <span class="w">          </span><span class="nt">udsink</span><span class="p">:</span>
 <span class="w">            </span><span class="nt">container</span><span class="p">:</span>
 <span class="w">              </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink:latest</span>
-</code></pre></div></p>
+</code></pre></div>
+<h3 id="step-2-update-the-user-defined-sink-implementation">Step 2 - update the user-defined sink implementation<a class="headerlink" href="#step-2-update-the-user-defined-sink-implementation" title="Permanent link">&para;</a></h3>
+<p>Code changes have to be made in the primary sink to generate either a <strong>failed</strong> response or a <strong>fallback</strong> response,
+based on the use case.</p>
+<ul>
+<li>a <strong>failed</strong> response gets processed following the <a href="https://numaflow.numaproj.io/user-guide/sinks/retry-strategy/">retry strategy</a>, and if the retry strategy is set to <code>fallback</code>, the message will be directed to the fallback sink after the retries are exhausted.</li>
+<li>a <strong>fallback</strong> response doesn't respect the sink retry strategy. It gets immediately directed to the fallback sink without getting retried.</li>
+</ul>
+<p>SDK methods to generate either a fallback or a failed response in a primary user-defined sink can be found here:
+<a href="https://github.com/numaproj/numaflow-go/blob/main/pkg/sinker/types.go">Golang</a>, <a href="https://github.com/numaproj/numaflow-java/blob/main/src/main/java/io/numaproj/numaflow/sinker/Response.java">Java</a>, <a href="https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sinker/_dtypes.py">Python</a></p>
 
               
             </article>
