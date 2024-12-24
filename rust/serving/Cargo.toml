@@ -18,6 +18,7 @@ numaflow-models.workspace = true
 backoff.workspace = true
 axum.workspace = true
 axum-server.workspace = true
+bytes.workspace = true
 async-nats = "0.35.1"
 axum-macros = "0.4.1"
 hyper-util = { version = "0.1.6", features = ["client-legacy"] }

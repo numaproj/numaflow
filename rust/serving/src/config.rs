@@ -7,63 +7,23 @@ use base64::Engine;
 use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
 use serde::{Deserialize, Serialize};
 
-use crate::Error::ParseConfig;
+use crate::{
+    pipeline::PipelineDCG,
+    Error::{self, ParseConfig},
+};
 
 const ENV_NUMAFLOW_SERVING_SOURCE_OBJECT: &str = "NUMAFLOW_SERVING_SOURCE_OBJECT";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM: &str = "NUMAFLOW_SERVING_JETSTREAM_STREAM";
 const ENV_NUMAFLOW_SERVING_STORE_TTL: &str = "NUMAFLOW_SERVING_STORE_TTL";
 const ENV_NUMAFLOW_SERVING_HOST_IP: &str = "NUMAFLOW_SERVING_HOST_IP";
 const ENV_NUMAFLOW_SERVING_APP_PORT: &str = "NUMAFLOW_SERVING_APP_LISTEN_PORT";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
 const ENV_NUMAFLOW_SERVING_AUTH_TOKEN: &str = "NUMAFLOW_SERVING_AUTH_TOKEN";
+const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 
 pub fn generate_certs() -> std::result::Result<(Certificate, KeyPair), String> {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| format!("Failed to generate cert {:?}", e))?;
     Ok((cert, key_pair))
-}
-
-#[derive(Deserialize, Clone, PartialEq)]
-pub struct BasicAuth {
-    pub username: String,
-    pub password: String,
-}
-
-impl Debug for BasicAuth {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let passwd_printable = if self.password.len() > 4 {
-            let passwd: String = self
-                .password
-                .chars()
-                .skip(self.password.len() - 2)
-                .take(2)
-                .collect();
-            format!("***{}", passwd)
-        } else {
-            "*****".to_owned()
-        };
-        write!(f, "{}:{}", self.username, passwd_printable)
-    }
-}
-
-#[derive(Debug, Deserialize, Clone, PartialEq)]
-pub struct JetStreamConfig {
-    pub stream: String,
-    pub url: String,
-    pub auth: Option<BasicAuth>,
-}
-
-impl Default for JetStreamConfig {
-    fn default() -> Self {
-        Self {
-            stream: "default".to_owned(),
-            url: "localhost:4222".to_owned(),
-            auth: None,
-        }
-    }
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -95,11 +55,11 @@ pub struct Settings {
     pub metrics_server_listen_port: u16,
     pub upstream_addr: String,
     pub drain_timeout_secs: u64,
-    pub jetstream: JetStreamConfig,
     pub redis: RedisConfig,
     /// The IP address of the numaserve pod. This will be used to construct the value for X-Numaflow-Callback-Url header
     pub host_ip: String,
     pub api_auth_token: Option<String>,
+    pub pipeline_spec: PipelineDCG,
 }
 
 impl Default for Settings {
@@ -110,10 +70,10 @@ impl Default for Settings {
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".to_owned(),
             drain_timeout_secs: 10,
-            jetstream: JetStreamConfig::default(),
             redis: RedisConfig::default(),
             host_ip: "127.0.0.1".to_owned(),
             api_auth_token: None,
+            pipeline_spec: Default::default(),
         }
     }
 }
@@ -133,7 +93,7 @@ pub struct CallbackStorageConfig {
 
 /// This implementation is to load settings from env variables
 impl TryFrom<HashMap<String, String>> for Settings {
-    type Error = crate::Error;
+    type Error = Error;
     fn try_from(env_vars: HashMap<String, String>) -> std::result::Result<Self, Self::Error> {
         let host_ip = env_vars
             .get(ENV_NUMAFLOW_SERVING_HOST_IP)
@@ -144,18 +104,26 @@ impl TryFrom<HashMap<String, String>> for Settings {
             })?
             .to_owned();
 
+        let pipeline_spec: PipelineDCG = env_vars
+            .get(ENV_MIN_PIPELINE_SPEC)
+            .ok_or_else(|| {
+                Error::ParseConfig(format!(
+                    "Pipeline spec is not set using environment variable {ENV_MIN_PIPELINE_SPEC}"
+                ))
+            })?
+            .parse()
+            .map_err(|e| {
+                Error::ParseConfig(format!(
+                    "Parsing pipeline spec: {}: error={e:?}",
+                    env_vars.get(ENV_MIN_PIPELINE_SPEC).unwrap()
+                ))
+            })?;
+
         let mut settings = Settings {
             host_ip,
+            pipeline_spec,
             ..Default::default()
         };
-
-        if let Some(jetstream_url) = env_vars.get(ENV_NUMAFLOW_SERVING_JETSTREAM_URL) {
-            settings.jetstream.url = jetstream_url.to_owned();
-        }
-
-        if let Some(jetstream_stream) = env_vars.get(ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM) {
-            settings.jetstream.stream = jetstream_stream.to_owned();
-        }
 
         if let Some(api_auth_token) = env_vars.get(ENV_NUMAFLOW_SERVING_AUTH_TOKEN) {
             settings.api_auth_token = Some(api_auth_token.to_owned());
@@ -167,17 +135,6 @@ impl TryFrom<HashMap<String, String>> for Settings {
                     "Parsing {ENV_NUMAFLOW_SERVING_APP_PORT}(set to '{app_port}'): {e:?}"
                 ))
             })?;
-        }
-
-        // If username is set, the password also must be set
-        if let Some(username) = env_vars.get(ENV_NUMAFLOW_SERVING_JETSTREAM_USER) {
-            let Some(password) = env_vars.get(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD) else {
-                return Err(ParseConfig(format!("Env variable {ENV_NUMAFLOW_SERVING_JETSTREAM_USER} is set, but {ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD} is not set")));
-            };
-            settings.jetstream.auth = Some(BasicAuth {
-                username: username.to_owned(),
-                password: password.to_owned(),
-            });
         }
 
         // Update redis.ttl_secs from environment variable
@@ -213,17 +170,9 @@ impl TryFrom<HashMap<String, String>> for Settings {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::pipeline::{Edge, Vertex};
 
-    #[test]
-    fn test_basic_auth_debug_print() {
-        let auth = BasicAuth {
-            username: "js-auth-user".into(),
-            password: "js-auth-password".into(),
-        };
-        let auth_debug = format!("{auth:?}");
-        assert_eq!(auth_debug, "js-auth-user:***rd");
-    }
+    use super::*;
 
     #[test]
     fn test_default_config() {
@@ -234,8 +183,6 @@ mod tests {
         assert_eq!(settings.metrics_server_listen_port, 3001);
         assert_eq!(settings.upstream_addr, "localhost:8888");
         assert_eq!(settings.drain_timeout_secs, 10);
-        assert_eq!(settings.jetstream.stream, "default");
-        assert_eq!(settings.jetstream.url, "localhost:4222");
         assert_eq!(settings.redis.addr, "redis://127.0.0.1:6379");
         assert_eq!(settings.redis.max_tasks, 50);
         assert_eq!(settings.redis.retries, 5);
@@ -246,21 +193,12 @@ mod tests {
     fn test_config_parse() {
         // Set up the environment variables
         let env_vars = [
-            (
-                ENV_NUMAFLOW_SERVING_JETSTREAM_URL,
-                "nats://isbsvc-default-js-svc.default.svc:4222",
-            ),
-            (
-                ENV_NUMAFLOW_SERVING_JETSTREAM_STREAM,
-                "ascii-art-pipeline-in-serving-source",
-            ),
-            (ENV_NUMAFLOW_SERVING_JETSTREAM_USER, "js-auth-user"),
-            (ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD, "js-user-password"),
             (ENV_NUMAFLOW_SERVING_HOST_IP, "10.2.3.5"),
             (ENV_NUMAFLOW_SERVING_AUTH_TOKEN, "api-auth-token"),
             (ENV_NUMAFLOW_SERVING_APP_PORT, "8443"),
             (ENV_NUMAFLOW_SERVING_STORE_TTL, "86400"),
-            (ENV_NUMAFLOW_SERVING_SOURCE_OBJECT, "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQiLCJzdG9yZSI6eyJ1cmwiOiJyZWRpczovL3JlZGlzOjYzNzkifX0=")
+            (ENV_NUMAFLOW_SERVING_SOURCE_OBJECT, "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQiLCJzdG9yZSI6eyJ1cmwiOiJyZWRpczovL3JlZGlzOjYzNzkifX0="),
+            (ENV_MIN_PIPELINE_SPEC, "eyJ2ZXJ0aWNlcyI6W3sibmFtZSI6InNlcnZpbmctaW4iLCJzb3VyY2UiOnsic2VydmluZyI6eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQiLCJzdG9yZSI6eyJ1cmwiOiJyZWRpczovL3JlZGlzOjYzNzkifX19LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciIsImVudiI6W3sibmFtZSI6IlJVU1RfTE9HIiwidmFsdWUiOiJpbmZvIn1dfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fSx7Im5hbWUiOiJzZXJ2aW5nLXNpbmsiLCJzaW5rIjp7InVkc2luayI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJxdWF5LmlvL251bWFpby9udW1hZmxvdy1ycy9zaW5rLWxvZzpzdGFibGUiLCJlbnYiOlt7Im5hbWUiOiJOVU1BRkxPV19DQUxMQkFDS19VUkxfS0VZIiwidmFsdWUiOiJYLU51bWFmbG93LUNhbGxiYWNrLVVybCJ9LHsibmFtZSI6Ik5VTUFGTE9XX01TR19JRF9IRUFERVJfS0VZIiwidmFsdWUiOiJYLU51bWFmbG93LUlkIn1dLCJyZXNvdXJjZXMiOnt9fX0sInJldHJ5U3RyYXRlZ3kiOnt9fSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fV0sImVkZ2VzIjpbeyJmcm9tIjoic2VydmluZy1pbiIsInRvIjoic2VydmluZy1zaW5rIiwiY29uZGl0aW9ucyI6bnVsbH1dLCJsaWZlY3ljbGUiOnt9LCJ3YXRlcm1hcmsiOnt9fQ==")
         ];
 
         // Call the config method
@@ -277,14 +215,6 @@ mod tests {
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
             drain_timeout_secs: 10,
-            jetstream: JetStreamConfig {
-                stream: "ascii-art-pipeline-in-serving-source".into(),
-                url: "nats://isbsvc-default-js-svc.default.svc:4222".into(),
-                auth: Some(BasicAuth {
-                    username: "js-auth-user".into(),
-                    password: "js-user-password".into(),
-                }),
-            },
             redis: RedisConfig {
                 addr: "redis://redis:6379".into(),
                 max_tasks: 50,
@@ -294,8 +224,22 @@ mod tests {
             },
             host_ip: "10.2.3.5".into(),
             api_auth_token: Some("api-auth-token".into()),
+            pipeline_spec: PipelineDCG {
+                vertices: vec![
+                    Vertex {
+                        name: "serving-in".into(),
+                    },
+                    Vertex {
+                        name: "serving-sink".into(),
+                    },
+                ],
+                edges: vec![Edge {
+                    from: "serving-in".into(),
+                    to: "serving-sink".into(),
+                    conditions: None,
+                }],
+            },
         };
-
         assert_eq!(settings, expected_config);
     }
 }

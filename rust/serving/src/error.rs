@@ -1,4 +1,5 @@
 use thiserror::Error;
+use tokio::sync::oneshot;
 
 // TODO: introduce module level error handling
 
@@ -43,6 +44,9 @@ pub enum Error {
 
     #[error("Init Error - {0}")]
     InitError(String),
+
+    #[error("Failed to receive message from channel. Actor task is terminated: {0:?}")]
+    ActorTaskTerminated(oneshot::error::RecvError),
 
     #[error("Other Error - {0}")]
     // catch-all variant for now

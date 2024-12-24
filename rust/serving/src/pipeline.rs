@@ -42,22 +42,20 @@ impl From<String> for OperatorType {
 }
 
 // Tag is a struct that contains the information about the tags for the edge
-#[cfg_attr(test, derive(PartialEq))]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Tag {
     pub operator: Option<OperatorType>,
     pub values: Vec<String>,
 }
 
 // Conditions is a struct that contains the information about the conditions for the edge
-#[cfg_attr(test, derive(PartialEq))]
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Conditions {
     pub tags: Option<Tag>,
 }
 
 // Edge is a struct that contains the information about the edge in the pipeline.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Edge {
     pub from: String,
     pub to: String,
@@ -66,14 +64,13 @@ pub struct Edge {
 
 /// DCG (directed compute graph) of the pipeline with minimal information build using vertices and edges
 /// from the pipeline spec
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde()]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct PipelineDCG {
     pub vertices: Vec<Vertex>,
     pub edges: Vec<Edge>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Vertex {
     pub name: String,
 }

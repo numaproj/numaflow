@@ -1,12 +1,13 @@
-use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use crate::app::callback::state::State as CallbackState;
+use app::callback::store::Store;
 use axum_server::tls_rustls::RustlsConfig;
+use tokio::sync::mpsc;
 use tracing::info;
 
 pub use self::error::{Error, Result};
-use self::pipeline::PipelineDCG;
 use crate::app::start_main_server;
 use crate::config::generate_certs;
 use crate::metrics::start_https_metrics_server;
@@ -21,41 +22,39 @@ mod error;
 mod metrics;
 mod pipeline;
 
-const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
+pub mod source;
+pub use source::{Message, MessageWrapper, ServingSource};
 
-pub async fn serve(
-    settings: Arc<Settings>,
-) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+#[derive(Clone)]
+pub(crate) struct AppState<T> {
+    pub message: mpsc::Sender<MessageWrapper>,
+    pub settings: Arc<Settings>,
+    pub callback_state: CallbackState<T>,
+}
+
+pub(crate) async fn serve<T>(
+    app: AppState<T>,
+) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
+where
+    T: Clone + Send + Sync + Store + 'static,
+{
     let (cert, key) = generate_certs()?;
 
     let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
         .await
         .map_err(|e| format!("Failed to create tls config {:?}", e))?;
 
-    // TODO: Move all env variables into one place. Some env variables are loaded when Settings is initialized
-    let pipeline_spec: PipelineDCG = env::var(ENV_MIN_PIPELINE_SPEC)
-        .map_err(|_| {
-            format!("Pipeline spec is not set using environment variable {ENV_MIN_PIPELINE_SPEC}")
-        })?
-        .parse()
-        .map_err(|e| {
-            format!(
-                "Parsing pipeline spec: {}: error={e:?}",
-                env::var(ENV_MIN_PIPELINE_SPEC).unwrap()
-            )
-        })?;
-
-    info!(config = ?settings, ?pipeline_spec, "Starting server with config and pipeline spec");
+    info!(config = ?app.settings, "Starting server with config and pipeline spec");
 
     // Start the metrics server, which serves the prometheus metrics.
     let metrics_addr: SocketAddr =
-        format!("0.0.0.0:{}", &settings.metrics_server_listen_port).parse()?;
+        format!("0.0.0.0:{}", &app.settings.metrics_server_listen_port).parse()?;
 
     let metrics_server_handle =
         tokio::spawn(start_https_metrics_server(metrics_addr, tls_config.clone()));
 
     // Start the main server, which serves the application.
-    let app_server_handle = tokio::spawn(start_main_server(settings, tls_config, pipeline_spec));
+    let app_server_handle = tokio::spawn(start_main_server(app, tls_config));
 
     // TODO: is try_join the best? we need to short-circuit at the first failure
     tokio::try_join!(flatten(app_server_handle), flatten(metrics_server_handle))?;
