@@ -518,7 +518,11 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 func (r *jetStreamInstaller) Uninstall(ctx context.Context) error {
 	// Clean up metrics
 	_ = reconciler.JetStreamISBSvcReplicas.DeleteLabelValues(r.isbSvc.Namespace, r.isbSvc.Name)
-	return r.uninstallPVCs(ctx)
+	// TODO: (k8s 1.27) Remove this once we deprecate the support for k8s < 1.27
+	if !dfv1.IsPVCRetentionPolicySupported() {
+		return r.uninstallPVCs(ctx)
+	}
+	return nil
 }
 
 func (r *jetStreamInstaller) uninstallPVCs(ctx context.Context) error {
