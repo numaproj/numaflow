@@ -41,7 +41,9 @@ import (
 )
 
 const (
-	finalizerName = dfv1.ControllerISBSvc
+	finalizerName = "numaflow.numaproj.io/" + dfv1.ControllerISBSvc
+	// TODO: clean up the deprecated finalizer in v1.7
+	deprecatedFinalizerName = dfv1.ControllerISBSvc
 )
 
 // interStepBufferReconciler reconciles an Inter-Step Buffer Service object.
@@ -97,7 +99,7 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 	log := logging.FromContext(ctx)
 	if !isbSvc.DeletionTimestamp.IsZero() {
 		log.Info("Deleting ISB Service")
-		if controllerutil.ContainsFinalizer(isbSvc, finalizerName) {
+		if controllerutil.ContainsFinalizer(isbSvc, finalizerName) || controllerutil.ContainsFinalizer(isbSvc, deprecatedFinalizerName) {
 			// Finalizer logic should be added here.
 			if err := installer.Uninstall(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder); err != nil {
 				log.Errorw("Failed to uninstall", zap.Error(err))
@@ -105,10 +107,14 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 				return err
 			}
 			controllerutil.RemoveFinalizer(isbSvc, finalizerName)
+			controllerutil.RemoveFinalizer(isbSvc, deprecatedFinalizerName)
 			// Clean up metrics
 			_ = reconciler.ISBSvcHealth.DeleteLabelValues(isbSvc.Namespace, isbSvc.Name)
 		}
 		return nil
+	}
+	if controllerutil.ContainsFinalizer(isbSvc, deprecatedFinalizerName) { // Remove deprecated finalizer if exists
+		controllerutil.RemoveFinalizer(isbSvc, deprecatedFinalizerName)
 	}
 	if needsFinalizer(isbSvc) {
 		controllerutil.AddFinalizer(isbSvc, finalizerName)
