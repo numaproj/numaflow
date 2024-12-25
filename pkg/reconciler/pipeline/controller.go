@@ -52,7 +52,9 @@ import (
 )
 
 const (
-	finalizerName = dfv1.ControllerPipeline
+	finalizerName = "numaflow.numaproj.io/" + dfv1.ControllerPipeline
+	// TODO: clean up the deprecated finalizer in v1.7
+	deprecatedFinalizerName = dfv1.ControllerPipeline
 
 	pauseTimestampPath = `/metadata/annotations/numaflow.numaproj.io~1pause-timestamp`
 )
@@ -111,7 +113,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	log := logging.FromContext(ctx)
 	if !pl.DeletionTimestamp.IsZero() {
 		log.Info("Deleting pipeline")
-		if controllerutil.ContainsFinalizer(pl, finalizerName) {
+		if controllerutil.ContainsFinalizer(pl, finalizerName) || controllerutil.ContainsFinalizer(pl, deprecatedFinalizerName) {
 			if time.Now().Before(pl.DeletionTimestamp.Add(time.Duration(pl.GetTerminationGracePeriodSeconds()) * time.Second)) {
 				safeToDelete, err := r.safeToDelete(ctx, pl)
 				if err != nil {
@@ -135,6 +137,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 			}
 			controllerutil.RemoveFinalizer(pl, finalizerName)
+			controllerutil.RemoveFinalizer(pl, deprecatedFinalizerName)
 			// Clean up metrics
 			_ = reconciler.PipelineHealth.DeleteLabelValues(pl.Namespace, pl.Name)
 			// Delete corresponding vertex metrics
@@ -154,6 +157,10 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 	pl.Status.InitConditions()
 	pl.Status.SetObservedGeneration(pl.Generation)
+
+	if controllerutil.ContainsFinalizer(pl, deprecatedFinalizerName) { // Remove deprecated finalizer if exists
+		controllerutil.RemoveFinalizer(pl, deprecatedFinalizerName)
+	}
 
 	if !controllerutil.ContainsFinalizer(pl, finalizerName) {
 		controllerutil.AddFinalizer(pl, finalizerName)
