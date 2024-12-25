@@ -4,7 +4,7 @@ import { getPodContainerUsePercentages } from "../../../../../../../../../../../
 import { PodInfoProps } from "../../../../../../../../../../../../../types/declarations/pods";
 
 import "./style.css";
-
+// TODO: calculate cpu/mem percent from containerInfoProps/calculateCPUPercent/calculateMemoryPercent
 export function ContainerInfo({
   pod,
   podDetails,
