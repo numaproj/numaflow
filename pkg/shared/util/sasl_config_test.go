@@ -41,6 +41,14 @@ func TestSaslConfiguration(t *testing.T) {
 				objectName: "password-secret-name",
 				key:        "password",
 			}: "password",
+			{
+				objectName: "oauth-client-secret",
+				key:        "clientid",
+			}: "clientid",
+			{
+				objectName: "oauth-client-secret",
+				key:        "clientsecret",
+			}: "clientsecret",
 		},
 	}
 
@@ -58,6 +66,22 @@ func TestSaslConfiguration(t *testing.T) {
 			Key: "password",
 		},
 		Handshake: true,
+	}
+
+	oauthcredentials := &dfv1.SASLOAuth{
+		ClientID: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: "oauth-client-secret",
+			},
+			Key: "clientid",
+		},
+		ClientSecret: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: "oauth-client-secret",
+			},
+			Key: "clientsecret",
+		},
+		TokenEndpoint: "https://token-endpoint/token",
 	}
 
 	t.Run("Plain produces right values", func(t *testing.T) {
@@ -108,6 +132,18 @@ func TestSaslConfiguration(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Nil(t, config)
 
+	})
+
+	t.Run("OAuth produces right values", func(t *testing.T) {
+		oauth := dfv1.SASLTypeOAuth
+		config, err := getSASLStrategy(&dfv1.SASL{
+			Mechanism: &oauth,
+			OAuth:     oauthcredentials,
+		}, mockedVolumes)
+		assert.NoError(t, err)
+		assert.Equal(t, true, config.Enable)
+		assert.Equal(t, sarama.SASLTypeOAuth, string(config.Mechanism))
+		assert.NotNil(t, config.TokenProvider)
 	})
 }
 
@@ -172,7 +208,6 @@ type mockGSSAPI struct {
 }
 
 func TestGetGSSAPIConfig(t *testing.T) {
-
 	authType := dfv1.KRB5UserAuth
 	tests := []struct {
 		name    string
