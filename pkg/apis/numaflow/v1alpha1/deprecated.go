@@ -31,3 +31,14 @@ func isSidecarSupported() bool {
 	k8sVersion, _ := strconv.ParseFloat(v, 32)
 	return k8sVersion >= 1.29
 }
+
+// TODO: (k8s 1.27) Remove this once we deprecate the support for k8s < 1.27
+func IsPVCRetentionPolicySupported() bool {
+	v := os.Getenv(EnvK8sServerVersion)
+	if v == "" {
+		return true // default to true if the env var is not found
+	}
+	// e.g. 1.31
+	k8sVersion, _ := strconv.ParseFloat(v, 32)
+	return k8sVersion >= 1.27
+}
