@@ -4,11 +4,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::config::{config, CustomResourceType};
+pub(crate) use crate::error::{Error, Result};
 
 /// Custom Error handling.
 mod error;
-pub(crate) use crate::error::{Error, Result};
-
 /// [MonoVertex] is a simplified version of the [Pipeline] spec which is ideal for high TPS, low latency
 /// use-cases which do not require [ISB].
 ///
@@ -52,6 +51,10 @@ mod pipeline;
 mod tracker;
 
 pub async fn run() -> Result<()> {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
 

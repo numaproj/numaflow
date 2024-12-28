@@ -3,7 +3,6 @@ use tracing::info;
 
 use forwarder::ForwarderBuilder;
 
-use crate::{metrics, shared};
 use crate::config::is_mono_vertex;
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
@@ -12,6 +11,7 @@ use crate::sink::SinkWriter;
 use crate::source::Source;
 use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
+use crate::{metrics, shared};
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
 /// The forward-a-chunk executes the following in an infinite loop till a shutdown signal is received:
@@ -112,8 +112,8 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
 
-    use numaflow::{sink, source};
     use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source};
     use tokio::sync::mpsc::Sender;
     use tokio_util::sync::CancellationToken;
 

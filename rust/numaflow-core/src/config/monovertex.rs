@@ -1,19 +1,19 @@
 use std::env;
 use std::time::Duration;
 
-use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use serde_json::from_slice;
 
 use numaflow_models::models::MonoVertex;
 
-use crate::config::components::{sink, source};
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::source::{GeneratorConfig, SourceConfig};
 use crate::config::components::transformer::{
     TransformerConfig, TransformerType, UserDefinedConfig,
 };
+use crate::config::components::{sink, source};
 use crate::config::get_vertex_replica;
 use crate::config::monovertex::sink::SinkType;
 use crate::error::Error;
@@ -173,7 +173,7 @@ impl MonovertexConfig {
 
 fn get_daemon_server_address(mvtx_name: String, mvtx_namespace: String) -> String {
     format!(
-        "https://{}-mv-daemon-svc.{}.svc:{}",
+        "{}-mv-daemon-svc.{}.svc:{}",
         mvtx_name.to_lowercase(),
         mvtx_namespace.to_lowercase(),
         DAEMON_SERVICE_PORT
@@ -182,8 +182,8 @@ fn get_daemon_server_address(mvtx_name: String, mvtx_namespace: String) -> Strin
 
 #[cfg(test)]
 mod tests {
-    use base64::Engine;
     use base64::prelude::BASE64_STANDARD;
+    use base64::Engine;
 
     use crate::config::components::sink::SinkType;
     use crate::config::components::source::SourceType;
@@ -479,7 +479,7 @@ mod tests {
         assert_eq!(
             daemon_server_address,
             format!(
-                "https://{}-mv-daemon-svc.{}.svc:{}",
+                "{}-mv-daemon-svc.{}.svc:{}",
                 mvtx_name.to_lowercase(),
                 mvtx_namespace.to_lowercase(),
                 4327

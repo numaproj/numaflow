@@ -1,14 +1,15 @@
-use std::{env, iter};
 use std::collections::{BTreeMap, HashMap};
+use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
+use std::{env, iter};
 
-use axum::{Router, routing::get};
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
+use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
@@ -16,21 +17,23 @@ use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::Histogram;
 use prometheus_client::registry::Registry;
-use rcgen::{CertifiedKey, generate_simple_self_signed};
+use rcgen::{generate_simple_self_signed, CertifiedKey};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
-use tonic::Request;
 use tonic::transport::Channel;
-use tracing::{debug, error, info};
+use tonic::Request;
+use tracing::{debug, error, info, warn};
 
+use numaflow_pb::clients::mvtxdaemon::mono_vertex_daemon_service_client::MonoVertexDaemonServiceClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
-use crate::Error;
+use crate::shared::insecure_tls::HTTPSClient;
 use crate::source::Source;
+use crate::Error;
 
 // SDK information
 const SDK_INFO: &str = "sdk_info";
@@ -874,25 +877,39 @@ async fn expose_pending_metrics(
         ("15m", 900),
     ];
 
+    let mut daemon_client: Option<MonoVertexDaemonServiceClient<HTTPSClient>> = None;
+
     loop {
         ticker.tick().await;
 
-        /// Update the lookback seconds from the daemon server
-        /// Currently only monovertex is supported
+        // Update the lookback seconds from the daemon server
+        // Currently only monovertex is supported
         if !daemon_server_address.is_empty() && is_mono_vertex {
-            let server_url = format!("{}/api/v1/lookback", daemon_server_address);
-
-            let client = reqwest::ClientBuilder::new()
-                .danger_accept_invalid_certs(true)
-                .build()
-                .unwrap();
-            let resp = client.get(server_url).send().await;
-            if resp.is_ok() {
-                // Parse the JSON into a HashMap, extract the lookback seconds from the json
-                let json_map: HashMap<String, f64> = resp.unwrap().json().await.unwrap();
-                let lookback_seconds = json_map.get("lookback").unwrap();
-                // update the key with the new lookback seconds
-                lookback_seconds_map[1] = ("default", *lookback_seconds as u16);
+            // only create the client if not already created
+            if daemon_client.is_none() {
+                daemon_client = create_mvtx_daemon_client(daemon_server_address.clone()).await;
+            }
+            if let Some(ref mut client) = daemon_client {
+                let res = client.get_mono_vertex_lookback(Request::new(())).await;
+                if let Ok(response) = res {
+                    let lookback = response.into_inner().lookback.unwrap() as u16;
+                    // Update the lookback seconds if it has changed
+                    if lookback != lookback_seconds_map[1].1 {
+                        lookback_seconds_map[1] = ("default", lookback);
+                        debug!("Updated lookback seconds to {}", lookback);
+                    }
+                } else {
+                    // Trigger reinitialization of client in the next iteration
+                    // to handle any transient errors
+                    warn!(
+                        "Error fetching lookback from MonoVertex daemon, will try to reconnect. {:?}",
+                        res.err()
+                    );
+                    daemon_client = None;
+                }
+            } else {
+                warn!("Unable to establish client connection. Trying again in the next loop iteration.");
+                daemon_client = None;
             }
         }
 
@@ -954,13 +971,47 @@ async fn calculate_pending(
     result
 }
 
+async fn create_mvtx_daemon_client(
+    daemon_server_address: String,
+) -> Option<MonoVertexDaemonServiceClient<HTTPSClient>> {
+    let https_client = crate::shared::insecure_tls::new_https_client().ok()?;
+    let addr = tokio::net::lookup_host(daemon_server_address)
+        .await
+        .ok()?
+        .find_map(|socket_addr| match socket_addr {
+            std::net::SocketAddr::V4(ipv4) => Some(ipv4.to_string()),
+            _ => None,
+        })?;
+
+    match tokio::net::TcpStream::connect(&addr).await {
+        Ok(_) => {
+            let uri = hyper::Uri::builder()
+                .authority(addr)
+                .scheme("https")
+                .path_and_query("/")
+                .build()
+                .unwrap();
+
+            let client = MonoVertexDaemonServiceClient::with_origin(https_client, uri);
+            Some(client)
+        }
+        Err(err) => {
+            warn!(
+                "Failed to connect to Monovertex daemon server at {}: {}",
+                addr, err
+            );
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::net::SocketAddr;
     use std::time::Instant;
 
-    use numaflow::{sink, source, sourcetransform};
     use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source, sourcetransform};
     use tokio::sync::mpsc::Sender;
 
     use crate::shared::grpc::create_rpc_channel;
