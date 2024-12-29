@@ -11,12 +11,6 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
-
-use numaflow_pb::clients::map::map_client::MapClient;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
@@ -31,6 +25,7 @@ use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{debug, error, info, warn};
 
+use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::mvtxdaemon::mono_vertex_daemon_service_client::MonoVertexDaemonServiceClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
@@ -911,7 +906,7 @@ async fn expose_pending_metrics(
                     // Update the lookback seconds if it has changed
                     if lookback != lookback_seconds_map[1].1 {
                         lookback_seconds_map[1] = ("default", lookback);
-                        debug!("Updated lookback seconds to {}", lookback);
+                        info!("Updated lookback seconds to {}", lookback);
                     }
                 } else {
                     // Trigger reinitialization of client in the next iteration
@@ -946,9 +941,6 @@ async fn expose_pending_metrics(
                         .get_or_create(&metric_labels)
                         .set(pending);
                 }
-            }
-            if label == "default" {
-                info!("MYDEBUG Seconds {}", seconds);
             }
         }
         // skip for those the pending is not implemented
