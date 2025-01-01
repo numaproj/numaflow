@@ -179,6 +179,7 @@ func (mvs *MonoVertexService) startHealthCheck(ctx context.Context) {
 	}
 }
 
+// GetMonoVertexLookback returns the current lookback of the MonoVertex from the rater
 func (mvs *MonoVertexService) GetMonoVertexLookback(ctx context.Context, empty *emptypb.Empty) (*mvtxdaemon.GetMonoVertexLookbackResponse, error) {
 	return &mvtxdaemon.GetMonoVertexLookbackResponse{
 		Lookback: mvs.rater.GetLookBack(),

@@ -42,7 +42,7 @@ func (tc *TimestampedProcessingTime) Update(podReadCount *PodProcessingTime) {
 	if podReadCount == nil {
 		return
 	}
-	sum, count := podReadCount.processingTime()
+	sum, count := podReadCount.processingTimeValues()
 
 	// Convert microseconds to seconds
 	microseconds := sum / count

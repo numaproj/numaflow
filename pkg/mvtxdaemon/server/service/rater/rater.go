@@ -68,12 +68,13 @@ type Rater struct {
 	timestampedPodCounts *sharedqueue.OverflowQueue[*TimestampedCounts]
 	// timestampedPodProcessingTime is a map between vertex name and a queue of timestamped processing times for that vertex
 	timestampedPodProcessingTime *sharedqueue.OverflowQueue[*TimestampedProcessingTime]
-	// userSpecifiedLookBackSeconds is a map between vertex name and the user-specified lookback seconds for that vertex
+	// userSpecifiedLookBackSeconds the current lookback seconds for the monovertex
+	// this can be updated dynamically, defaults to user-specified value in the spec
 	userSpecifiedLookBackSeconds *atomic.Float64
 	options                      *options
 }
 
-// GetLookBack is used
+// GetLookBack returns the current lookback seconds for the MonoVertex.
 func (r *Rater) GetLookBack() *wrapperspb.DoubleValue {
 	return wrapperspb.Double(r.userSpecifiedLookBackSeconds.Load())
 }
@@ -167,7 +168,6 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
 	UpdateCount(r.timestampedPodCounts, now, podReadCount)
 	UpdateProcessingTime(r.timestampedPodProcessingTime, now, processingTime)
-	r.log.Infof("MYDEBUG: processing rate vertex %s is: %v", pInfo.monoVertexName, r.timestampedPodProcessingTime)
 	return nil
 }
 
@@ -214,9 +214,6 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 	var result = make(map[string]*wrapperspb.DoubleValue)
 	// calculate rates for each lookback seconds
 	for n, i := range r.buildLookbackSecondsMap() {
-		if n == "default" {
-			r.log.Infof("MYDEBUG: lookback %d", i)
-		}
 		rate := CalculateRate(r.timestampedPodCounts, i)
 		result[n] = wrapperspb.Double(rate)
 	}
