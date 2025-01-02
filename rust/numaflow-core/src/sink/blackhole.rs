@@ -1,5 +1,5 @@
-use super::Sink;
-use crate::message::{Message, ResponseFromSink, ResponseStatusFromSink};
+use super::{ResponseFromSink, ResponseStatusFromSink, Sink};
+use crate::message::Message;
 
 /// Blackhole is a sink to emulate /dev/null
 pub struct BlackholeSink;
@@ -25,8 +25,8 @@ mod tests {
 
     use super::BlackholeSink;
     use crate::message::IntOffset;
-    use crate::message::{Message, MessageID, Offset, ResponseFromSink, ResponseStatusFromSink};
-    use crate::sink::Sink;
+    use crate::message::{Message, MessageID, Offset};
+    use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 
     #[tokio::test]
     async fn test_black_hole() {

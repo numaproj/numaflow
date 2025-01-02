@@ -13,6 +13,7 @@ use tracing::error;
 use crate::config::get_vertex_name;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageID, Offset};
+use crate::shared::grpc::prost_timestamp_from_utc;
 
 type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
@@ -24,6 +25,23 @@ struct ParentMessageInfo {
     offset: Offset,
     event_time: DateTime<Utc>,
     headers: HashMap<String, String>,
+}
+
+impl From<Message> for MapRequest {
+    fn from(message: Message) -> Self {
+        Self {
+            request: Some(map::map_request::Request {
+                keys: message.keys.to_vec(),
+                value: message.value.to_vec(),
+                event_time: prost_timestamp_from_utc(message.event_time),
+                watermark: None,
+                headers: message.headers,
+            }),
+            id: message.offset.unwrap().to_string(),
+            handshake: None,
+            status: None,
+        }
+    }
 }
 
 /// UserDefinedUnaryMap is a grpc client that sends unary requests to the map server
