@@ -47,7 +47,7 @@ impl Default for MonovertexConfig {
                 source_type: source::SourceType::Generator(GeneratorConfig::default()),
             },
             sink_config: SinkConfig {
-                sink_type: sink::SinkType::Log(sink::LogConfig::default()),
+                sink_type: SinkType::Log(sink::LogConfig::default()),
                 retry_config: None,
             },
             transformer_config: None,
