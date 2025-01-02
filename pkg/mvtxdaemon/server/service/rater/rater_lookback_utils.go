@@ -49,13 +49,12 @@ func (r *Rater) updateDynamicLookbackSecs() {
 	// calculate rates for each look back seconds
 	vertexName := r.monoVertex.Name
 	processingTimeSeconds, update := r.CalculateVertexProcessingTime(r.timestampedPodProcessingTime)
-	r.log.Infof("MYDEBUG: processingTimeSeconds %f ", processingTimeSeconds)
 	if !update {
 		return
 	}
+	r.log.Debugf("Calulcated processingTimeSeconds for mvtx %s : %f ", vertexName, processingTimeSeconds)
 	// if the current calculated processing time is greater than the lookback Seconds, update it
 	currentVal := r.userSpecifiedLookBackSeconds.Load()
-
 	// round up to the nearest minute, also ensure that while going up and down we have the consistent value for
 	// a given processingTimeSeconds, then convert back to seconds
 	roundedProcessingTime := 60 * int(math.Ceil(processingTimeSeconds/60))
