@@ -161,7 +161,7 @@ impl fmt::Display for MessageID {
 impl TryFrom<Message> for BytesMut {
     type Error = Error;
 
-    fn try_from(message: Message) -> std::result::Result<Self, Self::Error> {
+    fn try_from(message: Message) -> Result<Self, Self::Error> {
         let proto_message = numaflow_pb::objects::isb::Message {
             header: Some(numaflow_pb::objects::isb::Header {
                 message_info: Some(numaflow_pb::objects::isb::MessageInfo {
