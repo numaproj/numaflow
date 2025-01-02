@@ -49,6 +49,24 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 	q.Append(tc)
 }
 
+// UpdateProcessingTime updates the processing time of a batch of messages for a pod at a given time
+func UpdateProcessingTime(q *sharedqueue.OverflowQueue[*TimestampedProcessingTime], time int64, podProcessingTime *PodProcessingTime) {
+	items := q.Items()
+
+	// find the element matching the input timestamp and update it
+	for _, i := range items {
+		if i.timestamp == time {
+			i.Update(podProcessingTime)
+			return
+		}
+	}
+
+	// if we cannot find a matching element, it means we need to add a new timestamped count to the queue
+	tc := NewTimestampedProcessingTime(time)
+	tc.Update(podProcessingTime)
+	q.Append(tc)
+}
+
 // CalculateRate calculates the rate of a MonoVertex for a given lookback period.
 func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) float64 {
 	counts := q.Items()
@@ -81,6 +99,31 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds
 func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
+	n := len(counts)
+	now := time.Now().Truncate(CountWindow).Unix()
+	if n < 2 || now-counts[n-2].timestamp > lookbackSeconds {
+		// if the second last element is already outside the lookback window, we return indexNotFound
+		return indexNotFound
+	}
+
+	startIndex := n - 2
+	left := 0
+	right := n - 2
+	lastTimestamp := now - lookbackSeconds
+	for left <= right {
+		mid := left + (right-left)/2
+		if counts[mid].timestamp >= lastTimestamp {
+			startIndex = mid
+			right = mid - 1
+		} else {
+			left = mid + 1
+		}
+	}
+	return startIndex
+}
+
+// findStartIndex finds the index of the first element in the queue that is within the lookback seconds
+func findStartIndexPt(lookbackSeconds int64, counts []*TimestampedProcessingTime) int {
 	n := len(counts)
 	now := time.Now().Truncate(CountWindow).Unix()
 	if n < 2 || now-counts[n-2].timestamp > lookbackSeconds {

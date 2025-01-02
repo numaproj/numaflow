@@ -1,8 +1,9 @@
-use std::collections::BTreeMap;
-use std::iter;
+use std::collections::{BTreeMap, HashMap};
+use std::io::ErrorKind;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
+use std::{env, iter};
 
 use axum::body::Body;
 use axum::extract::State;
@@ -10,10 +11,6 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
-use numaflow_pb::clients::map::map_client::MapClient;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
@@ -26,9 +23,16 @@ use tokio::task::JoinHandle;
 use tokio::time;
 use tonic::transport::Channel;
 use tonic::Request;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
+
+use numaflow_pb::clients::map::map_client::MapClient;
+use numaflow_pb::clients::mvtxdaemon::mono_vertex_daemon_service_client::MonoVertexDaemonServiceClient;
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
+use crate::shared::insecure_tls::HTTPSClient;
 use crate::source::Source;
 use crate::Error;
 
@@ -784,7 +788,11 @@ impl PendingReader {
     /// - Another to periodically expose the pending metrics.
     ///
     /// Dropping the PendingReaderTasks will abort the background tasks.
-    pub async fn start(&self, is_mono_vertex: bool) -> PendingReaderTasks {
+    pub async fn start(
+        &self,
+        is_mono_vertex: bool,
+        daemon_server_address: String,
+    ) -> PendingReaderTasks {
         let pending_reader = self.lag_reader.clone();
         let lag_checking_interval = self.lag_checking_interval;
         let refresh_interval = self.refresh_interval;
@@ -802,6 +810,7 @@ impl PendingReader {
                 refresh_interval,
                 pending_stats,
                 lookback_seconds,
+                daemon_server_address,
             )
             .await;
         });
@@ -863,6 +872,7 @@ async fn expose_pending_metrics(
     refresh_interval: Duration,
     pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
     lookback_seconds: u16,
+    daemon_server_address: String,
 ) {
     let mut ticker = time::interval(refresh_interval);
 
@@ -870,15 +880,49 @@ async fn expose_pending_metrics(
     // string concat is more efficient?
     let mut pending_info: BTreeMap<&str, i64> = BTreeMap::new();
 
-    let lookback_seconds_map: [(&str, u16); 4] = [
+    let mut lookback_seconds_map: [(&str, u16); 4] = [
         ("1m", 60),
         ("default", lookback_seconds),
         ("5m", 300),
         ("15m", 900),
     ];
 
+    let mut daemon_client: Option<MonoVertexDaemonServiceClient<HTTPSClient>> = None;
+
     loop {
         ticker.tick().await;
+
+        // Update the lookback seconds from the daemon server
+        // Currently only monovertex is supported
+        if !daemon_server_address.is_empty() && is_mono_vertex {
+            // only create the client if not already created
+            if daemon_client.is_none() {
+                daemon_client = create_mvtx_daemon_client(daemon_server_address.clone()).await;
+            }
+            if let Some(ref mut client) = daemon_client {
+                let res = client.get_mono_vertex_lookback(Request::new(())).await;
+                if let Ok(response) = res {
+                    let lookback = response.into_inner().lookback.unwrap() as u16;
+                    // Update the lookback seconds if it has changed
+                    if lookback != lookback_seconds_map[1].1 {
+                        lookback_seconds_map[1] = ("default", lookback);
+                        info!("Updated lookback seconds to {}", lookback);
+                    }
+                } else {
+                    // Trigger reinitialization of client in the next iteration
+                    // to handle any transient errors
+                    warn!(
+                        "Error fetching lookback from MonoVertex daemon, will try to reconnect. {:?}",
+                        res.err()
+                    );
+                    daemon_client = None;
+                }
+            } else {
+                warn!("Unable to establish client connection. Trying again in the next loop iteration.");
+                daemon_client = None;
+            }
+        }
+
         for (label, seconds) in lookback_seconds_map {
             let pending = calculate_pending(seconds as i64, &pending_stats).await;
             if pending != -1 {
@@ -934,6 +978,40 @@ async fn calculate_pending(
     result
 }
 
+async fn create_mvtx_daemon_client(
+    daemon_server_address: String,
+) -> Option<MonoVertexDaemonServiceClient<HTTPSClient>> {
+    let https_client = crate::shared::insecure_tls::new_https_client().ok()?;
+    let addr = tokio::net::lookup_host(daemon_server_address)
+        .await
+        .ok()?
+        .find_map(|socket_addr| match socket_addr {
+            std::net::SocketAddr::V4(ipv4) => Some(ipv4.to_string()),
+            _ => None,
+        })?;
+
+    match tokio::net::TcpStream::connect(&addr).await {
+        Ok(_) => {
+            let uri = hyper::Uri::builder()
+                .authority(addr)
+                .scheme("https")
+                .path_and_query("/")
+                .build()
+                .unwrap();
+
+            let client = MonoVertexDaemonServiceClient::with_origin(https_client, uri);
+            Some(client)
+        }
+        Err(err) => {
+            warn!(
+                "Failed to connect to Monovertex daemon server at {}: {}",
+                addr, err
+            );
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::net::SocketAddr;
@@ -943,8 +1021,9 @@ mod tests {
     use numaflow::{sink, source, sourcetransform};
     use tokio::sync::mpsc::Sender;
 
-    use super::*;
     use crate::shared::grpc::create_rpc_channel;
+
+    use super::*;
 
     struct SimpleSource;
     #[tonic::async_trait]
@@ -1130,8 +1209,14 @@ mod tests {
         tokio::spawn({
             let pending_stats = Arc::clone(&pending_stats);
             async move {
-                expose_pending_metrics(true, refresh_interval, pending_stats, lookback_seconds)
-                    .await;
+                expose_pending_metrics(
+                    true,
+                    refresh_interval,
+                    pending_stats,
+                    lookback_seconds,
+                    "".to_string(),
+                )
+                .await;
             }
         });
         // We use tokio::time::interval() as the ticker in the expose_pending_metrics() function.

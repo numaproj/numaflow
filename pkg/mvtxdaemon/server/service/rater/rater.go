@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/prometheus/common/expfmt"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -34,11 +35,13 @@ import (
 
 const CountWindow = time.Second * 10
 const monoVtxReadMetricName = "monovtx_read_total"
+const MaxLookback = time.Minute * 10
 
 // MonoVtxRatable is the interface for the Rater struct.
 type MonoVtxRatable interface {
 	Start(ctx context.Context) error
 	GetRates() map[string]*wrapperspb.DoubleValue
+	GetLookBack() *wrapperspb.DoubleValue
 }
 
 var _ MonoVtxRatable = (*Rater)(nil)
@@ -63,9 +66,17 @@ type Rater struct {
 	podTracker *PodTracker
 	// timestampedPodCounts is a queue of timestamped counts for the MonoVertex
 	timestampedPodCounts *sharedqueue.OverflowQueue[*TimestampedCounts]
-	// userSpecifiedLookBackSeconds is the user-specified lookback seconds for that MonoVertex
-	userSpecifiedLookBackSeconds int64
+	// timestampedPodProcessingTime is a map between vertex name and a queue of timestamped processing times for that vertex
+	timestampedPodProcessingTime *sharedqueue.OverflowQueue[*TimestampedProcessingTime]
+	// userSpecifiedLookBackSeconds the current lookback seconds for the monovertex
+	// this can be updated dynamically, defaults to user-specified value in the spec
+	userSpecifiedLookBackSeconds *atomic.Float64
 	options                      *options
+}
+
+// GetLookBack returns the current lookback seconds for the MonoVertex.
+func (r *Rater) GetLookBack() *wrapperspb.DoubleValue {
+	return wrapperspb.Double(r.userSpecifiedLookBackSeconds.Load())
 }
 
 // PodReadCount is a struct to maintain count of messages read by a pod of MonoVertex
@@ -95,14 +106,15 @@ func NewRater(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...Option) *Rat
 			},
 			Timeout: time.Second * 1,
 		},
-		log:     logging.FromContext(ctx).Named("Rater"),
-		options: defaultOptions(),
+		log:                          logging.FromContext(ctx).Named("Rater"),
+		options:                      defaultOptions(),
+		userSpecifiedLookBackSeconds: atomic.NewFloat64(float64(mv.Spec.Scale.GetLookbackSeconds())),
 	}
 
 	rater.podTracker = NewPodTracker(ctx, mv)
 	// maintain the total counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
 	rater.timestampedPodCounts = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
-	rater.userSpecifiedLookBackSeconds = int64(mv.Spec.Scale.GetLookbackSeconds())
+	rater.timestampedPodProcessingTime = sharedqueue.New[*TimestampedProcessingTime](int(1800 / CountWindow.Seconds()))
 
 	for _, opt := range opts {
 		if opt != nil {
@@ -138,17 +150,24 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 		return err
 	}
 	var podReadCount *PodReadCount
+	var processingTime *PodProcessingTime
 	if r.podTracker.IsActive(key) {
 		podReadCount = r.getPodReadCounts(pInfo.podName)
 		if podReadCount == nil {
 			log.Debugf("Failed retrieving total podReadCounts for pod %s", pInfo.podName)
 		}
+		processingTime = r.getPodProcessingTime(pInfo.podName)
+		if processingTime == nil {
+			log.Debugf("Failed retrieving total processingTime for pod %s", pInfo.podName)
+		}
 	} else {
 		log.Debugf("Pod %s does not exist, updating it with nil...", pInfo.podName)
 		podReadCount = nil
+		processingTime = nil
 	}
 	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
 	UpdateCount(r.timestampedPodCounts, now, podReadCount)
+	UpdateProcessingTime(r.timestampedPodProcessingTime, now, processingTime)
 	return nil
 }
 
@@ -203,7 +222,8 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 }
 
 func (r *Rater) buildLookbackSecondsMap() map[string]int64 {
-	lookbackSecondsMap := map[string]int64{"default": r.userSpecifiedLookBackSeconds}
+	lbValue := r.userSpecifiedLookBackSeconds.Load()
+	lookbackSecondsMap := map[string]int64{"default": int64(lbValue)}
 	for k, v := range fixedLookbackSeconds {
 		lookbackSecondsMap[k] = v
 	}
@@ -222,6 +242,10 @@ func (r *Rater) Start(ctx context.Context) error {
 			r.log.Errorw("Failed to start pod tracker", zap.Error(err))
 		}
 	}()
+
+	// start the dynamic lookback check which will be
+	// calculating and updating the lookback period based on the processing time
+	go r.startDynamicLookBack(ctx)
 
 	// Worker group
 	for i := 1; i <= r.options.workers; i++ {
@@ -267,5 +291,24 @@ func sleep(ctx context.Context, duration time.Duration) {
 	select {
 	case <-ctx.Done():
 	case <-time.After(duration):
+	}
+}
+
+// startDynamicLookBack continuously adjusts ths lookback duration based on the current
+// processing time of the MonoVertex system.
+func (r *Rater) startDynamicLookBack(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	// Ensure the ticker is stopped to prevent a resource leak.
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			// The updateDynamicLookbackSecs method is called which adjusts the
+			// lookback duration based on current conditions.
+			r.updateDynamicLookbackSecs()
+		case <-ctx.Done():
+			// If the context is canceled or expires exit
+			return
+		}
 	}
 }

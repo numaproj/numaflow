@@ -4,6 +4,9 @@ fn main() {
 
     // protobuf objects for serde
     build_objects();
+
+    // gRPC clients for daemon
+    build_daemon();
 }
 
 fn build_client() {
@@ -33,6 +36,22 @@ fn build_objects() {
         .compile_protos(
             &["proto/isb/message.proto", "proto/wmb/wmb.proto"],
             &["proto"],
+        )
+        .expect("failed to compile protos");
+}
+
+fn build_daemon() {
+    tonic_build::configure()
+        .build_client(true)
+        .build_server(false)
+        .out_dir("src/clients")
+        .compile_protos(
+            &[
+                "proto/mvtxdaemon/mvtxdaemon.proto",
+                "proto/google/api/annotations.proto",
+                "proto/google/api/http.proto",
+            ],
+            &["proto", "proto/google/api"],
         )
         .expect("failed to compile protos");
 }
