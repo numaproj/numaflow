@@ -27,7 +27,13 @@ use crate::metrics::{
 use crate::tracker::TrackerHandle;
 use crate::Result;
 
+/// A [blackhole] sink which reads but never writes to anywhere, semantic equivalent of `/dev/null`
+/// 
+/// [Blackhole]: https://numaflow.numaproj.io/user-guide/sinks/blackhole/
 mod blackhole;
+/// [log] sink prints out the read messages on to stdout.
+/// 
+/// [Log]: https://numaflow.numaproj.io/user-guide/sinks/log/
 mod log;
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
