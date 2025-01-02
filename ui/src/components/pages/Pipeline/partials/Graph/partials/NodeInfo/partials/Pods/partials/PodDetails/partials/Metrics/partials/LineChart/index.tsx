@@ -13,10 +13,10 @@ import {
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dropdown from "../common/Dropdown";
-import TimeRange from "../common/TimeRange";
 import FiltersDropdown from "../common/FiltersDropdown";
 import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
+import TimeSelector from "../common/TimeRange";
 
 
 const getYAxisLabel = (metricName: string) => {
@@ -207,6 +207,8 @@ const LineChartComponent = ({
 
   if (paramsList?.length === 0) return <></>;
 
+  const hasTimeParams = paramsList?.some((param) => ["start_time", "end_time"].includes(param.name)); 
+
   return (
     <Box>
       <Box
@@ -234,16 +236,11 @@ const LineChartComponent = ({
               </Box>
             );
           })}
-
-        {paramsList
-          ?.filter((param) => ["start_time", "end_time"]?.includes(param.name))
-          ?.map((param: any) => {
-            return (
-              <Box key={`line-chart-${param.name}`}>
-                <TimeRange field={param.name} setMetricReq={setMetricsReq} />
-              </Box>
-            );
-          })}
+        {hasTimeParams && (
+          <Box key="line-chart-preset">
+              <TimeSelector setMetricReq={setMetricsReq} />
+          </Box>
+          )}
       </Box>
 
       {filtersList?.filter((filterEle: any) => !filterEle?.required)?.length >

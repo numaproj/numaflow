@@ -1,11 +1,11 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use numaflow_pb::clients::sourcetransformer::{
     self, source_transform_client::SourceTransformClient, SourceTransformRequest,
     SourceTransformResponse,
 };
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
@@ -13,7 +13,7 @@ use tonic::{Request, Streaming};
 use crate::config::get_vertex_name;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageID, Offset};
-use crate::shared::grpc::utc_from_timestamp;
+use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 
 type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
@@ -28,6 +28,34 @@ struct ParentMessageInfo {
 pub(super) struct UserDefinedTransformer {
     read_tx: mpsc::Sender<SourceTransformRequest>,
     senders: ResponseSenderMap,
+    task_handle: tokio::task::JoinHandle<()>,
+}
+
+/// Aborts the background task when the UserDefinedTransformer is dropped.
+impl Drop for UserDefinedTransformer {
+    fn drop(&mut self) {
+        self.task_handle.abort();
+    }
+}
+
+/// Convert the [`Message`] to [`SourceTransformRequest`]
+impl From<Message> for SourceTransformRequest {
+    fn from(message: Message) -> Self {
+        Self {
+            request: Some(sourcetransformer::source_transform_request::Request {
+                id: message
+                    .offset
+                    .expect("offset should be present")
+                    .to_string(),
+                keys: message.keys.to_vec(),
+                value: message.value.to_vec(),
+                event_time: prost_timestamp_from_utc(message.event_time),
+                watermark: None,
+                headers: message.headers,
+            }),
+            handshake: None,
+        }
+    }
 }
 
 impl UserDefinedTransformer {
@@ -65,14 +93,18 @@ impl UserDefinedTransformer {
         // map to track the oneshot sender for each request along with the message info
         let sender_map = Arc::new(Mutex::new(HashMap::new()));
 
-        let transformer = Self {
-            read_tx,
-            senders: Arc::clone(&sender_map),
-        };
-
         // background task to receive responses from the server and send them to the appropriate
         // oneshot sender based on the message id
-        tokio::spawn(Self::receive_responses(sender_map, resp_stream));
+        let task_handle = tokio::spawn(Self::receive_responses(
+            Arc::clone(&sender_map),
+            resp_stream,
+        ));
+
+        let transformer = Self {
+            read_tx,
+            senders: sender_map,
+            task_handle,
+        };
 
         Ok(transformer)
     }
@@ -83,29 +115,32 @@ impl UserDefinedTransformer {
         sender_map: ResponseSenderMap,
         mut resp_stream: Streaming<SourceTransformResponse>,
     ) {
-        while let Some(resp) = resp_stream
-            .message()
-            .await
-            .expect("failed to receive response")
-        {
+        while let Some(resp) = match resp_stream.message().await {
+            Ok(message) => message,
+            Err(e) => {
+                let error =
+                    Error::Transformer(format!("failed to receive transformer response: {}", e));
+                let mut senders = sender_map.lock().await;
+                for (_, (_, sender)) in senders.drain() {
+                    let _ = sender.send(Err(error.clone()));
+                }
+                None
+            }
+        } {
             let msg_id = resp.id;
-            if let Some((msg_info, sender)) = sender_map
-                .lock()
-                .expect("map entry should always be present")
-                .remove(&msg_id)
-            {
+            if let Some((msg_info, sender)) = sender_map.lock().await.remove(&msg_id) {
                 let mut response_messages = vec![];
                 for (i, result) in resp.results.into_iter().enumerate() {
                     let message = Message {
                         id: MessageID {
                             vertex_name: get_vertex_name().to_string().into(),
                             index: i as i32,
-                            offset: msg_info.offset.to_string().into(),
+                            offset: msg_info.offset.clone().to_string().into(),
                         },
                         keys: Arc::from(result.keys),
                         tags: Some(Arc::from(result.tags)),
                         value: result.value.into(),
-                        offset: None,
+                        offset: Some(msg_info.offset.clone()),
                         event_time: utc_from_timestamp(result.event_time),
                         headers: msg_info.headers.clone(),
                     };
@@ -124,7 +159,12 @@ impl UserDefinedTransformer {
         message: Message,
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
     ) {
-        let msg_id = message.id.to_string();
+        let key = message
+            .offset
+            .clone()
+            .expect("offset should be present")
+            .to_string();
+
         let msg_info = ParentMessageInfo {
             offset: message.offset.clone().expect("offset can never be none"),
             headers: message.headers.clone(),
@@ -132,26 +172,28 @@ impl UserDefinedTransformer {
 
         self.senders
             .lock()
-            .unwrap()
-            .insert(msg_id, (msg_info, respond_to));
+            .await
+            .insert(key, (msg_info, respond_to));
 
-        self.read_tx.send(message.into()).await.unwrap();
+        self.read_tx
+            .send(message.into())
+            .await
+            .expect("failed to send message");
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::error::Error;
-    use std::sync::Arc;
-    use std::time::Duration;
-
+    use super::*;
+    use crate::message::StringOffset;
+    use crate::shared::grpc::create_rpc_channel;
+    use chrono::{TimeZone, Utc};
     use numaflow::sourcetransform;
-    use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+    use std::error::Error;
+    use std::result::Result;
+    use std::time::Duration;
     use tempfile::TempDir;
 
-    use crate::message::{MessageID, StringOffset};
-    use crate::shared::grpc::create_rpc_channel;
-    use crate::transformer::user_defined::UserDefinedTransformer;
     struct NowCat;
 
     #[tonic::async_trait]
@@ -234,5 +276,28 @@ mod tests {
             "Expected gRPC server to have shut down"
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_message_to_source_transform_request() {
+        let message = Message {
+            keys: Arc::from(vec!["key1".to_string()]),
+            tags: None,
+            value: vec![1, 2, 3].into(),
+            offset: Some(Offset::String(StringOffset {
+                offset: "123".to_string().into(),
+                partition_idx: 0,
+            })),
+            event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "123".to_string().into(),
+                index: 0,
+            },
+            headers: HashMap::new(),
+        };
+
+        let request: SourceTransformRequest = message.into();
+        assert!(request.request.is_some());
     }
 }

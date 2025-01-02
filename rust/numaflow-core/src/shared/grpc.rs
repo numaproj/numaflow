@@ -5,6 +5,7 @@ use axum::http::Uri;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use chrono::{DateTime, TimeZone, Timelike, Utc};
+use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -77,6 +78,26 @@ pub(crate) async fn wait_until_transformer_ready(
             Err(_) => sleep(Duration::from_secs(1)).await,
         }
         info!("Waiting for transformer client to be ready...");
+    }
+    Ok(())
+}
+
+/// Waits until the mapper server is ready, by doing health checks
+pub(crate) async fn wait_until_mapper_ready(
+    cln_token: &CancellationToken,
+    client: &mut MapClient<Channel>,
+) -> error::Result<()> {
+    loop {
+        if cln_token.is_cancelled() {
+            return Err(Error::Forwarder(
+                "Cancellation token is cancelled".to_string(),
+            ));
+        }
+        match client.is_ready(Request::new(())).await {
+            Ok(_) => break,
+            Err(_) => sleep(Duration::from_secs(1)).await,
+        }
+        info!("Waiting for mapper client to be ready...");
     }
     Ok(())
 }

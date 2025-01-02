@@ -6,8 +6,9 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::error;
 
-use crate::message::{Message, ResponseFromSink};
-use crate::sink::Sink;
+use crate::message::Message;
+use crate::shared::grpc::prost_timestamp_from_utc;
+use crate::sink::{ResponseFromSink, Sink};
 use crate::Error;
 use crate::Result;
 
@@ -17,6 +18,24 @@ const DEFAULT_CHANNEL_SIZE: usize = 1000;
 pub struct UserDefinedSink {
     sink_tx: mpsc::Sender<SinkRequest>,
     resp_stream: Streaming<SinkResponse>,
+}
+
+/// Convert [`Message`] to [`proto::SinkRequest`]
+impl From<Message> for SinkRequest {
+    fn from(message: Message) -> Self {
+        Self {
+            request: Some(numaflow_pb::clients::sink::sink_request::Request {
+                keys: message.keys.to_vec(),
+                value: message.value.to_vec(),
+                event_time: prost_timestamp_from_utc(message.event_time),
+                watermark: None,
+                id: message.id.to_string(),
+                headers: message.headers,
+            }),
+            status: None,
+            handshake: None,
+        }
+    }
 }
 
 impl UserDefinedSink {

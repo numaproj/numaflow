@@ -12,7 +12,6 @@ use std::collections::HashMap;
 
 use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
-use tracing::warn;
 
 use crate::error::Error;
 use crate::message::ReadAck;
@@ -43,6 +42,7 @@ enum ActorMessage {
     Discard {
         offset: String,
     },
+    DiscardAll, // New variant for discarding all messages
     #[cfg(test)]
     IsEmpty {
         respond_to: oneshot::Sender<bool>,
@@ -56,11 +56,10 @@ struct Tracker {
     receiver: mpsc::Receiver<ActorMessage>,
 }
 
-/// Implementation of Drop for Tracker to send Nak for unacknowledged messages.
 impl Drop for Tracker {
     fn drop(&mut self) {
-        for (offset, entry) in self.entries.drain() {
-            warn!(?offset, "Sending Nak for unacknowledged message");
+        // clear the entries from the map and send nak
+        for (_, entry) in self.entries.drain() {
             entry
                 .ack_send
                 .send(ReadAck::Nak)
@@ -103,6 +102,9 @@ impl Tracker {
             ActorMessage::Discard { offset } => {
                 self.handle_discard(offset);
             }
+            ActorMessage::DiscardAll => {
+                self.handle_discard_all().await;
+            }
             #[cfg(test)]
             ActorMessage::IsEmpty { respond_to } => {
                 let is_empty = self.entries.is_empty();
@@ -118,7 +120,7 @@ impl Tracker {
             TrackerEntry {
                 ack_send: respond_to,
                 count: 0,
-                eof: false,
+                eof: true,
             },
         );
     }
@@ -126,8 +128,18 @@ impl Tracker {
     /// Updates an existing entry in the tracker with the number of expected messages and EOF status.
     fn handle_update(&mut self, offset: String, count: u32, eof: bool) {
         if let Some(entry) = self.entries.get_mut(&offset) {
-            entry.count = count;
+            entry.count += count;
             entry.eof = eof;
+            // if the count is zero, we can send an ack immediately
+            // this is case where map stream will send eof true after
+            // receiving all the messages.
+            if entry.count == 0 {
+                let entry = self.entries.remove(&offset).unwrap();
+                entry
+                    .ack_send
+                    .send(ReadAck::Ack)
+                    .expect("Failed to send ack");
+            }
         }
     }
 
@@ -138,7 +150,7 @@ impl Tracker {
             if entry.count > 0 {
                 entry.count -= 1;
             }
-            if entry.count == 0 || entry.eof {
+            if entry.count == 0 && entry.eof {
                 entry
                     .ack_send
                     .send(ReadAck::Ack)
@@ -152,6 +164,16 @@ impl Tracker {
     /// Discards an entry from the tracker and sends a nak.
     fn handle_discard(&mut self, offset: String) {
         if let Some(entry) = self.entries.remove(&offset) {
+            entry
+                .ack_send
+                .send(ReadAck::Nak)
+                .expect("Failed to send nak");
+        }
+    }
+
+    /// Discards all entries from the tracker and sends a nak for each.
+    async fn handle_discard_all(&mut self) {
+        for (_, entry) in self.entries.drain() {
             entry
                 .ack_send
                 .send(ReadAck::Nak)
@@ -231,6 +253,15 @@ impl TrackerHandle {
         Ok(())
     }
 
+    /// Discards all messages from the Tracker and sends a nak for each.
+    pub(crate) async fn discard_all(&self) -> Result<()> {
+        let message = ActorMessage::DiscardAll;
+        self.sender
+            .send(message)
+            .await
+            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+        Ok(())
+    }
     /// Checks if the Tracker is empty. Used for testing to make sure all messages are acknowledged.
     #[cfg(test)]
     pub(crate) async fn is_empty(&self) -> Result<bool> {
@@ -293,7 +324,7 @@ mod tests {
 
         // Update the message with a count of 3
         handle
-            .update("offset1".to_string().into(), 3, false)
+            .update("offset1".to_string().into(), 3, true)
             .await
             .unwrap();
 

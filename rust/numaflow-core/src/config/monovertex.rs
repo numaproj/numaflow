@@ -1,3 +1,4 @@
+use std::env;
 use std::time::Duration;
 
 use base64::prelude::BASE64_STANDARD;
@@ -42,10 +43,11 @@ impl Default for MonovertexConfig {
             read_timeout: Duration::from_millis(DEFAULT_TIMEOUT_IN_MS as u64),
             replica: 0,
             source_config: SourceConfig {
+                read_ahead: false,
                 source_type: source::SourceType::Generator(GeneratorConfig::default()),
             },
             sink_config: SinkConfig {
-                sink_type: sink::SinkType::Log(sink::LogConfig::default()),
+                sink_type: SinkType::Log(sink::LogConfig::default()),
                 retry_config: None,
             },
             transformer_config: None,
@@ -107,6 +109,10 @@ impl MonovertexConfig {
             .ok_or_else(|| Error::Config("Source not found".to_string()))?;
 
         let source_config = SourceConfig {
+            read_ahead: env::var("READ_AHEAD")
+                .unwrap_or("false".to_string())
+                .parse()
+                .unwrap(),
             source_type: source.try_into()?,
         };
 
