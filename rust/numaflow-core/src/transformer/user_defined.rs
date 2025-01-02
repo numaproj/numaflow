@@ -13,7 +13,7 @@ use tonic::{Request, Streaming};
 use crate::config::get_vertex_name;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageID, Offset};
-use crate::shared::grpc::utc_from_timestamp;
+use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 
 type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
@@ -35,6 +35,26 @@ pub(super) struct UserDefinedTransformer {
 impl Drop for UserDefinedTransformer {
     fn drop(&mut self) {
         self.task_handle.abort();
+    }
+}
+
+/// Convert the [`Message`] to [`SourceTransformRequest`]
+impl From<Message> for SourceTransformRequest {
+    fn from(message: Message) -> Self {
+        Self {
+            request: Some(sourcetransformer::source_transform_request::Request {
+                id: message
+                    .offset
+                    .expect("offset should be present")
+                    .to_string(),
+                keys: message.keys.to_vec(),
+                value: message.value.to_vec(),
+                event_time: prost_timestamp_from_utc(message.event_time),
+                watermark: None,
+                headers: message.headers,
+            }),
+            handshake: None,
+        }
     }
 }
 
@@ -164,17 +184,16 @@ impl UserDefinedTransformer {
 
 #[cfg(test)]
 mod tests {
-    use std::error::Error;
-    use std::sync::Arc;
-    use std::time::Duration;
-
+    use super::*;
+    use crate::message::StringOffset;
+    use crate::shared::grpc::create_rpc_channel;
+    use chrono::{TimeZone, Utc};
     use numaflow::sourcetransform;
-    use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+    use std::error::Error;
+    use std::result::Result;
+    use std::time::Duration;
     use tempfile::TempDir;
 
-    use crate::message::{MessageID, StringOffset};
-    use crate::shared::grpc::create_rpc_channel;
-    use crate::transformer::user_defined::UserDefinedTransformer;
     struct NowCat;
 
     #[tonic::async_trait]
@@ -257,5 +276,28 @@ mod tests {
             "Expected gRPC server to have shut down"
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_message_to_source_transform_request() {
+        let message = Message {
+            keys: Arc::from(vec!["key1".to_string()]),
+            tags: None,
+            value: vec![1, 2, 3].into(),
+            offset: Some(Offset::String(StringOffset {
+                offset: "123".to_string().into(),
+                partition_idx: 0,
+            })),
+            event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "123".to_string().into(),
+                index: 0,
+            },
+            headers: HashMap::new(),
+        };
+
+        let request: SourceTransformRequest = message.into();
+        assert!(request.request.is_some());
     }
 }

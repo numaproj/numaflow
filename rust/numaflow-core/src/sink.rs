@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::sink::sink_response;
+use numaflow_pb::clients::sink::Status::{Failure, Fallback, Success};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -17,7 +19,7 @@ use user_defined::UserDefinedSink;
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
 use crate::config::is_mono_vertex;
 use crate::error::Error;
-use crate::message::{Message, ResponseFromSink, ResponseStatusFromSink};
+use crate::message::Message;
 use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_metrics,
@@ -645,6 +647,56 @@ impl SinkWriter {
     }
 }
 
+/// Sink's status for each [Message] written to Sink.
+#[derive(PartialEq, Debug)]
+pub(crate) enum ResponseStatusFromSink {
+    /// Successfully wrote to the Sink.
+    Success,
+    /// Failed with error message.
+    Failed(String),
+    /// Write to FallBack Sink.
+    Fallback,
+}
+
+/// Sink will give a response per [Message].
+#[derive(Debug, PartialEq)]
+pub(crate) struct ResponseFromSink {
+    /// Unique id per [Message]. We need to track per [Message] status.
+    pub(crate) id: String,
+    /// Status of the "sink" operation per [Message].
+    pub(crate) status: ResponseStatusFromSink,
+}
+
+impl From<sink_response::Result> for ResponseFromSink {
+    fn from(value: sink_response::Result) -> Self {
+        let status = match value.status() {
+            Success => ResponseStatusFromSink::Success,
+            Failure => ResponseStatusFromSink::Failed(value.err_msg),
+            Fallback => ResponseStatusFromSink::Fallback,
+        };
+        Self {
+            id: value.id,
+            status,
+        }
+    }
+}
+
+impl From<ResponseFromSink> for sink_response::Result {
+    fn from(value: ResponseFromSink) -> Self {
+        let (status, err_msg) = match value.status {
+            ResponseStatusFromSink::Success => (Success, "".to_string()),
+            ResponseStatusFromSink::Failed(err) => (Failure, err.to_string()),
+            ResponseStatusFromSink::Fallback => (Fallback, "".to_string()),
+        };
+
+        Self {
+            id: value.id,
+            status: status as i32,
+            err_msg,
+        }
+    }
+}
+
 impl Drop for SinkWriter {
     fn drop(&mut self) {}
 }
@@ -653,14 +705,14 @@ impl Drop for SinkWriter {
 mod tests {
     use std::sync::Arc;
 
-    use chrono::Utc;
+    use super::*;
+    use crate::message::{Message, MessageID, Offset, ReadAck, StringOffset};
+    use crate::shared::grpc::create_rpc_channel;
+    use chrono::{TimeZone, Utc};
     use numaflow::sink;
+    use numaflow_pb::clients::sink::{SinkRequest, SinkResponse};
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
-
-    use super::*;
-    use crate::message::{Message, MessageID, ReadAck};
-    use crate::shared::grpc::create_rpc_channel;
 
     struct SimpleSink;
     #[tonic::async_trait]
@@ -937,5 +989,65 @@ mod tests {
 
         // check if the tracker is empty
         assert!(tracker_handle.is_empty().await.unwrap());
+    }
+
+    #[test]
+    fn test_message_to_sink_request() {
+        let message = Message {
+            keys: Arc::from(vec!["key1".to_string()]),
+            tags: None,
+            value: vec![1, 2, 3].into(),
+            offset: Some(Offset::String(StringOffset {
+                offset: "123".to_string().into(),
+                partition_idx: 0,
+            })),
+            event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "123".to_string().into(),
+                index: 0,
+            },
+            headers: HashMap::new(),
+        };
+
+        let request: SinkRequest = message.into();
+        assert!(request.request.is_some());
+    }
+
+    #[test]
+    fn test_response_from_sink_to_sink_response() {
+        let response = ResponseFromSink {
+            id: "123".to_string(),
+            status: ResponseStatusFromSink::Success,
+        };
+
+        let sink_result: sink_response::Result = response.into();
+        assert_eq!(sink_result.status, Success as i32);
+    }
+
+    #[test]
+    fn test_sink_response_to_response_from_sink() {
+        let sink_response = SinkResponse {
+            results: vec![sink_response::Result {
+                id: "123".to_string(),
+                status: Success as i32,
+                err_msg: "".to_string(),
+            }],
+            handshake: None,
+            status: None,
+        };
+
+        let results: Vec<ResponseFromSink> = sink_response
+            .results
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<_>>();
+        assert!(!results.is_empty());
+
+        assert_eq!(results.first().unwrap().id, "123");
+        assert_eq!(
+            results.first().unwrap().status,
+            ResponseStatusFromSink::Success
+        );
     }
 }

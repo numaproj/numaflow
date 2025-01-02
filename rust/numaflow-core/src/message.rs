@@ -3,24 +3,14 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
-use async_nats::HeaderValue;
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use base64::Engine;
 use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
-use numaflow_pb::clients::map::MapRequest;
-use numaflow_pb::clients::sink::sink_request::Request;
-use numaflow_pb::clients::sink::Status::{Failure, Fallback, Success};
-use numaflow_pb::clients::sink::{sink_response, SinkRequest};
-use numaflow_pb::clients::source::read_response;
-use numaflow_pb::clients::sourcetransformer::SourceTransformRequest;
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 
 use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::shared::grpc::utc_from_timestamp;
-use crate::Result;
-use crate::{config, Error};
+use crate::Error;
 
 const DROP: &str = "U+005C__DROP__";
 
@@ -62,44 +52,6 @@ impl fmt::Display for Offset {
     }
 }
 
-impl TryFrom<async_nats::Message> for Message {
-    type Error = Error;
-
-    fn try_from(message: async_nats::Message) -> std::result::Result<Self, Self::Error> {
-        let payload = message.payload;
-        let headers: HashMap<String, String> = message
-            .headers
-            .unwrap_or_default()
-            .iter()
-            .map(|(key, value)| {
-                (
-                    key.to_string(),
-                    value.first().unwrap_or(&HeaderValue::from("")).to_string(),
-                )
-            })
-            .collect();
-        // FIXME(cr): we should not be using subject. keys are in the payload
-        let keys = message.subject.split('.').map(|s| s.to_string()).collect();
-        let event_time = Utc::now();
-        let offset = None;
-        let id = MessageID {
-            vertex_name: config::get_vertex_name().to_string().into(),
-            offset: "0".to_string().into(),
-            index: 0,
-        };
-
-        Ok(Self {
-            keys,
-            tags: None,
-            value: payload,
-            offset,
-            event_time,
-            id,
-            headers,
-        })
-    }
-}
-
 impl Message {
     // Check if the message should be dropped.
     pub(crate) fn dropped(&self) -> bool {
@@ -135,8 +87,8 @@ impl fmt::Display for IntOffset {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct StringOffset {
     /// offset could be a complex base64 string.
-    offset: Bytes,
-    partition_idx: u16,
+    pub(crate) offset: Bytes,
+    pub(crate) partition_idx: u16,
 }
 
 impl StringOffset {
@@ -206,22 +158,6 @@ impl fmt::Display for MessageID {
     }
 }
 
-impl TryFrom<Offset> for numaflow_pb::clients::source::Offset {
-    type Error = Error;
-
-    fn try_from(offset: Offset) -> std::result::Result<Self, Self::Error> {
-        match offset {
-            Offset::Int(_) => Err(Error::Source("IntOffset not supported".to_string())),
-            Offset::String(o) => Ok(numaflow_pb::clients::source::Offset {
-                offset: BASE64_STANDARD
-                    .decode(o.offset)
-                    .expect("we control the encoding, so this should never fail"),
-                partition_id: o.partition_idx as i32,
-            }),
-        }
-    }
-}
-
 impl TryFrom<Message> for BytesMut {
     type Error = Error;
 
@@ -253,7 +189,7 @@ impl TryFrom<Message> for BytesMut {
 impl TryFrom<Bytes> for Message {
     type Error = Error;
 
-    fn try_from(bytes: Bytes) -> std::result::Result<Self, Self::Error> {
+    fn try_from(bytes: Bytes) -> Result<Self, Self::Error> {
         let proto_message = numaflow_pb::objects::isb::Message::decode(bytes)
             .map_err(|e| Error::Proto(e.to_string()))?;
 
@@ -280,153 +216,14 @@ impl TryFrom<Bytes> for Message {
     }
 }
 
-/// Convert the [`Message`] to [`SourceTransformRequest`]
-impl From<Message> for SourceTransformRequest {
-    fn from(message: Message) -> Self {
-        Self {
-            request: Some(
-                numaflow_pb::clients::sourcetransformer::source_transform_request::Request {
-                    id: message
-                        .offset
-                        .expect("offset should be present")
-                        .to_string(),
-                    keys: message.keys.to_vec(),
-                    value: message.value.to_vec(),
-                    event_time: prost_timestamp_from_utc(message.event_time),
-                    watermark: None,
-                    headers: message.headers,
-                },
-            ),
-            handshake: None,
-        }
-    }
-}
-
-impl From<Message> for MapRequest {
-    fn from(message: Message) -> Self {
-        Self {
-            request: Some(numaflow_pb::clients::map::map_request::Request {
-                keys: message.keys.to_vec(),
-                value: message.value.to_vec(),
-                event_time: prost_timestamp_from_utc(message.event_time),
-                watermark: None,
-                headers: message.headers,
-            }),
-            id: message.offset.unwrap().to_string(),
-            handshake: None,
-            status: None,
-        }
-    }
-}
-
-/// Convert [`read_response::Result`] to [`Message`]
-impl TryFrom<read_response::Result> for Message {
-    type Error = Error;
-
-    fn try_from(result: read_response::Result) -> Result<Self> {
-        let source_offset = match result.offset {
-            Some(o) => Offset::String(StringOffset {
-                offset: BASE64_STANDARD.encode(o.offset).into(),
-                partition_idx: o.partition_id as u16,
-            }),
-            None => return Err(Error::Source("Offset not found".to_string())),
-        };
-
-        Ok(Message {
-            keys: Arc::from(result.keys),
-            tags: None,
-            value: result.payload.into(),
-            offset: Some(source_offset.clone()),
-            event_time: utc_from_timestamp(result.event_time),
-            id: MessageID {
-                vertex_name: config::get_vertex_name().to_string().into(),
-                offset: source_offset.to_string().into(),
-                index: 0,
-            },
-            headers: result.headers,
-        })
-    }
-}
-
-/// Convert [`Message`] to [`proto::SinkRequest`]
-impl From<Message> for SinkRequest {
-    fn from(message: Message) -> Self {
-        Self {
-            request: Some(Request {
-                keys: message.keys.to_vec(),
-                value: message.value.to_vec(),
-                event_time: prost_timestamp_from_utc(message.event_time),
-                watermark: None,
-                id: message.id.to_string(),
-                headers: message.headers,
-            }),
-            status: None,
-            handshake: None,
-        }
-    }
-}
-
-/// Sink's status for each [Message] written to Sink.
-#[derive(PartialEq, Debug)]
-pub(crate) enum ResponseStatusFromSink {
-    /// Successfully wrote to the Sink.
-    Success,
-    /// Failed with error message.
-    Failed(String),
-    /// Write to FallBack Sink.
-    Fallback,
-}
-
-/// Sink will give a response per [Message].
-#[derive(Debug, PartialEq)]
-pub(crate) struct ResponseFromSink {
-    /// Unique id per [Message]. We need to track per [Message] status.
-    pub(crate) id: String,
-    /// Status of the "sink" operation per [Message].
-    pub(crate) status: ResponseStatusFromSink,
-}
-
-impl From<ResponseFromSink> for sink_response::Result {
-    fn from(value: ResponseFromSink) -> Self {
-        let (status, err_msg) = match value.status {
-            ResponseStatusFromSink::Success => (Success, "".to_string()),
-            ResponseStatusFromSink::Failed(err) => (Failure, err.to_string()),
-            ResponseStatusFromSink::Fallback => (Fallback, "".to_string()),
-        };
-
-        Self {
-            id: value.id,
-            status: status as i32,
-            err_msg,
-        }
-    }
-}
-
-impl From<sink_response::Result> for ResponseFromSink {
-    fn from(value: sink_response::Result) -> Self {
-        let status = match value.status() {
-            Success => ResponseStatusFromSink::Success,
-            Failure => ResponseStatusFromSink::Failed(value.err_msg),
-            Fallback => ResponseStatusFromSink::Fallback,
-        };
-        Self {
-            id: value.id,
-            status,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
+    use crate::error::Result;
     use chrono::TimeZone;
-    use numaflow_pb::clients::sink::sink_response::Result as SinkResult;
-    use numaflow_pb::clients::sink::SinkResponse;
-    use numaflow_pb::clients::source::Offset as SourceOffset;
     use numaflow_pb::objects::isb::{
         Body, Header, Message as ProtoMessage, MessageId, MessageInfo,
     };
+    use std::collections::HashMap;
 
     use super::*;
 
@@ -531,116 +328,6 @@ mod tests {
     }
 
     #[test]
-    fn test_message_to_source_transform_request() {
-        let message = Message {
-            keys: Arc::from(vec!["key1".to_string()]),
-            tags: None,
-            value: vec![1, 2, 3].into(),
-            offset: Some(Offset::String(StringOffset {
-                offset: "123".to_string().into(),
-                partition_idx: 0,
-            })),
-            event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
-            id: MessageID {
-                vertex_name: "vertex".to_string().into(),
-                offset: "123".to_string().into(),
-                index: 0,
-            },
-            headers: HashMap::new(),
-        };
-
-        let request: SourceTransformRequest = message.into();
-        assert!(request.request.is_some());
-    }
-
-    #[test]
-    fn test_read_response_result_to_message() {
-        let result = read_response::Result {
-            payload: vec![1, 2, 3],
-            offset: Some(SourceOffset {
-                offset: BASE64_STANDARD.encode("123").into_bytes(),
-                partition_id: 0,
-            }),
-            event_time: Some(
-                prost_timestamp_from_utc(Utc.timestamp_opt(1627846261, 0).unwrap()).unwrap(),
-            ),
-            keys: vec!["key1".to_string()],
-            headers: HashMap::new(),
-        };
-
-        let message: Result<Message> = result.try_into();
-        assert!(message.is_ok());
-
-        let message = message.unwrap();
-        assert_eq!(message.keys.to_vec(), vec!["key1".to_string()]);
-        assert_eq!(message.value, vec![1, 2, 3]);
-        assert_eq!(
-            message.event_time,
-            Utc.timestamp_opt(1627846261, 0).unwrap()
-        );
-    }
-
-    #[test]
-    fn test_message_to_sink_request() {
-        let message = Message {
-            keys: Arc::from(vec!["key1".to_string()]),
-            tags: None,
-            value: vec![1, 2, 3].into(),
-            offset: Some(Offset::String(StringOffset {
-                offset: "123".to_string().into(),
-                partition_idx: 0,
-            })),
-            event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
-            id: MessageID {
-                vertex_name: "vertex".to_string().into(),
-                offset: "123".to_string().into(),
-                index: 0,
-            },
-            headers: HashMap::new(),
-        };
-
-        let request: SinkRequest = message.into();
-        assert!(request.request.is_some());
-    }
-
-    #[test]
-    fn test_response_from_sink_to_sink_response() {
-        let response = ResponseFromSink {
-            id: "123".to_string(),
-            status: ResponseStatusFromSink::Success,
-        };
-
-        let sink_result: sink_response::Result = response.into();
-        assert_eq!(sink_result.status, Success as i32);
-    }
-
-    #[test]
-    fn test_sink_response_to_response_from_sink() {
-        let sink_response = SinkResponse {
-            results: vec![SinkResult {
-                id: "123".to_string(),
-                status: Success as i32,
-                err_msg: "".to_string(),
-            }],
-            handshake: None,
-            status: None,
-        };
-
-        let results: Vec<ResponseFromSink> = sink_response
-            .results
-            .into_iter()
-            .map(Into::into)
-            .collect::<Vec<_>>();
-        assert!(!results.is_empty());
-
-        assert_eq!(results.get(0).unwrap().id, "123");
-        assert_eq!(
-            results.get(0).unwrap().status,
-            ResponseStatusFromSink::Success
-        );
-    }
-
-    #[test]
     fn test_message_id_from_proto() {
         let proto_id = MessageId {
             vertex_name: "vertex".to_string(),
@@ -683,15 +370,5 @@ mod tests {
 
         let offset_string = Offset::String(string_offset);
         assert_eq!(format!("{}", offset_string), "42-1");
-
-        // Test conversion from Offset to AckRequest for StringOffset
-        let offset = Offset::String(StringOffset::new(BASE64_STANDARD.encode("42"), 1));
-        let offset: Result<numaflow_pb::clients::source::Offset> = offset.try_into();
-        assert_eq!(offset.unwrap().partition_id, 1);
-
-        // Test conversion from Offset to AckRequest for IntOffset (should fail)
-        let offset = Offset::Int(IntOffset::new(42, 1));
-        let result: Result<numaflow_pb::clients::source::Offset> = offset.try_into();
-        assert!(result.is_err());
     }
 }
