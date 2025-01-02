@@ -1,62 +1,66 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Box from "@mui/material/Box";
-import { DateTimePicker, LocalizationProvider } from "@mui/x-date-pickers";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import dayjs from "dayjs";
+import moment from 'moment';
+import React, { useState } from 'react';
+import 'bootstrap/dist/css/bootstrap.min.css';
+import 'bootstrap-daterangepicker/daterangepicker.css';
+import DateRangePicker from 'react-bootstrap-daterangepicker';
+import 'jquery';
+import './TimeSelector.css';
+import { ArrowDropDown } from '@mui/icons-material'; 
 
-export interface MetricTimeRangeProps {
-  field: string;
+interface TimeSelectorProps {
   setMetricReq: any;
 }
 
-const TimeRange = ({ field, setMetricReq }: MetricTimeRangeProps) => {
-  const getInitialValue = useMemo(() => {
-    switch (field) {
-      case "start_time":
-        return dayjs().subtract(1, "hour");
-      case "end_time":
-        return dayjs();
-      default:
-        return null;
-    }
-  }, [field]);
+const TimeSelector = ({setMetricReq}: TimeSelectorProps) => {
+  const [startDate, setStartDate] = useState(moment().subtract(1, 'hour'));
+  const [endDate, setEndDate] = useState(moment());
 
-  const [time, setTime] = useState<dayjs.Dayjs | null>(getInitialValue);
+  const handleCallback = (start: moment.Moment, end: moment.Moment) => {
+    setStartDate(start);
+    setEndDate(end);
+    setMetricReq((prev: any) => ({ 
+      ...prev, 
+      start_time: start.format(), 
+      end_time: end.format() 
+    }));
+  };
 
-  // Update metricsReq with the initial value
-  useEffect(() => {
-    setMetricReq((prev: any) => ({ ...prev, [field]: getInitialValue }));
-  }, [getInitialValue, field, setMetricReq]);
-
-  const handleTimeChange = useCallback(
-    (newValue: dayjs.Dayjs | null) => {
-      if (newValue && newValue.isValid()) {
-        setTime(newValue);
-        setMetricReq((prev: any) => ({ ...prev, [field]: newValue }));
-      }
-    },
-    [setTime]
-  );
+  const ranges: { [key: string]: [moment.Moment, moment.Moment] } = {
+    'Last 10 Minutes': [moment().subtract(10, 'minutes'), moment()],
+    'Last 30 Minutes': [moment().subtract(30, 'minutes'), moment()],
+    'Last Hour': [moment().subtract(1, 'hour'), moment()],
+    'Last 2 Hours': [moment().subtract(2, 'hours'), moment()],
+    'Last 6 Hours': [moment().subtract(6, 'hours'), moment()],
+    'Last 12 Hours': [moment().subtract(12, 'hours'), moment()],
+  };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Box>
-        <DateTimePicker
-          label={field === "start_time" ? "Start Time" : "End Time"}
-          value={time}
-          onChange={handleTimeChange}
-          sx={{
-            "& .MuiInputLabel-root": {
-              fontSize: "1.4rem",
-            },
-            "& .MuiInputBase-input": {
-              fontSize: "1.6rem",
-            },
-          }}
+    <div className="date-range-picker-container">
+      <label htmlFor="dateRangeInput" className="date-range-label">
+        Time Range
+      </label>
+      <DateRangePicker
+        initialSettings={{
+          startDate: startDate,
+          endDate: endDate,
+          ranges: ranges,
+          timePicker: true,
+          timePicker24Hour: true,
+          locale: {
+            format: 'DD/MM/YYYY hh:mm A'
+          }
+        }}
+        onCallback={handleCallback}
+      >
+        <input type="text" 
+         id="dateRangeInput"
+          className="form-control date-input" 
+          style={{ fontSize: '1.6rem', width: '400px', paddingRight: '10px', height: '50px' }} 
         />
-      </Box>
-    </LocalizationProvider>
+      </DateRangePicker>
+      <span className="caret"><ArrowDropDown/></span>
+    </div>
   );
 };
 
-export default TimeRange;
+export default TimeSelector;
