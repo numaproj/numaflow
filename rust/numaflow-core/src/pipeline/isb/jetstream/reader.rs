@@ -12,8 +12,8 @@ use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
+use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::BufferReaderConfig;
-use crate::config::pipeline::PipelineConfig;
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
 use crate::metrics::{
@@ -33,6 +33,7 @@ pub(crate) struct JetstreamReader {
     config: BufferReaderConfig,
     consumer: PullConsumer,
     tracker_handle: TrackerHandle,
+    batch_size: usize,
 }
 
 impl JetstreamReader {
@@ -42,6 +43,7 @@ impl JetstreamReader {
         js_ctx: Context,
         config: BufferReaderConfig,
         tracker_handle: TrackerHandle,
+        batch_size: usize,
     ) -> Result<Self> {
         let mut config = config;
 
@@ -69,6 +71,7 @@ impl JetstreamReader {
             config: config.clone(),
             consumer,
             tracker_handle,
+            batch_size,
         })
     }
 
@@ -81,10 +84,8 @@ impl JetstreamReader {
     pub(crate) async fn streaming_read(
         &self,
         cancel_token: CancellationToken,
-        pipeline_config: &PipelineConfig,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
-        let (messages_tx, messages_rx) = mpsc::channel(2 * pipeline_config.batch_size);
-        let pipeline_config = pipeline_config.clone();
+        let (messages_tx, messages_rx) = mpsc::channel(2 * self.batch_size);
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let consumer = self.consumer.clone();
@@ -143,20 +144,23 @@ impl JetstreamReader {
                                 }
                             };
 
-                            message.offset = Some(Offset::Int(IntOffset::new(
+                            let offset = Offset::Int(IntOffset::new(
                                 msg_info.stream_sequence,
                                 partition_idx,
-                            )));
+                            ));
 
-                            message.id = MessageID {
-                                vertex_name: pipeline_config.vertex_name.clone().into(),
-                                offset: msg_info.stream_sequence.to_string().into(),
+                            let message_id = MessageID {
+                                vertex_name: get_vertex_name().to_string().into(),
+                                offset: offset.to_string().into(),
                                 index: 0,
                             };
 
+                            message.offset = Some(offset.clone());
+                            message.id = message_id.clone();
+
                             // Insert the message into the tracker and wait for the ack to be sent back.
                             let (ack_tx, ack_rx) = oneshot::channel();
-                            tracker_handle.insert(message.id.offset.clone(), ack_tx).await?;
+                            tracker_handle.insert(message_id.offset.clone(), ack_tx).await?;
 
                             tokio::spawn(Self::start_work_in_progress(
                                 jetstream_message,
@@ -164,9 +168,14 @@ impl JetstreamReader {
                                 config.wip_ack_interval,
                             ));
 
-                            messages_tx.send(message).await.map_err(|e| {
-                                Error::ISB(format!("Error while sending message to channel: {:?}", e))
-                            })?;
+                            if let Err(e) = messages_tx.send(message).await {
+                                // nak the read message and return
+                                tracker_handle.discard(message_id.offset.clone()).await?;
+                                return Err(Error::ISB(format!(
+                                    "Failed to send message to receiver: {:?}",
+                                    e
+                                )));
+                            }
 
                             pipeline_metrics()
                                 .forwarder
@@ -313,17 +322,14 @@ mod tests {
             context.clone(),
             buf_reader_config,
             TrackerHandle::new(),
+            500,
         )
         .await
         .unwrap();
 
-        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW91dCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im91dCIsInNpbmsiOnsiYmxhY2tob2xlIjp7fSwicmV0cnlTdHJhdGVneSI6eyJvbkZhaWx1cmUiOiJyZXRyeSJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoib3V0IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==".to_string();
-
-        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
-        let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
         let reader_cancel_token = CancellationToken::new();
         let (mut js_reader_rx, js_reader_task) = js_reader
-            .streaming_read(reader_cancel_token.clone(), &pipeline_config)
+            .streaming_read(reader_cancel_token.clone())
             .await
             .unwrap();
 
@@ -413,17 +419,14 @@ mod tests {
             context.clone(),
             buf_reader_config,
             tracker_handle.clone(),
+            1,
         )
         .await
         .unwrap();
 
-        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW91dCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im91dCIsInNpbmsiOnsiYmxhY2tob2xlIjp7fSwicmV0cnlTdHJhdGVneSI6eyJvbkZhaWx1cmUiOiJyZXRyeSJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoib3V0IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==".to_string();
-
-        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
-        let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
         let reader_cancel_token = CancellationToken::new();
         let (mut js_reader_rx, js_reader_task) = js_reader
-            .streaming_read(reader_cancel_token.clone(), &pipeline_config)
+            .streaming_read(reader_cancel_token.clone())
             .await
             .unwrap();
 
@@ -438,7 +441,7 @@ mod tests {
                 event_time: Utc::now(),
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
-                    offset: format!("{}", i + 1).into(),
+                    offset: format!("{}-0", i + 1).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
