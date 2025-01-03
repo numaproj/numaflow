@@ -8,6 +8,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  Text
 } from "recharts";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -16,6 +17,71 @@ import FiltersDropdown from "../common/FiltersDropdown";
 import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
 import TimeSelector from "../common/TimeRange";
+
+
+const getYAxisLabel = (unit: string) => {
+  if (unit !== "") {
+    return unit
+  }
+  return "Units"
+};
+
+const getDefaultFormatter = (value: number, metricName: string) => {
+  const formatValue = (value: number, suffix: string) => {
+    const formattedValue = parseFloat(value.toFixed(2));
+    return formattedValue % 1 === 0 
+      ? `${Math.floor(formattedValue)}${suffix}` 
+      : `${formattedValue}${suffix}`;
+  };
+  switch(metricName){
+    case "monovtx_ack_time_bucket":
+    case "monovtx_read_time_bucket":
+    case "monovtx_processing_time_bucket":
+    case "monovtx_sink_time_bucket":
+    case "numaflow_monovtx_processing_time_bucket":
+    case "numaflow_monovtx_sink_time_bucket":
+    case "numaflow_monovtx_read_time_bucket":
+    case "numaflow_monovtx_ack_time_bucket":
+      if (value === 0){
+        return "0";
+      } else if (value < 1000) {
+        return `${value} μs`;
+      } else if (value < 1000000) {
+        return formatValue(value / 1000, " ms");
+      } else {
+        return formatValue(value / 1000000, " s");
+      }
+    default:
+      if (value === 0){
+        return "0";
+      } else if (value < 1000) {
+        return `${value}`;
+      } else if (value < 1000000) {
+        return formatValue(value / 1000, " k");
+      } else {
+        return formatValue(value / 1000000, " M");
+      }
+  }
+}
+
+
+
+const getTickFormatter = (unit: string, metricName: string) => {
+  const formatValue = (value: number) => {
+    const formattedValue = parseFloat(value.toFixed(2));  // Format to 2 decimal places
+    return formattedValue % 1 === 0 ? Math.floor(formattedValue) : formattedValue; // Remove trailing .0
+  };
+  return (value: number) => {
+    switch (unit) {
+      case 's':
+        return `${formatValue(value / 1000000)}`;
+      case 'ms':
+        return `${formatValue(value / 1000)}`;
+      default:
+        return getDefaultFormatter(value, metricName);
+    }
+  }
+};
 
 // TODO have a check for metricReq against metric object to ensure required fields are passed
 const LineChartComponent = ({
@@ -226,29 +292,29 @@ const LineChartComponent = ({
 
       {filtersList?.filter((filterEle: any) => !filterEle?.required)?.length >
         0 && (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-around",
-            mt: "1rem",
-            mb: "2rem",
-            px: "6rem",
-          }}
-        >
-          <Box sx={{ mr: "1rem" }}>Filters</Box>
-          <FiltersDropdown
-            items={filtersList?.filter(
-              (filterEle: any) => !filterEle?.required
-            )}
-            namespaceId={namespaceId}
-            pipelineId={pipelineId}
-            type={type}
-            vertexId={vertexId}
-            setFilters={setFilters}
-          />
-        </Box>
-      )}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-around",
+              mt: "1rem",
+              mb: "2rem",
+              px: "6rem",
+            }}
+          >
+            <Box sx={{ mr: "1rem" }}>Filters</Box>
+            <FiltersDropdown
+              items={filtersList?.filter(
+                (filterEle: any) => !filterEle?.required
+              )}
+              namespaceId={namespaceId}
+              pipelineId={pipelineId}
+              type={type}
+              vertexId={vertexId}
+              setFilters={setFilters}
+            />
+          </Box>
+        )}
 
       {isLoading && (
         <Box
@@ -277,9 +343,15 @@ const LineChartComponent = ({
             }}
           >
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="time" padding={{ left: 30, right: 30 }} />
-            <YAxis />
-            <CartesianGrid stroke="#f5f5f5" />
+            <XAxis dataKey="time" padding={{ left: 30, right: 30 }} >
+            </XAxis>
+            <YAxis
+              label={<Text x={-160} y={5} dy={5} transform="rotate(-90)" fontSize={14} textAnchor="middle">{getYAxisLabel(metric?.unit)}</Text>}
+              tickFormatter={getTickFormatter(metric?.unit, metric?.metric_name)}
+            />
+            <CartesianGrid stroke="#f5f5f5">
+            </CartesianGrid>
+
             {chartLabels?.map((value, index) => (
               <Line
                 key={`${value}-line-chart`}
