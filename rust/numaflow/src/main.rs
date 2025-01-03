@@ -1,7 +1,5 @@
-use std::collections::HashMap;
 use std::env;
 use std::error::Error;
-use std::sync::Arc;
 
 use tracing::error;
 use tracing_subscriber::layer::SubscriberExt;
@@ -31,14 +29,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     // Based on the argument, run the appropriate component.
-    if args.contains(&"--serving".to_string()) {
-        let env_vars: HashMap<String, String> = env::vars().collect();
-        let settings: serving::Settings = env_vars.try_into()?;
-        let settings = Arc::new(settings);
-        serving::serve(settings)
-            .await
-            .map_err(|e| format!("Error running serving: {e:?}"))?;
-    } else if args.contains(&"--servesink".to_string()) {
+    if args.contains(&"--servesink".to_string()) {
         servesink::servesink()
             .await
             .map_err(|e| format!("Error running servesink: {e:?}"))?;
@@ -47,5 +38,5 @@ async fn run() -> Result<(), Box<dyn Error>> {
             .await
             .map_err(|e| format!("Error running rust binary: {e:?}"))?
     }
-    Err("Invalid argument. Use --serving, --servesink, or --rust".into())
+    Err("Invalid argument. Use --servesink, or --rust".into())
 }

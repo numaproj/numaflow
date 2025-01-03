@@ -37,7 +37,7 @@ pub(crate) struct Message {
 }
 
 /// Offset of the message which will be used to acknowledge the message.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) enum Offset {
     Int(IntOffset),
     String(StringOffset),
@@ -62,7 +62,7 @@ impl Message {
 }
 
 /// IntOffset is integer based offset enum type.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IntOffset {
     pub(crate) offset: u64,
     pub(crate) partition_idx: u16,
@@ -84,7 +84,7 @@ impl fmt::Display for IntOffset {
 }
 
 /// StringOffset is string based offset enum type.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) struct StringOffset {
     /// offset could be a complex base64 string.
     pub(crate) offset: Bytes,
@@ -120,7 +120,7 @@ pub(crate) enum ReadAck {
 }
 
 /// Message ID which is used to uniquely identify a message. It cheap to clone this.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) struct MessageID {
     pub(crate) vertex_name: Bytes,
     pub(crate) offset: Bytes,
