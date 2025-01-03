@@ -19,20 +19,67 @@ import { useMetricsFetch } from "../../../../../../../../../../../../../../../ut
 import TimeSelector from "../common/TimeRange";
 
 
-const getYAxisLabel = (metricName: string) => {
-  switch(metricName) {
+const getYAxisLabel = (unit: string) => {
+  if (unit !== "") {
+    return unit
+  }
+  return "Units"
+};
+
+const getDefaultFormatter = (value: number, metricName: string) => {
+  const formatValue = (value: number, suffix: string) => {
+    const formattedValue = parseFloat(value.toFixed(2));
+    return formattedValue % 1 === 0 
+      ? `${Math.floor(formattedValue)}${suffix}` 
+      : `${formattedValue}${suffix}`;
+  };
+  switch(metricName){
     case "monovtx_ack_time_bucket":
     case "monovtx_read_time_bucket":
     case "monovtx_processing_time_bucket":
     case "monovtx_sink_time_bucket":
-      return "Latency (in μs)"
-    case "forwarder_data_read_total":
-    case "monovtx_read_total":
-      return "Rate (messages/second)"
-    case "monovtx_pending":
-      return "Number of pending messages"
+    case "numaflow_monovtx_processing_time_bucket":
+    case "numaflow_monovtx_sink_time_bucket":
+    case "numaflow_monovtx_read_time_bucket":
+    case "numaflow_monovtx_ack_time_bucket":
+      if (value === 0){
+        return "0";
+      } else if (value < 1000) {
+        return `${value} μs`;
+      } else if (value < 1000000) {
+        return formatValue(value / 1000, " ms");
+      } else {
+        return formatValue(value / 1000000, " s");
+      }
     default:
-      return ""
+      if (value === 0){
+        return "0";
+      } else if (value < 1000) {
+        return `${value}`;
+      } else if (value < 1000000) {
+        return formatValue(value / 1000, " k");
+      } else {
+        return formatValue(value / 1000000, " M");
+      }
+  }
+}
+
+
+
+const getTickFormatter = (unit: string, metricName: string) => {
+  const formatValue = (value: number) => {
+    const formattedValue = parseFloat(value.toFixed(2));  // Format to 2 decimal places
+    return formattedValue % 1 === 0 ? Math.floor(formattedValue) : formattedValue; // Remove trailing .0
+  };
+  return (value: number) => {
+    switch (unit) {
+      case 's':
+        return `${formatValue(value / 1000000)}`;
+      case 'ms':
+        return `${formatValue(value / 1000)}`;
+      default:
+        return getDefaultFormatter(value, metricName);
+    }
   }
 };
 
@@ -245,29 +292,29 @@ const LineChartComponent = ({
 
       {filtersList?.filter((filterEle: any) => !filterEle?.required)?.length >
         0 && (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-around",
-            mt: "1rem",
-            mb: "2rem",
-            px: "6rem",
-          }}
-        >
-          <Box sx={{ mr: "1rem" }}>Filters</Box>
-          <FiltersDropdown
-            items={filtersList?.filter(
-              (filterEle: any) => !filterEle?.required
-            )}
-            namespaceId={namespaceId}
-            pipelineId={pipelineId}
-            type={type}
-            vertexId={vertexId}
-            setFilters={setFilters}
-          />
-        </Box>
-      )}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-around",
+              mt: "1rem",
+              mb: "2rem",
+              px: "6rem",
+            }}
+          >
+            <Box sx={{ mr: "1rem" }}>Filters</Box>
+            <FiltersDropdown
+              items={filtersList?.filter(
+                (filterEle: any) => !filterEle?.required
+              )}
+              namespaceId={namespaceId}
+              pipelineId={pipelineId}
+              type={type}
+              vertexId={vertexId}
+              setFilters={setFilters}
+            />
+          </Box>
+        )}
 
       {isLoading && (
         <Box
@@ -298,12 +345,13 @@ const LineChartComponent = ({
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="time" padding={{ left: 30, right: 30 }} >
             </XAxis>
-            <YAxis 
-              label={<Text x={-160} y={5} dy={5} transform="rotate(-90)" fontSize={14} textAnchor="middle">{getYAxisLabel(metric?.metric_name)}</Text>}
+            <YAxis
+              label={<Text x={-160} y={5} dy={5} transform="rotate(-90)" fontSize={14} textAnchor="middle">{getYAxisLabel(metric?.unit)}</Text>}
+              tickFormatter={getTickFormatter(metric?.unit, metric?.metric_name)}
             />
             <CartesianGrid stroke="#f5f5f5">
             </CartesianGrid>
-            
+
             {chartLabels?.map((value, index) => (
               <Line
                 key={`${value}-line-chart`}

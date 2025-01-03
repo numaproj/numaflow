@@ -6,7 +6,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 import LineChartComponent from "./partials/LineChart";
 import { useMetricsDiscoveryDataFetch } from "../../../../../../../../../../../../../utils/fetchWrappers/metricsDiscoveryDataFetch";
-import { dimensionReverseMap } from "./utils/constants";
+import { dimensionReverseMap, metricNameMap } from "./utils/constants";
 
 import "./style.css";
 
@@ -83,7 +83,7 @@ export function Metrics({ namespaceId, pipelineId, type, vertexId }: MetricsProp
               id={`${metric?.metric_name}-header`}
             >
               <Box>
-                {metric?.display_name || metric?.metric_name}
+                {metric?.display_name || metricNameMap[metric?.metric_name] || metric?.metric_name}
               </Box>
             </AccordionSummary>
             <AccordionDetails>
