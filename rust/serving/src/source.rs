@@ -17,6 +17,7 @@ pub struct MessageWrapper {
     pub message: Message,
 }
 
+#[derive(Debug)]
 pub struct Message {
     pub value: Bytes,
     pub id: String,
@@ -71,7 +72,9 @@ impl ServingSourceActor {
             settings,
             callback_state,
         };
-        crate::serve(app).await.unwrap();
+        tokio::spawn(async move {
+            crate::serve(app).await.unwrap();
+        });
         Ok(())
     }
 
@@ -153,7 +156,7 @@ impl ServingSource {
         batch_size: usize,
         timeout: Duration,
     ) -> Result<Self> {
-        let (actor_tx, actor_rx) = mpsc::channel(10);
+        let (actor_tx, actor_rx) = mpsc::channel(1000);
         ServingSourceActor::start(settings, actor_rx).await?;
         Ok(Self {
             batch_size,
@@ -189,6 +192,75 @@ impl ServingSource {
         };
         let _ = self.actor_tx.send(actor_msg).await;
         rx.await.map_err(Error::ActorTaskTerminated)?;
+        Ok(())
+    }
+}
+
+#[cfg(feature = "redis-tests")]
+#[cfg(test)]
+mod tests {
+    use std::{sync::Arc, time::Duration};
+
+    use crate::Settings;
+
+    use super::ServingSource;
+
+    type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+    #[tokio::test]
+    async fn test_serving_source() -> Result<()> {
+        let settings = Arc::new(Settings::default());
+        let serving_source =
+            ServingSource::new(Arc::clone(&settings), 10, Duration::from_millis(1)).await?;
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(2))
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
+
+        // Wait for the server
+        for _ in 0..10 {
+            let resp = client
+                .get(format!(
+                    "https://localhost:{}/livez",
+                    settings.app_listen_port
+                ))
+                .send()
+                .await;
+            if resp.is_ok() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                let mut messages = serving_source.read_messages().await.unwrap();
+                if messages.is_empty() {
+                    // Server has not received any requests yet
+                    continue;
+                }
+                assert_eq!(messages.len(), 1);
+                let msg = messages.remove(0);
+                serving_source
+                    .ack_messages(vec![format!("{}-0", msg.id)])
+                    .await
+                    .unwrap();
+                break;
+            }
+        });
+
+        let resp = client
+            .post(format!(
+                "https://localhost:{}/v1/process/async",
+                settings.app_listen_port
+            ))
+            .json("test-payload")
+            .send()
+            .await?;
+
+        assert!(resp.status().is_success());
         Ok(())
     }
 }

@@ -18,6 +18,7 @@ backoff.workspace = true
 axum.workspace = true
 axum-server.workspace = true
 bytes.workspace = true
+rustls.workspace = true
 axum-macros = "0.4.1"
 hyper-util = { version = "0.1.6", features = ["client-legacy"] }
 serde = { version = "1.0.204", features = ["derive"] }
@@ -35,4 +36,5 @@ prometheus-client = "0.22.3"
 thiserror = "1.0.63"
 
 [dev-dependencies]
+reqwest = {version= "0.12.12", features = ["json"]}
 rustls.workspace = true
