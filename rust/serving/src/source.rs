@@ -235,7 +235,7 @@ mod tests {
     async fn test_serving_source() -> Result<()> {
         let settings = Arc::new(Settings::default());
         let serving_source =
-            ServingSource::new(Arc::clone(&settings), 10, Duration::from_millis(1)).await?;
+            ServingSource::new(Arc::clone(&settings), 10, Duration::from_millis(1), 0).await?;
 
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(2))
