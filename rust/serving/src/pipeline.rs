@@ -10,7 +10,7 @@ use crate::Error::ParseConfig;
 // OperatorType is an enum that contains the types of operators
 // that can be used in the conditions for the edge.
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-pub enum OperatorType {
+pub(crate) enum OperatorType {
     #[serde(rename = "and")]
     And,
     #[serde(rename = "or")]
@@ -43,36 +43,36 @@ impl From<String> for OperatorType {
 
 // Tag is a struct that contains the information about the tags for the edge
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct Tag {
-    pub operator: Option<OperatorType>,
-    pub values: Vec<String>,
+pub(crate) struct Tag {
+    pub(crate) operator: Option<OperatorType>,
+    pub(crate) values: Vec<String>,
 }
 
 // Conditions is a struct that contains the information about the conditions for the edge
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct Conditions {
-    pub tags: Option<Tag>,
+pub(crate) struct Conditions {
+    pub(crate) tags: Option<Tag>,
 }
 
 // Edge is a struct that contains the information about the edge in the pipeline.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct Edge {
-    pub from: String,
-    pub to: String,
-    pub conditions: Option<Conditions>,
+pub(crate) struct Edge {
+    pub(crate) from: String,
+    pub(crate) to: String,
+    pub(crate) conditions: Option<Conditions>,
 }
 
 /// DCG (directed compute graph) of the pipeline with minimal information build using vertices and edges
 /// from the pipeline spec
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
-pub struct PipelineDCG {
-    pub vertices: Vec<Vertex>,
-    pub edges: Vec<Edge>,
+pub(crate) struct PipelineDCG {
+    pub(crate) vertices: Vec<Vertex>,
+    pub(crate) edges: Vec<Edge>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct Vertex {
-    pub name: String,
+pub(crate) struct Vertex {
+    pub(crate) name: String,
 }
 
 impl FromStr for PipelineDCG {

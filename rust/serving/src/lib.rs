@@ -23,13 +23,14 @@ mod metrics;
 mod pipeline;
 
 pub mod source;
-pub use source::{Message, MessageWrapper, ServingSource};
+pub use source::{Message, ServingSource};
+use crate::source::MessageWrapper;
 
 #[derive(Clone)]
 pub(crate) struct AppState<T> {
-    pub message: mpsc::Sender<MessageWrapper>,
-    pub settings: Arc<Settings>,
-    pub callback_state: CallbackState<T>,
+    pub(crate) message: mpsc::Sender<MessageWrapper>,
+    pub(crate) settings: Arc<Settings>,
+    pub(crate) callback_state: CallbackState<T>,
 }
 
 pub(crate) async fn serve<T>(

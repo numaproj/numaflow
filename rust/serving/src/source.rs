@@ -12,11 +12,14 @@ use crate::app::tracker::MessageGraph;
 use crate::Settings;
 use crate::{Error, Result};
 
-pub struct MessageWrapper {
-    pub confirm_save: oneshot::Sender<()>,
-    pub message: Message,
+/// [Message] with a oneshot for notifying when the message has been completed processed.
+pub(crate) struct MessageWrapper {
+    // TODO: this might be more that saving to ISB.
+    pub(crate) confirm_save: oneshot::Sender<()>,
+    pub(crate) message: Message,
 }
 
+/// Serving payload passed on to Numaflow.
 #[derive(Debug)]
 pub struct Message {
     pub value: Bytes,
