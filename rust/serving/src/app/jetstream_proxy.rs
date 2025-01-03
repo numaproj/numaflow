@@ -92,7 +92,11 @@ async fn sync_publish_serve<T: Send + Sync + Clone + Store>(
         },
     };
 
-    proxy_state.message.send(message).await.unwrap(); // FIXME:
+    proxy_state
+        .message
+        .send(message)
+        .await
+        .expect("Failed to send request payload to Serving channel");
 
     if let Err(e) = rx.await {
         // Deregister the ID in the callback proxy state if writing to Jetstream fails

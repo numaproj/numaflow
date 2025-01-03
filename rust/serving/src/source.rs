@@ -31,26 +31,36 @@ enum ActorMessage {
     Read {
         batch_size: usize,
         timeout_at: Instant,
-        reply_to: oneshot::Sender<Vec<Message>>,
+        reply_to: oneshot::Sender<Result<Vec<Message>>>,
     },
     Ack {
         offsets: Vec<String>,
-        reply_to: oneshot::Sender<()>,
+        reply_to: oneshot::Sender<Result<()>>,
     },
 }
 
+/// Background actor that starts Axum server for accepting HTTP requests.
 struct ServingSourceActor {
+    /// The HTTP handlers will put the message received from the payload to this channel
     messages: mpsc::Receiver<MessageWrapper>,
+    /// Channel for the actor handle to communicate with this actor
     handler_rx: mpsc::Receiver<ActorMessage>,
+    /// Mapping from request's ID header (usually `X-Numaflow-Id` header) to a channel.
+    /// This sending a message on this channel notifies the HTTP handler function that the message
+    /// has been successfully processed.
     tracker: HashMap<String, oneshot::Sender<()>>,
+    vertex_replica_id: u16,
 }
 
 impl ServingSourceActor {
     async fn start(
         settings: Arc<Settings>,
         handler_rx: mpsc::Receiver<ActorMessage>,
+        request_channel_buffer_size: usize,
+        vertex_replica_id: u16,
     ) -> Result<()> {
-        let (messages_tx, messages_rx) = mpsc::channel(10000);
+        // Channel to which HTTP handlers will send request payload
+        let (messages_tx, messages_rx) = mpsc::channel(request_channel_buffer_size);
         // Create a redis store to store the callbacks and the custom responses
         let redis_store = RedisConnection::new(settings.redis.clone()).await?;
         // Create the message graph from the pipeline spec and the redis store
@@ -67,6 +77,7 @@ impl ServingSourceActor {
                 messages: messages_rx,
                 handler_rx,
                 tracker: HashMap::new(),
+                vertex_replica_id,
             };
             serving_actor.run().await;
         });
@@ -98,24 +109,32 @@ impl ServingSourceActor {
                 let _ = reply_to.send(messages);
             }
             ActorMessage::Ack { offsets, reply_to } => {
-                self.ack(offsets).await;
-                let _ = reply_to.send(());
+                let status = self.ack(offsets).await;
+                let _ = reply_to.send(status);
             }
         }
     }
 
-    async fn read(&mut self, count: usize, timeout_at: Instant) -> Vec<Message> {
+    async fn read(&mut self, count: usize, timeout_at: Instant) -> Result<Vec<Message>> {
         let mut messages = vec![];
         loop {
+            // Stop if the read timeout has reached or if we have collected the requested number of messages
             if messages.len() >= count || Instant::now() >= timeout_at {
                 break;
             }
             let message = match self.messages.try_recv() {
                 Ok(msg) => msg,
                 Err(mpsc::error::TryRecvError::Empty) => break,
-                Err(e) => {
-                    tracing::error!(?e, "Receiving messages from the serving channel"); // FIXME:
-                    return messages;
+                Err(mpsc::error::TryRecvError::Disconnected) => {
+                    // If we have collected at-least one message, we return those messages.
+                    // The error will happen on all the subsequent read attempts too.
+                    if messages.is_empty() {
+                        return Err(Error::Other(
+                            "Sending half of the Serving channel has disconnected".into(),
+                        ));
+                    }
+                    tracing::error!("Sending half of the Serving channel has disconnected");
+                    return Ok(messages);
                 }
             };
             let MessageWrapper {
@@ -126,22 +145,24 @@ impl ServingSourceActor {
             self.tracker.insert(message.id.clone(), confirm_save);
             messages.push(message);
         }
-        messages
+        Ok(messages)
     }
 
-    async fn ack(&mut self, offsets: Vec<String>) {
+    async fn ack(&mut self, offsets: Vec<String>) -> Result<()> {
+        let offset_suffix = format!("-{}", self.vertex_replica_id);
         for offset in offsets {
-            let offset = offset
-                .strip_suffix("-0")
-                .expect("offset does not end with '-0'"); // FIXME: we hardcode 0 as the partition index when constructing offset
+            let offset = offset.strip_suffix(&offset_suffix).ok_or_else(|| {
+                Error::Source(format!("offset does not end with '{}'", &offset_suffix))
+            })?;
             let confirm_save_tx = self
                 .tracker
                 .remove(offset)
-                .expect("offset was not found in the tracker");
+                .ok_or_else(|| Error::Source("offset was not found in the tracker".into()))?;
             confirm_save_tx
                 .send(())
-                .expect("Sending on confirm_save channel");
+                .map_err(|e| Error::Source(format!("Sending on confirm_save channel: {e:?}")))?;
         }
+        Ok(())
     }
 }
 
@@ -158,9 +179,10 @@ impl ServingSource {
         settings: Arc<Settings>,
         batch_size: usize,
         timeout: Duration,
+        vertex_replica_id: u16,
     ) -> Result<Self> {
-        let (actor_tx, actor_rx) = mpsc::channel(1000);
-        ServingSourceActor::start(settings, actor_rx).await?;
+        let (actor_tx, actor_rx) = mpsc::channel(2 * batch_size);
+        ServingSourceActor::start(settings, actor_rx, 2 * batch_size, vertex_replica_id).await?;
         Ok(Self {
             batch_size,
             timeout,
@@ -177,7 +199,7 @@ impl ServingSource {
             timeout_at: Instant::now() + self.timeout,
         };
         let _ = self.actor_tx.send(actor_msg).await;
-        let messages = rx.await.map_err(Error::ActorTaskTerminated)?;
+        let messages = rx.await.map_err(Error::ActorTaskTerminated)??;
         tracing::debug!(
             count = messages.len(),
             requested_count = self.batch_size,
@@ -194,7 +216,7 @@ impl ServingSource {
             reply_to: tx,
         };
         let _ = self.actor_tx.send(actor_msg).await;
-        rx.await.map_err(Error::ActorTaskTerminated)?;
+        rx.await.map_err(Error::ActorTaskTerminated)??;
         Ok(())
     }
 }

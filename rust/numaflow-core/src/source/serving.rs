@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 pub(crate) use serving::ServingSource;
 
+use crate::config::get_vertex_replica;
 use crate::message::{MessageID, StringOffset};
 use crate::Error;
 use crate::Result;
@@ -12,9 +13,10 @@ impl TryFrom<serving::Message> for Message {
     type Error = Error;
 
     fn try_from(message: serving::Message) -> Result<Self> {
-        let offset = Offset::String(StringOffset::new(message.id.clone(), 0));
+        let offset = Offset::String(StringOffset::new(message.id.clone(), *get_vertex_replica()));
 
         Ok(Message {
+            // we do not support keys from HTTP client
             keys: Arc::from(vec![]),
             tags: None,
             value: message.value,
@@ -50,11 +52,14 @@ impl super::SourceReader for ServingSource {
     }
 
     fn partitions(&self) -> Vec<u16> {
-        vec![]
+        vec![*get_vertex_replica()]
     }
 }
 
 impl super::SourceAcker for ServingSource {
+    /// HTTP response is sent only once we have confirmation that the message has been written to the ISB.
+    // TODO: Current implementation only works for `/v1/process/async` endpoint.
+    //       For `/v1/process/{sync,sync_serve}` endpoints: https://github.com/numaproj/numaflow/issues/2308
     async fn ack(&mut self, offsets: Vec<Offset>) -> Result<()> {
         let mut serving_offsets = vec![];
         for offset in offsets {
@@ -86,6 +91,8 @@ mod tests {
 
     use bytes::Bytes;
     use serving::{ServingSource, Settings};
+
+    use super::get_vertex_replica;
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -139,8 +146,13 @@ mod tests {
             ..Default::default()
         };
         let settings = Arc::new(settings);
-        let mut serving_source =
-            ServingSource::new(Arc::clone(&settings), 10, Duration::from_millis(1)).await?;
+        let mut serving_source = ServingSource::new(
+            Arc::clone(&settings),
+            10,
+            Duration::from_millis(1),
+            *get_vertex_replica(),
+        )
+        .await?;
 
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(2))

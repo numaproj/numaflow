@@ -48,6 +48,9 @@ pub enum Error {
     #[error("Failed to receive message from channel. Actor task is terminated: {0:?}")]
     ActorTaskTerminated(oneshot::error::RecvError),
 
+    #[error("Serving source error - {0}")]
+    Source(String),
+
     #[error("Other Error - {0}")]
     // catch-all variant for now
     Other(String),

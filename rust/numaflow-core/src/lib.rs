@@ -55,7 +55,6 @@ mod tracker;
 mod mapper;
 
 pub async fn run() -> Result<()> {
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
 

@@ -12,6 +12,7 @@ use tonic::transport::Channel;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
+use crate::config::get_vertex_replica;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::{DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET};
 use crate::error::Error;
@@ -337,7 +338,13 @@ pub async fn create_source(
             ))
         }
         SourceType::Serving(config) => {
-            let serving = ServingSource::new(Arc::clone(config), batch_size, read_timeout).await?;
+            let serving = ServingSource::new(
+                Arc::clone(config),
+                batch_size,
+                read_timeout,
+                *get_vertex_replica(),
+            )
+            .await?;
             Ok((
                 Source::new(
                     batch_size,
