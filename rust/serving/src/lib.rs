@@ -38,9 +38,7 @@ pub(crate) async fn serve<T>(
 where
     T: Clone + Send + Sync + Store + 'static,
 {
-    rustls::crypto::aws_lc_rs::default_provider()
-        .install_default()
-        .expect("Failed to set crypto provider");
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     let (cert, key) = generate_certs()?;
 
     let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
