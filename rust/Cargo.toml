@@ -58,7 +58,7 @@ numaflow-core = { path = "numaflow-core" }
 numaflow-models = { path = "numaflow-models" }
 backoff = { path = "backoff" }
 numaflow-pb = { path = "numaflow-pb" }
-numaflow-pulsar = {path = "extns/numaflow-pulsar"}
+numaflow-pulsar = { path = "extns/numaflow-pulsar" }
 tokio = "1.41.1"
 bytes = "1.7.1"
 tracing = "0.1.40"
@@ -66,3 +66,4 @@ axum = "0.7.5"
 axum-server = { version = "0.7.1", features = ["tls-rustls"] }
 serde = { version = "1.0.204", features = ["derive"] }
 rustls = { version = "0.23.12", features = ["aws_lc_rs"] }
+reqwest = "0.12.12"

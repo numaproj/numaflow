@@ -78,10 +78,14 @@ impl super::LagReader for ServingSource {
 
 #[cfg(test)]
 mod tests {
-    use crate::message::{Message, MessageID, Offset, StringOffset};
-    use std::collections::HashMap;
+    use crate::{
+        message::{Message, MessageID, Offset, StringOffset},
+        source::{SourceAcker, SourceReader},
+    };
+    use std::{collections::HashMap, sync::Arc, time::Duration};
 
     use bytes::Bytes;
+    use serving::{ServingSource, Settings};
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -126,5 +130,65 @@ mod tests {
         } else {
             panic!("Expected Error::Source() variant");
         }
+    }
+
+    #[tokio::test]
+    async fn test_serving_source_reader_acker() -> Result<()> {
+        let settings = Settings {
+            app_listen_port: 2000,
+            ..Default::default()
+        };
+        let settings = Arc::new(settings);
+        let mut serving_source =
+            ServingSource::new(Arc::clone(&settings), 10, Duration::from_millis(1)).await?;
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(2))
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap();
+
+        // Wait for the server
+        for _ in 0..10 {
+            let resp = client
+                .get(format!(
+                    "https://localhost:{}/livez",
+                    settings.app_listen_port
+                ))
+                .send()
+                .await;
+            if resp.is_ok() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        let task_handle = tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                let mut messages = serving_source.read().await.unwrap();
+                if messages.is_empty() {
+                    // Server has not received any requests yet
+                    continue;
+                }
+                assert_eq!(messages.len(), 1);
+                let msg = messages.remove(0);
+                serving_source.ack(vec![msg.offset.unwrap()]).await.unwrap();
+                break;
+            }
+        });
+
+        let resp = client
+            .post(format!(
+                "https://localhost:{}/v1/process/async",
+                settings.app_listen_port
+            ))
+            .json("test-payload")
+            .send()
+            .await?;
+
+        assert!(resp.status().is_success());
+        assert!(task_handle.await.is_ok());
+        Ok(())
     }
 }
