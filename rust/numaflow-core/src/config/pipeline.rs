@@ -182,6 +182,13 @@ pub(crate) struct FromVertexConfig {
     pub(crate) name: String,
     pub(crate) reader_config: BufferReaderConfig,
     pub(crate) partitions: u16,
+    pub(crate) watermark_config: Option<WatermarkConfig>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct WatermarkConfig {
+    pub(crate) ot_bucket: String,
+    pub(crate) hb_bucket: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -326,6 +333,7 @@ impl PipelineConfig {
                     ..Default::default()
                 },
                 partitions: 0,
+                watermark_config: None,
             });
         }
 
@@ -470,6 +478,7 @@ mod tests {
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
+                watermark_config: None,
             }],
             to_vertex_config: vec![],
             vertex_config: VertexType::Sink(SinkVtxConfig {
@@ -693,6 +702,7 @@ mod tests {
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
+                watermark_config: None,
             }],
             to_vertex_config: vec![],
             vertex_config: VertexType::Map(MapVtxConfig {

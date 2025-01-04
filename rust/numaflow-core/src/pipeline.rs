@@ -593,6 +593,7 @@ mod tests {
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
+                watermark_config: None,
             }],
             vertex_config: VertexType::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
@@ -834,6 +835,7 @@ mod tests {
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
+                watermark_config: None,
             }],
             vertex_config: VertexType::Map(MapVtxConfig {
                 concurrency: 10,

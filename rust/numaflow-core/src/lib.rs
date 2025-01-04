@@ -53,6 +53,7 @@ mod tracker;
 
 /// Map is a feature that allows users to execute custom code to transform their data.
 mod mapper;
+mod watermark;
 
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
