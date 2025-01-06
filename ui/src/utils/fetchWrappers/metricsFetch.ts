@@ -21,31 +21,34 @@ export const useMetricsFetch = ({
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
-
-      try {
-        const response = await fetch(urlPath, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ ...metricReq, filters }),
-        });
-        const data = await response.json();
-        if (data?.data === null) {
-          setChartData(null);
-          setError(data?.errMsg);
-        } else {
-          setChartData(data?.data);
-          setError(null);
+      if (filters !== null && Object.keys(filters).length > 0 && metricReq?.dimension !== undefined) {
+        try {
+          const response = await fetch(urlPath, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ ...metricReq, filters }),
+          });
+          const data = await response.json();
+          if (data?.data === null) {
+            setChartData(null);
+            setError(data?.errMsg);
+          } else {
+            setChartData(data?.data);
+            setError(null);
+          }
+        } catch (e) {
+          console.error("Error fetching data:", e);
+          if (e instanceof Error) {
+            setError(e);
+          } else {
+            setError(null);
+          }
+        } finally {
+          setIsLoading(false);
         }
-      } catch (e) {
-        console.error("Error fetching data:", e);
-        if (e instanceof Error) {
-          setError(e);
-        } else {
-          setError(null);
-        }
-      } finally {
+      } else{
         setIsLoading(false);
       }
     };
