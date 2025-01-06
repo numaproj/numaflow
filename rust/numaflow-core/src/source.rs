@@ -37,6 +37,9 @@ pub(crate) mod generator;
 /// [Pulsar]: https://numaflow.numaproj.io/user-guide/sources/pulsar/
 pub(crate) mod pulsar;
 
+pub(crate) mod serving;
+use serving::ServingSource;
+
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
     #[allow(dead_code)]
@@ -68,6 +71,7 @@ pub(crate) enum SourceType {
         generator::GeneratorLagReader,
     ),
     Pulsar(PulsarSource),
+    Serving(ServingSource),
 }
 
 enum ActorMessage {
@@ -179,6 +183,13 @@ impl Source {
                         pulsar_source.clone(),
                         pulsar_source,
                     );
+                    actor.run().await;
+                });
+            }
+            SourceType::Serving(serving) => {
+                tokio::spawn(async move {
+                    let actor =
+                        SourceActor::new(receiver, serving.clone(), serving.clone(), serving);
                     actor.run().await;
                 });
             }
