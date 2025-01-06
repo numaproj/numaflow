@@ -122,10 +122,10 @@ impl ServingSourceActor {
             if messages.len() >= count || Instant::now() >= timeout_at {
                 break;
             }
-            let message = match self.messages.try_recv() {
-                Ok(msg) => msg,
-                Err(mpsc::error::TryRecvError::Empty) => break,
-                Err(mpsc::error::TryRecvError::Disconnected) => {
+            let next_msg = self.messages.recv();
+            let message = match tokio::time::timeout_at(timeout_at, next_msg).await {
+                Ok(Some(msg)) => msg,
+                Ok(None) => {
                     // If we have collected at-least one message, we return those messages.
                     // The error will happen on all the subsequent read attempts too.
                     if messages.is_empty() {
@@ -136,6 +136,7 @@ impl ServingSourceActor {
                     tracing::error!("Sending half of the Serving channel has disconnected");
                     return Ok(messages);
                 }
+                Err(_) => return Ok(messages),
             };
             let MessageWrapper {
                 confirm_save,
