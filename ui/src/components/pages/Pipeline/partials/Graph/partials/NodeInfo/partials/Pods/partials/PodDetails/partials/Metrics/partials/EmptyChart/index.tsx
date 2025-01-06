@@ -8,7 +8,7 @@ const EmptyChart = ({ message }: { message?: string }) => {
     <Box className={"empty_chart_container"}>
       <CircleIcon className={"circle_icon"} />
 
-      <Box className={"empty_text"}>{message || "No data for the selected filters."}</Box>
+      <Box className={"empty_text"}>{message ? "Error occurred while retrieving data" : "No data for the selected filters."}</Box>
     </Box>
   );
 };
