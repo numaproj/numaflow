@@ -3,6 +3,7 @@ use std::time::Duration;
 use async_nats::jetstream::Context;
 use async_nats::{jetstream, ConnectOptions};
 use futures::future::try_join_all;
+use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -53,11 +54,21 @@ async fn start_source_forwarder(
     let tracker_handle = TrackerHandle::new();
     let js_context = create_js_context(config.js_client_config.clone()).await?;
 
+    let callback_handler = match config.callback_config {
+        Some(ref cb_cfg) => Some(CallbackHandler::new(
+            config.pipeline_name.clone(),
+            config.vertex_name.clone(),
+            cb_cfg.callback_concurrency,
+        )),
+        None => None,
+    };
+
     let buffer_writer = create_buffer_writer(
         &config,
         js_context.clone(),
         tracker_handle.clone(),
         cln_token.clone(),
+        callback_handler,
     )
     .await;
 
@@ -142,11 +153,21 @@ async fn start_map_forwarder(
             mapper_grpc_client = Some(mapper_rpc_client);
         }
 
+        let callback_handler = match config.callback_config {
+            Some(ref cb_cfg) => Some(CallbackHandler::new(
+                config.pipeline_name.clone(),
+                config.vertex_name.clone(),
+                cb_cfg.callback_concurrency,
+            )),
+            None => None,
+        };
+
         let buffer_writer = create_buffer_writer(
             &config,
             js_context.clone(),
             tracker_handle.clone(),
             cln_token.clone(),
+            callback_handler,
         )
         .await;
         forwarder_components.push((buffer_reader, buffer_writer, mapper));
@@ -240,6 +261,15 @@ async fn start_sink_forwarder(
         .await;
     }
 
+    let callback_handler = match config.callback_config {
+        Some(ref cb_cfg) => Some(CallbackHandler::new(
+            config.pipeline_name.clone(),
+            config.vertex_name.clone(),
+            cb_cfg.callback_concurrency,
+        )),
+        None => None,
+    };
+
     // Start a new forwarder for each buffer reader
     let mut forwarder_tasks = Vec::new();
     for (buffer_reader, (sink_writer, _, _)) in buffer_readers.into_iter().zip(sink_writers) {
@@ -248,6 +278,7 @@ async fn start_sink_forwarder(
             buffer_reader,
             sink_writer,
             cln_token.clone(),
+            callback_handler.clone(),
         )
         .await;
 
@@ -273,6 +304,7 @@ async fn create_buffer_writer(
     js_context: Context,
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
+    callback_handler: Option<CallbackHandler>,
 ) -> JetstreamWriter {
     JetstreamWriter::new(
         config.to_vertex_config.clone(),
@@ -280,6 +312,7 @@ async fn create_buffer_writer(
         config.paf_concurrency,
         tracker_handle,
         cln_token,
+        callback_handler,
     )
 }
 
@@ -450,6 +483,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            callback_config: None,
         };
 
         let cancellation_token = CancellationToken::new();
@@ -542,6 +576,7 @@ mod tests {
                     index: 0,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let message: bytes::BytesMut = message.try_into().unwrap();
 
@@ -607,6 +642,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            callback_config: None,
         };
 
         let cancellation_token = CancellationToken::new();
@@ -738,6 +774,7 @@ mod tests {
                     index: 0,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let message: bytes::BytesMut = message.try_into().unwrap();
 
@@ -850,6 +887,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            callback_config: None,
         };
 
         let cancellation_token = CancellationToken::new();

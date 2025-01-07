@@ -237,6 +237,7 @@ mod tests {
                     conditions: None,
                 }],
             },
+            ..Default::default()
         };
         assert_eq!(settings, expected_config);
     }

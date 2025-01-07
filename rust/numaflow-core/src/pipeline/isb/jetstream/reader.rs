@@ -346,6 +346,7 @@ mod tests {
                     index: i,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
             context
@@ -377,6 +378,8 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_jetstream_ack() {
+        use async_nats::jetstream::stream::No;
+
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
@@ -445,6 +448,7 @@ mod tests {
                     index: i,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             offsets.push(message.id.offset.clone());
             let message_bytes: BytesMut = message.try_into().unwrap();

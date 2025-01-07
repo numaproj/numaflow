@@ -10,6 +10,7 @@ use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
 use async_nats::jetstream::Context;
 use bytes::{Bytes, BytesMut};
+use serving::callback::CallbackHandler;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio::time;
@@ -44,6 +45,7 @@ pub(crate) struct JetstreamWriter {
     cancel_token: CancellationToken,
     tracker_handle: TrackerHandle,
     sem: Arc<Semaphore>,
+    callback_handler: Option<CallbackHandler>,
 }
 
 impl JetstreamWriter {
@@ -55,6 +57,7 @@ impl JetstreamWriter {
         paf_concurrency: usize,
         tracker_handle: TrackerHandle,
         cancel_token: CancellationToken,
+        callback_handler: Option<CallbackHandler>,
     ) -> Self {
         let streams = config
             .iter()
@@ -73,6 +76,7 @@ impl JetstreamWriter {
             cancel_token,
             tracker_handle,
             sem: Arc::new(Semaphore::new(paf_concurrency)),
+            callback_handler,
         };
 
         // spawn a task for checking whether buffer is_full
@@ -245,6 +249,18 @@ impl JetstreamWriter {
                     offset: message.id.offset,
                 })
                 .await?;
+
+                if let Some(ref callback_handler) = this.callback_handler {
+                    let metadata = message.metadata.ok_or_else(|| {
+                        Error::Source(format!(
+                            "Message does not contain previous vertex name in the metadata"
+                        ))
+                    })?;
+                    callback_handler
+                        .callback(&message.headers, &message.tags, metadata.previous_vertex)
+                        .await
+                        .unwrap(); // FIXME:
+                };
 
                 processed_msgs_count += 1;
                 if last_logged_at.elapsed().as_secs() >= 1 {
@@ -538,6 +554,7 @@ mod tests {
             100,
             tracker_handle,
             cln_token.clone(),
+            None,
         );
 
         let message = Message {
@@ -552,6 +569,7 @@ mod tests {
                 index: 0,
             },
             headers: HashMap::new(),
+            metadata: None,
         };
 
         let paf = writer
@@ -611,6 +629,7 @@ mod tests {
                 index: 0,
             },
             headers: HashMap::new(),
+            metadata: None,
         };
 
         let message_bytes: BytesMut = message.try_into().unwrap();
@@ -678,6 +697,7 @@ mod tests {
             100,
             tracker_handle,
             cancel_token.clone(),
+            None,
         );
 
         let mut result_receivers = Vec::new();
@@ -695,6 +715,7 @@ mod tests {
                     index: i,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let paf = writer
                 .write(
@@ -720,6 +741,7 @@ mod tests {
                 index: 11,
             },
             headers: HashMap::new(),
+            metadata: None,
         };
         let paf = writer
             .write(
@@ -879,6 +901,7 @@ mod tests {
             100,
             tracker_handle,
             cancel_token.clone(),
+            None,
         );
 
         let mut js_writer = writer.clone();
@@ -969,6 +992,7 @@ mod tests {
             100,
             tracker_handle.clone(),
             cln_token.clone(),
+            None,
         );
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
@@ -987,6 +1011,7 @@ mod tests {
                     index: i,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             tracker_handle
@@ -1057,6 +1082,7 @@ mod tests {
             100,
             tracker_handle.clone(),
             cancel_token.clone(),
+            None,
         );
 
         let (tx, rx) = tokio::sync::mpsc::channel(500);
@@ -1075,6 +1101,7 @@ mod tests {
                     index: i,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             tracker_handle
@@ -1102,6 +1129,7 @@ mod tests {
                 index: 101,
             },
             headers: HashMap::new(),
+            metadata: None,
         };
         let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
         tracker_handle
@@ -1198,6 +1226,7 @@ mod tests {
             100,
             tracker_handle.clone(),
             cln_token.clone(),
+            None,
         );
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
@@ -1215,6 +1244,7 @@ mod tests {
                     index: i,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             tracker_handle

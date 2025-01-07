@@ -554,6 +554,7 @@ mod tests {
                 index: 0,
             },
             headers: Default::default(),
+            metadata: None,
         };
 
         let (output_tx, mut output_rx) = mpsc::channel(10);
@@ -646,6 +647,7 @@ mod tests {
                     index: i,
                 },
                 headers: Default::default(),
+                metadata: None,
             };
             input_tx.send(message).await.unwrap();
         }
@@ -735,6 +737,7 @@ mod tests {
                 index: 0,
             },
             headers: Default::default(),
+            metadata: None,
         };
 
         input_tx.send(message).await.unwrap();
@@ -829,6 +832,7 @@ mod tests {
                     index: 0,
                 },
                 headers: Default::default(),
+                metadata: None,
             },
             Message {
                 keys: Arc::from(vec!["second".into()]),
@@ -842,6 +846,7 @@ mod tests {
                     index: 1,
                 },
                 headers: Default::default(),
+                metadata: None,
             },
         ];
 
@@ -939,6 +944,7 @@ mod tests {
                     index: 0,
                 },
                 headers: Default::default(),
+                metadata: None,
             },
             Message {
                 keys: Arc::from(vec!["second".into()]),
@@ -952,6 +958,7 @@ mod tests {
                     index: 1,
                 },
                 headers: Default::default(),
+                metadata: None,
             },
         ];
 
@@ -1049,6 +1056,7 @@ mod tests {
                 index: 0,
             },
             headers: Default::default(),
+            metadata: None,
         };
 
         let (input_tx, input_rx) = mpsc::channel(10);
@@ -1145,6 +1153,7 @@ mod tests {
                 index: 0,
             },
             headers: Default::default(),
+            metadata: None,
         };
 
         let (input_tx, input_rx) = mpsc::channel(10);

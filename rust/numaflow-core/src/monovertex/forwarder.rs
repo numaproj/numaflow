@@ -28,6 +28,7 @@
 //! [Stream]: https://docs.rs/tokio-stream/latest/tokio_stream/wrappers/struct.ReceiverStream.html
 //! [Actor Pattern]: https://ryhl.io/blog/actors-with-tokio/
 
+use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 
 use crate::error;
@@ -44,6 +45,7 @@ pub(crate) struct Forwarder {
     transformer: Option<Transformer>,
     sink_writer: SinkWriter,
     cln_token: CancellationToken,
+    callback_handler: Option<CallbackHandler>,
 }
 
 pub(crate) struct ForwarderBuilder {
@@ -51,6 +53,7 @@ pub(crate) struct ForwarderBuilder {
     sink_writer: SinkWriter,
     cln_token: CancellationToken,
     transformer: Option<Transformer>,
+    callback_handler: Option<CallbackHandler>,
 }
 
 impl ForwarderBuilder {
@@ -59,12 +62,14 @@ impl ForwarderBuilder {
         streaming_source: Source,
         streaming_sink: SinkWriter,
         cln_token: CancellationToken,
+        callback_handler: Option<CallbackHandler>,
     ) -> Self {
         Self {
             source: streaming_source,
             sink_writer: streaming_sink,
             cln_token,
             transformer: None,
+            callback_handler,
         }
     }
 
@@ -82,6 +87,7 @@ impl ForwarderBuilder {
             sink_writer: self.sink_writer,
             transformer: self.transformer,
             cln_token: self.cln_token,
+            callback_handler: self.callback_handler,
         }
     }
 }
@@ -102,7 +108,11 @@ impl Forwarder {
 
         let sink_writer_handle = self
             .sink_writer
-            .streaming_write(transformed_messages_stream, self.cln_token.clone())
+            .streaming_write(
+                transformed_messages_stream,
+                self.cln_token.clone(),
+                self.callback_handler.clone(),
+            )
             .await?;
 
         match tokio::try_join!(
@@ -307,7 +317,7 @@ mod tests {
         .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = ForwarderBuilder::new(source.clone(), sink_writer, cln_token.clone())
+        let forwarder = ForwarderBuilder::new(source.clone(), sink_writer, cln_token.clone(), None)
             .transformer(transformer)
             .build();
 
@@ -437,7 +447,7 @@ mod tests {
         .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = ForwarderBuilder::new(source.clone(), sink_writer, cln_token.clone())
+        let forwarder = ForwarderBuilder::new(source.clone(), sink_writer, cln_token.clone(), None)
             .transformer(transformer)
             .build();
 

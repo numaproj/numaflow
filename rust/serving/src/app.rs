@@ -12,9 +12,10 @@ use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use tokio::signal;
 use tower::ServiceBuilder;
+use tower_http::classify::ServerErrorsFailureClass;
 use tower_http::timeout::TimeoutLayer;
-use tower_http::trace::{DefaultOnResponse, TraceLayer};
-use tracing::{info, info_span, Level};
+use tower_http::trace::TraceLayer;
+use tracing::{info, info_span, Span};
 use uuid::Uuid;
 
 use self::{
@@ -93,9 +94,18 @@ where
                         .get::<MatchedPath>()
                         .map(MatchedPath::as_str);
 
-                    info_span!("request", tid, method=?req.method(), matched_path)
+                    info_span!("request", tid, method=?req.method(), path=req.uri().path(), matched_path)
                 })
-                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+                .on_response(
+                    |response: &Response<Body>, latency: Duration, _span: &Span| {
+                        tracing::info!(status=?response.status(), ?latency)
+                    },
+                )
+                .on_failure(
+                    |error: ServerErrorsFailureClass, latency: Duration, _span: &Span| {
+                        tracing::error!(?error, ?latency, "Server error");
+                    },
+                ),
         )
         // capture metrics for all requests
         .layer(middleware::from_fn(capture_metrics))

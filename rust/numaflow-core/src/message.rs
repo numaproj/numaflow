@@ -34,6 +34,13 @@ pub(crate) struct Message {
     pub(crate) id: MessageID,
     /// headers of the message
     pub(crate) headers: HashMap<String, String>,
+    pub(crate) metadata: Option<Metadata>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct Metadata {
+    // name of the previous vertex.
+    pub(crate) previous_vertex: String,
 }
 
 /// Offset of the message which will be used to acknowledge the message.
@@ -212,6 +219,7 @@ impl TryFrom<Bytes> for Message {
             event_time: utc_from_timestamp(message_info.event_time),
             id: id.into(),
             headers: header.headers,
+            metadata: None,
         })
     }
 }
@@ -263,6 +271,7 @@ mod tests {
                 index: 0,
             },
             headers: HashMap::new(),
+            metadata: None,
         };
 
         let result: Result<BytesMut> = message.clone().try_into();

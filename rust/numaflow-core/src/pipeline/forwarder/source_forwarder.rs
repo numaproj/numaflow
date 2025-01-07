@@ -292,6 +292,7 @@ mod tests {
             100,
             tracker_handle.clone(),
             cln_token.clone(),
+            None,
         );
 
         // create a transformer

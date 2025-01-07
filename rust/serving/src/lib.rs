@@ -26,6 +26,8 @@ pub mod source;
 use crate::source::MessageWrapper;
 pub use source::{Message, ServingSource};
 
+pub mod callback;
+
 #[derive(Clone)]
 pub(crate) struct AppState<T> {
     pub(crate) message: mpsc::Sender<MessageWrapper>,

@@ -3,7 +3,7 @@ use std::sync::Arc;
 pub(crate) use serving::ServingSource;
 
 use crate::config::get_vertex_replica;
-use crate::message::{MessageID, StringOffset};
+use crate::message::{MessageID, Metadata, StringOffset};
 use crate::Error;
 use crate::Result;
 
@@ -28,6 +28,9 @@ impl TryFrom<serving::Message> for Message {
                 index: 0,
             },
             headers: message.headers,
+            metadata: Some(Metadata {
+                previous_vertex: get_vertex_name().to_string(),
+            }),
         })
     }
 }

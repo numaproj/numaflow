@@ -50,6 +50,7 @@ struct ServingSourceActor {
     /// has been successfully processed.
     tracker: HashMap<String, oneshot::Sender<()>>,
     vertex_replica_id: u16,
+    callback_url: String,
 }
 
 impl ServingSourceActor {
@@ -72,12 +73,17 @@ impl ServingSourceActor {
         })?;
         let callback_state = CallbackState::new(msg_graph, redis_store).await?;
 
+        let callback_url = format!(
+            "https://{}:{}/v1/process/callback",
+            &settings.host_ip, &settings.app_listen_port
+        );
         tokio::spawn(async move {
             let mut serving_actor = ServingSourceActor {
                 messages: messages_rx,
                 handler_rx,
                 tracker: HashMap::new(),
                 vertex_replica_id,
+                callback_url,
             };
             serving_actor.run().await;
         });
@@ -140,10 +146,16 @@ impl ServingSourceActor {
             };
             let MessageWrapper {
                 confirm_save,
-                message,
+                mut message,
             } = message;
 
             self.tracker.insert(message.id.clone(), confirm_save);
+            message
+                .headers
+                .insert("X-Numaflow-Callback-Url".into(), self.callback_url.clone());
+            message
+                .headers
+                .insert("X-Numaflow-Id".into(), message.id.clone());
             messages.push(message);
         }
         Ok(messages)

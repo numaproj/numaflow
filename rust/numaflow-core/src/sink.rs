@@ -4,6 +4,7 @@ use std::time::Duration;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, Success};
+use serving::callback::CallbackHandler;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -255,6 +256,7 @@ impl SinkWriter {
         &self,
         messages_stream: ReceiverStream<Message>,
         cancellation_token: CancellationToken,
+        callback_handler: Option<CallbackHandler>,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let mut this = self.clone();
@@ -293,7 +295,7 @@ impl SinkWriter {
 
                     let sink_start = time::Instant::now();
                     let total_valid_msgs = batch.len();
-                    match this.write(batch, cancellation_token.clone()).await {
+                    match this.write(batch.clone(), cancellation_token.clone()).await {
                         Ok(_) => {
                             for offset in offsets {
                                 // Delete the message from the tracker
@@ -308,6 +310,20 @@ impl SinkWriter {
                             }
                         }
                     }
+
+                    if let Some(ref callback_handler) = callback_handler {
+                        for message in batch {
+                            let metadata = message.metadata.ok_or_else(|| {
+                                Error::Source(format!(
+                                    "Message does not contain previous vertex name in the metadata"
+                                ))
+                            })?;
+                            callback_handler
+                                .callback(&message.headers, &message.tags, metadata.previous_vertex)
+                                .await
+                                .unwrap(); // FIXME:
+                        }
+                    };
 
                     // publish sink metrics
                     if is_mono_vertex() {
@@ -769,6 +785,7 @@ mod tests {
                     index: i,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             })
             .collect();
 
@@ -804,6 +821,7 @@ mod tests {
                     index: i,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             })
             .collect();
 
@@ -882,6 +900,7 @@ mod tests {
                     index: i,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             })
             .collect();
 
@@ -969,6 +988,7 @@ mod tests {
                     index: i,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             })
             .collect();
 
@@ -1016,6 +1036,7 @@ mod tests {
                 index: 0,
             },
             headers: HashMap::new(),
+            metadata: None,
         };
 
         let request: SinkRequest = message.into();
