@@ -240,8 +240,8 @@ mod tests {
     use tokio::sync::oneshot;
 
     use super::*;
-    use crate::message::StringOffset;
     use crate::message::{Message, MessageID, Offset};
+    use crate::message::{OffsetType, StringOffset};
     use crate::shared::grpc::create_rpc_channel;
 
     struct SimpleTransformer;
@@ -287,8 +287,9 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::Source(OffsetType::String(StringOffset::new("0".to_string(), 0))),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
@@ -366,8 +367,9 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("value_{}", i).into(),
-                offset: Some(Offset::String(StringOffset::new(i.to_string(), 0))),
+                offset: Offset::Source(OffsetType::String(StringOffset::new(i.to_string(), 0))),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: i.to_string().into(),
@@ -450,8 +452,9 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::Source(OffsetType::String(StringOffset::new("0".to_string(), 0))),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),

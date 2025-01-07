@@ -485,7 +485,7 @@ mod tests {
     use crate::Result;
     use std::time::Duration;
 
-    use crate::message::{MessageID, Offset, StringOffset};
+    use crate::message::{MessageID, Offset, OffsetType, StringOffset};
     use crate::shared::grpc::create_rpc_channel;
     use numaflow::mapstream;
     use numaflow::{batchmap, map};
@@ -543,11 +543,9 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Some(Offset::String(crate::message::StringOffset::new(
-                "0".to_string(),
-                0,
-            ))),
+            offset: Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0))),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
@@ -638,8 +636,9 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("value_{}", i).into(),
-                offset: Some(Offset::String(StringOffset::new(i.to_string(), 0))),
+                offset: Offset::ISB(OffsetType::String(StringOffset::new(i.to_string(), 0))),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: i.to_string().into(),
@@ -727,8 +726,9 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0))),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
@@ -767,7 +767,7 @@ mod tests {
     impl batchmap::BatchMapper for SimpleBatchMap {
         async fn batchmap(
             &self,
-            mut input: tokio::sync::mpsc::Receiver<batchmap::Datum>,
+            mut input: mpsc::Receiver<batchmap::Datum>,
         ) -> Vec<batchmap::BatchResponse> {
             let mut responses: Vec<batchmap::BatchResponse> = Vec::new();
             while let Some(datum) = input.recv().await {
@@ -785,7 +785,7 @@ mod tests {
 
     #[tokio::test]
     async fn batch_mapper_operations() -> Result<()> {
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("batch_map.sock");
         let server_info_file = tmp_dir.path().join("batch_map-server-info");
@@ -821,8 +821,9 @@ mod tests {
                 keys: Arc::from(vec!["first".into()]),
                 tags: None,
                 value: "hello".into(),
-                offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+                offset: Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0))),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "0".to_string().into(),
@@ -834,8 +835,9 @@ mod tests {
                 keys: Arc::from(vec!["second".into()]),
                 tags: None,
                 value: "world".into(),
-                offset: Some(Offset::String(StringOffset::new("1".to_string(), 1))),
+                offset: Offset::ISB(OffsetType::String(StringOffset::new("1".to_string(), 1))),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "1".to_string().into(),
@@ -931,8 +933,9 @@ mod tests {
                 keys: Arc::from(vec!["first".into()]),
                 tags: None,
                 value: "hello".into(),
-                offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+                offset: Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0))),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "0".to_string().into(),
@@ -944,8 +947,9 @@ mod tests {
                 keys: Arc::from(vec!["second".into()]),
                 tags: None,
                 value: "world".into(),
-                offset: Some(Offset::String(StringOffset::new("1".to_string(), 1))),
+                offset: Offset::ISB(OffsetType::String(StringOffset::new("1".to_string(), 1))),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "1".to_string().into(),
@@ -1041,8 +1045,9 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "test,map,stream".into(),
-            offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0))),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
@@ -1137,8 +1142,9 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "panic".into(),
-            offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0))),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),

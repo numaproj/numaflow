@@ -1,9 +1,11 @@
 use std::fmt;
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_nats::jetstream::{
     consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
 };
+use prost::Message as ProtoMessage;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
@@ -15,10 +17,11 @@ use tracing::{error, info};
 use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::BufferReaderConfig;
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
+use crate::message::{IntOffset, Message, MessageID, Offset, OffsetType, ReadAck};
 use crate::metrics::{
     pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
 };
+use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
 use crate::Result;
 
@@ -34,6 +37,60 @@ pub(crate) struct JetstreamReader {
     consumer: PullConsumer,
     tracker_handle: TrackerHandle,
     batch_size: usize,
+}
+
+/// JSWrappedMessage is a wrapper around the Jetstream message that includes the
+/// partition index and the vertex name.
+struct JSWrappedMessage {
+    partition_idx: u16,
+    message: async_nats::jetstream::Message,
+    vertex_name: String,
+}
+
+impl TryFrom<JSWrappedMessage> for Message {
+    type Error = Error;
+
+    fn try_from(value: JSWrappedMessage) -> Result<Self> {
+        let msg_info = value.message.info().map_err(|e| {
+            Error::ISB(format!(
+                "Failed to get message info from Jetstream: {:?}",
+                e
+            ))
+        })?;
+
+        let proto_message =
+            numaflow_pb::objects::isb::Message::decode(value.message.payload.clone())
+                .map_err(|e| Error::Proto(e.to_string()))?;
+
+        let header = proto_message
+            .header
+            .ok_or(Error::Proto("Missing header".to_string()))?;
+        let body = proto_message
+            .body
+            .ok_or(Error::Proto("Missing body".to_string()))?;
+        let message_info = header
+            .message_info
+            .ok_or(Error::Proto("Missing message_info".to_string()))?;
+        let offset = Offset::ISB(OffsetType::Int(IntOffset::new(
+            msg_info.stream_sequence,
+            value.partition_idx,
+        )));
+
+        Ok(Message {
+            keys: Arc::from(header.keys.into_boxed_slice()),
+            tags: None,
+            value: body.payload.into(),
+            offset: offset.clone(),
+            event_time: utc_from_timestamp(message_info.event_time),
+            id: MessageID {
+                vertex_name: get_vertex_name().to_string().into(),
+                offset: offset.to_string().into(),
+                index: 0,
+            },
+            headers: header.headers,
+            watermark: None,
+        })
+    }
 }
 
 impl JetstreamReader {
@@ -125,15 +182,14 @@ impl JetstreamReader {
                                     continue;
                                 }
                             };
-                            let msg_info = match jetstream_message.info() {
-                                Ok(info) => info,
-                                Err(e) => {
-                                    error!(?e, ?stream_name, "Failed to get message info from Jetstream");
-                                    continue;
-                                }
+
+                            let js_message = JSWrappedMessage {
+                                partition_idx,
+                                message: jetstream_message.clone(),
+                                vertex_name: get_vertex_name().to_string(),
                             };
 
-                            let mut message: Message = match jetstream_message.payload.clone().try_into() {
+                            let message: Message = match js_message.try_into() {
                                 Ok(message) => message,
                                 Err(e) => {
                                     error!(
@@ -144,23 +200,11 @@ impl JetstreamReader {
                                 }
                             };
 
-                            let offset = Offset::Int(IntOffset::new(
-                                msg_info.stream_sequence,
-                                partition_idx,
-                            ));
-
-                            let message_id = MessageID {
-                                vertex_name: get_vertex_name().to_string().into(),
-                                offset: offset.to_string().into(),
-                                index: 0,
-                            };
-
-                            message.offset = Some(offset.clone());
-                            message.id = message_id.clone();
+                            let offset = message.id.offset.clone();
 
                             // Insert the message into the tracker and wait for the ack to be sent back.
                             let (ack_tx, ack_rx) = oneshot::channel();
-                            tracker_handle.insert(message_id.offset.clone(), ack_tx).await?;
+                            tracker_handle.insert(offset.clone(), ack_tx).await?;
 
                             tokio::spawn(Self::start_work_in_progress(
                                 jetstream_message,
@@ -170,7 +214,7 @@ impl JetstreamReader {
 
                             if let Err(e) = messages_tx.send(message).await {
                                 // nak the read message and return
-                                tracker_handle.discard(message_id.offset.clone()).await?;
+                                tracker_handle.discard(offset).await?;
                                 return Err(Error::ISB(format!(
                                     "Failed to send message to receiver: {:?}",
                                     e
@@ -269,14 +313,15 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
 
+    use super::*;
+    use crate::message::{Message, MessageID};
+    use crate::shared::grpc::prost_timestamp_from_utc;
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
-    use chrono::Utc;
+    use chrono::{TimeZone, Utc};
+    use numaflow_pb::objects::isb::{Body, Header, MessageId, MessageInfo};
     use tokio::time::sleep;
-
-    use super::*;
-    use crate::message::{Message, MessageID};
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -338,12 +383,13 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
             };
@@ -437,12 +483,13 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("{}-0", i + 1).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
             };

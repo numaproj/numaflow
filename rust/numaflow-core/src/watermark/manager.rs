@@ -3,11 +3,14 @@ use crate::watermark::WMB;
 use bytes::Buf;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::SystemTime;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 use tracing::debug;
 
-// introduce enum status
+const DEFAULT_PROCESSOR_REFRESH_RATE: u16 = 5;
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Status {
     InActive,
@@ -52,6 +55,15 @@ pub(crate) struct ProcessorManager {
     partition_count: u16,
     processors: Arc<Mutex<HashMap<String, Processor>>>,
     heartbeats: Arc<Mutex<HashMap<String, u32>>>,
+    handles: Vec<tokio::task::JoinHandle<()>>,
+}
+
+impl Drop for ProcessorManager {
+    fn drop(&mut self) {
+        for handle in self.handles.drain(..) {
+            handle.abort();
+        }
+    }
 }
 
 impl ProcessorManager {
@@ -63,18 +75,55 @@ impl ProcessorManager {
         let processors = Arc::new(Mutex::new(HashMap::new()));
         let heartbeats = Arc::new(Mutex::new(HashMap::new()));
 
-        tokio::spawn(Self::start_ot_watcher(ot_watcher, Arc::clone(&processors)));
-        tokio::spawn(Self::start_hb_watcher(
+        let ot_handle = tokio::spawn(Self::start_ot_watcher(ot_watcher, Arc::clone(&processors)));
+        let hb_handle = tokio::spawn(Self::start_hb_watcher(
             partition_count,
             hb_watcher,
             Arc::clone(&heartbeats),
             Arc::clone(&processors),
+        ));
+        let refresh_handle = tokio::spawn(Self::start_refreshing_processors(
+            DEFAULT_PROCESSOR_REFRESH_RATE,
+            Arc::clone(&processors),
+            Arc::clone(&heartbeats),
         ));
 
         ProcessorManager {
             partition_count,
             processors,
             heartbeats,
+            handles: vec![ot_handle, hb_handle, refresh_handle],
+        }
+    }
+
+    async fn start_refreshing_processors(
+        refreshing_processors_rate: u16,
+        processors: Arc<Mutex<HashMap<String, Processor>>>,
+        heartbeats: Arc<Mutex<HashMap<String, u32>>>,
+    ) {
+        let mut interval =
+            tokio::time::interval(Duration::from_secs(refreshing_processors_rate as u64));
+        loop {
+            interval.tick().await;
+            let current_time = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64;
+
+            let heartbeats = heartbeats.lock().await;
+            let mut processors = processors.lock().await;
+
+            for (p_name, &p_time) in heartbeats.iter() {
+                if let Some(p) = processors.get_mut(p_name) {
+                    if current_time - p_time as i64 > 10 * refreshing_processors_rate as i64 {
+                        p.set_status(Status::Deleted);
+                    } else if current_time - p_time as i64 > refreshing_processors_rate as i64 {
+                        p.set_status(Status::InActive);
+                    } else {
+                        p.set_status(Status::Active);
+                    }
+                }
+            }
         }
     }
 

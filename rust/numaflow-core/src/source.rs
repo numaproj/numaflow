@@ -306,7 +306,7 @@ impl Source {
                 let mut ack_batch = Vec::with_capacity(n);
                 for message in messages {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
-                    let offset = message.offset.clone().expect("offset can never be none");
+                    let offset = message.offset.clone();
 
                     // insert the offset and the ack one shot in the tracker.
                     tracker_handle
@@ -546,7 +546,7 @@ mod tests {
         for _ in 0..100 {
             let message = stream.next().await.unwrap();
             assert_eq!(message.value, "hello".as_bytes());
-            offsets.push(message.offset.clone().unwrap());
+            offsets.push(message.offset.clone());
         }
 
         // ack all the messages

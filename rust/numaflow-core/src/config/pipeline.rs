@@ -196,6 +196,7 @@ pub(crate) struct ToVertexConfig {
     pub(crate) name: String,
     pub(crate) writer_config: BufferWriterConfig,
     pub(crate) conditions: Option<Box<ForwardConditions>>,
+    pub(crate) watermark_config: Option<WatermarkConfig>,
 }
 
 impl PipelineConfig {
@@ -371,6 +372,7 @@ impl PipelineConfig {
                         .unwrap_or(default_writer_config.buffer_full_strategy),
                 },
                 conditions: edge.conditions,
+                watermark_config: None,
             });
         }
 
@@ -529,6 +531,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                watermark_config: None,
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
@@ -582,6 +585,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                watermark_config: None,
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {

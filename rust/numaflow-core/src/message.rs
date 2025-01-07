@@ -9,7 +9,6 @@ use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 
 use crate::shared::grpc::prost_timestamp_from_utc;
-use crate::shared::grpc::utc_from_timestamp;
 use crate::Error;
 
 const DROP: &str = "U+005C__DROP__";
@@ -27,9 +26,11 @@ pub(crate) struct Message {
     /// offset of the message, it is optional because offset is only
     /// available when we read the message, and we don't persist the
     /// offset in the ISB.
-    pub(crate) offset: Option<Offset>,
+    pub(crate) offset: Offset,
     /// event time of the message
     pub(crate) event_time: DateTime<Utc>,
+    /// watermark of the message
+    pub(crate) watermark: Option<DateTime<Utc>>,
     /// id of the message
     pub(crate) id: MessageID,
     /// headers of the message
@@ -39,15 +40,30 @@ pub(crate) struct Message {
 /// Offset of the message which will be used to acknowledge the message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum Offset {
+    Source(OffsetType),
+    ISB(OffsetType),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) enum OffsetType {
     Int(IntOffset),
     String(StringOffset),
+}
+
+impl fmt::Display for OffsetType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OffsetType::Int(offset) => write!(f, "{}", offset),
+            OffsetType::String(offset) => write!(f, "{}", offset),
+        }
+    }
 }
 
 impl fmt::Display for Offset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Offset::Int(offset) => write!(f, "{}", offset),
-            Offset::String(offset) => write!(f, "{}", offset),
+            Offset::Source(offset) => write!(f, "{}", offset),
+            Offset::ISB(offset) => write!(f, "{}", offset),
         }
     }
 }
@@ -63,13 +79,13 @@ impl Message {
 
 /// IntOffset is integer based offset enum type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IntOffset {
+pub(crate) struct IntOffset {
     pub(crate) offset: u64,
     pub(crate) partition_idx: u16,
 }
 
 impl IntOffset {
-    pub fn new(seq: u64, partition_idx: u16) -> Self {
+    pub(crate) fn new(seq: u64, partition_idx: u16) -> Self {
         Self {
             offset: seq,
             partition_idx,
@@ -186,36 +202,6 @@ impl TryFrom<Message> for BytesMut {
     }
 }
 
-impl TryFrom<Bytes> for Message {
-    type Error = Error;
-
-    fn try_from(bytes: Bytes) -> Result<Self, Self::Error> {
-        let proto_message = numaflow_pb::objects::isb::Message::decode(bytes)
-            .map_err(|e| Error::Proto(e.to_string()))?;
-
-        let header = proto_message
-            .header
-            .ok_or(Error::Proto("Missing header".to_string()))?;
-        let body = proto_message
-            .body
-            .ok_or(Error::Proto("Missing body".to_string()))?;
-        let message_info = header
-            .message_info
-            .ok_or(Error::Proto("Missing message_info".to_string()))?;
-        let id = header.id.ok_or(Error::Proto("Missing id".to_string()))?;
-
-        Ok(Message {
-            keys: Arc::from(header.keys.into_boxed_slice()),
-            tags: None,
-            value: body.payload.into(),
-            offset: None,
-            event_time: utc_from_timestamp(message_info.event_time),
-            id: id.into(),
-            headers: header.headers,
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::error::Result;
@@ -229,10 +215,10 @@ mod tests {
 
     #[test]
     fn test_offset_display() {
-        let offset = Offset::String(StringOffset {
+        let offset = Offset::Source(OffsetType::String(StringOffset {
             offset: "123".to_string().into(),
             partition_idx: 1,
-        });
+        }));
         assert_eq!(format!("{}", offset), "123-1");
     }
 
@@ -252,11 +238,12 @@ mod tests {
             keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),
-            offset: Some(Offset::String(StringOffset {
+            offset: Offset::ISB(OffsetType::String(StringOffset {
                 offset: "123".to_string().into(),
                 partition_idx: 0,
             })),
             event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex".to_string().into(),
                 offset: "123".to_string().into(),
@@ -287,44 +274,6 @@ mod tests {
         let mut buf = Vec::new();
         prost::Message::encode(&proto_message, &mut buf).unwrap();
         assert_eq!(result.unwrap(), buf);
-    }
-
-    #[test]
-    fn test_vec_u8_to_message() {
-        let proto_message = ProtoMessage {
-            header: Some(Header {
-                message_info: Some(MessageInfo {
-                    event_time: prost_timestamp_from_utc(Utc.timestamp_opt(1627846261, 0).unwrap()),
-                    is_late: false,
-                }),
-                kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
-                id: Some(MessageId {
-                    vertex_name: "vertex".to_string(),
-                    offset: "123".to_string(),
-                    index: 0,
-                }),
-                keys: vec!["key1".to_string()],
-                headers: HashMap::new(),
-            }),
-            body: Some(Body {
-                payload: vec![1, 2, 3],
-            }),
-        };
-
-        let mut buf = BytesMut::new();
-        prost::Message::encode(&proto_message, &mut buf).unwrap();
-        let buf = buf.freeze();
-
-        let result: Result<Message> = buf.try_into();
-        assert!(result.is_ok());
-
-        let message = result.unwrap();
-        assert_eq!(message.keys.to_vec(), vec!["key1".to_string()]);
-        assert_eq!(message.value, vec![1, 2, 3]);
-        assert_eq!(
-            message.event_time,
-            Utc.timestamp_opt(1627846261, 0).unwrap()
-        );
     }
 
     #[test]
@@ -365,10 +314,10 @@ mod tests {
         assert_eq!(string_offset.partition_idx, 1);
         assert_eq!(format!("{}", string_offset), "42-1");
 
-        let offset_int = Offset::Int(int_offset);
+        let offset_int = Offset::Source(OffsetType::Int(int_offset));
         assert_eq!(format!("{}", offset_int), "42-1");
 
-        let offset_string = Offset::String(string_offset);
+        let offset_string = Offset::Source(OffsetType::String(string_offset));
         assert_eq!(format!("{}", offset_string), "42-1");
     }
 }

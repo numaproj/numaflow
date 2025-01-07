@@ -343,6 +343,7 @@ mod tests {
     use crate::config::components::source::SourceType;
     use crate::config::pipeline::map::{MapType, UserDefinedConfig};
     use crate::config::pipeline::PipelineConfig;
+    use crate::message::OffsetType;
     use crate::pipeline::pipeline::isb;
     use crate::pipeline::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
     use crate::pipeline::pipeline::VertexType;
@@ -428,6 +429,7 @@ mod tests {
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
+                watermark_config: None,
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
@@ -534,8 +536,9 @@ mod tests {
                 keys: Arc::from(vec!["key1".to_string()]),
                 tags: None,
                 value: vec![1, 2, 3].into(),
-                offset: Some(Offset::String(StringOffset::new("123".to_string(), 0))),
+                offset: Offset::ISB(OffsetType::String(StringOffset::new("123".to_string(), 0))),
                 event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: "123".to_string().into(),
@@ -731,8 +734,9 @@ mod tests {
                 keys: Arc::from(vec!["key1".to_string()]),
                 tags: None,
                 value: vec![1, 2, 3].into(),
-                offset: Some(Offset::String(StringOffset::new("123".to_string(), 0))),
+                offset: Offset::ISB(OffsetType::String(StringOffset::new("123".to_string(), 0))),
                 event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: "123".to_string().into(),
@@ -822,6 +826,7 @@ mod tests {
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
+                watermark_config: None,
             }],
             from_vertex_config: vec![FromVertexConfig {
                 name: "map-in".to_string(),

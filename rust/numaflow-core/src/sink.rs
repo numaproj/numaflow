@@ -714,7 +714,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::message::{Message, MessageID, Offset, ReadAck, StringOffset};
+    use crate::message::{IntOffset, Message, MessageID, Offset, OffsetType, ReadAck};
     use crate::shared::grpc::create_rpc_channel;
     use chrono::{TimeZone, Utc};
     use numaflow::sink;
@@ -761,12 +761,13 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
             })
@@ -796,12 +797,13 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
             })
@@ -874,12 +876,13 @@ mod tests {
                 keys: Arc::from(vec!["error".to_string()]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
             })
@@ -961,12 +964,13 @@ mod tests {
                 keys: Arc::from(vec!["fallback".to_string()]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
             })
@@ -1005,11 +1009,9 @@ mod tests {
             keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),
-            offset: Some(Offset::String(StringOffset {
-                offset: "123".to_string().into(),
-                partition_idx: 0,
-            })),
+            offset: Offset::ISB(OffsetType::Int(IntOffset::new(0, 0))),
             event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex".to_string().into(),
                 offset: "123".to_string().into(),

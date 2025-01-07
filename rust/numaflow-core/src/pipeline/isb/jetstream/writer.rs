@@ -1,3 +1,4 @@
+use crate::message::OffsetType;
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,7 +13,6 @@ use async_nats::jetstream::Context;
 use bytes::{Bytes, BytesMut};
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
-use tokio::time;
 use tokio::time::{sleep, Instant};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
@@ -185,7 +185,7 @@ impl JetstreamWriter {
             let mut hash = DefaultHasher::new();
 
             let mut processed_msgs_count: usize = 0;
-            let mut last_logged_at = time::Instant::now();
+            let mut last_logged_at = Instant::now();
 
             while let Some(message) = messages_stream.next().await {
                 // if message needs to be dropped, ack and continue
@@ -361,7 +361,7 @@ impl JetstreamWriter {
                         }
                         offsets.push((
                             stream.clone(),
-                            Offset::Int(IntOffset::new(ack.sequence, stream.1)),
+                            Offset::ISB(OffsetType::Int(IntOffset::new(ack.sequence, stream.1))),
                         ));
                         tracker_handle
                             .delete(result.offset.clone())
@@ -391,7 +391,10 @@ impl JetstreamWriter {
                                 }
                                 offsets.push((
                                     stream.clone(),
-                                    Offset::Int(IntOffset::new(ack.sequence, stream.1)),
+                                    Offset::ISB(OffsetType::Int(IntOffset::new(
+                                        ack.sequence,
+                                        stream.1,
+                                    ))),
                                 ));
                             }
                             Err(e) => {
@@ -533,6 +536,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                watermark_config: None,
             }],
             context.clone(),
             100,
@@ -544,8 +548,9 @@ mod tests {
             keys: Arc::from(vec!["key_0".to_string()]),
             tags: None,
             value: "message 0".as_bytes().to_vec().into(),
-            offset: None,
+            offset: Offset::ISB(OffsetType::Int(IntOffset::new(0, 0))),
             event_time: Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex".to_string().into(),
                 offset: "offset_0".to_string().into(),
@@ -603,8 +608,9 @@ mod tests {
             keys: Arc::from(vec!["key_0".to_string()]),
             tags: None,
             value: "message 0".as_bytes().to_vec().into(),
-            offset: None,
+            offset: Offset::ISB(OffsetType::Int(IntOffset::new(0, 0))),
             event_time: Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex".to_string().into(),
                 offset: "offset_0".to_string().into(),
@@ -673,6 +679,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                watermark_config: None,
             }],
             context.clone(),
             100,
@@ -687,14 +694,15 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
                 event_time: Utc::now(),
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
+                watermark: None,
             };
             let paf = writer
                 .write(
@@ -712,8 +720,9 @@ mod tests {
             keys: Arc::from(vec!["key_11".to_string()]),
             tags: None,
             value: vec![0; 1025].into(),
-            offset: None,
+            offset: Offset::ISB(OffsetType::Int(IntOffset::new(11, 0))),
             event_time: Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex".to_string().into(),
                 offset: "offset_11".to_string().into(),
@@ -874,6 +883,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                watermark_config: None,
             }],
             context.clone(),
             100,
@@ -964,6 +974,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                watermark_config: None,
             }],
             context.clone(),
             100,
@@ -979,12 +990,13 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
             };
@@ -1052,6 +1064,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                watermark_config: None,
             }],
             context.clone(),
             100,
@@ -1067,12 +1080,13 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
             };
@@ -1094,8 +1108,9 @@ mod tests {
             keys: Arc::from(vec!["key_101".to_string()]),
             tags: None,
             value: vec![0; 1025].into(),
-            offset: None,
+            offset: Offset::ISB(OffsetType::Int(IntOffset::new(101, 0))),
             event_time: Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex".to_string().into(),
                 offset: "offset_101".to_string().into(),
@@ -1162,6 +1177,7 @@ mod tests {
                         operator: Some("and".to_string()),
                         values: vec!["tag1".to_string(), "tag2".to_string()],
                     }))),
+                    watermark_config: None,
                 },
                 ToVertexConfig {
                     name: "vertex2".to_string(),
@@ -1177,6 +1193,7 @@ mod tests {
                         operator: Some("or".to_string()),
                         values: vec!["tag2".to_string()],
                     }))),
+                    watermark_config: None,
                 },
                 ToVertexConfig {
                     name: "vertex3".to_string(),
@@ -1192,6 +1209,7 @@ mod tests {
                         operator: Some("not".to_string()),
                         values: vec!["tag1".to_string()],
                     }))),
+                    watermark_config: None,
                 },
             ],
             context.clone(),
@@ -1207,12 +1225,13 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: Some(Arc::from(vec!["tag1".to_string(), "tag2".to_string()])),
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
             };

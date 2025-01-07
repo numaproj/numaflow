@@ -1,19 +1,22 @@
-use crate::config::pipeline::FromVertexConfig;
+use crate::config::pipeline::{FromVertexConfig, WatermarkConfig};
 use crate::error::{Error, Result};
 use crate::watermark::manager::ProcessorManager;
+use crate::watermark::Watermark;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+#[allow(dead_code)]
 pub(crate) struct Fetcher {
     processor_managers: Arc<RwLock<HashMap<String, ProcessorManager>>>,
     last_processed_wm: Arc<RwLock<HashMap<String, Vec<i64>>>>,
 }
 
 impl Fetcher {
-    pub(crate) async fn new(
+    async fn new(
         from_vertex_configs: Vec<FromVertexConfig>,
         js_context: async_nats::jetstream::Context,
+        source_watermark_config: Option<WatermarkConfig>,
     ) -> Result<Self> {
         let mut processor_managers = HashMap::new();
         let mut last_processed_wm = HashMap::new();
@@ -63,10 +66,14 @@ impl Fetcher {
         })
     }
 
-    pub(crate) async fn fetch_watermark(&self, offset: u32, partition_idx: u16) -> Result<i64> {
-        let all_processors = self.processor_managers.read().await;
+    pub(crate) async fn fetch_watermark(
+        &self,
+        offset: u64,
+        partition_idx: u16,
+    ) -> Result<Watermark> {
+        let pms = self.processor_managers.read().await;
 
-        for (edge, processor_manager) in all_processors.iter() {
+        for (edge, processor_manager) in pms.iter() {
             let mut epoch = i64::MAX;
 
             for (name, processor) in processor_manager.get_all_processors().await {
@@ -85,25 +92,57 @@ impl Fetcher {
 
                 // if the pod is not active and the head offset of all the timelines is less than the input offset,
                 // delete the processor (this means we are processing data later than what the stale processor has processed)
-                if processor.is_deleted() && offset > head_offset as u32 {
+                if processor.is_deleted() && offset > head_offset as u64 {
                     processor_manager.delete_processor(name.as_str()).await;
                 }
             }
 
-            // update the last processed watermark for this particular edge and the partition
-            let mut last_processed_wm = self.last_processed_wm.write().await;
-            last_processed_wm.get_mut(edge).unwrap()[partition_idx as usize] = epoch;
+            if epoch != i64::MAX {
+                // update the last processed watermark for this particular edge and the partition
+                let mut last_processed_wm = self.last_processed_wm.write().await;
+                last_processed_wm.get_mut(edge).unwrap()[partition_idx as usize] = epoch;
+            }
         }
 
         // iterate over the last processed wm and return the min
         self.get_watermark().await
     }
 
+    pub(crate) async fn fetch_source_watermark(&self) -> Result<Watermark> {
+        let pms = self.processor_managers.read().await;
+        let mut min_wm = i64::MAX;
+
+        for (edge, processor_manager) in pms.iter() {
+            for (name, processor) in processor_manager.get_all_processors().await {
+                if !processor.is_active() {
+                    continue;
+                }
+                let head_wm = processor
+                    .timelines
+                    .first()
+                    .unwrap()
+                    .get_head_watermark()
+                    .await;
+
+                if head_wm < min_wm {
+                    min_wm = head_wm;
+                }
+            }
+        }
+
+        if min_wm == i64::MAX {
+            return Ok(Watermark::from_timestamp_millis(-1).unwrap());
+        }
+
+        Ok(Watermark::from_timestamp_millis(min_wm).unwrap())
+    }
+
     pub(crate) async fn fetch_head_idle_watermark(&self, partition_idx: u16) -> Result<i64> {
-        let processors = self.processor_managers.read().await;
+        let pms = self.processor_managers.read().await;
 
         let mut min_wm = i64::MAX;
-        for processor_manager in processors.values() {
+        for (edge, processor_manager) in pms.iter() {
+            let mut epoch = i64::MAX;
             for processor in processor_manager.get_all_processors().await.values() {
                 if !processor.is_active() {
                     continue;
@@ -120,20 +159,31 @@ impl Fetcher {
                     if !wmb.idle {
                         return Ok(-1);
                     }
-                    if wmb.watermark < min_wm {
-                        min_wm = wmb.watermark;
+                    if wmb.watermark < epoch {
+                        epoch = wmb.watermark;
                     }
                 }
+            }
+
+            if epoch < min_wm {
+                min_wm = epoch;
+            }
+
+            if epoch != i64::MAX {
+                // update the last processed watermark for this particular edge and the partition
+                let mut last_processed_wm = self.last_processed_wm.write().await;
+                last_processed_wm.get_mut(edge).unwrap()[partition_idx as usize] = epoch;
             }
         }
 
         if min_wm == i64::MAX {
             return Ok(-1);
         }
+
         Ok(min_wm)
     }
 
-    async fn get_watermark(&self) -> Result<i64> {
+    async fn get_watermark(&self) -> Result<Watermark> {
         let mut min_wm = i64::MAX;
         let last_processed_wm = self.last_processed_wm.read().await;
 
@@ -146,9 +196,9 @@ impl Fetcher {
         }
 
         if min_wm == i64::MAX {
-            return Ok(-1);
+            return Ok(Watermark::from_timestamp_millis(-1).unwrap());
         }
 
-        Ok(min_wm)
+        Ok(Watermark::from_timestamp_millis(min_wm).unwrap())
     }
 }

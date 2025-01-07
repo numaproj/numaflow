@@ -12,7 +12,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
-use crate::message::{Message, MessageID, Offset, StringOffset};
+use crate::message::{Message, MessageID, Offset, OffsetType, StringOffset};
 use crate::reader::LagReader;
 use crate::shared::grpc::utc_from_timestamp;
 use crate::source::{SourceAcker, SourceReader};
@@ -109,10 +109,10 @@ impl TryFrom<read_response::Result> for Message {
 
     fn try_from(result: read_response::Result) -> Result<Self> {
         let source_offset = match result.offset {
-            Some(o) => Offset::String(StringOffset {
+            Some(o) => Offset::Source(OffsetType::String(StringOffset {
                 offset: BASE64_STANDARD.encode(o.offset).into(),
                 partition_idx: o.partition_id as u16,
-            }),
+            })),
             None => return Err(Error::Source("Offset not found".to_string())),
         };
 
@@ -120,7 +120,7 @@ impl TryFrom<read_response::Result> for Message {
             keys: Arc::from(result.keys),
             tags: None,
             value: result.payload.into(),
-            offset: Some(source_offset.clone()),
+            offset: source_offset.clone(),
             event_time: utc_from_timestamp(result.event_time),
             id: MessageID {
                 vertex_name: config::get_vertex_name().to_string().into(),
@@ -128,6 +128,7 @@ impl TryFrom<read_response::Result> for Message {
                 index: 0,
             },
             headers: result.headers,
+            watermark: None,
         })
     }
 }
@@ -137,13 +138,19 @@ impl TryFrom<Offset> for source::Offset {
 
     fn try_from(offset: Offset) -> std::result::Result<Self, Self::Error> {
         match offset {
-            Offset::Int(_) => Err(Error::Source("IntOffset not supported".to_string())),
-            Offset::String(o) => Ok(numaflow_pb::clients::source::Offset {
-                offset: BASE64_STANDARD
-                    .decode(o.offset)
-                    .expect("we control the encoding, so this should never fail"),
-                partition_id: o.partition_idx as i32,
-            }),
+            Offset::ISB(_) => Err(Error::Source("ISB offset not valid for source".to_string())),
+            Offset::Source(o) => match o {
+                OffsetType::String(StringOffset {
+                    offset,
+                    partition_idx,
+                }) => Ok(source::Offset {
+                    offset: BASE64_STANDARD
+                        .decode(offset)
+                        .expect("we control the encoding, so this should never fail"),
+                    partition_id: partition_idx as i32,
+                }),
+                OffsetType::Int(_) => Err(Error::Source("IntOffset not supported".to_string())),
+            },
         }
     }
 }
@@ -384,7 +391,7 @@ mod tests {
         assert_eq!(messages.len(), 5);
 
         let response = src_ack
-            .ack(messages.iter().map(|m| m.offset.clone().unwrap()).collect())
+            .ack(messages.iter().map(|m| m.offset.clone()).collect())
             .await;
         assert!(response.is_ok());
 
@@ -432,13 +439,15 @@ mod tests {
     #[test]
     fn test_offset_conversion() {
         // Test conversion from Offset to AckRequest for StringOffset
-        let offset =
-            crate::message::Offset::String(StringOffset::new(BASE64_STANDARD.encode("42"), 1));
+        let offset = crate::message::Offset::Source(OffsetType::String(StringOffset::new(
+            BASE64_STANDARD.encode("42"),
+            1,
+        )));
         let offset: Result<numaflow_pb::clients::source::Offset> = offset.try_into();
         assert_eq!(offset.unwrap().partition_id, 1);
 
         // Test conversion from Offset to AckRequest for IntOffset (should fail)
-        let offset = crate::message::Offset::Int(IntOffset::new(42, 1));
+        let offset = crate::message::Offset::Source(OffsetType::Int(IntOffset::new(42, 1)));
         let result: Result<numaflow_pb::clients::source::Offset> = offset.try_into();
         assert!(result.is_err());
     }

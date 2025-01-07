@@ -287,6 +287,7 @@ mod tests {
                 },
                 conditions: None,
                 name: "test-vertex".to_string(),
+                watermark_config: None,
             }],
             context.clone(),
             100,

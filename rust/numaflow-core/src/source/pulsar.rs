@@ -3,23 +3,27 @@ use std::time::Duration;
 
 use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig};
 
-use crate::config::get_vertex_name;
+use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, Offset};
+use crate::message::{IntOffset, Message, MessageID, Offset, OffsetType};
 use crate::source;
 
 impl TryFrom<PulsarMessage> for Message {
     type Error = Error;
 
     fn try_from(message: PulsarMessage) -> crate::Result<Self> {
-        let offset = Offset::Int(IntOffset::new(message.offset, 1)); // FIXME: partition id
+        let offset = Offset::Source(OffsetType::Int(IntOffset::new(
+            message.offset,
+            *get_vertex_replica(),
+        ))); // FIXME: partition id
 
         Ok(Message {
             keys: Arc::from(vec![message.key]),
             tags: None,
             value: message.payload,
-            offset: Some(offset.clone()),
+            offset: offset.clone(),
             event_time: message.event_time,
+            watermark: None,
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: offset.to_string().into(),
@@ -76,7 +80,7 @@ impl source::SourceAcker for PulsarSource {
     async fn ack(&mut self, offsets: Vec<Offset>) -> crate::error::Result<()> {
         let mut pulsar_offsets = Vec::with_capacity(offsets.len());
         for offset in offsets {
-            let Offset::Int(int_offset) = offset else {
+            let Offset::Source(OffsetType::Int(int_offset)) = offset else {
                 return Err(Error::Source(format!(
                     "Expected Offset::Int type for Pulsar. offset={offset:?}"
                 )));
@@ -153,7 +157,7 @@ mod tests {
         let messages = pulsar.read().await?;
         assert_eq!(messages.len(), 10);
 
-        let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset.unwrap()).collect();
+        let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset).collect();
 
         pulsar.ack(offsets).await?;
 
