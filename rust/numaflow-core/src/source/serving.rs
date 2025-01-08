@@ -139,6 +139,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "redis-tests")]
     #[tokio::test]
     async fn test_serving_source_reader_acker() -> Result<()> {
         let settings = Settings {
@@ -146,6 +147,10 @@ mod tests {
             ..Default::default()
         };
         let settings = Arc::new(settings);
+        // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
+        // ServingSource starts an Axum HTTPS server in the background. Rustls is used to generate
+        // self-signed certs when starting the server.
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let mut serving_source = ServingSource::new(
             Arc::clone(&settings),
             10,

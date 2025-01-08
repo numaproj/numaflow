@@ -65,7 +65,7 @@ pub(crate) struct Edge {
 /// DCG (directed compute graph) of the pipeline with minimal information build using vertices and edges
 /// from the pipeline spec
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
-pub(crate) struct PipelineDCG {
+pub struct PipelineDCG {
     pub(crate) vertices: Vec<Vertex>,
     pub(crate) edges: Vec<Edge>,
 }
