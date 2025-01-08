@@ -281,7 +281,7 @@ impl SinkWriter {
 
                     let offsets = batch
                         .iter()
-                        .map(|msg| msg.id.offset.clone())
+                        .map(|msg| msg.offset.clone())
                         .collect::<Vec<_>>();
 
                     let total_msgs = batch.len();
@@ -815,7 +815,7 @@ mod tests {
             let (ack_tx, ack_rx) = oneshot::channel();
             ack_rxs.push(ack_rx);
             tracker_handle
-                .insert(msg.id.offset.clone(), ack_tx)
+                .insert(msg.offset.clone(), ack_tx)
                 .await
                 .unwrap();
             let _ = tx.send(msg).await;
@@ -894,7 +894,7 @@ mod tests {
             let (ack_tx, ack_rx) = oneshot::channel();
             ack_rxs.push(ack_rx);
             tracker_handle
-                .insert(msg.id.offset.clone(), ack_tx)
+                .insert(msg.offset.clone(), ack_tx)
                 .await
                 .unwrap();
             let _ = tx.send(msg).await;
@@ -981,7 +981,7 @@ mod tests {
         for msg in messages {
             let (ack_tx, ack_rx) = oneshot::channel();
             tracker_handle
-                .insert(msg.id.offset.clone(), ack_tx)
+                .insert(msg.offset.clone(), ack_tx)
                 .await
                 .unwrap();
             ack_rxs.push(ack_rx);

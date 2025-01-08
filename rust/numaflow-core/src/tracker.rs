@@ -9,12 +9,10 @@
 //! In the future Watermark will also be propagated based on this.
 
 use std::collections::HashMap;
-
-use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::error::Error;
-use crate::message::ReadAck;
+use crate::message::{Offset, ReadAck};
 use crate::Result;
 
 /// TrackerEntry represents the state of a tracked message.
@@ -201,11 +199,11 @@ impl TrackerHandle {
     /// Inserts a new message into the Tracker with the given offset and acknowledgment sender.
     pub(crate) async fn insert(
         &self,
-        offset: Bytes,
+        offset: Offset,
         ack_send: oneshot::Sender<ReadAck>,
     ) -> Result<()> {
         let message = ActorMessage::Insert {
-            offset: String::from_utf8_lossy(&offset).to_string(),
+            offset: offset.to_string(),
             ack_send,
         };
         self.sender
@@ -216,9 +214,9 @@ impl TrackerHandle {
     }
 
     /// Updates an existing message in the Tracker with the given offset, count, and EOF status.
-    pub(crate) async fn update(&self, offset: Bytes, count: u32, eof: bool) -> Result<()> {
+    pub(crate) async fn update(&self, offset: Offset, count: u32, eof: bool) -> Result<()> {
         let message = ActorMessage::Update {
-            offset: String::from_utf8_lossy(&offset).to_string(),
+            offset: offset.to_string(),
             count,
             eof,
         };
@@ -230,9 +228,9 @@ impl TrackerHandle {
     }
 
     /// Deletes a message from the Tracker with the given offset.
-    pub(crate) async fn delete(&self, offset: Bytes) -> Result<()> {
+    pub(crate) async fn delete(&self, offset: Offset) -> Result<()> {
         let message = ActorMessage::Delete {
-            offset: String::from_utf8_lossy(&offset).to_string(),
+            offset: offset.to_string(),
         };
         self.sender
             .send(message)
@@ -242,9 +240,9 @@ impl TrackerHandle {
     }
 
     /// Discards a message from the Tracker with the given offset.
-    pub(crate) async fn discard(&self, offset: Bytes) -> Result<()> {
+    pub(crate) async fn discard(&self, offset: Offset) -> Result<()> {
         let message = ActorMessage::Discard {
-            offset: String::from_utf8_lossy(&offset).to_string(),
+            offset: offset.to_string(),
         };
         self.sender
             .send(message)
@@ -283,30 +281,26 @@ impl TrackerHandle {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::message::{IntOffset, OffsetType, StringOffset};
     use tokio::sync::oneshot;
     use tokio::time::{timeout, Duration};
-
-    use super::*;
 
     #[tokio::test]
     async fn test_insert_update_delete() {
         let handle = TrackerHandle::new();
         let (ack_send, ack_recv) = oneshot::channel();
 
+        let offset = Offset::ISB(OffsetType::Int(IntOffset::new(0, 0)));
+
         // Insert a new message
-        handle
-            .insert("offset1".to_string().into(), ack_send)
-            .await
-            .unwrap();
+        handle.insert(offset.clone(), ack_send).await.unwrap();
 
         // Update the message
-        handle
-            .update("offset1".to_string().into(), 1, true)
-            .await
-            .unwrap();
+        handle.update(offset.clone(), 1, true).await.unwrap();
 
         // Delete the message
-        handle.delete("offset1".to_string().into()).await.unwrap();
+        handle.delete(offset).await.unwrap();
 
         // Verify that the message was deleted and ack was received
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
@@ -319,23 +313,18 @@ mod tests {
     async fn test_update_with_multiple_deletes() {
         let handle = TrackerHandle::new();
         let (ack_send, ack_recv) = oneshot::channel();
+        let offset = Offset::ISB(OffsetType::Int(IntOffset::new(0, 0)));
 
         // Insert a new message
-        handle
-            .insert("offset1".to_string().into(), ack_send)
-            .await
-            .unwrap();
+        handle.insert(offset.clone(), ack_send).await.unwrap();
 
         // Update the message with a count of 3
-        handle
-            .update("offset1".to_string().into(), 3, true)
-            .await
-            .unwrap();
+        handle.update(offset.clone(), 3, true).await.unwrap();
 
         // Delete the message three times
-        handle.delete("offset1".to_string().into()).await.unwrap();
-        handle.delete("offset1".to_string().into()).await.unwrap();
-        handle.delete("offset1".to_string().into()).await.unwrap();
+        handle.delete(offset.clone()).await.unwrap();
+        handle.delete(offset.clone()).await.unwrap();
+        handle.delete(offset.clone()).await.unwrap();
 
         // Verify that the message was deleted and ack was received after the third delete
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
@@ -348,15 +337,13 @@ mod tests {
     async fn test_discard() {
         let handle = TrackerHandle::new();
         let (ack_send, ack_recv) = oneshot::channel();
+        let offset = Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0)));
 
         // Insert a new message
-        handle
-            .insert("offset1".to_string().into(), ack_send)
-            .await
-            .unwrap();
+        handle.insert(offset.clone(), ack_send).await.unwrap();
 
         // Discard the message
-        handle.discard("offset1".to_string().into()).await.unwrap();
+        handle.discard(offset).await.unwrap();
 
         // Verify that the message was discarded and nak was received
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
@@ -369,21 +356,16 @@ mod tests {
     async fn test_discard_after_update_with_higher_count() {
         let handle = TrackerHandle::new();
         let (ack_send, ack_recv) = oneshot::channel();
+        let offset = Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0)));
 
         // Insert a new message
-        handle
-            .insert("offset1".to_string().into(), ack_send)
-            .await
-            .unwrap();
+        handle.insert(offset.clone(), ack_send).await.unwrap();
 
         // Update the message with a count of 3
-        handle
-            .update("offset1".to_string().into(), 3, false)
-            .await
-            .unwrap();
+        handle.update(offset.clone(), 3, false).await.unwrap();
 
         // Discard the message
-        handle.discard("offset1".to_string().into()).await.unwrap();
+        handle.discard(offset).await.unwrap();
 
         // Verify that the message was discarded and nak was received
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();

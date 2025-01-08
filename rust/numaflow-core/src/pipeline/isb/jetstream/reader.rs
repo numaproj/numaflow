@@ -83,7 +83,7 @@ impl TryFrom<JSWrappedMessage> for Message {
             offset: offset.clone(),
             event_time: utc_from_timestamp(message_info.event_time),
             id: MessageID {
-                vertex_name: get_vertex_name().to_string().into(),
+                vertex_name: value.vertex_name.into(),
                 offset: offset.to_string().into(),
                 index: 0,
             },
@@ -200,7 +200,7 @@ impl JetstreamReader {
                                 }
                             };
 
-                            let offset = message.id.offset.clone();
+                            let offset = message.offset.clone();
 
                             // Insert the message into the tracker and wait for the ack to be sent back.
                             let (ack_tx, ack_rx) = oneshot::channel();
@@ -315,12 +315,10 @@ mod tests {
 
     use super::*;
     use crate::message::{Message, MessageID};
-    use crate::shared::grpc::prost_timestamp_from_utc;
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
-    use chrono::{TimeZone, Utc};
-    use numaflow_pb::objects::isb::{Body, Header, MessageId, MessageInfo};
+    use chrono::Utc;
     use tokio::time::sleep;
 
     #[cfg(feature = "nats-tests")]
@@ -483,7 +481,7 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
+                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i + 1, 0))),
                 event_time: Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -493,7 +491,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
             };
-            offsets.push(message.id.offset.clone());
+            offsets.push(message.offset.clone());
             let message_bytes: BytesMut = message.try_into().unwrap();
             context
                 .publish(stream_name, message_bytes.into())

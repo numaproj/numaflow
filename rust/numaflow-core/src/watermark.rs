@@ -24,7 +24,8 @@ type Watermark = DateTime<Utc>;
 //                  * publish the fetched watermark to downstream
 //                  * check if the watermark is greater than the previously fetched watermark
 //                  * if its greater publish the watermark for all the yet to be published offsets
-//                  * if it's not greater add it to the yet to be published offsets map
+//                  * if it's not greater add it to the yet to be published offsets map (only track the largest offset)
+//                  * track the last published watermark and last published offset for a given partition and edge
 //
 // source vertex
 // (js writer) - publish watermark for the read source message -> Here processing entity is partition so publish the watermark for that partition
@@ -36,6 +37,11 @@ type Watermark = DateTime<Utc>;
 // branch idling - while publishing watermark check if we are not publishing to the other edges and partitions if we are not
 //               - check if the ctrl message is already present for that partition, if so publish idle wm for the ctrl message
 //               - else write a ctrl message and get the offset and write the watermark for that offset
+
+// idle handler - the one that tracks the ctrl message used to publish the idle watermark
+// source idle handler is different dude it's some another level
+//
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WMB {
     pub idle: bool,

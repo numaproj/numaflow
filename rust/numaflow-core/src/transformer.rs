@@ -139,7 +139,7 @@ impl Transformer {
                 Ok(Ok(mut transformed_messages)) => {
                     if let Err(e) = tracker_handle
                         .update(
-                            read_msg.id.offset.clone(),
+                            read_msg.offset.clone(),
                             transformed_messages.len() as u32,
                             true,
                         )

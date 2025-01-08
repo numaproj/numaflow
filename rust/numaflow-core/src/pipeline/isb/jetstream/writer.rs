@@ -192,7 +192,7 @@ impl JetstreamWriter {
                 // TODO: add metric for dropped count
                 if message.dropped() {
                     // delete the entry from tracker
-                    this.tracker_handle.delete(message.id.offset).await?;
+                    this.tracker_handle.delete(message.offset).await?;
                     continue;
                 }
 
@@ -242,7 +242,7 @@ impl JetstreamWriter {
                 this.resolve_pafs(ResolveAndPublishResult {
                     pafs,
                     payload: message.value.clone().into(),
-                    offset: message.id.offset,
+                    offset: message.offset,
                 })
                 .await?;
 
@@ -273,7 +273,7 @@ impl JetstreamWriter {
     ) -> Option<PublishAckFuture> {
         let mut counter = 500u16;
 
-        let offset = message.id.offset.clone();
+        let offset = message.offset.clone();
         let payload: BytesMut = message
             .try_into()
             .expect("message serialization should not fail");
@@ -474,7 +474,7 @@ impl JetstreamWriter {
 pub(crate) struct ResolveAndPublishResult {
     pub(crate) pafs: Vec<(Stream, PublishAckFuture)>,
     pub(crate) payload: Vec<u8>,
-    pub(crate) offset: Bytes,
+    pub(crate) offset: Offset,
 }
 
 #[cfg(test)]
@@ -1002,7 +1002,7 @@ mod tests {
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             tracker_handle
-                .insert(message.id.offset.clone(), ack_tx)
+                .insert(message.offset.clone(), ack_tx)
                 .await
                 .unwrap();
             ack_rxs.push(ack_rx);
@@ -1092,7 +1092,7 @@ mod tests {
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             tracker_handle
-                .insert(message.id.offset.clone(), ack_tx)
+                .insert(message.offset.clone(), ack_tx)
                 .await
                 .unwrap();
             ack_rxs.push(ack_rx);
@@ -1120,7 +1120,7 @@ mod tests {
         };
         let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
         tracker_handle
-            .insert("offset_101".to_string().into(), ack_tx)
+            .insert(message.offset.clone(), ack_tx)
             .await
             .unwrap();
         ack_rxs.push(ack_rx);
@@ -1237,7 +1237,7 @@ mod tests {
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             tracker_handle
-                .insert(message.id.offset.clone(), ack_tx)
+                .insert(message.offset.clone(), ack_tx)
                 .await
                 .unwrap();
             ack_rxs.push(ack_rx);

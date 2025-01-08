@@ -342,11 +342,7 @@ impl MapHandle {
                 Ok(Ok(mut mapped_messages)) => {
                     // update the tracker with the number of messages sent and send the mapped messages
                     if let Err(e) = tracker_handle
-                        .update(
-                            read_msg.id.offset.clone(),
-                            mapped_messages.len() as u32,
-                            true,
-                        )
+                        .update(read_msg.offset.clone(), mapped_messages.len() as u32, true)
                         .await
                     {
                         error_tx.send(e).await.expect("failed to send error");
@@ -395,7 +391,7 @@ impl MapHandle {
         for receiver in receivers {
             match receiver.await {
                 Ok(Ok(mut mapped_messages)) => {
-                    let offset = mapped_messages.first().unwrap().id.offset.clone();
+                    let offset = mapped_messages.first().unwrap().offset.clone();
                     tracker_handle
                         .update(offset.clone(), mapped_messages.len() as u32, true)
                         .await?;
@@ -452,7 +448,7 @@ impl MapHandle {
             while let Some(result) = receiver.recv().await {
                 match result {
                     Ok(mapped_message) => {
-                        let offset = mapped_message.id.offset.clone();
+                        let offset = mapped_message.offset.clone();
                         if let Err(e) = tracker_handle.update(offset.clone(), 1, false).await {
                             error_tx.send(e).await.expect("failed to send error");
                             return;
@@ -472,7 +468,7 @@ impl MapHandle {
                 }
             }
 
-            if let Err(e) = tracker_handle.update(read_msg.id.offset, 0, true).await {
+            if let Err(e) = tracker_handle.update(read_msg.offset, 0, true).await {
                 error_tx.send(e).await.expect("failed to send error");
             }
         });
