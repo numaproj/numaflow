@@ -80,7 +80,7 @@ export function Metrics({ namespaceId, pipelineId, type, vertexId }: MetricsProp
               id={`${metric?.metric_name}-header`}
             >
               <Box>
-                {metricNameMap[metric?.metric_name] || metric?.metric_name}
+                {metric?.display_name || metricNameMap[metric?.metric_name] || metric?.metric_name}
               </Box>
             </AccordionSummary>
             <AccordionDetails>
