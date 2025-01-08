@@ -600,8 +600,6 @@ pub(crate) async fn start_metrics_https_server(
     addr: SocketAddr,
     metrics_state: UserDefinedContainerState,
 ) -> crate::Result<()> {
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
     // Generate a self-signed certificate
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| Error::Metrics(format!("Generating self-signed certificate: {}", e)))?;
