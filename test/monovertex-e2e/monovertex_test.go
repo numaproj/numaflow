@@ -39,7 +39,7 @@ func (s *MonoVertexSuite) TestMonoVertexWithTransformer() {
 	w.Expect().MonoVertexPodsRunning().MvtxDaemonPodsRunning()
 
 	defer w.MonoVertexPodPortForward(8931, dfv1.MonoVertexMetricsPort).
-		MvtxDaemonPodPortForward(3232, dfv1.MonoVertexMetricsPort).
+		MvtxDaemonPodPortForward(3232, dfv1.MonoVertexDaemonServicePort).
 		TerminateAllPodPortForwards()
 
 	// Check metrics endpoints
