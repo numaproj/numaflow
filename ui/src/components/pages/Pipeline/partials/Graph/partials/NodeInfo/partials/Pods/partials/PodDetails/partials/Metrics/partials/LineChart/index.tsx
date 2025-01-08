@@ -18,6 +18,31 @@ import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
 import TimeSelector from "../common/TimeRange";
 
+interface TooltipProps {
+  payload?: any[];
+  label?: string;
+  active?: boolean;
+}
+
+function CustomTooltip({ payload, label, active }: TooltipProps) {
+  if (active && payload && payload.length) {
+    const maxWidth = Math.max(...payload.map(entry => entry.name.length)) * 9.5;
+    console.log("max width: ", maxWidth)
+    return (
+      <div className="custom-tooltip" style={{ backgroundColor: '#fff', padding: '10px', border: '1px solid #ccc' }}>
+        <p>{label}</p>
+        {payload.map((entry: any, index: any) => (
+            <div key={`item-${index}`} style={{ display: 'flex' }}>
+              <span style={{  width: `${maxWidth}px`, display: 'inline-block', paddingRight: '10px', color: entry.color }}>{entry.name}:</span>
+              <span style={{color: entry.color}}>{entry.value}</span>
+            </div>
+        ))}
+      </div>
+    );
+  }
+
+  return null;
+}
 
 const getYAxisLabel = (unit: string) => {
   if (unit !== "") {
@@ -64,8 +89,6 @@ const getDefaultFormatter = (value: number, metricName: string) => {
   }
 }
 
-
-
 const getTickFormatter = (unit: string, metricName: string) => {
   const formatValue = (value: number) => {
     const formattedValue = parseFloat(value.toFixed(2));  // Format to 2 decimal places
@@ -106,7 +129,7 @@ const LineChartComponent = ({
 
   const getRandomColor = useCallback((index: number) => {
     const hue = (index * 137.508) % 360;
-    return `hsl(${hue}, 70%, 50%)`;
+    return `hsl(${hue}, 50%, 50%)`;
   }, []);
 
   const getFilterValue = useCallback(
@@ -346,7 +369,7 @@ const LineChartComponent = ({
             <XAxis dataKey="time" padding={{ left: 30, right: 30 }} >
             </XAxis>
             <YAxis
-              label={<Text x={-160} y={5} dy={5} transform="rotate(-90)" fontSize={14} textAnchor="middle">{getYAxisLabel(metric?.unit)}</Text>}
+              label={<Text x={-160} y={15} dy={5} transform="rotate(-90)" fontSize={14} textAnchor="middle">{getYAxisLabel(metric?.unit)}</Text>}
               tickFormatter={getTickFormatter(metric?.unit, metric?.metric_name)}
             />
             <CartesianGrid stroke="#f5f5f5">
@@ -362,7 +385,7 @@ const LineChartComponent = ({
               />
             ))}
 
-            <Tooltip />
+            <Tooltip content={<CustomTooltip />}/>
             <Legend />
           </LineChart>
         </ResponsiveContainer>
