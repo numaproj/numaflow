@@ -280,7 +280,7 @@ func WaitForMonoVertexPodRunning(kubeClient kubernetes.Interface, monoVertexClie
 		}
 		ok := len(podList.Items) > 0 && len(podList.Items) == monoVertex.CalculateReplicas() // pod number should equal to desired replicas
 		for _, p := range podList.Items {
-			ok = ok && p.Status.Phase == corev1.PodRunning
+			ok = ok && isPodReady(p)
 		}
 		if ok {
 			return nil
@@ -366,6 +366,26 @@ func WaitForDaemonPodsRunning(kubeClient kubernetes.Interface, namespace, pipeli
 		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
 		if err != nil {
 			return fmt.Errorf("error getting daemon pod name: %w", err)
+		}
+		ok := len(podList.Items) > 0
+		for _, p := range podList.Items {
+			ok = ok && p.Status.Phase == corev1.PodRunning
+		}
+		if ok {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+func WaitForMvtxDaemonPodsRunning(kubeClient kubernetes.Interface, namespace, mvtx string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, mvtx, dfv1.KeyComponent, dfv1.ComponentMonoVertexDaemon)
+	for {
+		podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+		if err != nil {
+			return fmt.Errorf("error getting mvtx daemon pod name: %w", err)
 		}
 		ok := len(podList.Items) > 0
 		for _, p := range podList.Items {

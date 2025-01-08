@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
@@ -35,7 +36,20 @@ func (s *MonoVertexSuite) TestMonoVertexWithTransformer() {
 		When().CreateMonoVertexAndWait()
 	defer w.DeleteMonoVertexAndWait()
 
-	w.Expect().MonoVertexPodsRunning()
+	w.Expect().MonoVertexPodsRunning().MvtxDaemonPodsRunning()
+
+	defer w.MonoVertexPodPortForward(8931, dfv1.MonoVertexMetricsPort).
+		MvtxDaemonPodPortForward(3232, dfv1.MonoVertexDaemonServicePort).
+		TerminateAllPodPortForwards()
+
+	// Check metrics endpoints
+	HTTPExpect(s.T(), "https://localhost:8931").GET("/metrics").
+		Expect().
+		Status(200)
+
+	HTTPExpect(s.T(), "https://localhost:3232").GET("/metrics").
+		Expect().
+		Status(200)
 
 	// Expect the messages to be processed by the transformer.
 	w.Expect().MonoVertexPodLogContains("AssignEventTime", PodLogCheckOptionWithContainer("transformer"))
