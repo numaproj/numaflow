@@ -243,6 +243,50 @@ func (w *When) DaemonPodPortForward(pipelineName string, localPort, remotePort i
 	return w
 }
 
+func (w *When) MonoVertexPodPortForward(localPort, remotePort int) *When {
+	w.t.Helper()
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyComponent, dfv1.ComponentMonoVertex, dfv1.KeyMonoVertexName, w.monoVertex.Name)
+	ctx := context.Background()
+	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		w.t.Fatalf("Error getting mvtx pod name: %v", err)
+	}
+	podName := podList.Items[0].GetName()
+	w.t.Logf("MonoVertex POD name: %s", podName)
+
+	stopCh := make(chan struct{}, 1)
+	if err = PodPortForward(w.restConfig, Namespace, podName, localPort, remotePort, stopCh); err != nil {
+		w.t.Fatalf("Expected mvtx pod port-forward: %v", err)
+	}
+	if w.portForwarderStopChannels == nil {
+		w.portForwarderStopChannels = make(map[string]chan struct{})
+	}
+	w.portForwarderStopChannels[podName] = stopCh
+	return w
+}
+
+func (w *When) MvtxDaemonPodPortForward(localPort, remotePort int) *When {
+	w.t.Helper()
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyComponent, dfv1.ComponentMonoVertexDaemon, dfv1.KeyMonoVertexName, w.monoVertex.Name)
+	ctx := context.Background()
+	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		w.t.Fatalf("Error getting mvtx daemon pod name: %v", err)
+	}
+	podName := podList.Items[0].GetName()
+	w.t.Logf("MonoVertex Daemon POD name: %s", podName)
+
+	stopCh := make(chan struct{}, 1)
+	if err = PodPortForward(w.restConfig, Namespace, podName, localPort, remotePort, stopCh); err != nil {
+		w.t.Fatalf("Expected mvtx daemon pod port-forward: %v", err)
+	}
+	if w.portForwarderStopChannels == nil {
+		w.portForwarderStopChannels = make(map[string]chan struct{})
+	}
+	w.portForwarderStopChannels[podName] = stopCh
+	return w
+}
+
 func (w *When) UXServerPodPortForward(localPort, remotePort int) *When {
 	w.t.Helper()
 	labelSelector := fmt.Sprintf("%s=%s", dfv1.KeyComponent, dfv1.ComponentUXServer)

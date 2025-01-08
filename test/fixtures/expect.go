@@ -204,6 +204,15 @@ func (t *Expect) DaemonPodLogContains(pipelineName, regex string, opts ...PodLog
 	return t
 }
 
+func (t *Expect) MvtxDaemonPodsRunning() *Expect {
+	t.t.Helper()
+	timeout := 2 * time.Minute
+	if err := WaitForMvtxDaemonPodsRunning(t.kubeClient, Namespace, t.monoVertex.Name, timeout); err != nil {
+		t.t.Fatalf("Expected mvtx daemon pods of %q running: %v", t.monoVertex.Name, err)
+	}
+	return t
+}
+
 func (t *Expect) When() *When {
 	return &When{
 		t:                t.t,
