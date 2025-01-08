@@ -1708,6 +1708,7 @@ dependencies = [
  "backoff",
  "numaflow-core",
  "numaflow-models",
+ "rustls 0.23.19",
  "servesink",
  "serving",
  "tokio",
