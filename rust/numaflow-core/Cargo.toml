@@ -6,7 +6,8 @@ edition = "2021"
 [features]
 nats-tests = []
 pulsar-tests = []
-all-tests = ["nats-tests", "pulsar-tests"]
+redis-tests = []
+all-tests = ["nats-tests", "pulsar-tests", "redis-tests"]
 
 [lints]
 workspace = true

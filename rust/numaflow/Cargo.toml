@@ -14,4 +14,5 @@ numaflow-models.workspace = true
 backoff.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+rustls.workspace = true
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
