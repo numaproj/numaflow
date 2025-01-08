@@ -16,6 +16,26 @@ mod timeline;
 
 type Watermark = DateTime<Utc>;
 
+// map vertex
+// (js reader) - fetch watermark for offset and assign to the message (each read partition will be invoking fetch simultaneously
+// (js writer) - publish watermark for the write offsets
+//                  * get the lowest inflight offset using the tracker
+//                  * fetch the watermark for that offset
+//                  * publish the fetched watermark to downstream
+//                  * check if the watermark is greater than the previously fetched watermark
+//                  * if its greater publish the watermark for all the yet to be published offsets
+//                  * if it's not greater add it to the yet to be published offsets map
+//
+// source vertex
+// (js writer) - publish watermark for the read source message -> Here processing entity is partition so publish the watermark for that partition
+//             - publish watermark for the isb write offsets -> fetch the watermark we don't care about the offset here
+//             - check if the watermark has changed compared to the previous watermark if so publish the watermark
+
+// Now lets think about idle watermark
+// map vertex
+// branch idling - while publishing watermark check if we are not publishing to the other edges and partitions if we are not
+//               - check if the ctrl message is already present for that partition, if so publish idle wm for the ctrl message
+//               - else write a ctrl message and get the offset and write the watermark for that offset
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WMB {
     pub idle: bool,
