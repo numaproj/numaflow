@@ -147,7 +147,7 @@ export function PodLogs({
   >();
   const [search, setSearch] = useState<string>("");
   const [negateSearch, setNegateSearch] = useState<boolean>(false);
-  const [wrapLines, setWrapLines] = useState<boolean>(true);
+  const [wrapLines, setWrapLines] = useState<boolean>(false);
   const [paused, setPaused] = useState<boolean>(false);
   const [colorMode, setColorMode] = useState<string>("light");
   const [logsOrder, setLogsOrder] = useState<string>("desc");
