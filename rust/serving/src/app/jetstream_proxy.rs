@@ -1,6 +1,5 @@
-use std::{borrow::Borrow, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
-use async_nats::{jetstream::Context, HeaderMap as JSHeaderMap};
 use axum::{
     body::Bytes,
     extract::State,
@@ -9,12 +8,13 @@ use axum::{
     routing::post,
     Json, Router,
 };
+use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 use uuid::Uuid;
 
 use super::{callback::store::Store, AppState};
-use crate::app::callback::state;
 use crate::app::response::{ApiError, ServeResponse};
+use crate::{app::callback::state, Message, MessageWrapper};
 
 // TODO:
 // - [ ] better health check
@@ -32,30 +32,22 @@ use crate::app::response::{ApiError, ServeResponse};
 //   "from_vertex": "a"
 // }
 
-const CALLBACK_URL_KEY: &str = "X-Numaflow-Callback-Url";
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
 
 struct ProxyState<T> {
+    message: mpsc::Sender<MessageWrapper>,
     tid_header: String,
-    context: Context,
     callback: state::State<T>,
-    stream: String,
-    callback_url: String,
 }
 
 pub(crate) async fn jetstream_proxy<T: Clone + Send + Sync + Store + 'static>(
     state: AppState<T>,
 ) -> crate::Result<Router> {
     let proxy_state = Arc::new(ProxyState {
+        message: state.message.clone(),
         tid_header: state.settings.tid_header.clone(),
-        context: state.context.clone(),
         callback: state.callback_state.clone(),
-        stream: state.settings.jetstream.stream.clone(),
-        callback_url: format!(
-            "https://{}:{}/v1/process/callback",
-            state.settings.host_ip, state.settings.app_listen_port
-        ),
     });
 
     let router = Router::new()
@@ -76,20 +68,34 @@ async fn sync_publish_serve<T: Send + Sync + Clone + Store>(
     // Register the ID in the callback proxy state
     let notify = proxy_state.callback.clone().register(id.clone());
 
-    if let Err(e) = publish_to_jetstream(
-        proxy_state.stream.clone(),
-        &proxy_state.callback_url,
-        headers,
-        body,
-        proxy_state.context.clone(),
-        proxy_state.tid_header.as_str(),
-        id.as_str(),
-    )
-    .await
-    {
+    let mut msg_headers: HashMap<String, String> = HashMap::new();
+    for (key, value) in headers.iter() {
+        msg_headers.insert(
+            key.to_string(),
+            String::from_utf8_lossy(value.as_bytes()).to_string(),
+        );
+    }
+
+    let (tx, rx) = oneshot::channel();
+    let message = MessageWrapper {
+        confirm_save: tx,
+        message: Message {
+            value: body,
+            id: id.clone(),
+            headers: msg_headers,
+        },
+    };
+
+    proxy_state
+        .message
+        .send(message)
+        .await
+        .expect("Failed to send request payload to Serving channel");
+
+    if let Err(e) = rx.await {
         // Deregister the ID in the callback proxy state if writing to Jetstream fails
         let _ = proxy_state.callback.clone().deregister(&id).await;
-        error!(error = ?e, "Publishing message to Jetstream for sync serve request");
+        error!(error = ?e, "Waiting for acknowledgement for message");
         return Err(ApiError::BadGateway(
             "Failed to write message to Jetstream".to_string(),
         ));
@@ -143,21 +149,30 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
 ) -> Result<Json<ServeResponse>, ApiError> {
     let id = extract_id_from_headers(&proxy_state.tid_header, &headers);
 
+    let mut msg_headers: HashMap<String, String> = HashMap::new();
+    for (key, value) in headers.iter() {
+        msg_headers.insert(
+            key.to_string(),
+            String::from_utf8_lossy(value.as_bytes()).to_string(),
+        );
+    }
+
+    let (tx, rx) = oneshot::channel();
+    let message = MessageWrapper {
+        confirm_save: tx,
+        message: Message {
+            value: body,
+            id: id.clone(),
+            headers: msg_headers,
+        },
+    };
+
     // Register the ID in the callback proxy state
     let notify = proxy_state.callback.clone().register(id.clone());
+    proxy_state.message.send(message).await.unwrap(); // FIXME:
 
-    if let Err(e) = publish_to_jetstream(
-        proxy_state.stream.clone(),
-        &proxy_state.callback_url,
-        headers,
-        body,
-        proxy_state.context.clone(),
-        &proxy_state.tid_header,
-        id.as_str(),
-    )
-    .await
-    {
-        // Deregister the ID in the callback proxy state if writing to Jetstream fails
+    if let Err(e) = rx.await {
+        // Deregister the ID in the callback proxy state if waiting for ack fails
         let _ = proxy_state.callback.clone().deregister(&id).await;
         error!(error = ?e, "Publishing message to Jetstream for sync request");
         return Err(ApiError::BadGateway(
@@ -192,60 +207,38 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
     body: Bytes,
 ) -> Result<Json<ServeResponse>, ApiError> {
     let id = extract_id_from_headers(&proxy_state.tid_header, &headers);
-    let result = publish_to_jetstream(
-        proxy_state.stream.clone(),
-        &proxy_state.callback_url,
-        headers,
-        body,
-        proxy_state.context.clone(),
-        &proxy_state.tid_header,
-        id.as_str(),
-    )
-    .await;
+    let mut msg_headers: HashMap<String, String> = HashMap::new();
+    for (key, value) in headers.iter() {
+        msg_headers.insert(
+            key.to_string(),
+            String::from_utf8_lossy(value.as_bytes()).to_string(),
+        );
+    }
 
-    match result {
+    let (tx, rx) = oneshot::channel();
+    let message = MessageWrapper {
+        confirm_save: tx,
+        message: Message {
+            value: body,
+            id: id.clone(),
+            headers: msg_headers,
+        },
+    };
+
+    proxy_state.message.send(message).await.unwrap(); // FIXME:
+    match rx.await {
         Ok(_) => Ok(Json(ServeResponse::new(
             "Successfully published message".to_string(),
             id,
             StatusCode::OK,
         ))),
         Err(e) => {
-            error!(error = ?e, "Publishing message to Jetstream");
+            error!(error = ?e, "Waiting for message save confirmation");
             Err(ApiError::InternalServerError(
-                "Failed to publish message to Jetstream".to_string(),
+                "Failed to save message".to_string(),
             ))
         }
     }
-}
-
-/// Write to JetStream and return the metadata. It is responsible for getting the ID from the header.
-async fn publish_to_jetstream(
-    stream: String,
-    callback_url: &str,
-    headers: HeaderMap,
-    body: Bytes,
-    js_context: Context,
-    id_header: &str,
-    id_header_value: &str,
-) -> Result<(), async_nats::Error> {
-    let mut js_headers = JSHeaderMap::new();
-
-    // pass in the HTTP headers as jetstream headers
-    for (k, v) in headers.iter() {
-        js_headers.append(k.as_ref(), String::from_utf8_lossy(v.as_bytes()).borrow())
-    }
-
-    js_headers.append(id_header, id_header_value); // Use the passed ID
-    js_headers.append(CALLBACK_URL_KEY, callback_url);
-
-    js_context
-        .publish_with_headers(stream, js_headers, body)
-        .await
-        .map_err(|e| format!("Publishing message to stream: {e:?}"))?
-        .await
-        .map_err(|e| format!("Waiting for acknowledgement of published message: {e:?}"))?;
-
-    Ok(())
 }
 
 // extracts the ID from the headers, if not found, generates a new UUID
@@ -256,13 +249,10 @@ fn extract_id_from_headers(tid_header: &str, headers: &HeaderMap) -> String {
     )
 }
 
-#[cfg(feature = "nats-tests")]
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
-    use async_nats::jetstream;
-    use async_nats::jetstream::stream;
     use axum::body::{to_bytes, Body};
     use axum::extract::Request;
     use axum::http::header::{CONTENT_LENGTH, CONTENT_TYPE};
@@ -303,46 +293,47 @@ mod tests {
 
     #[tokio::test]
     async fn test_async_publish() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let settings = Settings::default();
-        let settings = Arc::new(settings);
-        let client = async_nats::connect(&settings.jetstream.url)
-            .await
-            .map_err(|e| format!("Connecting to Jetstream: {:?}", e))?;
-
-        let context = jetstream::new(client);
-        let id = "foobar";
-        let stream_name = "default";
-
-        let _stream = context
-            .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
-                ..Default::default()
-            })
-            .await
-            .map_err(|e| format!("creating stream {}: {}", &settings.jetstream.url, e))?;
+        const ID_HEADER: &str = "X-Numaflow-ID";
+        const ID_VALUE: &str = "foobar";
+        let settings = Settings {
+            tid_header: ID_HEADER.into(),
+            ..Default::default()
+        };
 
         let mock_store = MockStore {};
-        let pipeline_spec: PipelineDCG = PIPELINE_SPEC_ENCODED.parse().unwrap();
-        let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)
-            .map_err(|e| format!("Failed to create message graph from pipeline spec: {:?}", e))?;
-
+        let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
+        let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
         let callback_state = CallbackState::new(msg_graph, mock_store).await?;
+
+        let (messages_tx, mut messages_rx) = mpsc::channel::<MessageWrapper>(10);
+        let response_collector = tokio::spawn(async move {
+            let message = messages_rx.recv().await.unwrap();
+            let MessageWrapper {
+                confirm_save,
+                message,
+            } = message;
+            confirm_save.send(()).unwrap();
+            message
+        });
+
         let app_state = AppState {
+            message: messages_tx,
+            settings: Arc::new(settings),
             callback_state,
-            context,
-            settings,
         };
+
         let app = jetstream_proxy(app_state).await?;
         let res = Request::builder()
             .method("POST")
             .uri("/async")
             .header(CONTENT_TYPE, "text/plain")
-            .header("id", id)
+            .header(ID_HEADER, ID_VALUE)
             .body(Body::from("Test Message"))
             .unwrap();
 
         let response = app.oneshot(res).await.unwrap();
+        let message = response_collector.await.unwrap();
+        assert_eq!(message.id, ID_VALUE);
         assert_eq!(response.status(), StatusCode::OK);
 
         let result = extract_response_from_body(response.into_body()).await;
@@ -350,7 +341,7 @@ mod tests {
             result,
             json!({
                 "message": "Successfully published message",
-                "id": id,
+                "id": ID_VALUE,
                 "code": 200
             })
         );
@@ -392,20 +383,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_sync_publish() {
-        let settings = Settings::default();
-        let client = async_nats::connect(&settings.jetstream.url).await.unwrap();
-        let context = jetstream::new(client);
-        let id = "foobar";
-        let stream_name = "sync_pub";
-
-        let _stream = context
-            .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
-                ..Default::default()
-            })
-            .await
-            .map_err(|e| format!("creating stream {}: {}", &settings.jetstream.url, e));
+        const ID_HEADER: &str = "X-Numaflow-ID";
+        const ID_VALUE: &str = "foobar";
+        let settings = Settings {
+            tid_header: ID_HEADER.into(),
+            ..Default::default()
+        };
 
         let mem_store = InMemoryStore::new();
         let pipeline_spec: PipelineDCG = PIPELINE_SPEC_ENCODED.parse().unwrap();
@@ -413,16 +396,28 @@ mod tests {
 
         let mut callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
-        let settings = Arc::new(settings);
+        let (messages_tx, mut messages_rx) = mpsc::channel(10);
+
+        let response_collector = tokio::spawn(async move {
+            let message = messages_rx.recv().await.unwrap();
+            let MessageWrapper {
+                confirm_save,
+                message,
+            } = message;
+            confirm_save.send(()).unwrap();
+            message
+        });
+
         let app_state = AppState {
-            settings,
+            message: messages_tx,
+            settings: Arc::new(settings),
             callback_state: callback_state.clone(),
-            context,
         };
+
         let app = jetstream_proxy(app_state).await.unwrap();
 
         tokio::spawn(async move {
-            let cbs = create_default_callbacks(id);
+            let cbs = create_default_callbacks(ID_VALUE);
             let mut retries = 0;
             loop {
                 match callback_state.insert_callback_requests(cbs.clone()).await {
@@ -442,11 +437,13 @@ mod tests {
             .method("POST")
             .uri("/sync")
             .header("Content-Type", "text/plain")
-            .header("id", id)
+            .header(ID_HEADER, ID_VALUE)
             .body(Body::from("Test Message"))
             .unwrap();
 
         let response = app.clone().oneshot(res).await.unwrap();
+        let message = response_collector.await.unwrap();
+        assert_eq!(message.id, ID_VALUE);
         assert_eq!(response.status(), StatusCode::OK);
 
         let result = extract_response_from_body(response.into_body()).await;
@@ -454,7 +451,7 @@ mod tests {
             result,
             json!({
                 "message": "Successfully processed the message",
-                "id": id,
+                "id": ID_VALUE,
                 "code": 200
             })
         );
@@ -462,20 +459,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_sync_publish_serve() {
+        const ID_VALUE: &str = "foobar";
         let settings = Arc::new(Settings::default());
-        let client = async_nats::connect(&settings.jetstream.url).await.unwrap();
-        let context = jetstream::new(client);
-        let id = "foobar";
-        let stream_name = "sync_serve_pub";
-
-        let _stream = context
-            .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
-                ..Default::default()
-            })
-            .await
-            .map_err(|e| format!("creating stream {}: {}", &settings.jetstream.url, e));
 
         let mem_store = InMemoryStore::new();
         let pipeline_spec: PipelineDCG = PIPELINE_SPEC_ENCODED.parse().unwrap();
@@ -483,16 +468,28 @@ mod tests {
 
         let mut callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
 
+        let (messages_tx, mut messages_rx) = mpsc::channel(10);
+
+        let response_collector = tokio::spawn(async move {
+            let message = messages_rx.recv().await.unwrap();
+            let MessageWrapper {
+                confirm_save,
+                message,
+            } = message;
+            confirm_save.send(()).unwrap();
+            message
+        });
+
         let app_state = AppState {
+            message: messages_tx,
             settings,
             callback_state: callback_state.clone(),
-            context,
         };
 
         let app = jetstream_proxy(app_state).await.unwrap();
 
         // pipeline is in -> cat -> out, so we will have 3 callback requests
-        let cbs = create_default_callbacks(id);
+        let cbs = create_default_callbacks(ID_VALUE);
 
         // spawn a tokio task which will insert the callback requests to the callback state
         // if it fails, sleep for 10ms and retry
@@ -531,11 +528,14 @@ mod tests {
             .method("POST")
             .uri("/sync_serve")
             .header("Content-Type", "text/plain")
-            .header("id", id)
+            .header("ID", ID_VALUE)
             .body(Body::from("Test Message"))
             .unwrap();
 
         let response = app.oneshot(res).await.unwrap();
+        let message = response_collector.await.unwrap();
+        assert_eq!(message.id, ID_VALUE);
+
         assert_eq!(response.status(), StatusCode::OK);
 
         let content_len = response.headers().get(CONTENT_LENGTH).unwrap();
