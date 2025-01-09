@@ -36,7 +36,13 @@ async fn run() -> Result<(), Box<dyn Error>> {
     } else if args.contains(&"--rust".to_string()) {
         numaflow_core::run()
             .await
-            .map_err(|e| format!("Error running rust binary: {e:?}"))?
+            .map_err(|e| format!("Error running rust binary: {e:?}"))?;
+    } else {
+        return Err(format!(
+            "Invalid argument. Use --servesink, or --rust. Current args = {:?}",
+            args
+        )
+        .into());
     }
-    Err("Invalid argument. Use --servesink, or --rust".into())
+    Ok(())
 }

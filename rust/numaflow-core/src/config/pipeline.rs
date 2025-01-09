@@ -25,6 +25,7 @@ const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
+const ENV_PAF_BATCH_SIZE: &str = "PAF_BATCH_SIZE";
 const ENV_CALLBACK_ENABLED: &str = "NUMAFLOW_CALLBACK_ENABLED";
 const ENV_CALLBACK_CONCURRENCY: &str = "NUMAFLOW_CALLBACK_CONCURRENCY";
 const DEFAULT_CALLBACK_CONCURRENCY: usize = 100;
@@ -296,9 +297,15 @@ impl PipelineConfig {
             .map(|(key, val)| (key.into(), val.into()))
             .filter(|(key, _val)| {
                 // FIXME(cr): this filter is non-exhaustive, should we invert?
-                key == ENV_NUMAFLOW_SERVING_JETSTREAM_URL
-                    || key == ENV_NUMAFLOW_SERVING_JETSTREAM_USER
-                    || key == ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD
+                [
+                    ENV_NUMAFLOW_SERVING_JETSTREAM_URL,
+                    ENV_NUMAFLOW_SERVING_JETSTREAM_USER,
+                    ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD,
+                    ENV_PAF_BATCH_SIZE,
+                    ENV_CALLBACK_ENABLED,
+                    ENV_CALLBACK_CONCURRENCY,
+                ]
+                .contains(&key.as_str())
             })
             .collect();
 
@@ -400,7 +407,7 @@ impl PipelineConfig {
 
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
-            paf_concurrency: env::var("PAF_BATCH_SIZE")
+            paf_concurrency: get_var(ENV_PAF_BATCH_SIZE)
                 .unwrap_or((DEFAULT_BATCH_SIZE * 2).to_string())
                 .parse()
                 .unwrap(),

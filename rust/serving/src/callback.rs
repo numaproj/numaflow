@@ -15,18 +15,16 @@ const CALLBACK_URL_HEADER_KEY: &str = "X-Numaflow-Callback-Url";
 /// The data to be sent in the POST request
 #[derive(serde::Serialize)]
 struct CallbackPayload {
-    /// Name of the vertex
-    vertex: String,
-    /// Name of the pipeline
-    pipeline: String,
     /// Unique identifier of the message
     id: String,
+    /// Name of the vertex
+    vertex: String,
     /// Time when the callback was made
     cb_time: u64,
-    /// List of tags associated with the message
-    tags: Vec<String>,
     /// Name of the vertex from which the message was sent
     from_vertex: String,
+    /// List of tags associated with the message
+    tags: Option<Vec<String>>,
 }
 
 #[derive(Clone)]
@@ -77,23 +75,25 @@ impl CallbackHandler {
                 ))
             })?
             .to_owned();
-        let uuid = message_headers.get(ID_HEADER).ok_or_else(|| {
-            Error::Source(format!("{ID_HEADER} is not found in message headers",))
-        })?;
+        let uuid = message_headers
+            .get(ID_HEADER)
+            .ok_or_else(|| Error::Source(format!("{ID_HEADER} is not found in message headers",)))?
+            .to_owned();
         let cb_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("System time is older than Unix epoch time")
             .as_millis() as u64;
 
-        let mut msg_tags = vec![];
+        let mut msg_tags = None;
         if let Some(tags) = message_tags {
-            msg_tags = tags.iter().cloned().collect();
+            if !tags.is_empty() {
+                msg_tags = Some(tags.iter().cloned().collect());
+            }
         };
 
         let callback_payload = CallbackPayload {
             vertex: self.vertex_name.clone(),
-            pipeline: self.pipeline_name.clone(),
-            id: uuid.to_owned(),
+            id: uuid.clone(),
             cb_time,
             tags: msg_tags,
             from_vertex: previous_vertex,
@@ -105,7 +105,8 @@ impl CallbackHandler {
             let _permit = permit;
             let resp = client
                 .post(callback_url)
-                .json(&callback_payload)
+                .header(ID_HEADER, uuid.clone())
+                .json(&[callback_payload])
                 .send()
                 .await
                 .map_err(|e| Error::Source(format!("Sending callback request: {e:?}")))

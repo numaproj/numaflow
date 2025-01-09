@@ -315,7 +315,7 @@ impl SinkWriter {
                         for message in batch {
                             let metadata = message.metadata.ok_or_else(|| {
                                 Error::Source(format!(
-                                    "Message does not contain previous vertex name in the metadata"
+                                    "Writing to Sink: message does not contain previous vertex name in the metadata"
                                 ))
                             })?;
                             callback_handler

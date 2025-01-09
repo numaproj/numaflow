@@ -155,6 +155,12 @@ impl JetstreamReader {
                                 index: 0,
                             };
 
+                            let metadata = crate::message::Metadata{
+                                // Copy previous vertex name from message id
+                                previous_vertex: String::from_utf8_lossy(&message.id.vertex_name).into(),
+                            };
+                            message.metadata = Some(metadata);
+
                             message.offset = Some(offset.clone());
                             message.id = message_id.clone();
 
