@@ -137,6 +137,7 @@ export interface PodLogsProps {
   namespaceId: string;
   podName: string;
   containerName: string;
+  type: string;
 }
 
 export interface ResourceUsage {
