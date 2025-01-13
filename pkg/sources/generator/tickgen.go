@@ -32,7 +32,6 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 )
 
@@ -198,11 +197,11 @@ loop:
 		// since the Read call is blocking, and runs in an infinite loop,
 		// we implement Read With Wait semantics
 		select {
-		case r := <-mg.srcChan:
+		case r, ok := <-mg.srcChan:
 			// when the channel is closed and empty, go will still read from the channel once and return the zero value.
 			// exclude the zero value from being passed to the next vertex,
 			// ensuring all messages produced by generator follow the same data schema.
-			if util.IsZeroStruct(r) {
+			if !ok {
 				mg.logger.Info("Zero value read from the generator channel, skipping...")
 				continue
 			}
