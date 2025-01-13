@@ -56,7 +56,6 @@ async fn start_source_forwarder(
 
     let callback_handler = match config.callback_config {
         Some(ref cb_cfg) => Some(CallbackHandler::new(
-            config.pipeline_name.clone(),
             config.vertex_name.clone(),
             cb_cfg.callback_concurrency,
         )),
@@ -155,7 +154,6 @@ async fn start_map_forwarder(
 
         let callback_handler = match config.callback_config {
             Some(ref cb_cfg) => Some(CallbackHandler::new(
-                config.pipeline_name.clone(),
                 config.vertex_name.clone(),
                 cb_cfg.callback_concurrency,
             )),
@@ -263,7 +261,6 @@ async fn start_sink_forwarder(
 
     let callback_handler = match config.callback_config {
         Some(ref cb_cfg) => Some(CallbackHandler::new(
-            config.pipeline_name.clone(),
             config.vertex_name.clone(),
             cb_cfg.callback_concurrency,
         )),

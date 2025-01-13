@@ -30,13 +30,12 @@ struct CallbackPayload {
 #[derive(Clone)]
 pub struct CallbackHandler {
     client: Client,
-    pipeline_name: String,
     vertex_name: String,
     semaphore: Arc<Semaphore>,
 }
 
 impl CallbackHandler {
-    pub fn new(pipeline_name: String, vertex_name: String, concurrency_limit: usize) -> Self {
+    pub fn new(vertex_name: String, concurrency_limit: usize) -> Self {
         // if env::var(ENV_CALLBACK_ENABLED).is_err() {
         //     return Ok(None);
         // };
@@ -55,7 +54,6 @@ impl CallbackHandler {
 
         Self {
             client,
-            pipeline_name,
             vertex_name,
             semaphore,
         }
@@ -103,22 +101,72 @@ impl CallbackHandler {
         let client = self.client.clone();
         tokio::spawn(async move {
             let _permit = permit;
-            let resp = client
-                .post(callback_url)
-                .header(ID_HEADER, uuid.clone())
-                .json(&[callback_payload])
-                .send()
-                .await
-                .map_err(|e| Error::Source(format!("Sending callback request: {e:?}")))
-                .unwrap(); //FIXME:
+            // Retry incase of failure in making request.
+            // When there is a failure, we retry after wait_secs. This value is doubled after each retry attempt.
+            // Then longest wait time will be 64 seconds.
+            let mut wait_secs = 1;
+            const TOTAL_ATTEMPTS: usize = 7;
+            for i in 1..=TOTAL_ATTEMPTS {
+                let resp = client
+                    .post(&callback_url)
+                    .header(ID_HEADER, uuid.clone())
+                    .json(&[&callback_payload])
+                    .send()
+                    .await;
+                let resp = match resp {
+                    Ok(resp) => resp,
+                    Err(e) => {
+                        if i < TOTAL_ATTEMPTS {
+                            tracing::warn!(
+                                ?e,
+                                "Sending callback request failed. Will retry after a delay"
+                            );
+                            tokio::time::sleep(Duration::from_secs(wait_secs)).await;
+                            wait_secs *= 2;
+                        } else {
+                            tracing::error!(?e, "Sending callback request failed");
+                        }
+                        continue;
+                    }
+                };
 
-            if !resp.status().is_success() {
-                // return Err(Error::Source(format!(
-                //     "Received non-OK status for callback request. Status={}, Body: {}",
-                //     resp.status(),
-                //     resp.text().await.unwrap_or_default()
-                // )));
-                tracing::error!("Received non-OK status for callback request"); //FIXME: what to do with errors
+                if resp.status().is_success() {
+                    break;
+                }
+
+                if resp.status().is_client_error() {
+                    // TODO: When the source serving pod restarts, the callbacks will fail with 4xx status
+                    // since the request ID won't be available in it's in-memory tracker.
+                    // No point in retrying such cases
+                    // 4xx can also happen if payload is wrong (due to bugs in the code). We should differentiate
+                    // between what can be retried and not.
+                    let status_code = resp.status();
+                    let response_body = resp.text().await;
+                    tracing::error!(
+                        ?status_code,
+                        ?response_body,
+                        "Received client error while making callback. Callback will not be retried"
+                    );
+                    break;
+                }
+
+                let status_code = resp.status();
+                let response_body = resp.text().await;
+                if i < TOTAL_ATTEMPTS {
+                    tracing::warn!(
+                        ?status_code,
+                        ?response_body,
+                        "Received non-OK status for callback request. Will retry after a delay"
+                    );
+                    tokio::time::sleep(Duration::from_secs(wait_secs)).await;
+                    wait_secs *= 2;
+                } else {
+                    tracing::error!(
+                        ?status_code,
+                        ?response_body,
+                        "Received non-OK status for callback request"
+                    );
+                }
             }
         });
 

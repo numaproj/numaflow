@@ -302,6 +302,7 @@ impl MapHandle {
             Ok(())
         });
 
+        tracing::info!("Returning output_rx stream");
         Ok((ReceiverStream::new(output_rx), handle))
     }
 

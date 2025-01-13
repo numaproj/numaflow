@@ -19,6 +19,8 @@ use crate::config::pipeline::map::MapVtxConfig;
 use crate::error::Error;
 use crate::Result;
 
+use super::{DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED};
+
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
 const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
@@ -26,9 +28,6 @@ const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL"
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
 const ENV_PAF_BATCH_SIZE: &str = "PAF_BATCH_SIZE";
-const ENV_CALLBACK_ENABLED: &str = "NUMAFLOW_CALLBACK_ENABLED";
-const ENV_CALLBACK_CONCURRENCY: &str = "NUMAFLOW_CALLBACK_CONCURRENCY";
-const DEFAULT_CALLBACK_CONCURRENCY: usize = 100;
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_MAP_SOCKET: &str = "/var/run/numaflow/map.sock";
 pub(crate) const DEFAULT_BATCH_MAP_SOCKET: &str = "/var/run/numaflow/batchmap.sock";
@@ -408,7 +407,7 @@ impl PipelineConfig {
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
             paf_concurrency: get_var(ENV_PAF_BATCH_SIZE)
-                .unwrap_or((DEFAULT_BATCH_SIZE * 2).to_string())
+                .unwrap_or_else(|_| (DEFAULT_BATCH_SIZE * 2).to_string())
                 .parse()
                 .unwrap(),
             read_timeout: Duration::from_millis(timeout_in_ms as u64),

@@ -72,7 +72,6 @@ pub(crate) async fn start_forwarder(
     let callback_handler = match config.callback_config {
         Some(ref cb_cfg) => Some(CallbackHandler::new(
             config.name.clone(),
-            config.name.clone(),
             cb_cfg.callback_concurrency,
         )),
         None => None,

@@ -20,13 +20,11 @@ use crate::Result;
 
 use super::pipeline::ServingCallbackConfig;
 
+use super::{DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED};
+
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
 const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
-
-const ENV_CALLBACK_ENABLED: &str = "NUMAFLOW_CALLBACK_ENABLED"; //FIXME: duplicates
-const ENV_CALLBACK_CONCURRENCY: &str = "NUMAFLOW_CALLBACK_CONCURRENCY";
-const DEFAULT_CALLBACK_CONCURRENCY: usize = 100;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MonovertexConfig {

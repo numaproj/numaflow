@@ -10,6 +10,10 @@ use crate::Result;
 const ENV_MONO_VERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 const ENV_VERTEX_OBJ: &str = "NUMAFLOW_VERTEX_OBJECT";
 
+const ENV_CALLBACK_ENABLED: &str = "NUMAFLOW_CALLBACK_ENABLED";
+const ENV_CALLBACK_CONCURRENCY: &str = "NUMAFLOW_CALLBACK_CONCURRENCY";
+const DEFAULT_CALLBACK_CONCURRENCY: usize = 100;
+
 /// Building blocks (Source, Sink, Transformer, FallBack, Metrics, etc.) to build a Pipeline or a
 /// MonoVertex.
 pub(crate) mod components;
@@ -112,7 +116,7 @@ impl Settings {
                 custom_resource_type: CustomResourceType::Pipeline(cfg),
             });
         }
-        Err(Error::Config("No configuration found - env variable {ENV_MONO_VERTEX_OBJ} or {ENV_VERTEX_OBJ} is not set".to_string()))
+        Err(Error::Config("No configuration found - environment variable {ENV_MONO_VERTEX_OBJ} or {ENV_VERTEX_OBJ} is not set".to_string()))
     }
 }
 

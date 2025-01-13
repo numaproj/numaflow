@@ -185,6 +185,7 @@ impl JetstreamWriter {
         let this = self.clone();
 
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
+            tracing::info!("Starting streaming Jetstream writer");
             let mut messages_stream = messages_stream;
             let mut hash = DefaultHasher::new();
 
@@ -256,10 +257,12 @@ impl JetstreamWriter {
                             "Message does not contain previous vertex name in the metadata"
                         ))
                     })?;
-                    callback_handler
+                    if let Err(e) = callback_handler
                         .callback(&message.headers, &message.tags, metadata.previous_vertex)
                         .await
-                        .unwrap(); // FIXME:
+                    {
+                        tracing::error!(?e, "Failed to send callback for message");
+                    }
                 };
 
                 processed_msgs_count += 1;
@@ -273,6 +276,7 @@ impl JetstreamWriter {
                     last_logged_at = Instant::now();
                 }
             }
+            tracing::info!("Streaming jetstream writer finished");
             Ok(())
         });
         Ok(handle)

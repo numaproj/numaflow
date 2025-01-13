@@ -318,10 +318,12 @@ impl SinkWriter {
                                     "Writing to Sink: message does not contain previous vertex name in the metadata"
                                 ))
                             })?;
-                            callback_handler
+                            if let Err(e) = callback_handler
                                 .callback(&message.headers, &message.tags, metadata.previous_vertex)
                                 .await
-                                .unwrap(); // FIXME:
+                            {
+                                tracing::error!(?e, "Failed to send callback for message");
+                            }
                         }
                     };
 
@@ -839,7 +841,7 @@ mod tests {
         drop(tx);
 
         let handle = sink_writer
-            .streaming_write(ReceiverStream::new(rx), CancellationToken::new())
+            .streaming_write(ReceiverStream::new(rx), CancellationToken::new(), None)
             .await
             .unwrap();
 
@@ -918,7 +920,7 @@ mod tests {
         drop(tx);
         let cln_token = CancellationToken::new();
         let handle = sink_writer
-            .streaming_write(ReceiverStream::new(rx), cln_token.clone())
+            .streaming_write(ReceiverStream::new(rx), cln_token.clone(), None)
             .await
             .unwrap();
 
@@ -1006,7 +1008,7 @@ mod tests {
         drop(tx);
         let cln_token = CancellationToken::new();
         let handle = sink_writer
-            .streaming_write(ReceiverStream::new(rx), cln_token.clone())
+            .streaming_write(ReceiverStream::new(rx), cln_token.clone(), None)
             .await
             .unwrap();
 
