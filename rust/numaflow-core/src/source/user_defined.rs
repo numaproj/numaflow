@@ -1,19 +1,22 @@
-use std::time::Duration;
-
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
 use numaflow_pb::clients::source;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::source::{
-    read_request, AckRequest, AckResponse, ReadRequest, ReadResponse,
+    read_request, read_response, AckRequest, AckResponse, ReadRequest, ReadResponse,
 };
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 
-use crate::message::{Message, Offset};
+use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::reader::LagReader;
+use crate::shared::grpc::utc_from_timestamp;
 use crate::source::{SourceAcker, SourceReader};
-use crate::{Error, Result};
+use crate::{config, Error, Result};
 
 /// User-Defined Source to operative on custom sources.
 #[derive(Debug)]
@@ -100,6 +103,51 @@ impl UserDefinedSourceRead {
     }
 }
 
+/// Convert [`read_response::Result`] to [`Message`]
+impl TryFrom<read_response::Result> for Message {
+    type Error = Error;
+
+    fn try_from(result: read_response::Result) -> Result<Self> {
+        let source_offset = match result.offset {
+            Some(o) => Offset::String(StringOffset {
+                offset: BASE64_STANDARD.encode(o.offset).into(),
+                partition_idx: o.partition_id as u16,
+            }),
+            None => return Err(Error::Source("Offset not found".to_string())),
+        };
+
+        Ok(Message {
+            keys: Arc::from(result.keys),
+            tags: None,
+            value: result.payload.into(),
+            offset: Some(source_offset.clone()),
+            event_time: utc_from_timestamp(result.event_time),
+            id: MessageID {
+                vertex_name: config::get_vertex_name().to_string().into(),
+                offset: source_offset.to_string().into(),
+                index: 0,
+            },
+            headers: result.headers,
+        })
+    }
+}
+
+impl TryFrom<Offset> for source::Offset {
+    type Error = Error;
+
+    fn try_from(offset: Offset) -> std::result::Result<Self, Self::Error> {
+        match offset {
+            Offset::Int(_) => Err(Error::Source("IntOffset not supported".to_string())),
+            Offset::String(o) => Ok(numaflow_pb::clients::source::Offset {
+                offset: BASE64_STANDARD
+                    .decode(o.offset)
+                    .expect("we control the encoding, so this should never fail"),
+                partition_id: o.partition_idx as i32,
+            }),
+        }
+    }
+}
+
 impl SourceReader for UserDefinedSourceRead {
     fn name(&self) -> &'static str {
         "user-defined-source"
@@ -136,7 +184,7 @@ impl SourceReader for UserDefinedSourceRead {
     }
 
     fn partitions(&self) -> Vec<u16> {
-        todo!()
+        unimplemented!()
     }
 }
 
@@ -233,16 +281,16 @@ impl LagReader for UserDefinedSourceLagReader {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
 
-    use chrono::Utc;
+    use super::*;
+    use crate::message::IntOffset;
+    use crate::shared::grpc::{create_rpc_channel, prost_timestamp_from_utc};
+    use chrono::{TimeZone, Utc};
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
     use tokio::sync::mpsc::Sender;
-
-    use super::*;
-    use crate::shared::grpc::create_rpc_channel;
 
     struct SimpleSource {
         num: usize,
@@ -292,8 +340,8 @@ mod tests {
             }
         }
 
-        async fn pending(&self) -> usize {
-            self.yet_to_ack.read().unwrap().len()
+        async fn pending(&self) -> Option<usize> {
+            Some(self.yet_to_ack.read().unwrap().len())
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {
@@ -352,5 +400,46 @@ mod tests {
             .send(())
             .expect("failed to send shutdown signal");
         server_handle.await.expect("failed to join server task");
+    }
+
+    #[test]
+    fn test_read_response_result_to_message() {
+        let result = read_response::Result {
+            payload: vec![1, 2, 3],
+            offset: Some(numaflow_pb::clients::source::Offset {
+                offset: BASE64_STANDARD.encode("123").into_bytes(),
+                partition_id: 0,
+            }),
+            event_time: Some(
+                prost_timestamp_from_utc(Utc.timestamp_opt(1627846261, 0).unwrap()).unwrap(),
+            ),
+            keys: vec!["key1".to_string()],
+            headers: HashMap::new(),
+        };
+
+        let message: Result<crate::message::Message> = result.try_into();
+        assert!(message.is_ok());
+
+        let message = message.unwrap();
+        assert_eq!(message.keys.to_vec(), vec!["key1".to_string()]);
+        assert_eq!(message.value, vec![1, 2, 3]);
+        assert_eq!(
+            message.event_time,
+            Utc.timestamp_opt(1627846261, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_offset_conversion() {
+        // Test conversion from Offset to AckRequest for StringOffset
+        let offset =
+            crate::message::Offset::String(StringOffset::new(BASE64_STANDARD.encode("42"), 1));
+        let offset: Result<numaflow_pb::clients::source::Offset> = offset.try_into();
+        assert_eq!(offset.unwrap().partition_id, 1);
+
+        // Test conversion from Offset to AckRequest for IntOffset (should fail)
+        let offset = crate::message::Offset::Int(IntOffset::new(42, 1));
+        let result: Result<numaflow_pb::clients::source::Offset> = offset.try_into();
+        assert!(result.is_err());
     }
 }

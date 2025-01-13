@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.4.2 (2024-12-11)
+
+ * [c9dc38f4](https://github.com/numaproj/numaflow/commit/c9dc38f4cce2b5db598536a7539f2a35febcf1ca) Update manifests to v1.4.2
+ * [fea792b3](https://github.com/numaproj/numaflow/commit/fea792b36bd342adcdcdd96768b6fdd68921bfd2) fix: set max decode size of proto message (#2275)
+
+### Contributors
+
+ * Sidhant Kohli
+
+## v1.4.1 (2024-12-05)
+
+ * [346f2a73](https://github.com/numaproj/numaflow/commit/346f2a7321d158fa9ce9392cfdcc76d671d6f577) Update manifests to v1.4.1
+ * [1343e4d4](https://github.com/numaproj/numaflow/commit/1343e4d47934afcea324d4426df810dd9e99d9ab) feat: add sdk infomation metrics (#2208)
+ * [1abb5ede](https://github.com/numaproj/numaflow/commit/1abb5ede3577016b7c2a923755e1445146efdb05) fix: Fix Sink Config to respect Fallback (#2261)
+
+### Contributors
+
+ * Derek Wang
+ * Yashash H L
+
 ## v1.4.0 (2024-11-08)
 
  * [6892c115](https://github.com/numaproj/numaflow/commit/6892c11590ea482c186724e55837dbcfb2100ce3) Update manifests to v1.4.0
@@ -282,6 +302,15 @@
  * dependabot[bot]
  * samhith-kakarla
  * xdevxy
+
+## v1.2.2 (2024-11-15)
+
+ * [61adf4e9](https://github.com/numaproj/numaflow/commit/61adf4e9805c2772d937a7513afcb3c14048127c) Update manifests to v1.2.2
+ * [623cc4e2](https://github.com/numaproj/numaflow/commit/623cc4e2aaa2d67d196cb972bd525a60544d2148) fix: update key len (#2223)
+
+### Contributors
+
+ * Sidhant Kohli
 
 ## v1.2.1 (2024-05-07)
 

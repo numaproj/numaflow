@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/assert"
@@ -38,13 +40,46 @@ func (m *MockPrometheusAPI) QueryRange(ctx context.Context, query string, r v1.R
 	return mockResponse, nil, nil
 }
 
-// comparePrometheusQueries compares two Prometheus queries, ignoring the order of filters within the curly braces
-func comparePrometheusQueries(query1, query2 string) bool {
-	// Extract the filter portions of the queries
+func compareFilters(query1, query2 string) bool {
+	//Extract the filter portions of the queries
 	filters1 := extractfilters(query1)
 	filters2 := extractfilters(query2)
-	// Compare the filter portions using reflect.DeepEqual, which ignores order
 	return reflect.DeepEqual(filters1, filters2)
+}
+
+// comparePrometheusQueries compares two Prometheus queries, ignoring the order of filters within the curly braces
+func comparePrometheusQueries(query1, query2 string) bool {
+	//Extract the filter portions of the queries
+	filters1 := extractfilters(query1)
+	filters2 := extractfilters(query2)
+	//Compare the filter portions using reflect.DeepEqual, which ignores order
+	if !reflect.DeepEqual(filters1, filters2) {
+		return false // Filters don't match
+	}
+
+	//Remove filter portions from the queries
+	query1 = removeFilters(query1)
+	query2 = removeFilters(query2)
+
+	//Normalize the remaining parts of the queries
+	query1 = normalizeQuery(query1)
+	query2 = normalizeQuery(query2)
+
+	//Compare the normalized queries
+	return cmp.Equal(query1, query2, cmpopts.IgnoreUnexported(struct{}{}))
+
+}
+
+func normalizeQuery(query string) string {
+	// Remove extra whitespace and normalize case
+	query = strings.TrimSpace(strings.ToLower(query))
+	return query
+}
+
+// remove filters within {}
+func removeFilters(query string) string {
+	re := regexp.MustCompile(`\{(.*?)\}`)
+	return re.ReplaceAllString(query, "")
 }
 
 // extractfilters extracts the key-value pairs within the curly braces
@@ -97,7 +132,7 @@ func Test_PopulateReqMap(t *testing.T) {
 		assert.Equal(t, actualMap["$quantile"], expectedMap["$quantile"])
 		assert.Equal(t, actualMap["$duration"], expectedMap["$duration"])
 		assert.Equal(t, actualMap["$dimension"], expectedMap["$dimension"])
-		if !comparePrometheusQueries(expectedMap["$filters"], actualMap["$filters"]) {
+		if !compareFilters(expectedMap["$filters"], actualMap["$filters"]) {
 			t.Errorf("filters do not match")
 		}
 	})
@@ -121,7 +156,7 @@ func Test_PopulateReqMap(t *testing.T) {
 		assert.Equal(t, actualMap["$duration"], expectedMap["$duration"])
 		assert.Equal(t, actualMap["$dimension"], expectedMap["$dimension"])
 
-		if !comparePrometheusQueries(expectedMap["$filters"], actualMap["$filters"]) {
+		if !compareFilters(expectedMap["$filters"], actualMap["$filters"]) {
 			t.Errorf("filters do not match")
 		}
 	})
@@ -160,7 +195,7 @@ func Test_PromQueryBuilder(t *testing.T) {
 					"pod":       "test-pod",
 				},
 			},
-			expectedQuery: `histogram_quantile(0.90, sum by(test_dimension,le) (rate(test_bucket{namespace= "test_namespace", mvtx_name= "test-mono-vertex", pod= "test-pod"}[5m])))`,
+			expectedQuery: `histogram_quantile(0.90, sum by(test_dimension,le) (rate(test_metric{namespace= "test_namespace", mvtx_name= "test-mono-vertex", pod= "test-pod"}[5m])))`,
 		},
 		{
 			name: "Missing placeholder in req",
@@ -273,6 +308,136 @@ func Test_PromQueryBuilder(t *testing.T) {
 			}
 		})
 	}
+
+	// tests for mono-vertex gauge metrics
+	var gauge_service = &PromQlService{
+		PlaceHolders: map[string]map[string][]string{
+			"monovtx_pending": {
+				"mono-vertex": {"$dimension", "$metric_name", "$filters"},
+			},
+		},
+		Expression: map[string]map[string]string{
+			"monovtx_pending": {
+				"mono-vertex": "sum($metric_name{$filters}) by ($dimension, period)",
+			},
+		},
+	}
+
+	gauge_metrics_tests := []struct {
+		name          string
+		requestBody   MetricsRequestBody
+		expectedQuery string
+		expectError   bool
+	}{
+		{
+			name: "Successful gauge metrics template substitution",
+			requestBody: MetricsRequestBody{
+				MetricName: "monovtx_pending",
+				Dimension:  "mono-vertex",
+				Filters: map[string]string{
+					"namespace": "test_namespace",
+					"mvtx_name": "test_mvtx",
+					"period":    "5m",
+				},
+			},
+			expectedQuery: `sum(monovtx_pending{namespace= "test_namespace", mvtx_name= "test_mvtx", period= "5m"}) by (mvtx_name, period)`,
+		},
+		{
+			name: "Missing metric name in service config",
+			requestBody: MetricsRequestBody{
+				MetricName: "non_existent_metric",
+				Dimension:  "mono-vertex",
+				Filters: map[string]string{
+					"namespace": "test_namespace",
+					"mvtx_name": "test_mvtx",
+					"period":    "5m",
+				},
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range gauge_metrics_tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualQuery, err := gauge_service.BuildQuery(tt.requestBody)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if !comparePrometheusQueries(tt.expectedQuery, actualQuery) {
+					t.Errorf("Prometheus queries do not match.\nExpected: %s\nGot: %s", tt.expectedQuery, actualQuery)
+				} else {
+					t.Log("Prometheus queries match!")
+				}
+			}
+		})
+	}
+
+	// tests for pipeline gauge metrics
+	var pl_gauge_service = &PromQlService{
+		PlaceHolders: map[string]map[string][]string{
+			"vertex_pending_messages": {
+				"vertex": {"$dimension", "$metric_name", "$filters"},
+			},
+		},
+		Expression: map[string]map[string]string{
+			"vertex_pending_messages": {
+				"vertex": "sum($metric_name{$filters}) by ($dimension, period)",
+			},
+		},
+	}
+
+	pl_gauge_metrics_tests := []struct {
+		name          string
+		requestBody   MetricsRequestBody
+		expectedQuery string
+		expectError   bool
+	}{
+		{
+			name: "Successful pipeline gauge metrics template substitution",
+			requestBody: MetricsRequestBody{
+				MetricName: "vertex_pending_messages",
+				Dimension:  "vertex",
+				Filters: map[string]string{
+					"namespace": "test_namespace",
+					"pipeline":  "test_pipeline",
+					"vertex":    "test_vertex",
+					"period":    "5m",
+				},
+			},
+			expectedQuery: `sum(vertex_pending_messages{namespace= "test_namespace", pipeline= "test_pipeline", vertex= "test_vertex", period= "5m"}) by (vertex, period)`,
+		},
+		{
+			name: "Missing metric name in service config",
+			requestBody: MetricsRequestBody{
+				MetricName: "non_existent_metric",
+				Dimension:  "mono-vertex",
+				Filters: map[string]string{
+					"namespace": "test_namespace",
+					"pipeline":  "test_pipeline",
+					"vertex":    "test_vertex",
+					"period":    "5m",
+				},
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range pl_gauge_metrics_tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualQuery, err := pl_gauge_service.BuildQuery(tt.requestBody)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if !comparePrometheusQueries(tt.expectedQuery, actualQuery) {
+					t.Errorf("Prometheus queries do not match.\nExpected: %s\nGot: %s", tt.expectedQuery, actualQuery)
+				} else {
+					t.Log("Prometheus queries match!")
+				}
+			}
+		})
+	}
 }
 
 func Test_QueryPrometheus(t *testing.T) {
@@ -307,6 +472,52 @@ func Test_QueryPrometheus(t *testing.T) {
 			},
 		}
 		query := `sum(rate(forwarder_data_read_total{namespace="default", pipeline="test-pipeline"}[5m])) by (vertex)`
+		startTime := time.Now().Add(-30 * time.Minute)
+		endTime := time.Now()
+
+		ctx := context.Background()
+		result, err := promQlService.QueryPrometheus(ctx, query, startTime, endTime)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+
+		// for query range , response should be a matrix
+		matrix, ok := result.(model.Matrix)
+		assert.True(t, ok)
+		assert.Equal(t, 1, matrix.Len())
+	})
+
+	t.Run("Successful mono-vertex gauge query", func(t *testing.T) {
+		mockAPI := &MockPrometheusAPI{}
+		promQlService := &PromQlService{
+			PrometheusClient: &Prometheus{
+				Api: mockAPI,
+			},
+		}
+		query := `sum(monovtx_pending{namespace="default", mvtx_name="test-mvtx", period="5m"}) by (mvtx_name, period)`
+		startTime := time.Now().Add(-30 * time.Minute)
+		endTime := time.Now()
+
+		ctx := context.Background()
+		result, err := promQlService.QueryPrometheus(ctx, query, startTime, endTime)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+
+		// for query range , response should be a matrix
+		matrix, ok := result.(model.Matrix)
+		assert.True(t, ok)
+		assert.Equal(t, 1, matrix.Len())
+	})
+
+	t.Run("Successful pipeline gauge query", func(t *testing.T) {
+		mockAPI := &MockPrometheusAPI{}
+		promQlService := &PromQlService{
+			PrometheusClient: &Prometheus{
+				Api: mockAPI,
+			},
+		}
+		query := `sum(vertex_pending_messages{namespace="default", pipeline="test-pipeline", vertex="test-vertex", period="5m"}) by (vertex, period)`
 		startTime := time.Now().Add(-30 * time.Minute)
 		endTime := time.Now()
 

@@ -1133,6 +1133,27 @@ func (h *handler) GetMonoVertex(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, monoVertexResp))
 }
 
+// DeleteMonoVertex is used to delete a mono vertex
+func (h *handler) DeleteMonoVertex(c *gin.Context) {
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+
+	// Check if the mono vertex exists
+	_, err := h.numaflowClient.MonoVertices(ns).Get(c, monoVertex, metav1.GetOptions{})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch mono vertex %q in namespace %q, %s", monoVertex, ns, err.Error()))
+		return
+	}
+
+	// Delete the mono vertex
+	err = h.numaflowClient.MonoVertices(ns).Delete(c, monoVertex, metav1.DeleteOptions{})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to delete mono vertex %q in namespace %q, %s", monoVertex, ns, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+}
+
 // CreateMonoVertex is used to create a mono vertex
 func (h *handler) CreateMonoVertex(c *gin.Context) {
 	if h.opts.readonly {
@@ -1319,7 +1340,7 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 					})
 				}
 
-				discoveredMetrics = append(discoveredMetrics, NewDiscoveryResponse(metric.Name, dimensionData))
+				discoveredMetrics = append(discoveredMetrics, NewDiscoveryResponse(metric.Name, metric.DisplayName, metric.Unit, dimensionData))
 			}
 		}
 	}

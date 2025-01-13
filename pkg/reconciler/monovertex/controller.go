@@ -206,7 +206,8 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 	if err := mr.cleanUpPodsFromTo(ctx, monoVtx, desiredReplicas, math.MaxInt); err != nil {
 		return fmt.Errorf("failed to clean up mono vertex pods [%v, ∞): %w", desiredReplicas, err)
 	}
-	if currentReplicas := int(monoVtx.Status.Replicas); currentReplicas > desiredReplicas {
+	currentReplicas := int(monoVtx.Status.Replicas)
+	if currentReplicas > desiredReplicas {
 		monoVtx.Status.Replicas = uint32(desiredReplicas)
 	}
 	updatedReplicas := int(monoVtx.Status.UpdatedReplicas)
@@ -286,7 +287,6 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 		}
 	}
 
-	currentReplicas := int(monoVtx.Status.Replicas)
 	if currentReplicas != desiredReplicas {
 		log.Infow("MonoVertex replicas changed", "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
 		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "ReplicasScaled", "Replicas changed from %d to %d", currentReplicas, desiredReplicas)

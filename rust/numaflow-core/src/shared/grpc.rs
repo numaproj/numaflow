@@ -5,6 +5,7 @@ use axum::http::Uri;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use chrono::{DateTime, TimeZone, Timelike, Utc};
+use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -15,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tower::service_fn;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::error;
 use crate::error::Error;
@@ -81,6 +82,26 @@ pub(crate) async fn wait_until_transformer_ready(
     Ok(())
 }
 
+/// Waits until the mapper server is ready, by doing health checks
+pub(crate) async fn wait_until_mapper_ready(
+    cln_token: &CancellationToken,
+    client: &mut MapClient<Channel>,
+) -> error::Result<()> {
+    loop {
+        if cln_token.is_cancelled() {
+            return Err(Error::Forwarder(
+                "Cancellation token is cancelled".to_string(),
+            ));
+        }
+        match client.is_ready(Request::new(())).await {
+            Ok(_) => break,
+            Err(_) => sleep(Duration::from_secs(1)).await,
+        }
+        info!("Waiting for mapper client to be ready...");
+    }
+    Ok(())
+}
+
 pub(crate) fn prost_timestamp_from_utc(t: DateTime<Utc>) -> Option<Timestamp> {
     Some(Timestamp {
         seconds: t.timestamp(),
@@ -90,13 +111,21 @@ pub(crate) fn prost_timestamp_from_utc(t: DateTime<Utc>) -> Option<Timestamp> {
 
 pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> error::Result<Channel> {
     const RECONNECT_INTERVAL: u64 = 1000;
-    const MAX_RECONNECT_ATTEMPTS: usize = 5;
+    const MAX_RECONNECT_ATTEMPTS: usize = 60;
 
     let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
 
     let channel = Retry::retry(
         interval,
-        || async { connect_with_uds(socket_path.clone()).await },
+        || async {
+            match connect_with_uds(socket_path.clone()).await {
+                Ok(channel) => Ok(channel),
+                Err(e) => {
+                    warn!(?e, "Failed to connect to UDS socket");
+                    Err(Error::Connection(format!("Failed to connect: {:?}", e)))
+                }
+            }
+        },
         |_: &Error| true,
     )
     .await?;

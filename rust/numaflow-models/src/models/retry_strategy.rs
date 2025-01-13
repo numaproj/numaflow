@@ -22,7 +22,7 @@ limitations under the License.
 pub struct RetryStrategy {
     #[serde(rename = "backoff", skip_serializing_if = "Option::is_none")]
     pub backoff: Option<Box<crate::models::Backoff>>,
-    /// OnFailure specifies the action to take when a retry fails. The default action is to retry.
+    /// OnFailure specifies the action to take when the specified retry strategy fails. The possible values are: 1. \"retry\": start another round of retrying the operation, 2. \"fallback\": re-route the operation to a fallback sink and 3. \"drop\": drop the operation and perform no further action. The default action is to retry.
     #[serde(rename = "onFailure", skip_serializing_if = "Option::is_none")]
     pub on_failure: Option<String>,
 }

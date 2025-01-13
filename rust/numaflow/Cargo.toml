@@ -1,0 +1,18 @@
+[package]
+name = "numaflow"
+version = "0.1.0"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[dependencies]
+servesink.workspace = true
+serving.workspace = true
+numaflow-core.workspace = true
+numaflow-models.workspace = true
+backoff.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+rustls.workspace = true
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

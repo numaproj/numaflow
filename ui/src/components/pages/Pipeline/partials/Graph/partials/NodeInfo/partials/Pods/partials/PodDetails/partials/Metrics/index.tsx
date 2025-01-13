@@ -65,6 +65,11 @@ export function Metrics({ namespaceId, pipelineId, type, vertexId }: MetricsProp
   return (
     <Box sx={{ height: "100%" }}>
       {discoveredMetrics?.data?.map((metric: any) => {
+        if (
+          type === "source" &&
+          metric?.metric_name === "vertex_pending_messages"
+        )
+          return null;
         const panelId = `${metric?.metric_name}-panel`;
         return (
           <Accordion
@@ -77,8 +82,8 @@ export function Metrics({ namespaceId, pipelineId, type, vertexId }: MetricsProp
               aria-controls={`${metric?.metric_name}-content`}
               id={`${metric?.metric_name}-header`}
             >
-              <Box sx={{ textTransform: "capitalize" }}>
-                {metricNameMap[metric?.metric_name] || metric?.metric_name}
+              <Box>
+                {metric?.display_name || metricNameMap[metric?.metric_name] || metric?.metric_name}
               </Box>
             </AccordionSummary>
             <AccordionDetails>

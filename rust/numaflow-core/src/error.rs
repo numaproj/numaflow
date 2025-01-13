@@ -16,6 +16,9 @@ pub enum Error {
     #[error("Transformer Error - {0}")]
     Transformer(String),
 
+    #[error("Mapper Error - {0}")]
+    Mapper(String),
+
     #[error("Forwarder Error - {0}")]
     Forwarder(String),
 
@@ -49,6 +52,9 @@ pub enum Error {
 
     #[error("Lag cannot be fetched, {0}")]
     Lag(String),
+
+    #[error("Task Error - {0}")]
+    Tracker(String),
 }
 
 impl From<tonic::Status> for Error {

@@ -19,7 +19,7 @@ export const dimensionMap: { [p: string]: string } = {
   "mono-vertex": "MonoVertex",
   pod: "Pod",
   pipeline: "Pipeline",
-  vertex: "Vertex"
+  vertex: "Vertex",
 };
 
 export const dimensionReverseMap: { [p: string]: string } = {
@@ -32,12 +32,15 @@ export const dimensionReverseMap: { [p: string]: string } = {
 };
 
 export const metricNameMap: { [p: string]: string } = {
-  monovtx_ack_time_bucket: "Mono Vertex Ack Time Latency (in micro seconds)",
-  monovtx_read_time_bucket: "Mono Vertex Read Time Latency (in micro seconds)",
+  monovtx_ack_time_bucket: "Mono Vertex Ack Time Latency",
+  monovtx_read_time_bucket: "Mono Vertex Read Time Latency",
   monovtx_processing_time_bucket:
-    "Mono Vertex Processing Time Latency (in micro seconds)",
+    "Mono Vertex Processing Time Latency",
   monovtx_sink_time_bucket:
-    "Mono Vertex Sink Write Time Latency (in micro seconds)",
+    "Mono Vertex Sink Write Time Latency",
   forwarder_data_read_total:
-    "Vertex Read Processing Rate"
+    "Vertex Read Processing Rate",
+  monovtx_read_total: "Mono Vertex Read Processing Rate",
+  monovtx_pending: "Mono Vertex Pending Messages",
+  vertex_pending_messages: "Vertex Pending Messages",
 };

@@ -1,8 +1,5 @@
-use crate::sink::Sink;
-use crate::{
-    error,
-    message::{Message, ResponseFromSink, ResponseStatusFromSink},
-};
+use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
+use crate::{error, message::Message};
 
 pub(crate) struct LogSink;
 
@@ -35,38 +32,42 @@ impl Sink for LogSink {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use chrono::Utc;
 
     use super::LogSink;
     use crate::message::IntOffset;
-    use crate::message::{Message, MessageID, Offset, ResponseFromSink, ResponseStatusFromSink};
-    use crate::sink::Sink;
+    use crate::message::{Message, MessageID, Offset};
+    use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 
     #[tokio::test]
     async fn test_log_sink() {
         let mut sink = LogSink;
         let messages = vec![
             Message {
-                keys: vec![],
+                keys: Arc::from(vec![]),
+                tags: None,
                 value: b"Hello, World!".to_vec().into(),
                 offset: Some(Offset::Int(IntOffset::new(1, 0))),
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: "1".to_string(),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: "1".to_string().into(),
                     index: 0,
                 },
             },
             Message {
-                keys: vec![],
+                keys: Arc::from(vec![]),
+                tags: None,
                 value: b"Hello, World!".to_vec().into(),
                 offset: Some(Offset::Int(IntOffset::new(1, 0))),
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: "2".to_string(),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: "2".to_string().into(),
                     index: 1,
                 },
             },

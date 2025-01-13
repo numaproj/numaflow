@@ -12,13 +12,14 @@ use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
+use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::BufferReaderConfig;
-use crate::config::pipeline::PipelineConfig;
 use crate::error::Error;
-use crate::message::{IntOffset, Message, Offset, ReadAck, ReadMessage};
+use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
 use crate::metrics::{
     pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
 };
+use crate::tracker::TrackerHandle;
 use crate::Result;
 
 /// The JetstreamReader is a handle to the background actor that continuously fetches messages from Jetstream.
@@ -31,6 +32,8 @@ pub(crate) struct JetstreamReader {
     partition_idx: u16,
     config: BufferReaderConfig,
     consumer: PullConsumer,
+    tracker_handle: TrackerHandle,
+    batch_size: usize,
 }
 
 impl JetstreamReader {
@@ -39,6 +42,8 @@ impl JetstreamReader {
         partition_idx: u16,
         js_ctx: Context,
         config: BufferReaderConfig,
+        tracker_handle: TrackerHandle,
+        batch_size: usize,
     ) -> Result<Self> {
         let mut config = config;
 
@@ -65,6 +70,8 @@ impl JetstreamReader {
             partition_idx,
             config: config.clone(),
             consumer,
+            tracker_handle,
+            batch_size,
         })
     }
 
@@ -77,14 +84,14 @@ impl JetstreamReader {
     pub(crate) async fn streaming_read(
         &self,
         cancel_token: CancellationToken,
-        pipeline_config: &PipelineConfig,
-    ) -> Result<(ReceiverStream<ReadMessage>, JoinHandle<Result<()>>)> {
-        let (messages_tx, messages_rx) = mpsc::channel(2 * pipeline_config.batch_size);
+    ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
+        let (messages_tx, messages_rx) = mpsc::channel(2 * self.batch_size);
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let consumer = self.consumer.clone();
             let partition_idx = self.partition_idx;
             let config = self.config.clone();
+            let tracker_handle = self.tracker_handle.clone();
             let cancel_token = cancel_token.clone();
 
             let stream_name = self.stream_name;
@@ -98,8 +105,6 @@ impl JetstreamReader {
                     ))
                 })?;
 
-                let mut start_time = Instant::now();
-                let mut total_messages = 0;
                 loop {
                     tokio::select! {
                         _ = cancel_token.cancelled() => { // should we drain from the stream when token is cancelled?
@@ -139,42 +144,44 @@ impl JetstreamReader {
                                 }
                             };
 
-                            message.offset = Some(Offset::Int(IntOffset::new(
+                            let offset = Offset::Int(IntOffset::new(
                                 msg_info.stream_sequence,
                                 partition_idx,
-                            )));
+                            ));
 
+                            let message_id = MessageID {
+                                vertex_name: get_vertex_name().to_string().into(),
+                                offset: offset.to_string().into(),
+                                index: 0,
+                            };
+
+                            message.offset = Some(offset.clone());
+                            message.id = message_id.clone();
+
+                            // Insert the message into the tracker and wait for the ack to be sent back.
                             let (ack_tx, ack_rx) = oneshot::channel();
+                            tracker_handle.insert(message_id.offset.clone(), ack_tx).await?;
+
                             tokio::spawn(Self::start_work_in_progress(
                                 jetstream_message,
                                 ack_rx,
                                 config.wip_ack_interval,
                             ));
 
-                            let read_message = ReadMessage {
-                                message,
-                                ack: ack_tx,
-                            };
-
-                            messages_tx.send(read_message).await.map_err(|e| {
-                                Error::ISB(format!("Error while sending message to channel: {:?}", e))
-                            })?;
+                            if let Err(e) = messages_tx.send(message).await {
+                                // nak the read message and return
+                                tracker_handle.discard(message_id.offset.clone()).await?;
+                                return Err(Error::ISB(format!(
+                                    "Failed to send message to receiver: {:?}",
+                                    e
+                                )));
+                            }
 
                             pipeline_metrics()
                                 .forwarder
                                 .read_total
                                 .get_or_create(labels)
                                 .inc();
-
-                            if start_time.elapsed() >= Duration::from_millis(1000) {
-                                info!(
-                                    "Total messages read from Jetstream in {:?} seconds: {}",
-                                    start_time.elapsed(),
-                                    total_messages
-                                );
-                                start_time = Instant::now();
-                                total_messages = 0;
-                            }
                         }
                     }
                 }
@@ -260,16 +267,16 @@ impl fmt::Display for JetstreamReader {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
     use chrono::Utc;
+    use tokio::time::sleep;
 
     use super::*;
-    use crate::message::ReadAck::Ack;
     use crate::message::{Message, MessageID};
-    use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -280,6 +287,8 @@ mod tests {
         let context = jetstream::new(client);
 
         let stream_name = "test_jetstream_read";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -307,51 +316,43 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let js_reader = JetstreamReader::new(stream_name, 0, context.clone(), buf_reader_config)
-            .await
-            .unwrap();
+        let js_reader = JetstreamReader::new(
+            stream_name,
+            0,
+            context.clone(),
+            buf_reader_config,
+            TrackerHandle::new(),
+            500,
+        )
+        .await
+        .unwrap();
 
-        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW91dCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im91dCIsInNpbmsiOnsiYmxhY2tob2xlIjp7fSwicmV0cnlTdHJhdGVneSI6eyJvbkZhaWx1cmUiOiJyZXRyeSJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoib3V0IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==".to_string();
-
-        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
-        let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
         let reader_cancel_token = CancellationToken::new();
         let (mut js_reader_rx, js_reader_task) = js_reader
-            .streaming_read(reader_cancel_token.clone(), &pipeline_config)
+            .streaming_read(reader_cancel_token.clone())
             .await
             .unwrap();
-
-        let writer_cancel_token = CancellationToken::new();
-        let writer = JetstreamWriter::new(
-            vec![(stream_name.to_string(), 0)],
-            Default::default(),
-            context.clone(),
-            writer_cancel_token.clone(),
-        );
 
         for i in 0..10 {
             let message = Message {
-                keys: vec![format!("key_{}", i)],
+                keys: Arc::from(vec![format!("key_{}", i)]),
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
-            writer
-                .write((stream_name.to_string(), 0), message_bytes.into())
-                .await
+            context
+                .publish(stream_name, message_bytes.into())
                 .await
                 .unwrap();
         }
-
-        // Cancel the token to exit the retry loop
-        writer_cancel_token.cancel();
 
         let mut buffer = vec![];
         for _ in 0..10 {
@@ -380,8 +381,11 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
+        let tracker_handle = TrackerHandle::new();
 
         let stream_name = "test_ack";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -409,58 +413,66 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let js_reader = JetstreamReader::new(stream_name, 0, context.clone(), buf_reader_config)
-            .await
-            .unwrap();
+        let js_reader = JetstreamReader::new(
+            stream_name,
+            0,
+            context.clone(),
+            buf_reader_config,
+            tracker_handle.clone(),
+            1,
+        )
+        .await
+        .unwrap();
 
-        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW91dCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im91dCIsInNpbmsiOnsiYmxhY2tob2xlIjp7fSwicmV0cnlTdHJhdGVneSI6eyJvbkZhaWx1cmUiOiJyZXRyeSJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoib3V0IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==".to_string();
-
-        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
-        let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
         let reader_cancel_token = CancellationToken::new();
         let (mut js_reader_rx, js_reader_task) = js_reader
-            .streaming_read(reader_cancel_token.clone(), &pipeline_config)
+            .streaming_read(reader_cancel_token.clone())
             .await
             .unwrap();
 
-        let writer_cancel_token = CancellationToken::new();
-        let writer = JetstreamWriter::new(
-            vec![(stream_name.to_string(), 0)],
-            Default::default(),
-            context.clone(),
-            writer_cancel_token.clone(),
-        );
-
+        let mut offsets = vec![];
         // write 5 messages
         for i in 0..5 {
             let message = Message {
-                keys: vec![format!("key_{}", i)],
+                keys: Arc::from(vec![format!("key_{}", i)]),
+                tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: format!("offset_{}", i),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("{}-0", i + 1).into(),
                     index: i,
                 },
                 headers: HashMap::new(),
             };
+            offsets.push(message.id.offset.clone());
             let message_bytes: BytesMut = message.try_into().unwrap();
-            writer
-                .write((stream_name.to_string(), 0), message_bytes.into())
-                .await
+            context
+                .publish(stream_name, message_bytes.into())
                 .await
                 .unwrap();
         }
-        // Cancel the token to exit the retry loop
-        writer_cancel_token.cancel();
 
         for _ in 0..5 {
-            let Some(val) = js_reader_rx.next().await else {
+            let Some(_val) = js_reader_rx.next().await else {
                 break;
             };
-            val.ack.send(Ack).unwrap()
         }
+
+        // after reading messages remove from the tracker so that the messages are acked
+        for offset in offsets {
+            tracker_handle.delete(offset).await.unwrap();
+        }
+
+        // wait until the tracker becomes empty, don't wait more than 1 second
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !tracker_handle.is_empty().await.unwrap() {
+                sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("Tracker is not empty after 1 second");
 
         let mut consumer: PullConsumer = context
             .get_consumer_from_stream(stream_name, stream_name)

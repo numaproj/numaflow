@@ -1,9 +1,6 @@
-use std::env;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use async_nats::jetstream;
-use async_nats::jetstream::Context;
 use axum::extract::{MatchedPath, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
@@ -17,7 +14,7 @@ use tokio::signal;
 use tower::ServiceBuilder;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
-use tracing::{debug, info, info_span, Level};
+use tracing::{info, info_span, Level};
 use uuid::Uuid;
 
 use self::{
@@ -25,10 +22,9 @@ use self::{
     message_path::get_message_path,
 };
 use crate::app::callback::store::Store;
-use crate::app::tracker::MessageGraph;
-use crate::pipeline::min_pipeline_spec;
-use crate::Error::{InitError, MetricsServer};
-use crate::{app::callback::state::State as CallbackState, config, metrics::capture_metrics};
+use crate::metrics::capture_metrics;
+use crate::AppState;
+use crate::Error::InitError;
 
 /// manage callbacks
 pub(crate) mod callback;
@@ -39,11 +35,7 @@ mod jetstream_proxy;
 /// Return message path in response to UI requests
 mod message_path; // TODO: merge message_path and tracker
 mod response;
-mod tracker;
-
-const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
-const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
-const ENV_NUMAFLOW_SERVING_AUTH_TOKEN: &str = "NUMAFLOW_SERVING_AUTH_TOKEN";
+pub(crate) mod tracker;
 
 /// Everything for numaserve starts here. The routing, middlewares, proxying, etc.
 // TODO
@@ -51,20 +43,47 @@ const ENV_NUMAFLOW_SERVING_AUTH_TOKEN: &str = "NUMAFLOW_SERVING_AUTH_TOKEN";
 // - [ ] outer fallback for /v1/direct
 
 /// Start the main application Router and the axum server.
-pub(crate) async fn start_main_server(
-    addr: SocketAddr,
+pub(crate) async fn start_main_server<T>(
+    app: AppState<T>,
     tls_config: RustlsConfig,
-) -> crate::Result<()> {
-    debug!(?addr, "App server started");
+) -> crate::Result<()>
+where
+    T: Clone + Send + Sync + Store + 'static,
+{
+    let app_addr: SocketAddr = format!("0.0.0.0:{}", &app.settings.app_listen_port)
+        .parse()
+        .map_err(|e| InitError(format!("{e:?}")))?;
 
+    let handle = Handle::new();
+    // Spawn a task to gracefully shutdown server.
+    tokio::spawn(graceful_shutdown(handle.clone()));
+
+    info!(?app_addr, "Starting application server");
+
+    let router = router_with_auth(app).await?;
+
+    axum_server::bind_rustls(app_addr, tls_config)
+        .handle(handle)
+        .serve(router.into_make_service())
+        .await
+        .map_err(|e| InitError(format!("Starting web server for metrics: {}", e)))?;
+
+    Ok(())
+}
+
+pub(crate) async fn router_with_auth<T>(app: AppState<T>) -> crate::Result<Router>
+where
+    T: Clone + Send + Sync + Store + 'static,
+{
+    let tid_header = app.settings.tid_header.clone();
     let layers = ServiceBuilder::new()
         // Add tracing to all requests
         .layer(
             TraceLayer::new_for_http()
-                .make_span_with(|req: &Request<Body>| {
+                .make_span_with(move |req: &Request<Body>| {
                     let tid = req
                         .headers()
-                        .get(&config().tid_header)
+                        .get(&tid_header)
                         .and_then(|v| v.to_str().ok())
                         .map(|v| v.to_string())
                         .unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -83,42 +102,14 @@ pub(crate) async fn start_main_server(
         .layer(
             // Graceful shutdown will wait for outstanding requests to complete. Add a timeout so
             // requests don't hang forever.
-            TimeoutLayer::new(Duration::from_secs(config().drain_timeout_secs)),
+            TimeoutLayer::new(Duration::from_secs(app.settings.drain_timeout_secs)),
         )
         // Add auth middleware to all user facing routes
-        .layer(middleware::from_fn(auth_middleware));
-
-    // Create the message graph from the pipeline spec and the redis store
-    let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).map_err(|e| {
-        InitError(format!(
-            "Creating message graph from pipeline spec: {:?}",
-            e
-        ))
-    })?;
-
-    // Create a redis store to store the callbacks and the custom responses
-    let redis_store = callback::store::redisstore::RedisConnection::new(
-        &config().redis.addr,
-        config().redis.max_tasks,
-    )
-    .await?;
-    let state = CallbackState::new(msg_graph, redis_store).await?;
-
-    let handle = Handle::new();
-    // Spawn a task to gracefully shutdown server.
-    tokio::spawn(graceful_shutdown(handle.clone()));
-
-    // Create a Jetstream context
-    let js_context = create_js_context().await?;
-
-    let router = setup_app(js_context, state).await?.layer(layers);
-    axum_server::bind_rustls(addr, tls_config)
-        .handle(handle)
-        .serve(router.into_make_service())
-        .await
-        .map_err(|e| MetricsServer(format!("Starting web server for metrics: {}", e)))?;
-
-    Ok(())
+        .layer(middleware::from_fn_with_state(
+            app.settings.api_auth_token.clone(),
+            auth_middleware,
+        ));
+    Ok(setup_app(app).await?.layer(layers))
 }
 
 // Gracefully shutdown the server on receiving SIGINT or SIGTERM
@@ -149,34 +140,6 @@ async fn graceful_shutdown(handle: Handle) {
     handle.graceful_shutdown(Some(Duration::from_secs(30)));
 }
 
-async fn create_js_context() -> crate::Result<Context> {
-    // Check for user and password in the Jetstream configuration
-    let js_config = &config().jetstream;
-
-    // Connect to Jetstream with user and password if they are set
-    let js_client = match (
-        env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_USER),
-        env::var(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD),
-    ) {
-        (Ok(user), Ok(password)) => {
-            async_nats::connect_with_options(
-                &js_config.url,
-                async_nats::ConnectOptions::with_user_and_password(user, password),
-            )
-            .await
-        }
-        _ => async_nats::connect(&js_config.url).await,
-    }
-    .map_err(|e| {
-        InitError(format!(
-            "Connecting to jetstream server {}: {}",
-            &config().jetstream.url,
-            e
-        ))
-    })?;
-    Ok(jetstream::new(js_client))
-}
-
 const PUBLISH_ENDPOINTS: [&str; 3] = [
     "/v1/process/sync",
     "/v1/process/sync_serve",
@@ -185,7 +148,11 @@ const PUBLISH_ENDPOINTS: [&str; 3] = [
 
 // auth middleware to do token based authentication for all user facing routes
 // if auth is enabled.
-async fn auth_middleware(request: axum::extract::Request, next: Next) -> Response {
+async fn auth_middleware(
+    State(api_auth_token): State<Option<String>>,
+    request: axum::extract::Request,
+    next: Next,
+) -> Response {
     let path = request.uri().path();
 
     // we only need to check for the presence of the auth token in the request headers for the publish endpoints
@@ -193,8 +160,8 @@ async fn auth_middleware(request: axum::extract::Request, next: Next) -> Respons
         return next.run(request).await;
     }
 
-    match env::var(ENV_NUMAFLOW_SERVING_AUTH_TOKEN) {
-        Ok(token) => {
+    match api_auth_token {
+        Some(token) => {
             // Check for the presence of the auth token in the request headers
             let auth_token = match request.headers().get("Authorization") {
                 Some(token) => token,
@@ -216,7 +183,7 @@ async fn auth_middleware(request: axum::extract::Request, next: Next) -> Respons
                 next.run(request).await
             }
         }
-        Err(_) => {
+        None => {
             // If the auth token is not set, we don't need to check for the presence of the auth token in the request headers
             next.run(request).await
         }
@@ -224,14 +191,13 @@ async fn auth_middleware(request: axum::extract::Request, next: Next) -> Respons
 }
 
 async fn setup_app<T: Clone + Send + Sync + Store + 'static>(
-    context: Context,
-    state: CallbackState<T>,
+    app: AppState<T>,
 ) -> crate::Result<Router> {
     let parent = Router::new()
         .route("/health", get(health_check))
         .route("/livez", get(livez)) // Liveliness check
         .route("/readyz", get(readyz))
-        .with_state((state.clone(), context.clone())); // Readiness check
+        .with_state(app.clone()); // Readiness check
 
     // a pool based client implementation for direct proxy, this client is cloneable.
     let client: direct_proxy::Client =
@@ -240,8 +206,11 @@ async fn setup_app<T: Clone + Send + Sync + Store + 'static>(
 
     // let's nest each endpoint
     let app = parent
-        .nest("/v1/direct", direct_proxy(client))
-        .nest("/v1/process", routes(context, state).await?);
+        .nest(
+            "/v1/direct",
+            direct_proxy(client, app.settings.upstream_addr.clone()),
+        )
+        .nest("/v1/process", routes(app).await?);
 
     Ok(app)
 }
@@ -250,16 +219,14 @@ async fn health_check() -> impl IntoResponse {
     "ok"
 }
 
-async fn livez<T: Send + Sync + Clone + Store + 'static>(
-    State((_state, _context)): State<(CallbackState<T>, Context)>,
-) -> impl IntoResponse {
+async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
 async fn readyz<T: Send + Sync + Clone + Store + 'static>(
-    State((mut state, context)): State<(CallbackState<T>, Context)>,
+    State(app): State<AppState<T>>,
 ) -> impl IntoResponse {
-    if state.ready().await && context.get_stream(&config().jetstream.stream).await.is_ok() {
+    if app.callback_state.clone().ready().await {
         StatusCode::NO_CONTENT
     } else {
         StatusCode::INTERNAL_SERVER_ERROR
@@ -267,11 +234,14 @@ async fn readyz<T: Send + Sync + Clone + Store + 'static>(
 }
 
 async fn routes<T: Clone + Send + Sync + Store + 'static>(
-    context: Context,
-    state: CallbackState<T>,
+    app_state: AppState<T>,
 ) -> crate::Result<Router> {
-    let jetstream_proxy = jetstream_proxy(context, state.clone()).await?;
-    let callback_router = callback_handler(state.clone());
+    let state = app_state.callback_state.clone();
+    let jetstream_proxy = jetstream_proxy(app_state.clone()).await?;
+    let callback_router = callback_handler(
+        app_state.settings.tid_header.clone(),
+        app_state.callback_state.clone(),
+    );
     let message_path_handler = get_message_path(state);
     Ok(jetstream_proxy
         .merge(callback_router)
@@ -280,177 +250,107 @@ async fn routes<T: Clone + Send + Sync + Store + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddr;
+    use std::sync::Arc;
 
-    use async_nats::jetstream::stream;
     use axum::http::StatusCode;
-    use tokio::time::{sleep, Duration};
     use tower::ServiceExt;
 
     use super::*;
     use crate::app::callback::store::memstore::InMemoryStore;
-    use crate::config::cert_key_pair;
+    use crate::Settings;
+    use callback::state::State as CallbackState;
+    use tokio::sync::mpsc;
+    use tracker::MessageGraph;
+
+    const PIPELINE_SPEC_ENCODED: &str = "eyJ2ZXJ0aWNlcyI6W3sibmFtZSI6ImluIiwic291cmNlIjp7InNlcnZpbmciOnsiYXV0aCI6bnVsbCwic2VydmljZSI6dHJ1ZSwibXNnSURIZWFkZXJLZXkiOiJYLU51bWFmbG93LUlkIiwic3RvcmUiOnsidXJsIjoicmVkaXM6Ly9yZWRpczo2Mzc5In19fSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIiLCJlbnYiOlt7Im5hbWUiOiJSVVNUX0xPRyIsInZhbHVlIjoiZGVidWcifV19LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19LHsibmFtZSI6InBsYW5uZXIiLCJ1ZGYiOnsiY29udGFpbmVyIjp7ImltYWdlIjoiYXNjaWk6MC4xIiwiYXJncyI6WyJwbGFubmVyIl0sInJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sImJ1aWx0aW4iOm51bGwsImdyb3VwQnkiOm51bGx9LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19LHsibmFtZSI6InRpZ2VyIiwidWRmIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImFzY2lpOjAuMSIsImFyZ3MiOlsidGlnZXIiXSwicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwiYnVpbHRpbiI6bnVsbCwiZ3JvdXBCeSI6bnVsbH0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sInNjYWxlIjp7Im1pbiI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX0seyJuYW1lIjoiZG9nIiwidWRmIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImFzY2lpOjAuMSIsImFyZ3MiOlsiZG9nIl0sInJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sImJ1aWx0aW4iOm51bGwsImdyb3VwQnkiOm51bGx9LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19LHsibmFtZSI6ImVsZXBoYW50IiwidWRmIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImFzY2lpOjAuMSIsImFyZ3MiOlsiZWxlcGhhbnQiXSwicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwiYnVpbHRpbiI6bnVsbCwiZ3JvdXBCeSI6bnVsbH0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sInNjYWxlIjp7Im1pbiI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX0seyJuYW1lIjoiYXNjaWlhcnQiLCJ1ZGYiOnsiY29udGFpbmVyIjp7ImltYWdlIjoiYXNjaWk6MC4xIiwiYXJncyI6WyJhc2NpaWFydCJdLCJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJidWlsdGluIjpudWxsLCJncm91cEJ5IjpudWxsfSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fSx7Im5hbWUiOiJzZXJ2ZS1zaW5rIiwic2luayI6eyJ1ZHNpbmsiOnsiY29udGFpbmVyIjp7ImltYWdlIjoic2VydmVzaW5rOjAuMSIsImVudiI6W3sibmFtZSI6Ik5VTUFGTE9XX0NBTExCQUNLX1VSTF9LRVkiLCJ2YWx1ZSI6IlgtTnVtYWZsb3ctQ2FsbGJhY2stVXJsIn0seyJuYW1lIjoiTlVNQUZMT1dfTVNHX0lEX0hFQURFUl9LRVkiLCJ2YWx1ZSI6IlgtTnVtYWZsb3ctSWQifV0sInJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn19LCJyZXRyeVN0cmF0ZWd5Ijp7fX0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sInNjYWxlIjp7Im1pbiI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX0seyJuYW1lIjoiZXJyb3Itc2luayIsInNpbmsiOnsidWRzaW5rIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6InNlcnZlc2luazowLjEiLCJlbnYiOlt7Im5hbWUiOiJOVU1BRkxPV19DQUxMQkFDS19VUkxfS0VZIiwidmFsdWUiOiJYLU51bWFmbG93LUNhbGxiYWNrLVVybCJ9LHsibmFtZSI6Ik5VTUFGTE9XX01TR19JRF9IRUFERVJfS0VZIiwidmFsdWUiOiJYLU51bWFmbG93LUlkIn1dLCJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9fSwicmV0cnlTdHJhdGVneSI6e319LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19XSwiZWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoicGxhbm5lciIsImNvbmRpdGlvbnMiOm51bGx9LHsiZnJvbSI6InBsYW5uZXIiLCJ0byI6ImFzY2lpYXJ0IiwiY29uZGl0aW9ucyI6eyJ0YWdzIjp7Im9wZXJhdG9yIjoib3IiLCJ2YWx1ZXMiOlsiYXNjaWlhcnQiXX19fSx7ImZyb20iOiJwbGFubmVyIiwidG8iOiJ0aWdlciIsImNvbmRpdGlvbnMiOnsidGFncyI6eyJvcGVyYXRvciI6Im9yIiwidmFsdWVzIjpbInRpZ2VyIl19fX0seyJmcm9tIjoicGxhbm5lciIsInRvIjoiZG9nIiwiY29uZGl0aW9ucyI6eyJ0YWdzIjp7Im9wZXJhdG9yIjoib3IiLCJ2YWx1ZXMiOlsiZG9nIl19fX0seyJmcm9tIjoicGxhbm5lciIsInRvIjoiZWxlcGhhbnQiLCJjb25kaXRpb25zIjp7InRhZ3MiOnsib3BlcmF0b3IiOiJvciIsInZhbHVlcyI6WyJlbGVwaGFudCJdfX19LHsiZnJvbSI6InRpZ2VyIiwidG8iOiJzZXJ2ZS1zaW5rIiwiY29uZGl0aW9ucyI6bnVsbH0seyJmcm9tIjoiZG9nIiwidG8iOiJzZXJ2ZS1zaW5rIiwiY29uZGl0aW9ucyI6bnVsbH0seyJmcm9tIjoiZWxlcGhhbnQiLCJ0byI6InNlcnZlLXNpbmsiLCJjb25kaXRpb25zIjpudWxsfSx7ImZyb20iOiJhc2NpaWFydCIsInRvIjoic2VydmUtc2luayIsImNvbmRpdGlvbnMiOm51bGx9LHsiZnJvbSI6InBsYW5uZXIiLCJ0byI6ImVycm9yLXNpbmsiLCJjb25kaXRpb25zIjp7InRhZ3MiOnsib3BlcmF0b3IiOiJvciIsInZhbHVlcyI6WyJlcnJvciJdfX19XSwibGlmZWN5Y2xlIjp7fSwid2F0ZXJtYXJrIjp7fX0=";
+
+    type Result<T> = core::result::Result<T, Error>;
+    type Error = Box<dyn std::error::Error>;
 
     #[tokio::test]
-    async fn test_start_main_server() {
-        let (cert, key) = cert_key_pair();
-
-        let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
-            .await
-            .unwrap();
-
-        let addr = SocketAddr::from(([127, 0, 0, 1], 0));
-        let server = tokio::spawn(async move {
-            let result = start_main_server(addr, tls_config).await;
-            assert!(result.is_ok())
-        });
-
-        // Give the server a little bit of time to start
-        sleep(Duration::from_millis(50)).await;
-
-        // Stop the server
-        server.abort();
-    }
-
-    #[cfg(feature = "all-tests")]
-    #[tokio::test]
-    async fn test_setup_app() {
-        let client = async_nats::connect(&config().jetstream.url).await.unwrap();
-        let context = jetstream::new(client);
-        let stream_name = &config().jetstream.stream;
-
-        let stream = context
-            .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
-                ..Default::default()
-            })
-            .await;
-
-        assert!(stream.is_ok());
+    async fn test_setup_app() -> Result<()> {
+        let settings = Arc::new(Settings::default());
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
+        let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
+        let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
 
-        let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
+        let callback_state = CallbackState::new(msg_graph, mem_store).await?;
+        let (tx, _) = mpsc::channel(10);
+        let app = AppState {
+            message: tx,
+            settings,
+            callback_state,
+        };
 
-        let result = setup_app(context, callback_state).await;
+        let result = setup_app(app).await;
         assert!(result.is_ok());
+        Ok(())
     }
 
-    #[cfg(feature = "all-tests")]
     #[tokio::test]
-    async fn test_livez() {
-        let client = async_nats::connect(&config().jetstream.url).await.unwrap();
-        let context = jetstream::new(client);
-        let stream_name = &config().jetstream.stream;
-
-        let stream = context
-            .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
-                ..Default::default()
-            })
-            .await;
-
-        assert!(stream.is_ok());
+    async fn test_health_check_endpoints() -> Result<()> {
+        let settings = Arc::new(Settings::default());
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
+        let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec)?;
+        let callback_state = CallbackState::new(msg_graph, mem_store).await?;
 
-        let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
+        let (messages_tx, _messages_rx) = mpsc::channel(10);
+        let app = AppState {
+            message: messages_tx,
+            settings,
+            callback_state,
+        };
 
-        let result = setup_app(context, callback_state).await;
+        let router = setup_app(app).await.unwrap();
 
-        let request = Request::builder()
-            .uri("/livez")
-            .body(Body::empty())
-            .unwrap();
-
-        let response = result.unwrap().oneshot(request).await.unwrap();
+        let request = Request::builder().uri("/livez").body(Body::empty())?;
+        let response = router.clone().oneshot(request).await?;
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
-    }
 
-    #[cfg(feature = "all-tests")]
-    #[tokio::test]
-    async fn test_readyz() {
-        let client = async_nats::connect(&config().jetstream.url).await.unwrap();
-        let context = jetstream::new(client);
-        let stream_name = &config().jetstream.stream;
-
-        let stream = context
-            .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
-                ..Default::default()
-            })
-            .await;
-
-        assert!(stream.is_ok());
-
-        let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
-
-        let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
-
-        let result = setup_app(context, callback_state).await;
-
-        let request = Request::builder()
-            .uri("/readyz")
-            .body(Body::empty())
-            .unwrap();
-
-        let response = result.unwrap().oneshot(request).await.unwrap();
+        let request = Request::builder().uri("/readyz").body(Body::empty())?;
+        let response = router.clone().oneshot(request).await?;
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
-    }
 
-    #[tokio::test]
-    async fn test_health_check() {
-        let response = health_check().await;
-        let response = response.into_response();
+        let request = Request::builder().uri("/health").body(Body::empty())?;
+        let response = router.clone().oneshot(request).await?;
         assert_eq!(response.status(), StatusCode::OK);
+        Ok(())
     }
 
-    #[cfg(feature = "all-tests")]
     #[tokio::test]
-    async fn test_auth_middleware() {
-        let client = async_nats::connect(&config().jetstream.url).await.unwrap();
-        let context = jetstream::new(client);
-        let stream_name = &config().jetstream.stream;
-
-        let stream = context
-            .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
-                ..Default::default()
-            })
-            .await;
-
-        assert!(stream.is_ok());
+    async fn test_auth_middleware() -> Result<()> {
+        let settings = Settings {
+            api_auth_token: Some("test-token".into()),
+            ..Default::default()
+        };
 
         let mem_store = InMemoryStore::new();
-        let msg_graph = MessageGraph::from_pipeline(min_pipeline_spec()).unwrap();
-        let callback_state = CallbackState::new(msg_graph, mem_store).await.unwrap();
+        let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
+        let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
+        let callback_state = CallbackState::new(msg_graph, mem_store).await?;
 
-        let app = Router::new()
-            .nest(
-                "/v1/process",
-                routes(context, callback_state).await.unwrap(),
-            )
-            .layer(middleware::from_fn(auth_middleware));
+        let (messages_tx, _messages_rx) = mpsc::channel(10);
 
-        env::set_var(ENV_NUMAFLOW_SERVING_AUTH_TOKEN, "test_token");
-        let res = app
+        let app_state = AppState {
+            message: messages_tx,
+            settings: Arc::new(settings),
+            callback_state,
+        };
+
+        let router = router_with_auth(app_state).await.unwrap();
+        let res = router
             .oneshot(
                 axum::extract::Request::builder()
+                    .method("POST")
                     .uri("/v1/process/sync")
                     .body(Body::empty())
                     .unwrap(),
             )
-            .await
-            .unwrap();
+            .await?;
 
         assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
-        env::remove_var(ENV_NUMAFLOW_SERVING_AUTH_TOKEN);
+        Ok(())
     }
 }

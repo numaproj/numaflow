@@ -318,7 +318,7 @@ func (mv MonoVertex) simpleCopy() MonoVertex {
 
 func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, error) {
 	copiedSpec := mv.simpleCopy()
-	copiedSpec.Spec.Scale = Scale{}
+	copiedSpec.Spec.Scale = Scale{LookbackSeconds: mv.Spec.Scale.LookbackSeconds}
 	monoVtxBytes, err := json.Marshal(copiedSpec)
 	if err != nil {
 		return nil, errors.New("failed to marshal mono vertex spec")
@@ -481,10 +481,9 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 	if mvspec.Sink.UDSink != nil { // Only support UDSink for now.
 		sidecarContainers = append(sidecarContainers, mvspec.Sink.getUDSinkContainer(req))
 	}
-	if mvspec.Sink.Fallback != nil {
+	if mvspec.Sink.Fallback != nil && mvspec.Sink.Fallback.UDSink != nil {
 		sidecarContainers = append(sidecarContainers, mvspec.Sink.getFallbackUDSinkContainer(req))
 	}
-	// Fallback sink is not supported.
 	sidecarContainers = append(sidecarContainers, mvspec.Sidecars...)
 	return sidecarContainers, containers
 }

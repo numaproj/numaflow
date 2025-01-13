@@ -4,9 +4,11 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
+use tracing::error;
 
-use crate::message::{Message, ResponseFromSink};
-use crate::sink::Sink;
+use crate::message::Message;
+use crate::shared::grpc::prost_timestamp_from_utc;
+use crate::sink::{ResponseFromSink, Sink};
 use crate::Error;
 use crate::Result;
 
@@ -16,6 +18,24 @@ const DEFAULT_CHANNEL_SIZE: usize = 1000;
 pub struct UserDefinedSink {
     sink_tx: mpsc::Sender<SinkRequest>,
     resp_stream: Streaming<SinkResponse>,
+}
+
+/// Convert [`Message`] to [`proto::SinkRequest`]
+impl From<Message> for SinkRequest {
+    fn from(message: Message) -> Self {
+        Self {
+            request: Some(numaflow_pb::clients::sink::sink_request::Request {
+                keys: message.keys.to_vec(),
+                value: message.value.to_vec(),
+                event_time: prost_timestamp_from_utc(message.event_time),
+                watermark: None,
+                id: message.id.to_string(),
+                headers: message.headers,
+            }),
+            status: None,
+            handshake: None,
+        }
+    }
 }
 
 impl UserDefinedSink {
@@ -97,7 +117,7 @@ impl Sink for UserDefinedSink {
 
             if response.status.map_or(false, |s| s.eot) {
                 if responses.len() != num_requests {
-                    log::error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
+                    error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
                 } else {
                     break;
                 }
@@ -118,6 +138,8 @@ impl Sink for UserDefinedSink {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use chrono::offset::Utc;
     use numaflow::sink;
     use tokio::sync::mpsc;
@@ -179,26 +201,28 @@ mod tests {
 
         let messages = vec![
             Message {
-                keys: vec![],
+                keys: Arc::from(vec![]),
+                tags: None,
                 value: b"Hello, World!".to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: "1".to_string(),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: "1".to_string().into(),
                     index: 0,
                 },
             },
             Message {
-                keys: vec![],
+                keys: Arc::from(vec![]),
+                tags: None,
                 value: b"Hello, World!".to_vec().into(),
                 offset: None,
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
-                    vertex_name: "vertex".to_string(),
-                    offset: "2".to_string(),
+                    vertex_name: "vertex".to_string().into(),
+                    offset: "2".to_string().into(),
                     index: 1,
                 },
             },

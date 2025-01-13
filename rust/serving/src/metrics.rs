@@ -97,6 +97,7 @@ pub(crate) async fn start_https_metrics_server(
 ) -> crate::Result<()> {
     let metrics_app = Router::new().route("/metrics", get(metrics_handler));
 
+    tracing::info!(?addr, "Starting metrics server");
     axum_server::bind_rustls(addr, tls_config)
         .serve(metrics_app.into_make_service())
         .await
@@ -167,11 +168,16 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
-    use crate::config::cert_key_pair;
+    use crate::config::generate_certs;
+
+    type Result<T> = core::result::Result<T, Error>;
+    type Error = Box<dyn std::error::Error>;
 
     #[tokio::test]
-    async fn test_start_metrics_server() {
-        let (cert, key) = cert_key_pair();
+    async fn test_start_metrics_server() -> Result<()> {
+        // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        let (cert, key) = generate_certs()?;
 
         let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
             .await
@@ -188,6 +194,7 @@ mod tests {
 
         // Stop the server
         server.abort();
+        Ok(())
     }
 
     #[tokio::test]

@@ -2,7 +2,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error;
 use crate::error::Error;
-use crate::pipeline::isb::jetstream::ISBWriter;
+use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::source::Source;
 use crate::transformer::Transformer;
 
@@ -11,7 +11,7 @@ use crate::transformer::Transformer;
 pub(crate) struct SourceForwarder {
     source: Source,
     transformer: Option<Transformer>,
-    writer: ISBWriter,
+    writer: JetstreamWriter,
     cln_token: CancellationToken,
 }
 
@@ -19,14 +19,14 @@ pub(crate) struct SourceForwarder {
 pub(crate) struct SourceForwarderBuilder {
     streaming_source: Source,
     transformer: Option<Transformer>,
-    writer: ISBWriter,
+    writer: JetstreamWriter,
     cln_token: CancellationToken,
 }
 
 impl SourceForwarderBuilder {
     pub(crate) fn new(
         streaming_source: Source,
-        writer: ISBWriter,
+        writer: JetstreamWriter,
         cln_token: CancellationToken,
     ) -> Self {
         Self {
@@ -81,9 +81,9 @@ impl SourceForwarder {
             writer_handle,
         ) {
             Ok((reader_result, transformer_result, sink_writer_result)) => {
-                reader_result?;
-                transformer_result?;
                 sink_writer_result?;
+                transformer_result?;
+                reader_result?;
                 Ok(())
             }
             Err(e) => Err(Error::Forwarder(format!(
@@ -114,11 +114,13 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use crate::config::pipeline::isb::BufferWriterConfig;
-    use crate::pipeline::isb::jetstream::ISBWriter;
+    use crate::config::pipeline::ToVertexConfig;
+    use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
     use crate::pipeline::source_forwarder::SourceForwarderBuilder;
     use crate::shared::grpc::create_rpc_channel;
     use crate::source::user_defined::new_source;
     use crate::source::{Source, SourceType};
+    use crate::tracker::TrackerHandle;
     use crate::transformer::Transformer;
     use crate::Result;
 
@@ -178,9 +180,11 @@ mod tests {
             }
         }
 
-        async fn pending(&self) -> usize {
-            self.num - self.sent_count.load(Ordering::SeqCst)
-                + self.yet_to_ack.read().unwrap().len()
+        async fn pending(&self) -> Option<usize> {
+            Some(
+                self.num - self.sent_count.load(Ordering::SeqCst)
+                    + self.yet_to_ack.read().unwrap().len(),
+            )
         }
 
         async fn partitions(&self) -> Option<Vec<i32>> {
@@ -204,11 +208,13 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_source_forwarder() {
+        let tracker_handle = TrackerHandle::new();
+
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
 
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
-        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let tmp_dir = TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("source.sock");
         let server_info_file = tmp_dir.path().join("source-server-info");
 
@@ -238,6 +244,8 @@ mod tests {
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            tracker_handle.clone(),
+            true,
         );
 
         // create a js writer
@@ -247,6 +255,8 @@ mod tests {
         let context = jetstream::new(client);
 
         let stream_name = "test_source_forwarder";
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream_name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
                 name: stream_name.into(),
@@ -269,16 +279,20 @@ mod tests {
             .await
             .unwrap();
 
-        let writer = ISBWriter::new(
-            10,
-            vec![BufferWriterConfig {
-                streams: vec![(stream_name.to_string(), 0)],
-                ..Default::default()
+        let writer = JetstreamWriter::new(
+            vec![ToVertexConfig {
+                writer_config: BufferWriterConfig {
+                    streams: vec![(stream_name.to_string(), 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+                name: "test-vertex".to_string(),
             }],
             context.clone(),
+            100,
+            tracker_handle.clone(),
             cln_token.clone(),
-        )
-        .await;
+        );
 
         // create a transformer
         let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();
@@ -299,9 +313,10 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let transformer = Transformer::new(10, 10, client).await.unwrap();
+        let transformer = Transformer::new(10, 10, client, tracker_handle)
+            .await
+            .unwrap();
 
         // create the forwarder with the source, transformer, and writer
         let forwarder = SourceForwarderBuilder::new(source.clone(), writer, cln_token.clone())

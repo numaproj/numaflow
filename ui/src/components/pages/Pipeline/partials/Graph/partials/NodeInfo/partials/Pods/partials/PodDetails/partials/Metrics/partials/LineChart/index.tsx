@@ -8,17 +8,112 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  Text
 } from "recharts";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dropdown from "../common/Dropdown";
-import TimeRange from "../common/TimeRange";
 import FiltersDropdown from "../common/FiltersDropdown";
 import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
+import TimeSelector from "../common/TimeRange";
+
+interface TooltipProps {
+  payload?: any[];
+  label?: string;
+  active?: boolean;
+}
+
+function CustomTooltip({ payload, label, active }: TooltipProps) {
+  if (active && payload && payload.length) {
+    const maxWidth = Math.max(...payload.map(entry => entry.name.length)) * 9.5;
+    console.log("max width: ", maxWidth)
+    return (
+      <div className="custom-tooltip" style={{ backgroundColor: '#fff', padding: '10px', border: '1px solid #ccc' }}>
+        <p>{label}</p>
+        {payload.map((entry: any, index: any) => (
+            <div key={`item-${index}`} style={{ display: 'flex' }}>
+              <span style={{  width: `${maxWidth}px`, display: 'inline-block', paddingRight: '10px', color: entry.color }}>{entry.name}:</span>
+              <span style={{color: entry.color}}>{entry.value}</span>
+            </div>
+        ))}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+const getYAxisLabel = (unit: string) => {
+  if (unit !== "") {
+    return unit
+  }
+  return "Units"
+};
+
+const getDefaultFormatter = (value: number, metricName: string) => {
+  const formatValue = (value: number, suffix: string) => {
+    const formattedValue = parseFloat(value.toFixed(2));
+    return formattedValue % 1 === 0 
+      ? `${Math.floor(formattedValue)}${suffix}` 
+      : `${formattedValue}${suffix}`;
+  };
+  switch(metricName){
+    case "monovtx_ack_time_bucket":
+    case "monovtx_read_time_bucket":
+    case "monovtx_processing_time_bucket":
+    case "monovtx_sink_time_bucket":
+    case "numaflow_monovtx_processing_time_bucket":
+    case "numaflow_monovtx_sink_time_bucket":
+    case "numaflow_monovtx_read_time_bucket":
+    case "numaflow_monovtx_ack_time_bucket":
+      if (value === 0){
+        return "0";
+      } else if (value < 1000) {
+        return `${value} μs`;
+      } else if (value < 1000000) {
+        return formatValue(value / 1000, " ms");
+      } else {
+        return formatValue(value / 1000000, " s");
+      }
+    default:
+      if (value === 0){
+        return "0";
+      } else if (value < 1000) {
+        return `${value}`;
+      } else if (value < 1000000) {
+        return formatValue(value / 1000, " k");
+      } else {
+        return formatValue(value / 1000000, " M");
+      }
+  }
+}
+
+const getTickFormatter = (unit: string, metricName: string) => {
+  const formatValue = (value: number) => {
+    const formattedValue = parseFloat(value.toFixed(2));  // Format to 2 decimal places
+    return formattedValue % 1 === 0 ? Math.floor(formattedValue) : formattedValue; // Remove trailing .0
+  };
+  return (value: number) => {
+    switch (unit) {
+      case 's':
+        return `${formatValue(value / 1000000)}`;
+      case 'ms':
+        return `${formatValue(value / 1000)}`;
+      default:
+        return getDefaultFormatter(value, metricName);
+    }
+  }
+};
 
 // TODO have a check for metricReq against metric object to ensure required fields are passed
-const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }: any) => {
+const LineChartComponent = ({
+  namespaceId,
+  pipelineId,
+  type,
+  metric,
+  vertexId,
+}: any) => {
   const [transformedData, setTransformedData] = useState<any[]>([]);
   const [chartLabels, setChartLabels] = useState<any[]>([]);
   const [metricsReq, setMetricsReq] = useState<any>({
@@ -28,11 +123,13 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
   // store all filters for each selected dimension
   const [filtersList, setFiltersList] = useState<any[]>([]);
   const [filters, setFilters] = useState<any>({});
-  const [previousDimension, setPreviousDimension] = useState(metricsReq?.dimension);
+  const [previousDimension, setPreviousDimension] = useState<string>(
+    metricsReq?.dimension
+  );
 
   const getRandomColor = useCallback((index: number) => {
     const hue = (index * 137.508) % 360;
-    return `hsl(${hue}, 70%, 50%)`;
+    return `hsl(${hue}, 50%, 50%)`;
   }, []);
 
   const getFilterValue = useCallback(
@@ -96,7 +193,7 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
         name: param?.Name,
         required: param?.Required,
       })) || [];
-    
+
     setParamsList([...initParams, ...newParams]);
   }, [metric, setParamsList]);
 
@@ -110,12 +207,18 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
     filters,
   });
 
-  const groupByLabel = useCallback((dimension: string) => {
+  const groupByLabel = useCallback((dimension: string, metricName: string) => {
+    switch (metricName) {
+      case "monovtx_pending":
+      case "vertex_pending_messages":
+        return dimension === "pod" ? ["pod", "period"] : ["period"];
+    }
+
     switch (dimension) {
       case "mono-vertex":
-        return "mvtx_name";
+        return ["mvtx_name"];
       default:
-        return dimension;
+        return [dimension];
     }
   }, []);
 
@@ -123,9 +226,23 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
     if (chartData) {
       const labels: any[] = [];
       const transformedData: any[] = [];
-      const label = groupByLabel(metricsReq?.dimension);
+      const label = groupByLabel(
+        metricsReq?.dimension,
+        metricsReq?.metric_name
+      );
       chartData?.forEach((item) => {
-        const labelVal = item?.metric?.[label];
+        let labelVal = "";
+        label?.forEach((eachLabel: string) => {
+          if (item?.metric?.[eachLabel] !== undefined) {
+            labelVal += (labelVal ? "-" : "") + item.metric[eachLabel];
+          }
+        });
+
+        // Remove initial hyphen if labelVal is not empty
+        if (labelVal.startsWith("-") && labelVal.length > 1) {
+          labelVal = labelVal.substring(1);
+        }
+
         labels.push(labelVal);
         item?.values?.forEach(([timestamp, value]: [number, string]) => {
           const date = new Date(timestamp * 1000);
@@ -160,6 +277,8 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
 
   if (paramsList?.length === 0) return <></>;
 
+  const hasTimeParams = paramsList?.some((param) => ["start_time", "end_time"].includes(param.name)); 
+
   return (
     <Box>
       <Box
@@ -187,43 +306,38 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
               </Box>
             );
           })}
-
-        {paramsList
-          ?.filter((param) => ["start_time", "end_time"]?.includes(param.name))
-          ?.map((param: any) => {
-            return (
-              <Box key={`line-chart-${param.name}`}>
-                <TimeRange field={param.name} setMetricReq={setMetricsReq} />
-              </Box>
-            );
-          })}
+        {hasTimeParams && (
+          <Box key="line-chart-preset">
+              <TimeSelector setMetricReq={setMetricsReq} />
+          </Box>
+          )}
       </Box>
 
       {filtersList?.filter((filterEle: any) => !filterEle?.required)?.length >
         0 && (
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-around",
-            mt: "1rem",
-            mb: "2rem",
-            px: "6rem",
-          }}
-        >
-          <Box sx={{ mr: "1rem" }}>Filters</Box>
-          <FiltersDropdown
-            items={filtersList?.filter(
-              (filterEle: any) => !filterEle?.required
-            )}
-            namespaceId={namespaceId}
-            pipelineId={pipelineId}
-            type={type}
-            vertexId={vertexId}
-            setFilters={setFilters}
-          />
-        </Box>
-      )}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-around",
+              mt: "1rem",
+              mb: "2rem",
+              px: "6rem",
+            }}
+          >
+            <Box sx={{ mr: "1rem" }}>Filters</Box>
+            <FiltersDropdown
+              items={filtersList?.filter(
+                (filterEle: any) => !filterEle?.required
+              )}
+              namespaceId={namespaceId}
+              pipelineId={pipelineId}
+              type={type}
+              vertexId={vertexId}
+              setFilters={setFilters}
+            />
+          </Box>
+        )}
 
       {isLoading && (
         <Box
@@ -252,9 +366,15 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
             }}
           >
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="time" padding={{ left: 30, right: 30 }} />
-            <YAxis />
-            <CartesianGrid stroke="#f5f5f5" />
+            <XAxis dataKey="time" padding={{ left: 30, right: 30 }} >
+            </XAxis>
+            <YAxis
+              label={<Text x={-160} y={15} dy={5} transform="rotate(-90)" fontSize={14} textAnchor="middle">{getYAxisLabel(metric?.unit)}</Text>}
+              tickFormatter={getTickFormatter(metric?.unit, metric?.metric_name)}
+            />
+            <CartesianGrid stroke="#f5f5f5">
+            </CartesianGrid>
+
             {chartLabels?.map((value, index) => (
               <Line
                 key={`${value}-line-chart`}
@@ -265,7 +385,7 @@ const LineChartComponent = ({ namespaceId, pipelineId, type, metric, vertexId }:
               />
             ))}
 
-            <Tooltip />
+            <Tooltip content={<CustomTooltip />}/>
             <Legend />
           </LineChart>
         </ResponsiveContainer>

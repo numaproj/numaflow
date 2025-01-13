@@ -1,4 +1,4 @@
-use futures::StreamExt;
+use tokio_stream::StreamExt;
 
 use crate::config::components::source::GeneratorConfig;
 use crate::message::{Message, Offset};
@@ -17,11 +17,12 @@ use crate::source;
 ///              =========================================================================> time
 ///  Read RPU=5: | :xxx:xx:  | :xxx <delay>             |:xxx:xx:| :xxx:xx:  | :xxx:xx:  |
 ///                2 batches   only 1 batch (no reread)      5         5           5
-///                 
+///
 /// ```
 /// NOTE: The minimum granularity of duration is 10ms.
 mod stream_generator {
     use std::pin::Pin;
+    use std::sync::Arc;
     use std::task::{Context, Poll};
     use std::time::Duration;
 
@@ -166,13 +167,14 @@ mod stream_generator {
             }
 
             Message {
-                keys: self.next_key_to_be_fetched(),
+                keys: Arc::from(self.next_key_to_be_fetched()),
+                tags: None,
                 value: data.into(),
                 offset: Some(offset.clone()),
                 event_time,
                 id: MessageID {
-                    vertex_name: get_vertex_name().to_string(),
-                    offset: offset.to_string(),
+                    vertex_name: get_vertex_name().to_string().into(),
+                    offset: offset.to_string().into(),
                     index: Default::default(),
                 },
                 headers: Default::default(),
@@ -234,7 +236,7 @@ mod stream_generator {
 
     #[cfg(test)]
     mod tests {
-        use futures::StreamExt;
+        use tokio_stream::StreamExt;
 
         use super::*;
 
@@ -350,7 +352,7 @@ impl source::SourceReader for GeneratorRead {
     }
 
     fn partitions(&self) -> Vec<u16> {
-        todo!()
+        unimplemented!()
     }
 }
 
