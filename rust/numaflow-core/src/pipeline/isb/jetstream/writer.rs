@@ -253,9 +253,10 @@ impl JetstreamWriter {
 
                 if let Some(ref callback_handler) = this.callback_handler {
                     let metadata = message.metadata.ok_or_else(|| {
-                        Error::Source(format!(
+                        Error::Source(
                             "Message does not contain previous vertex name in the metadata"
-                        ))
+                                .to_owned(),
+                        )
                     })?;
                     if let Err(e) = callback_handler
                         .callback(&message.headers, &message.tags, metadata.previous_vertex)

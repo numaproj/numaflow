@@ -178,7 +178,7 @@ mod tests {
     use crate::callback::{CallbackHandler, DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
     use crate::config::generate_certs;
     use crate::pipeline::PipelineDCG;
-    use crate::{AppState, Settings};
+    use crate::{AppState, Error, Settings};
     use axum_server::tls_rustls::RustlsConfig;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -252,10 +252,11 @@ mod tests {
         .map(|(k, v)| (k.into(), v.into()))
         .collect();
 
+        let tags = Arc::from(vec!["tag1".to_owned()]);
         // On the server, this fails with SubGraphInvalidInput("Invalid callback: 1234, vertex: in")
         // We get 200 OK response from the server, since we already registered this request ID in the store.
         callback_handler
-            .callback(&message_headers, &None, "in".into())
+            .callback(&message_headers, &Some(tags), "in".into())
             .await?;
         let mut data = None;
         for _ in 0..10 {
@@ -270,6 +271,28 @@ mod tests {
         }
         assert!(data.is_some(), "Callback data not found in store");
         server_handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_callback_missing_headers() -> Result<()> {
+        let callback_handler = CallbackHandler::new("test".into(), 10);
+        let message_headers: HashMap<String, String> = HashMap::new();
+        let result = callback_handler
+            .callback(&message_headers, &None, "in".into())
+            .await;
+        assert!(result.is_err());
+
+        let mut message_headers: HashMap<String, String> = HashMap::new();
+        message_headers.insert(
+            DEFAULT_CALLBACK_URL_HEADER_KEY.into(),
+            "https://localhost:3003/v1/process/callback".into(),
+        );
+        let result = callback_handler
+            .callback(&message_headers, &None, "in".into())
+            .await;
+        assert!(result.is_err());
+
         Ok(())
     }
 }
