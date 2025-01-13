@@ -18,6 +18,10 @@ const ENV_NUMAFLOW_SERVING_APP_PORT: &str = "NUMAFLOW_SERVING_APP_LISTEN_PORT";
 const ENV_NUMAFLOW_SERVING_AUTH_TOKEN: &str = "NUMAFLOW_SERVING_AUTH_TOKEN";
 const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 
+pub(crate) const DEFAULT_ID_HEADER: &str = "X-Numaflow-Id";
+pub(crate) const DEFAULT_CALLBACK_URL_HEADER_KEY: &str = "X-Numaflow-Callback-Url";
+
+
 pub fn generate_certs() -> std::result::Result<(Certificate, KeyPair), String> {
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| format!("Failed to generate cert {:?}", e))?;
@@ -63,7 +67,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            tid_header: "ID".to_owned(),
+            tid_header: DEFAULT_ID_HEADER.to_owned(),
             app_listen_port: 3000,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".to_owned(),
@@ -176,7 +180,7 @@ mod tests {
     fn test_default_config() {
         let settings = Settings::default();
 
-        assert_eq!(settings.tid_header, "ID");
+        assert_eq!(settings.tid_header, "X-Numaflow-Id");
         assert_eq!(settings.app_listen_port, 3000);
         assert_eq!(settings.metrics_server_listen_port, 3001);
         assert_eq!(settings.upstream_addr, "localhost:8888");

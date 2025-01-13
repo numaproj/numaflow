@@ -7,10 +7,9 @@ use std::{
 use reqwest::Client;
 use tokio::sync::Semaphore;
 
+use crate::config::DEFAULT_CALLBACK_URL_HEADER_KEY;
+use crate::config::DEFAULT_ID_HEADER;
 use crate::Error;
-
-const ID_HEADER: &str = "X-Numaflow-Id";
-const CALLBACK_URL_HEADER_KEY: &str = "X-Numaflow-Callback-Url";
 
 /// The data to be sent in the POST request
 #[derive(serde::Serialize)]
@@ -36,21 +35,13 @@ pub struct CallbackHandler {
 
 impl CallbackHandler {
     pub fn new(vertex_name: String, concurrency_limit: usize) -> Self {
-        // if env::var(ENV_CALLBACK_ENABLED).is_err() {
-        //     return Ok(None);
-        // };
-
-        // let Ok(callback_url) = env::var(ENV_CALLBACK_URL) else {
-        //     return Err(Error::Source(format!("Environment variable {ENV_CALLBACK_ENABLED} is set, but {ENV_CALLBACK_URL} is not set")));
-        // };
-
         let client = Client::builder()
             .danger_accept_invalid_certs(true)
             .timeout(Duration::from_secs(1))
             .build()
             .expect("Creating callback client for Serving source");
 
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency_limit));
+        let semaphore = Arc::new(Semaphore::new(concurrency_limit));
 
         Self {
             client,
@@ -66,16 +57,20 @@ impl CallbackHandler {
         previous_vertex: String,
     ) -> crate::Result<()> {
         let callback_url = message_headers
-            .get(CALLBACK_URL_HEADER_KEY)
+            .get(DEFAULT_CALLBACK_URL_HEADER_KEY)
             .ok_or_else(|| {
                 Error::Source(format!(
-                    "{CALLBACK_URL_HEADER_KEY} header is not present in the message headers",
+                    "{DEFAULT_CALLBACK_URL_HEADER_KEY} header is not present in the message headers",
                 ))
             })?
             .to_owned();
         let uuid = message_headers
-            .get(ID_HEADER)
-            .ok_or_else(|| Error::Source(format!("{ID_HEADER} is not found in message headers",)))?
+            .get(DEFAULT_ID_HEADER)
+            .ok_or_else(|| {
+                Error::Source(format!(
+                    "{DEFAULT_ID_HEADER} is not found in message headers",
+                ))
+            })?
             .to_owned();
         let cb_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -101,7 +96,7 @@ impl CallbackHandler {
         let client = self.client.clone();
         tokio::spawn(async move {
             let _permit = permit;
-            // Retry incase of failure in making request.
+            // Retry in case of failure in making request.
             // When there is a failure, we retry after wait_secs. This value is doubled after each retry attempt.
             // Then longest wait time will be 64 seconds.
             let mut wait_secs = 1;
@@ -109,7 +104,7 @@ impl CallbackHandler {
             for i in 1..=TOTAL_ATTEMPTS {
                 let resp = client
                     .post(&callback_url)
-                    .header(ID_HEADER, uuid.clone())
+                    .header(DEFAULT_ID_HEADER, uuid.clone())
                     .json(&[&callback_payload])
                     .send()
                     .await;
@@ -170,6 +165,105 @@ impl CallbackHandler {
             }
         });
 
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::callback::state::State as CallbackState;
+    use crate::app::callback::store::memstore::InMemoryStore;
+    use crate::app::start_main_server;
+    use crate::app::tracker::MessageGraph;
+    use crate::callback::{CallbackHandler, DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
+    use crate::config::generate_certs;
+    use crate::pipeline::PipelineDCG;
+    use crate::{AppState, Settings};
+    use axum_server::tls_rustls::RustlsConfig;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::sync::mpsc;
+
+    type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+    #[tokio::test]
+    async fn test_callback() -> Result<()> {
+        // Set up the CryptoProvider (controls core cryptography used by rustls) for the process
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+        let (cert, key) = generate_certs()?;
+
+        let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
+            .await
+            .map_err(|e| format!("Failed to create tls config {:?}", e))?;
+
+        let settings = Settings {
+            app_listen_port: 3003,
+            ..Default::default()
+        };
+        // We start the 'Serving' https server with an in-memory store
+        // When the server receives callback request, the in-memory store will be populated.
+        // This is verified at the end of the test.
+        let store = InMemoryStore::new();
+        let message_graph = MessageGraph::from_pipeline(&PipelineDCG::default())?;
+        let (tx, _) = mpsc::channel(10);
+
+        let mut app_state = AppState {
+            message: tx,
+            settings: Arc::new(settings),
+            callback_state: CallbackState::new(message_graph, store.clone()).await?,
+        };
+
+        // Reg
+        let _callback_notify_rx = app_state.callback_state.register("1234".into());
+
+        let server_handle = tokio::spawn(start_main_server(app_state, tls_config));
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(2))
+            .danger_accept_invalid_certs(true)
+            .build()?;
+
+        // Wait for the server to be ready
+        let mut server_ready = false;
+        for _ in 0..10 {
+            let resp = client.get("https://localhost:3003/livez").send().await?;
+            if resp.status().is_success() {
+                server_ready = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert!(server_ready, "Server is not ready");
+
+        let callback_handler = CallbackHandler::new("test".into(), 10);
+        let message_headers: HashMap<String, String> = [
+            (
+                DEFAULT_CALLBACK_URL_HEADER_KEY,
+                "https://localhost:3003/v1/process/callback",
+            ),
+            (DEFAULT_ID_HEADER, "1234"),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.into(), v.into()))
+        .collect();
+        callback_handler
+            .callback(&message_headers, &None, "in".into())
+            .await?;
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        let mut data = None;
+        for _ in 0..10 {
+            tokio::time::sleep(Duration::from_millis(2)).await;
+            data = {
+                let guard = store.data.lock().unwrap();
+                guard.get("1234").cloned()
+            };
+            if data.is_some() {
+                break;
+            }
+        }
+        assert!(data.is_some(), "Callback data not found in store");
+        server_handle.abort();
         Ok(())
     }
 }

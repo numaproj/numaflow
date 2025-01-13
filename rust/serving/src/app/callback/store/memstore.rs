@@ -12,7 +12,7 @@ use crate::Error;
 pub(crate) struct InMemoryStore {
     /// The data field is a `HashMap` where the key is a `String` and the value is a `Vec<Vec<u8>>`.
     /// It is wrapped in an `Arc<Mutex<_>>` to allow shared ownership and thread safety.
-    data: Arc<std::sync::Mutex<HashMap<String, Vec<Vec<u8>>>>>,
+    pub(crate) data: Arc<std::sync::Mutex<HashMap<String, Vec<Vec<u8>>>>>,
 }
 
 impl InMemoryStore {

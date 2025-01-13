@@ -11,6 +11,7 @@ use crate::app::callback::store::redisstore::RedisConnection;
 use crate::app::tracker::MessageGraph;
 use crate::Settings;
 use crate::{Error, Result};
+use crate::config::{DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
 
 /// [Message] with a oneshot for notifying when the message has been completed processed.
 pub(crate) struct MessageWrapper {
@@ -152,10 +153,10 @@ impl ServingSourceActor {
             self.tracker.insert(message.id.clone(), confirm_save);
             message
                 .headers
-                .insert("X-Numaflow-Callback-Url".into(), self.callback_url.clone());
+                .insert(DEFAULT_CALLBACK_URL_HEADER_KEY.into(), self.callback_url.clone());
             message
                 .headers
-                .insert("X-Numaflow-Id".into(), message.id.clone());
+                .insert(DEFAULT_ID_HEADER.into(), message.id.clone());
             messages.push(message);
         }
         Ok(messages)
