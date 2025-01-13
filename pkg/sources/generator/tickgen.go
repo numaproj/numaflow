@@ -198,12 +198,9 @@ loop:
 		// we implement Read With Wait semantics
 		select {
 		case r, ok := <-mg.srcChan:
-			// when the channel is closed and empty, go will still read from the channel once and return the zero value.
-			// exclude the zero value from being passed to the next vertex,
-			// ensuring all messages produced by generator follow the same data schema.
 			if !ok {
-				mg.logger.Info("Zero value read from the generator channel, skipping...")
-				continue
+				mg.logger.Info("All the messages have been read. returning.")
+				break loop
 			}
 			msgs = append(msgs, mg.newReadMessage(r.key, r.data, r.offset, r.ts))
 		case <-timeout:
