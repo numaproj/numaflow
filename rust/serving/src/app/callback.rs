@@ -13,11 +13,17 @@ use state::State as CallbackState;
 pub(crate) mod store;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub(crate) struct CallbackRequest {
+pub(crate) struct Callback {
     pub(crate) id: String,
     pub(crate) vertex: String,
     pub(crate) cb_time: u64,
     pub(crate) from_vertex: String,
+    pub(crate) responses: Vec<Response>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub(crate) struct Response {
+    pub(crate) index: u16,
     pub(crate) tags: Option<Vec<String>>,
 }
 
@@ -68,7 +74,7 @@ async fn callback_save<T: Send + Sync + Clone + Store>(
 
 async fn callback<T: Send + Sync + Clone + Store>(
     State(app_state): State<CallbackAppState<T>>,
-    Json(payload): Json<Vec<CallbackRequest>>,
+    Json(payload): Json<Vec<Callback>>,
 ) -> Result<(), ApiError> {
     app_state
         .callback_state
@@ -107,12 +113,15 @@ mod tests {
         let state = CallbackState::new(msg_graph, store).await.unwrap();
         let app = callback_handler("ID".to_owned(), state);
 
-        let payload = vec![CallbackRequest {
+        let payload = vec![Callback {
             id: "test_id".to_string(),
             vertex: "in".to_string(),
             cb_time: 12345,
             from_vertex: "in".to_string(),
-            tags: None,
+            responses: vec![Response {
+                index: 0,
+                tags: None,
+            }],
         }];
 
         let res = Request::builder()
@@ -143,26 +152,35 @@ mod tests {
         let app = callback_handler("ID".to_owned(), state);
 
         let payload = vec![
-            CallbackRequest {
+            Callback {
                 id: "test_id".to_string(),
                 vertex: "in".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
-                tags: None,
+                responses: vec![Response {
+                    index: 0,
+                    tags: None,
+                }],
             },
-            CallbackRequest {
+            Callback {
                 id: "test_id".to_string(),
                 vertex: "cat".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
-                tags: None,
+                responses: vec![Response {
+                    index: 0,
+                    tags: None,
+                }],
             },
-            CallbackRequest {
+            Callback {
                 id: "test_id".to_string(),
                 vertex: "out".to_string(),
                 cb_time: 12345,
                 from_vertex: "cat".to_string(),
-                tags: None,
+                responses: vec![Response {
+                    index: 0,
+                    tags: None,
+                }],
             },
         ];
 

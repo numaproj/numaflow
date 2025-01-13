@@ -260,10 +260,11 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
+    use crate::app::callback;
     use crate::app::callback::state::State as CallbackState;
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::app::callback::store::PayloadToSave;
-    use crate::app::callback::CallbackRequest;
+    use crate::app::callback::Callback;
     use crate::app::tracker::MessageGraph;
     use crate::pipeline::PipelineDCG;
     use crate::{Error, Settings};
@@ -277,10 +278,7 @@ mod tests {
         async fn save(&mut self, _messages: Vec<PayloadToSave>) -> crate::Result<()> {
             Ok(())
         }
-        async fn retrieve_callbacks(
-            &mut self,
-            _id: &str,
-        ) -> Result<Vec<Arc<CallbackRequest>>, Error> {
+        async fn retrieve_callbacks(&mut self, _id: &str) -> Result<Vec<Arc<Callback>>, Error> {
             Ok(vec![])
         }
         async fn retrieve_datum(&mut self, _id: &str) -> Result<Vec<Vec<u8>>, Error> {
@@ -355,28 +353,37 @@ mod tests {
         resp
     }
 
-    fn create_default_callbacks(id: &str) -> Vec<CallbackRequest> {
+    fn create_default_callbacks(id: &str) -> Vec<Callback> {
         vec![
-            CallbackRequest {
+            Callback {
                 id: id.to_string(),
                 vertex: "in".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
-                tags: None,
+                responses: vec![callback::Response {
+                    index: 0,
+                    tags: None,
+                }],
             },
-            CallbackRequest {
+            Callback {
                 id: id.to_string(),
                 vertex: "cat".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
-                tags: None,
+                responses: vec![callback::Response {
+                    index: 0,
+                    tags: None,
+                }],
             },
-            CallbackRequest {
+            Callback {
                 id: id.to_string(),
                 vertex: "out".to_string(),
                 cb_time: 12345,
                 from_vertex: "cat".to_string(),
-                tags: None,
+                responses: vec![callback::Response {
+                    index: 0,
+                    tags: None,
+                }],
             },
         ]
     }
