@@ -273,10 +273,6 @@ impl TrackerHandle {
             .await
             .map_err(|e| Error::Tracker(format!("{:?}", e)))
     }
-
-    pub(crate) async fn get_lowest_offset(&self) -> Result<Option<String>> {
-        unimplemented!("get_lowest_offset");
-    }
 }
 
 #[cfg(test)]

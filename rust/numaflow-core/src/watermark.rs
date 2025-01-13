@@ -1,13 +1,14 @@
 use crate::error::Error;
+use crate::error::Result;
 use crate::message::{Offset, OffsetType};
+use crate::watermark::fetcher::Fetcher;
+use crate::watermark::publisher::Publisher;
 use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use prost::Message as ProtoMessage;
-
-use crate::error::Result;
-use crate::tracker::TrackerHandle;
-use crate::watermark::fetcher::Fetcher;
-use crate::watermark::publisher::Publisher;
+use std::cmp::Ordering;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 
 mod fetcher;
 mod manager;
@@ -16,38 +17,12 @@ mod timeline;
 
 type Watermark = DateTime<Utc>;
 
-// map vertex
-// (js reader) - fetch watermark for offset and assign to the message (each read partition will be invoking fetch simultaneously
-// (js writer) - publish watermark for the write offsets
-//                  * get the lowest inflight offset using the tracker
-//                  * fetch the watermark for that offset
-//                  * publish the fetched watermark to downstream
-//                  * check if the watermark is greater than the previously fetched watermark
-//                  * if its greater publish the watermark for all the yet to be published offsets
-//                  * if it's not greater add it to the yet to be published offsets map (only track the largest offset)
-//                  * track the last published watermark and last published offset for a given partition and edge
-//
-// source vertex
-// (js writer) - publish watermark for the read source message -> Here processing entity is partition so publish the watermark for that partition
-//             - publish watermark for the isb write offsets -> fetch the watermark we don't care about the offset here
-//             - check if the watermark has changed compared to the previous watermark if so publish the watermark
-
-// Now lets think about idle watermark
-// map vertex
-// branch idling - while publishing watermark check if we are not publishing to the other edges and partitions if we are not
-//               - check if the ctrl message is already present for that partition, if so publish idle wm for the ctrl message
-//               - else write a ctrl message and get the offset and write the watermark for that offset
-
-// idle handler - the one that tracks the ctrl message used to publish the idle watermark
-// source idle handler is different dude it's some another level
-//
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WMB {
     pub idle: bool,
     pub offset: i64,
     pub watermark: i64,
-    pub partition: i32,
+    pub partition: u16,
 }
 
 impl TryFrom<Bytes> for WMB {
@@ -61,7 +36,7 @@ impl TryFrom<Bytes> for WMB {
             idle: proto_wmb.idle,
             offset: proto_wmb.offset,
             watermark: proto_wmb.watermark,
-            partition: proto_wmb.partition,
+            partition: proto_wmb.partition as u16,
         })
     }
 }
@@ -75,7 +50,7 @@ impl TryFrom<WMB> for BytesMut {
             idle: wmb.idle,
             offset: wmb.offset,
             watermark: wmb.watermark,
-            partition: wmb.partition,
+            partition: wmb.partition as i32,
         };
 
         proto_wmb
@@ -91,66 +66,149 @@ enum ActorMessage {
         offset: Offset,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     },
-    PublishWatermark(Offset),
+    PublishWatermark {
+        offset: Offset,
+        vertex_name: String,
+    },
+    RemoveOffset(Offset),
+}
+
+#[derive(Eq, PartialEq)]
+struct OffsetWatermark {
+    offset: u64,
+    watermark: Watermark,
+}
+
+impl Ord for OffsetWatermark {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.offset.cmp(&other.offset)
+    }
+}
+
+impl PartialOrd for OffsetWatermark {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 struct WatermarkActor {
     fetcher: Fetcher,
-    tracker: TrackerHandle,
     publisher: Publisher,
+    offset_set: HashMap<u16, BTreeSet<OffsetWatermark>>, // partition_id -> BTreeSet of OffsetWatermark
 }
 
 impl WatermarkActor {
-    pub fn new(fetcher: Fetcher, tracker: TrackerHandle, publisher: Publisher) -> Self {
+    pub fn new(fetcher: Fetcher, publisher: Publisher) -> Self {
         Self {
             fetcher,
-            tracker,
             publisher,
+            offset_set: HashMap::new(),
         }
     }
 
-    pub async fn handle_message(&self, message: ActorMessage) -> Result<()> {
+    pub async fn handle_message(&mut self, message: ActorMessage) -> Result<()> {
         match message {
-            ActorMessage::FetchWatermark { offset, oneshot_tx } => match offset {
-                Offset::Source(_) => {
-                    let watermark = self.fetcher.fetch_source_watermark().await?;
-                    oneshot_tx
-                        .send(Ok(watermark))
-                        .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
-                }
-                Offset::ISB(offset) => {
-                    match offset {
+            ActorMessage::FetchWatermark { offset, oneshot_tx } => {
+                let watermark = match offset {
+                    Offset::Source(_) => {
+                        return Err(Error::Watermark(
+                            "source offset is not supported".to_string(),
+                        ));
+                    }
+                    Offset::ISB(offset) => match offset {
                         OffsetType::Int(offset) => {
                             let watermark = self
                                 .fetcher
                                 .fetch_watermark(offset.offset, offset.partition_idx)
                                 .await?;
-                            oneshot_tx.send(Ok(watermark)).map_err(|_| {
-                                Error::Watermark("failed to send response".to_string())
-                            })?;
+                            self.insert_offset(offset.partition_idx, offset.offset, watermark);
+                            watermark
                         }
                         OffsetType::String(_) => {
-                            // string offset is not supported
                             return Err(Error::Watermark(
                                 "string offset is not supported".to_string(),
                             ));
                         }
-                    }
-                }
-            },
-            ActorMessage::PublishWatermark(offset) => match offset {
+                    },
+                };
+
+                oneshot_tx
+                    .send(Ok(watermark))
+                    .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
+            }
+
+            ActorMessage::PublishWatermark {
+                offset,
+                vertex_name,
+            } => match offset {
                 Offset::Source(_) => {
                     // for publishing to source, we don't need to fetch (nothing to fetcher here :))
                 }
-                Offset::ISB(_) => {
-                    // get the smallest offset using the tracker
-                    // fetch the watermark for the smallest offset
-                    // publish watermark for the offset
-                }
+                Offset::ISB(offset_type) => match offset_type {
+                    OffsetType::Int(int_offset) => {
+                        let min_wm = self
+                            .get_lowest_watermark()
+                            .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap());
+
+                        self.publisher
+                            .publish_watermark(
+                                int_offset.partition_idx,
+                                int_offset.offset as i64,
+                                min_wm.timestamp_millis(),
+                                vertex_name,
+                            )
+                            .await?;
+                    }
+                    OffsetType::String(_) => {}
+                },
             },
+
+            ActorMessage::RemoveOffset(offset) => {
+                // remove the offset from the heap
+                match offset {
+                    Offset::Source(_) => {
+                        return Err(Error::Watermark(
+                            "source offset is not supported".to_string(),
+                        ));
+                    }
+                    Offset::ISB(offset) => match offset {
+                        OffsetType::Int(offset) => {
+                            self.remove_offset(offset.partition_idx, offset.offset)?;
+                        }
+                        OffsetType::String(_) => {
+                            return Err(Error::Watermark(
+                                "string offset is not supported".to_string(),
+                            ));
+                        }
+                    },
+                }
+            }
         }
 
         Ok(())
+    }
+
+    fn insert_offset(&mut self, partition_id: u16, offset: u64, watermark: Watermark) {
+        let set = self.offset_set.entry(partition_id).or_default();
+        set.insert(OffsetWatermark { offset, watermark });
+    }
+
+    fn remove_offset(&mut self, partition_id: u16, offset: u64) -> Result<()> {
+        if let Some(set) = self.offset_set.get_mut(&partition_id) {
+            if let Some(&OffsetWatermark { watermark, .. }) =
+                set.iter().find(|ow| ow.offset == offset)
+            {
+                set.remove(&OffsetWatermark { offset, watermark });
+            }
+        }
+        Ok(())
+    }
+
+    fn get_lowest_watermark(&self) -> Option<Watermark> {
+        self.offset_set
+            .values()
+            .filter_map(|set| set.iter().next().map(|ow| ow.watermark))
+            .min()
     }
 }
 
@@ -165,9 +223,7 @@ impl WatermarkHandle {
         Ok(Watermark::default())
     }
 
-    pub(crate) async fn publish_watermark(&self, offset: Offset) {}
+    pub(crate) async fn publish_watermark(&self, vertex_name: String, offset: Offset) {}
 
-    pub(crate) async fn track_offset(&self, offset: Offset) {}
-
-    pub(crate) async fn delete_offset(&self, offset: Offset) {}
+    pub(crate) async fn remove_offset(&self, offset: Offset) {}
 }
