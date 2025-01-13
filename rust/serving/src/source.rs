@@ -9,9 +9,9 @@ use tokio::time::Instant;
 use crate::app::callback::state::State as CallbackState;
 use crate::app::callback::store::redisstore::RedisConnection;
 use crate::app::tracker::MessageGraph;
+use crate::config::{DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
 use crate::Settings;
 use crate::{Error, Result};
-use crate::config::{DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
 
 /// [Message] with a oneshot for notifying when the message has been completed processed.
 pub(crate) struct MessageWrapper {
@@ -151,9 +151,10 @@ impl ServingSourceActor {
             } = message;
 
             self.tracker.insert(message.id.clone(), confirm_save);
-            message
-                .headers
-                .insert(DEFAULT_CALLBACK_URL_HEADER_KEY.into(), self.callback_url.clone());
+            message.headers.insert(
+                DEFAULT_CALLBACK_URL_HEADER_KEY.into(),
+                self.callback_url.clone(),
+            );
             message
                 .headers
                 .insert(DEFAULT_ID_HEADER.into(), message.id.clone());

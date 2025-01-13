@@ -214,8 +214,12 @@ mod tests {
             callback_state: CallbackState::new(message_graph, store.clone()).await?,
         };
 
-        // Reg
-        let _callback_notify_rx = app_state.callback_state.register("1234".into());
+        // We use this value as the request id of the callback request
+        const ID_VALUE: &str = "1234";
+
+        // Register the request id in the store. This normally happens when the Serving source
+        // receives a request from the client. The callbacks for this request must only happen after this.
+        let _callback_notify_rx = app_state.callback_state.register(ID_VALUE.into());
 
         let server_handle = tokio::spawn(start_main_server(app_state, tls_config));
 
@@ -242,21 +246,23 @@ mod tests {
                 DEFAULT_CALLBACK_URL_HEADER_KEY,
                 "https://localhost:3003/v1/process/callback",
             ),
-            (DEFAULT_ID_HEADER, "1234"),
+            (DEFAULT_ID_HEADER, ID_VALUE),
         ]
         .into_iter()
         .map(|(k, v)| (k.into(), v.into()))
         .collect();
+
+        // On the server, this fails with SubGraphInvalidInput("Invalid callback: 1234, vertex: in")
+        // We get 200 OK response from the server, since we already registered this request ID in the store.
         callback_handler
             .callback(&message_headers, &None, "in".into())
             .await?;
-        tokio::time::sleep(Duration::from_secs(2)).await;
         let mut data = None;
         for _ in 0..10 {
             tokio::time::sleep(Duration::from_millis(2)).await;
             data = {
                 let guard = store.data.lock().unwrap();
-                guard.get("1234").cloned()
+                guard.get(ID_VALUE).cloned()
             };
             if data.is_some() {
                 break;
