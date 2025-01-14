@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.16.3
   name: monovertices.numaflow.numaproj.io
 spec:
   group: numaflow.numaproj.io
@@ -20,6 +19,15 @@ spec:
   - additionalPrinterColumns:
     - jsonPath: .status.phase
       name: Phase
+      type: string
+    - jsonPath: .status.desiredReplicas
+      name: Desired
+      type: string
+    - jsonPath: .status.replicas
+      name: Current
+      type: string
+    - jsonPath: .status.readyReplicas
+      name: Ready
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -62,11 +70,13 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchFields:
                                   items:
                                     properties:
@@ -78,12 +88,15 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                               type: object
+                              x-kubernetes-map-type: atomic
                             weight:
                               format: int32
                               type: integer
@@ -92,6 +105,7 @@ spec:
                           - weight
                           type: object
                         type: array
+                        x-kubernetes-list-type: atomic
                       requiredDuringSchedulingIgnoredDuringExecution:
                         properties:
                           nodeSelectorTerms:
@@ -108,11 +122,13 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchFields:
                                   items:
                                     properties:
@@ -124,16 +140,21 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                               type: object
+                              x-kubernetes-map-type: atomic
                             type: array
+                            x-kubernetes-list-type: atomic
                         required:
                         - nodeSelectorTerms
                         type: object
+                        x-kubernetes-map-type: atomic
                     type: object
                   podAffinity:
                     properties:
@@ -155,16 +176,19 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
                                       type: object
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 matchLabelKeys:
                                   items:
                                     type: string
@@ -188,20 +212,24 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
                                       type: object
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 namespaces:
                                   items:
                                     type: string
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 topologyKey:
                                   type: string
                               required:
@@ -215,6 +243,7 @@ spec:
                           - weight
                           type: object
                         type: array
+                        x-kubernetes-list-type: atomic
                       requiredDuringSchedulingIgnoredDuringExecution:
                         items:
                           properties:
@@ -231,16 +260,19 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchLabels:
                                   additionalProperties:
                                     type: string
                                   type: object
                               type: object
+                              x-kubernetes-map-type: atomic
                             matchLabelKeys:
                               items:
                                 type: string
@@ -264,26 +296,31 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchLabels:
                                   additionalProperties:
                                     type: string
                                   type: object
                               type: object
+                              x-kubernetes-map-type: atomic
                             namespaces:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                             topologyKey:
                               type: string
                           required:
                           - topologyKey
                           type: object
                         type: array
+                        x-kubernetes-list-type: atomic
                     type: object
                   podAntiAffinity:
                     properties:
@@ -305,16 +342,19 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
                                       type: object
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 matchLabelKeys:
                                   items:
                                     type: string
@@ -338,20 +378,24 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
                                       type: object
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 namespaces:
                                   items:
                                     type: string
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 topologyKey:
                                   type: string
                               required:
@@ -365,6 +409,7 @@ spec:
                           - weight
                           type: object
                         type: array
+                        x-kubernetes-list-type: atomic
                       requiredDuringSchedulingIgnoredDuringExecution:
                         items:
                           properties:
@@ -381,16 +426,19 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchLabels:
                                   additionalProperties:
                                     type: string
                                   type: object
                               type: object
+                              x-kubernetes-map-type: atomic
                             matchLabelKeys:
                               items:
                                 type: string
@@ -414,26 +462,31 @@ spec:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     required:
                                     - key
                                     - operator
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 matchLabels:
                                   additionalProperties:
                                     type: string
                                   type: object
                               type: object
+                              x-kubernetes-map-type: atomic
                             namespaces:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                             topologyKey:
                               type: string
                           required:
                           - topologyKey
                           type: object
                         type: array
+                        x-kubernetes-list-type: atomic
                     type: object
                 type: object
               automountServiceAccountToken:
@@ -454,12 +507,14 @@ spec:
                                 key:
                                   type: string
                                 name:
+                                  default: ""
                                   type: string
                                 optional:
                                   type: boolean
                               required:
                               - key
                               type: object
+                              x-kubernetes-map-type: atomic
                             fieldRef:
                               properties:
                                 apiVersion:
@@ -469,6 +524,7 @@ spec:
                               required:
                               - fieldPath
                               type: object
+                              x-kubernetes-map-type: atomic
                             resourceFieldRef:
                               properties:
                                 containerName:
@@ -484,17 +540,20 @@ spec:
                               required:
                               - resource
                               type: object
+                              x-kubernetes-map-type: atomic
                             secretKeyRef:
                               properties:
                                 key:
                                   type: string
                                 name:
+                                  default: ""
                                   type: string
                                 optional:
                                   type: boolean
                               required:
                               - key
                               type: object
+                              x-kubernetes-map-type: atomic
                           type: object
                       required:
                       - name
@@ -506,29 +565,71 @@ spec:
                         configMapRef:
                           properties:
                             name:
+                              default: ""
                               type: string
                             optional:
                               type: boolean
                           type: object
+                          x-kubernetes-map-type: atomic
                         prefix:
                           type: string
                         secretRef:
                           properties:
                             name:
+                              default: ""
                               type: string
                             optional:
                               type: boolean
                           type: object
+                          x-kubernetes-map-type: atomic
                       type: object
                     type: array
                   imagePullPolicy:
                     type: string
+                  livenessProbe:
+                    properties:
+                      failureThreshold:
+                        format: int32
+                        type: integer
+                      initialDelaySeconds:
+                        format: int32
+                        type: integer
+                      periodSeconds:
+                        format: int32
+                        type: integer
+                      successThreshold:
+                        format: int32
+                        type: integer
+                      timeoutSeconds:
+                        format: int32
+                        type: integer
+                    type: object
+                  readinessProbe:
+                    properties:
+                      failureThreshold:
+                        format: int32
+                        type: integer
+                      initialDelaySeconds:
+                        format: int32
+                        type: integer
+                      periodSeconds:
+                        format: int32
+                        type: integer
+                      successThreshold:
+                        format: int32
+                        type: integer
+                      timeoutSeconds:
+                        format: int32
+                        type: integer
+                    type: object
                   resources:
                     properties:
                       claims:
                         items:
                           properties:
                             name:
+                              type: string
+                            request:
                               type: string
                           required:
                           - name
@@ -558,16 +659,27 @@ spec:
                     properties:
                       allowPrivilegeEscalation:
                         type: boolean
+                      appArmorProfile:
+                        properties:
+                          localhostProfile:
+                            type: string
+                          type:
+                            type: string
+                        required:
+                        - type
+                        type: object
                       capabilities:
                         properties:
                           add:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: atomic
                           drop:
                             items:
                               type: string
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       privileged:
                         type: boolean
@@ -638,11 +750,13 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchFields:
                                       items:
                                         properties:
@@ -654,12 +768,15 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 weight:
                                   format: int32
                                   type: integer
@@ -668,6 +785,7 @@ spec:
                               - weight
                               type: object
                             type: array
+                            x-kubernetes-list-type: atomic
                           requiredDuringSchedulingIgnoredDuringExecution:
                             properties:
                               nodeSelectorTerms:
@@ -684,11 +802,13 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchFields:
                                       items:
                                         properties:
@@ -700,16 +820,21 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 type: array
+                                x-kubernetes-list-type: atomic
                             required:
                             - nodeSelectorTerms
                             type: object
+                            x-kubernetes-map-type: atomic
                         type: object
                       podAffinity:
                         properties:
@@ -731,16 +856,19 @@ spec:
                                                 items:
                                                   type: string
                                                 type: array
+                                                x-kubernetes-list-type: atomic
                                             required:
                                             - key
                                             - operator
                                             type: object
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                         matchLabels:
                                           additionalProperties:
                                             type: string
                                           type: object
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     matchLabelKeys:
                                       items:
                                         type: string
@@ -764,20 +892,24 @@ spec:
                                                 items:
                                                   type: string
                                                 type: array
+                                                x-kubernetes-list-type: atomic
                                             required:
                                             - key
                                             - operator
                                             type: object
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                         matchLabels:
                                           additionalProperties:
                                             type: string
                                           type: object
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     namespaces:
                                       items:
                                         type: string
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     topologyKey:
                                       type: string
                                   required:
@@ -791,6 +923,7 @@ spec:
                               - weight
                               type: object
                             type: array
+                            x-kubernetes-list-type: atomic
                           requiredDuringSchedulingIgnoredDuringExecution:
                             items:
                               properties:
@@ -807,16 +940,19 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
                                       type: object
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 matchLabelKeys:
                                   items:
                                     type: string
@@ -840,26 +976,31 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
                                       type: object
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 namespaces:
                                   items:
                                     type: string
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 topologyKey:
                                   type: string
                               required:
                               - topologyKey
                               type: object
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                       podAntiAffinity:
                         properties:
@@ -881,16 +1022,19 @@ spec:
                                                 items:
                                                   type: string
                                                 type: array
+                                                x-kubernetes-list-type: atomic
                                             required:
                                             - key
                                             - operator
                                             type: object
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                         matchLabels:
                                           additionalProperties:
                                             type: string
                                           type: object
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     matchLabelKeys:
                                       items:
                                         type: string
@@ -914,20 +1058,24 @@ spec:
                                                 items:
                                                   type: string
                                                 type: array
+                                                x-kubernetes-list-type: atomic
                                             required:
                                             - key
                                             - operator
                                             type: object
                                           type: array
+                                          x-kubernetes-list-type: atomic
                                         matchLabels:
                                           additionalProperties:
                                             type: string
                                           type: object
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     namespaces:
                                       items:
                                         type: string
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     topologyKey:
                                       type: string
                                   required:
@@ -941,6 +1089,7 @@ spec:
                               - weight
                               type: object
                             type: array
+                            x-kubernetes-list-type: atomic
                           requiredDuringSchedulingIgnoredDuringExecution:
                             items:
                               properties:
@@ -957,16 +1106,19 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
                                       type: object
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 matchLabelKeys:
                                   items:
                                     type: string
@@ -990,26 +1142,31 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
                                       type: object
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 namespaces:
                                   items:
                                     type: string
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 topologyKey:
                                   type: string
                               required:
                               - topologyKey
                               type: object
                             type: array
+                            x-kubernetes-list-type: atomic
                         type: object
                     type: object
                   automountServiceAccountToken:
@@ -1030,12 +1187,14 @@ spec:
                                     key:
                                       type: string
                                     name:
+                                      default: ""
                                       type: string
                                     optional:
                                       type: boolean
                                   required:
                                   - key
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 fieldRef:
                                   properties:
                                     apiVersion:
@@ -1045,6 +1204,7 @@ spec:
                                   required:
                                   - fieldPath
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 resourceFieldRef:
                                   properties:
                                     containerName:
@@ -1060,17 +1220,20 @@ spec:
                                   required:
                                   - resource
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 secretKeyRef:
                                   properties:
                                     key:
                                       type: string
                                     name:
+                                      default: ""
                                       type: string
                                     optional:
                                       type: boolean
                                   required:
                                   - key
                                   type: object
+                                  x-kubernetes-map-type: atomic
                               type: object
                           required:
                           - name
@@ -1082,29 +1245,71 @@ spec:
                             configMapRef:
                               properties:
                                 name:
+                                  default: ""
                                   type: string
                                 optional:
                                   type: boolean
                               type: object
+                              x-kubernetes-map-type: atomic
                             prefix:
                               type: string
                             secretRef:
                               properties:
                                 name:
+                                  default: ""
                                   type: string
                                 optional:
                                   type: boolean
                               type: object
+                              x-kubernetes-map-type: atomic
                           type: object
                         type: array
                       imagePullPolicy:
                         type: string
+                      livenessProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
+                      readinessProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
                       resources:
                         properties:
                           claims:
                             items:
                               properties:
                                 name:
+                                  type: string
+                                request:
                                   type: string
                               required:
                               - name
@@ -1134,16 +1339,27 @@ spec:
                         properties:
                           allowPrivilegeEscalation:
                             type: boolean
+                          appArmorProfile:
+                            properties:
+                              localhostProfile:
+                                type: string
+                              type:
+                                type: string
+                            required:
+                            - type
+                            type: object
                           capabilities:
                             properties:
                               add:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: atomic
                               drop:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: atomic
                             type: object
                           privileged:
                             type: boolean
@@ -1198,6 +1414,7 @@ spec:
                         items:
                           type: string
                         type: array
+                        x-kubernetes-list-type: atomic
                       options:
                         items:
                           properties:
@@ -1207,10 +1424,12 @@ spec:
                               type: string
                           type: object
                         type: array
+                        x-kubernetes-list-type: atomic
                       searches:
                         items:
                           type: string
                         type: array
+                        x-kubernetes-list-type: atomic
                     type: object
                   dnsPolicy:
                     type: string
@@ -1218,8 +1437,10 @@ spec:
                     items:
                       properties:
                         name:
+                          default: ""
                           type: string
                       type: object
+                      x-kubernetes-map-type: atomic
                     type: array
                   initContainerTemplate:
                     properties:
@@ -1237,12 +1458,14 @@ spec:
                                     key:
                                       type: string
                                     name:
+                                      default: ""
                                       type: string
                                     optional:
                                       type: boolean
                                   required:
                                   - key
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 fieldRef:
                                   properties:
                                     apiVersion:
@@ -1252,6 +1475,7 @@ spec:
                                   required:
                                   - fieldPath
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 resourceFieldRef:
                                   properties:
                                     containerName:
@@ -1267,17 +1491,20 @@ spec:
                                   required:
                                   - resource
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 secretKeyRef:
                                   properties:
                                     key:
                                       type: string
                                     name:
+                                      default: ""
                                       type: string
                                     optional:
                                       type: boolean
                                   required:
                                   - key
                                   type: object
+                                  x-kubernetes-map-type: atomic
                               type: object
                           required:
                           - name
@@ -1289,29 +1516,71 @@ spec:
                             configMapRef:
                               properties:
                                 name:
+                                  default: ""
                                   type: string
                                 optional:
                                   type: boolean
                               type: object
+                              x-kubernetes-map-type: atomic
                             prefix:
                               type: string
                             secretRef:
                               properties:
                                 name:
+                                  default: ""
                                   type: string
                                 optional:
                                   type: boolean
                               type: object
+                              x-kubernetes-map-type: atomic
                           type: object
                         type: array
                       imagePullPolicy:
                         type: string
+                      livenessProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
+                      readinessProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
                       resources:
                         properties:
                           claims:
                             items:
                               properties:
                                 name:
+                                  type: string
+                                request:
                                   type: string
                               required:
                               - name
@@ -1341,16 +1610,27 @@ spec:
                         properties:
                           allowPrivilegeEscalation:
                             type: boolean
+                          appArmorProfile:
+                            properties:
+                              localhostProfile:
+                                type: string
+                              type:
+                                type: string
+                            required:
+                            - type
+                            type: object
                           capabilities:
                             properties:
                               add:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: atomic
                               drop:
                                 items:
                                   type: string
                                 type: array
+                                x-kubernetes-list-type: atomic
                             type: object
                           privileged:
                             type: boolean
@@ -1422,10 +1702,32 @@ spec:
                   replicas:
                     format: int32
                     type: integer
+                  resourceClaims:
+                    items:
+                      properties:
+                        name:
+                          type: string
+                        resourceClaimName:
+                          type: string
+                        resourceClaimTemplateName:
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
                   runtimeClassName:
                     type: string
                   securityContext:
                     properties:
+                      appArmorProfile:
+                        properties:
+                          localhostProfile:
+                            type: string
+                          type:
+                            type: string
+                        required:
+                        - type
+                        type: object
                       fsGroup:
                         format: int64
                         type: integer
@@ -1464,6 +1766,9 @@ spec:
                           format: int64
                           type: integer
                         type: array
+                        x-kubernetes-list-type: atomic
+                      supplementalGroupsPolicy:
+                        type: string
                       sysctls:
                         items:
                           properties:
@@ -1476,6 +1781,7 @@ spec:
                           - value
                           type: object
                         type: array
+                        x-kubernetes-list-type: atomic
                       windowsOptions:
                         properties:
                           gmsaCredentialSpec:
@@ -1513,6 +1819,7 @@ spec:
                     items:
                       type: string
                     type: array
+                    x-kubernetes-list-type: atomic
                   options:
                     items:
                       properties:
@@ -1522,10 +1829,12 @@ spec:
                           type: string
                       type: object
                     type: array
+                    x-kubernetes-list-type: atomic
                   searches:
                     items:
                       type: string
                     type: array
+                    x-kubernetes-list-type: atomic
                 type: object
               dnsPolicy:
                 type: string
@@ -1533,8 +1842,10 @@ spec:
                 items:
                   properties:
                     name:
+                      default: ""
                       type: string
                   type: object
+                  x-kubernetes-map-type: atomic
                 type: array
               initContainers:
                 items:
@@ -1543,10 +1854,12 @@ spec:
                       items:
                         type: string
                       type: array
+                      x-kubernetes-list-type: atomic
                     command:
                       items:
                         type: string
                       type: array
+                      x-kubernetes-list-type: atomic
                     env:
                       items:
                         properties:
@@ -1561,12 +1874,14 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               fieldRef:
                                 properties:
                                   apiVersion:
@@ -1576,6 +1891,7 @@ spec:
                                 required:
                                 - fieldPath
                                 type: object
+                                x-kubernetes-map-type: atomic
                               resourceFieldRef:
                                 properties:
                                   containerName:
@@ -1591,43 +1907,54 @@ spec:
                                 required:
                                 - resource
                                 type: object
+                                x-kubernetes-map-type: atomic
                               secretKeyRef:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                             type: object
                         required:
                         - name
                         type: object
                       type: array
+                      x-kubernetes-list-map-keys:
+                      - name
+                      x-kubernetes-list-type: map
                     envFrom:
                       items:
                         properties:
                           configMapRef:
                             properties:
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             type: object
+                            x-kubernetes-map-type: atomic
                           prefix:
                             type: string
                           secretRef:
                             properties:
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             type: object
+                            x-kubernetes-map-type: atomic
                         type: object
                       type: array
+                      x-kubernetes-list-type: atomic
                     image:
                       type: string
                     imagePullPolicy:
@@ -1642,6 +1969,7 @@ spec:
                                   items:
                                     type: string
                                   type: array
+                                  x-kubernetes-list-type: atomic
                               type: object
                             httpGet:
                               properties:
@@ -1659,6 +1987,7 @@ spec:
                                     - value
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 path:
                                   type: string
                                 port:
@@ -1700,6 +2029,7 @@ spec:
                                   items:
                                     type: string
                                   type: array
+                                  x-kubernetes-list-type: atomic
                               type: object
                             httpGet:
                               properties:
@@ -1717,6 +2047,7 @@ spec:
                                     - value
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 path:
                                   type: string
                                 port:
@@ -1759,6 +2090,7 @@ spec:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                           type: object
                         failureThreshold:
                           format: int32
@@ -1769,6 +2101,7 @@ spec:
                               format: int32
                               type: integer
                             service:
+                              default: ""
                               type: string
                           required:
                           - port
@@ -1789,6 +2122,7 @@ spec:
                                 - value
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             path:
                               type: string
                             port:
@@ -1863,6 +2197,7 @@ spec:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                           type: object
                         failureThreshold:
                           format: int32
@@ -1873,6 +2208,7 @@ spec:
                               format: int32
                               type: integer
                             service:
+                              default: ""
                               type: string
                           required:
                           - port
@@ -1893,6 +2229,7 @@ spec:
                                 - value
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             path:
                               type: string
                             port:
@@ -1953,6 +2290,8 @@ spec:
                             properties:
                               name:
                                 type: string
+                              request:
+                                type: string
                             required:
                             - name
                             type: object
@@ -1983,16 +2322,27 @@ spec:
                       properties:
                         allowPrivilegeEscalation:
                           type: boolean
+                        appArmorProfile:
+                          properties:
+                            localhostProfile:
+                              type: string
+                            type:
+                              type: string
+                          required:
+                          - type
+                          type: object
                         capabilities:
                           properties:
                             add:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                             drop:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                           type: object
                         privileged:
                           type: boolean
@@ -2048,6 +2398,7 @@ spec:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                           type: object
                         failureThreshold:
                           format: int32
@@ -2058,6 +2409,7 @@ spec:
                               format: int32
                               type: integer
                             service:
+                              default: ""
                               type: string
                           required:
                           - port
@@ -2078,6 +2430,7 @@ spec:
                                 - value
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             path:
                               type: string
                             port:
@@ -2140,6 +2493,9 @@ spec:
                         - name
                         type: object
                       type: array
+                      x-kubernetes-list-map-keys:
+                      - devicePath
+                      x-kubernetes-list-type: map
                     volumeMounts:
                       items:
                         properties:
@@ -2151,6 +2507,8 @@ spec:
                             type: string
                           readOnly:
                             type: boolean
+                          recursiveReadOnly:
+                            type: string
                           subPath:
                             type: string
                           subPathExpr:
@@ -2160,12 +2518,30 @@ spec:
                         - name
                         type: object
                       type: array
+                      x-kubernetes-list-map-keys:
+                      - mountPath
+                      x-kubernetes-list-type: map
                     workingDir:
                       type: string
                   required:
                   - name
                   type: object
                 type: array
+              lifecycle:
+                default:
+                  desiredPhase: Running
+                properties:
+                  desiredPhase:
+                    default: Running
+                    enum:
+                    - ""
+                    - Running
+                    - Failed
+                    - Pausing
+                    - Paused
+                    - Deleting
+                    type: string
+                type: object
               limits:
                 properties:
                   readBatchSize:
@@ -2200,13 +2576,23 @@ spec:
                 default: 1
                 format: int32
                 type: integer
+              resourceClaims:
+                items:
+                  properties:
+                    name:
+                      type: string
+                    resourceClaimName:
+                      type: string
+                    resourceClaimTemplateName:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
               runtimeClassName:
                 type: string
               scale:
                 properties:
-                  cooldownSeconds:
-                    format: int32
-                    type: integer
                   disabled:
                     type: boolean
                   lookbackSeconds:
@@ -2219,6 +2605,12 @@ spec:
                     format: int32
                     type: integer
                   replicasPerScale:
+                    format: int32
+                    type: integer
+                  replicasPerScaleDown:
+                    format: int32
+                    type: integer
+                  replicasPerScaleUp:
                     format: int32
                     type: integer
                   scaleDownCooldownSeconds:
@@ -2239,6 +2631,15 @@ spec:
                 type: object
               securityContext:
                 properties:
+                  appArmorProfile:
+                    properties:
+                      localhostProfile:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                    - type
+                    type: object
                   fsGroup:
                     format: int64
                     type: integer
@@ -2277,6 +2678,9 @@ spec:
                       format: int64
                       type: integer
                     type: array
+                    x-kubernetes-list-type: atomic
+                  supplementalGroupsPolicy:
+                    type: string
                   sysctls:
                     items:
                       properties:
@@ -2289,6 +2693,7 @@ spec:
                       - value
                       type: object
                     type: array
+                    x-kubernetes-list-type: atomic
                   windowsOptions:
                     properties:
                       gmsaCredentialSpec:
@@ -2310,10 +2715,12 @@ spec:
                       items:
                         type: string
                       type: array
+                      x-kubernetes-list-type: atomic
                     command:
                       items:
                         type: string
                       type: array
+                      x-kubernetes-list-type: atomic
                     env:
                       items:
                         properties:
@@ -2328,12 +2735,14 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               fieldRef:
                                 properties:
                                   apiVersion:
@@ -2343,6 +2752,7 @@ spec:
                                 required:
                                 - fieldPath
                                 type: object
+                                x-kubernetes-map-type: atomic
                               resourceFieldRef:
                                 properties:
                                   containerName:
@@ -2358,43 +2768,54 @@ spec:
                                 required:
                                 - resource
                                 type: object
+                                x-kubernetes-map-type: atomic
                               secretKeyRef:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                             type: object
                         required:
                         - name
                         type: object
                       type: array
+                      x-kubernetes-list-map-keys:
+                      - name
+                      x-kubernetes-list-type: map
                     envFrom:
                       items:
                         properties:
                           configMapRef:
                             properties:
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             type: object
+                            x-kubernetes-map-type: atomic
                           prefix:
                             type: string
                           secretRef:
                             properties:
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             type: object
+                            x-kubernetes-map-type: atomic
                         type: object
                       type: array
+                      x-kubernetes-list-type: atomic
                     image:
                       type: string
                     imagePullPolicy:
@@ -2409,6 +2830,7 @@ spec:
                                   items:
                                     type: string
                                   type: array
+                                  x-kubernetes-list-type: atomic
                               type: object
                             httpGet:
                               properties:
@@ -2426,6 +2848,7 @@ spec:
                                     - value
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 path:
                                   type: string
                                 port:
@@ -2467,6 +2890,7 @@ spec:
                                   items:
                                     type: string
                                   type: array
+                                  x-kubernetes-list-type: atomic
                               type: object
                             httpGet:
                               properties:
@@ -2484,6 +2908,7 @@ spec:
                                     - value
                                     type: object
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 path:
                                   type: string
                                 port:
@@ -2526,6 +2951,7 @@ spec:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                           type: object
                         failureThreshold:
                           format: int32
@@ -2536,6 +2962,7 @@ spec:
                               format: int32
                               type: integer
                             service:
+                              default: ""
                               type: string
                           required:
                           - port
@@ -2556,6 +2983,7 @@ spec:
                                 - value
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             path:
                               type: string
                             port:
@@ -2630,6 +3058,7 @@ spec:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                           type: object
                         failureThreshold:
                           format: int32
@@ -2640,6 +3069,7 @@ spec:
                               format: int32
                               type: integer
                             service:
+                              default: ""
                               type: string
                           required:
                           - port
@@ -2660,6 +3090,7 @@ spec:
                                 - value
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             path:
                               type: string
                             port:
@@ -2720,6 +3151,8 @@ spec:
                             properties:
                               name:
                                 type: string
+                              request:
+                                type: string
                             required:
                             - name
                             type: object
@@ -2750,16 +3183,27 @@ spec:
                       properties:
                         allowPrivilegeEscalation:
                           type: boolean
+                        appArmorProfile:
+                          properties:
+                            localhostProfile:
+                              type: string
+                            type:
+                              type: string
+                          required:
+                          - type
+                          type: object
                         capabilities:
                           properties:
                             add:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                             drop:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                           type: object
                         privileged:
                           type: boolean
@@ -2815,6 +3259,7 @@ spec:
                               items:
                                 type: string
                               type: array
+                              x-kubernetes-list-type: atomic
                           type: object
                         failureThreshold:
                           format: int32
@@ -2825,6 +3270,7 @@ spec:
                               format: int32
                               type: integer
                             service:
+                              default: ""
                               type: string
                           required:
                           - port
@@ -2845,6 +3291,7 @@ spec:
                                 - value
                                 type: object
                               type: array
+                              x-kubernetes-list-type: atomic
                             path:
                               type: string
                             port:
@@ -2907,6 +3354,9 @@ spec:
                         - name
                         type: object
                       type: array
+                      x-kubernetes-list-map-keys:
+                      - devicePath
+                      x-kubernetes-list-type: map
                     volumeMounts:
                       items:
                         properties:
@@ -2918,6 +3368,8 @@ spec:
                             type: string
                           readOnly:
                             type: boolean
+                          recursiveReadOnly:
+                            type: string
                           subPath:
                             type: string
                           subPathExpr:
@@ -2927,6 +3379,9 @@ spec:
                         - name
                         type: object
                       type: array
+                      x-kubernetes-list-map-keys:
+                      - mountPath
+                      x-kubernetes-list-type: map
                     workingDir:
                       type: string
                   required:
@@ -2960,34 +3415,40 @@ spec:
                                       key:
                                         type: string
                                       name:
+                                        default: ""
                                         type: string
                                       optional:
                                         type: boolean
                                     required:
                                     - key
                                     type: object
+                                    x-kubernetes-map-type: atomic
                                   keytabSecret:
                                     properties:
                                       key:
                                         type: string
                                       name:
+                                        default: ""
                                         type: string
                                       optional:
                                         type: boolean
                                     required:
                                     - key
                                     type: object
+                                    x-kubernetes-map-type: atomic
                                   passwordSecret:
                                     properties:
                                       key:
                                         type: string
                                       name:
+                                        default: ""
                                         type: string
                                       optional:
                                         type: boolean
                                     required:
                                     - key
                                     type: object
+                                    x-kubernetes-map-type: atomic
                                   realm:
                                     type: string
                                   serviceName:
@@ -2997,12 +3458,14 @@ spec:
                                       key:
                                         type: string
                                       name:
+                                        default: ""
                                         type: string
                                       optional:
                                         type: boolean
                                     required:
                                     - key
                                     type: object
+                                    x-kubernetes-map-type: atomic
                                 required:
                                 - authType
                                 - realm
@@ -3020,23 +3483,27 @@ spec:
                                       key:
                                         type: string
                                       name:
+                                        default: ""
                                         type: string
                                       optional:
                                         type: boolean
                                     required:
                                     - key
                                     type: object
+                                    x-kubernetes-map-type: atomic
                                   userSecret:
                                     properties:
                                       key:
                                         type: string
                                       name:
+                                        default: ""
                                         type: string
                                       optional:
                                         type: boolean
                                     required:
                                     - key
                                     type: object
+                                    x-kubernetes-map-type: atomic
                                 required:
                                 - handshake
                                 - userSecret
@@ -3050,23 +3517,27 @@ spec:
                                       key:
                                         type: string
                                       name:
+                                        default: ""
                                         type: string
                                       optional:
                                         type: boolean
                                     required:
                                     - key
                                     type: object
+                                    x-kubernetes-map-type: atomic
                                   userSecret:
                                     properties:
                                       key:
                                         type: string
                                       name:
+                                        default: ""
                                         type: string
                                       optional:
                                         type: boolean
                                     required:
                                     - key
                                     type: object
+                                    x-kubernetes-map-type: atomic
                                 required:
                                 - handshake
                                 - userSecret
@@ -3080,23 +3551,27 @@ spec:
                                       key:
                                         type: string
                                       name:
+                                        default: ""
                                         type: string
                                       optional:
                                         type: boolean
                                     required:
                                     - key
                                     type: object
+                                    x-kubernetes-map-type: atomic
                                   userSecret:
                                     properties:
                                       key:
                                         type: string
                                       name:
+                                        default: ""
                                         type: string
                                       optional:
                                         type: boolean
                                     required:
                                     - key
                                     type: object
+                                    x-kubernetes-map-type: atomic
                                 required:
                                 - handshake
                                 - userSecret
@@ -3104,6 +3579,8 @@ spec:
                             required:
                             - mechanism
                             type: object
+                          setKey:
+                            type: boolean
                           tls:
                             properties:
                               caCertSecret:
@@ -3111,23 +3588,27 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               certSecret:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               insecureSkipVerify:
                                 type: boolean
                               keySecret:
@@ -3135,12 +3616,14 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                             type: object
                           topic:
                             type: string
@@ -3175,12 +3658,14 @@ spec:
                                             key:
                                               type: string
                                             name:
+                                              default: ""
                                               type: string
                                             optional:
                                               type: boolean
                                           required:
                                           - key
                                           type: object
+                                          x-kubernetes-map-type: atomic
                                         fieldRef:
                                           properties:
                                             apiVersion:
@@ -3190,6 +3675,7 @@ spec:
                                           required:
                                           - fieldPath
                                           type: object
+                                          x-kubernetes-map-type: atomic
                                         resourceFieldRef:
                                           properties:
                                             containerName:
@@ -3205,17 +3691,20 @@ spec:
                                           required:
                                           - resource
                                           type: object
+                                          x-kubernetes-map-type: atomic
                                         secretKeyRef:
                                           properties:
                                             key:
                                               type: string
                                             name:
+                                              default: ""
                                               type: string
                                             optional:
                                               type: boolean
                                           required:
                                           - key
                                           type: object
+                                          x-kubernetes-map-type: atomic
                                       type: object
                                   required:
                                   - name
@@ -3227,31 +3716,97 @@ spec:
                                     configMapRef:
                                       properties:
                                         name:
+                                          default: ""
                                           type: string
                                         optional:
                                           type: boolean
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     prefix:
                                       type: string
                                     secretRef:
                                       properties:
                                         name:
+                                          default: ""
                                           type: string
                                         optional:
                                           type: boolean
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                   type: object
                                 type: array
                               image:
                                 type: string
                               imagePullPolicy:
                                 type: string
+                              livenessProbe:
+                                properties:
+                                  failureThreshold:
+                                    format: int32
+                                    type: integer
+                                  initialDelaySeconds:
+                                    format: int32
+                                    type: integer
+                                  periodSeconds:
+                                    format: int32
+                                    type: integer
+                                  successThreshold:
+                                    format: int32
+                                    type: integer
+                                  timeoutSeconds:
+                                    format: int32
+                                    type: integer
+                                type: object
+                              ports:
+                                items:
+                                  properties:
+                                    containerPort:
+                                      format: int32
+                                      type: integer
+                                    hostIP:
+                                      type: string
+                                    hostPort:
+                                      format: int32
+                                      type: integer
+                                    name:
+                                      type: string
+                                    protocol:
+                                      default: TCP
+                                      type: string
+                                  required:
+                                  - containerPort
+                                  type: object
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - containerPort
+                                - protocol
+                                x-kubernetes-list-type: map
+                              readinessProbe:
+                                properties:
+                                  failureThreshold:
+                                    format: int32
+                                    type: integer
+                                  initialDelaySeconds:
+                                    format: int32
+                                    type: integer
+                                  periodSeconds:
+                                    format: int32
+                                    type: integer
+                                  successThreshold:
+                                    format: int32
+                                    type: integer
+                                  timeoutSeconds:
+                                    format: int32
+                                    type: integer
+                                type: object
                               resources:
                                 properties:
                                   claims:
                                     items:
                                       properties:
                                         name:
+                                          type: string
+                                        request:
                                           type: string
                                       required:
                                       - name
@@ -3281,16 +3836,27 @@ spec:
                                 properties:
                                   allowPrivilegeEscalation:
                                     type: boolean
+                                  appArmorProfile:
+                                    properties:
+                                      localhostProfile:
+                                        type: string
+                                      type:
+                                        type: string
+                                    required:
+                                    - type
+                                    type: object
                                   capabilities:
                                     properties:
                                       add:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                       drop:
                                         items:
                                           type: string
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                     type: object
                                   privileged:
                                     type: boolean
@@ -3349,6 +3915,8 @@ spec:
                                       type: string
                                     readOnly:
                                       type: boolean
+                                    recursiveReadOnly:
+                                      type: string
                                     subPath:
                                       type: string
                                     subPathExpr:
@@ -3382,34 +3950,40 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               keytabSecret:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               passwordSecret:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               realm:
                                 type: string
                               serviceName:
@@ -3419,12 +3993,14 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                             required:
                             - authType
                             - realm
@@ -3442,23 +4018,27 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               userSecret:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                             required:
                             - handshake
                             - userSecret
@@ -3472,23 +4052,27 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               userSecret:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                             required:
                             - handshake
                             - userSecret
@@ -3502,23 +4086,27 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               userSecret:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                             required:
                             - handshake
                             - userSecret
@@ -3526,6 +4114,8 @@ spec:
                         required:
                         - mechanism
                         type: object
+                      setKey:
+                        type: boolean
                       tls:
                         properties:
                           caCertSecret:
@@ -3533,23 +4123,27 @@ spec:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                           certSecret:
                             properties:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                           insecureSkipVerify:
                             type: boolean
                           keySecret:
@@ -3557,12 +4151,14 @@ spec:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                         type: object
                       topic:
                         type: string
@@ -3570,6 +4166,21 @@ spec:
                     - topic
                     type: object
                   log:
+                    type: object
+                  retryStrategy:
+                    properties:
+                      backoff:
+                        properties:
+                          interval:
+                            default: 1ms
+                            type: string
+                          steps:
+                            format: int32
+                            type: integer
+                        type: object
+                      onFailure:
+                        default: retry
+                        type: string
                     type: object
                   udsink:
                     properties:
@@ -3597,12 +4208,14 @@ spec:
                                         key:
                                           type: string
                                         name:
+                                          default: ""
                                           type: string
                                         optional:
                                           type: boolean
                                       required:
                                       - key
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     fieldRef:
                                       properties:
                                         apiVersion:
@@ -3612,6 +4225,7 @@ spec:
                                       required:
                                       - fieldPath
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     resourceFieldRef:
                                       properties:
                                         containerName:
@@ -3627,17 +4241,20 @@ spec:
                                       required:
                                       - resource
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     secretKeyRef:
                                       properties:
                                         key:
                                           type: string
                                         name:
+                                          default: ""
                                           type: string
                                         optional:
                                           type: boolean
                                       required:
                                       - key
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                   type: object
                               required:
                               - name
@@ -3649,31 +4266,97 @@ spec:
                                 configMapRef:
                                   properties:
                                     name:
+                                      default: ""
                                       type: string
                                     optional:
                                       type: boolean
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 prefix:
                                   type: string
                                 secretRef:
                                   properties:
                                     name:
+                                      default: ""
                                       type: string
                                     optional:
                                       type: boolean
                                   type: object
+                                  x-kubernetes-map-type: atomic
                               type: object
                             type: array
                           image:
                             type: string
                           imagePullPolicy:
                             type: string
+                          livenessProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
+                          ports:
+                            items:
+                              properties:
+                                containerPort:
+                                  format: int32
+                                  type: integer
+                                hostIP:
+                                  type: string
+                                hostPort:
+                                  format: int32
+                                  type: integer
+                                name:
+                                  type: string
+                                protocol:
+                                  default: TCP
+                                  type: string
+                              required:
+                              - containerPort
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - containerPort
+                            - protocol
+                            x-kubernetes-list-type: map
+                          readinessProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
                           resources:
                             properties:
                               claims:
                                 items:
                                   properties:
                                     name:
+                                      type: string
+                                    request:
                                       type: string
                                   required:
                                   - name
@@ -3703,16 +4386,27 @@ spec:
                             properties:
                               allowPrivilegeEscalation:
                                 type: boolean
+                              appArmorProfile:
+                                properties:
+                                  localhostProfile:
+                                    type: string
+                                  type:
+                                    type: string
+                                required:
+                                - type
+                                type: object
                               capabilities:
                                 properties:
                                   add:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   drop:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 type: object
                               privileged:
                                 type: boolean
@@ -3771,6 +4465,8 @@ spec:
                                   type: string
                                 readOnly:
                                   type: boolean
+                                recursiveReadOnly:
+                                  type: string
                                 subPath:
                                   type: string
                                 subPathExpr:
@@ -3821,12 +4517,14 @@ spec:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                         type: object
                       service:
                         type: boolean
@@ -3842,46 +4540,54 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               user:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                             type: object
                           nkey:
                             properties:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                           token:
                             properties:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                         type: object
                       stream:
                         type: string
@@ -3892,23 +4598,27 @@ spec:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                           certSecret:
                             properties:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                           insecureSkipVerify:
                             type: boolean
                           keySecret:
@@ -3916,12 +4626,14 @@ spec:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                         type: object
                       url:
                         type: string
@@ -3939,6 +4651,8 @@ spec:
                         type: string
                       consumerGroup:
                         type: string
+                      kafkaVersion:
+                        type: string
                       sasl:
                         properties:
                           gssapi:
@@ -3950,34 +4664,40 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               keytabSecret:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               passwordSecret:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               realm:
                                 type: string
                               serviceName:
@@ -3987,12 +4707,14 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                             required:
                             - authType
                             - realm
@@ -4010,23 +4732,27 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               userSecret:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                             required:
                             - handshake
                             - userSecret
@@ -4040,23 +4766,27 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               userSecret:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                             required:
                             - handshake
                             - userSecret
@@ -4070,23 +4800,27 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               userSecret:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                             required:
                             - handshake
                             - userSecret
@@ -4101,23 +4835,27 @@ spec:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                           certSecret:
                             properties:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                           insecureSkipVerify:
                             type: boolean
                           keySecret:
@@ -4125,12 +4863,14 @@ spec:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                         type: object
                       topic:
                         type: string
@@ -4148,46 +4888,54 @@ spec:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                               user:
                                 properties:
                                   key:
                                     type: string
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 required:
                                 - key
                                 type: object
+                                x-kubernetes-map-type: atomic
                             type: object
                           nkey:
                             properties:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                           token:
                             properties:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                         type: object
                       queue:
                         type: string
@@ -4200,23 +4948,27 @@ spec:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                           certSecret:
                             properties:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                           insecureSkipVerify:
                             type: boolean
                           keySecret:
@@ -4224,12 +4976,14 @@ spec:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                         type: object
                       url:
                         type: string
@@ -4237,6 +4991,41 @@ spec:
                     - queue
                     - subject
                     - url
+                    type: object
+                  pulsar:
+                    properties:
+                      auth:
+                        properties:
+                          token:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                        type: object
+                      consumerName:
+                        type: string
+                      maxUnack:
+                        format: int32
+                        type: integer
+                      serverAddr:
+                        type: string
+                      subscriptionName:
+                        type: string
+                      topic:
+                        type: string
+                    required:
+                    - consumerName
+                    - serverAddr
+                    - subscriptionName
+                    - topic
                     type: object
                   serving:
                     properties:
@@ -4247,12 +5036,14 @@ spec:
                               key:
                                 type: string
                               name:
+                                default: ""
                                 type: string
                               optional:
                                 type: boolean
                             required:
                             - key
                             type: object
+                            x-kubernetes-map-type: atomic
                         type: object
                       msgIDHeaderKey:
                         type: string
@@ -4316,12 +5107,14 @@ spec:
                                         key:
                                           type: string
                                         name:
+                                          default: ""
                                           type: string
                                         optional:
                                           type: boolean
                                       required:
                                       - key
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     fieldRef:
                                       properties:
                                         apiVersion:
@@ -4331,6 +5124,7 @@ spec:
                                       required:
                                       - fieldPath
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     resourceFieldRef:
                                       properties:
                                         containerName:
@@ -4346,17 +5140,20 @@ spec:
                                       required:
                                       - resource
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     secretKeyRef:
                                       properties:
                                         key:
                                           type: string
                                         name:
+                                          default: ""
                                           type: string
                                         optional:
                                           type: boolean
                                       required:
                                       - key
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                   type: object
                               required:
                               - name
@@ -4368,31 +5165,97 @@ spec:
                                 configMapRef:
                                   properties:
                                     name:
+                                      default: ""
                                       type: string
                                     optional:
                                       type: boolean
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 prefix:
                                   type: string
                                 secretRef:
                                   properties:
                                     name:
+                                      default: ""
                                       type: string
                                     optional:
                                       type: boolean
                                   type: object
+                                  x-kubernetes-map-type: atomic
                               type: object
                             type: array
                           image:
                             type: string
                           imagePullPolicy:
                             type: string
+                          livenessProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
+                          ports:
+                            items:
+                              properties:
+                                containerPort:
+                                  format: int32
+                                  type: integer
+                                hostIP:
+                                  type: string
+                                hostPort:
+                                  format: int32
+                                  type: integer
+                                name:
+                                  type: string
+                                protocol:
+                                  default: TCP
+                                  type: string
+                              required:
+                              - containerPort
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - containerPort
+                            - protocol
+                            x-kubernetes-list-type: map
+                          readinessProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
                           resources:
                             properties:
                               claims:
                                 items:
                                   properties:
                                     name:
+                                      type: string
+                                    request:
                                       type: string
                                   required:
                                   - name
@@ -4422,16 +5285,27 @@ spec:
                             properties:
                               allowPrivilegeEscalation:
                                 type: boolean
+                              appArmorProfile:
+                                properties:
+                                  localhostProfile:
+                                    type: string
+                                  type:
+                                    type: string
+                                required:
+                                - type
+                                type: object
                               capabilities:
                                 properties:
                                   add:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   drop:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 type: object
                               privileged:
                                 type: boolean
@@ -4490,6 +5364,8 @@ spec:
                                   type: string
                                 readOnly:
                                   type: boolean
+                                recursiveReadOnly:
+                                  type: string
                                 subPath:
                                   type: string
                                 subPathExpr:
@@ -4527,12 +5403,14 @@ spec:
                                         key:
                                           type: string
                                         name:
+                                          default: ""
                                           type: string
                                         optional:
                                           type: boolean
                                       required:
                                       - key
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     fieldRef:
                                       properties:
                                         apiVersion:
@@ -4542,6 +5420,7 @@ spec:
                                       required:
                                       - fieldPath
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     resourceFieldRef:
                                       properties:
                                         containerName:
@@ -4557,17 +5436,20 @@ spec:
                                       required:
                                       - resource
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                     secretKeyRef:
                                       properties:
                                         key:
                                           type: string
                                         name:
+                                          default: ""
                                           type: string
                                         optional:
                                           type: boolean
                                       required:
                                       - key
                                       type: object
+                                      x-kubernetes-map-type: atomic
                                   type: object
                               required:
                               - name
@@ -4579,31 +5461,97 @@ spec:
                                 configMapRef:
                                   properties:
                                     name:
+                                      default: ""
                                       type: string
                                     optional:
                                       type: boolean
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 prefix:
                                   type: string
                                 secretRef:
                                   properties:
                                     name:
+                                      default: ""
                                       type: string
                                     optional:
                                       type: boolean
                                   type: object
+                                  x-kubernetes-map-type: atomic
                               type: object
                             type: array
                           image:
                             type: string
                           imagePullPolicy:
                             type: string
+                          livenessProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
+                          ports:
+                            items:
+                              properties:
+                                containerPort:
+                                  format: int32
+                                  type: integer
+                                hostIP:
+                                  type: string
+                                hostPort:
+                                  format: int32
+                                  type: integer
+                                name:
+                                  type: string
+                                protocol:
+                                  default: TCP
+                                  type: string
+                              required:
+                              - containerPort
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - containerPort
+                            - protocol
+                            x-kubernetes-list-type: map
+                          readinessProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                type: integer
+                            type: object
                           resources:
                             properties:
                               claims:
                                 items:
                                   properties:
                                     name:
+                                      type: string
+                                    request:
                                       type: string
                                   required:
                                   - name
@@ -4633,16 +5581,27 @@ spec:
                             properties:
                               allowPrivilegeEscalation:
                                 type: boolean
+                              appArmorProfile:
+                                properties:
+                                  localhostProfile:
+                                    type: string
+                                  type:
+                                    type: string
+                                required:
+                                - type
+                                type: object
                               capabilities:
                                 properties:
                                   add:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   drop:
                                     items:
                                       type: string
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 type: object
                               privileged:
                                 type: boolean
@@ -4701,6 +5660,8 @@ spec:
                                   type: string
                                 readOnly:
                                   type: boolean
+                                recursiveReadOnly:
+                                  type: string
                                 subPath:
                                   type: string
                                 subPathExpr:
@@ -4731,6 +5692,23 @@ spec:
                       type: string
                   type: object
                 type: array
+              updateStrategy:
+                default:
+                  rollingUpdate:
+                    maxUnavailable: 25%
+                  type: RollingUpdate
+                properties:
+                  rollingUpdate:
+                    properties:
+                      maxUnavailable:
+                        anyOf:
+                        - type: integer
+                        - type: string
+                        x-kubernetes-int-or-string: true
+                    type: object
+                  type:
+                    type: string
+                type: object
               volumes:
                 items:
                   properties:
@@ -4757,10 +5735,12 @@ spec:
                         diskURI:
                           type: string
                         fsType:
+                          default: ext4
                           type: string
                         kind:
                           type: string
                         readOnly:
+                          default: false
                           type: boolean
                       required:
                       - diskName
@@ -4784,6 +5764,7 @@ spec:
                           items:
                             type: string
                           type: array
+                          x-kubernetes-list-type: atomic
                         path:
                           type: string
                         readOnly:
@@ -4793,8 +5774,10 @@ spec:
                         secretRef:
                           properties:
                             name:
+                              default: ""
                               type: string
                           type: object
+                          x-kubernetes-map-type: atomic
                         user:
                           type: string
                       required:
@@ -4809,8 +5792,10 @@ spec:
                         secretRef:
                           properties:
                             name:
+                              default: ""
                               type: string
                           type: object
+                          x-kubernetes-map-type: atomic
                         volumeID:
                           type: string
                       required:
@@ -4836,11 +5821,14 @@ spec:
                             - path
                             type: object
                           type: array
+                          x-kubernetes-list-type: atomic
                         name:
+                          default: ""
                           type: string
                         optional:
                           type: boolean
                       type: object
+                      x-kubernetes-map-type: atomic
                     csi:
                       properties:
                         driver:
@@ -4850,8 +5838,10 @@ spec:
                         nodePublishSecretRef:
                           properties:
                             name:
+                              default: ""
                               type: string
                           type: object
+                          x-kubernetes-map-type: atomic
                         readOnly:
                           type: boolean
                         volumeAttributes:
@@ -4878,6 +5868,7 @@ spec:
                                 required:
                                 - fieldPath
                                 type: object
+                                x-kubernetes-map-type: atomic
                               mode:
                                 format: int32
                                 type: integer
@@ -4898,10 +5889,12 @@ spec:
                                 required:
                                 - resource
                                 type: object
+                                x-kubernetes-map-type: atomic
                             required:
                             - path
                             type: object
                           type: array
+                          x-kubernetes-list-type: atomic
                       type: object
                     emptyDir:
                       properties:
@@ -4926,6 +5919,7 @@ spec:
                                   items:
                                     type: string
                                   type: array
+                                  x-kubernetes-list-type: atomic
                                 dataSource:
                                   properties:
                                     apiGroup:
@@ -4938,6 +5932,7 @@ spec:
                                   - kind
                                   - name
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 dataSourceRef:
                                   properties:
                                     apiGroup:
@@ -4984,16 +5979,19 @@ spec:
                                             items:
                                               type: string
                                             type: array
+                                            x-kubernetes-list-type: atomic
                                         required:
                                         - key
                                         - operator
                                         type: object
                                       type: array
+                                      x-kubernetes-list-type: atomic
                                     matchLabels:
                                       additionalProperties:
                                         type: string
                                       type: object
                                   type: object
+                                  x-kubernetes-map-type: atomic
                                 storageClassName:
                                   type: string
                                 volumeAttributesClassName:
@@ -5020,10 +6018,12 @@ spec:
                           items:
                             type: string
                           type: array
+                          x-kubernetes-list-type: atomic
                         wwids:
                           items:
                             type: string
                           type: array
+                          x-kubernetes-list-type: atomic
                       type: object
                     flexVolume:
                       properties:
@@ -5040,8 +6040,10 @@ spec:
                         secretRef:
                           properties:
                             name:
+                              default: ""
                               type: string
                           type: object
+                          x-kubernetes-map-type: atomic
                       required:
                       - driver
                       type: object
@@ -5098,6 +6100,13 @@ spec:
                       required:
                       - path
                       type: object
+                    image:
+                      properties:
+                        pullPolicy:
+                          type: string
+                        reference:
+                          type: string
+                      type: object
                     iscsi:
                       properties:
                         chapAuthDiscovery:
@@ -5111,6 +6120,7 @@ spec:
                         iqn:
                           type: string
                         iscsiInterface:
+                          default: default
                           type: string
                         lun:
                           format: int32
@@ -5119,13 +6129,16 @@ spec:
                           items:
                             type: string
                           type: array
+                          x-kubernetes-list-type: atomic
                         readOnly:
                           type: boolean
                         secretRef:
                           properties:
                             name:
+                              default: ""
                               type: string
                           type: object
+                          x-kubernetes-map-type: atomic
                         targetPortal:
                           type: string
                       required:
@@ -5199,16 +6212,19 @@ spec:
                                               items:
                                                 type: string
                                               type: array
+                                              x-kubernetes-list-type: atomic
                                           required:
                                           - key
                                           - operator
                                           type: object
                                         type: array
+                                        x-kubernetes-list-type: atomic
                                       matchLabels:
                                         additionalProperties:
                                           type: string
                                         type: object
                                     type: object
+                                    x-kubernetes-map-type: atomic
                                   name:
                                     type: string
                                   optional:
@@ -5237,11 +6253,14 @@ spec:
                                       - path
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 type: object
+                                x-kubernetes-map-type: atomic
                               downwardAPI:
                                 properties:
                                   items:
@@ -5256,6 +6275,7 @@ spec:
                                           required:
                                           - fieldPath
                                           type: object
+                                          x-kubernetes-map-type: atomic
                                         mode:
                                           format: int32
                                           type: integer
@@ -5276,10 +6296,12 @@ spec:
                                           required:
                                           - resource
                                           type: object
+                                          x-kubernetes-map-type: atomic
                                       required:
                                       - path
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                 type: object
                               secret:
                                 properties:
@@ -5298,11 +6320,14 @@ spec:
                                       - path
                                       type: object
                                     type: array
+                                    x-kubernetes-list-type: atomic
                                   name:
+                                    default: ""
                                     type: string
                                   optional:
                                     type: boolean
                                 type: object
+                                x-kubernetes-map-type: atomic
                               serviceAccountToken:
                                 properties:
                                   audience:
@@ -5317,6 +6342,7 @@ spec:
                                 type: object
                             type: object
                           type: array
+                          x-kubernetes-list-type: atomic
                       type: object
                     quobyte:
                       properties:
@@ -5343,21 +6369,27 @@ spec:
                         image:
                           type: string
                         keyring:
+                          default: /etc/ceph/keyring
                           type: string
                         monitors:
                           items:
                             type: string
                           type: array
+                          x-kubernetes-list-type: atomic
                         pool:
+                          default: rbd
                           type: string
                         readOnly:
                           type: boolean
                         secretRef:
                           properties:
                             name:
+                              default: ""
                               type: string
                           type: object
+                          x-kubernetes-map-type: atomic
                         user:
+                          default: admin
                           type: string
                       required:
                       - image
@@ -5366,6 +6398,7 @@ spec:
                     scaleIO:
                       properties:
                         fsType:
+                          default: xfs
                           type: string
                         gateway:
                           type: string
@@ -5376,11 +6409,14 @@ spec:
                         secretRef:
                           properties:
                             name:
+                              default: ""
                               type: string
                           type: object
+                          x-kubernetes-map-type: atomic
                         sslEnabled:
                           type: boolean
                         storageMode:
+                          default: ThinProvisioned
                           type: string
                         storagePool:
                           type: string
@@ -5413,6 +6449,7 @@ spec:
                             - path
                             type: object
                           type: array
+                          x-kubernetes-list-type: atomic
                         optional:
                           type: boolean
                         secretName:
@@ -5427,8 +6464,10 @@ spec:
                         secretRef:
                           properties:
                             name:
+                              default: ""
                               type: string
                           type: object
+                          x-kubernetes-map-type: atomic
                         volumeName:
                           type: string
                         volumeNamespace:
@@ -5490,6 +6529,11 @@ spec:
                   - type
                   type: object
                 type: array
+              currentHash:
+                type: string
+              desiredReplicas:
+                format: int32
+                type: integer
               lastScaledAt:
                 format: date-time
                 type: string
@@ -5510,6 +6554,9 @@ spec:
                 - Paused
                 - Deleting
                 type: string
+              readyReplicas:
+                format: int32
+                type: integer
               reason:
                 type: string
               replicas:
@@ -5517,8 +6564,14 @@ spec:
                 type: integer
               selector:
                 type: string
-            required:
-            - replicas
+              updateHash:
+                type: string
+              updatedReadyReplicas:
+                format: int32
+                type: integer
+              updatedReplicas:
+                format: int32
+                type: integer
             type: object
         required:
         - spec
@@ -5531,9 +6584,3 @@ spec:
         specReplicasPath: .spec.replicas
         statusReplicasPath: .status.replicas
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

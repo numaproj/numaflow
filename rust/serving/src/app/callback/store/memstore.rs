@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use super::PayloadToSave;
 use crate::app::callback::CallbackRequest;
 use crate::consts::SAVED;
 use crate::Error;
-
-use super::PayloadToSave;
 
 /// `InMemoryStore` is an in-memory implementation of the `Store` trait.
 /// It uses a `HashMap` to store data in memory.
@@ -97,10 +96,9 @@ impl super::Store for InMemoryStore {
 mod tests {
     use std::sync::Arc;
 
+    use super::*;
     use crate::app::callback::store::{PayloadToSave, Store};
     use crate::app::callback::CallbackRequest;
-
-    use super::*;
 
     #[tokio::test]
     async fn test_save_and_retrieve_callbacks() {
@@ -118,7 +116,7 @@ mod tests {
         store
             .save(vec![PayloadToSave::Callback {
                 key: key.clone(),
-                value: value.clone(),
+                value: Arc::clone(&value),
             }])
             .await
             .unwrap();
@@ -193,7 +191,7 @@ mod tests {
         let result = store
             .save(vec![PayloadToSave::Callback {
                 key: "".to_string(),
-                value: value.clone(),
+                value: Arc::clone(&value),
             }])
             .await;
 

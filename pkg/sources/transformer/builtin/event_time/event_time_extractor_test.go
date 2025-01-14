@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var _keys = []string{"test-key"}
+
 type testDatum struct {
 	value     []byte
 	eventTime time.Time
@@ -74,7 +76,7 @@ func TestEventTimeExtractor(t *testing.T) {
 		assert.NoError(t, err)
 
 		testJsonMsg := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-02-18T21:54:42.123Z"}]}`
-		result := handle(context.Background(), []string{"test-key"}, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(testJsonMsg),
 			eventTime: time.Time{},
 			watermark: time.Time{},
@@ -86,6 +88,8 @@ func TestEventTimeExtractor(t *testing.T) {
 		assert.True(t, expected.Equal(result.Items()[0].EventTime()))
 		// Verify the payload remains unchanged.
 		assert.Equal(t, testJsonMsg, string(result.Items()[0].Value()))
+		// Verify the keys remain unchanged.
+		assert.Equal(t, _keys, result.Items()[0].Keys())
 	})
 
 	t.Run("Json expression valid, assign a new event time to the message - format specified", func(t *testing.T) {
@@ -94,7 +98,7 @@ func TestEventTimeExtractor(t *testing.T) {
 		assert.NoError(t, err)
 
 		testJsonMsg := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-02-18T21:54:42.123Z"}]}`
-		result := handle(context.Background(), []string{"test-key"}, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(testJsonMsg),
 			eventTime: time.Time{},
 			watermark: time.Time{},
@@ -106,6 +110,8 @@ func TestEventTimeExtractor(t *testing.T) {
 		assert.True(t, expected.Equal(result.Items()[0].EventTime()))
 		// Verify the payload remains unchanged.
 		assert.Equal(t, testJsonMsg, string(result.Items()[0].Value()))
+		// Verify the keys remain unchanged.
+		assert.Equal(t, _keys, result.Items()[0].Keys())
 	})
 
 	t.Run("Time string not matching user-provided format, pass on the message without assigning new event time", func(t *testing.T) {
@@ -114,9 +120,9 @@ func TestEventTimeExtractor(t *testing.T) {
 		assert.NoError(t, err)
 
 		testInputEventTime := time.Date(2022, 1, 4, 2, 3, 4, 5, time.UTC)
-		// Handler receives format as time.ANSIC but in the message, we use time.RFC3339. Format is not matched.
+		// Handler receives a format as time.ANSIC but in the message, we use time.RFC3339. Format is not matched.
 		testJsonMsg := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-02-18T21:54:42.123Z"}]}`
-		result := handle(context.Background(), []string{"test-key"}, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(testJsonMsg),
 			eventTime: testInputEventTime,
 			watermark: time.Time{},
@@ -126,6 +132,8 @@ func TestEventTimeExtractor(t *testing.T) {
 		assert.Equal(t, testInputEventTime, result.Items()[0].EventTime())
 		// Verify the payload remains unchanged.
 		assert.Equal(t, testJsonMsg, string(result.Items()[0].Value()))
+		// Verify the keys remain unchanged.
+		assert.Equal(t, _keys, result.Items()[0].Keys())
 	})
 
 	t.Run("Cannot compile json expression, pass on the message without assigning new event time", func(t *testing.T) {
@@ -135,7 +143,7 @@ func TestEventTimeExtractor(t *testing.T) {
 
 		testInputEventTime := time.Date(2022, 1, 4, 2, 3, 4, 5, time.UTC)
 		testJsonMsg := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "2022-02-18T21:54:42.123Z"},{"id": 2, "name": "numa", "time": "2021-02-18T21:54:42.123Z"}]}`
-		result := handle(context.Background(), []string{"test-key"}, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(testJsonMsg),
 			eventTime: testInputEventTime,
 			watermark: time.Time{},
@@ -146,6 +154,8 @@ func TestEventTimeExtractor(t *testing.T) {
 		assert.True(t, expected.Equal(result.Items()[0].EventTime()))
 		// Verify the payload remains unchanged.
 		assert.Equal(t, testJsonMsg, string(result.Items()[0].Value()))
+		// Verify the keys remain unchanged.
+		assert.Equal(t, _keys, result.Items()[0].Keys())
 	})
 
 	t.Run("The time string is in epoch format with a granularity of seconds, assign a new event time to the message", func(t *testing.T) {
@@ -154,9 +164,9 @@ func TestEventTimeExtractor(t *testing.T) {
 		assert.NoError(t, err)
 
 		testInputEventTime := time.Date(2022, 1, 4, 2, 3, 4, 5, time.UTC)
-		// Handler receives format as time.ANSIC but in the message, we use time.RFC3339. Format is not matched.
+		// Handler receives a format as time.ANSIC but in the message, we use time.RFC3339. Format is not matched.
 		testJsonMsg := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "1673239888"},{"id": 2, "name": "numa", "time": "1673239888"}]}`
-		result := handle(context.Background(), []string{"test-key"}, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(testJsonMsg),
 			eventTime: testInputEventTime,
 			watermark: time.Time{},
@@ -168,6 +178,8 @@ func TestEventTimeExtractor(t *testing.T) {
 		assert.True(t, expected.Equal(result.Items()[0].EventTime()))
 		// Verify the payload remains unchanged.
 		assert.Equal(t, testJsonMsg, string(result.Items()[0].Value()))
+		// Verify the keys remain unchanged.
+		assert.Equal(t, _keys, result.Items()[0].Keys())
 	})
 
 	t.Run("The time string is in epoch format with a granularity of milliseconds, assign a new event time to the message", func(t *testing.T) {
@@ -177,7 +189,7 @@ func TestEventTimeExtractor(t *testing.T) {
 
 		testInputEventTime := time.Date(2022, 1, 4, 2, 3, 4, 5, time.UTC)
 		testJsonMsg := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "1673239888123"},{"id": 2, "name": "numa", "time": "1673239888123"}]}`
-		result := handle(context.Background(), []string{"test-key"}, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(testJsonMsg),
 			eventTime: testInputEventTime,
 			watermark: time.Time{},
@@ -189,6 +201,8 @@ func TestEventTimeExtractor(t *testing.T) {
 		assert.True(t, expected.Equal(result.Items()[0].EventTime()))
 		// Verify the payload remains unchanged.
 		assert.Equal(t, testJsonMsg, string(result.Items()[0].Value()))
+		// Verify the keys remain unchanged.
+		assert.Equal(t, _keys, result.Items()[0].Keys())
 	})
 
 	t.Run("The time string is ambiguous, pass on the message without assigning new event time", func(t *testing.T) {
@@ -199,7 +213,7 @@ func TestEventTimeExtractor(t *testing.T) {
 		testInputEventTime := time.Date(2022, 1, 4, 2, 3, 4, 5, time.UTC)
 		// 04/08/2014 is ambiguous because it could be mm/dd/yyyy or dd/mm/yyyy.
 		testJsonMsg := `{"test": 21, "item": [{"id": 1, "name": "numa", "time": "04/08/2014 22:05"},{"id": 2, "name": "numa", "time": "04/08/2014 22:05"}]}`
-		result := handle(context.Background(), []string{"test-key"}, &testDatum{
+		result := handle(context.Background(), _keys, &testDatum{
 			value:     []byte(testJsonMsg),
 			eventTime: testInputEventTime,
 			watermark: time.Time{},
@@ -211,5 +225,7 @@ func TestEventTimeExtractor(t *testing.T) {
 		assert.True(t, expected.Equal(result.Items()[0].EventTime()))
 		// Verify the payload remains unchanged.
 		assert.Equal(t, testJsonMsg, string(result.Items()[0].Value()))
+		// Verify the keys remain unchanged.
+		assert.Equal(t, _keys, result.Items()[0].Keys())
 	})
 }

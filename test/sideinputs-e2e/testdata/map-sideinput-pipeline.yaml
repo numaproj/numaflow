@@ -16,6 +16,8 @@ spec:
       source:
         http: {}
     - name: si-e2e
+      scale:
+        min: 1
       udf:
         container:
           # A map side input udf, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/map_sideinput/udf
@@ -29,9 +31,13 @@ spec:
       sink:
         udsink:
           container:
-            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis-sink
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
             imagePullPolicy: Always
+            env:
+              - name: SINK_HASH_KEY
+                # The key is set in the format of "pipeline_name-vertex_name"
+                value: "map-sideinput-pipeline-sink"
   edges:
     - from: in
       to: si-e2e

@@ -32,7 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
+	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	sinkclient "github.com/numaproj/numaflow/pkg/sdkclient/sinker"
 	"github.com/numaproj/numaflow/pkg/shared/callback"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
@@ -84,7 +84,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	switch u.ISBSvcType {
 	case dfv1.ISBSvcTypeRedis:
 		redisClient := redisclient.NewInClusterRedisClient()
-		readOptions := []redisclient.Option{}
+		var readOptions []redisclient.Option
 		if x := u.VertexInstance.Vertex.Spec.Limits; x != nil && x.ReadTimeout != nil {
 			readOptions = append(readOptions, redisclient.WithReadTimeOut(x.ReadTimeout.Duration))
 		}
@@ -150,12 +150,13 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
 	if udSink := u.VertexInstance.Vertex.Spec.Sink.UDSink; udSink != nil {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.SinkServerInfoFile))
+		serverInfo, err := serverinfo.SDKServerInfo(serverinfo.WithServerInfoFilePath(sdkclient.SinkServerInfoFile))
 		if err != nil {
 			return err
 		}
+		metrics.SDKInfo.WithLabelValues(dfv1.ComponentVertex, fmt.Sprintf("%s-%s", pipelineName, vertexName), string(serverinfo.ContainerTypeSinker), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
-		sdkClient, err := sinkclient.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+		sdkClient, err := sinkclient.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create sdk client, %w", err)
 		}
@@ -179,12 +180,13 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 
 	if u.VertexInstance.Vertex.HasFallbackUDSink() {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.FbSinkServerInfoFile))
+		serverInfo, err := serverinfo.SDKServerInfo(serverinfo.WithServerInfoFilePath(sdkclient.FbSinkServerInfoFile))
 		if err != nil {
 			return err
 		}
+		metrics.SDKInfo.WithLabelValues(dfv1.ComponentVertex, fmt.Sprintf("%s-%s", pipelineName, vertexName), string(serverinfo.ContainerTypeFbsinker), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
-		sdkClient, err := sinkclient.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.FbSinkAddr))
+		sdkClient, err := sinkclient.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize), sdkclient.WithUdsSockAddr(sdkclient.FbSinkAddr))
 		if err != nil {
 			return fmt.Errorf("failed to create sdk client, %w", err)
 		}
@@ -230,7 +232,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to find a sink, error: %w", err)
 			}
-			log.Infow("Fallback sink writer created", zap.String("vertex", u.VertexInstance.Vertex.Spec.Sink.Fallback.String()))
+			log.Info("Fallback sink writer created")
 			forwardOpts = append(forwardOpts, sinkforward.WithFbSinkWriter(fbSinkWriter))
 		}
 
@@ -256,21 +258,20 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			defer finalWg.Done()
 			log.Infow("Start processing sink messages ", zap.String("isbsvc", string(u.ISBSvcType)), zap.String("fromPartition ", fromBufferPartitionName))
 			stopped := sinkForwarder.Start()
-			wg := &sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for {
-					<-stopped
-					log.Info("Sink forwarder stopped, exiting sink processor...")
-					return
+			select {
+			case <-ctx.Done(): // context cancelled case
+				log.Info("Context cancelled, stopping forwarder for partition...", zap.String("partition", fromBufferPartitionName))
+				sinkForwarder.Stop()
+				if err := <-stopped; err != nil {
+					log.Errorw("Sink forwarder stopped with error", zap.String("fromPartition", fromBufferPartitionName), zap.Error(err))
 				}
-			}()
-			<-ctx.Done()
-			log.Infow("SIGTERM exiting inside partition...", zap.String("fromPartition", fromBufferPartitionName))
-			sinkForwarder.Stop()
-			wg.Wait()
-			log.Infow("Exited for partition...", zap.String("fromPartition", fromBufferPartitionName))
+				log.Info("Exited for partition...", zap.String("partition", fromBufferPartitionName))
+			case err := <-stopped: // critical error case
+				if err != nil {
+					log.Errorw("Sink forwarder stopped with error", zap.String("fromPartition", fromBufferPartitionName), zap.Error(err))
+					cancel()
+				}
+			}
 		}(df, readers[index].GetName())
 	}
 
@@ -292,7 +293,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 	// wait for all the forwarders to exit
 	finalWg.Wait()
 
-	// close the from vertex wm stores
+	// close the fromVertex wm stores
 	// since we created the stores, we can close them
 	for _, wmStore := range fromVertexWmStores {
 		_ = wmStore.Close()

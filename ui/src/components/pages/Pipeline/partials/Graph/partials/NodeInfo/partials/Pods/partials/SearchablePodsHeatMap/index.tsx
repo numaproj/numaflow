@@ -10,16 +10,13 @@ export const SearchablePodsHeatMap = ({
   onPodClick,
   selectedPod,
 }: SearchablePodsHeatMapProps) => {
-  //
   return (
-    <Box sx={{ paddingBottom: "0.5rem" }}>
-      {pods?.length > 0 && (
-        <Box sx={{ display: "flex", flexDirection: "row" }}>
-          <Box
-            sx={{ paddingBottom: "1rem", fontWeight: "600", width: "12.8rem" }}
-          >
-            <span>Select a pod by resource</span>
-          </Box>
+    pods?.length > 0 && (
+      <Box sx={{ display: "flex", mb: "0.75rem", width: "100%" }}>
+        <Box sx={{ fontWeight: "600", width: "24%", mr: "1%" }}>
+          Select a pod by resource
+        </Box>
+        <Box sx={{ width: "75%" }}>
           <PodsHeatMap
             pods={pods}
             podsDetailsMap={podsDetailsMap}
@@ -27,7 +24,7 @@ export const SearchablePodsHeatMap = ({
             selectedPod={selectedPod}
           />
         </Box>
-      )}
-    </Box>
+      </Box>
+    )
   );
 };

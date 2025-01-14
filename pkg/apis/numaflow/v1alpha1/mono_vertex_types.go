@@ -38,6 +38,7 @@ const (
 	MonoVertexPhaseUnknown MonoVertexPhase = ""
 	MonoVertexPhaseRunning MonoVertexPhase = "Running"
 	MonoVertexPhaseFailed  MonoVertexPhase = "Failed"
+	MonoVertexPhasePaused  MonoVertexPhase = "Paused"
 
 	// MonoVertexConditionDeployed has the status True when the MonoVertex
 	// has its sub resources created and deployed.
@@ -54,6 +55,9 @@ const (
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.status.desiredReplicas`
+// +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.readyReplicas`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
@@ -68,11 +72,30 @@ type MonoVertex struct {
 	Status MonoVertexStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
-func (mv MonoVertex) GetReplicas() int {
+func (mv MonoVertex) getReplicas() int {
 	if mv.Spec.Replicas == nil {
 		return 1
 	}
 	return int(*mv.Spec.Replicas)
+}
+
+func (mv MonoVertex) CalculateReplicas() int {
+	// If we are pausing the MonoVertex then we should have the desired replicas as 0
+	if mv.Spec.Lifecycle.GetDesiredPhase() == MonoVertexPhasePaused {
+		return 0
+	}
+	desiredReplicas := mv.getReplicas()
+	// Don't allow replicas to be out of the range of min and max when auto scaling is enabled
+	if s := mv.Spec.Scale; !s.Disabled {
+		max := int(s.GetMaxReplicas())
+		min := int(s.GetMinReplicas())
+		if desiredReplicas < min {
+			desiredReplicas = min
+		} else if desiredReplicas > max {
+			desiredReplicas = max
+		}
+	}
+	return desiredReplicas
 }
 
 func (mv MonoVertex) GetHeadlessServiceName() string {
@@ -121,6 +144,16 @@ func (mv MonoVertex) GetDaemonServiceName() string {
 
 func (mv MonoVertex) GetDaemonDeploymentName() string {
 	return fmt.Sprintf("%s-mv-daemon", mv.Name)
+}
+
+func (mv MonoVertex) GetDaemonServiceURL() string {
+	// Note: the format of the URL is also used in `server/apis/v1/handler.go`
+	// Do not change it without updating the handler.
+	return fmt.Sprintf("%s.%s.svc:%d", mv.GetDaemonServiceName(), mv.Namespace, MonoVertexDaemonServicePort)
+}
+
+func (mv MonoVertex) Scalable() bool {
+	return !mv.Spec.Scale.Disabled
 }
 
 func (mv MonoVertex) GetDaemonServiceObj() *corev1.Service {
@@ -278,13 +311,15 @@ func (mv MonoVertex) simpleCopy() MonoVertex {
 	if m.Spec.Limits.ReadTimeout == nil {
 		m.Spec.Limits.ReadTimeout = &metav1.Duration{Duration: DefaultReadTimeout}
 	}
-	// TODO: lifecycle
-	// mvVtxCopy.Spec.Lifecycle = Lifecycle{}
+	m.Spec.UpdateStrategy = UpdateStrategy{}
+	m.Spec.Lifecycle = MonoVertexLifecycle{}
 	return m
 }
 
 func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, error) {
-	monoVtxBytes, err := json.Marshal(mv.simpleCopy())
+	copiedSpec := mv.simpleCopy()
+	copiedSpec.Spec.Scale = Scale{LookbackSeconds: mv.Spec.Scale.LookbackSeconds}
+	monoVtxBytes, err := json.Marshal(copiedSpec)
 	if err != nil {
 		return nil, errors.New("failed to marshal mono vertex spec")
 	}
@@ -306,7 +341,7 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
 
-	containers := mv.Spec.buildContainers(getContainerReq{
+	sidecarContainers, containers := mv.Spec.buildContainers(getContainerReq{
 		env:             envVars,
 		image:           req.Image,
 		imagePullPolicy: req.PullPolicy,
@@ -314,6 +349,18 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 		volumeMounts:    volumeMounts,
 	})
 
+	var readyzInitDeploy, readyzPeriodSeconds, readyzTimeoutSeconds, readyzFailureThreshold int32 = NumaContainerReadyzInitialDelaySeconds, NumaContainerReadyzPeriodSeconds, NumaContainerReadyzTimeoutSeconds, NumaContainerReadyzFailureThreshold
+	var liveZInitDeploy, liveZPeriodSeconds, liveZTimeoutSeconds, liveZFailureThreshold int32 = NumaContainerLivezInitialDelaySeconds, NumaContainerLivezPeriodSeconds, NumaContainerLivezTimeoutSeconds, NumaContainerLivezFailureThreshold
+	if x := mv.Spec.ContainerTemplate; x != nil {
+		readyzInitDeploy = GetProbeInitialDelaySecondsOr(x.ReadinessProbe, readyzInitDeploy)
+		readyzPeriodSeconds = GetProbePeriodSecondsOr(x.ReadinessProbe, readyzPeriodSeconds)
+		readyzTimeoutSeconds = GetProbeTimeoutSecondsOr(x.ReadinessProbe, readyzTimeoutSeconds)
+		readyzFailureThreshold = GetProbeFailureThresholdOr(x.ReadinessProbe, readyzFailureThreshold)
+		liveZInitDeploy = GetProbeInitialDelaySecondsOr(x.LivenessProbe, liveZInitDeploy)
+		liveZPeriodSeconds = GetProbePeriodSecondsOr(x.LivenessProbe, liveZPeriodSeconds)
+		liveZTimeoutSeconds = GetProbeTimeoutSecondsOr(x.LivenessProbe, liveZTimeoutSeconds)
+		liveZFailureThreshold = GetProbeFailureThresholdOr(x.LivenessProbe, liveZFailureThreshold)
+	}
 	containers[0].ReadinessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -322,9 +369,10 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 3,
-		PeriodSeconds:       3,
-		TimeoutSeconds:      1,
+		InitialDelaySeconds: readyzInitDeploy,
+		PeriodSeconds:       readyzPeriodSeconds,
+		TimeoutSeconds:      readyzTimeoutSeconds,
+		FailureThreshold:    readyzFailureThreshold,
 	}
 	containers[0].LivenessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
@@ -334,25 +382,33 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 20,
-		PeriodSeconds:       60,
-		TimeoutSeconds:      30,
+		InitialDelaySeconds: liveZInitDeploy,
+		PeriodSeconds:       liveZPeriodSeconds,
+		TimeoutSeconds:      liveZTimeoutSeconds,
+		FailureThreshold:    liveZFailureThreshold,
 	}
 	containers[0].Ports = []corev1.ContainerPort{
 		{Name: MonoVertexMetricsPortName, ContainerPort: MonoVertexMetricsPort},
 	}
 
-	if len(containers) > 1 { // udf, udsink, udsource, or source vertex specifies a udtransformer
-		for i := 1; i < len(containers); i++ {
-			containers[i].Env = append(containers[i].Env, mv.commonEnvs()...)
-			containers[i].Env = append(containers[i].Env, mv.sidecarEnvs()...)
-		}
+	for i := 0; i < len(sidecarContainers); i++ { // udsink, udsource, udtransformer ...
+		sidecarContainers[i].Env = append(sidecarContainers[i].Env, mv.commonEnvs()...)
+		sidecarContainers[i].Env = append(sidecarContainers[i].Env, mv.sidecarEnvs()...)
+	}
+
+	initContainers := []corev1.Container{}
+	initContainers = append(initContainers, mv.Spec.InitContainers...)
+	// TODO: (k8s 1.29)  clean this up once we deprecate the support for k8s < 1.29
+	if isSidecarSupported() {
+		initContainers = append(initContainers, sidecarContainers...)
+	} else {
+		containers = append(containers, sidecarContainers...)
 	}
 
 	spec := &corev1.PodSpec{
 		Subdomain:      mv.GetHeadlessServiceName(),
 		Volumes:        append(volumes, mv.Spec.Volumes...),
-		InitContainers: mv.Spec.InitContainers,
+		InitContainers: initContainers,
 		Containers:     append(containers, mv.Spec.Sidecars...),
 	}
 	mv.Spec.AbstractPodTemplate.ApplyToPodSpec(spec)
@@ -377,7 +433,7 @@ type MonoVertexSpec struct {
 	// +patchStrategy=merge
 	// +patchMergeKey=name
 	Volumes []corev1.Volume `json:"volumes,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,6,rep,name=volumes"`
-	// Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings
+	// Limits define the limitations such as read batch size for the mono vertex.
 	// +optional
 	Limits *MonoVertexLimits `json:"limits,omitempty" protobuf:"bytes,7,opt,name=limits"`
 	// Settings for autoscaling
@@ -393,6 +449,14 @@ type MonoVertexSpec struct {
 	// Template for the daemon service deployment.
 	// +optional
 	DaemonTemplate *DaemonTemplate `json:"daemonTemplate,omitempty" protobuf:"bytes,11,opt,name=daemonTemplate"`
+	// The strategy to use to replace existing pods with new ones.
+	// +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
+	// +optional
+	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty" protobuf:"bytes,12,opt,name=updateStrategy"`
+	// Lifecycle defines the Lifecycle properties of a MonoVertex
+	// +kubebuilder:default={"desiredPhase": Running}
+	// +optional
+	Lifecycle MonoVertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,13,opt,name=lifecycle"`
 }
 
 func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
@@ -401,23 +465,27 @@ func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
 	return x
 }
 
-func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) []corev1.Container {
+// buildContainers builds the sidecar containers and main containers for the mono vertex.
+func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Container, []corev1.Container) {
 	mainContainer := containerBuilder{}.
-		init(req).command(NumaflowRustBinary).args("--monovertex").build()
-
+		init(req).command(NumaflowRustBinary).args("--rust").build()
 	containers := []corev1.Container{mainContainer}
+
+	sidecarContainers := []corev1.Container{}
 	if mvspec.Source.UDSource != nil { // Only support UDSource for now.
-		containers = append(containers, mvspec.Source.getUDSourceContainer(req))
+		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDSourceContainer(req))
 	}
 	if mvspec.Source.UDTransformer != nil {
-		containers = append(containers, mvspec.Source.getUDTransformerContainer(req))
+		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDTransformerContainer(req))
 	}
 	if mvspec.Sink.UDSink != nil { // Only support UDSink for now.
-		containers = append(containers, mvspec.Sink.getUDSinkContainer(req))
+		sidecarContainers = append(sidecarContainers, mvspec.Sink.getUDSinkContainer(req))
 	}
-	// Fallback sink is not supported.
-	containers = append(containers, mvspec.Sidecars...)
-	return containers
+	if mvspec.Sink.Fallback != nil && mvspec.Sink.Fallback.UDSink != nil {
+		sidecarContainers = append(sidecarContainers, mvspec.Sink.getFallbackUDSinkContainer(req))
+	}
+	sidecarContainers = append(sidecarContainers, mvspec.Sidecars...)
+	return sidecarContainers, containers
 }
 
 type MonoVertexLimits struct {
@@ -446,15 +514,40 @@ func (mvl MonoVertexLimits) GetReadTimeout() time.Duration {
 }
 
 type MonoVertexStatus struct {
-	Status             `json:",inline" protobuf:"bytes,1,opt,name=status"`
-	Phase              MonoVertexPhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=MonoVertexPhase"`
-	Replicas           uint32          `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
-	Selector           string          `json:"selector,omitempty" protobuf:"bytes,4,opt,name=selector"`
-	Reason             string          `json:"reason,omitempty" protobuf:"bytes,5,opt,name=reason"`
-	Message            string          `json:"message,omitempty" protobuf:"bytes,6,opt,name=message"`
-	LastUpdated        metav1.Time     `json:"lastUpdated,omitempty" protobuf:"bytes,7,opt,name=lastUpdated"`
-	LastScaledAt       metav1.Time     `json:"lastScaledAt,omitempty" protobuf:"bytes,8,opt,name=lastScaledAt"`
-	ObservedGeneration int64           `json:"observedGeneration,omitempty" protobuf:"varint,9,opt,name=observedGeneration"`
+	Status `json:",inline" protobuf:"bytes,1,opt,name=status"`
+	// +optional
+	Phase MonoVertexPhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=MonoVertexPhase"`
+	// Total number of non-terminated pods targeted by this MonoVertex (their labels match the selector).
+	// +optional
+	Replicas uint32 `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
+	// The number of desired replicas.
+	// +optional
+	DesiredReplicas uint32 `json:"desiredReplicas" protobuf:"varint,4,opt,name=desiredReplicas"`
+	// +optional
+	Selector string `json:"selector,omitempty" protobuf:"bytes,5,opt,name=selector"`
+	// +optional
+	Reason string `json:"reason,omitempty" protobuf:"bytes,6,opt,name=reason"`
+	// +optional
+	Message string `json:"message,omitempty" protobuf:"bytes,7,opt,name=message"`
+	// +optional
+	LastUpdated metav1.Time `json:"lastUpdated,omitempty" protobuf:"bytes,8,opt,name=lastUpdated"`
+	// Time of last scaling operation.
+	// +optional
+	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,9,opt,name=lastScaledAt"`
+	// The generation observed by the MonoVertex controller.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,10,opt,name=observedGeneration"`
+	// The number of pods targeted by this MonoVertex with a Ready Condition.
+	// +optional
+	ReadyReplicas uint32 `json:"readyReplicas,omitempty" protobuf:"varint,11,opt,name=readyReplicas"`
+	// The number of Pods created by the controller from the MonoVertex version indicated by updateHash.
+	UpdatedReplicas uint32 `json:"updatedReplicas,omitempty" protobuf:"varint,12,opt,name=updatedReplicas"`
+	// The number of ready Pods created by the controller from the MonoVertex version indicated by updateHash.
+	UpdatedReadyReplicas uint32 `json:"updatedReadyReplicas,omitempty" protobuf:"varint,13,opt,name=updatedReadyReplicas"`
+	// If not empty, indicates the current version of the MonoVertex used to generate Pods.
+	CurrentHash string `json:"currentHash,omitempty" protobuf:"bytes,14,opt,name=currentHash"`
+	// If not empty, indicates the updated version of the MonoVertex used to generate Pods.
+	UpdateHash string `json:"updateHash,omitempty" protobuf:"bytes,15,opt,name=updateHash"`
 }
 
 // SetObservedGeneration sets the Status ObservedGeneration
@@ -518,10 +611,50 @@ func (mvs *MonoVertexStatus) MarkPhaseRunning() {
 	mvs.MarkPhase(MonoVertexPhaseRunning, "", "")
 }
 
+// MarkPhasePaused set the Pipeline has been paused.
+func (mvs *MonoVertexStatus) MarkPhasePaused() {
+	mvs.MarkPhase(MonoVertexPhasePaused, "", "MonoVertex paused")
+}
+
+// IsHealthy indicates whether the MonoVertex is in healthy status
+// It returns false if any issues exists
+// True indicates that the MonoVertex is healthy
+func (mvs *MonoVertexStatus) IsHealthy() bool {
+	// check for the phase field first
+	switch mvs.Phase {
+	// Directly return an error if the phase is failed
+	case MonoVertexPhaseFailed:
+		return false
+	// Check if the MonoVertex is ready if the phase is running or Paused,
+	// We check if all the required conditions are true for it to be healthy
+	case MonoVertexPhaseRunning, MonoVertexPhasePaused:
+		return mvs.IsReady()
+	default:
+		return false
+	}
+}
+
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type MonoVertexList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []MonoVertex `json:"items" protobuf:"bytes,2,rep,name=items"`
+}
+
+type MonoVertexLifecycle struct {
+	// DesiredPhase used to bring the pipeline from current phase to desired phase
+	// +kubebuilder:default=Running
+	// +optional
+	DesiredPhase MonoVertexPhase `json:"desiredPhase,omitempty" protobuf:"bytes,1,opt,name=desiredPhase"`
+}
+
+// GetDesiredPhase is used to fetch the desired lifecycle phase for a MonoVertex
+func (lc MonoVertexLifecycle) GetDesiredPhase() MonoVertexPhase {
+	switch lc.DesiredPhase {
+	case MonoVertexPhasePaused:
+		return MonoVertexPhasePaused
+	default:
+		return MonoVertexPhaseRunning
+	}
 }

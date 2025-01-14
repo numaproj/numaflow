@@ -6,7 +6,7 @@ spec:
   vertices:
     - name: in
       source:
-        http: {}
+        http: { }
         transformer:
           builtin:
             name: eventTimeExtractor

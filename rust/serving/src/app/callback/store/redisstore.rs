@@ -1,17 +1,17 @@
 use std::sync::Arc;
 
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
 use redis::aio::ConnectionManager;
 use redis::RedisError;
 use tokio::sync::Semaphore;
 
-use backoff::retry::Retry;
-use backoff::strategy::fixed;
-
-use crate::app::callback::CallbackRequest;
-use crate::consts::SAVED;
-use crate::{config, Error};
-
 use super::PayloadToSave;
+use crate::app::callback::CallbackRequest;
+use crate::config::RedisConfig;
+use crate::consts::SAVED;
+use crate::Error;
+use crate::Error::Connection;
 
 const LPUSH: &str = "LPUSH";
 const LRANGE: &str = "LRANGE";
@@ -20,52 +20,28 @@ const EXPIRE: &str = "EXPIRE";
 // Handle to the Redis actor.
 #[derive(Clone)]
 pub(crate) struct RedisConnection {
-    max_tasks: usize,
     conn_manager: ConnectionManager,
+    config: RedisConfig,
 }
 
 impl RedisConnection {
     /// Creates a new RedisConnection with concurrent operations on Redis set by max_tasks.
-    pub(crate) async fn new(addr: &str, max_tasks: usize) -> crate::Result<Self> {
-        let client =
-            redis::Client::open(addr).map_err(|e| format!("Creating Redis client: {e:?}"))?;
+    pub(crate) async fn new(config: RedisConfig) -> crate::Result<Self> {
+        let client = redis::Client::open(config.addr.as_str())
+            .map_err(|e| Connection(format!("Creating Redis client: {e:?}")))?;
         let conn = client
             .get_connection_manager()
             .await
-            .map_err(|e| format!("Connecting to Redis server: {e:?}"))?;
+            .map_err(|e| Connection(format!("Connecting to Redis server: {e:?}")))?;
         Ok(Self {
             conn_manager: conn,
-            max_tasks,
+            config,
         })
-    }
-
-    async fn handle_write_requests(
-        conn_manager: &mut ConnectionManager,
-        msg: PayloadToSave,
-    ) -> crate::Result<()> {
-        match msg {
-            PayloadToSave::Callback { key, value } => {
-                // Convert the CallbackRequest to a byte array
-                let value = serde_json::to_vec(&*value)
-                    .map_err(|e| Error::StoreWrite(format!("Serializing payload - {}", e)))?;
-
-                Self::write_to_redis(conn_manager, &key, &value).await
-            }
-
-            // Write the byte array to Redis
-            PayloadToSave::DatumFromPipeline { key, value } => {
-                // we have to differentiate between the saved responses and the callback requests
-                // saved responses are stored in "id_SAVED", callback requests are stored in "id"
-                let key = format!("{}_{}", key, SAVED);
-                let value: Vec<u8> = value.into();
-
-                Self::write_to_redis(conn_manager, &key, &value).await
-            }
-        }
     }
 
     async fn execute_redis_cmd(
         conn_manager: &mut ConnectionManager,
+        ttl_secs: Option<u32>,
         key: &str,
         val: &Vec<u8>,
     ) -> Result<(), RedisError> {
@@ -73,7 +49,7 @@ impl RedisConnection {
         pipe.cmd(LPUSH).arg(key).arg(val);
 
         // if the ttl is configured, add the EXPIRE command to the pipeline
-        if let Some(ttl) = config().redis.ttl_secs {
+        if let Some(ttl) = ttl_secs {
             pipe.cmd(EXPIRE).arg(key).arg(ttl);
         }
 
@@ -82,24 +58,51 @@ impl RedisConnection {
     }
 
     // write to Redis with retries
-    async fn write_to_redis(
-        conn_manager: &mut ConnectionManager,
-        key: &str,
-        value: &Vec<u8>,
-    ) -> crate::Result<()> {
-        let interval = fixed::Interval::from_millis(config().redis.retries_duration_millis.into())
-            .take(config().redis.retries);
+    async fn write_to_redis(&self, key: &str, value: &Vec<u8>) -> crate::Result<()> {
+        let interval = fixed::Interval::from_millis(self.config.retries_duration_millis.into())
+            .take(self.config.retries);
 
         Retry::retry(
             interval,
             || async {
                 // https://hackmd.io/@compiler-errors/async-closures
-                Self::execute_redis_cmd(&mut conn_manager.clone(), key, value).await
+                Self::execute_redis_cmd(
+                    &mut self.conn_manager.clone(),
+                    self.config.ttl_secs,
+                    key,
+                    value,
+                )
+                .await
             },
             |e: &RedisError| !e.is_unrecoverable_error(),
         )
         .await
         .map_err(|err| Error::StoreWrite(format!("Saving to redis: {}", err).to_string()))
+    }
+}
+
+async fn handle_write_requests(
+    redis_conn: RedisConnection,
+    msg: PayloadToSave,
+) -> crate::Result<()> {
+    match msg {
+        PayloadToSave::Callback { key, value } => {
+            // Convert the CallbackRequest to a byte array
+            let value = serde_json::to_vec(&*value)
+                .map_err(|e| Error::StoreWrite(format!("Serializing payload - {}", e)))?;
+
+            redis_conn.write_to_redis(&key, &value).await
+        }
+
+        // Write the byte array to Redis
+        PayloadToSave::DatumFromPipeline { key, value } => {
+            // we have to differentiate between the saved responses and the callback requests
+            // saved responses are stored in "id_SAVED", callback requests are stored in "id"
+            let key = format!("{}_{}", key, SAVED);
+            let value: Vec<u8> = value.into();
+
+            redis_conn.write_to_redis(&key, &value).await
+        }
     }
 }
 
@@ -111,13 +114,13 @@ impl super::Store for RedisConnection {
         let mut tasks = vec![];
         // This is put in place not to overload Redis and also way some kind of
         // flow control.
-        let sem = Arc::new(Semaphore::new(self.max_tasks));
+        let sem = Arc::new(Semaphore::new(self.config.max_tasks));
         for msg in messages {
             let permit = Arc::clone(&sem).acquire_owned().await;
-            let mut _conn_mgr = self.conn_manager.clone();
+            let redis_conn = self.clone();
             let task = tokio::spawn(async move {
                 let _permit = permit;
-                Self::handle_write_requests(&mut _conn_mgr, msg).await
+                handle_write_requests(redis_conn, msg).await
             });
             tasks.push(task);
         }
@@ -198,20 +201,24 @@ impl super::Store for RedisConnection {
 #[cfg(feature = "redis-tests")]
 #[cfg(test)]
 mod tests {
-    use crate::app::callback::store::LocalStore;
     use axum::body::Bytes;
     use redis::AsyncCommands;
 
     use super::*;
+    use crate::app::callback::store::LocalStore;
 
     #[tokio::test]
     async fn test_redis_store() {
-        let redis_connection = RedisConnection::new("no_such_redis://127.0.0.1:6379", 10).await;
+        let redis_config = RedisConfig {
+            addr: "no_such_redis://127.0.0.1:6379".to_owned(),
+            max_tasks: 10,
+            ..Default::default()
+        };
+        let redis_connection = RedisConnection::new(redis_config).await;
         assert!(redis_connection.is_err());
 
         // Test Redis connection
-        let redis_connection =
-            RedisConnection::new(format!("redis://127.0.0.1:{}", "6379").as_str(), 10).await;
+        let redis_connection = RedisConnection::new(RedisConfig::default()).await;
         assert!(redis_connection.is_ok());
 
         let key = uuid::Uuid::new_v4().to_string();
@@ -274,7 +281,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_redis_ttl() {
-        let redis_connection = RedisConnection::new("redis://127.0.0.1:6379", 10)
+        let redis_config = RedisConfig {
+            max_tasks: 10,
+            ..Default::default()
+        };
+        let redis_connection = RedisConnection::new(redis_config)
             .await
             .expect("Failed to connect to Redis");
 
@@ -288,14 +299,12 @@ mod tests {
         });
 
         // Save with TTL of 1 second
+        redis_connection
+            .write_to_redis(&key, &serde_json::to_vec(&*value).unwrap())
+            .await
+            .expect("Failed to write to Redis");
+
         let mut conn_manager = redis_connection.conn_manager.clone();
-        RedisConnection::write_to_redis(
-            &mut conn_manager,
-            &key,
-            &serde_json::to_vec(&*value).unwrap(),
-        )
-        .await
-        .expect("Failed to write to Redis");
 
         let exists: bool = conn_manager
             .exists(&key)

@@ -369,6 +369,29 @@ merged to the generated DNS configuration based on DNSPolicy.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>resourceClaims</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#podresourceclaim-v1-core">
+\[\]Kubernetes core/v1.PodResourceClaim </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ResourceClaims defines which ResourceClaims must be allocated and
+reserved before the Pod is allowed to start. The resources will be made
+available to those containers which consume them by name.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -817,6 +840,27 @@ Container template for the side inputs watcher container.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>updateStrategy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy"> UpdateStrategy
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The strategy to use to replace existing pods with new ones.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -875,6 +919,94 @@ Kubernetes core/v1.SecretKeySelector </a> </em>
 
 A secret selector which contains bearer token To use this, the client
 needs to add “Authorization: Bearer <token>” in the header
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.Backoff">
+
+Backoff
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RetryStrategy">RetryStrategy</a>)
+</p>
+
+<p>
+
+<p>
+
+Backoff defines parameters used to systematically configure the retry
+strategy.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>interval</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Interval sets the delay to wait before retry, after a failure occurs.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>steps</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Steps defines the number of times to try writing to a sink including
+retries
 </p>
 
 </td>
@@ -1465,6 +1597,52 @@ Kubernetes core/v1.PullPolicy </a> </em>
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>readinessProbe</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Probe"> Probe </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>livenessProbe</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Probe"> Probe </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>ports</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#containerport-v1-core">
+\[\]Kubernetes core/v1.ContainerPort </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -1589,6 +1767,36 @@ Kubernetes core/v1.SecurityContext </a> </em>
 <code>envFrom</code></br> <em>
 <a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envfromsource-v1-core">
 \[\]Kubernetes core/v1.EnvFromSource </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>readinessProbe</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Probe"> Probe </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>livenessProbe</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Probe"> Probe </a> </em>
 </td>
 
 <td>
@@ -5019,6 +5227,30 @@ Description
 
 <td>
 
+<code>setKey</code></br> <em> bool </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+SetKey sets the Kafka key to the keys passed in the Message. When the
+key is null (default), the record is sent randomly to one of the
+available partitions of the topic. If a key exists, Kafka hashes the
+key, and the result is used to map the message to a specific partition.
+This ensures that messages with the same key end up in the same
+partition.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
 TLS </a> </em>
 </td>
@@ -5207,6 +5439,19 @@ default for SASL.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>kafkaVersion</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -5252,7 +5497,7 @@ Description
 
 <td>
 
-<code>deleteGracePeriodSeconds</code></br> <em> int32 </em>
+<code>deletionGracePeriodSeconds</code></br> <em> int64 </em>
 </td>
 
 <td>
@@ -5260,7 +5505,7 @@ Description
 <em>(Optional)</em>
 <p>
 
-DeleteGracePeriodSeconds used to delete pipeline gracefully
+DeletionGracePeriodSeconds used to delete pipeline gracefully
 </p>
 
 </td>
@@ -5293,7 +5538,7 @@ phase
 
 <td>
 
-<code>pauseGracePeriodSeconds</code></br> <em> int32 </em>
+<code>pauseGracePeriodSeconds</code></br> <em> int64 </em>
 </td>
 
 <td>
@@ -5302,6 +5547,26 @@ phase
 <p>
 
 PauseGracePeriodSeconds used to pause pipeline gracefully
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>deleteGracePeriodSeconds</code></br> <em> int64 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+DeleteGracePeriodSeconds used to delete pipeline gracefully Deprecated:
+Use DeletionGracePeriodSeconds instead
 </p>
 
 </td>
@@ -5588,8 +5853,8 @@ MonoVertexLimits </a> </em>
 <em>(Optional)</em>
 <p>
 
-Limits define the limitations such as buffer read batch size for all the
-vertices of a pipeline, will override pipeline level settings
+Limits define the limitations such as read batch size for the mono
+vertex.
 </p>
 
 </td>
@@ -5680,6 +5945,48 @@ Template for the daemon service deployment.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>updateStrategy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy"> UpdateStrategy
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The strategy to use to replace existing pods with new ones.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>lifecycle</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexLifecycle">
+MonoVertexLifecycle </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Lifecycle defines the Lifecycle properties of a MonoVertex
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -5698,6 +6005,69 @@ MonoVertexStatus </a> </em>
 <td>
 
 <em>(Optional)</em>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.MonoVertexLifecycle">
+
+MonoVertexLifecycle
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>desiredPhase</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexPhase">
+MonoVertexPhase </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+DesiredPhase used to bring the pipeline from current phase to desired
+phase
+</p>
+
 </td>
 
 </tr>
@@ -5797,6 +6167,7 @@ MonoVertexPhase (<code>string</code> alias)
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexLifecycle">MonoVertexLifecycle</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexStatus">MonoVertexStatus</a>)
 </p>
 
@@ -5956,8 +6327,8 @@ MonoVertexLimits </a> </em>
 <em>(Optional)</em>
 <p>
 
-Limits define the limitations such as buffer read batch size for all the
-vertices of a pipeline, will override pipeline level settings
+Limits define the limitations such as read batch size for the mono
+vertex.
 </p>
 
 </td>
@@ -6048,6 +6419,48 @@ Template for the daemon service deployment.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>updateStrategy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy"> UpdateStrategy
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The strategy to use to replace existing pods with new ones.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>lifecycle</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexLifecycle">
+MonoVertexLifecycle </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Lifecycle defines the Lifecycle properties of a MonoVertex
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -6119,6 +6532,7 @@ MonoVertexPhase </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -6131,6 +6545,32 @@ MonoVertexPhase </a> </em>
 </td>
 
 <td>
+
+<em>(Optional)</em>
+<p>
+
+Total number of non-terminated pods targeted by this MonoVertex (their
+labels match the selector).
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>desiredReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The number of desired replicas.
+</p>
 
 </td>
 
@@ -6145,6 +6585,7 @@ MonoVertexPhase </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -6158,6 +6599,7 @@ MonoVertexPhase </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -6171,6 +6613,7 @@ MonoVertexPhase </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -6186,6 +6629,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -6201,6 +6645,12 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
+<p>
+
+Time of last scaling operation.
+</p>
+
 </td>
 
 </tr>
@@ -6213,6 +6663,107 @@ Kubernetes meta/v1.Time </a> </em>
 </td>
 
 <td>
+
+<em>(Optional)</em>
+<p>
+
+The generation observed by the MonoVertex controller.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>readyReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The number of pods targeted by this MonoVertex with a Ready Condition.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>updatedReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+The number of Pods created by the controller from the MonoVertex version
+indicated by updateHash.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>updatedReadyReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+The number of ready Pods created by the controller from the MonoVertex
+version indicated by updateHash.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>currentHash</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+If not empty, indicates the current version of the MonoVertex used to
+generate Pods.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>updateHash</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+If not empty, indicates the updated version of the MonoVertex used to
+generate Pods.
+</p>
 
 </td>
 
@@ -6704,6 +7255,23 @@ data loss during pod restarts. Use this option only if you do not care
 about correctness (e.g., approx statistics pipeline like sampling rate,
 etc.).
 </p>
+
+</p>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.OnFailureRetryStrategy">
+
+OnFailureRetryStrategy (<code>string</code> alias)
+</p>
+
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.RetryStrategy">RetryStrategy</a>)
+</p>
+
+<p>
 
 </p>
 
@@ -7556,6 +8124,7 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7569,6 +8138,7 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7584,6 +8154,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7597,6 +8168,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7610,6 +8182,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7623,6 +8196,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7636,6 +8210,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7649,6 +8224,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7662,6 +8238,7 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -7674,6 +8251,382 @@ Kubernetes meta/v1.Time </a> </em>
 </td>
 
 <td>
+
+<em>(Optional)</em>
+<p>
+
+The generation observed by the Pipeline controller.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>drainedOnPause</code></br> <em> bool </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Field to indicate if a pipeline drain successfully occurred, only
+meaningful when the pipeline is paused. True means it has been
+successfully drained.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.Probe">
+
+Probe
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Container">Container</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">ContainerTemplate</a>)
+</p>
+
+<p>
+
+<p>
+
+Probe is used to customize the configuration for Readiness and Liveness
+probes.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>initialDelaySeconds</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Number of seconds after the container has started before liveness probes
+are initiated. More info:
+<a href="https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes">https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes</a>
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>timeoutSeconds</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Number of seconds after which the probe times out. More info:
+<a href="https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes">https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes</a>
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>periodSeconds</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+How often (in seconds) to perform the probe.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>successThreshold</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Minimum consecutive successes for the probe to be considered successful
+after having failed. Defaults to 1. Must be 1 for liveness and startup.
+Minimum value is 1.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>failureThreshold</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Minimum consecutive failures for the probe to be considered failed after
+having succeeded. Defaults to 3. Minimum value is 1.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.PulsarAuth">
+
+PulsarAuth
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSource">PulsarSource</a>)
+</p>
+
+<p>
+
+<p>
+
+PulsarAuth defines how to authenticate with Pulsar
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>token</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+JWT Token auth
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.PulsarSource">
+
+PulsarSource
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Source">Source</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>serverAddr</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>topic</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>consumerName</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>subscriptionName</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>maxUnack</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+Maximum number of messages that are in not yet acked state. Once this
+limit is crossed, futher read requests will return empty list.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>auth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarAuth"> PulsarAuth </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Auth information
+</p>
 
 </td>
 
@@ -8035,6 +8988,175 @@ settings from controller config
 
 Sentinel settings, will override the global settings from controller
 config
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RetryStrategy">
+
+RetryStrategy
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Sink">Sink</a>)
+</p>
+
+<p>
+
+<p>
+
+RetryStrategy struct encapsulates the settings for retrying operations
+in the event of failures. It includes a BackOff strategy to manage the
+timing of retries and defines the action to take upon failure.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>backoff</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Backoff"> Backoff </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+BackOff specifies the parameters for the backoff strategy, controlling
+how delays between retries should increase.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>onFailure</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.OnFailureRetryStrategy">
+OnFailureRetryStrategy </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+OnFailure specifies the action to take when the specified retry strategy
+fails. The possible values are: 1. “retry”: start another round of
+retrying the operation, 2. “fallback”: re-route the operation to a
+fallback sink and 3. “drop”: drop the operation and perform no further
+action. The default action is to retry.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.RollingUpdateStrategy">
+
+RollingUpdateStrategy
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy">UpdateStrategy</a>)
+</p>
+
+<p>
+
+<p>
+
+RollingUpdateStrategy is used to communicate parameter for
+RollingUpdateStrategyType.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>maxUnavailable</code></br> <em>
+k8s.io/apimachinery/pkg/util/intstr.IntOrString </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The maximum number of pods that can be unavailable during the update.
+Value can be an absolute number (ex: 5) or a percentage of desired pods
+(ex: 10%). Absolute number is calculated from percentage by rounding
+down. Defaults to 25%. Example: when this is set to 30%, the old pods
+can be scaled down to 70% of desired pods immediately when the rolling
+update starts. Once new pods are ready, old pods can be scaled down
+further, followed by scaling up the new pods, ensuring that the total
+number of pods available at all times during the update is at least 70%
+of desired pods.
 </p>
 
 </td>
@@ -8428,26 +9550,6 @@ processing rate.
 
 <td>
 
-<code>cooldownSeconds</code></br> <em> uint32 </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-<p>
-
-Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds
-instead. Cooldown seconds after a scaling operation before another one.
-</p>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
 <code>zeroReplicaSleepSeconds</code></br> <em> uint32 </em>
 </td>
 
@@ -8522,8 +9624,10 @@ have buffers to read.
 <em>(Optional)</em>
 <p>
 
-ReplicasPerScale defines maximum replicas can be scaled up or down at
-once. The is use to prevent too aggressive scaling operations
+DeprecatedReplicasPerScale defines the number of maximum replicas that
+can be changed in a single scale up or down operation. The is use to
+prevent from too aggressive scaling operations Deprecated: Use
+ReplicasPerScaleUp and ReplicasPerScaleDown instead
 </p>
 
 </td>
@@ -8566,6 +9670,48 @@ CooldownSeconds if not set.
 ScaleDownCooldownSeconds defines the cooldown seconds after a scaling
 operation, before a follow-up scaling down. It defaults to the
 CooldownSeconds if not set.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>replicasPerScaleUp</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ReplicasPerScaleUp defines the number of maximum replicas that can be
+changed in a single scaled up operation. The is use to prevent from too
+aggressive scaling up operations
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>replicasPerScaleDown</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ReplicasPerScaleDown defines the number of maximum replicas that can be
+changed in a single scaled down operation. The is use to prevent from
+too aggressive scaling down operations
 </p>
 
 </td>
@@ -9213,6 +10359,28 @@ it.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>retryStrategy</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RetryStrategy"> RetryStrategy
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+RetryStrategy struct encapsulates the settings for retrying operations
+in the event of failures.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -9479,6 +10647,22 @@ JetStreamSource </a> </em>
 <code>serving</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ServingSource"> ServingSource
 </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>pulsar</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSource"> PulsarSource </a>
+</em>
 </td>
 
 <td>
@@ -10240,6 +11424,121 @@ Description
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.UpdateStrategy">
+
+UpdateStrategy
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>)
+</p>
+
+<p>
+
+<p>
+
+UpdateStrategy indicates the strategy that the controller will use to
+perform updates for Vertex or MonoVertex.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>type</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategyType">
+UpdateStrategyType </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Type indicates the type of the StatefulSetUpdateStrategy. Default is
+RollingUpdate.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>rollingUpdate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.RollingUpdateStrategy">
+RollingUpdateStrategy </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+RollingUpdate is used to communicate parameters when Type is
+RollingUpdateStrategy.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.UpdateStrategyType">
+
+UpdateStrategyType (<code>string</code> alias)
+</p>
+
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.UpdateStrategy">UpdateStrategy</a>)
+</p>
+
+<p>
+
+<p>
+
+UpdateStrategyType is a string enumeration type that enumerates all
+possible update strategies.
+</p>
+
+</p>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.Vertex">
 
 Vertex
@@ -10894,6 +12193,7 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -10906,6 +12206,32 @@ Description
 </td>
 
 <td>
+
+<em>(Optional)</em>
+<p>
+
+Total number of non-terminated pods targeted by this Vertex (their
+labels match the selector).
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>desiredReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The number of desired replicas.
+</p>
 
 </td>
 
@@ -10920,6 +12246,7 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -10933,6 +12260,7 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -10946,6 +12274,7 @@ Description
 
 <td>
 
+<em>(Optional)</em>
 </td>
 
 </tr>
@@ -10961,6 +12290,12 @@ Kubernetes meta/v1.Time </a> </em>
 
 <td>
 
+<em>(Optional)</em>
+<p>
+
+Time of last scaling operation.
+</p>
+
 </td>
 
 </tr>
@@ -10973,6 +12308,107 @@ Kubernetes meta/v1.Time </a> </em>
 </td>
 
 <td>
+
+<em>(Optional)</em>
+<p>
+
+The generation observed by the Vertex controller.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>readyReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The number of pods targeted by this Vertex with a Ready Condition.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>updatedReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+The number of Pods created by the controller from the Vertex version
+indicated by updateHash.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>updatedReadyReplicas</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<p>
+
+The number of ready Pods created by the controller from the Vertex
+version indicated by updateHash.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>currentHash</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+If not empty, indicates the current version of the Vertex used to
+generate Pods.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>updateHash</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+If not empty, indicates the updated version of the Vertex used to
+generate Pods.
+</p>
 
 </td>
 

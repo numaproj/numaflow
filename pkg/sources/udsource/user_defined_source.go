@@ -25,6 +25,7 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"github.com/numaproj/numaflow/pkg/sources/errors"
 	"github.com/numaproj/numaflow/pkg/sources/sourcer"
 )
 
@@ -49,7 +50,6 @@ type userDefinedSource struct {
 // NewUserDefinedSource returns a new user-defined source reader.
 func NewUserDefinedSource(ctx context.Context, vertexInstance *dfv1.VertexInstance, sourceApplier *GRPCBasedUDSource, opts ...Option) (sourcer.SourceReader, error) {
 	var err error
-
 	u := &userDefinedSource{
 		vertexName:    vertexInstance.Vertex.Spec.Name,
 		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
@@ -62,10 +62,6 @@ func NewUserDefinedSource(ctx context.Context, vertexInstance *dfv1.VertexInstan
 		}
 	}
 
-	if err != nil {
-		u.logger.Errorw("Error instantiating the forwarder", zap.Error(err))
-		return nil, err
-	}
 	return u, nil
 }
 
@@ -86,18 +82,38 @@ func (u *userDefinedSource) Partitions(ctx context.Context) []int32 {
 
 // Read reads the messages from the user-defined source.
 func (u *userDefinedSource) Read(ctx context.Context, count int64) ([]*isb.ReadMessage, error) {
-	return u.sourceApplier.ApplyReadFn(ctx, count, u.readTimeout)
+	messages, err := u.sourceApplier.ApplyReadFn(ctx, count, u.readTimeout)
+	if err != nil {
+		return nil, &errors.SourceReadErr{
+			Message:   err.Error(),
+			Retryable: false,
+		}
+	}
+	return messages, nil
 }
 
 // Ack acknowledges the messages from the user-defined source
 // If there is an error, return the error using an error array
 func (u *userDefinedSource) Ack(ctx context.Context, offsets []isb.Offset) []error {
-	return []error{u.sourceApplier.ApplyAckFn(ctx, offsets)}
+	if err := u.sourceApplier.ApplyAckFn(ctx, offsets); err != nil {
+		return []error{&errors.SourceAckErr{
+			Message:   err.Error(),
+			Retryable: false,
+		}}
+	}
+	return []error{}
 }
 
 // Pending returns the number of pending messages in the user-defined source
 func (u *userDefinedSource) Pending(ctx context.Context) (int64, error) {
-	return u.sourceApplier.ApplyPendingFn(ctx)
+	pending, err := u.sourceApplier.ApplyPendingFn(ctx)
+	if err != nil {
+		return 0, &errors.SourcePendingErr{
+			Message:   err.Error(),
+			Retryable: false,
+		}
+	}
+	return pending, nil
 }
 
 func (u *userDefinedSource) Close() error {

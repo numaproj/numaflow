@@ -31,14 +31,16 @@ import (
 )
 
 type When struct {
-	t              *testing.T
-	isbSvcClient   flowpkg.InterStepBufferServiceInterface
-	pipelineClient flowpkg.PipelineInterface
-	vertexClient   flowpkg.VertexInterface
-	isbSvc         *dfv1.InterStepBufferService
-	pipeline       *dfv1.Pipeline
-	restConfig     *rest.Config
-	kubeClient     kubernetes.Interface
+	t                *testing.T
+	isbSvcClient     flowpkg.InterStepBufferServiceInterface
+	pipelineClient   flowpkg.PipelineInterface
+	vertexClient     flowpkg.VertexInterface
+	monoVertexClient flowpkg.MonoVertexInterface
+	isbSvc           *dfv1.InterStepBufferService
+	pipeline         *dfv1.Pipeline
+	monoVertex       *dfv1.MonoVertex
+	restConfig       *rest.Config
+	kubeClient       kubernetes.Interface
 
 	portForwarderStopChannels map[string]chan struct{}
 	streamLogsStopChannels    map[string]chan struct{}
@@ -101,6 +103,26 @@ func (w *When) CreatePipelineAndWait() *When {
 	return w
 }
 
+func (w *When) CreateMonoVertexAndWait() *When {
+	w.t.Helper()
+	if w.monoVertex == nil {
+		w.t.Fatal("No MonoVertex to create")
+	}
+	w.t.Log("Creating MonoVertex", w.monoVertex.Name)
+	ctx := context.Background()
+	i, err := w.monoVertexClient.Create(ctx, w.monoVertex, metav1.CreateOptions{})
+	if err != nil {
+		w.t.Fatal(err)
+	} else {
+		w.monoVertex = i
+	}
+	// wait
+	if err := WaitForMonoVertexRunning(ctx, w.monoVertexClient, w.monoVertex.Name, defaultTimeout); err != nil {
+		w.t.Fatal(err)
+	}
+	return w
+}
+
 func (w *When) DeletePipelineAndWait() *When {
 	w.t.Helper()
 	if w.pipeline == nil {
@@ -125,6 +147,38 @@ func (w *When) DeletePipelineAndWait() *When {
 		podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {
 			w.t.Fatalf("Error getting pipeline pods: %v", err)
+		}
+		if len(podList.Items) == 0 {
+			return w
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+func (w *When) DeleteMonoVertexAndWait() *When {
+	w.t.Helper()
+	if w.monoVertex == nil {
+		w.t.Fatal("No MonoVertex to delete")
+	}
+	w.t.Log("Deleting MonoVertex", w.monoVertex.Name)
+	ctx := context.Background()
+	if err := w.monoVertexClient.Delete(ctx, w.monoVertex.Name, metav1.DeleteOptions{}); err != nil {
+		w.t.Fatal(err)
+	}
+
+	timeout := defaultTimeout
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	labelSelector := fmt.Sprintf("%s=%s", dfv1.KeyMonoVertexName, w.monoVertex.Name)
+	for {
+		select {
+		case <-ctx.Done():
+			w.t.Fatalf("Timeout after %v waiting for mono vertex pods terminating", timeout)
+		default:
+		}
+		podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+		if err != nil {
+			w.t.Fatalf("Error getting mono vertex pods: %v", err)
 		}
 		if len(podList.Items) == 0 {
 			return w
@@ -189,6 +243,50 @@ func (w *When) DaemonPodPortForward(pipelineName string, localPort, remotePort i
 	return w
 }
 
+func (w *When) MonoVertexPodPortForward(localPort, remotePort int) *When {
+	w.t.Helper()
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyComponent, dfv1.ComponentMonoVertex, dfv1.KeyMonoVertexName, w.monoVertex.Name)
+	ctx := context.Background()
+	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		w.t.Fatalf("Error getting mvtx pod name: %v", err)
+	}
+	podName := podList.Items[0].GetName()
+	w.t.Logf("MonoVertex POD name: %s", podName)
+
+	stopCh := make(chan struct{}, 1)
+	if err = PodPortForward(w.restConfig, Namespace, podName, localPort, remotePort, stopCh); err != nil {
+		w.t.Fatalf("Expected mvtx pod port-forward: %v", err)
+	}
+	if w.portForwarderStopChannels == nil {
+		w.portForwarderStopChannels = make(map[string]chan struct{})
+	}
+	w.portForwarderStopChannels[podName] = stopCh
+	return w
+}
+
+func (w *When) MvtxDaemonPodPortForward(localPort, remotePort int) *When {
+	w.t.Helper()
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyComponent, dfv1.ComponentMonoVertexDaemon, dfv1.KeyMonoVertexName, w.monoVertex.Name)
+	ctx := context.Background()
+	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		w.t.Fatalf("Error getting mvtx daemon pod name: %v", err)
+	}
+	podName := podList.Items[0].GetName()
+	w.t.Logf("MonoVertex Daemon POD name: %s", podName)
+
+	stopCh := make(chan struct{}, 1)
+	if err = PodPortForward(w.restConfig, Namespace, podName, localPort, remotePort, stopCh); err != nil {
+		w.t.Fatalf("Expected mvtx daemon pod port-forward: %v", err)
+	}
+	if w.portForwarderStopChannels == nil {
+		w.portForwarderStopChannels = make(map[string]chan struct{})
+	}
+	w.portForwarderStopChannels[podName] = stopCh
+	return w
+}
+
 func (w *When) UXServerPodPortForward(localPort, remotePort int) *When {
 	w.t.Helper()
 	labelSelector := fmt.Sprintf("%s=%s", dfv1.KeyComponent, dfv1.ComponentUXServer)
@@ -222,7 +320,7 @@ func (w *When) TerminateAllPodPortForwards() *When {
 	return w
 }
 
-func (w *When) StreamVertexPodlogs(vertexName, containerName string) *When {
+func (w *When) StreamVertexPodLogs(vertexName, containerName string) *When {
 	w.t.Helper()
 	ctx := context.Background()
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, w.pipeline.Name, dfv1.KeyVertexName, vertexName)
@@ -237,6 +335,44 @@ func (w *When) StreamVertexPodlogs(vertexName, containerName string) *When {
 			w.streamLogsStopChannels = make(map[string]chan struct{})
 		}
 		w.streamLogsStopChannels[pod.Name+":"+containerName] = stopCh
+	}
+	return w
+}
+
+func (w *When) StreamISBLogs() *When {
+	w.t.Helper()
+	ctx := context.Background()
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyComponent, dfv1.ComponentISBSvc, dfv1.KeyManagedBy, dfv1.ControllerISBSvc)
+	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		w.t.Fatalf("Error getting ISB service pods: %v", err)
+	}
+	for _, pod := range podList.Items {
+		stopCh := make(chan struct{}, 1)
+		streamPodLogs(ctx, w.kubeClient, Namespace, pod.Name, "main", stopCh)
+		if w.streamLogsStopChannels == nil {
+			w.streamLogsStopChannels = make(map[string]chan struct{})
+		}
+		w.streamLogsStopChannels[pod.Name+":main"] = stopCh
+	}
+	return w
+}
+
+func (w *When) StreamControllerLogs() *When {
+	w.t.Helper()
+	ctx := context.Background()
+	labelSelector := fmt.Sprintf("%s=%s", dfv1.KeyComponent, dfv1.ComponentControllerManager)
+	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		w.t.Fatalf("Error getting the controller pods: %v", err)
+	}
+	for _, pod := range podList.Items {
+		stopCh := make(chan struct{}, 1)
+		streamPodLogs(ctx, w.kubeClient, Namespace, pod.Name, "controller-manager", stopCh)
+		if w.streamLogsStopChannels == nil {
+			w.streamLogsStopChannels = make(map[string]chan struct{})
+		}
+		w.streamLogsStopChannels[pod.Name+":controller-manager"] = stopCh
 	}
 	return w
 }
@@ -281,26 +417,30 @@ func (w *When) Exec(name string, args []string, block func(t *testing.T, output 
 
 func (w *When) Given() *Given {
 	return &Given{
-		t:              w.t,
-		isbSvcClient:   w.isbSvcClient,
-		pipelineClient: w.pipelineClient,
-		vertexClient:   w.vertexClient,
-		isbSvc:         w.isbSvc,
-		pipeline:       w.pipeline,
-		restConfig:     w.restConfig,
-		kubeClient:     w.kubeClient,
+		t:                w.t,
+		isbSvcClient:     w.isbSvcClient,
+		pipelineClient:   w.pipelineClient,
+		vertexClient:     w.vertexClient,
+		monoVertexClient: w.monoVertexClient,
+		isbSvc:           w.isbSvc,
+		pipeline:         w.pipeline,
+		monoVertex:       w.monoVertex,
+		restConfig:       w.restConfig,
+		kubeClient:       w.kubeClient,
 	}
 }
 
 func (w *When) Expect() *Expect {
 	return &Expect{
-		t:              w.t,
-		isbSvcClient:   w.isbSvcClient,
-		pipelineClient: w.pipelineClient,
-		vertexClient:   w.vertexClient,
-		isbSvc:         w.isbSvc,
-		pipeline:       w.pipeline,
-		restConfig:     w.restConfig,
-		kubeClient:     w.kubeClient,
+		t:                w.t,
+		isbSvcClient:     w.isbSvcClient,
+		pipelineClient:   w.pipelineClient,
+		vertexClient:     w.vertexClient,
+		monoVertexClient: w.monoVertexClient,
+		isbSvc:           w.isbSvc,
+		pipeline:         w.pipeline,
+		monoVertex:       w.monoVertex,
+		restConfig:       w.restConfig,
+		kubeClient:       w.kubeClient,
 	}
 }

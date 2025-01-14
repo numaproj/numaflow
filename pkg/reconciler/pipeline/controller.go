@@ -18,13 +18,13 @@ package pipeline
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/imdario/mergo"
 	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
 	appv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -40,17 +40,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/yaml"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/reconciler"
+	"github.com/numaproj/numaflow/pkg/reconciler/validator"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 const (
-	finalizerName = dfv1.ControllerPipeline
+	finalizerName = "numaflow.numaproj.io/" + dfv1.ControllerPipeline
+	// TODO: clean up the deprecated finalizer in v1.7
+	deprecatedFinalizerName = dfv1.ControllerPipeline
+
+	pauseTimestampPath = `/metadata/annotations/numaflow.numaproj.io~1pause-timestamp`
 )
 
 // pipelineReconciler reconciles a pipeline object.
@@ -78,6 +84,10 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 	log := r.logger.With("namespace", pl.Namespace).With("pipeline", pl.Name)
+	if instance := pl.GetAnnotations()[dfv1.KeyInstance]; instance != r.config.GetInstance() {
+		log.Debugw("Pipeline not managed by this controller, skipping", zap.String("instance", instance))
+		return ctrl.Result{}, nil
+	}
 	plCopy := pl.DeepCopy()
 	ctx = logging.WithLogger(ctx, log)
 	result, reconcileErr := r.reconcile(ctx, plCopy)
@@ -85,9 +95,10 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
 	}
 	plCopy.Status.LastUpdated = metav1.Now()
-	if needsUpdate(pl, plCopy) {
-		// Update with a DeepCopy because .Status will be cleaned up.
-		if err := r.client.Update(ctx, plCopy.DeepCopy()); err != nil {
+	if !equality.Semantic.DeepEqual(pl.Finalizers, plCopy.Finalizers) {
+		patchYaml := "metadata:\n  finalizers: [" + strings.Join(plCopy.Finalizers, ",") + "]"
+		patchJson, _ := yaml.YAMLToJSON([]byte(patchYaml))
+		if err := r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, patchJson)); err != nil {
 			return result, err
 		}
 	}
@@ -102,8 +113,8 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 	log := logging.FromContext(ctx)
 	if !pl.DeletionTimestamp.IsZero() {
 		log.Info("Deleting pipeline")
-		if controllerutil.ContainsFinalizer(pl, finalizerName) {
-			if time.Now().Before(pl.DeletionTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetDeleteGracePeriodSeconds()) * time.Second)) {
+		if controllerutil.ContainsFinalizer(pl, finalizerName) || controllerutil.ContainsFinalizer(pl, deprecatedFinalizerName) {
+			if time.Now().Before(pl.DeletionTimestamp.Add(time.Duration(pl.GetTerminationGracePeriodSeconds()) * time.Second)) {
 				safeToDelete, err := r.safeToDelete(ctx, pl)
 				if err != nil {
 					logMsg := fmt.Sprintf("Failed to check if it's safe to delete pipeline %s: %v", pl.Name, err.Error())
@@ -126,6 +137,7 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 
 			}
 			controllerutil.RemoveFinalizer(pl, finalizerName)
+			controllerutil.RemoveFinalizer(pl, deprecatedFinalizerName)
 			// Clean up metrics
 			_ = reconciler.PipelineHealth.DeleteLabelValues(pl.Namespace, pl.Name)
 			// Delete corresponding vertex metrics
@@ -143,10 +155,47 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		}
 	}()
 
+	pl.Status.InitConditions()
 	pl.Status.SetObservedGeneration(pl.Generation)
 
-	if oldPhase := pl.Status.Phase; pl.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
-		oldPhase == dfv1.PipelinePhasePaused || oldPhase == dfv1.PipelinePhasePausing {
+	if controllerutil.ContainsFinalizer(pl, deprecatedFinalizerName) { // Remove deprecated finalizer if exists
+		controllerutil.RemoveFinalizer(pl, deprecatedFinalizerName)
+	}
+
+	if !controllerutil.ContainsFinalizer(pl, finalizerName) {
+		controllerutil.AddFinalizer(pl, finalizerName)
+	}
+	if err := validator.ValidatePipeline(pl); err != nil {
+		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ValidatePipelineFailed", "Invalid pipeline: %s", err.Error())
+		pl.Status.MarkNotConfigured("InvalidSpec", err.Error())
+		return ctrl.Result{}, err
+	}
+	pl.Status.SetVertexCounts(pl.Spec.Vertices)
+	pl.Status.MarkConfigured()
+
+	// Orchestrate pipeline sub resources.
+	// This should be happening in all cases to ensure a clean initialization regardless of the lifecycle phase.
+	// Eg: even for a pipeline started with desiredPhase = Pause, we should still create the resources for the pipeline.
+	if err := r.reconcileFixedResources(ctx, pl); err != nil {
+		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcileFixedResourcesFailed", "Failed to reconcile pipeline sub resources: %s", err.Error())
+		pl.Status.MarkDeployFailed("ReconcileFixedResourcesFailed", err.Error())
+		return ctrl.Result{}, err
+	}
+	pl.Status.MarkDeployed()
+
+	// If the pipeline has a lifecycle change, then do not update the phase as
+	// this should happen only after the required configs for the lifecycle changes
+	// have been applied.
+	if !isLifecycleChange(pl) {
+		pl.Status.SetPhase(pl.GetDesiredPhase(), "")
+	}
+	if err := r.checkChildrenResourceStatus(ctx, pl); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to check pipeline children resource status, %w", err)
+	}
+
+	// check if any changes related to pause/resume lifecycle for the pipeline
+	oldPhase := pl.Status.Phase
+	if isLifecycleChange(pl) && oldPhase != pl.GetDesiredPhase() {
 		requeue, err := r.updateDesiredState(ctx, pl)
 		if err != nil {
 			logMsg := fmt.Sprintf("Updated desired pipeline phase failed: %v", zap.Error(err))
@@ -162,33 +211,29 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			return ctrl.Result{RequeueAfter: dfv1.DefaultRequeueAfter}, nil
 		}
 		return ctrl.Result{}, nil
-
 	}
-
-	// Regular pipeline change
-	result, err := r.reconcileNonLifecycleChanges(ctx, pl)
-	if err != nil {
-		r.recorder.Eventf(pl, corev1.EventTypeWarning, "ReconcilePipelineFailed", "Failed to reconcile pipeline: %v", err.Error())
-	}
-
-	return result, err
+	return ctrl.Result{}, nil
 }
 
-// reconcileNonLifecycleChanges do the jobs not related to pipeline lifecycle changes.
-func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, pl *dfv1.Pipeline) (ctrl.Result, error) {
-	log := logging.FromContext(ctx)
-	if !controllerutil.ContainsFinalizer(pl, finalizerName) {
-		controllerutil.AddFinalizer(pl, finalizerName)
+// isLifecycleChange determines whether there has been a change requested in the lifecycle
+// of a Pipeline object, specifically relating to the paused and pausing states.
+func isLifecycleChange(pl *dfv1.Pipeline) bool {
+	// Extract the current phase from the status of the pipeline.
+	// Check if the desired phase of the pipeline is 'Paused', or if the current phase of the
+	// pipeline is either 'Paused' or 'Pausing'. This indicates a transition into or out of
+	// a paused state which is a lifecycle phase change
+	if oldPhase := pl.Status.Phase; pl.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
+		oldPhase == dfv1.PipelinePhasePaused || oldPhase == dfv1.PipelinePhasePausing {
+		return true
 	}
-	pl.Status.InitConditions()
-	if err := ValidatePipeline(pl); err != nil {
-		log.Errorw("Validation failed", zap.Error(err))
-		pl.Status.MarkNotConfigured("InvalidSpec", err.Error())
-		return ctrl.Result{}, err
-	}
-	pl.Status.SetVertexCounts(pl.Spec.Vertices)
-	pl.Status.MarkConfigured()
 
+	// If none of the conditions are met, return false
+	return false
+}
+
+// reconcileFixedResources do the jobs of creating fixed resources such as daemon service, vertex objects, and ISB management jobs, etc
+func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *dfv1.Pipeline) error {
+	log := logging.FromContext(ctx)
 	isbSvc := &dfv1.InterStepBufferService{}
 	isbSvcName := dfv1.DefaultISBSvcName
 	if len(pl.Spec.InterStepBufferServiceName) > 0 {
@@ -197,33 +242,31 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 	err := r.client.Get(ctx, types.NamespacedName{Namespace: pl.Namespace, Name: isbSvcName}, isbSvc)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			pl.Status.MarkDeployFailed("ISBSvcNotFound", "ISB Service not found.")
 			log.Errorw("ISB Service not found", zap.String("isbsvc", isbSvcName), zap.Error(err))
-			return ctrl.Result{}, fmt.Errorf("isbsvc %s not found", isbSvcName)
+			return fmt.Errorf("isbsvc %s not found", isbSvcName)
 		}
-		pl.Status.MarkDeployFailed("GetISBSvcFailed", err.Error())
 		log.Errorw("Failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
-		return ctrl.Result{}, err
+		return err
+	}
+	if isbSvc.GetAnnotations()[dfv1.KeyInstance] != pl.GetAnnotations()[dfv1.KeyInstance] {
+		log.Errorw("ISB Service is found but not managed by the same controller of this pipeline", zap.String("isbsvc", isbSvcName), zap.Error(err))
+		return fmt.Errorf("isbsvc not managed by the same controller of this pipeline")
 	}
 	if !isbSvc.Status.IsHealthy() {
-		pl.Status.MarkDeployFailed("ISBSvcNotHealthy", "ISB Service not healthy.")
 		log.Errorw("ISB Service is not in healthy status", zap.String("isbsvc", isbSvcName), zap.Error(err))
-		return ctrl.Result{}, fmt.Errorf("isbsvc not healthy")
+		return fmt.Errorf("isbsvc not healthy")
 	}
 
 	// Create or update the Side Inputs Manager deployments
 	if err := r.createOrUpdateSIMDeployments(ctx, pl, isbSvc.Status.Config); err != nil {
 		log.Errorw("Failed to create or update Side Inputs Manager deployments", zap.Error(err))
-		pl.Status.MarkDeployFailed("CreateOrUpdateSIMDeploymentsFailed", err.Error())
 		r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateOrUpdateSIMDeploymentsFailed", "Failed to create or update Side Inputs Manager deployments: %w", err.Error())
-		return ctrl.Result{}, err
+		return fmt.Errorf("failed to create or update SIM deployments: %w", err)
 	}
 
 	existingObjs, err := r.findExistingVertices(ctx, pl)
 	if err != nil {
-		log.Errorw("Failed to find existing vertices", zap.Error(err))
-		pl.Status.MarkDeployFailed("ListVerticesFailed", err.Error())
-		return ctrl.Result{}, err
+		return fmt.Errorf("failed to find existing vertices: %w", err)
 	}
 	oldBuffers := make(map[string]string)
 	newBuffers := make(map[string]string)
@@ -254,47 +297,6 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 			newBuckets[b] = b
 		}
 	}
-	newObjs := buildVertices(pl)
-	for vertexName, newObj := range newObjs {
-		if oldObj, existing := existingObjs[vertexName]; !existing {
-			if err := r.client.Create(ctx, &newObj); err != nil {
-				if apierrors.IsAlreadyExists(err) { // probably somebody else already created it
-					continue
-				} else {
-					pl.Status.MarkDeployFailed("CreateVertexFailed", err.Error())
-					r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateVertexFailed", "Failed to create vertex: %w", err.Error())
-					return ctrl.Result{}, fmt.Errorf("failed to create vertex, err: %w", err)
-				}
-			}
-			log.Infow("Created vertex successfully", zap.String("vertex", vertexName))
-			r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateVertexSuccess", "Created vertex %s successfully", vertexName)
-		} else {
-			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] { // need to update
-				oldObj.Spec = newObj.Spec
-				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
-				if err := r.client.Update(ctx, &oldObj); err != nil {
-					pl.Status.MarkDeployFailed("UpdateVertexFailed", err.Error())
-					r.recorder.Eventf(pl, corev1.EventTypeWarning, "UpdateVertexFailed", "Failed to update vertex: %w", err.Error())
-					return ctrl.Result{}, fmt.Errorf("failed to update vertex, err: %w", err)
-				}
-				log.Infow("Updated vertex successfully", zap.String("vertex", vertexName))
-				r.recorder.Eventf(pl, corev1.EventTypeNormal, "UpdateVertexSuccess", "Updated vertex %s successfully", vertexName)
-			}
-			delete(existingObjs, vertexName)
-		}
-	}
-	for _, v := range existingObjs {
-		if err := r.client.Delete(ctx, &v); err != nil {
-			pl.Status.MarkDeployFailed("DeleteStaleVertexFailed", err.Error())
-			r.recorder.Eventf(pl, corev1.EventTypeWarning, "DeleteStaleVertexFailed", "Failed to delete vertex: %w", err.Error())
-			return ctrl.Result{}, fmt.Errorf("failed to delete vertex, err: %w", err)
-		}
-		log.Infow("Deleted stale vertex successfully", zap.String("vertex", v.Name))
-		r.recorder.Eventf(pl, corev1.EventTypeNormal, "DeleteStaleVertexSuccess", "Deleted stale vertex %s successfully", v.Name)
-		// Clean up vertex replica metrics
-		reconciler.VertexDesiredReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
-		reconciler.VertexCurrentReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
-	}
 
 	// create batch job
 	if len(newBuffers) > 0 || len(newBuckets) > 0 {
@@ -311,10 +313,11 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		args = append(args, fmt.Sprintf("--serving-source-streams=%s", strings.Join(pl.GetServingSourceStreamNames(), ",")))
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "cre")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
-			pl.Status.MarkDeployFailed("CreateISBSvcCreatingJobFailed", err.Error())
-			return ctrl.Result{}, fmt.Errorf("failed to create ISB Svc creating job, err: %w", err)
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateJobForISBCeationFailed", "Failed to create a Job: %w", err.Error())
+			return fmt.Errorf("failed to create ISB creating job, err: %w", err)
 		}
-		log.Infow("Created a job successfully for ISB Svc creating", zap.Any("buffers", bfs), zap.Any("buckets", bks), zap.Any("servingStreams", pl.GetServingSourceStreamNames()))
+		log.Infow("Created a job successfully for ISB creating", zap.Any("buffers", bfs), zap.Any("buckets", bks), zap.Any("servingStreams", pl.GetServingSourceStreamNames()))
+		r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateJobForISBCeationSuccessful", "Create ISB creation job successfully")
 	}
 
 	if len(oldBuffers) > 0 || len(oldBuckets) > 0 {
@@ -329,27 +332,64 @@ func (r *pipelineReconciler) reconcileNonLifecycleChanges(ctx context.Context, p
 		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "del")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
-			pl.Status.MarkDeployFailed("CreateISBSvcDeletingJobFailed", err.Error())
-			return ctrl.Result{}, fmt.Errorf("failed to create ISB Svc deleting job, err: %w", err)
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateJobForISBDeletionFailed", "Failed to create a Job: %w", err.Error())
+			return fmt.Errorf("failed to create ISB deleting job, err: %w", err)
 		}
 		log.Infow("Created ISB Svc deleting job successfully", zap.Any("buffers", bfs), zap.Any("buckets", bks))
+		r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateJobForISBDeletionSuccessful", "Create ISB deletion job successfully")
+	}
+
+	newObjs := buildVertices(pl)
+	for vertexName, newObj := range newObjs {
+		if oldObj, existing := existingObjs[vertexName]; !existing {
+			if err := r.client.Create(ctx, &newObj); err != nil {
+				if apierrors.IsAlreadyExists(err) { // probably somebody else already created it
+					continue
+				} else {
+					r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateVertexFailed", "Failed to create vertex: %w", err.Error())
+					return fmt.Errorf("failed to create vertex, err: %w", err)
+				}
+			}
+			log.Infow("Created vertex successfully", zap.String("vertex", vertexName))
+			r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateVertexSuccess", "Created vertex %s successfully", vertexName)
+		} else {
+			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] { // need to update
+				originalReplicas := oldObj.Spec.Replicas
+				oldObj.Spec = newObj.Spec
+				oldObj.Spec.Replicas = originalReplicas
+				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
+				if err := r.client.Update(ctx, &oldObj); err != nil {
+					r.recorder.Eventf(pl, corev1.EventTypeWarning, "UpdateVertexFailed", "Failed to update vertex: %w", err.Error())
+					return fmt.Errorf("failed to update vertex, err: %w", err)
+				}
+				log.Infow("Updated vertex successfully", zap.String("vertex", vertexName))
+				r.recorder.Eventf(pl, corev1.EventTypeNormal, "UpdateVertexSuccess", "Updated vertex %s successfully", vertexName)
+			}
+			delete(existingObjs, vertexName)
+		}
+	}
+	for _, v := range existingObjs {
+		if err := r.client.Delete(ctx, &v); err != nil {
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "DeleteStaleVertexFailed", "Failed to delete vertex: %w", err.Error())
+			return fmt.Errorf("failed to delete vertex, err: %w", err)
+		}
+		log.Infow("Deleted stale vertex successfully", zap.String("vertex", v.Name))
+		r.recorder.Eventf(pl, corev1.EventTypeNormal, "DeleteStaleVertexSuccess", "Deleted stale vertex %s successfully", v.Name)
+		// Clean up vertex replica metrics
+		reconciler.VertexDesiredReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
+		reconciler.VertexCurrentReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
 	}
 
 	// Daemon service
 	if err := r.createOrUpdateDaemonService(ctx, pl); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 	// Daemon deployment
 	if err := r.createOrUpdateDaemonDeployment(ctx, pl, isbSvc.Status.Config); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 
-	pl.Status.MarkDeployed()
-	pl.Status.SetPhase(pl.Spec.Lifecycle.GetDesiredPhase(), "")
-	if err := r.checkChildrenResourceStatus(ctx, pl); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to check pipeline children resource status, %w", err)
-	}
-	return ctrl.Result{}, nil
+	return nil
 }
 
 func (r *pipelineReconciler) createOrUpdateDaemonService(ctx context.Context, pl *dfv1.Pipeline) error {
@@ -571,17 +611,6 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 	return nil
 }
 
-func needsUpdate(old, new *dfv1.Pipeline) bool {
-	if old == nil {
-		return true
-	}
-	if !equality.Semantic.DeepEqual(old.Finalizers, new.Finalizers) {
-		return true
-	}
-
-	return false
-}
-
 func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 	result := make(map[string]dfv1.Vertex)
 	for _, v := range pl.Spec.Vertices {
@@ -599,7 +628,8 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 		copyVertexTemplate(pl, vCopy)
 		copyVertexLimits(pl, vCopy)
 		replicas := int32(1)
-		if pl.Status.Phase == dfv1.PipelinePhasePaused {
+		// If the desired phase is paused, or we are in the middle of pausing we should not start any vertex replicas
+		if isLifecycleChange(pl) {
 			replicas = int32(0)
 		} else if v.IsReduceUDF() {
 			partitions := pl.NumOfPartitions(v.Name)
@@ -637,6 +667,10 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 				},
 			},
 			Spec: spec,
+		}
+		// If corresponding pipline has instance annotation, we should copy it to the vertex
+		if x := pl.GetAnnotations()[dfv1.KeyInstance]; x != "" {
+			obj.Annotations[dfv1.KeyInstance] = x
 		}
 		result[obj.Name] = obj
 	}
@@ -783,7 +817,7 @@ var allVertexFilter vertexFilterFunc = func(v dfv1.Vertex) bool { return true }
 var sourceVertexFilter vertexFilterFunc = func(v dfv1.Vertex) bool { return v.IsASource() }
 
 func (r *pipelineReconciler) updateDesiredState(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
-	switch pl.Spec.Lifecycle.GetDesiredPhase() {
+	switch pl.GetDesiredPhase() {
 	case dfv1.PipelinePhasePaused:
 		return r.pausePipeline(ctx, pl)
 	case dfv1.PipelinePhaseRunning, dfv1.PipelinePhaseUnknown:
@@ -794,10 +828,9 @@ func (r *pipelineReconciler) updateDesiredState(ctx context.Context, pl *dfv1.Pi
 }
 
 func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
-
 	// reset pause timestamp
 	if pl.GetAnnotations()[dfv1.KeyPauseTimestamp] != "" {
-		err := r.client.Patch(ctx, pl, client.RawPatch(types.JSONPatchType, []byte(dfv1.RemovePauseTimestampPatch)))
+		err := r.client.Patch(ctx, pl, client.RawPatch(types.JSONPatchType, []byte(`[{"op": "remove", "path": "`+pauseTimestampPath+`"}]`)))
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return false, nil // skip pipeline if it can't be found
@@ -806,48 +839,58 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 			}
 		}
 	}
-
 	_, err := r.scaleUpAllVertices(ctx, pl)
 	if err != nil {
 		return false, err
 	}
+	// mark the drained field as false to refresh the drained status as this will
+	// be a new lifecycle from running
+	pl.Status.MarkDrainedOnPauseFalse()
 	pl.Status.MarkPhaseRunning()
 	return false, nil
 }
 
 func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
+	var (
+		drainCompleted = false
+		daemonClient   daemonclient.DaemonClient
+		errWhileDrain  error
+	)
+	pl.Status.MarkPhasePausing()
 
-	// check that annotations / pause timestamp annotation exist
 	if pl.GetAnnotations() == nil || pl.GetAnnotations()[dfv1.KeyPauseTimestamp] == "" {
-		pl.SetAnnotations(map[string]string{dfv1.KeyPauseTimestamp: time.Now().Format(time.RFC3339)})
-		body, err := json.Marshal(pl)
+		_, err := r.scaleDownSourceVertices(ctx, pl)
 		if err != nil {
-			return false, err
-		}
-		err = r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, body))
-		if err != nil && !apierrors.IsNotFound(err) {
+			// If there's an error requeue the request
 			return true, err
 		}
+		patchJson := `{"metadata":{"annotations":{"` + dfv1.KeyPauseTimestamp + `":"` + time.Now().Format(time.RFC3339) + `"}}}`
+		if err = r.client.Patch(ctx, pl, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil && !apierrors.IsNotFound(err) {
+			return true, err
+		}
+		// This is to give some time to process the new messages,
+		// otherwise check IsDrained directly may get incorrect information
+		return true, nil
 	}
 
-	pl.Status.MarkPhasePausing()
-	updated, err := r.scaleDownSourceVertices(ctx, pl)
-	if err != nil || updated {
-		// If there's an error, or scaling down happens, requeue the request
-		// This is to give some time to process the new messages, otherwise check IsDrained directly may get incorrect information
-		return updated, err
+	// Check if all the source vertex pods have scaled down to zero
+	sourcePodsTerminated, err := r.noSourceVertexPodsRunning(ctx, pl)
+	// If the sources have scaled down successfully then check for the buffer information.
+	// Check for the daemon to obtain the buffer draining information, in case we see an error trying to
+	// retrieve this we do not exit prematurely to allow honoring the pause timeout for a consistent error
+	// - In case the timeout has not occurred we would trigger a requeue
+	// - If the timeout has occurred even after getting the drained error, we will try to pause the pipeline
+	if sourcePodsTerminated {
+		daemonClient, err = daemonclient.NewGRPCDaemonServiceClient(pl.GetDaemonServiceURL())
+		if daemonClient != nil {
+			defer func() {
+				_ = daemonClient.Close()
+			}()
+			drainCompleted, err = daemonClient.IsDrained(ctx, pl.Name)
+		}
 	}
-
-	daemonClient, err := daemonclient.NewGRPCDaemonServiceClient(pl.GetDaemonServiceURL())
 	if err != nil {
-		return true, err
-	}
-	defer func() {
-		_ = daemonClient.Close()
-	}()
-	drainCompleted, err := daemonClient.IsDrained(ctx, pl.Name)
-	if err != nil {
-		return true, err
+		errWhileDrain = err
 	}
 
 	pauseTimestamp, err := time.Parse(time.RFC3339, pl.GetAnnotations()[dfv1.KeyPauseTimestamp])
@@ -855,16 +898,36 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		return false, err
 	}
 
-	// if drain is completed or we have exceed pause deadline, mark pl as paused and scale down
-	if time.Now().After(pauseTimestamp.Add(time.Duration(pl.Spec.Lifecycle.GetPauseGracePeriodSeconds())*time.Second)) || drainCompleted {
-		_, err := r.scaleDownAllVertices(ctx, pl)
+	// if drain is completed, or we have exceeded the pause deadline, mark pl as paused and scale down
+	if time.Now().After(pauseTimestamp.Add(time.Duration(pl.GetPauseGracePeriodSeconds())*time.Second)) || drainCompleted {
+		_, err = r.scaleDownAllVertices(ctx, pl)
 		if err != nil {
 			return true, err
+		}
+		if errWhileDrain != nil {
+			r.logger.Errorw("Errors encountered while pausing, moving to paused after timeout", zap.Error(errWhileDrain))
+		}
+		// if the drain completed successfully, then set the DrainedOnPause field to true
+		if drainCompleted {
+			pl.Status.MarkDrainedOnPauseTrue()
 		}
 		pl.Status.MarkPhasePaused()
 		return false, nil
 	}
-	return true, nil
+	return true, err
+}
+
+// noSourceVertexPodsRunning checks whether any source vertex has running replicas
+func (r *pipelineReconciler) noSourceVertexPodsRunning(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
+	sources := pl.Spec.GetSourcesByName()
+	pods := corev1.PodList{}
+	label := fmt.Sprintf("%s=%s, %s in (%s)", dfv1.KeyPipelineName, pl.Name,
+		dfv1.KeyVertexName, strings.Join(maps.Keys(sources), ","))
+	selector, _ := labels.Parse(label)
+	if err := r.client.List(ctx, &pods, &client.ListOptions{Namespace: pl.Namespace, LabelSelector: selector}); err != nil {
+		return false, err
+	}
+	return len(pods.Items) == 0, nil
 }
 
 func (r *pipelineReconciler) scaleDownSourceVertices(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
@@ -902,12 +965,8 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 					}
 				}
 			}
-			vertex.Spec.Replicas = ptr.To[int32](scaleTo)
-			body, err := json.Marshal(vertex)
-			if err != nil {
-				return false, err
-			}
-			err = r.client.Patch(ctx, &vertex, client.RawPatch(types.MergePatchType, body))
+			patchJson := fmt.Sprintf(`{"spec":{"replicas":%d}}`, scaleTo)
+			err = r.client.Patch(ctx, &vertex, client.RawPatch(types.MergePatchType, []byte(patchJson)))
 			if err != nil && !apierrors.IsNotFound(err) {
 				return false, err
 			}
@@ -945,10 +1004,12 @@ func (r *pipelineReconciler) checkChildrenResourceStatus(ctx context.Context, pi
 	defer func() {
 		for _, c := range pipeline.Status.Conditions {
 			if c.Status != metav1.ConditionTrue {
-				pipeline.Status.SetPhase(pipeline.Spec.Lifecycle.GetDesiredPhase(), "Degraded: "+c.Message)
+				pipeline.Status.Message = "Degraded: " + c.Message
 				return
 			}
 		}
+		// if all conditions are True, clear the status message.
+		pipeline.Status.Message = ""
 	}()
 
 	// get the daemon deployment and update the status of it to the pipeline

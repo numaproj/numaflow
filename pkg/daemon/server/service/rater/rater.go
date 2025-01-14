@@ -218,12 +218,11 @@ func sleep(ctx context.Context, duration time.Duration) {
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
 func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
 	readTotalMetricName := "forwarder_data_read_total"
-
 	// scrape the read total metric from pod metric port
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	resp, err := r.httpClient.Get(url)
 	if err != nil {
-		r.log.Errorf("[vertex name %s, pod name %s]: failed reading the metrics endpoint, %v", vertexName, podName, err.Error())
+		r.log.Warnf("[vertex name %s, pod name %s]: failed reading the metrics endpoint, the pod might have been scaled down: %v", vertexName, podName, err.Error())
 		return nil
 	}
 	defer resp.Body.Close()
@@ -249,13 +248,19 @@ func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
 			if partitionName == "" {
 				r.log.Warnf("[vertex name %s, pod name %s]: Partition name is not found for metric %s", vertexName, podName, readTotalMetricName)
 			} else {
-				partitionReadCount[partitionName] = ele.Counter.GetValue()
+				// https://github.com/prometheus/client_rust/issues/194
+				counterVal := ele.Counter.GetValue()
+				untypedVal := ele.Untyped.GetValue()
+				if counterVal == 0 && untypedVal != 0 {
+					counterVal = untypedVal
+				}
+				partitionReadCount[partitionName] = counterVal
 			}
 		}
 		podReadCount := &PodReadCount{podName, partitionReadCount}
 		return podReadCount
 	} else {
-		r.log.Errorf("[vertex name %s, pod name %s]: failed getting the read total metric, the metric is not available.", vertexName, podName)
+		r.log.Infof("[vertex name %s, pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", vertexName, podName, readTotalMetricName)
 		return nil
 	}
 }

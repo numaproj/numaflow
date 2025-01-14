@@ -73,6 +73,9 @@ pub struct VertexSpec {
     pub priority_class_name: Option<String>,
     #[serde(rename = "replicas", skip_serializing_if = "Option::is_none")]
     pub replicas: Option<i32>,
+    /// ResourceClaims defines which ResourceClaims must be allocated and reserved before the Pod is allowed to start. The resources will be made available to those containers which consume them by name.
+    #[serde(rename = "resourceClaims", skip_serializing_if = "Option::is_none")]
+    pub resource_claims: Option<Vec<k8s_openapi::api::core::v1::PodResourceClaim>>,
     /// RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class
     #[serde(rename = "runtimeClassName", skip_serializing_if = "Option::is_none")]
     pub runtime_class_name: Option<String>,
@@ -105,6 +108,8 @@ pub struct VertexSpec {
     pub tolerations: Option<Vec<k8s_openapi::api::core::v1::Toleration>>,
     #[serde(rename = "udf", skip_serializing_if = "Option::is_none")]
     pub udf: Option<Box<crate::models::Udf>>,
+    #[serde(rename = "updateStrategy", skip_serializing_if = "Option::is_none")]
+    pub update_strategy: Option<Box<crate::models::UpdateStrategy>>,
     #[serde(rename = "volumes", skip_serializing_if = "Option::is_none")]
     pub volumes: Option<Vec<k8s_openapi::api::core::v1::Volume>>,
     #[serde(rename = "watermark", skip_serializing_if = "Option::is_none")]
@@ -133,6 +138,7 @@ impl VertexSpec {
             priority: None,
             priority_class_name: None,
             replicas: None,
+            resource_claims: None,
             runtime_class_name: None,
             scale: None,
             security_context: None,
@@ -145,6 +151,7 @@ impl VertexSpec {
             to_edges: None,
             tolerations: None,
             udf: None,
+            update_strategy: None,
             volumes: None,
             watermark: None,
         }

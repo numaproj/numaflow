@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -25,7 +26,8 @@ const (
 	Project = "numaflow"
 
 	// label/annotation keys.
-	KeyHash             = "numaflow.numaproj.io/hash" // hash of the object
+	KeyInstance         = "numaflow.numaproj.io/instance" // instance key of the object
+	KeyHash             = "numaflow.numaproj.io/hash"     // hash of the object
 	KeyComponent        = "app.kubernetes.io/component"
 	KeyPartOf           = "app.kubernetes.io/part-of"
 	KeyManagedBy        = "app.kubernetes.io/managed-by"
@@ -39,8 +41,6 @@ const (
 	KeySideInputName    = "numaflow.numaproj.io/side-input-name"
 	KeyPauseTimestamp   = "numaflow.numaproj.io/pause-timestamp"
 	KeyDefaultContainer = "kubectl.kubernetes.io/default-container"
-
-	RemovePauseTimestampPatch = `[{"op": "remove", "path": "/metadata/annotations/numaflow.numaproj.io~1pause-timestamp"}]`
 
 	// ID key in the header of sources like http
 	KeyMetaID          = "X-Numaflow-Id"
@@ -87,14 +87,15 @@ const (
 	ServingSourceContainer  = "serving"
 
 	// components
-	ComponentISBSvc           = "isbsvc"
-	ComponentDaemon           = "daemon"
-	ComponentVertex           = "vertex"
-	ComponentMonoVertex       = "mono-vertex"
-	ComponentMonoVertexDaemon = "mono-vertex-daemon"
-	ComponentJob              = "job"
-	ComponentSideInputManager = "side-inputs-manager"
-	ComponentUXServer         = "numaflow-ux"
+	ComponentISBSvc            = "isbsvc"
+	ComponentDaemon            = "daemon"
+	ComponentVertex            = "vertex"
+	ComponentMonoVertex        = "mono-vertex"
+	ComponentMonoVertexDaemon  = "mono-vertex-daemon"
+	ComponentJob               = "job"
+	ComponentSideInputManager  = "side-inputs-manager"
+	ComponentUXServer          = "numaflow-ux"
+	ComponentControllerManager = "controller-manager"
 
 	// controllers
 	ControllerISBSvc     = "isbsvc-controller"
@@ -150,15 +151,19 @@ const (
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
 	EnvServingStoreTTL                  = "NUMAFLOW_SERVING_STORE_TTL"
-	PathVarRun                          = "/var/run/numaflow"
-	VertexMetricsPort                   = 2469
-	VertexMetricsPortName               = "metrics"
-	VertexHTTPSPort                     = 8443
-	VertexHTTPSPortName                 = "https"
-	DaemonServicePort                   = 4327
-	MonoVertexMetricsPort               = 2469
-	MonoVertexMetricsPortName           = "metrics"
-	MonoVertexDaemonServicePort         = 4327
+	EnvExecuteRustBinary                = "NUMAFLOW_EXECUTE_RUST_BINARY"
+
+	EnvK8sServerVersion = "K8S_SERVER_VERSION"
+
+	PathVarRun                  = "/var/run/numaflow"
+	VertexMetricsPort           = 2469
+	VertexMetricsPortName       = "metrics"
+	VertexHTTPSPort             = 8443
+	VertexHTTPSPortName         = "https"
+	DaemonServicePort           = 4327
+	MonoVertexMetricsPort       = 2469
+	MonoVertexMetricsPortName   = "metrics"
+	MonoVertexDaemonServicePort = 4327
 
 	DefaultRequeueAfter = 10 * time.Second
 
@@ -230,7 +235,11 @@ const (
 
 	// MonoVertex health status
 	// TODO - more statuses to be added
-	MonoVertexStatusHealthy = "healthy"
+	MonoVertexStatusHealthy   = "healthy"
+	MonoVertexStatusUnhealthy = "unhealthy"
+	MonoVertexStatusUnknown   = "unknown"
+	MonoVertexStatusCritical  = "critical"
+	MonoVertexStatusWarning   = "warning"
 
 	// Callback annotation keys
 	CallbackEnabledKey = "numaflow.numaproj.io/callback"
@@ -238,6 +247,43 @@ const (
 
 	// Serving source
 	DefaultServingTTL = 24 * time.Hour
+
+	// Retry Strategy
+
+	// DefaultRetryInterval specifies the default time interval between retry attempts.
+	// This value can be adjusted depending on the specific requirements
+	// for responsiveness and system load considerations.
+	DefaultRetryInterval = 1 * time.Millisecond
+
+	// DefaultRetrySteps is defined to dictate how many times the platform should attempt to retry
+	// a write operation to a sink following a failure. The value is set to math.MaxInt32 - 1,
+	// effectively indicating an almost indefinite number of retries. This large default is chosen
+	// to ensure that the system will try persistently to carry out the operation unless explicitly
+	// configured otherwise. This approach can be useful in environments where loss of data
+	// due to intermittent failures is unacceptable.
+	DefaultRetrySteps = math.MaxInt32 - 1
+
+	// DefaultOnFailureRetryStrategy specifies the strategy to be used when the write to a sink fails and
+	// the retries count specified are exhausted.
+	// Setting this to 'OnFailureRetry' means the system is configured by default
+	// to retry the failed operation until successful completion.
+	// This strategy argues for robustness in operations, aiming
+	// to minimize the chances of data loss or failed deliveries in transient failure scenarios.
+	DefaultOnFailureRetryStrategy = OnFailureRetry
+
+	// Defeault values for readiness and liveness probes
+	NumaContainerReadyzInitialDelaySeconds = 5
+	NumaContainerReadyzPeriodSeconds       = 10
+	NumaContainerReadyzTimeoutSeconds      = 30
+	NumaContainerReadyzFailureThreshold    = 6
+	NumaContainerLivezInitialDelaySeconds  = 20
+	NumaContainerLivezPeriodSeconds        = 60
+	NumaContainerLivezTimeoutSeconds       = 30
+	NumaContainerLivezFailureThreshold     = 5
+	UDContainerLivezInitialDelaySeconds    = 30
+	UDContainerLivezPeriodSeconds          = 60
+	UDContainerLivezTimeoutSeconds         = 30
+	UDContainerLivezFailureThreshold       = 5
 )
 
 var (

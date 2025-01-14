@@ -72,6 +72,18 @@ func (si SideInput) getManagerDeploymentObj(pipeline Pipeline, req GetSideInputD
 		volumes = append(volumes, si.Volumes...)
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
+	numaContainer.VolumeMounts = append(numaContainer.VolumeMounts, volumeMounts...)
+	sidecarContainer := si.getUDContainer(req)
+	sidecarContainer.VolumeMounts = append(sidecarContainer.VolumeMounts, volumeMounts...)
+	containers := []corev1.Container{*numaContainer}
+	initContainers := []corev1.Container{si.getInitContainer(pipeline, req), sidecarContainer}
+
+	// TODO: (k8s 1.29) clean this up once we deprecate the support for k8s < 1.29
+	if !isSidecarSupported() {
+		initContainers = []corev1.Container{si.getInitContainer(pipeline, req)}
+		containers = []corev1.Container{*numaContainer, sidecarContainer}
+	}
+
 	deployment := &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pipeline.GetSideInputsManagerDeploymentName(si.Name),
@@ -93,8 +105,8 @@ func (si SideInput) getManagerDeploymentObj(pipeline Pipeline, req GetSideInputD
 					},
 				},
 				Spec: corev1.PodSpec{
-					Containers:     []corev1.Container{*numaContainer, si.getUDContainer(req)},
-					InitContainers: []corev1.Container{si.getInitContainer(pipeline, req)},
+					Containers:     containers,
+					InitContainers: initContainers,
 					Volumes:        volumes,
 				},
 			},
@@ -102,9 +114,6 @@ func (si SideInput) getManagerDeploymentObj(pipeline Pipeline, req GetSideInputD
 	}
 	if x := pipeline.Spec.Templates; x != nil && x.SideInputsManagerTemplate != nil {
 		x.SideInputsManagerTemplate.ApplyToPodTemplateSpec(&deployment.Spec.Template)
-	}
-	for i := range deployment.Spec.Template.Spec.Containers {
-		deployment.Spec.Template.Spec.Containers[i].VolumeMounts = append(deployment.Spec.Template.Spec.Containers[i].VolumeMounts, volumeMounts...)
 	}
 	return deployment, nil
 }
@@ -157,7 +166,7 @@ func (si SideInput) getUDContainer(req GetSideInputDeploymentReq) corev1.Contain
 	cb := containerBuilder{}.
 		name(CtrUdSideInput).
 		image(si.Container.Image).
-		imagePullPolicy(req.PullPolicy)
+		imagePullPolicy(req.PullPolicy).asSidecar()
 	if si.Container.ImagePullPolicy != nil {
 		cb = cb.imagePullPolicy(*si.Container.ImagePullPolicy)
 	}
@@ -169,7 +178,7 @@ func (si SideInput) getUDContainer(req GetSideInputDeploymentReq) corev1.Contain
 	}
 	// Do not append the envs from req here, as they might contain sensitive information
 	cb = cb.appendEnv(si.Container.Env...).appendVolumeMounts(si.Container.VolumeMounts...).
-		resources(si.Container.Resources).securityContext(si.Container.SecurityContext).appendEnvFrom(si.Container.EnvFrom...)
+		resources(si.Container.Resources).securityContext(si.Container.SecurityContext).appendEnvFrom(si.Container.EnvFrom...).appendPorts(si.Container.Ports...)
 	cb = cb.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerSideInputs})
 	return cb.build()
 }

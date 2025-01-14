@@ -24,9 +24,10 @@ import (
 )
 
 var (
-	mono_vertex_info = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	// Deprecated: Use pkg/metrics.BuildInfo instead.
+	deprecatedMonoVertexInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "monovtx",
 		Name:      "build_info",
-		Help:      "A metric with a constant value '1', labeled by Numaflow binary version and platform, as well as the mono vertex name",
-	}, []string{metrics.LabelVersion, metrics.LabelPlatform, metrics.LabelMonoVertex})
+		Help:      "A metric with a constant value '1', labeled by Numaflow binary version and platform, as well as the mono vertex name.  Deprecated: Use build_info instead",
+	}, []string{metrics.LabelVersion, metrics.LabelPlatform, metrics.LabelMonoVertexName})
 )

@@ -1,3 +1,5 @@
+//go:build test
+
 /*
 Copyright 2022 The Numaproj Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +36,6 @@ type ReduceSuite struct {
 
 // one reduce vertex (keyed)
 func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
-
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
@@ -72,14 +73,13 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 	// since the key can be even or odd and the window duration is 10s
 	// the sum should be 20(for even) and 40(for odd)
 	w.Expect().
-		SinkContains("sink", "40").
-		SinkContains("sink", "20")
+		RedisSinkContains("simple-sum-sink", "40").
+		RedisSinkContains("simple-sum-sink", "20")
 	done <- struct{}{}
 }
 
 // one reduce vertex(non keyed)
 func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
-
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
@@ -117,13 +117,12 @@ func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
 
 	// since there is no key, all the messages will be assigned to same window
 	// the sum should be 60(since the window is 10s)
-	w.Expect().SinkContains("sink", "60")
+	w.Expect().RedisSinkContains("reduce-sum-sink", "60")
 	done <- struct{}{}
 }
 
 // two reduce vertex(keyed and non keyed)
 func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
-
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
@@ -161,12 +160,11 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 	// since the key can be even or odd and the first window duration is 10s(which is keyed)
 	// and the second window duration is 60s(non-keyed)
 	// the sum should be 180(60 + 120)
-	w.Expect().SinkContains("sink", "180")
+	w.Expect().RedisSinkContains("complex-sum-sink", "180")
 	done <- struct{}{}
 }
 
 func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
-
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
@@ -193,7 +191,6 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 
 	w.Expect().VertexPodsRunning()
 
-	defer w.StreamVertexPodlogs("compute-sum", "numa").TerminateAllPodLogs()
 	go func() {
 		startTime := int(time.Unix(1000, 0).UnixMilli())
 		for i := 1; true; i++ {
@@ -209,7 +206,6 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 					w.Expect().VertexPodsRunning()
 					w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 					w.Expect().VertexPodsRunning()
-					w.StreamVertexPodlogs("compute-sum", "numa")
 				}
 				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime)).
@@ -219,17 +215,16 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 	}()
 
 	w.Expect().
-		SinkContains("sink", "38").
-		SinkContains("sink", "76").
-		SinkContains("sink", "120").
-		SinkContains("sink", "240")
+		RedisSinkContains("even-odd-sum-sink", "38").
+		RedisSinkContains("even-odd-sum-sink", "76").
+		RedisSinkContains("even-odd-sum-sink", "120").
+		RedisSinkContains("even-odd-sum-sink", "240")
 
 	done <- struct{}{}
 }
 
 // two reduce vertices (keyed and non-keyed) followed by a sliding window vertex
 func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
-
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
@@ -280,12 +275,12 @@ func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
 	// we only have to extend the timeout for the first output to be produced. for the rest,
 	// we just need to wait for the default timeout for the rest of the outputs since its synchronous
 	w.Expect().
-		SinkContains("sink", "30").
-		SinkContains("sink", "60").
-		SinkNotContains("sink", "80").
-		SinkContains("sink", "90").
-		SinkContains("sink", "180").
-		SinkNotContains("sink", "210")
+		RedisSinkContains("complex-sliding-sum-sink", "30").
+		RedisSinkContains("complex-sliding-sum-sink", "60").
+		RedisSinkNotContains("complex-sliding-sum-sink", "80").
+		RedisSinkContains("complex-sliding-sum-sink", "90").
+		RedisSinkContains("complex-sliding-sum-sink", "180").
+		RedisSinkNotContains("complex-sliding-sum-sink", "210")
 	done <- struct{}{}
 }
 

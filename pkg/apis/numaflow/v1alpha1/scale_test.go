@@ -30,14 +30,16 @@ func Test_Scale_Parameters(t *testing.T) {
 	assert.Equal(t, DefaultCooldownSeconds, s.GetScaleUpCooldownSeconds())
 	assert.Equal(t, DefaultCooldownSeconds, s.GetScaleDownCooldownSeconds())
 	assert.Equal(t, DefaultLookbackSeconds, s.GetLookbackSeconds())
-	assert.Equal(t, DefaultReplicasPerScale, s.GetReplicasPerScale())
+	assert.Equal(t, DefaultReplicasPerScale, s.GetReplicasPerScaleUp())
+	assert.Equal(t, DefaultReplicasPerScale, s.GetReplicasPerScaleDown())
 	assert.Equal(t, DefaultTargetBufferAvailability, s.GetTargetBufferAvailability())
 	assert.Equal(t, DefaultTargetProcessingSeconds, s.GetTargetProcessingSeconds())
 	assert.Equal(t, DefaultZeroReplicaSleepSeconds, s.GetZeroReplicaSleepSeconds())
 	upcds := uint32(100)
 	downcds := uint32(99)
 	lbs := uint32(101)
-	rps := uint32(3)
+	rpsu := uint32(3)
+	rpsd := uint32(4)
 	tps := uint32(102)
 	tbu := uint32(33)
 	zrss := uint32(44)
@@ -47,7 +49,8 @@ func Test_Scale_Parameters(t *testing.T) {
 		ScaleUpCooldownSeconds:   &upcds,
 		ScaleDownCooldownSeconds: &downcds,
 		LookbackSeconds:          &lbs,
-		ReplicasPerScale:         &rps,
+		ReplicasPerScaleUp:       &rpsu,
+		ReplicasPerScaleDown:     &rpsd,
 		TargetProcessingSeconds:  &tps,
 		TargetBufferAvailability: &tbu,
 		ZeroReplicaSleepSeconds:  &zrss,
@@ -57,7 +60,8 @@ func Test_Scale_Parameters(t *testing.T) {
 	assert.Equal(t, int(upcds), s.GetScaleUpCooldownSeconds())
 	assert.Equal(t, int(downcds), s.GetScaleDownCooldownSeconds())
 	assert.Equal(t, int(lbs), s.GetLookbackSeconds())
-	assert.Equal(t, int(rps), s.GetReplicasPerScale())
+	assert.Equal(t, int(rpsu), s.GetReplicasPerScaleUp())
+	assert.Equal(t, int(rpsd), s.GetReplicasPerScaleDown())
 	assert.Equal(t, int(tbu), s.GetTargetBufferAvailability())
 	assert.Equal(t, int(tps), s.GetTargetProcessingSeconds())
 	assert.Equal(t, int(zrss), s.GetZeroReplicaSleepSeconds())

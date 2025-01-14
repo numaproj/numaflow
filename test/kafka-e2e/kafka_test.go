@@ -24,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/test/fixtures"
@@ -39,64 +38,6 @@ type KafkaSuite struct {
 	fixtures.E2ESuite
 }
 
-func (ks *KafkaSuite) TestKafkaSink() {
-	topicName := fixtures.GenerateKafkaTopicName()
-	fixtures.CreateKafkaTopic(topicName, 1)
-	defer fixtures.DeleteKafkaTopic(topicName)
-
-	pipeline := &dfv1.Pipeline{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "kafka-sink-e2e",
-		},
-		Spec: dfv1.PipelineSpec{
-			Vertices: []dfv1.AbstractVertex{
-				{
-					Name: "input",
-					Source: &dfv1.Source{
-						Generator: &dfv1.GeneratorSource{
-							RPU:      ptr.To[int64](5),
-							Duration: &metav1.Duration{Duration: 2 * time.Second},
-						},
-					},
-				},
-				{
-					Name: "p1",
-					UDF: &dfv1.UDF{
-						Builtin: &dfv1.Function{Name: "cat"},
-					},
-				},
-
-				{
-					Name: "output",
-					Sink: &dfv1.Sink{
-						AbstractSink: dfv1.AbstractSink{
-							Kafka: &dfv1.KafkaSink{
-								Brokers: []string{"kafka-broker:9092"},
-								Topic:   topicName,
-							},
-						},
-					},
-				},
-			},
-			Edges: []dfv1.Edge{
-				{
-					From: "input",
-					To:   "p1",
-				},
-				{
-					From: "p1",
-					To:   "output",
-				},
-			},
-		},
-	}
-	w := ks.Given().WithPipeline(pipeline).
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	fixtures.ExpectKafkaTopicCount(topicName, 15, 3*time.Second)
-}
-
 func (ks *KafkaSuite) TestKafkaSourceSink() {
 	inputTopic := fixtures.GenerateKafkaTopicName()
 	fixtures.CreateKafkaTopic(inputTopic, 1)
@@ -105,7 +46,7 @@ func (ks *KafkaSuite) TestKafkaSourceSink() {
 	fixtures.CreateKafkaTopic(outputTopic, 1)
 	pipeline := &dfv1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "kafka-sink-e2e",
+			Name: "kafka-source-sink-e2e",
 		},
 		Spec: dfv1.PipelineSpec{
 			Vertices: []dfv1.AbstractVertex{
@@ -125,7 +66,6 @@ func (ks *KafkaSuite) TestKafkaSourceSink() {
 						Builtin: &dfv1.Function{Name: "cat"},
 					},
 				},
-
 				{
 					Name: "output",
 					Sink: &dfv1.Sink{
@@ -134,7 +74,6 @@ func (ks *KafkaSuite) TestKafkaSourceSink() {
 								Brokers: []string{"kafka-broker:9092"},
 								Topic:   outputTopic,
 							},
-							//Log: &dfv1.Log{},
 						},
 					},
 				},

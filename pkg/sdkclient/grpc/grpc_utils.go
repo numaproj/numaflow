@@ -18,25 +18,23 @@ package grpc
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 
-	"github.com/numaproj/numaflow-go/pkg/info"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	resolver "github.com/numaproj/numaflow/pkg/sdkclient/grpc_resolver"
-	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
+	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 )
 
 // ConnectToServer connects to the server with the given socket address based on the server info protocol.
-func ConnectToServer(udsSockAddr string, serverInfo *info.ServerInfo, maxMessageSize int) (*grpc.ClientConn, error) {
+func ConnectToServer(udsSockAddr string, serverInfo *serverinfo.ServerInfo, maxMessageSize int) (*grpc.ClientConn, error) {
 	var conn *grpc.ClientConn
 	var err error
 	var sockAddr string
 
 	// Check if Multiproc server mode is enabled
-	if multiProcServer, ok := serverInfo.Metadata[sdkserverinfo.MultiProcMetadata]; ok {
+	if multiProcServer, ok := serverInfo.Metadata[serverinfo.MultiProcKey]; ok {
 		// Extract the server ports from the server info file
 		numServers, _ := strconv.Atoi(multiProcServer)
 		// In Multiprocessing server mode we have multiple servers forks
@@ -49,7 +47,7 @@ func ConnectToServer(udsSockAddr string, serverInfo *info.ServerInfo, maxMessage
 			return nil, fmt.Errorf("failed to start Multiproc Client: %w", err)
 		}
 
-		conn, err = grpc.Dial(
+		conn, err = grpc.NewClient(
 			fmt.Sprintf("%s:///%s", resolver.CustScheme, resolver.CustServiceName),
 			grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"round_robin":{}}]}`),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -57,14 +55,13 @@ func ConnectToServer(udsSockAddr string, serverInfo *info.ServerInfo, maxMessage
 		)
 	} else {
 		sockAddr = getUdsSockAddr(udsSockAddr)
-		log.Println("UDS Client:", sockAddr)
 
-		conn, err = grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		conn, err = grpc.NewClient(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxMessageSize), grpc.MaxCallSendMsgSize(maxMessageSize)))
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute grpc.Dial(%q): %w", sockAddr, err)
+		return nil, fmt.Errorf("failed to execute grpc.NewClient(%q): %w", sockAddr, err)
 	}
 
 	return conn, nil

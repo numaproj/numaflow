@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/env"
 	"k8s.io/utils/ptr"
 )
 
@@ -37,6 +38,8 @@ const (
 	VertexPhaseRunning VertexPhase = "Running"
 	VertexPhaseFailed  VertexPhase = "Failed"
 
+	// VertexConditionDeployed has the status True when the vertex related sub resources are deployed.
+	VertexConditionDeployed ConditionType = "Deployed"
 	// VertexConditionPodsHealthy has the status True when all the vertex pods are healthy.
 	VertexConditionPodsHealthy ConditionType = "PodsHealthy"
 )
@@ -58,8 +61,9 @@ const NumaflowRustBinary = "/bin/numaflow-rs"
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
+// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.status.desiredReplicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.readyReplicas`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
@@ -237,19 +241,32 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		},
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
-
-	containers, err := v.Spec.getType().getContainers(getContainerReq{
-		isbSvcType:      req.ISBSvcType,
-		env:             envVars,
-		image:           req.Image,
-		imagePullPolicy: req.PullPolicy,
-		resources:       req.DefaultResources,
-		volumeMounts:    volumeMounts,
+	executeRustBinary, _ := env.GetBool(EnvExecuteRustBinary, false)
+	sidecarContainers, containers, err := v.Spec.getType().getContainers(getContainerReq{
+		isbSvcType:        req.ISBSvcType,
+		env:               envVars,
+		image:             req.Image,
+		imagePullPolicy:   req.PullPolicy,
+		resources:         req.DefaultResources,
+		volumeMounts:      volumeMounts,
+		executeRustBinary: executeRustBinary,
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	var readyzInitDeploy, readyzPeriodSeconds, readyzTimeoutSeconds, readyzFailureThreshold int32 = NumaContainerReadyzInitialDelaySeconds, NumaContainerReadyzPeriodSeconds, NumaContainerReadyzTimeoutSeconds, NumaContainerReadyzFailureThreshold
+	var liveZInitDeploy, liveZPeriodSeconds, liveZTimeoutSeconds, liveZFailureThreshold int32 = NumaContainerLivezInitialDelaySeconds, NumaContainerLivezPeriodSeconds, NumaContainerLivezTimeoutSeconds, NumaContainerLivezFailureThreshold
+	if x := v.Spec.ContainerTemplate; x != nil {
+		readyzInitDeploy = GetProbeInitialDelaySecondsOr(x.ReadinessProbe, readyzInitDeploy)
+		readyzPeriodSeconds = GetProbePeriodSecondsOr(x.ReadinessProbe, readyzPeriodSeconds)
+		readyzTimeoutSeconds = GetProbeTimeoutSecondsOr(x.ReadinessProbe, readyzTimeoutSeconds)
+		readyzFailureThreshold = GetProbeFailureThresholdOr(x.ReadinessProbe, readyzFailureThreshold)
+		liveZInitDeploy = GetProbeInitialDelaySecondsOr(x.LivenessProbe, liveZInitDeploy)
+		liveZPeriodSeconds = GetProbePeriodSecondsOr(x.LivenessProbe, liveZPeriodSeconds)
+		liveZTimeoutSeconds = GetProbeTimeoutSecondsOr(x.LivenessProbe, liveZTimeoutSeconds)
+		liveZFailureThreshold = GetProbeFailureThresholdOr(x.LivenessProbe, liveZFailureThreshold)
+	}
 	containers[0].ReadinessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -258,10 +275,12 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 3,
-		PeriodSeconds:       3,
-		TimeoutSeconds:      1,
+		InitialDelaySeconds: readyzInitDeploy,
+		PeriodSeconds:       readyzPeriodSeconds,
+		TimeoutSeconds:      readyzTimeoutSeconds,
+		FailureThreshold:    readyzFailureThreshold,
 	}
+
 	containers[0].LivenessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
@@ -270,19 +289,18 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
-		InitialDelaySeconds: 20,
-		PeriodSeconds:       60,
-		TimeoutSeconds:      30,
+		InitialDelaySeconds: liveZInitDeploy,
+		PeriodSeconds:       liveZPeriodSeconds,
+		TimeoutSeconds:      liveZTimeoutSeconds,
+		FailureThreshold:    liveZFailureThreshold,
 	}
 	containers[0].Ports = []corev1.ContainerPort{
 		{Name: VertexMetricsPortName, ContainerPort: VertexMetricsPort},
 	}
 
-	if len(containers) > 1 { // udf, udsink, udsource, or source vertex specifies a udtransformer
-		for i := 1; i < len(containers); i++ {
-			containers[i].Env = append(containers[i].Env, v.commonEnvs()...)
-			containers[i].Env = append(containers[i].Env, v.sidecarEnvs()...)
-		}
+	for i := 0; i < len(sidecarContainers); i++ { // udf, udsink, udsource, or source vertex specifies a udtransformer
+		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.commonEnvs()...)
+		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.sidecarEnvs()...)
 	}
 
 	initContainers := v.getInitContainers(req)
@@ -306,17 +324,22 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		if x := v.Spec.SideInputsContainerTemplate; x != nil {
 			x.ApplyToContainer(&sideInputsWatcher)
 		}
+		sideInputsWatcher.VolumeMounts = append(sideInputsWatcher.VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 		containers = append(containers, sideInputsWatcher)
-		for i := 1; i < len(containers); i++ {
-			if containers[i].Name == CtrSideInputsWatcher {
-				containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
-			} else {
-				// Readonly mount for user-defined containers
-				containers[i].VolumeMounts = append(containers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
-			}
+		for i := 0; i < len(sidecarContainers); i++ {
+			// Readonly mount for user-defined containers
+			sidecarContainers[i].VolumeMounts = append(sidecarContainers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
 		}
 		// Side Inputs init container
 		initContainers[1].VolumeMounts = append(initContainers[1].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
+	}
+
+	// Add the sidecar containers
+	// TODO: (k8s 1.29) clean this up once we deprecate the support for k8s <1.29
+	if isSidecarSupported() {
+		initContainers = append(initContainers, sidecarContainers...)
+	} else {
+		containers = append(containers, sidecarContainers...)
 	}
 
 	if v.IsASource() && v.Spec.Source.Serving != nil {
@@ -424,7 +447,7 @@ func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, 
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/readyz",
 				Port:   intstr.FromInt32(VertexHTTPSPort),
-				Scheme: corev1.URISchemeHTTP,
+				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
 		InitialDelaySeconds: 3,
@@ -437,7 +460,7 @@ func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, 
 			HTTPGet: &corev1.HTTPGetAction{
 				Path:   "/livez",
 				Port:   intstr.FromInt32(VertexHTTPSPort),
-				Scheme: corev1.URISchemeHTTP,
+				Scheme: corev1.URISchemeHTTPS,
 			},
 		},
 		InitialDelaySeconds: 20,
@@ -607,6 +630,10 @@ type AbstractVertex struct {
 	// Container template for the side inputs watcher container.
 	// +optional
 	SideInputsContainerTemplate *ContainerTemplate `json:"sideInputsContainerTemplate,omitempty" protobuf:"bytes,15,opt,name=sideInputsContainerTemplate"`
+	// The strategy to use to replace existing pods with new ones.
+	// +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
+	// +optional
+	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty" protobuf:"bytes,16,opt,name=updateStrategy"`
 }
 
 func (av AbstractVertex) GetVertexType() VertexType {
@@ -708,14 +735,38 @@ func (v VertexSpec) getType() containerSupplier {
 }
 
 type VertexStatus struct {
-	Status             `json:",inline" protobuf:"bytes,1,opt,name=status"`
-	Phase              VertexPhase `json:"phase" protobuf:"bytes,2,opt,name=phase,casttype=VertexPhase"`
-	Replicas           uint32      `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
-	Selector           string      `json:"selector,omitempty" protobuf:"bytes,4,opt,name=selector"`
-	Reason             string      `json:"reason,omitempty" protobuf:"bytes,5,opt,name=reason"`
-	Message            string      `json:"message,omitempty" protobuf:"bytes,6,opt,name=message"`
-	LastScaledAt       metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,7,opt,name=lastScaledAt"`
-	ObservedGeneration int64       `json:"observedGeneration,omitempty" protobuf:"varint,8,opt,name=observedGeneration"`
+	Status `json:",inline" protobuf:"bytes,1,opt,name=status"`
+	// +optional
+	Phase VertexPhase `json:"phase" protobuf:"bytes,2,opt,name=phase,casttype=VertexPhase"`
+	// Total number of non-terminated pods targeted by this Vertex (their labels match the selector).
+	// +optional
+	Replicas uint32 `json:"replicas" protobuf:"varint,3,opt,name=replicas"`
+	// The number of desired replicas.
+	// +optional
+	DesiredReplicas uint32 `json:"desiredReplicas" protobuf:"varint,4,opt,name=desiredReplicas"`
+	// +optional
+	Selector string `json:"selector,omitempty" protobuf:"bytes,5,opt,name=selector"`
+	// +optional
+	Reason string `json:"reason,omitempty" protobuf:"bytes,6,opt,name=reason"`
+	// +optional
+	Message string `json:"message,omitempty" protobuf:"bytes,7,opt,name=message"`
+	// Time of last scaling operation.
+	// +optional
+	LastScaledAt metav1.Time `json:"lastScaledAt,omitempty" protobuf:"bytes,8,opt,name=lastScaledAt"`
+	// The generation observed by the Vertex controller.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,9,opt,name=observedGeneration"`
+	// The number of pods targeted by this Vertex with a Ready Condition.
+	// +optional
+	ReadyReplicas uint32 `json:"readyReplicas,omitempty" protobuf:"varint,10,opt,name=readyReplicas"`
+	// The number of Pods created by the controller from the Vertex version indicated by updateHash.
+	UpdatedReplicas uint32 `json:"updatedReplicas,omitempty" protobuf:"varint,11,opt,name=updatedReplicas"`
+	// The number of ready Pods created by the controller from the Vertex version indicated by updateHash.
+	UpdatedReadyReplicas uint32 `json:"updatedReadyReplicas,omitempty" protobuf:"varint,12,opt,name=updatedReadyReplicas"`
+	// If not empty, indicates the current version of the Vertex used to generate Pods.
+	CurrentHash string `json:"currentHash,omitempty" protobuf:"bytes,13,opt,name=currentHash"`
+	// If not empty, indicates the updated version of the Vertex used to generate Pods.
+	UpdateHash string `json:"updateHash,omitempty" protobuf:"bytes,14,opt,name=updateHash"`
 }
 
 func (vs *VertexStatus) MarkPhase(phase VertexPhase, reason, message string) {
@@ -734,6 +785,17 @@ func (vs *VertexStatus) MarkPhaseRunning() {
 	vs.MarkPhase(VertexPhaseRunning, "", "")
 }
 
+// MarkDeployed set the Vertex has it's sub resources deployed.
+func (vs *VertexStatus) MarkDeployed() {
+	vs.MarkTrue(VertexConditionDeployed)
+}
+
+// MarkDeployFailed set the Vertex deployment failed
+func (vs *VertexStatus) MarkDeployFailed(reason, message string) {
+	vs.MarkFalse(VertexConditionDeployed, reason, message)
+	vs.MarkPhaseFailed(reason, message)
+}
+
 // MarkPodNotHealthy marks the pod not healthy with the given reason and message.
 func (vs *VertexStatus) MarkPodNotHealthy(reason, message string) {
 	vs.MarkFalse(VertexConditionPodsHealthy, reason, message)
@@ -748,7 +810,7 @@ func (vs *VertexStatus) MarkPodHealthy(reason, message string) {
 
 // InitConditions sets conditions to Unknown state.
 func (vs *VertexStatus) InitConditions() {
-	vs.InitializeConditions(VertexConditionPodsHealthy)
+	vs.InitializeConditions(VertexConditionDeployed, VertexConditionPodsHealthy)
 }
 
 // IsHealthy indicates whether the vertex is healthy or not

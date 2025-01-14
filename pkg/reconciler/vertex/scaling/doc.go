@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package scaling provides the autoscaling capability for Numaflow.
+// Package scaling provides the autoscaling capability for Vertex objects.
 //
 // A workqueue is implemented in this package to watch vertices in the cluster,
 // calculate the desired replica number for each of them periodically, and

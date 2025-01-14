@@ -19,6 +19,7 @@ package kafka
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -38,6 +39,7 @@ type ToKafka struct {
 	producer     sarama.AsyncProducer
 	connected    bool
 	topic        string
+	setKey       bool
 	kafkaSink    *dfv1.KafkaSink
 	log          *zap.SugaredLogger
 }
@@ -51,6 +53,7 @@ func NewToKafka(ctx context.Context, vertexInstance *dfv1.VertexInstance) (*ToKa
 	toKafka.name = vertexInstance.Vertex.Spec.Name
 	toKafka.pipelineName = vertexInstance.Vertex.Spec.PipelineName
 	toKafka.topic = kafkaSink.Topic
+	toKafka.setKey = kafkaSink.SetKey
 	toKafka.kafkaSink = kafkaSink
 
 	producer, err := connect(kafkaSink)
@@ -150,22 +153,49 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 			}
 		}
 	}()
+
 	for index, msg := range messages {
+		// insert keys in the header.
+		// since keys is an array, to decompose it, we need len and key at each index.
+		var headers []sarama.RecordHeader
+		// insert __key_len
+		keyLen := sarama.RecordHeader{
+			Key:   []byte("__key_len"),
+			Value: []byte(fmt.Sprintf("%d", len(msg.Keys))),
+		}
+		headers = append(headers, keyLen)
+
+		// keys is concatenated keys
+		var keys string
+		// write keys into header if length > 0
+		if len(msg.Keys) > 0 {
+			// all keys concatenated together to set kafka key field if need be
+			keys = strings.Join(msg.Keys, ":")
+
+			for idx, key := range msg.Keys {
+				headers = append(headers, sarama.RecordHeader{
+					Key:   []byte(fmt.Sprintf("__key_%d", idx)),
+					Value: []byte(key),
+				})
+			}
+		}
+
+		var kafkaKey sarama.StringEncoder
+		// set Kafka Key if SetKey is set.
+		if tk.setKey {
+			kafkaKey = sarama.StringEncoder(keys)
+		}
+
 		message := &sarama.ProducerMessage{
+			Key:      kafkaKey,
 			Topic:    tk.topic,
 			Value:    sarama.ByteEncoder(msg.Payload),
+			Headers:  headers,
 			Metadata: index, // Use metadata to identify if it succeeds or fails in the async return.
 		}
 		tk.producer.Input() <- message
 	}
 	<-done
-	for _, err := range errs {
-		if err != nil {
-			kafkaSinkWriteErrors.With(map[string]string{metrics.LabelVertex: tk.name, metrics.LabelPipeline: tk.pipelineName}).Inc()
-		} else {
-			kafkaSinkWriteCount.With(map[string]string{metrics.LabelVertex: tk.name, metrics.LabelPipeline: tk.pipelineName}).Inc()
-		}
-	}
 	return nil, errs
 }
 

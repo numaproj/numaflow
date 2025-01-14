@@ -41,6 +41,8 @@ pub struct MonoVertexSpec {
     /// List of customized init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
     #[serde(rename = "initContainers", skip_serializing_if = "Option::is_none")]
     pub init_containers: Option<Vec<k8s_openapi::api::core::v1::Container>>,
+    #[serde(rename = "lifecycle", skip_serializing_if = "Option::is_none")]
+    pub lifecycle: Option<Box<crate::models::MonoVertexLifecycle>>,
     #[serde(rename = "limits", skip_serializing_if = "Option::is_none")]
     pub limits: Option<Box<crate::models::MonoVertexLimits>>,
     #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
@@ -56,6 +58,9 @@ pub struct MonoVertexSpec {
     pub priority_class_name: Option<String>,
     #[serde(rename = "replicas", skip_serializing_if = "Option::is_none")]
     pub replicas: Option<i32>,
+    /// ResourceClaims defines which ResourceClaims must be allocated and reserved before the Pod is allowed to start. The resources will be made available to those containers which consume them by name.
+    #[serde(rename = "resourceClaims", skip_serializing_if = "Option::is_none")]
+    pub resource_claims: Option<Vec<k8s_openapi::api::core::v1::PodResourceClaim>>,
     /// RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class
     #[serde(rename = "runtimeClassName", skip_serializing_if = "Option::is_none")]
     pub runtime_class_name: Option<String>,
@@ -76,6 +81,8 @@ pub struct MonoVertexSpec {
     /// If specified, the pod's tolerations.
     #[serde(rename = "tolerations", skip_serializing_if = "Option::is_none")]
     pub tolerations: Option<Vec<k8s_openapi::api::core::v1::Toleration>>,
+    #[serde(rename = "updateStrategy", skip_serializing_if = "Option::is_none")]
+    pub update_strategy: Option<Box<crate::models::UpdateStrategy>>,
     #[serde(rename = "volumes", skip_serializing_if = "Option::is_none")]
     pub volumes: Option<Vec<k8s_openapi::api::core::v1::Volume>>,
 }
@@ -91,12 +98,14 @@ impl MonoVertexSpec {
             dns_policy: None,
             image_pull_secrets: None,
             init_containers: None,
+            lifecycle: None,
             limits: None,
             metadata: None,
             node_selector: None,
             priority: None,
             priority_class_name: None,
             replicas: None,
+            resource_claims: None,
             runtime_class_name: None,
             scale: None,
             security_context: None,
@@ -105,6 +114,7 @@ impl MonoVertexSpec {
             sink: None,
             source: None,
             tolerations: None,
+            update_strategy: None,
             volumes: None,
         }
     }

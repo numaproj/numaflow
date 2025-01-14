@@ -43,7 +43,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: "1.23"
       - name: Add bins to PATH
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
@@ -72,16 +72,20 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       nats:
-        image: 'bitnami/nats:latest'
+        image: "bitnami/nats:latest"
         ports:
           - 4222:4222
         env:
           NATS_EXTRA_ARGS: -js
+
     steps:
+      - name: Start Pulsar standalone container
+        run: docker run -d -p 6650:6650 -p 8080:8080 apachepulsar/pulsar:4.0.0 bin/pulsar standalone 
+
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: "1.23"
         id: go
 
       - name: Check out code
@@ -94,27 +98,38 @@ jobs:
           key: ${{ runner.os }}-go-build-v1-${{ github.run_id }}
 
       - name: Get dependencies
-        run: go mod download
+        run: go mod download -x
 
       - name: Test Go
         run: make test-coverage-with-isb
-      
+
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          components: llvm-tools-preview
+          cache-workspaces: rust -> target
+
+      - name: Install llvm-tools-preview
+        working-directory: ./rust
+        run: rustup component add llvm-tools-preview
 
       - name: Install grcov
-        run: cargo install grcov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: grcov
 
-      - name: Install Protobuf Compiler
-        run: sudo apt-get install -y protobuf-compiler
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
 
       - name: Test Rust
         working-directory: ./rust
         run: |
-          CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='./target/debug/coverage/cargo-test-%p-%m.profraw' cargo test --all-features --workspace --all 
+          CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='./target/debug/coverage/cargo-test-%p-%m.profraw' cargo test --all-features --workspace --all
           grcov . -s ./target/debug/coverage/ --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing -o ./target/debug/coverage/lcov.info
+
+      - name: Check Rust formatting
+        working-directory: ./rust
+        run: |
+            cargo fmt -- --check
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
@@ -134,7 +149,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: "1.23"
       - name: Restore Go build cache
         uses: actions/cache@v4
         with:
@@ -143,15 +158,66 @@ jobs:
       - run: make lint
       - run: git diff --exit-code
 
+  build-rust-amd64:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ./rust
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
+        with:
+          cache-workspaces: rust -> target
+          rustflags: ""
+      - name: Configure sccache
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.5
+      - name: Install dependencies
+        run: sudo apt-get install -y protobuf-compiler
+      - name: Print Protoc version
+        run: protoc --version
+      - name: Build binary
+        run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
+      - name: Rename binary
+        run: cp -pv target/x86_64-unknown-linux-gnu/release/numaflow ./numaflow-rs-linux-amd64
+      - name: List files
+        run: pwd && ls -al && file ./numaflow-rs-linux-amd64
+      - name: Upload numaflow binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: numaflow-rs-linux-amd64
+          path: rust/numaflow-rs-linux-amd64
+          if-no-files-found: error
+
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
+    needs: [build-rust-amd64]
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         driver: [jetstream]
-        case: [e2e, diamond-e2e, transformer-e2e, kafka-e2e, http-e2e, nats-e2e, jetstream-e2e, sdks-e2e, reduce-one-e2e, reduce-two-e2e, udsource-e2e, api-e2e, sideinputs-e2e, idle-source-e2e]
+        case:
+          [
+            e2e,
+            diamond-e2e,
+            transformer-e2e,
+            kafka-e2e,
+            map-e2e,
+            reduce-one-e2e,
+            reduce-two-e2e,
+            udsource-e2e,
+            api-e2e,
+            sideinputs-e2e,
+            idle-source-e2e,
+            monovertex-e2e,
+            builtin-source-e2e,
+          ]
         include:
           - driver: redis
             case: e2e
@@ -171,7 +237,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: "1.23"
       - name: Add bins to PATH
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
@@ -185,6 +251,10 @@ jobs:
         with:
           path: ui/node_modules
           key: ${{ runner.os }}-node-dep-v1-${{ hashFiles('**/yarn.lock') }}
+      - name: Download Rust amd64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: numaflow-rs-linux-amd64
       - name: Install k3d
         run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
       - name: Create a cluster
@@ -199,4 +269,4 @@ jobs:
       - name: Run tests
         env:
           GOPATH: /home/runner/go
-        run: KUBECONFIG=~/.kube/numaflow-e2e-config VERSION=${{ github.sha }} ISBSVC=${{matrix.driver}} make test-${{matrix.case}}
+        run: KUBECONFIG=~/.kube/numaflow-e2e-config VERSION=${{ github.sha }} ISBSVC=${{matrix.driver}} SKIP_IMAGE_BUILD=true make test-${{matrix.case}}

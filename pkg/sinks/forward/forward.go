@@ -54,6 +54,7 @@ type DataForward struct {
 	vertexName          string
 	pipelineName        string
 	vertexReplica       int32
+	sinkRetryStrategy   dfv1.RetryStrategy
 	// idleManager manages the idle watermark status.
 	idleManager wmb.IdleManager
 	// wmbChecker checks if the idle watermark is valid.
@@ -98,6 +99,10 @@ func NewDataForward(
 		},
 		opts: *dOpts,
 	}
+	// add the sink retry strategy to the forward
+	if vertexInstance.Vertex.Spec.Sink != nil {
+		df.sinkRetryStrategy = vertexInstance.Vertex.Spec.Sink.RetryStrategy
+	}
 
 	// Add logger from parent ctx to child context.
 	df.ctx = logging.WithLogger(ctx, dOpts.logger)
@@ -106,9 +111,9 @@ func NewDataForward(
 }
 
 // Start starts reading the buffer and forwards to sinker. Call `Stop` to stop.
-func (df *DataForward) Start() <-chan struct{} {
+func (df *DataForward) Start() <-chan error {
 	log := logging.FromContext(df.ctx)
-	stopped := make(chan struct{})
+	stopped := make(chan error)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -132,7 +137,11 @@ func (df *DataForward) Start() <-chan struct{} {
 				// shutdown the fromBufferPartition should be empty.
 			}
 			// keep doing what you are good at
-			df.forwardAChunk(df.ctx)
+			if err := df.forwardAChunk(df.ctx); err != nil {
+				log.Errorw("Failed to forward a chunk", zap.Error(err))
+				stopped <- err
+				return
+			}
 		}
 	}()
 
@@ -171,10 +180,26 @@ func (df *DataForward) Start() <-chan struct{} {
 // for a chunk of messages returned by the first Read call. It will return only if only we are successfully able to ack
 // the message after forwarding, barring any platform errors. The platform errors include buffer-full,
 // buffer-not-reachable, etc., but does not include errors due to WhereTo, etc.
-func (df *DataForward) forwardAChunk(ctx context.Context) {
+func (df *DataForward) forwardAChunk(ctx context.Context) error {
+	// Initialize forwardAChunk and read start times
 	start := time.Now()
+	readStart := time.Now()
 	totalBytes := 0
 	dataBytes := 0
+	// Initialize metric labels
+	metricLabels := map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+	}
+	metricLabelsWithPartition := map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
+	}
 	// There is a chance that we have read the message and the container got forcefully terminated before processing. To provide
 	// at-least-once semantics for reading, during restart we will have to reprocess all unacknowledged messages. It is the
 	// responsibility of the Read function to do that.
@@ -182,7 +207,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	df.opts.logger.Debugw("Read from buffer", zap.String("bufferFrom", df.fromBufferPartition.GetName()), zap.Int64("length", int64(len(readMessages))))
 	if err != nil {
 		df.opts.logger.Warnw("failed to read fromBufferPartition", zap.Error(err))
-		metrics.ReadMessagesError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Inc()
+		metrics.ReadMessagesError.With(metricLabelsWithPartition).Inc()
 	}
 
 	// process only if we have any read messages. There is a natural looping here if there is an internal error while
@@ -202,13 +227,15 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 				zap.Int64("offset", processorWMB.Offset),
 				zap.Int64("watermark", processorWMB.Watermark),
 				zap.Bool("idle", processorWMB.Idle))
-			return
+			return nil
 		}
 
-		// if the validation passed, we will publish the watermark to all the toBuffer partitions.
+		// if the validation passed, we will publish the idle watermark to SINK OT even though we do not use it today.
 		idlehandler.PublishIdleWatermark(ctx, df.sinkWriter.GetPartitionIdx(), df.sinkWriter, df.wmPublisher, df.idleManager, df.opts.logger, df.vertexName, df.pipelineName, dfv1.VertexTypeSink, df.vertexReplica, wmb.Watermark(time.UnixMilli(processorWMB.Watermark)))
-		return
+		return nil
 	}
+
+	metrics.ReadProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(readStart).Microseconds()))
 
 	var dataMessages = make([]*isb.ReadMessage, 0, len(readMessages))
 
@@ -223,24 +250,12 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
-	metrics.ReadDataMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(dataMessages)))
-	metrics.ReadMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(readMessages)))
+	metrics.ReadDataMessagesCount.With(metricLabelsWithPartition).Add(float64(len(dataMessages)))
+	metrics.ReadMessagesCount.With(metricLabelsWithPartition).Add(float64(len(readMessages)))
 
-	metrics.ReadBytesCount.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
-	}).Add(float64(totalBytes))
+	metrics.ReadBytesCount.With(metricLabelsWithPartition).Add(float64(totalBytes))
 
-	metrics.ReadDataBytesCount.With(map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
-		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
-		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
-	}).Add(float64(dataBytes))
+	metrics.ReadDataBytesCount.With(metricLabelsWithPartition).Add(float64(dataBytes))
 
 	// fetch watermark if available
 	// TODO: make it async (concurrent and wait later)
@@ -256,12 +271,12 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 	}
 
 	// write the messages to the sink
-	writeOffsets, fallbackMessages, err := df.writeToSink(ctx, df.sinkWriter, writeMessages, false)
+	_, fallbackMessages, err := df.writeToSink(ctx, df.sinkWriter, writeMessages, false)
 	// error will not be nil only when we get ctx.Done()
 	if err != nil {
 		df.opts.logger.Errorw("failed to write to sink", zap.Error(err))
 		df.fromBufferPartition.NoAck(ctx, readOffsets)
-		return
+		return err
 	}
 
 	// Only when fallback is configured, it is possible to return fallbackMessages. If there's any, write to the fallback sink.
@@ -272,32 +287,31 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		_, _, err = df.writeToSink(ctx, df.opts.fbSinkWriter, fallbackMessages, true)
 		if err != nil {
 			df.opts.logger.Errorw("Failed to write to fallback sink", zap.Error(err))
-			return
+			df.fromBufferPartition.NoAck(ctx, readOffsets)
+			return err
 		}
 	}
 
-	// FIXME: offsets are not supported for sink, so len(writeOffsets) > 0 will always fail
-	// in sink we don't drop any messages
-	// so len(dataMessages) should be the same as len(writeOffsets)
-	// if len(writeOffsets) is greater than 0, publish normal watermark
-	// if len(writeOffsets) is 0, meaning we only have control messages,
-	// we should not publish anything: the next len(readMessage) check will handle this idling situation
-	if len(writeOffsets) > 0 {
-		df.wmPublisher.PublishWatermark(processorWM, nil, int32(0))
-		// reset because the toBuffer is no longer idling
-		df.idleManager.MarkActive(df.fromBufferPartition.GetPartitionIdx(), df.sinkWriter.GetName())
-	}
+	// Always publish the watermark to SINK OT even though we do not use it today.
+	// There's no offset returned from sink writer.
+	df.wmPublisher.PublishWatermark(processorWM, nil, int32(0))
+	// reset because the toBuffer is no longer idling
+	df.idleManager.MarkActive(df.fromBufferPartition.GetPartitionIdx(), df.sinkWriter.GetName())
 
-	df.opts.logger.Debugw("write to sink completed")
+	df.opts.logger.Debugw("Write to sink completed")
 
+	ackStart := time.Now()
 	err = df.ackFromBuffer(ctx, readOffsets)
 	// implicit return for posterity :-)
 	if err != nil {
 		df.opts.logger.Errorw("Failed to ack from buffer", zap.Error(err))
-		metrics.AckMessageError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
-		return
+		metrics.AckMessageError.With(metricLabelsWithPartition).Add(float64(len(readOffsets)))
+		return nil
 	}
-	metrics.AckMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}).Add(float64(len(readOffsets)))
+
+	// Ack processing time
+	metrics.AckProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(ackStart).Microseconds()))
+	metrics.AckMessagesCount.With(metricLabelsWithPartition).Add(float64(len(readOffsets)))
 
 	if df.opts.cbPublisher != nil {
 		if err = df.opts.cbPublisher.SinkVertexCallback(ctx, writeMessages); err != nil {
@@ -305,7 +319,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 	// ProcessingTimes of the entire forwardAChunk
-	metrics.ForwardAChunkProcessingTime.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica))}).Observe(float64(time.Since(start).Microseconds()))
+	metrics.ForwardAChunkProcessingTime.With(metricLabels).Observe(float64(time.Since(start).Microseconds()))
+	return nil
 }
 
 // ackFromBuffer acknowledges an array of offsets back to fromBufferPartition and is a blocking call or until shutdown has been initiated.
@@ -357,80 +372,192 @@ func (df *DataForward) ackFromBuffer(ctx context.Context, offsets []isb.Offset) 
 	return ctxClosedErr
 }
 
-// writeToSink forwards an array of messages to a sink and it is a blocking call it keeps retrying until shutdown has been initiated.
-func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWriter, messages []isb.Message, isFbSinkWriter bool) ([]isb.Offset, []isb.Message, error) {
+// writeToSink forwards an array of messages to a sink and it is a blocking call it keeps retrying
+// until shutdown has been initiated. The function also evaluates whether to use a fallback sink based
+// on the error and configuration.
+func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWriter, messagesToTry []isb.Message, isFbSinkWriter bool) ([]isb.Offset, []isb.Message, error) {
 	var (
-		err        error
-		writeCount int
-		writeBytes float64
+		err              error
+		writeCount       int
+		writeBytes       float64
+		fallbackMessages []isb.Message
 	)
-	writeOffsets := make([]isb.Offset, 0, len(messages))
-	var fallbackMessages []isb.Message
+	writeStart := time.Now()
+	// slice to store the successful offsets returned by the sink
+	writeOffsets := make([]isb.Offset, 0, len(messagesToTry))
 
+	// extract the backOff conditions and failStrategy for the retry logic,
+	// when the isFbSinkWriter is true, we use an infinite retry
+	backoffCond, failStrategy := df.getBackOffConditions(isFbSinkWriter)
+
+	// The loop will continue trying to write messages until they are all processed
+	// or an unrecoverable error occurs.
 	for {
-		_writeOffsets, errs := sinkWriter.Write(ctx, messages)
-		// Note: this is an unwanted memory allocation during a happy path. We want only minimal allocation since using failedMessages is an unlikely path.
-		var failedMessages []isb.Message
-		needRetry := false
-		for idx, msg := range messages {
+		err = wait.ExponentialBackoffWithContext(ctx, backoffCond, func(_ context.Context) (done bool, err error) {
+			// Note: this is an unwanted memory allocation during a happy path. We want only minimal allocation
+			// since using failedMessages is an unlikely path.
+			var failedMessages []isb.Message
+			needRetry := false
+			_writeOffsets, errs := sinkWriter.Write(ctx, messagesToTry)
+			for idx, msg := range messagesToTry {
+				if err = errs[idx]; err != nil {
+					var udsinkErr = new(udsink.ApplyUDSinkErr)
+					if errors.As(err, &udsinkErr) {
+						if udsinkErr.IsInternalErr() {
+							return false, err
+						}
+					}
+					// if we are asked to write to fallback sink, check if the fallback sink is configured,
+					// and we are not already in the fallback sink write path.
+					if errors.Is(err, udsink.WriteToFallbackErr) && df.opts.fbSinkWriter != nil && !isFbSinkWriter {
+						fallbackMessages = append(fallbackMessages, msg)
+						continue
+					}
 
-			if err = errs[idx]; err != nil {
-				// if we are asked to write to fallback sink, check if the fallback sink is configured,
-				// and we are not already in the fallback sink write path.
-				if errors.Is(err, &udsink.WriteToFallbackErr) && df.opts.fbSinkWriter != nil && !isFbSinkWriter {
-					fallbackMessages = append(fallbackMessages, msg)
-					continue
-				}
+					// if we are asked to write to fallback but no fallback sink is configured, we will retry the messages to the same sink
+					if errors.Is(err, udsink.WriteToFallbackErr) && df.opts.fbSinkWriter == nil {
+						df.opts.logger.Error("Asked to write to fallback but no fallback sink is configured, retrying the message to the same sink")
+					}
 
-				// if we are asked to write to fallback but no fallback sink is configured, we will retry the messages to the same sink
-				if errors.Is(err, &udsink.WriteToFallbackErr) && df.opts.fbSinkWriter == nil {
-					df.opts.logger.Error("Asked to write to fallback but no fallback sink is configured, retrying the message to the same sink")
-				}
+					// if we are asked to write to fallback sink inside the fallback sink, we will retry the messages to the fallback sink
+					if errors.Is(err, udsink.WriteToFallbackErr) && isFbSinkWriter {
+						df.opts.logger.Error("Asked to write to fallback sink inside the fallback sink, retrying the message to fallback sink")
+					}
 
-				// if we are asked to write to fallback sink inside the fallback sink, we will retry the messages to the fallback sink
-				if errors.Is(err, &udsink.WriteToFallbackErr) && isFbSinkWriter {
-					df.opts.logger.Error("Asked to write to fallback sink inside the fallback sink, retrying the message to fallback sink")
-				}
+					needRetry = true
 
-				needRetry = true
-				// we retry only failed messages
-				failedMessages = append(failedMessages, msg)
-				metrics.WriteMessagesError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: sinkWriter.GetName()}).Inc()
-				// a shutdown can break the blocking loop caused due to InternalErr
-				if ok, _ := df.IsShuttingDown(); ok {
-					metrics.PlatformError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica))}).Inc()
-					return nil, nil, fmt.Errorf("writeToSink failed, Stop called while stuck on an internal error with failed messages:%d, %v", len(failedMessages), errs)
-				}
-			} else {
-				writeCount++
-				writeBytes += float64(len(msg.Payload))
-				// we support write offsets only for jetstream
-				if _writeOffsets != nil {
-					writeOffsets = append(writeOffsets, _writeOffsets[idx])
+					// TODO(Retry-Sink) : Propagate the retry-count?
+					// we retry only failed message
+					failedMessages = append(failedMessages, msg)
+
+					// increment the error metric
+					df.incrementErrorMetric(sinkWriter.GetName(), isFbSinkWriter)
+
+					// a shutdown can break the blocking loop caused due to InternalErr
+					if ok, _ := df.IsShuttingDown(); ok {
+						metrics.PlatformError.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica))}).Inc()
+						return true, fmt.Errorf("writeToSink failed, Stop called while stuck on an internal error with failed messages:%d, %v", len(failedMessages), errs)
+					}
+				} else {
+					writeCount++
+					writeBytes += float64(len(msg.Payload))
+					// we support write offsets only for jetstream
+					if _writeOffsets != nil {
+						writeOffsets = append(writeOffsets, _writeOffsets[idx])
+					}
 				}
 			}
-		}
+			// set messages to failedMessages, in case of success this should be empty
+			// While checking for retry we see the length of the messages left
+			messagesToTry = failedMessages
+			if needRetry {
+				df.opts.logger.Errorw("Retrying failed messages",
+					zap.Any("errors", errorArrayToMap(errs)),
+					zap.String(metrics.LabelPipeline, df.pipelineName),
+					zap.String(metrics.LabelVertex, df.vertexName),
+					zap.String(metrics.LabelPartitionName, sinkWriter.GetName()),
+				)
+				return false, nil
+			}
+			return true, nil
+		})
 
-		if needRetry {
-			df.opts.logger.Errorw("Retrying failed messages",
-				zap.Any("errors", errorArrayToMap(errs)),
-				zap.String(metrics.LabelPipeline, df.pipelineName),
-				zap.String(metrics.LabelVertex, df.vertexName),
-				zap.String(metrics.LabelPartitionName, sinkWriter.GetName()),
-			)
-			// set messages to failed for the retry
-			messages = failedMessages
-			// TODO: implement retry with backoff etc.
-			time.Sleep(df.opts.retryInterval)
-		} else {
+		if err != nil {
+			return nil, nil, err
+		}
+		// Check what actions are required once the writing loop is completed
+		// Break if no further action is required
+		if !df.handlePostRetryFailures(&messagesToTry, failStrategy, &fallbackMessages, sinkWriter) {
 			break
 		}
 	}
-
-	metrics.WriteMessagesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: sinkWriter.GetName()}).Add(float64(writeCount))
-	metrics.WriteBytesCount.With(map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeSink), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: sinkWriter.GetName()}).Add(writeBytes)
+	// update the write metrics for sink
+	df.updateSinkWriteMetrics(writeCount, writeBytes, sinkWriter.GetName(), isFbSinkWriter, writeStart)
 
 	return writeOffsets, fallbackMessages, nil
+}
+
+// handlePostRetryFailures deals with the scenarios after retries are exhausted.
+// It returns true if we need to continue retrying else returns false when no further writes are required
+func (df *DataForward) handlePostRetryFailures(messagesToTry *[]isb.Message, failStrategy dfv1.OnFailureRetryStrategy, fallbackMessages *[]isb.Message,
+	sinkWriter sinker.SinkWriter) bool {
+
+	// Check if we still have messages left to be processed
+	if len(*messagesToTry) > 0 {
+
+		df.opts.logger.Infof("Retries exhausted in sink, messagesLeft %d, Next strategy %s",
+			len(*messagesToTry), failStrategy)
+
+		// Check what is the failure strategy to be followed after retry exhaustion
+		switch failStrategy {
+		case dfv1.OnFailureRetry:
+			// If on failure, we keep on retrying then lets continue the loop and try all again
+			return true
+		case dfv1.OnFailureFallback:
+			// If onFail we have to divert messages to fallback, lets add all failed messages to fallback slice
+			*fallbackMessages = append(*fallbackMessages, *messagesToTry...)
+		case dfv1.OnFailureDrop:
+			// If on fail we want to Drop in that case lets not retry further
+			df.opts.logger.Info("Dropping the failed messages after retry in the Sink")
+			// Update the drop metric count with the messages left
+			metrics.DropMessagesCount.With(map[string]string{
+				metrics.LabelVertex:             df.vertexName,
+				metrics.LabelPipeline:           df.pipelineName,
+				metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
+				metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+				metrics.LabelPartitionName:      sinkWriter.GetName(),
+				metrics.LabelReason:             "retries exhausted in the Sink",
+			}).Add(float64(len(*messagesToTry)))
+		}
+	}
+	return false
+}
+
+// updateSinkWriteMetrics updates metrics related to data writes to a sink.
+// Metrics are updated based on whether the operation involves the primary or fallback sink.
+func (df *DataForward) updateSinkWriteMetrics(writeCount int, writeBytes float64, sinkWriterName string, isFallback bool, writeStart time.Time) {
+	// Define labels to keep track of the data related to the specific operation
+	labels := map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      sinkWriterName,
+	}
+
+	// Increment the metrics for message count and bytes
+	metrics.WriteMessagesCount.With(labels).Add(float64(writeCount))
+	metrics.WriteBytesCount.With(labels).Add(writeBytes)
+
+	// Add write processing time metric
+	metrics.WriteProcessingTime.With(labels).Observe(float64(time.Since(writeStart).Microseconds()))
+
+	// if this is for Fallback Sink, increment specific metrics as well
+	if isFallback {
+		metrics.FbSinkWriteMessagesCount.With(labels).Add(float64(writeCount))
+		metrics.FbSinkWriteBytesCount.With(labels).Add(writeBytes)
+		metrics.FbSinkWriteProcessingTime.With(labels).Observe(float64(time.Since(writeStart).Microseconds()))
+	}
+}
+
+// incrementErrorMetric updates the appropriate error metric based on whether the operation involves a fallback sink.
+func (df *DataForward) incrementErrorMetric(sinkWriter string, isFbSinkWriter bool) {
+	// Define labels to keep track of the data related to the specific operation
+	labels := map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeSink),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      sinkWriter,
+	}
+
+	// Increment the selected metric and attach labels to provide detailed context:
+	metrics.WriteMessagesError.With(labels).Inc()
+
+	// Increment fallback specific metric if fallback mode
+	if isFbSinkWriter {
+		metrics.FbSinkWriteMessagesError.With(labels).Inc()
+	}
 }
 
 // errorArrayToMap summarizes an error array to map
@@ -442,4 +569,17 @@ func errorArrayToMap(errs []error) map[string]int64 {
 		}
 	}
 	return result
+}
+
+// getBackOffConditions configures the retry backoff strategy based on whether its a fallbackSink or primary sink.
+func (df *DataForward) getBackOffConditions(isFallbackSink bool) (wait.Backoff, dfv1.OnFailureRetryStrategy) {
+	// If we want for isFallbackSink we will return an infinite retry which will keep retrying post exhaustion till it succeeds
+	if isFallbackSink {
+		return wait.Backoff{
+			Duration: dfv1.DefaultRetryInterval,
+			Steps:    dfv1.DefaultRetrySteps,
+		}, dfv1.OnFailureRetry
+	}
+	// Initial interval duration and number of retries are taken from DataForward settings.
+	return df.sinkRetryStrategy.GetBackoff(), df.sinkRetryStrategy.GetOnFailureRetryStrategy()
 }

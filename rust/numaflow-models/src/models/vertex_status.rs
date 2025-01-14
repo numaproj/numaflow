@@ -21,33 +21,62 @@ pub struct VertexStatus {
     /// Conditions are the latest available observations of a resource's current state.
     #[serde(rename = "conditions", skip_serializing_if = "Option::is_none")]
     pub conditions: Option<Vec<k8s_openapi::apimachinery::pkg::apis::meta::v1::Condition>>,
+    /// If not empty, indicates the current version of the Vertex used to generate Pods.
+    #[serde(rename = "currentHash", skip_serializing_if = "Option::is_none")]
+    pub current_hash: Option<String>,
+    /// The number of desired replicas.
+    #[serde(rename = "desiredReplicas", skip_serializing_if = "Option::is_none")]
+    pub desired_replicas: Option<i64>,
     #[serde(rename = "lastScaledAt", skip_serializing_if = "Option::is_none")]
     pub last_scaled_at: Option<k8s_openapi::apimachinery::pkg::apis::meta::v1::Time>,
     #[serde(rename = "message", skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    /// The generation observed by the Vertex controller.
     #[serde(rename = "observedGeneration", skip_serializing_if = "Option::is_none")]
     pub observed_generation: Option<i64>,
-    #[serde(rename = "phase")]
-    pub phase: String,
+    #[serde(rename = "phase", skip_serializing_if = "Option::is_none")]
+    pub phase: Option<String>,
+    /// The number of pods targeted by this Vertex with a Ready Condition.
+    #[serde(rename = "readyReplicas", skip_serializing_if = "Option::is_none")]
+    pub ready_replicas: Option<i64>,
     #[serde(rename = "reason", skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
-    #[serde(rename = "replicas")]
-    pub replicas: i64,
+    /// Total number of non-terminated pods targeted by this Vertex (their labels match the selector).
+    #[serde(rename = "replicas", skip_serializing_if = "Option::is_none")]
+    pub replicas: Option<i64>,
     #[serde(rename = "selector", skip_serializing_if = "Option::is_none")]
     pub selector: Option<String>,
+    /// If not empty, indicates the updated version of the Vertex used to generate Pods.
+    #[serde(rename = "updateHash", skip_serializing_if = "Option::is_none")]
+    pub update_hash: Option<String>,
+    /// The number of ready Pods created by the controller from the Vertex version indicated by updateHash.
+    #[serde(
+        rename = "updatedReadyReplicas",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub updated_ready_replicas: Option<i64>,
+    /// The number of Pods created by the controller from the Vertex version indicated by updateHash.
+    #[serde(rename = "updatedReplicas", skip_serializing_if = "Option::is_none")]
+    pub updated_replicas: Option<i64>,
 }
 
 impl VertexStatus {
-    pub fn new(phase: String, replicas: i64) -> VertexStatus {
+    pub fn new() -> VertexStatus {
         VertexStatus {
             conditions: None,
+            current_hash: None,
+            desired_replicas: None,
             last_scaled_at: None,
             message: None,
             observed_generation: None,
-            phase,
+            phase: None,
+            ready_replicas: None,
             reason: None,
-            replicas,
+            replicas: None,
             selector: None,
+            update_hash: None,
+            updated_ready_replicas: None,
+            updated_replicas: None,
         }
     }
 }

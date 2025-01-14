@@ -36,4 +36,4 @@ The command below will bring the pipeline back to `Running` status.
 
 ## Delete a Pipeline
 
-When deleting a pipeline, before terminating all the pods, it will try to wait for all the backlog messages that have already been ingested into the pipeline to be processed. However, it will not wait forever, if the backlog is too large, it will terminate the pods after `terminationGracePeriodSeconds`, which defaults to 30, and can be customized by setting `spec.lifecycle.terminationGracePeriodSeconds`.
+When deleting a pipeline, before terminating all the pods, it will try to wait for all the backlog messages that have already been ingested into the pipeline to be processed. However, it will not wait forever, if the backlog is too large, it will terminate the pods after `deletionGracePeriodSeconds`, which defaults to 30, and can be customized by setting `spec.lifecycle.deletionGracePeriodSeconds`.

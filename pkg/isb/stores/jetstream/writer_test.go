@@ -45,8 +45,8 @@ func (f myForwardJetStreamTest) WhereTo(_ []string, _ []string, s string) ([]for
 	}}, nil
 }
 
-func (f myForwardJetStreamTest) ApplyMap(ctx context.Context, message *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	return testutils.CopyUDFTestApply(ctx, "test-vertex", message)
+func (f myForwardJetStreamTest) ApplyMap(ctx context.Context, messages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	return testutils.CopyUDFTestApply(ctx, "test-vertex", messages)
 }
 
 func (f myForwardJetStreamTest) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
@@ -169,14 +169,10 @@ func TestForwarderJetStreamBuffer(t *testing.T) {
 			assert.NoError(t, err)
 
 			opts := []forward.Option{forward.WithReadBatchSize(tt.batchSize)}
-			if tt.batchEnabled {
-				opts = append(opts, forward.WithUDFBatchMap(myForwardJetStreamTest{}))
-			}
 			if tt.streamEnabled {
 				opts = append(opts, forward.WithUDFStreamingMap(myForwardJetStreamTest{}))
-			}
-			if tt.unaryEnabled {
-				opts = append(opts, forward.WithUDFUnaryMap(myForwardJetStreamTest{}))
+			} else {
+				opts = append(opts, forward.WithUDFMap(myForwardJetStreamTest{}))
 			}
 
 			f, err := forward.NewInterStepDataForward(vertexInstance, fromStep, toSteps, myForwardJetStreamTest{}, fetchWatermark, publishWatermark, idleManager, opts...)

@@ -6,6 +6,7 @@ export interface GraphProps {
   data: GraphData;
   namespaceId: string | undefined;
   pipelineId: string | undefined;
+  type: "monoVertex" | "pipeline";
   refresh: () => void;
 }
 
@@ -37,6 +38,7 @@ export interface FlowProps {
   refresh: () => void;
   namespaceId: string | undefined;
   data: any;
+  type: string;
 }
 
 export interface HighlightContextProps {

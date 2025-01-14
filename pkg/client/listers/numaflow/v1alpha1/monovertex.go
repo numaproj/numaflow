@@ -20,8 +20,8 @@ package v1alpha1
 
 import (
 	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/listers"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -38,25 +38,17 @@ type MonoVertexLister interface {
 
 // monoVertexLister implements the MonoVertexLister interface.
 type monoVertexLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*v1alpha1.MonoVertex]
 }
 
 // NewMonoVertexLister returns a new MonoVertexLister.
 func NewMonoVertexLister(indexer cache.Indexer) MonoVertexLister {
-	return &monoVertexLister{indexer: indexer}
-}
-
-// List lists all MonoVertices in the indexer.
-func (s *monoVertexLister) List(selector labels.Selector) (ret []*v1alpha1.MonoVertex, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.MonoVertex))
-	})
-	return ret, err
+	return &monoVertexLister{listers.New[*v1alpha1.MonoVertex](indexer, v1alpha1.Resource("monovertex"))}
 }
 
 // MonoVertices returns an object that can list and get MonoVertices.
 func (s *monoVertexLister) MonoVertices(namespace string) MonoVertexNamespaceLister {
-	return monoVertexNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return monoVertexNamespaceLister{listers.NewNamespaced[*v1alpha1.MonoVertex](s.ResourceIndexer, namespace)}
 }
 
 // MonoVertexNamespaceLister helps list and get MonoVertices.
@@ -74,26 +66,5 @@ type MonoVertexNamespaceLister interface {
 // monoVertexNamespaceLister implements the MonoVertexNamespaceLister
 // interface.
 type monoVertexNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all MonoVertices in the indexer for a given namespace.
-func (s monoVertexNamespaceLister) List(selector labels.Selector) (ret []*v1alpha1.MonoVertex, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.MonoVertex))
-	})
-	return ret, err
-}
-
-// Get retrieves the MonoVertex from the indexer for a given namespace and name.
-func (s monoVertexNamespaceLister) Get(name string) (*v1alpha1.MonoVertex, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("monovertex"), name)
-	}
-	return obj.(*v1alpha1.MonoVertex), nil
+	listers.ResourceIndexer[*v1alpha1.MonoVertex]
 }

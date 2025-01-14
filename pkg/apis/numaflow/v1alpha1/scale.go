@@ -31,35 +31,40 @@ type Scale struct {
 	// Lookback seconds to calculate the average pending messages and processing rate.
 	// +optional
 	LookbackSeconds *uint32 `json:"lookbackSeconds,omitempty" protobuf:"varint,4,opt,name=lookbackSeconds"`
-	// Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead.
-	// Cooldown seconds after a scaling operation before another one.
-	// +optional
-	DeprecatedCooldownSeconds *uint32 `json:"cooldownSeconds,omitempty" protobuf:"varint,5,opt,name=cooldownSeconds"`
 	// After scaling down the source vertex to 0, sleep how many seconds before scaling the source vertex back up to peek.
 	// +optional
-	ZeroReplicaSleepSeconds *uint32 `json:"zeroReplicaSleepSeconds,omitempty" protobuf:"varint,6,opt,name=zeroReplicaSleepSeconds"`
+	ZeroReplicaSleepSeconds *uint32 `json:"zeroReplicaSleepSeconds,omitempty" protobuf:"varint,5,opt,name=zeroReplicaSleepSeconds"`
 	// TargetProcessingSeconds is used to tune the aggressiveness of autoscaling for source vertices, it measures how fast
 	// you want the vertex to process all the pending messages. Typically increasing the value, which leads to lower processing
 	// rate, thus less replicas. It's only effective for source vertices.
 	// +optional
-	TargetProcessingSeconds *uint32 `json:"targetProcessingSeconds,omitempty" protobuf:"varint,7,opt,name=targetProcessingSeconds"`
+	TargetProcessingSeconds *uint32 `json:"targetProcessingSeconds,omitempty" protobuf:"varint,6,opt,name=targetProcessingSeconds"`
 	// TargetBufferAvailability is used to define the target percentage of the buffer availability.
 	// A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
 	// It only applies to UDF and Sink vertices because only they have buffers to read.
 	// +optional
-	TargetBufferAvailability *uint32 `json:"targetBufferAvailability,omitempty" protobuf:"varint,8,opt,name=targetBufferAvailability"`
-	// ReplicasPerScale defines maximum replicas can be scaled up or down at once.
-	// The is use to prevent too aggressive scaling operations
+	TargetBufferAvailability *uint32 `json:"targetBufferAvailability,omitempty" protobuf:"varint,7,opt,name=targetBufferAvailability"`
+	// DeprecatedReplicasPerScale defines the number of maximum replicas that can be changed in a single scale up or down operation.
+	// The is use to prevent from too aggressive scaling operations
+	// Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead
 	// +optional
-	ReplicasPerScale *uint32 `json:"replicasPerScale,omitempty" protobuf:"varint,9,opt,name=replicasPerScale"`
+	DeprecatedReplicasPerScale *uint32 `json:"replicasPerScale,omitempty" protobuf:"varint,8,opt,name=replicasPerScale"`
 	// ScaleUpCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling up.
 	// It defaults to the CooldownSeconds if not set.
 	// +optional
-	ScaleUpCooldownSeconds *uint32 `json:"scaleUpCooldownSeconds,omitempty" protobuf:"varint,10,opt,name=scaleUpCooldownSeconds"`
+	ScaleUpCooldownSeconds *uint32 `json:"scaleUpCooldownSeconds,omitempty" protobuf:"varint,9,opt,name=scaleUpCooldownSeconds"`
 	// ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down.
 	// It defaults to the CooldownSeconds if not set.
 	// +optional
-	ScaleDownCooldownSeconds *uint32 `json:"scaleDownCooldownSeconds,omitempty" protobuf:"varint,11,opt,name=scaleDownCooldownSeconds"`
+	ScaleDownCooldownSeconds *uint32 `json:"scaleDownCooldownSeconds,omitempty" protobuf:"varint,10,opt,name=scaleDownCooldownSeconds"`
+	// ReplicasPerScaleUp defines the number of maximum replicas that can be changed in a single scaled up operation.
+	// The is use to prevent from too aggressive scaling up operations
+	// +optional
+	ReplicasPerScaleUp *uint32 `json:"replicasPerScaleUp,omitempty" protobuf:"varint,11,opt,name=replicasPerScaleUp"`
+	// ReplicasPerScaleDown defines the number of maximum replicas that can be changed in a single scaled down operation.
+	// The is use to prevent from too aggressive scaling down operations
+	// +optional
+	ReplicasPerScaleDown *uint32 `json:"replicasPerScaleDown,omitempty" protobuf:"varint,12,opt,name=replicasPerScaleDown"`
 }
 
 func (s Scale) GetLookbackSeconds() int {
@@ -73,18 +78,12 @@ func (s Scale) GetScaleUpCooldownSeconds() int {
 	if s.ScaleUpCooldownSeconds != nil {
 		return int(*s.ScaleUpCooldownSeconds)
 	}
-	if s.DeprecatedCooldownSeconds != nil {
-		return int(*s.DeprecatedCooldownSeconds)
-	}
 	return DefaultCooldownSeconds
 }
 
 func (s Scale) GetScaleDownCooldownSeconds() int {
 	if s.ScaleDownCooldownSeconds != nil {
 		return int(*s.ScaleDownCooldownSeconds)
-	}
-	if s.DeprecatedCooldownSeconds != nil {
-		return int(*s.DeprecatedCooldownSeconds)
 	}
 	return DefaultCooldownSeconds
 }
@@ -110,9 +109,22 @@ func (s Scale) GetTargetBufferAvailability() int {
 	return DefaultTargetBufferAvailability
 }
 
-func (s Scale) GetReplicasPerScale() int {
-	if s.ReplicasPerScale != nil {
-		return int(*s.ReplicasPerScale)
+func (s Scale) GetReplicasPerScaleUp() int {
+	if s.ReplicasPerScaleUp != nil {
+		return int(*s.ReplicasPerScaleUp)
+	}
+	if s.DeprecatedReplicasPerScale != nil {
+		return int(*s.DeprecatedReplicasPerScale)
+	}
+	return DefaultReplicasPerScale
+}
+
+func (s Scale) GetReplicasPerScaleDown() int {
+	if s.ReplicasPerScaleDown != nil {
+		return int(*s.ReplicasPerScaleDown)
+	}
+	if s.DeprecatedReplicasPerScale != nil {
+		return int(*s.DeprecatedReplicasPerScale)
 	}
 	return DefaultReplicasPerScale
 }

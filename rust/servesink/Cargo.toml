@@ -3,10 +3,16 @@ name = "servesink"
 version = "0.1.0"
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
-tonic = "0.12.0"
-tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", branch = "main" }
-reqwest = "0.12.4"
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing.workspace = true
+tokio.workspace = true
+tonic = "0.12.3"
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "ddd879588e11455921f1ca958ea2b3c076689293" }
+
+[dependencies.reqwest]
+version = "0.12.7"
+default-features = false
+features = ["rustls-tls"]

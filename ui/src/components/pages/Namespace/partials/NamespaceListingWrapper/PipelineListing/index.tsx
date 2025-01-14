@@ -12,12 +12,14 @@ import {
   UNKNOWN,
 } from "../../../../../../utils";
 import { ListingProps } from "../ISBListing";
-import { PipelineData } from "../PipelinesTypes";
+import { MonoVertexData, PipelineData } from "../PipelinesTypes";
 import { PipelineCard } from "../../PipelineCard";
+import { MonoVertexCard } from "../../MonoVertexCard";
 
 interface PipelineListingProps extends ListingProps {
   pipelineData: Map<string, PipelineData> | undefined;
   isbData: any;
+  monoVertexData: Map<string, MonoVertexData> | undefined;
   totalCount: number;
 }
 
@@ -31,10 +33,11 @@ export function PipelineListing({
   totalCount,
   search,
   isbData,
+  monoVertexData,
 }: PipelineListingProps) {
-  const [filteredPipelines, setFilteredPipelines] = useState<PipelineData[]>(
-    []
-  );
+  const [filteredPipelines, setFilteredPipelines] = useState<
+    (PipelineData | MonoVertexData)[]
+  >([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(
     Math.ceil(totalCount / MAX_PAGE_SIZE)
@@ -72,18 +75,30 @@ export function PipelineListing({
           margin: "0.8rem 0 2.4rem 0",
         }}
       >
-        {filteredPipelines.map((p: PipelineData) => {
-          const isbName = pipelineData
-            ? pipelineData[p.name]?.pipeline?.spec
-                ?.interStepBufferServiceName || DEFAULT_ISB
-            : DEFAULT_ISB;
+        {filteredPipelines.map((p: PipelineData | MonoVertexData) => {
+          if (p?.pipeline) {
+            const isbName = pipelineData
+              ? pipelineData[p.name]?.pipeline?.spec
+                  ?.interStepBufferServiceName || DEFAULT_ISB
+              : DEFAULT_ISB;
+            return (
+              <Grid key={`pipeline-${p.name}`} item xs={12}>
+                <PipelineCard
+                  namespace={namespace}
+                  data={p}
+                  statusData={pipelineData ? pipelineData[p.name] : {}}
+                  isbData={isbData ? isbData[isbName] : {}}
+                  refresh={refresh}
+                />
+              </Grid>
+            );
+          }
           return (
-            <Grid key={`pipeline-${p.name}`} item xs={12}>
-              <PipelineCard
+            <Grid key={`mono-vertex-${p.name}`} item xs={12}>
+              <MonoVertexCard
                 namespace={namespace}
                 data={p}
-                statusData={pipelineData ? pipelineData[p.name] : {}}
-                isbData={isbData ? isbData[isbName] : {}}
+                statusData={monoVertexData ? monoVertexData[p.name] : {}}
                 refresh={refresh}
               />
             </Grid>
@@ -91,52 +106,84 @@ export function PipelineListing({
         })}
       </Grid>
     );
-  }, [filteredPipelines, namespace, refresh]);
+  }, [
+    filteredPipelines,
+    namespace,
+    pipelineData,
+    isbData,
+    monoVertexData,
+    refresh,
+  ]);
   useEffect(() => {
-    let filtered: PipelineData[] = Object.values(
+    let filtered: (PipelineData | MonoVertexData)[] = Object.values(
       pipelineData ? pipelineData : {}
     );
+    filtered = [
+      ...filtered,
+      ...Object.values(monoVertexData ? monoVertexData : {}),
+    ];
     if (search) {
       // Filter by search
-      filtered = filtered.filter((p: PipelineData) => p.name.includes(search));
+      filtered = filtered.filter((p: PipelineData | MonoVertexData) =>
+        p.name.includes(search)
+      );
     }
     // Sorting
     if (orderBy.value === ALPHABETICAL_SORT) {
-      filtered?.sort((a: PipelineData, b: PipelineData) => {
-        if (orderBy.sortOrder === ASC) {
-          return a.name > b.name ? 1 : -1;
-        } else {
-          return a.name < b.name ? 1 : -1;
+      filtered?.sort(
+        (
+          a: PipelineData | MonoVertexData,
+          b: PipelineData | MonoVertexData
+        ) => {
+          if (orderBy.sortOrder === ASC) {
+            return a.name > b.name ? 1 : -1;
+          } else {
+            return a.name < b.name ? 1 : -1;
+          }
         }
-      });
+      );
     } else if (orderBy.value === LAST_UPDATED_SORT) {
-      filtered?.sort((a: PipelineData, b: PipelineData) => {
-        if (orderBy.sortOrder === ASC) {
-          return a?.pipeline?.status?.lastUpdated >
-            b?.pipeline?.status?.lastUpdated
-            ? 1
-            : -1;
-        } else {
-          return a?.pipeline?.status?.lastUpdated <
-            b?.pipeline?.status?.lastUpdated
-            ? 1
-            : -1;
+      filtered?.sort(
+        (
+          a: PipelineData | MonoVertexData,
+          b: PipelineData | MonoVertexData
+        ) => {
+          const aType = a?.pipeline ? "pipeline" : "monoVertex";
+          const bType = b?.pipeline ? "pipeline" : "monoVertex";
+          if (orderBy.sortOrder === ASC) {
+            return Date.parse(a?.[aType]?.status?.lastUpdated) >
+              Date.parse(b?.[bType]?.status?.lastUpdated)
+              ? 1
+              : -1;
+          } else {
+            return Date.parse(a?.[aType]?.status?.lastUpdated) <
+              Date.parse(b?.[bType]?.status?.lastUpdated)
+              ? 1
+              : -1;
+          }
         }
-      });
+      );
     } else {
-      filtered?.sort((a: PipelineData, b: PipelineData) => {
-        if (orderBy.sortOrder === ASC) {
-          return Date.parse(a?.pipeline?.metadata?.creationTimestamp) >
-            Date.parse(b?.pipeline?.metadata?.creationTimestamp)
-            ? 1
-            : -1;
-        } else {
-          return Date.parse(a?.pipeline?.metadata?.creationTimestamp) <
-            Date.parse(b?.pipeline?.metadata?.creationTimestamp)
-            ? 1
-            : -1;
+      filtered?.sort(
+        (
+          a: PipelineData | MonoVertexData,
+          b: PipelineData | MonoVertexData
+        ) => {
+          const aType = a?.pipeline ? "pipeline" : "monoVertex";
+          const bType = b?.pipeline ? "pipeline" : "monoVertex";
+          if (orderBy.sortOrder === ASC) {
+            return Date.parse(a?.[aType]?.metadata?.creationTimestamp) >
+              Date.parse(b?.[bType]?.metadata?.creationTimestamp)
+              ? 1
+              : -1;
+          } else {
+            return Date.parse(a?.[aType]?.metadata?.creationTimestamp) <
+              Date.parse(b?.[bType]?.metadata?.creationTimestamp)
+              ? 1
+              : -1;
+          }
         }
-      });
+      );
     }
     //Filter by health
     if (healthFilter !== ALL) {
@@ -153,7 +200,8 @@ export function PipelineListing({
     //Filter by status
     if (statusFilter !== ALL) {
       filtered = filtered.filter((p) => {
-        const currentStatus = p?.pipeline?.status?.phase || UNKNOWN;
+        const type = p?.pipeline ? "pipeline" : "monoVertex";
+        const currentStatus = p?.[type]?.status?.phase || UNKNOWN;
         if (currentStatus.toLowerCase() === statusFilter.toLowerCase()) {
           return true;
         } else {
@@ -183,6 +231,7 @@ export function PipelineListing({
     page,
     pipelineData,
     isbData,
+    monoVertexData,
     orderBy,
     healthFilter,
     statusFilter,

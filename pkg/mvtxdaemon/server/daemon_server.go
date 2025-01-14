@@ -37,18 +37,23 @@ import (
 
 	"github.com/numaproj/numaflow"
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
+	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
+	"github.com/numaproj/numaflow/pkg/metrics"
+	"github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service"
+	rateServer "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 )
 
 type daemonServer struct {
-	monoVtx *v1alpha1.MonoVertex
+	monoVtx     *v1alpha1.MonoVertex
+	mvtxService *service.MonoVertexService
 }
 
 func NewDaemonServer(monoVtx *v1alpha1.MonoVertex) *daemonServer {
 	return &daemonServer{
-		monoVtx: monoVtx,
+		monoVtx:     monoVtx,
+		mvtxService: nil,
 	}
 }
 
@@ -57,6 +62,8 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	var (
 		err error
 	)
+	// rater is used to calculate the processing rate of the mono vertex
+	rater := rateServer.NewRater(ctx, ds.monoVtx)
 
 	// Start listener
 	var conn net.Listener
@@ -73,11 +80,11 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	}
 
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12}
-	grpcServer, err := ds.newGRPCServer()
+	grpcServer, err := ds.newGRPCServer(rater)
 	if err != nil {
 		return fmt.Errorf("failed to create grpc server: %w", err)
 	}
-	httpServer := ds.newHTTPServer(ctx, v1alpha1.DaemonServicePort, tlsConfig)
+	httpServer := ds.newHTTPServer(ctx, v1alpha1.MonoVertexDaemonServicePort, tlsConfig)
 
 	conn = tls.NewListener(conn, tlsConfig)
 	// Cmux is used to support servicing gRPC and HTTP1.1+JSON on the same port
@@ -89,15 +96,29 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	go func() { _ = httpServer.Serve(httpL) }()
 	go func() { _ = tcpm.Serve() }()
 
+	// Start the Data flow health status updater
+	go func() {
+		ds.mvtxService.StartHealthCheck(ctx)
+	}()
+
+	// Start the rater
+	go func() {
+		if err := rater.Start(ctx); err != nil {
+			log.Panic(fmt.Errorf("failed to start the rater: %w", err))
+		}
+	}()
+
 	version := numaflow.GetVersion()
-	mono_vertex_info.WithLabelValues(version.Version, version.Platform, ds.monoVtx.Name).Set(1)
+	// Todo: clean it up in v1.6
+	deprecatedMonoVertexInfo.WithLabelValues(version.Version, version.Platform, ds.monoVtx.Name).Set(1)
+	metrics.BuildInfo.WithLabelValues(v1alpha1.ComponentMonoVertexDaemon, ds.monoVtx.Name, version.Version, version.Platform).Set(1)
 
 	log.Infof("MonoVertex daemon server started successfully on %s", address)
 	<-ctx.Done()
 	return nil
 }
 
-func (ds *daemonServer) newGRPCServer() (*grpc.Server, error) {
+func (ds *daemonServer) newGRPCServer(rater rateServer.MonoVtxRatable) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is a bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
 	// To enable them please call the following in your server initialization code:"
@@ -111,6 +132,12 @@ func (ds *daemonServer) newGRPCServer() (*grpc.Server, error) {
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
+	mvtxService, err := service.NewMoveVertexService(ds.monoVtx, rater)
+	if err != nil {
+		return nil, err
+	}
+	mvtxdaemon.RegisterMonoVertexDaemonServiceServer(grpcServer, mvtxService)
+	ds.mvtxService = mvtxService
 	return grpcServer, nil
 }
 
@@ -133,7 +160,7 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 			return key, true
 		}),
 	)
-	if err := daemon.RegisterDaemonServiceHandlerFromEndpoint(ctx, gwmux, endpoint, dialOpts); err != nil {
+	if err := mvtxdaemon.RegisterMonoVertexDaemonServiceHandlerFromEndpoint(ctx, gwmux, endpoint, dialOpts); err != nil {
 		log.Errorw("Failed to register daemon handler on HTTP Server", zap.Error(err))
 	}
 	mux := http.NewServeMux()

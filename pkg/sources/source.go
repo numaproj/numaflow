@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -34,7 +33,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
+	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	sourceclient "github.com/numaproj/numaflow/pkg/sdkclient/source"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sourcetransformer"
 	"github.com/numaproj/numaflow/pkg/shared/callback"
@@ -196,12 +195,13 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	var udsGRPCClient *udsource.GRPCBasedUDSource
 	if sp.VertexInstance.Vertex.IsUDSource() {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.SourceServerInfoFile))
+		serverInfo, err := serverinfo.SDKServerInfo(serverinfo.WithServerInfoFilePath(sdkclient.SourceServerInfoFile))
 		if err != nil {
 			return err
 		}
+		metrics.SDKInfo.WithLabelValues(dfv1.ComponentVertex, fmt.Sprintf("%s-%s", pipelineName, vertexName), string(serverinfo.ContainerTypeSourcer), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
-		srcClient, err := sourceclient.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+		srcClient, err := sourceclient.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create a new gRPC client: %w", err)
 		}
@@ -235,12 +235,13 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 
 	if sp.VertexInstance.Vertex.HasUDTransformer() {
 		// Wait for server info to be ready
-		serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.SourceTransformerServerInfoFile))
+		serverInfo, err := serverinfo.SDKServerInfo(serverinfo.WithServerInfoFilePath(sdkclient.SourceTransformerServerInfoFile))
 		if err != nil {
 			return err
 		}
+		metrics.SDKInfo.WithLabelValues(dfv1.ComponentVertex, fmt.Sprintf("%s-%s", pipelineName, vertexName), string(serverinfo.ContainerTypeSourcetransformer), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
-		srcTransformerClient, err := sourcetransformer.New(serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+		srcTransformerClient, err := sourcetransformer.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 		if err != nil {
 			return fmt.Errorf("failed to create transformer gRPC client, %w", err)
 		}
@@ -295,19 +296,6 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to create source forwarder, error: %w", err)
 	}
 
-	log.Infow("Start processing source messages", zap.String("isbs", string(sp.ISBSvcType)), zap.Any("to", sp.VertexInstance.Vertex.GetToBuffers()))
-	stopped := sourceForwarder.Start()
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			<-stopped
-			log.Info("Source forwarder stopped, exiting...")
-			return
-		}
-	}()
-
 	metricsOpts := metrics.NewMetricsOptions(ctx, sp.VertexInstance.Vertex, healthCheckers, []isb.LagReader{sourceReader})
 	ms := metrics.NewMetricsServer(sp.VertexInstance.Vertex, metricsOpts...)
 	if shutdown, err := ms.Start(ctx); err != nil {
@@ -315,10 +303,23 @@ func (sp *SourceProcessor) Start(ctx context.Context) error {
 	} else {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
-	<-ctx.Done()
-	log.Info("SIGTERM, exiting...")
-	sourceForwarder.Stop()
-	wg.Wait()
+
+	log.Infow("Start processing source messages", zap.String("isbs", string(sp.ISBSvcType)), zap.Any("to", sp.VertexInstance.Vertex.GetToBuffers()))
+	stopped := sourceForwarder.Start()
+	select {
+	case <-ctx.Done(): // context cancelled case
+		log.Info("Context cancelled, stopping forwarder for partition...")
+		sourceForwarder.Stop()
+		if err := <-stopped; err != nil {
+			log.Errorw("Source forwarder stopped with error", zap.Error(err))
+		}
+		log.Info("Exited source forwarder...")
+	case err := <-stopped: // critical error case
+		if err != nil {
+			log.Errorw("Source forwarder stopped with error", zap.Error(err))
+			cancel()
+		}
+	}
 
 	// close all the sourceReader wm stores
 	for _, wmStore := range sourceWmStores {

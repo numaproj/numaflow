@@ -1,0 +1,59 @@
+[package]
+name = "numaflow-core"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+nats-tests = []
+pulsar-tests = []
+redis-tests = []
+all-tests = ["nats-tests", "pulsar-tests", "redis-tests"]
+
+[lints]
+workspace = true
+
+[dependencies]
+tokio.workspace = true
+tracing.workspace = true
+numaflow-pulsar.workspace = true
+numaflow-models.workspace = true
+numaflow-pb.workspace = true
+serving.workspace = true
+backoff.workspace = true
+axum.workspace = true
+axum-server.workspace = true
+bytes.workspace = true
+serde.workspace = true
+rustls.workspace = true
+tonic = "0.12.3"
+thiserror = "2.0.3"
+tokio-util = "0.7.11"
+tokio-stream = "0.1.15"
+prost = "0.13.2"
+prost-types = "0.13.1"
+chrono = "0.4.31"
+base64 = "0.22.1"
+hyper-util = "0.1.6"
+tower = "0.4.13"
+serde_json = "1.0.122"
+trait-variant = "0.1.2"
+rcgen = "0.13.1"
+semver = "1.0"
+pep440_rs = "0.6.6"
+parking_lot = "0.12.3"
+prometheus-client = "0.22.3"
+kube = "0.95.0"
+futures = "0.3.30"
+pin-project = "1.1.5"
+rand = "0.8.5"
+async-nats = "0.38.0"
+
+[dev-dependencies]
+tempfile = "3.11.0"
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "9ca9362ad511084501520e5a37d40cdcd0cdc9d9" }
+pulsar = { version = "6.3.0", default-features = false, features = [
+    "tokio-rustls-runtime",
+] }
+reqwest = { workspace = true, features = ["json"] }
+
+[build-dependencies]

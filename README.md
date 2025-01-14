@@ -36,7 +36,7 @@ Numaflow, created by the Intuit Argo team to address community needs for continu
 
 ## Roadmap
 
-- Map Streaming (1.3)
+- Inbuilt Debugging Experience (1.5) 
 
 ## Demo
 

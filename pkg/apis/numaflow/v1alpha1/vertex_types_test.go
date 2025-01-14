@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 )
@@ -198,7 +199,15 @@ func TestGetPodSpec(t *testing.T) {
 			{Name: "test-env", Value: "test-val"},
 		},
 		SideInputsStoreName: "test-store",
+		DefaultResources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
+			},
+			Limits: corev1.ResourceList{},
+		},
 	}
+
 	t.Run("test source", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Source = &Source{}
@@ -214,6 +223,18 @@ func TestGetPodSpec(t *testing.T) {
 			AutomountServiceAccountToken: ptr.To[bool](true),
 			DNSPolicy:                    corev1.DNSClusterFirstWithHostNet,
 			DNSConfig:                    &corev1.PodDNSConfig{Nameservers: []string{"aaa.aaa"}},
+		}
+		testObj.Spec.ContainerTemplate = &ContainerTemplate{
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("200m"),
+					corev1.ResourceMemory: resource.MustParse("200Mi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("200m"),
+					corev1.ResourceMemory: resource.MustParse("200Mi"),
+				},
+			},
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
@@ -252,11 +273,33 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSource))
 		assert.Equal(t, 1, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
+		assert.Equal(t, "200m", s.Containers[0].Resources.Requests.Cpu().String())
+		assert.Equal(t, "200m", s.Containers[0].Resources.Limits.Cpu().String())
+		assert.Equal(t, "200Mi", s.Containers[0].Resources.Requests.Memory().String())
+		assert.Equal(t, "200Mi", s.Containers[0].Resources.Limits.Memory().String())
+		assert.Equal(t, "100m", s.InitContainers[0].Resources.Requests.Cpu().String())
+		assert.Equal(t, "100Mi", s.InitContainers[0].Resources.Requests.Memory().String())
+		assert.Equal(t, "0", s.InitContainers[0].Resources.Limits.Cpu().String())
+		assert.Equal(t, "0", s.InitContainers[0].Resources.Limits.Memory().String())
 	})
 
 	t.Run("test sink", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Sink = &Sink{}
+		testObj.Spec.ContainerTemplate = &ContainerTemplate{
+			ReadinessProbe: &Probe{
+				InitialDelaySeconds: ptr.To[int32](24),
+				PeriodSeconds:       ptr.To[int32](25),
+				FailureThreshold:    ptr.To[int32](2),
+				TimeoutSeconds:      ptr.To[int32](21),
+			},
+			LivenessProbe: &Probe{
+				InitialDelaySeconds: ptr.To[int32](14),
+				PeriodSeconds:       ptr.To[int32](15),
+				FailureThreshold:    ptr.To[int32](2),
+				TimeoutSeconds:      ptr.To[int32](11),
+			},
+		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(s.Containers))
@@ -265,10 +308,20 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[0].ImagePullPolicy)
 		assert.NotNil(t, s.Containers[0].ReadinessProbe)
 		assert.NotNil(t, s.Containers[0].ReadinessProbe.HTTPGet)
+		assert.Equal(t, "/readyz", s.Containers[0].ReadinessProbe.HTTPGet.Path)
+		assert.Equal(t, int32(24), s.Containers[0].ReadinessProbe.InitialDelaySeconds)
+		assert.Equal(t, int32(25), s.Containers[0].ReadinessProbe.PeriodSeconds)
+		assert.Equal(t, int32(2), s.Containers[0].ReadinessProbe.FailureThreshold)
+		assert.Equal(t, int32(21), s.Containers[0].ReadinessProbe.TimeoutSeconds)
 		assert.Equal(t, corev1.URISchemeHTTPS, s.Containers[0].ReadinessProbe.HTTPGet.Scheme)
 		assert.Equal(t, VertexMetricsPort, s.Containers[0].ReadinessProbe.HTTPGet.Port.IntValue())
 		assert.NotNil(t, s.Containers[0].LivenessProbe)
 		assert.NotNil(t, s.Containers[0].LivenessProbe.HTTPGet)
+		assert.Equal(t, "/livez", s.Containers[0].LivenessProbe.HTTPGet.Path)
+		assert.Equal(t, int32(14), s.Containers[0].LivenessProbe.InitialDelaySeconds)
+		assert.Equal(t, int32(15), s.Containers[0].LivenessProbe.PeriodSeconds)
+		assert.Equal(t, int32(2), s.Containers[0].LivenessProbe.FailureThreshold)
+		assert.Equal(t, int32(11), s.Containers[0].LivenessProbe.TimeoutSeconds)
 		assert.Equal(t, corev1.URISchemeHTTPS, s.Containers[0].LivenessProbe.HTTPGet.Scheme)
 		assert.Equal(t, VertexMetricsPort, s.Containers[0].LivenessProbe.HTTPGet.Port.IntValue())
 		assert.Equal(t, 1, len(s.Containers[0].Ports))
@@ -295,7 +348,7 @@ func TestGetPodSpec(t *testing.T) {
 		testObj.Spec.Sink = &Sink{
 			AbstractSink: AbstractSink{
 				UDSink: &UDSink{
-					Container: Container{
+					Container: &Container{
 						Image:   "image",
 						Command: []string{"cmd"},
 						Args:    []string{"arg0"},
@@ -305,14 +358,15 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, len(s.Containers))
-		assert.Equal(t, "image", s.Containers[1].Image)
-		assert.Equal(t, 1, len(s.Containers[1].Command))
-		assert.Equal(t, "cmd", s.Containers[1].Command[0])
-		assert.Equal(t, 1, len(s.Containers[1].Args))
-		assert.Equal(t, "arg0", s.Containers[1].Args[0])
+		assert.Equal(t, 1, len(s.Containers))
+		assert.Equal(t, 2, len(s.InitContainers))
+		assert.Equal(t, "image", s.InitContainers[1].Image)
+		assert.Equal(t, 1, len(s.InitContainers[1].Command))
+		assert.Equal(t, "cmd", s.InitContainers[1].Command[0])
+		assert.Equal(t, 1, len(s.InitContainers[1].Args))
+		assert.Equal(t, "arg0", s.InitContainers[1].Args[0])
 		var sidecarEnvNames []string
-		for _, env := range s.Containers[1].Env {
+		for _, env := range s.InitContainers[1].Env {
 			sidecarEnvNames = append(sidecarEnvNames, env.Name)
 		}
 		assert.Contains(t, sidecarEnvNames, EnvCPULimit)
@@ -341,16 +395,17 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
-		assert.Equal(t, 3, len(s.Containers))
+		assert.Equal(t, 1, len(s.Containers))
+		assert.Equal(t, 3, len(s.InitContainers))
 
-		for i := 1; i < len(s.Containers); i++ {
-			assert.Equal(t, "image", s.Containers[i].Image)
-			assert.Equal(t, 1, len(s.Containers[i].Command))
-			assert.Equal(t, "cmd", s.Containers[i].Command[0])
-			assert.Equal(t, 1, len(s.Containers[i].Args))
-			assert.Equal(t, "arg0", s.Containers[i].Args[0])
+		for i := 1; i < len(s.InitContainers); i++ {
+			assert.Equal(t, "image", s.InitContainers[i].Image)
+			assert.Equal(t, 1, len(s.InitContainers[i].Command))
+			assert.Equal(t, "cmd", s.InitContainers[i].Command[0])
+			assert.Equal(t, 1, len(s.InitContainers[i].Args))
+			assert.Equal(t, "arg0", s.InitContainers[i].Args[0])
 			var sidecarEnvNames []string
-			for _, env := range s.Containers[i].Env {
+			for _, env := range s.InitContainers[i].Env {
 				sidecarEnvNames = append(sidecarEnvNames, env.Name)
 			}
 			assert.Contains(t, sidecarEnvNames, EnvCPULimit)
@@ -369,9 +424,10 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, len(s.Containers))
+		assert.Equal(t, 1, len(s.Containers))
+		assert.Equal(t, 2, len(s.InitContainers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
-		assert.Equal(t, CtrUdf, s.Containers[1].Name)
+		assert.Equal(t, CtrUdf, s.InitContainers[1].Name)
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[0].ImagePullPolicy)
 		var envNames []string
@@ -387,10 +443,11 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, EnvReplica)
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeMapUDF))
-		assert.Equal(t, 1, len(s.InitContainers))
+		assert.Equal(t, 2, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
+		assert.Equal(t, CtrUdf, s.InitContainers[1].Name)
 		var sidecarEnvNames []string
-		for _, env := range s.Containers[1].Env {
+		for _, env := range s.InitContainers[1].Env {
 			sidecarEnvNames = append(sidecarEnvNames, env.Name)
 		}
 		assert.Contains(t, sidecarEnvNames, EnvCPULimit)
@@ -409,13 +466,22 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
-		assert.Equal(t, 3, len(s.Containers))
+		assert.Equal(t, 2, len(s.Containers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
-		assert.Equal(t, CtrUdf, s.Containers[1].Name)
-		assert.Equal(t, CtrSideInputsWatcher, s.Containers[2].Name)
-		assert.Equal(t, 2, len(s.InitContainers))
+		assert.Equal(t, CtrSideInputsWatcher, s.Containers[1].Name)
+		assert.Equal(t, 3, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 		assert.Equal(t, CtrInitSideInputs, s.InitContainers[1].Name)
+		assert.Equal(t, 1, len(s.InitContainers[1].VolumeMounts))
+		assert.Equal(t, "var-run-side-inputs", s.InitContainers[1].VolumeMounts[0].Name)
+		assert.False(t, s.InitContainers[1].VolumeMounts[0].ReadOnly)
+		assert.Equal(t, CtrUdf, s.InitContainers[2].Name)
+		assert.Equal(t, 2, len(s.InitContainers[2].VolumeMounts))
+		assert.Equal(t, "var-run-side-inputs", s.InitContainers[2].VolumeMounts[1].Name)
+		assert.True(t, s.InitContainers[2].VolumeMounts[1].ReadOnly)
+		assert.Equal(t, 1, len(s.Containers[1].VolumeMounts))
+		assert.Equal(t, "var-run-side-inputs", s.Containers[1].VolumeMounts[0].Name)
+		assert.False(t, s.Containers[1].VolumeMounts[0].ReadOnly)
 	})
 
 	t.Run("test serving source", func(t *testing.T) {
@@ -536,10 +602,37 @@ func Test_VertexMarkPodHealthy(t *testing.T) {
 	}
 }
 
+func Test_VertexMarkDeployed(t *testing.T) {
+	s := VertexStatus{}
+	s.MarkDeployed()
+	for _, c := range s.Conditions {
+		if c.Type == string(VertexConditionDeployed) {
+			assert.Equal(t, metav1.ConditionTrue, c.Status)
+			assert.Equal(t, "Successful", c.Reason)
+			assert.Equal(t, "Successful", c.Message)
+		}
+	}
+}
+
+func Test_VertexMarkDeployFailed(t *testing.T) {
+	s := VertexStatus{}
+	s.MarkDeployFailed("reason", "message")
+	assert.Equal(t, VertexPhaseFailed, s.Phase)
+	assert.Equal(t, "reason", s.Reason)
+	assert.Equal(t, "message", s.Message)
+	for _, c := range s.Conditions {
+		if c.Type == string(VertexConditionDeployed) {
+			assert.Equal(t, metav1.ConditionFalse, c.Status)
+			assert.Equal(t, "reason", c.Reason)
+			assert.Equal(t, "message", c.Message)
+		}
+	}
+}
+
 func Test_VertexInitConditions(t *testing.T) {
 	v := VertexStatus{}
 	v.InitConditions()
-	assert.Equal(t, 1, len(v.Conditions))
+	assert.Equal(t, 2, len(v.Conditions))
 	for _, c := range v.Conditions {
 		assert.Equal(t, metav1.ConditionUnknown, c.Status)
 	}

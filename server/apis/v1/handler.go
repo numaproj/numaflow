@@ -34,11 +34,12 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	metricsversiond "k8s.io/metrics/pkg/client/clientset/versioned"
+	metricsclientv1beta1 "k8s.io/metrics/pkg/client/clientset/versioned/typed/metrics/v1beta1"
 	"k8s.io/utils/ptr"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -46,6 +47,7 @@ import (
 	dfv1versiond "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	dfv1clients "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
+	mvtdaemonclient "github.com/numaproj/numaflow/pkg/mvtxdaemon/client"
 	"github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/webhook/validator"
 	"github.com/numaproj/numaflow/server/authn"
@@ -89,18 +91,20 @@ func WithReadOnlyMode() HandlerOption {
 }
 
 type handler struct {
-	kubeClient           kubernetes.Interface
-	metricsClient        *metricsversiond.Clientset
-	numaflowClient       dfv1clients.NumaflowV1alpha1Interface
-	daemonClientsCache   *lru.Cache[string, daemonclient.DaemonClient]
-	dexObj               *DexObject
-	localUsersAuthObject *LocalUsersAuthObject
-	healthChecker        *HealthChecker
-	opts                 *handlerOptions
+	kubeClient            kubernetes.Interface
+	metricsClient         metricsclientv1beta1.MetricsV1beta1Interface
+	promQlServiceObj      PromQl
+	numaflowClient        dfv1clients.NumaflowV1alpha1Interface
+	daemonClientsCache    *lru.Cache[string, daemonclient.DaemonClient]
+	mvtDaemonClientsCache *lru.Cache[string, mvtdaemonclient.MonoVertexDaemonClient]
+	dexObj                *DexObject
+	localUsersAuthObject  *LocalUsersAuthObject
+	healthChecker         *HealthChecker
+	opts                  *handlerOptions
 }
 
 // NewHandler is used to provide a new instance of the handler type
-func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, opts ...HandlerOption) (*handler, error) {
+func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *LocalUsersAuthObject, promQlServiceObj PromQl, opts ...HandlerOption) (*handler, error) {
 	var (
 		k8sRestConfig *rest.Config
 		err           error
@@ -113,11 +117,15 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 	if err != nil {
 		return nil, fmt.Errorf("failed to get kubeclient, %w", err)
 	}
-	metricsClient := metricsversiond.NewForConfigOrDie(k8sRestConfig)
+	metricsClient := metricsclientv1beta1.NewForConfigOrDie(k8sRestConfig)
 	numaflowClient := dfv1versiond.NewForConfigOrDie(k8sRestConfig).NumaflowV1alpha1()
 	daemonClientsCache, _ := lru.NewWithEvict[string, daemonclient.DaemonClient](500, func(key string, value daemonclient.DaemonClient) {
 		_ = value.Close()
 	})
+	mvtDaemonClientsCache, _ := lru.NewWithEvict[string, mvtdaemonclient.MonoVertexDaemonClient](500, func(key string, value mvtdaemonclient.MonoVertexDaemonClient) {
+		_ = value.Close()
+	})
+
 	o := defaultHandlerOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -125,14 +133,16 @@ func NewHandler(ctx context.Context, dexObj *DexObject, localUsersAuthObject *Lo
 		}
 	}
 	return &handler{
-		kubeClient:           kubeClient,
-		metricsClient:        metricsClient,
-		numaflowClient:       numaflowClient,
-		daemonClientsCache:   daemonClientsCache,
-		dexObj:               dexObj,
-		localUsersAuthObject: localUsersAuthObject,
-		healthChecker:        NewHealthChecker(ctx),
-		opts:                 o,
+		kubeClient:            kubeClient,
+		metricsClient:         metricsClient,
+		promQlServiceObj:      promQlServiceObj,
+		numaflowClient:        numaflowClient,
+		daemonClientsCache:    daemonClientsCache,
+		mvtDaemonClientsCache: mvtDaemonClientsCache,
+		dexObj:                dexObj,
+		localUsersAuthObject:  localUsersAuthObject,
+		healthChecker:         NewHealthChecker(ctx),
+		opts:                  o,
 	}, nil
 }
 
@@ -434,7 +444,7 @@ func (h *handler) GetPipeline(c *gin.Context) {
 	}
 
 	// get pipeline lag
-	client, err := h.getDaemonClient(ns, pipeline)
+	client, err := h.getPipelineDaemonClient(ns, pipeline)
 	if err != nil || client == nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 		return
@@ -551,7 +561,9 @@ func (h *handler) DeletePipeline(c *gin.Context) {
 	}
 
 	// cleanup client after successfully deleting pipeline
-	h.daemonClientsCache.Remove(daemonSvcAddress(ns, pipeline))
+	// NOTE: if a pipeline was deleted by not through UI, the cache will not be updated,
+	// the entry becomes invalid and will be evicted only after the cache is full.
+	h.daemonClientsCache.Remove(pipelineDaemonSvcAddress(ns, pipeline))
 
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
 }
@@ -739,7 +751,7 @@ func (h *handler) DeleteInterStepBufferService(c *gin.Context) {
 func (h *handler) ListPipelineBuffers(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
-	client, err := h.getDaemonClient(ns, pipeline)
+	client, err := h.getPipelineDaemonClient(ns, pipeline)
 	if err != nil || client == nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 		return
@@ -758,7 +770,7 @@ func (h *handler) ListPipelineBuffers(c *gin.Context) {
 func (h *handler) GetPipelineWatermarks(c *gin.Context) {
 	ns, pipeline := c.Param("namespace"), c.Param("pipeline")
 
-	client, err := h.getDaemonClient(ns, pipeline)
+	client, err := h.getPipelineDaemonClient(ns, pipeline)
 	if err != nil || client == nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 		return
@@ -850,7 +862,7 @@ func (h *handler) GetVerticesMetrics(c *gin.Context) {
 		return
 	}
 
-	client, err := h.getDaemonClient(ns, pipeline)
+	client, err := h.getPipelineDaemonClient(ns, pipeline)
 	if err != nil || client == nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 		return
@@ -893,7 +905,7 @@ func (h *handler) ListPodsMetrics(c *gin.Context) {
 	ns := c.Param("namespace")
 
 	limit, _ := strconv.ParseInt(c.Query("limit"), 10, 64)
-	metrics, err := h.metricsClient.MetricsV1beta1().PodMetricses(ns).List(c, metav1.ListOptions{
+	metrics, err := h.metricsClient.PodMetricses(ns).List(c, metav1.ListOptions{
 		Limit:    limit,
 		Continue: c.Query("continue"),
 	})
@@ -915,6 +927,7 @@ func (h *handler) PodLogs(c *gin.Context) {
 		Container: c.Query("container"),
 		Follow:    c.Query("follow") == "true",
 		TailLines: tailLines,
+		Previous:  c.Query("previous") == "true",
 	}
 
 	stream, err := h.kubeClient.CoreV1().Pods(ns).GetLogs(pod, logOptions).Stream(c)
@@ -928,6 +941,60 @@ func (h *handler) PodLogs(c *gin.Context) {
 	h.streamLogs(c, stream)
 }
 
+func (h *handler) GetMonoVertexPodsInfo(c *gin.Context) {
+	var response = make([]PodDetails, 0)
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", dfv1.KeyMonoVertexName, monoVertex),
+	})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: Failed to get a list of pods: namespace %q mono vertex %q: %s",
+			ns, monoVertex, err.Error()))
+		return
+	}
+	if pods == nil || len(pods.Items) == 0 {
+		h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: No pods found for mono vertex %q in namespace %q", monoVertex, ns))
+		return
+	}
+	for _, pod := range pods.Items {
+		podDetails, err := h.getPodDetails(pod)
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("GetMonoVertexPodInfo: Failed to get the pod details: %v", err))
+			return
+		} else {
+			response = append(response, podDetails)
+		}
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
+}
+
+func (h *handler) GetVertexPodsInfo(c *gin.Context) {
+	var response = make([]PodDetails, 0)
+	ns, pipeline, vertex := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex")
+	pods, err := h.kubeClient.CoreV1().Pods(ns).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipeline, dfv1.KeyVertexName, vertex),
+	})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("GetVertexPodsInfo: Failed to get a list of pods: namespace %q pipeline %q vertex %q: %s",
+			ns, pipeline, vertex, err.Error()))
+		return
+	}
+	if pods == nil || len(pods.Items) == 0 {
+		h.respondWithError(c, fmt.Sprintf("GetVertexPodsInfo: No pods found for pipeline %q vertex %q in namespace %q", pipeline, vertex, ns))
+		return
+	}
+	for _, pod := range pods.Items {
+		podDetails, err := h.getPodDetails(pod)
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("GetVertexPodsInfo: Failed to get the pod details: %v", err))
+			return
+		} else {
+			response = append(response, podDetails)
+		}
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
+
+}
 func (h *handler) parseTailLines(query string) *int64 {
 	if query == "" {
 		return nil
@@ -1008,12 +1075,12 @@ func (h *handler) GetPipelineStatus(c *gin.Context) {
 	// Get the vertex level health of the pipeline
 	resourceHealth, err := h.healthChecker.getPipelineResourceHealth(h, ns, pipeline)
 	if err != nil {
-		h.respondWithError(c, fmt.Sprintf("Failed to get the dataStatus for pipeline %q: %s", pipeline, err.Error()))
+		h.respondWithError(c, fmt.Sprintf("Failed to get the resourceHealth for pipeline %q: %s", pipeline, err.Error()))
 		return
 	}
 
 	// Get a new daemon client for the given pipeline
-	client, err := h.getDaemonClient(ns, pipeline)
+	client, err := h.getPipelineDaemonClient(ns, pipeline)
 	if err != nil || client == nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
 		return
@@ -1066,6 +1133,27 @@ func (h *handler) GetMonoVertex(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, monoVertexResp))
 }
 
+// DeleteMonoVertex is used to delete a mono vertex
+func (h *handler) DeleteMonoVertex(c *gin.Context) {
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+
+	// Check if the mono vertex exists
+	_, err := h.numaflowClient.MonoVertices(ns).Get(c, monoVertex, metav1.GetOptions{})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to fetch mono vertex %q in namespace %q, %s", monoVertex, ns, err.Error()))
+		return
+	}
+
+	// Delete the mono vertex
+	err = h.numaflowClient.MonoVertices(ns).Delete(c, monoVertex, metav1.DeleteOptions{})
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to delete mono vertex %q in namespace %q, %s", monoVertex, ns, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, nil))
+}
+
 // CreateMonoVertex is used to create a mono vertex
 func (h *handler) CreateMonoVertex(c *gin.Context) {
 	if h.opts.readonly {
@@ -1116,6 +1204,148 @@ func (h *handler) ListMonoVertexPods(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, pods.Items))
+}
+
+// GetMonoVertexMetrics is used to provide information about one mono vertex, including processing rates.
+func (h *handler) GetMonoVertexMetrics(c *gin.Context) {
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+
+	client, err := h.getMonoVertexDaemonClient(ns, monoVertex)
+	if err != nil || client == nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for mono vertex %q, %s", monoVertex, err.Error()))
+		return
+	}
+
+	metrics, err := client.GetMonoVertexMetrics(c)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the mono vertex metrics: namespace %q mono vertex %q: %s", ns, monoVertex, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, metrics))
+}
+
+// GetMonoVertexHealth is used to the health information about a mono vertex
+// We use two checks to determine the health of the mono vertex:
+// 1. Resource Health: It is based on the health of the mono vertex deployment and pods.
+// 2. Data Criticality: It is based on the data movement of the mono vertex
+func (h *handler) GetMonoVertexHealth(c *gin.Context) {
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+
+	// Resource level health
+	resourceHealth, err := h.healthChecker.getMonoVtxResourceHealth(h, ns, monoVertex)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the resourceHealth for MonoVertex %q: %s", monoVertex, err.Error()))
+		return
+	}
+
+	// Create a new daemon client to get the data status
+	client, err := h.getMonoVertexDaemonClient(ns, monoVertex)
+	if err != nil || client == nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for mono vertex %q, %s", monoVertex, err.Error()))
+		return
+	}
+	// Data level health status
+	dataHealth, err := client.GetMonoVertexStatus(c)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the mono vertex dataStatus: namespace %q mono vertex %q: %s", ns, monoVertex, err.Error()))
+		return
+	}
+
+	// Create a response string based on the vertex health and data criticality
+	// We combine both the states to get the final dataStatus of the pipeline
+	response := NewHealthResponse(resourceHealth.Status, dataHealth.GetStatus(),
+		resourceHealth.Message, dataHealth.GetMessage(), resourceHealth.Code, dataHealth.GetCode())
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
+}
+
+func (h *handler) GetMetricData(c *gin.Context) {
+	var requestBody MetricsRequestBody
+	if h.promQlServiceObj == nil {
+		h.respondWithError(c, "Failed to get the prometheus query service")
+		return
+	}
+	if err := bindJson(c, &requestBody); err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to decode JSON request body to metrics query spec, %s", err.Error()))
+		return
+	}
+	// builds prom query
+	promQl, err := h.promQlServiceObj.BuildQuery(requestBody)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to build the prometheus query%v", err))
+		return
+	}
+	// default start time is 30 minutes before the current time
+	if requestBody.StartTime == "" {
+		requestBody.StartTime = time.Now().Add(-30 * time.Minute).Format(time.RFC3339)
+	}
+	// default end time is the current time
+	if requestBody.EndTime == "" {
+		requestBody.EndTime = time.Now().Format(time.RFC3339)
+	}
+
+	startTime, _ := time.Parse(time.RFC3339, requestBody.StartTime)
+	endTime, _ := time.Parse(time.RFC3339, requestBody.EndTime)
+
+	result, err := h.promQlServiceObj.QueryPrometheus(context.Background(), promQl, startTime, endTime)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to execute the prometheus query, %s", err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, result))
+}
+
+// DiscoverMetrics is used to provide a metrics list for each
+// dimension along with necessary params and filters for a given object
+func (h *handler) DiscoverMetrics(c *gin.Context) {
+	// Get the object for which the metrics are to be discovered
+	// Ex. mono-vertex, pipeline, etc.
+	object := c.Param("object")
+
+	configData := h.promQlServiceObj.GetConfigData()
+	if configData == nil {
+		h.respondWithError(c, "PrometheusClient metric config is not available")
+		return
+	}
+
+	var discoveredMetrics MetricsDiscoveryResponse
+
+	for _, pattern := range configData.Patterns {
+		if pattern.Object == object {
+			for _, metric := range pattern.Metrics {
+				var requiredFilters []Filter
+				// Populate the required filters
+				for _, filter := range metric.Filters {
+					requiredFilters = append(requiredFilters, Filter{
+						Name:     filter,
+						Required: true,
+					})
+				}
+				// Computing dimension data for each metric
+				var dimensionData []Dimensions
+				for _, dimension := range metric.Dimensions {
+					var combinedFilters = requiredFilters
+					// Add the dimension filters
+					for _, filter := range dimension.Filters {
+						combinedFilters = append(combinedFilters, Filter{
+							Name:     filter.Name,
+							Required: filter.Required,
+						})
+					}
+					dimensionData = append(dimensionData, Dimensions{
+						Name:    dimension.Name,
+						Filters: combinedFilters,
+						Params:  pattern.Params,
+					})
+				}
+
+				discoveredMetrics = append(discoveredMetrics, NewDiscoveryResponse(metric.Name, metric.DisplayName, metric.Unit, dimensionData))
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, discoveredMetrics))
 }
 
 // getAllNamespaces is a utility used to fetch all the namespaces in the cluster
@@ -1198,11 +1428,11 @@ func getMonoVertices(h *handler, namespace string) (MonoVertices, error) {
 func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
 	retStatus := dfv1.PipelineStatusHealthy
 	// Check if the pipeline is paused, if so, return inactive status
-	if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhasePaused {
+	if pipeline.GetDesiredPhase() == dfv1.PipelinePhasePaused {
 		retStatus = dfv1.PipelineStatusInactive
-	} else if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhaseRunning {
+	} else if pipeline.GetDesiredPhase() == dfv1.PipelinePhaseRunning {
 		retStatus = dfv1.PipelineStatusHealthy
-	} else if pipeline.Spec.Lifecycle.GetDesiredPhase() == dfv1.PipelinePhaseFailed {
+	} else if pipeline.GetDesiredPhase() == dfv1.PipelinePhaseFailed {
 		retStatus = dfv1.PipelineStatusCritical
 	}
 	return retStatus, nil
@@ -1312,26 +1542,166 @@ func validatePipelinePatch(patch []byte) error {
 	return nil
 }
 
-func daemonSvcAddress(ns, pipeline string) string {
-	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-daemon-svc", pipeline), ns, dfv1.DaemonServicePort)
+func pipelineDaemonSvcAddress(ns, pipelineName string) string {
+	// the format is consistent with what we defined in GetDaemonServiceURL in `pkg/apis/numaflow/v1alpha1/pipeline_types.go`
+	// do not change it without changing the other.
+	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-daemon-svc", pipelineName), ns, dfv1.DaemonServicePort)
 }
 
-func (h *handler) getDaemonClient(ns, pipeline string) (daemonclient.DaemonClient, error) {
-	if dClient, ok := h.daemonClientsCache.Get(daemonSvcAddress(ns, pipeline)); !ok {
+func monoVertexDaemonSvcAddress(ns, monoVertexName string) string {
+	// the format is consistent with what we defined in GetDaemonServiceURL in `pkg/apis/numaflow/v1alpha1/mono_vertex_types.go`
+	// do not change it without changing the other.
+	return fmt.Sprintf("%s.%s.svc:%d", fmt.Sprintf("%s-mv-daemon-svc", monoVertexName), ns, dfv1.MonoVertexDaemonServicePort)
+}
+
+func (h *handler) getPipelineDaemonClient(ns, pipeline string) (daemonclient.DaemonClient, error) {
+	if dClient, ok := h.daemonClientsCache.Get(pipelineDaemonSvcAddress(ns, pipeline)); !ok {
 		var err error
 		var c daemonclient.DaemonClient
 		// Default to use gRPC client
 		if strings.EqualFold(h.opts.daemonClientProtocol, "http") {
-			c, err = daemonclient.NewRESTfulDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+			c, err = daemonclient.NewRESTfulDaemonServiceClient(pipelineDaemonSvcAddress(ns, pipeline))
 		} else {
-			c, err = daemonclient.NewGRPCDaemonServiceClient(daemonSvcAddress(ns, pipeline))
+			c, err = daemonclient.NewGRPCDaemonServiceClient(pipelineDaemonSvcAddress(ns, pipeline))
 		}
 		if err != nil {
 			return nil, err
 		}
-		h.daemonClientsCache.Add(daemonSvcAddress(ns, pipeline), c)
+		h.daemonClientsCache.Add(pipelineDaemonSvcAddress(ns, pipeline), c)
 		return c, nil
 	} else {
 		return dClient, nil
+	}
+}
+
+func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient.MonoVertexDaemonClient, error) {
+	if mvtDaemonClient, ok := h.mvtDaemonClientsCache.Get(monoVertexDaemonSvcAddress(ns, mvtName)); !ok {
+		var err error
+		var c mvtdaemonclient.MonoVertexDaemonClient
+		// Default to use gRPC client
+		if strings.EqualFold(h.opts.daemonClientProtocol, "http") {
+			c, err = mvtdaemonclient.NewRESTfulClient(monoVertexDaemonSvcAddress(ns, mvtName))
+		} else {
+			c, err = mvtdaemonclient.NewGRPCClient(monoVertexDaemonSvcAddress(ns, mvtName))
+		}
+		if err != nil {
+			return nil, err
+		}
+		h.mvtDaemonClientsCache.Add(monoVertexDaemonSvcAddress(ns, mvtName), c)
+		return c, nil
+	} else {
+		return mvtDaemonClient, nil
+	}
+}
+
+func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
+	podDetails := PodDetails{
+		Name:    pod.Name,
+		Status:  string(pod.Status.Phase),
+		Message: pod.Status.Message,
+		Reason:  pod.Status.Reason,
+	}
+
+	metricsClient := h.metricsClient
+
+	// container details of a pod
+	containerDetails := h.getContainerDetails(pod)
+	podDetails.ContainerDetailsMap = containerDetails
+
+	// cpu/memory details of a pod
+	podMetrics, err := metricsClient.PodMetricses(pod.Namespace).Get(context.TODO(), pod.Name, metav1.GetOptions{})
+	if err == nil {
+		totalCPU := resource.NewQuantity(0, resource.DecimalSI)
+		totalMemory := resource.NewQuantity(0, resource.BinarySI)
+		for _, container := range podMetrics.Containers {
+			containerName := container.Name
+			cpuQuantity := container.Usage.Cpu()
+			memQuantity := container.Usage.Memory()
+			details, ok := containerDetails[containerName]
+			if !ok {
+				details = ContainerDetails{Name: container.Name} // Initialize if not found
+			}
+			if cpuQuantity != nil {
+				details.TotalCPU = strconv.FormatInt(cpuQuantity.MilliValue(), 10) + "m"
+				totalCPU.Add(*cpuQuantity)
+			}
+			if memQuantity != nil {
+				details.TotalMemory = strconv.FormatInt(memQuantity.Value()/(1024*1024), 10) + "Mi"
+				totalMemory.Add(*memQuantity)
+			}
+			containerDetails[containerName] = details
+		}
+		if totalCPU != nil {
+			podDetails.TotalCPU = strconv.FormatInt(totalCPU.MilliValue(), 10) + "m"
+		}
+
+		if totalMemory != nil {
+			podDetails.TotalMemory = strconv.FormatInt(totalMemory.Value()/(1024*1024), 10) + "Mi"
+		}
+	}
+	return podDetails, nil
+}
+
+func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetails {
+	var containerDetailsMap = make(map[string]ContainerDetails)
+	for _, status := range pod.Status.ContainerStatuses {
+		containerName := status.Name
+		details := ContainerDetails{
+			Name:         status.Name,
+			ID:           status.ContainerID,
+			State:        h.getContainerStatus(status.State),
+			RestartCount: status.RestartCount,
+		}
+		if status.State.Waiting != nil {
+			details.WaitingReason = status.State.Waiting.Reason
+			details.WaitingMessage = status.State.Waiting.Message
+		}
+		if status.LastTerminationState.Terminated != nil {
+			details.LastTerminationReason = status.LastTerminationState.Terminated.Reason
+			details.LastTerminationMessage = status.LastTerminationState.Terminated.Message
+		}
+		if status.State.Running != nil {
+			details.LastStartedAt = status.State.Running.StartedAt.Format(time.RFC3339)
+		}
+		containerDetailsMap[containerName] = details
+	}
+
+	// Get CPU/Memory requests and limits from Pod spec
+	for _, container := range pod.Spec.Containers {
+		cpuRequest := container.Resources.Requests.Cpu().MilliValue()
+		memRequest := container.Resources.Requests.Memory().Value() / (1024 * 1024)
+		cpuLimit := container.Resources.Limits.Cpu().MilliValue()
+		memLimit := container.Resources.Limits.Memory().Value() / (1024 * 1024)
+		// Get the existing ContainerDetails or create a new one
+		details, ok := containerDetailsMap[container.Name]
+		if !ok {
+			details = ContainerDetails{Name: container.Name} // Initialize if not found
+		}
+		if cpuRequest != 0 {
+			details.RequestedCPU = strconv.FormatInt(cpuRequest, 10) + "m"
+		}
+		if memRequest != 0 {
+			details.RequestedMemory = strconv.FormatInt(memRequest, 10) + "Mi"
+		}
+		if cpuLimit != 0 {
+			details.LimitCPU = strconv.FormatInt(cpuLimit, 10) + "m"
+		}
+		if memLimit != 0 {
+			details.LimitMemory = strconv.FormatInt(memLimit, 10) + "Mi"
+		}
+		containerDetailsMap[container.Name] = details
+	}
+	return containerDetailsMap
+}
+
+func (h *handler) getContainerStatus(state corev1.ContainerState) string {
+	if state.Running != nil {
+		return "Running"
+	} else if state.Waiting != nil {
+		return "Waiting"
+	} else if state.Terminated != nil {
+		return "Terminated"
+	} else {
+		return "Unknown"
 	}
 }

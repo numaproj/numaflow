@@ -18,7 +18,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -62,8 +61,7 @@ func (h *RedisController) GetMsgCountContains(w http.ResponseWriter, r *http.Req
 
 	redisClient := h.getRedisClient()
 
-	pipelineName := r.URL.Query().Get("pipelineName")
-	sinkName := r.URL.Query().Get("sinkName")
+	keyName := r.URL.Query().Get("keyName")
 	targetStr, err := url.QueryUnescape(r.URL.Query().Get("targetStr"))
 	if err != nil {
 		log.Println(err)
@@ -71,7 +69,7 @@ func (h *RedisController) GetMsgCountContains(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	count, err := redisClient.HGet(context.Background(), fmt.Sprintf("%s:%s", pipelineName, sinkName), targetStr).Result()
+	count, err := redisClient.HGet(context.Background(), keyName, targetStr).Result()
 
 	if err != nil {
 		log.Println(err)

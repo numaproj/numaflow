@@ -26,6 +26,7 @@ import "k8s.io/apimachinery/pkg/api/resource/generated.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
+import "k8s.io/apimachinery/pkg/util/intstr/generated.proto";
 
 // Package-wide variables from generator "generated".
 option go_package = "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1";
@@ -44,12 +45,12 @@ message AbstractPodTemplate {
 
   // If specified, the pod's tolerations.
   // +optional
-  repeated k8s.io.api.core.v1.Toleration tolerations = 3;
+  repeated .k8s.io.api.core.v1.Toleration tolerations = 3;
 
   // SecurityContext holds pod-level security attributes and common container settings.
   // Optional: Defaults to empty.  See type description for default values of each field.
   // +optional
-  optional k8s.io.api.core.v1.PodSecurityContext securityContext = 4;
+  optional .k8s.io.api.core.v1.PodSecurityContext securityContext = 4;
 
   // ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec.
   // If specified, these secrets will be passed to individual puller implementations for them to use. For example,
@@ -58,7 +59,7 @@ message AbstractPodTemplate {
   // +optional
   // +patchMergeKey=name
   // +patchStrategy=merge
-  repeated k8s.io.api.core.v1.LocalObjectReference imagePullSecrets = 5;
+  repeated .k8s.io.api.core.v1.LocalObjectReference imagePullSecrets = 5;
 
   // If specified, indicates the Redis pod's priority. "system-node-critical"
   // and "system-cluster-critical" are two special keywords which indicate the
@@ -82,7 +83,7 @@ message AbstractPodTemplate {
   // The pod's scheduling constraints
   // More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
   // +optional
-  optional k8s.io.api.core.v1.Affinity affinity = 8;
+  optional .k8s.io.api.core.v1.Affinity affinity = 8;
 
   // ServiceAccountName applied to the pod
   // +optional
@@ -113,7 +114,15 @@ message AbstractPodTemplate {
   // Parameters specified here will be merged to the generated DNS
   // configuration based on DNSPolicy.
   // +optional
-  optional k8s.io.api.core.v1.PodDNSConfig dnsConfig = 13;
+  optional .k8s.io.api.core.v1.PodDNSConfig dnsConfig = 13;
+
+  // ResourceClaims defines which ResourceClaims must be allocated and reserved
+  // before the Pod is allowed to start. The resources will be made available to those
+  // containers which consume them by name.
+  // +patchMergeKey=name
+  // +patchStrategy=merge,retainKeys
+  // +optional
+  repeated .k8s.io.api.core.v1.PodResourceClaim resourceClaims = 14;
 }
 
 message AbstractSink {
@@ -161,7 +170,7 @@ message AbstractVertex {
   // +optional
   // +patchStrategy=merge
   // +patchMergeKey=name
-  repeated k8s.io.api.core.v1.Volume volumes = 8;
+  repeated .k8s.io.api.core.v1.Volume volumes = 8;
 
   // Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings
   // +optional
@@ -174,11 +183,11 @@ message AbstractVertex {
   // List of customized init containers belonging to the pod.
   // More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
   // +optional
-  repeated k8s.io.api.core.v1.Container initContainers = 11;
+  repeated .k8s.io.api.core.v1.Container initContainers = 11;
 
   // List of customized sidecar containers belonging to the pod.
   // +optional
-  repeated k8s.io.api.core.v1.Container sidecars = 12;
+  repeated .k8s.io.api.core.v1.Container sidecars = 12;
 
   // Number of partitions of the vertex owned buffers.
   // It applies to udf and sink vertices only.
@@ -192,24 +201,41 @@ message AbstractVertex {
   // Container template for the side inputs watcher container.
   // +optional
   optional ContainerTemplate sideInputsContainerTemplate = 15;
+
+  // The strategy to use to replace existing pods with new ones.
+  // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
+  // +optional
+  optional UpdateStrategy updateStrategy = 16;
 }
 
 message Authorization {
   // A secret selector which contains bearer token
   // To use this, the client needs to add "Authorization: Bearer <token>" in the header
   // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector token = 1;
+  optional .k8s.io.api.core.v1.SecretKeySelector token = 1;
+}
+
+// Backoff defines parameters used to systematically configure the retry strategy.
+message Backoff {
+  // Interval sets the delay to wait before retry, after a failure occurs.
+  // +kubebuilder:default="1ms"
+  // +optional
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration interval = 1;
+
+  // Steps defines the number of times to try writing to a sink including retries
+  // +optional
+  optional uint32 steps = 2;
 }
 
 // BasicAuth represents the basic authentication approach which contains a user name and a password.
 message BasicAuth {
   // Secret for auth user
   // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector user = 1;
+  optional .k8s.io.api.core.v1.SecretKeySelector user = 1;
 
   // Secret for auth password
   // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector password = 2;
+  optional .k8s.io.api.core.v1.SecretKeySelector password = 2;
 }
 
 // Blackhole is a sink to emulate /dev/null
@@ -262,40 +288,60 @@ message Container {
   repeated string args = 3;
 
   // +optional
-  repeated k8s.io.api.core.v1.EnvVar env = 4;
+  repeated .k8s.io.api.core.v1.EnvVar env = 4;
 
   // +optional
-  repeated k8s.io.api.core.v1.EnvFromSource envFrom = 5;
+  repeated .k8s.io.api.core.v1.EnvFromSource envFrom = 5;
 
   // +optional
-  repeated k8s.io.api.core.v1.VolumeMount volumeMounts = 6;
+  repeated .k8s.io.api.core.v1.VolumeMount volumeMounts = 6;
 
   // +optional
-  optional k8s.io.api.core.v1.ResourceRequirements resources = 7;
+  optional .k8s.io.api.core.v1.ResourceRequirements resources = 7;
 
   // +optional
-  optional k8s.io.api.core.v1.SecurityContext securityContext = 8;
+  optional .k8s.io.api.core.v1.SecurityContext securityContext = 8;
 
   // +optional
   optional string imagePullPolicy = 9;
+
+  // +optional
+  optional Probe readinessProbe = 10;
+
+  // +optional
+  optional Probe livenessProbe = 11;
+
+  // +optional
+  // +patchMergeKey=containerPort
+  // +patchStrategy=merge
+  // +listType=map
+  // +listMapKey=containerPort
+  // +listMapKey=protocol
+  repeated .k8s.io.api.core.v1.ContainerPort ports = 12;
 }
 
 // ContainerTemplate defines customized spec for a container
 message ContainerTemplate {
   // +optional
-  optional k8s.io.api.core.v1.ResourceRequirements resources = 1;
+  optional .k8s.io.api.core.v1.ResourceRequirements resources = 1;
 
   // +optional
   optional string imagePullPolicy = 2;
 
   // +optional
-  optional k8s.io.api.core.v1.SecurityContext securityContext = 3;
+  optional .k8s.io.api.core.v1.SecurityContext securityContext = 3;
 
   // +optional
-  repeated k8s.io.api.core.v1.EnvVar env = 4;
+  repeated .k8s.io.api.core.v1.EnvVar env = 4;
 
   // +optional
-  repeated k8s.io.api.core.v1.EnvFromSource envFrom = 5;
+  repeated .k8s.io.api.core.v1.EnvFromSource envFrom = 5;
+
+  // +optional
+  optional Probe readinessProbe = 6;
+
+  // +optional
+  optional Probe livenessProbe = 7;
 }
 
 message DaemonTemplate {
@@ -336,7 +382,7 @@ message Edge {
 // FixedWindow describes a fixed window
 message FixedWindow {
   // Length is the duration of the fixed window.
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration length = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration length = 1;
 
   // +optional
   // Streaming should be set to true if the reduce udf is streaming.
@@ -366,22 +412,22 @@ message GSSAPI {
   optional string realm = 2;
 
   // UsernameSecret refers to the secret that contains the username
-  optional k8s.io.api.core.v1.SecretKeySelector usernameSecret = 3;
+  optional .k8s.io.api.core.v1.SecretKeySelector usernameSecret = 3;
 
   // valid inputs - KRB5_USER_AUTH, KRB5_KEYTAB_AUTH
   optional string authType = 4;
 
   // PasswordSecret refers to the secret that contains the password
   // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector passwordSecret = 5;
+  optional .k8s.io.api.core.v1.SecretKeySelector passwordSecret = 5;
 
   // KeytabSecret refers to the secret that contains the keytab
   // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector keytabSecret = 6;
+  optional .k8s.io.api.core.v1.SecretKeySelector keytabSecret = 6;
 
   // KerberosConfigSecret refers to the secret that contains the kerberos config
   // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector kerberosConfigSecret = 7;
+  optional .k8s.io.api.core.v1.SecretKeySelector kerberosConfigSecret = 7;
 }
 
 message GeneratorSource {
@@ -391,7 +437,7 @@ message GeneratorSource {
 
   // +kubebuilder:default="1s"
   // +optional
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration duration = 2;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration duration = 2;
 
   // Size of each generated message
   // +kubebuilder:default=8
@@ -411,7 +457,7 @@ message GeneratorSource {
   // time between 0 and 10s which will result in the message being out of order by 0 to 10s
   // +kubebuilder:default="0s"
   // +optional
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration jitter = 6;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration jitter = 6;
 
   // ValueBlob is an optional string which is the base64 encoding of direct payload to send.
   // This is useful for attaching a GeneratorSource to a true pipeline to test load behavior
@@ -429,9 +475,9 @@ message GetDaemonDeploymentReq {
 
   optional string pullPolicy = 3;
 
-  repeated k8s.io.api.core.v1.EnvVar env = 4;
+  repeated .k8s.io.api.core.v1.EnvVar env = 4;
 
-  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 5;
+  optional .k8s.io.api.core.v1.ResourceRequirements defaultResources = 5;
 }
 
 message GetJetStreamServiceSpecReq {
@@ -475,7 +521,7 @@ message GetJetStreamStatefulSetSpecReq {
 
   optional string startCommand = 14;
 
-  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 15;
+  optional .k8s.io.api.core.v1.ResourceRequirements defaultResources = 15;
 }
 
 message GetMonoVertexDaemonDeploymentReq {
@@ -483,9 +529,9 @@ message GetMonoVertexDaemonDeploymentReq {
 
   optional string pullPolicy = 2;
 
-  repeated k8s.io.api.core.v1.EnvVar env = 3;
+  repeated .k8s.io.api.core.v1.EnvVar env = 3;
 
-  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 4;
+  optional .k8s.io.api.core.v1.ResourceRequirements defaultResources = 4;
 }
 
 message GetMonoVertexPodSpecReq {
@@ -493,9 +539,9 @@ message GetMonoVertexPodSpecReq {
 
   optional string pullPolicy = 2;
 
-  repeated k8s.io.api.core.v1.EnvVar env = 3;
+  repeated .k8s.io.api.core.v1.EnvVar env = 3;
 
-  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 4;
+  optional .k8s.io.api.core.v1.ResourceRequirements defaultResources = 4;
 }
 
 message GetRedisServiceSpecReq {
@@ -537,7 +583,7 @@ message GetRedisStatefulSetSpecReq {
 
   optional string healthConfigMapName = 15;
 
-  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 16;
+  optional .k8s.io.api.core.v1.ResourceRequirements defaultResources = 16;
 }
 
 message GetSideInputDeploymentReq {
@@ -547,9 +593,9 @@ message GetSideInputDeploymentReq {
 
   optional string pullPolicy = 3;
 
-  repeated k8s.io.api.core.v1.EnvVar env = 4;
+  repeated .k8s.io.api.core.v1.EnvVar env = 4;
 
-  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 5;
+  optional .k8s.io.api.core.v1.ResourceRequirements defaultResources = 5;
 }
 
 message GetVertexPodSpecReq {
@@ -559,7 +605,7 @@ message GetVertexPodSpecReq {
 
   optional string pullPolicy = 3;
 
-  repeated k8s.io.api.core.v1.EnvVar env = 4;
+  repeated .k8s.io.api.core.v1.EnvVar env = 4;
 
   optional string sideInputsStoreName = 5;
 
@@ -567,7 +613,7 @@ message GetVertexPodSpecReq {
 
   optional PipelineSpec pipelineSpec = 7;
 
-  optional k8s.io.api.core.v1.ResourceRequirements defaultResources = 8;
+  optional .k8s.io.api.core.v1.ResourceRequirements defaultResources = 8;
 }
 
 // GroupBy indicates it is a reducer UDF
@@ -581,7 +627,7 @@ message GroupBy {
   // AllowedLateness allows late data to be included for the Reduce operation as long as the late data is not later
   // than (Watermark - AllowedLateness).
   // +optional
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration allowedLateness = 3;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration allowedLateness = 3;
 
   // Storage is used to define the PBQ storage for a reduce vertex.
   optional PBQStorage storage = 4;
@@ -599,17 +645,17 @@ message HTTPSource {
 message IdleSource {
   // Threshold is the duration after which a source is marked as Idle due to lack of data.
   // Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration threshold = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration threshold = 1;
 
   // StepInterval is the duration between the subsequent increment of the watermark as long the source remains Idle.
   // The default value is 0s which means that once we detect idle source, we will be incrementing the watermark by
   // `IncrementBy` for time we detect that we source is empty (in other words, this will be a very frequent update).
   // +kubebuilder:default="0s"
   // +optional
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration stepInterval = 2;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration stepInterval = 2;
 
   // IncrementBy is the duration to be added to the current watermark to progress the watermark when source is idling.
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration incrementBy = 3;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration incrementBy = 3;
 }
 
 // +genclient
@@ -623,7 +669,7 @@ message IdleSource {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 message InterStepBufferService {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   optional InterStepBufferServiceSpec spec = 2;
 
@@ -634,7 +680,7 @@ message InterStepBufferService {
 // InterStepBufferServiceList is the list of InterStepBufferService resources
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 message InterStepBufferServiceList {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   repeated InterStepBufferService items = 2;
 }
@@ -777,18 +823,25 @@ message KafkaSink {
 
   optional string topic = 2;
 
+  // SetKey sets the Kafka key to the keys passed in the Message.
+  // When the key is null (default), the record is sent randomly to one of the available partitions of the topic.
+  // If a key exists, Kafka hashes the key, and the result is used to map the message to a specific partition. This
+  // ensures that messages with the same key end up in the same partition.
+  // +optional
+  optional bool setKey = 3;
+
   // TLS user to configure TLS connection for kafka broker
   // TLS.enable=true default for TLS.
   // +optional
-  optional TLS tls = 3;
+  optional TLS tls = 4;
 
   // +optional
-  optional string config = 4;
+  optional string config = 5;
 
   // SASL user to configure SASL connection for kafka broker
   // SASL.enable=true default for SASL.
   // +optional
-  optional SASL sasl = 5;
+  optional SASL sasl = 6;
 }
 
 message KafkaSource {
@@ -810,13 +863,15 @@ message KafkaSource {
   // SASL.enable=true default for SASL.
   // +optional
   optional SASL sasl = 6;
+
+  optional string kafkaVersion = 7;
 }
 
 message Lifecycle {
-  // DeleteGracePeriodSeconds used to delete pipeline gracefully
+  // DeletionGracePeriodSeconds used to delete pipeline gracefully
   // +kubebuilder:default=30
   // +optional
-  optional int32 deleteGracePeriodSeconds = 1;
+  optional int64 deletionGracePeriodSeconds = 1;
 
   // DesiredPhase used to bring the pipeline from current phase to desired phase
   // +kubebuilder:default=Running
@@ -826,7 +881,13 @@ message Lifecycle {
   // PauseGracePeriodSeconds used to pause pipeline gracefully
   // +kubebuilder:default=30
   // +optional
-  optional int32 pauseGracePeriodSeconds = 3;
+  optional int64 pauseGracePeriodSeconds = 3;
+
+  // DeleteGracePeriodSeconds used to delete pipeline gracefully
+  // +kubebuilder:default=30
+  // Deprecated: Use DeletionGracePeriodSeconds instead
+  // +optional
+  optional int64 deleteGracePeriodSeconds = 4;
 }
 
 message Log {
@@ -844,18 +905,28 @@ message Metadata {
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.status.desiredReplicas`
+// +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.readyReplicas`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 message MonoVertex {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   optional MonoVertexSpec spec = 2;
 
   // +optional
   optional MonoVertexStatus status = 3;
+}
+
+message MonoVertexLifecycle {
+  // DesiredPhase used to bring the pipeline from current phase to desired phase
+  // +kubebuilder:default=Running
+  // +optional
+  optional string desiredPhase = 1;
 }
 
 message MonoVertexLimits {
@@ -867,13 +938,13 @@ message MonoVertexLimits {
   // Read timeout duration from the source.
   // +kubebuilder:default= "1s"
   // +optional
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 2;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 2;
 }
 
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 message MonoVertexList {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   repeated MonoVertex items = 2;
 }
@@ -897,9 +968,9 @@ message MonoVertexSpec {
   // +optional
   // +patchStrategy=merge
   // +patchMergeKey=name
-  repeated k8s.io.api.core.v1.Volume volumes = 6;
+  repeated .k8s.io.api.core.v1.Volume volumes = 6;
 
-  // Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings
+  // Limits define the limitations such as read batch size for the mono vertex.
   // +optional
   optional MonoVertexLimits limits = 7;
 
@@ -910,35 +981,76 @@ message MonoVertexSpec {
   // List of customized init containers belonging to the pod.
   // More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
   // +optional
-  repeated k8s.io.api.core.v1.Container initContainers = 9;
+  repeated .k8s.io.api.core.v1.Container initContainers = 9;
 
   // List of customized sidecar containers belonging to the pod.
   // +optional
-  repeated k8s.io.api.core.v1.Container sidecars = 10;
+  repeated .k8s.io.api.core.v1.Container sidecars = 10;
 
   // Template for the daemon service deployment.
   // +optional
   optional DaemonTemplate daemonTemplate = 11;
+
+  // The strategy to use to replace existing pods with new ones.
+  // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
+  // +optional
+  optional UpdateStrategy updateStrategy = 12;
+
+  // Lifecycle defines the Lifecycle properties of a MonoVertex
+  // +kubebuilder:default={"desiredPhase": Running}
+  // +optional
+  optional MonoVertexLifecycle lifecycle = 13;
 }
 
 message MonoVertexStatus {
   optional Status status = 1;
 
+  // +optional
   optional string phase = 2;
 
+  // Total number of non-terminated pods targeted by this MonoVertex (their labels match the selector).
+  // +optional
   optional uint32 replicas = 3;
 
-  optional string selector = 4;
+  // The number of desired replicas.
+  // +optional
+  optional uint32 desiredReplicas = 4;
 
-  optional string reason = 5;
+  // +optional
+  optional string selector = 5;
 
-  optional string message = 6;
+  // +optional
+  optional string reason = 6;
 
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastUpdated = 7;
+  // +optional
+  optional string message = 7;
 
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 8;
+  // +optional
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time lastUpdated = 8;
 
-  optional int64 observedGeneration = 9;
+  // Time of last scaling operation.
+  // +optional
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 9;
+
+  // The generation observed by the MonoVertex controller.
+  // +optional
+  optional int64 observedGeneration = 10;
+
+  // The number of pods targeted by this MonoVertex with a Ready Condition.
+  // +optional
+  optional uint32 readyReplicas = 11;
+
+  // The number of Pods created by the controller from the MonoVertex version indicated by updateHash.
+  optional uint32 updatedReplicas = 12;
+
+  // The number of ready Pods created by the controller from the MonoVertex version indicated by updateHash.
+  optional uint32 updatedReadyReplicas = 13;
+
+  // If not empty, indicates the current version of the MonoVertex used to generate Pods.
+  optional string currentHash = 14;
+
+  // If not empty, indicates the updated version of the MonoVertex used to generate Pods.
+  optional string updateHash = 15;
 }
 
 message NativeRedis {
@@ -983,11 +1095,11 @@ message NatsAuth {
 
   // Token auth
   // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector token = 2;
+  optional .k8s.io.api.core.v1.SecretKeySelector token = 2;
 
   // NKey auth
   // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector nkey = 3;
+  optional .k8s.io.api.core.v1.SecretKeySelector nkey = 3;
 }
 
 message NatsSource {
@@ -1020,7 +1132,7 @@ message PBQStorage {
   optional PersistenceStrategy persistentVolumeClaim = 1;
 
   // +optional
-  optional k8s.io.api.core.v1.EmptyDirVolumeSource emptyDir = 2;
+  optional .k8s.io.api.core.v1.EmptyDirVolumeSource emptyDir = 2;
 
   // +optional
   optional NoStore no_store = 3;
@@ -1039,7 +1151,7 @@ message PersistenceStrategy {
   optional string accessMode = 2;
 
   // Volume size, e.g. 50Gi
-  optional k8s.io.apimachinery.pkg.api.resource.Quantity volumeSize = 3;
+  optional .k8s.io.apimachinery.pkg.api.resource.Quantity volumeSize = 3;
 }
 
 // +genclient
@@ -1058,7 +1170,7 @@ message PersistenceStrategy {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 message Pipeline {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   optional PipelineSpec spec = 2;
 
@@ -1089,13 +1201,13 @@ message PipelineLimits {
   // Read timeout for all the vertices in the pipeline, can be overridden by the vertex's limit settings
   // +kubebuilder:default= "1s"
   // +optional
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 4;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 4;
 }
 
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 message PipelineList {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   repeated Pipeline items = 2;
 }
@@ -1138,25 +1250,92 @@ message PipelineSpec {
 message PipelineStatus {
   optional Status status = 1;
 
+  // +optional
   optional string phase = 2;
 
+  // +optional
   optional string message = 3;
 
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastUpdated = 4;
+  // +optional
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time lastUpdated = 4;
 
+  // +optional
   optional uint32 vertexCount = 5;
 
+  // +optional
   optional uint32 sourceCount = 6;
 
+  // +optional
   optional uint32 sinkCount = 7;
 
+  // +optional
   optional uint32 udfCount = 8;
 
+  // +optional
   optional uint32 mapUDFCount = 9;
 
+  // +optional
   optional uint32 reduceUDFCount = 10;
 
+  // The generation observed by the Pipeline controller.
+  // +optional
   optional int64 observedGeneration = 11;
+
+  // Field to indicate if a pipeline drain successfully occurred, only meaningful when the pipeline is paused.
+  // True means it has been successfully drained.
+  // +optional
+  optional bool drainedOnPause = 12;
+}
+
+// Probe is used to customize the configuration for Readiness and Liveness probes.
+message Probe {
+  // Number of seconds after the container has started before liveness probes are initiated.
+  // More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
+  // +optional
+  optional int32 initialDelaySeconds = 1;
+
+  // Number of seconds after which the probe times out.
+  // More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes
+  // +optional
+  optional int32 timeoutSeconds = 2;
+
+  // How often (in seconds) to perform the probe.
+  // +optional
+  optional int32 periodSeconds = 3;
+
+  // Minimum consecutive successes for the probe to be considered successful after having failed.
+  // Defaults to 1. Must be 1 for liveness and startup. Minimum value is 1.
+  // +optional
+  optional int32 successThreshold = 4;
+
+  // Minimum consecutive failures for the probe to be considered failed after having succeeded.
+  // Defaults to 3. Minimum value is 1.
+  // +optional
+  optional int32 failureThreshold = 5;
+}
+
+// PulsarAuth defines how to authenticate with Pulsar
+message PulsarAuth {
+  // JWT Token auth
+  // +optional
+  optional .k8s.io.api.core.v1.SecretKeySelector token = 1;
+}
+
+message PulsarSource {
+  optional string serverAddr = 1;
+
+  optional string topic = 2;
+
+  optional string consumerName = 3;
+
+  optional string subscriptionName = 4;
+
+  // Maximum number of messages that are in not yet acked state. Once this limit is crossed, futher read requests will return empty list.
+  optional uint32 maxUnack = 5;
+
+  // Auth information
+  // +optional
+  optional PulsarAuth auth = 6;
 }
 
 message RedisBufferService {
@@ -1186,11 +1365,11 @@ message RedisConfig {
 
   // Redis password secret selector
   // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector password = 5;
+  optional .k8s.io.api.core.v1.SecretKeySelector password = 5;
 
   // Sentinel password secret selector
   // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector sentinelPassword = 6;
+  optional .k8s.io.api.core.v1.SecretKeySelector sentinelPassword = 6;
 }
 
 message RedisSettings {
@@ -1209,6 +1388,39 @@ message RedisSettings {
   // Sentinel settings, will override the global settings from controller config
   // +optional
   optional string sentinel = 4;
+}
+
+// RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.
+// It includes a BackOff strategy to manage the timing of retries and defines the action to take upon failure.
+message RetryStrategy {
+  // BackOff specifies the parameters for the backoff strategy, controlling how delays between retries should increase.
+  // +optional
+  optional Backoff backoff = 1;
+
+  // OnFailure specifies the action to take when the specified retry strategy fails.
+  // The possible values are:
+  // 1. "retry": start another round of retrying the operation,
+  // 2. "fallback": re-route the operation to a fallback sink and
+  // 3. "drop": drop the operation and perform no further action.
+  // The default action is to retry.
+  // +optional
+  // +kubebuilder:default="retry"
+  optional string onFailure = 2;
+}
+
+// RollingUpdateStrategy is used to communicate parameter for RollingUpdateStrategyType.
+message RollingUpdateStrategy {
+  // The maximum number of pods that can be unavailable during the update.
+  // Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%).
+  // Absolute number is calculated from percentage by rounding down.
+  // Defaults to 25%.
+  // Example: when this is set to 30%, the old pods can be scaled down to 70% of desired pods
+  // immediately when the rolling update starts. Once new pods are ready, old pods
+  // can be scaled down further, followed by scaling up the new pods, ensuring
+  // that the total number of pods available at all times during the update is at
+  // least 70% of desired pods.
+  // +optional
+  optional .k8s.io.apimachinery.pkg.util.intstr.IntOrString maxUnavailable = 1;
 }
 
 message SASL {
@@ -1234,11 +1446,11 @@ message SASL {
 
 message SASLPlain {
   // UserSecret refers to the secret that contains the user
-  optional k8s.io.api.core.v1.SecretKeySelector userSecret = 1;
+  optional .k8s.io.api.core.v1.SecretKeySelector userSecret = 1;
 
   // PasswordSecret refers to the secret that contains the password
   // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector passwordSecret = 2;
+  optional .k8s.io.api.core.v1.SecretKeySelector passwordSecret = 2;
 
   optional bool handshake = 3;
 }
@@ -1262,41 +1474,47 @@ message Scale {
   // +optional
   optional uint32 lookbackSeconds = 4;
 
-  // Deprecated: Use scaleUpCooldownSeconds and scaleDownCooldownSeconds instead.
-  // Cooldown seconds after a scaling operation before another one.
-  // +optional
-  optional uint32 cooldownSeconds = 5;
-
   // After scaling down the source vertex to 0, sleep how many seconds before scaling the source vertex back up to peek.
   // +optional
-  optional uint32 zeroReplicaSleepSeconds = 6;
+  optional uint32 zeroReplicaSleepSeconds = 5;
 
   // TargetProcessingSeconds is used to tune the aggressiveness of autoscaling for source vertices, it measures how fast
   // you want the vertex to process all the pending messages. Typically increasing the value, which leads to lower processing
   // rate, thus less replicas. It's only effective for source vertices.
   // +optional
-  optional uint32 targetProcessingSeconds = 7;
+  optional uint32 targetProcessingSeconds = 6;
 
   // TargetBufferAvailability is used to define the target percentage of the buffer availability.
   // A valid and meaningful value should be less than the BufferUsageLimit defined in the Edge spec (or Pipeline spec), for example, 50.
   // It only applies to UDF and Sink vertices because only they have buffers to read.
   // +optional
-  optional uint32 targetBufferAvailability = 8;
+  optional uint32 targetBufferAvailability = 7;
 
-  // ReplicasPerScale defines maximum replicas can be scaled up or down at once.
-  // The is use to prevent too aggressive scaling operations
+  // DeprecatedReplicasPerScale defines the number of maximum replicas that can be changed in a single scale up or down operation.
+  // The is use to prevent from too aggressive scaling operations
+  // Deprecated: Use ReplicasPerScaleUp and ReplicasPerScaleDown instead
   // +optional
-  optional uint32 replicasPerScale = 9;
+  optional uint32 replicasPerScale = 8;
 
   // ScaleUpCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling up.
   // It defaults to the CooldownSeconds if not set.
   // +optional
-  optional uint32 scaleUpCooldownSeconds = 10;
+  optional uint32 scaleUpCooldownSeconds = 9;
 
   // ScaleDownCooldownSeconds defines the cooldown seconds after a scaling operation, before a follow-up scaling down.
   // It defaults to the CooldownSeconds if not set.
   // +optional
-  optional uint32 scaleDownCooldownSeconds = 11;
+  optional uint32 scaleDownCooldownSeconds = 10;
+
+  // ReplicasPerScaleUp defines the number of maximum replicas that can be changed in a single scaled up operation.
+  // The is use to prevent from too aggressive scaling up operations
+  // +optional
+  optional uint32 replicasPerScaleUp = 11;
+
+  // ReplicasPerScaleDown defines the number of maximum replicas that can be changed in a single scaled down operation.
+  // The is use to prevent from too aggressive scaling down operations
+  // +optional
+  optional uint32 replicasPerScaleDown = 12;
 }
 
 // ServingSource is the HTTP endpoint for Numaflow.
@@ -1322,13 +1540,13 @@ message ServingStore {
 
   // TTL for the data in the store and tracker
   // +optional
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration ttl = 2;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration ttl = 2;
 }
 
 // SessionWindow describes a session window
 message SessionWindow {
   // Timeout is the duration of inactivity after which a session window closes.
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration timeout = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration timeout = 1;
 }
 
 // SideInput defines information of a Side Input
@@ -1340,7 +1558,7 @@ message SideInput {
   // +optional
   // +patchStrategy=merge
   // +patchMergeKey=name
-  repeated k8s.io.api.core.v1.Volume volumes = 3;
+  repeated .k8s.io.api.core.v1.Volume volumes = 3;
 
   optional SideInputTrigger trigger = 4;
 }
@@ -1375,15 +1593,19 @@ message Sink {
   // initiated if the ud-sink response field sets it.
   // +optional
   optional AbstractSink fallback = 2;
+
+  // RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.
+  // +optional
+  optional RetryStrategy retryStrategy = 3;
 }
 
 // SlidingWindow describes a sliding window
 message SlidingWindow {
   // Length is the duration of the sliding window.
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration length = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration length = 1;
 
   // Slide is the slide parameter that controls the frequency at which the sliding window is created.
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration slide = 2;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration slide = 2;
 
   // +optional
   // Streaming should be set to true if the reduce udf is streaming.
@@ -1414,6 +1636,9 @@ message Source {
 
   // +optional
   optional ServingSource serving = 8;
+
+  // +optional
+  optional PulsarSource pulsar = 9;
 }
 
 // Status is a common structure which can be used for Status field.
@@ -1422,7 +1647,7 @@ message Status {
   // +optional
   // +patchMergeKey=type
   // +patchStrategy=merge
-  repeated k8s.io.apimachinery.pkg.apis.meta.v1.Condition conditions = 1;
+  repeated .k8s.io.apimachinery.pkg.apis.meta.v1.Condition conditions = 1;
 }
 
 message TLS {
@@ -1431,15 +1656,15 @@ message TLS {
 
   // CACertSecret refers to the secret that contains the CA cert
   // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector caCertSecret = 2;
+  optional .k8s.io.api.core.v1.SecretKeySelector caCertSecret = 2;
 
   // CertSecret refers to the secret that contains the cert
   // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector certSecret = 3;
+  optional .k8s.io.api.core.v1.SecretKeySelector certSecret = 3;
 
   // KeySecret refers to the secret that contains the key
   // +optional
-  optional k8s.io.api.core.v1.SecretKeySelector keySecret = 4;
+  optional .k8s.io.api.core.v1.SecretKeySelector keySecret = 4;
 }
 
 message TagConditions {
@@ -1509,21 +1734,35 @@ message UDTransformer {
   optional Transformer builtin = 2;
 }
 
+// UpdateStrategy indicates the strategy that the
+// controller will use to perform updates for Vertex or MonoVertex.
+message UpdateStrategy {
+  // Type indicates the type of the StatefulSetUpdateStrategy.
+  // Default is RollingUpdate.
+  // +optional
+  optional string type = 1;
+
+  // RollingUpdate is used to communicate parameters when Type is RollingUpdateStrategy.
+  // +optional
+  optional RollingUpdateStrategy rollingUpdate = 2;
+}
+
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=vtx
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
-// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.spec.replicas`
+// +kubebuilder:printcolumn:name="Desired",type=string,JSONPath=`.status.desiredReplicas`
 // +kubebuilder:printcolumn:name="Current",type=string,JSONPath=`.status.replicas`
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.readyReplicas`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.reason`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 message Vertex {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
 
   optional VertexSpec spec = 2;
 
@@ -1549,7 +1788,7 @@ message VertexLimits {
   // Read timeout duration from the source or buffer
   // It overrides the settings from pipeline limits.
   // +optional
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 2;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 2;
 
   // BufferMaxLength is used to define the max length of a buffer.
   // It overrides the settings from pipeline limits.
@@ -1565,7 +1804,7 @@ message VertexLimits {
 // +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 message VertexList {
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
 
   repeated Vertex items = 2;
 }
@@ -1597,19 +1836,49 @@ message VertexSpec {
 message VertexStatus {
   optional Status status = 1;
 
+  // +optional
   optional string phase = 2;
 
+  // Total number of non-terminated pods targeted by this Vertex (their labels match the selector).
+  // +optional
   optional uint32 replicas = 3;
 
-  optional string selector = 4;
+  // The number of desired replicas.
+  // +optional
+  optional uint32 desiredReplicas = 4;
 
-  optional string reason = 5;
+  // +optional
+  optional string selector = 5;
 
-  optional string message = 6;
+  // +optional
+  optional string reason = 6;
 
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 7;
+  // +optional
+  optional string message = 7;
 
-  optional int64 observedGeneration = 8;
+  // Time of last scaling operation.
+  // +optional
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time lastScaledAt = 8;
+
+  // The generation observed by the Vertex controller.
+  // +optional
+  optional int64 observedGeneration = 9;
+
+  // The number of pods targeted by this Vertex with a Ready Condition.
+  // +optional
+  optional uint32 readyReplicas = 10;
+
+  // The number of Pods created by the controller from the Vertex version indicated by updateHash.
+  optional uint32 updatedReplicas = 11;
+
+  // The number of ready Pods created by the controller from the Vertex version indicated by updateHash.
+  optional uint32 updatedReadyReplicas = 12;
+
+  // If not empty, indicates the current version of the Vertex used to generate Pods.
+  optional string currentHash = 13;
+
+  // If not empty, indicates the updated version of the Vertex used to generate Pods.
+  optional string updateHash = 14;
 }
 
 message VertexTemplate {
@@ -1634,7 +1903,7 @@ message Watermark {
   // Maximum delay allowed for watermark calculation, defaults to "0s", which means no delay.
   // +kubebuilder:default="0s"
   // +optional
-  optional k8s.io.apimachinery.pkg.apis.meta.v1.Duration maxDelay = 2;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration maxDelay = 2;
 
   // IdleSource defines the idle watermark properties, it could be configured in case source is idling.
   // +optional
