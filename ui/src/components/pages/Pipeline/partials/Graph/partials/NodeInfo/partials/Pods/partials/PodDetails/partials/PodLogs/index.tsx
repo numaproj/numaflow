@@ -38,6 +38,9 @@ import { AppContext } from "../../../../../../../../../../../../../App";
 import "./style.css";
 
 const MAX_LOGS = 1000;
+const LOGS_LEVEL_ERROR = "ERROR";
+const LOGS_LEVEL_DEBUG = "DEBUG";
+const LOGS_LEVEL_WARN = "WARN";
 
 const parsePodLogs = (
   value: string,
@@ -112,14 +115,15 @@ const logColor = (
   let startIndex = 0;
   if (enableTimestamp) {
     if (type === "monoVertex") {
-      if (log?.includes("ERROR") || log?.includes("DEBUG")) startIndex = 28;
+      if (log?.includes(LOGS_LEVEL_ERROR) || log?.includes(LOGS_LEVEL_DEBUG))
+        startIndex = 28;
       else startIndex = 29;
     } else {
       startIndex = 22;
     }
   } else {
     if (type === "monoVertex") {
-      if (log?.includes("WARN")) startIndex = 1;
+      if (log?.includes(LOGS_LEVEL_WARN)) startIndex = 1;
     }
   }
 
@@ -570,7 +574,7 @@ export function PodLogs({
             }`,
             fontWeight: 600,
             borderRadius: "0.4rem",
-            padding: "1rem 0.5rem",
+            padding: "1rem 0rem",
             height: "calc(100% - 6rem)",
             overflow: "scroll",
           }}
@@ -590,7 +594,8 @@ export function PodLogs({
                     component="span"
                     sx={{
                       whiteSpace: wrapLines ? "normal" : "nowrap",
-                      paddingTop: "0.8rem",
+                      height: wrapLines ? "auto" : "1.6rem",
+                      lineHeight: "1.6rem",
                     }}
                   >
                     <Highlighter
@@ -598,9 +603,17 @@ export function PodLogs({
                       autoEscape={true}
                       textToHighlight={l}
                       style={{
-                        color: logColor(l, colorMode, enableTimestamp, type),
-                        fontFamily: "Courier New, Courier, monospace",
+                        // uncomment to add color to logs
+                        // color: logColor(l, colorMode, enableTimestamp, type),
+                        color: colorMode === "light" ? "black" : "white",
+                        fontFamily:
+                          "Consolas,Liberation Mono,Courier,monospace",
+                        fontWeight: "normal",
+                        background:
+                          colorMode === "light" ? "#E6E6E6" : "#333333",
+                        fontSize: "1.4rem",
                         textWrap: wrapLines ? "wrap" : "nowrap",
+                        border: "1px solid #cacaca",
                       }}
                       highlightStyle={{
                         color: `${colorMode === "light" ? "white" : "black"}`,
@@ -622,7 +635,8 @@ export function PodLogs({
                     component="span"
                     sx={{
                       whiteSpace: wrapLines ? "normal" : "nowrap",
-                      paddingTop: "0.8rem",
+                      height: wrapLines ? "auto" : "1.6rem",
+                      lineHeight: "1.6rem",
                     }}
                   >
                     <Highlighter
@@ -630,9 +644,17 @@ export function PodLogs({
                       autoEscape={true}
                       textToHighlight={l}
                       style={{
-                        color: logColor(l, colorMode, enableTimestamp, type),
-                        fontFamily: "Courier New, Courier, monospace",
+                        // uncomment to add color to logs
+                        // color: logColor(l, colorMode, enableTimestamp, type),
+                        color: colorMode === "light" ? "black" : "white",
+                        fontFamily:
+                          "Consolas,Liberation Mono,Courier,monospace",
+                        fontWeight: "normal",
+                        background:
+                          colorMode === "light" ? "#E6E6E6" : "#333333",
+                        fontSize: "1.4rem",
                         textWrap: wrapLines ? "wrap" : "nowrap",
+                        border: "1px solid #cacaca",
                       }}
                       highlightStyle={{
                         color: `${colorMode === "light" ? "white" : "black"}`,
