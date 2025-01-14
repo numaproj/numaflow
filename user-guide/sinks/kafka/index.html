@@ -2383,7 +2383,7 @@ following format.</p>
 <span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pk</span>
 <span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pk-key</span>
 <span class="w">          </span><span class="nt">sasl</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional</span>
-<span class="w">            </span><span class="nt">mechanism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GSSAPI</span><span class="w"> </span><span class="c1"># PLAIN, GSSAPI, SCRAM-SHA-256 or SCRAM-SHA-512, other mechanisms not supported</span>
+<span class="w">            </span><span class="nt">mechanism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GSSAPI</span><span class="w"> </span><span class="c1"># PLAIN, GSSAPI, OAUTHBEARER, SCRAM-SHA-256 or SCRAM-SHA-512 other mechanisms not supported</span>
 <span class="w">            </span><span class="nt">gssapi</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, for GSSAPI mechanism</span>
 <span class="w">              </span><span class="nt">serviceName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-service</span>
 <span class="w">              </span><span class="nt">realm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-realm</span>
@@ -2434,6 +2434,14 @@ following format.</p>
 <span class="w">              </span><span class="c1"># Send the Kafka SASL handshake first if enabled (defaults to true)</span>
 <span class="w">              </span><span class="c1"># Set this to false if using a non-Kafka SASL proxy</span>
 <span class="w">              </span><span class="nt">handshake</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span>
+<span class="w">            </span><span class="nt">oauth</span><span class="p">:</span><span class="w">  </span><span class="c1">#Optional, for OAUTHBEARER mechanism</span>
+<span class="w">              </span><span class="nt">clientID</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the client id</span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-oauth-client</span>
+<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">clientid</span><span class="w"> </span>
+<span class="w">              </span><span class="nt">clientSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the client secret</span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-oauth-client</span>
+<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">clientsecret</span><span class="w"> </span>
+<span class="w">              </span><span class="nt">tokenEndpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://oauth-token.com/v1/token</span>
 <span class="w">          </span><span class="c1"># Optional, a yaml format string which could apply more configuration for the sink.</span>
 <span class="w">          </span><span class="c1"># The configuration hierarchy follows the Struct of sarama.Config at https://github.com/IBM/sarama/blob/main/config.go.</span>
 <span class="w">          </span><span class="nt">config</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>

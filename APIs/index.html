@@ -11591,6 +11591,125 @@ SASLSCRAMSHA512 contains the sasl plain config
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>oauth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASLOAuth"> SASLOAuth </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+OAuth contains the oauth config
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.SASLOAuth">
+
+SASLOAuth
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASL">SASL</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>clientID</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+
+<td>
+
+<p>
+
+ClientID refers to the secret that contains the client id
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>clientSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+
+<td>
+
+<p>
+
+ClientSecret refers to the secret that contains the client secret
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>tokenEndpoint</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+TokenEndpoint refers to the token endpoint
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>

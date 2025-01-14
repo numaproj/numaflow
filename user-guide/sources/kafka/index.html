@@ -2442,7 +2442,15 @@
 <span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scram-sha-512-password-key</span>
 <span class="w">              </span><span class="c1"># Send the Kafka SASL handshake first if enabled (defaults to true)</span>
 <span class="w">              </span><span class="c1"># Set this to false if using a non-Kafka SASL proxy</span>
-<span class="w">              </span><span class="nt">handshake</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span>
+<span class="w">              </span><span class="nt">handshake</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">            </span><span class="nt">oauth</span><span class="p">:</span><span class="w">  </span><span class="c1">#Optional, for OAUTHBEARER mechanism</span>
+<span class="w">              </span><span class="nt">clientID</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the client id</span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-oauth-client</span>
+<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">clientid</span><span class="w"> </span>
+<span class="w">              </span><span class="nt">clientSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Pointing to a secret reference which contains the client secret</span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-oauth-client</span>
+<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">clientsecret</span><span class="w"> </span>
+<span class="w">              </span><span class="nt">tokenEndpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://oauth-token.com/v1/token</span>
 </code></pre></div>
 <h2 id="faq">FAQ<a class="headerlink" href="#faq" title="Permanent link">&para;</a></h2>
 <h3 id="how-to-start-the-kafka-source-from-a-specific-offset-based-on-datetime">How to start the Kafka Source from a specific offset based on datetime?<a class="headerlink" href="#how-to-start-the-kafka-source-from-a-specific-offset-based-on-datetime" title="Permanent link">&para;</a></h3>
