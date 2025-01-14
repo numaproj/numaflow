@@ -38,9 +38,9 @@ import { AppContext } from "../../../../../../../../../../../../../App";
 import "./style.css";
 
 const MAX_LOGS = 1000;
-const LOGS_LEVEL_ERROR = "ERROR";
-const LOGS_LEVEL_DEBUG = "DEBUG";
-const LOGS_LEVEL_WARN = "WARN";
+// const LOGS_LEVEL_ERROR = "ERROR";
+// const LOGS_LEVEL_DEBUG = "DEBUG";
+// const LOGS_LEVEL_WARN = "WARN";
 
 const parsePodLogs = (
   value: string,
@@ -100,41 +100,41 @@ const parsePodLogs = (
   });
 };
 
-const logColor = (
-  log: string,
-  colorMode: string,
-  enableTimestamp: boolean,
-  type: string
-): string => {
-  const logLevelColors: { [key: string]: string } = {
-    ERROR: "#B80000",
-    WARN: "#FFAD00",
-    DEBUG: "#81b8ef",
-  };
-
-  let startIndex = 0;
-  if (enableTimestamp) {
-    if (type === "monoVertex") {
-      if (log?.includes(LOGS_LEVEL_ERROR) || log?.includes(LOGS_LEVEL_DEBUG))
-        startIndex = 28;
-      else startIndex = 29;
-    } else {
-      startIndex = 22;
-    }
-  } else {
-    if (type === "monoVertex") {
-      if (log?.includes(LOGS_LEVEL_WARN)) startIndex = 1;
-    }
-  }
-
-  for (const level in logLevelColors) {
-    if (log.startsWith(level, startIndex)) {
-      return logLevelColors[level];
-    }
-  }
-
-  return colorMode === "light" ? "black" : "white";
-};
+// const logColor = (
+//   log: string,
+//   colorMode: string,
+//   enableTimestamp: boolean,
+//   type: string
+// ): string => {
+//   const logLevelColors: { [key: string]: string } = {
+//     ERROR: "#B80000",
+//     WARN: "#FFAD00",
+//     DEBUG: "#81b8ef",
+//   };
+//
+//   let startIndex = 0;
+//   if (enableTimestamp) {
+//     if (type === "monoVertex") {
+//       if (log?.includes(LOGS_LEVEL_ERROR) || log?.includes(LOGS_LEVEL_DEBUG))
+//         startIndex = 28;
+//       else startIndex = 29;
+//     } else {
+//       startIndex = 22;
+//     }
+//   } else {
+//     if (type === "monoVertex") {
+//       if (log?.includes(LOGS_LEVEL_WARN)) startIndex = 1;
+//     }
+//   }
+//
+//   for (const level in logLevelColors) {
+//     if (log.startsWith(level, startIndex)) {
+//       return logLevelColors[level];
+//     }
+//   }
+//
+//   return colorMode === "light" ? "black" : "white";
+// };
 
 export function PodLogs({
   namespaceId,
