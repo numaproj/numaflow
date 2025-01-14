@@ -19,8 +19,12 @@ import { useNamespaceK8sEventsFetch } from "../../../../../utils/fetchWrappers/n
 
 import "./style.css";
 
-const MAX_PAGE_SIZE = 6;
+const DEFAULT_PAGE_SIZE_OPTIONS = [2, 4, 6, 8, 10, 15, 20];
+
 const DEFAULT_FILTER_VALUE = "All";
+
+
+
 
 export interface K8sEventsProps {
   namespaceId: string;
@@ -49,6 +53,7 @@ export function K8sEvents({
     useState<string>(DEFAULT_FILTER_VALUE);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(6); 
   const [typeFilter, setTypeFilter] = useState<string | undefined>();
   const [filteredEvents, setFilteredEvents] = useState<K8sEvent[]>([]);
   const { data, loading, error } = useNamespaceK8sEventsFetch({
@@ -58,7 +63,6 @@ export function K8sEvents({
     vertex: selectedVertex === DEFAULT_FILTER_VALUE ? vertexId : selectedVertex,
   });
 
-  // Update filtered events based on page selected and filter
   useEffect(() => {
     if (!data) {
       setFilteredEvents([]);
@@ -75,7 +79,7 @@ export function K8sEvents({
 
     // Break list into pages
     const pages = filtered.reduce((resultArray: any[], item, index) => {
-      const chunkIndex = Math.floor(index / MAX_PAGE_SIZE);
+      const chunkIndex = Math.floor(index / pageSize);
       if (!resultArray[chunkIndex]) {
         resultArray[chunkIndex] = [];
       }
@@ -84,10 +88,8 @@ export function K8sEvents({
     }, []);
 
     if (page > pages.length) {
-      // Reset to page 1 if current page is greater than total pages after filtering
       setPage(1);
     }
-    // Set filtered namespaces with current page
     setFilteredEvents(pages[page - 1] || []);
     setTotalPages(pages.length);
   }, [data, page, typeFilter]);
@@ -120,53 +122,106 @@ export function K8sEvents({
     },
     []
   );
+ 
+  const handlePageSizeChange = useCallback(
+    (event: React.ChangeEvent<{ value: unknown }>) => {
+      const value = Number(event.target.value);
+      setPageSize(value);
+      setPage(1); 
+    },
+    []
+  );
+
+
 
   const typeCounts = useMemo(() => {
     return (
-      <ToggleButtonGroup
-        value={typeFilter}
-        exclusive
-        onChange={handleTypeFilterChange}
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "1rem",
+        }}
       >
-        <ToggleButton
-          value="normal"
-          aria-label="normal events filter"
-          data-testid="normal-filter"
+        <ToggleButtonGroup
+          value={typeFilter}
+          exclusive
+          onChange={handleTypeFilterChange}
         >
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-            }}
+          <ToggleButton
+            value="normal"
+            aria-label="normal events filter"
+            data-testid="normal-filter"
           >
-            <span className="namespace-k8s-type-count-text">Normal</span>
-            <div className="namespace-k8s-type-count-badge normal">
-              {data?.normalCount || 0}
-            </div>
-          </Box>
-        </ToggleButton>
-        <ToggleButton
-          value="warning"
-          aria-label="warning events filter"
-          data-testid="warn-filter"
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+              }}
+            >
+              <span className="namespace-k8s-type-count-text">Normal</span>
+              <div className="namespace-k8s-type-count-badge normal">
+                {data?.normalCount || 0}
+              </div>
+            </Box>
+          </ToggleButton>
+          <ToggleButton
+            value="warning"
+            aria-label="warning events filter"
+            data-testid="warn-filter"
+          >
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+              }}
+            >
+              <span className="namespace-k8s-type-count-text">Warning</span>
+              <div className="namespace-k8s-type-count-badge warn">
+                {data?.warningCount || 0}
+              </div>
+            </Box>
+          </ToggleButton>
+        </ToggleButtonGroup>
+        
+        {}
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
+          }}
         >
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-            }}
-          >
-            <span className="namespace-k8s-type-count-text">Warning</span>
-            <div className="namespace-k8s-type-count-badge warn">
-              {data?.warningCount || 0}
-            </div>
-          </Box>
-        </ToggleButton>
-      </ToggleButtonGroup>
+          <label style={{ fontSize: "1.4rem", color: "#6B6C72" }}>
+            Rows Per Page:
+          </label>
+          <Select
+  value={pageSize}
+  onChange={(event) => {
+    const newSize = Number(event.target.value); 
+    setPageSize(newSize); 
+    setPage(1); 
+  }}
+  sx={{
+    fontSize: "1.6rem",
+    background: "#fff",
+    border: "1px solid #6B6C72",
+    height: "3.4rem",
+  }}
+>
+  {DEFAULT_PAGE_SIZE_OPTIONS.map((size) => (
+    <MenuItem key={size} value={size}>
+      {size}
+    </MenuItem>
+  ))}
+</Select>
+        </Box>
+      </Box>
     );
-  }, [data, typeFilter, handleTypeFilterChange]);
+  }, [data, typeFilter, pageSize, handleTypeFilterChange]);
 
   const table = useMemo(() => {
     if (loading) {
