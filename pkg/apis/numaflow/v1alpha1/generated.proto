@@ -1413,6 +1413,21 @@ message SASL {
   // SASLSCRAMSHA512 contains the sasl plain config
   // +optional
   optional SASLPlain scramsha512 = 5;
+
+  // OAuth contains the oauth config
+  // +optional
+  optional SASLOAuth oauth = 6;
+}
+
+message SASLOAuth {
+  // ClientID refers to the secret that contains the client id
+  optional .k8s.io.api.core.v1.SecretKeySelector clientID = 1;
+
+  // ClientSecret refers to the secret that contains the client secret
+  optional .k8s.io.api.core.v1.SecretKeySelector clientSecret = 2;
+
+  // TokenEndpoint refers to the token endpoint
+  optional string tokenEndpoint = 3;
 }
 
 message SASLPlain {

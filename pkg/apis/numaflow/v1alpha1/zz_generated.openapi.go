@@ -95,6 +95,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy":                    schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RollingUpdateStrategy":            schema_pkg_apis_numaflow_v1alpha1_RollingUpdateStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL":                             schema_pkg_apis_numaflow_v1alpha1_SASL(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLOAuth":                        schema_pkg_apis_numaflow_v1alpha1_SASLOAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain":                        schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale":                            schema_pkg_apis_numaflow_v1alpha1_Scale(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingSource":                    schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref),
@@ -4516,12 +4517,53 @@ func schema_pkg_apis_numaflow_v1alpha1_SASL(ref common.ReferenceCallback) common
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain"),
 						},
 					},
+					"oauth": {
+						SchemaProps: spec.SchemaProps{
+							Description: "OAuth contains the oauth config",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLOAuth"),
+						},
+					},
 				},
 				Required: []string{"mechanism"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GSSAPI", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GSSAPI", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLOAuth", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_SASLOAuth(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"clientID": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ClientID refers to the secret that contains the client id",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"clientSecret": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ClientSecret refers to the secret that contains the client secret",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"tokenEndpoint": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TokenEndpoint refers to the token endpoint",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"clientID", "clientSecret", "tokenEndpoint"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.SecretKeySelector"},
 	}
 }
 
