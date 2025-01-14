@@ -6,9 +6,9 @@ use futures::future::try_join_all;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::config::pipeline;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
+use crate::config::{is_mono_vertex, pipeline};
 use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
@@ -18,10 +18,10 @@ use crate::shared::create_components;
 use crate::shared::create_components::create_sink_writer;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
-use crate::{error, Result};
+use crate::{error, shared, Result};
 
 mod forwarder;
-mod isb;
+pub(crate) mod isb;
 
 /// Starts the appropriate forwarder based on the pipeline configuration.
 pub(crate) async fn start_forwarder(
@@ -77,6 +77,10 @@ async fn start_source_forwarder(
     )
     .await?;
 
+    let pending_reader =
+        shared::metrics::create_source_pending_reader(&config.metrics_config, source.clone()).await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+
     start_metrics_server(
         config.metrics_config.clone(),
         UserDefinedContainerState::Pipeline(PipelineContainerState::Source((
@@ -117,6 +121,8 @@ async fn start_map_forwarder(
     // Create buffer writers and buffer readers
     let mut forwarder_components = vec![];
     let mut mapper_grpc_client = None;
+    let mut isb_lag_readers = vec![];
+
     for stream in reader_config.streams.clone() {
         let tracker_handle = TrackerHandle::new();
 
@@ -128,6 +134,8 @@ async fn start_map_forwarder(
             config.batch_size,
         )
         .await?;
+
+        isb_lag_readers.push(buffer_reader.clone());
 
         let (mapper, mapper_rpc_client) = create_components::create_mapper(
             config.batch_size,
@@ -151,6 +159,10 @@ async fn start_map_forwarder(
         .await;
         forwarder_components.push((buffer_reader, buffer_writer, mapper));
     }
+
+    let pending_reader =
+        shared::metrics::create_isb_pending_reader(&config.metrics_config, isb_lag_readers).await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     start_metrics_server(
         config.metrics_config.clone(),
@@ -227,6 +239,11 @@ async fn start_sink_forwarder(
         .await?;
         sink_writers.push((sink_writer, sink_grpc_client, fb_sink_grpc_client));
     }
+
+    let pending_reader =
+        shared::metrics::create_isb_pending_reader(&config.metrics_config, buffer_readers.clone())
+            .await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     // Start the metrics server with one of the clients
     if let Some((_, sink, fb_sink)) = sink_writers.first() {

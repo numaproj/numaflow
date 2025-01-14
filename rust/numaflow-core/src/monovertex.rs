@@ -82,7 +82,8 @@ async fn start(
 ) -> error::Result<()> {
     // start the pending reader to publish pending metrics
     let pending_reader =
-        shared::metrics::create_pending_reader(&mvtx_config.metrics_config, source.clone()).await;
+        shared::metrics::create_source_pending_reader(&mvtx_config.metrics_config, source.clone())
+            .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     let mut forwarder_builder = ForwarderBuilder::new(source, sink, cln_token);
