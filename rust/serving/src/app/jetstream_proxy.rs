@@ -415,10 +415,10 @@ mod tests {
         let app = jetstream_proxy(app_state).await.unwrap();
 
         tokio::spawn(async move {
-            let cbs = create_default_callbacks(ID_VALUE);
             let mut retries = 0;
             loop {
-                match callback_state.insert_callback_requests(cbs.clone()).await {
+                let cbs = create_default_callbacks(ID_VALUE);
+                match callback_state.insert_callback_requests(cbs).await {
                     Ok(_) => break,
                     Err(e) => {
                         retries += 1;
@@ -487,14 +487,14 @@ mod tests {
         let app = jetstream_proxy(app_state).await.unwrap();
 
         // pipeline is in -> cat -> out, so we will have 3 callback requests
-        let cbs = create_default_callbacks(ID_VALUE);
 
         // spawn a tokio task which will insert the callback requests to the callback state
         // if it fails, sleep for 10ms and retry
         tokio::spawn(async move {
             let mut retries = 0;
             loop {
-                match callback_state.insert_callback_requests(cbs.clone()).await {
+                let cbs = create_default_callbacks(ID_VALUE);
+                match callback_state.insert_callback_requests(cbs).await {
                     Ok(_) => {
                         // save a test message, we should get this message when serve is invoked
                         // with foobar id
