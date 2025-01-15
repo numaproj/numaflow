@@ -1,13 +1,13 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::app::callback::state::State as CallbackState;
 use app::callback::store::Store;
 use axum_server::tls_rustls::RustlsConfig;
 use tokio::sync::mpsc;
 use tracing::info;
 
 pub use self::error::{Error, Result};
+use crate::app::callback::state::State as CallbackState;
 use crate::app::start_main_server;
 use crate::config::generate_certs;
 use crate::metrics::start_https_metrics_server;
@@ -23,8 +23,9 @@ mod metrics;
 mod pipeline;
 
 pub mod source;
-use crate::source::MessageWrapper;
 pub use source::{Message, ServingSource};
+
+use crate::source::MessageWrapper;
 
 #[derive(Clone)]
 pub(crate) struct AppState<T> {

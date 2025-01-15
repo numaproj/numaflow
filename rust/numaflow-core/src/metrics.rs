@@ -1,4 +1,3 @@
-use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use std::collections::{BTreeMap, HashMap};
 use std::iter;
 use std::net::SocketAddr;
@@ -30,6 +29,7 @@ use tonic::Request;
 use tracing::{debug, error, info};
 
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
+use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::source::Source;
 use crate::Error;
 

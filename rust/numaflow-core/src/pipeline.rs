@@ -341,7 +341,6 @@ async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Re
 
 #[cfg(test)]
 mod tests {
-    use crate::pipeline::pipeline::map::MapMode;
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
@@ -362,6 +361,7 @@ mod tests {
     use crate::config::pipeline::PipelineConfig;
     use crate::pipeline::pipeline::isb;
     use crate::pipeline::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
+    use crate::pipeline::pipeline::map::MapMode;
     use crate::pipeline::pipeline::VertexType;
     use crate::pipeline::pipeline::{FromVertexConfig, ToVertexConfig};
     use crate::pipeline::pipeline::{SinkVtxConfig, SourceVtxConfig};
