@@ -384,8 +384,6 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_jetstream_ack() {
-        use async_nats::jetstream::stream::No;
-
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();

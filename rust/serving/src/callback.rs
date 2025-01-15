@@ -178,7 +178,7 @@ mod tests {
     use crate::callback::{CallbackHandler, DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
     use crate::config::generate_certs;
     use crate::pipeline::PipelineDCG;
-    use crate::{AppState, Error, Settings};
+    use crate::{AppState, Settings};
     use axum_server::tls_rustls::RustlsConfig;
     use std::collections::HashMap;
     use std::sync::Arc;
