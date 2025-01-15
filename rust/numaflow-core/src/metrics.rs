@@ -74,8 +74,9 @@ const SINK_WRITE_TOTAL: &str = "write";
 const DROPPED_TOTAL: &str = "dropped";
 const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
 
-// pending as gauge for mvtx
+// pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING: &str = "pending";
+// pending as gauge for pipeline
 const VERTEX_PENDING: &str = "pending_messages";
 
 // processing times as timers
@@ -714,12 +715,18 @@ struct TimestampedPending {
     timestamp: std::time::Instant,
 }
 
+#[derive(Clone)]
+pub(crate) enum LagReader {
+    Source(Source),
+    // TODO: Arc<[T]>
+    ISB(Vec<JetstreamReader>) // multiple partitions
+}
+
 /// PendingReader is responsible for periodically checking the lag of the reader
 /// and exposing the metrics. It maintains a list of pending stats and ensures that
 /// only the most recent entries are kept.
 pub(crate) struct PendingReader {
-    source_lag_reader: Option<Source>,
-    isb_lag_readers: Option<Vec<JetstreamReader>>,
+    lag_reader: LagReader,
     lag_checking_interval: Duration,
     refresh_interval: Duration,
     pending_stats: Arc<Mutex<HashMap<String, Vec<TimestampedPending>>>>,
@@ -733,33 +740,22 @@ pub(crate) struct PendingReaderTasks {
 
 /// PendingReaderBuilder is used to build a [LagReader] instance.
 pub(crate) struct PendingReaderBuilder {
-    source_lag_reader: Option<Source>,
-    isb_lag_readers: Option<Vec<JetstreamReader>>,
+    lag_reader: LagReader,
     lag_checking_interval: Option<Duration>,
     refresh_interval: Option<Duration>,
     lookback_seconds: Option<u16>,
 }
 
 impl PendingReaderBuilder {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(lag_reader: LagReader) -> Self {
         Self {
-            source_lag_reader: None,
-            isb_lag_readers: None,
+            lag_reader,
             lag_checking_interval: None,
             refresh_interval: None,
             lookback_seconds: None,
         }
     }
 
-    pub(crate) fn source_lag_reader(mut self, source: Source) -> Self {
-        self.source_lag_reader = Some(source);
-        self
-    }
-
-    pub(crate) fn isb_lag_readers(mut self, readers: Vec<JetstreamReader>) -> Self {
-        self.isb_lag_readers = Some(readers);
-        self
-    }
 
     pub(crate) fn lag_checking_interval(mut self, interval: Duration) -> Self {
         self.lag_checking_interval = Some(interval);
@@ -778,20 +774,23 @@ impl PendingReaderBuilder {
 
     pub(crate) fn build(self) -> PendingReader {
         let mut pending_map = HashMap::new();
-        if let Some(_) = &self.source_lag_reader {
-            pending_map.insert("source".to_string(), Vec::with_capacity(MAX_PENDING_STATS));
-        } else if let Some(readers) = &self.isb_lag_readers {
-            for reader in readers {
-                pending_map.insert(
-                    reader.name().to_string(),
-                    Vec::with_capacity(MAX_PENDING_STATS),
-                );
+        match &self.lag_reader {
+            LagReader::Source(source) => {
+                pending_map.insert("source".to_string(), Vec::with_capacity(MAX_PENDING_STATS));
+            }
+            LagReader::ISB(readers) => {
+                // need a lag reader per partition
+                for reader in readers {
+                    pending_map.insert(
+                        reader.name().to_string(),
+                        Vec::with_capacity(MAX_PENDING_STATS),
+                    );
+                }
             }
         }
 
         PendingReader {
-            source_lag_reader: self.source_lag_reader,
-            isb_lag_readers: self.isb_lag_readers,
+            lag_reader: self.lag_reader,
             lag_checking_interval: self
                 .lag_checking_interval
                 .unwrap_or_else(|| Duration::from_secs(3)),
@@ -813,17 +812,15 @@ impl PendingReader {
     ///
     /// Dropping the PendingReaderTasks will abort the background tasks.
     pub async fn start(&self, is_mono_vertex: bool) -> PendingReaderTasks {
-        let src_pending_reader = self.source_lag_reader.clone();
-        let isb_pending_reader = self.isb_lag_readers.clone();
         let lag_checking_interval = self.lag_checking_interval;
         let refresh_interval = self.refresh_interval;
         let pending_stats = Arc::clone(&self.pending_stats);
         let lookback_seconds = self.lookback_seconds;
 
+        let lag_reader = self.lag_reader.clone();
         let buildup_handle = tokio::spawn(async move {
             build_pending_info(
-                src_pending_reader,
-                isb_pending_reader,
+                lag_reader,
                 lag_checking_interval,
                 pending_stats,
             )
@@ -858,58 +855,30 @@ impl Drop for PendingReaderTasks {
 
 /// Periodically checks the pending messages from the source client and build the pending stats.
 async fn build_pending_info(
-    source: Option<Source>,
-    mut isb_readers: Option<Vec<JetstreamReader>>,
+    mut lag_reader: LagReader,
     lag_checking_interval: Duration,
     pending_stats: Arc<Mutex<HashMap<String, Vec<TimestampedPending>>>>,
 ) {
     let mut ticker = time::interval(lag_checking_interval);
+    
     loop {
         ticker.tick().await;
 
-        if let Some(source) = source.as_ref() {
-            match fetch_source_pending(&source).await {
-                Ok(pending) => {
-                    if pending != -1 {
-                        let mut stats = pending_stats.lock().await;
-                        stats.get_mut("source").unwrap().push(TimestampedPending {
-                            pending,
-                            timestamp: std::time::Instant::now(),
-                        });
-                        let n = stats.len();
-                        // Ensure only the most recent MAX_PENDING_STATS entries are kept
-                        if n >= MAX_PENDING_STATS {
-                            stats
-                                .get_mut("source")
-                                .unwrap()
-                                .drain(0..(n - MAX_PENDING_STATS));
-                        }
-                    }
-                }
-                Err(err) => {
-                    error!("Failed to get pending messages: {:?}", err);
-                }
-            }
-        }
-
-        if let Some(readers) = isb_readers.as_mut() {
-            for mut reader in readers {
-                match fetch_isb_pending(&mut reader).await {
+        match &mut lag_reader {
+            LagReader::Source(source) => {
+                match fetch_source_pending(&source).await {
                     Ok(pending) => {
                         if pending != -1 {
                             let mut stats = pending_stats.lock().await;
-                            stats
-                                .get_mut(reader.name())
-                                .unwrap()
-                                .push(TimestampedPending {
-                                    pending,
-                                    timestamp: std::time::Instant::now(),
-                                });
+                            stats.get_mut("source").unwrap().push(TimestampedPending {
+                                pending,
+                                timestamp: std::time::Instant::now(),
+                            });
                             let n = stats.len();
                             // Ensure only the most recent MAX_PENDING_STATS entries are kept
                             if n >= MAX_PENDING_STATS {
                                 stats
-                                    .get_mut(reader.name())
+                                    .get_mut("source")
                                     .unwrap()
                                     .drain(0..(n - MAX_PENDING_STATS));
                             }
@@ -917,6 +886,36 @@ async fn build_pending_info(
                     }
                     Err(err) => {
                         error!("Failed to get pending messages: {:?}", err);
+                    }
+                }
+            }
+
+            LagReader::ISB(readers) => {
+                for mut reader in readers {
+                    match fetch_isb_pending(&mut reader).await {
+                        Ok(pending) => {
+                            if pending != -1 {
+                                let mut stats = pending_stats.lock().await;
+                                stats
+                                    .get_mut(reader.name())
+                                    .unwrap()
+                                    .push(TimestampedPending {
+                                        pending,
+                                        timestamp: std::time::Instant::now(),
+                                    });
+                                let n = stats.len();
+                                // Ensure only the most recent MAX_PENDING_STATS entries are kept
+                                if n >= MAX_PENDING_STATS {
+                                    stats
+                                        .get_mut(reader.name())
+                                        .unwrap()
+                                        .drain(0..(n - MAX_PENDING_STATS));
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            error!("Failed to get pending messages: {:?}", err);
+                        }
                     }
                 }
             }
