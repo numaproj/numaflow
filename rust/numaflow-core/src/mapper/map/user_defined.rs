@@ -430,12 +430,12 @@ impl UserDefinedStreamMap {
 
 #[cfg(test)]
 mod tests {
-    use numaflow::mapstream;
     use std::error::Error;
     use std::sync::Arc;
     use std::time::Duration;
 
     use numaflow::batchmap::Server;
+    use numaflow::mapstream;
     use numaflow::{batchmap, map};
     use numaflow_pb::clients::map::map_client::MapClient;
     use tempfile::TempDir;

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::iter;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
@@ -29,6 +29,7 @@ use tonic::Request;
 use tracing::{debug, error, info};
 
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
+use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::source::Source;
 use crate::Error;
 
@@ -73,8 +74,10 @@ const SINK_WRITE_TOTAL: &str = "write";
 const DROPPED_TOTAL: &str = "dropped";
 const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
 
-// pending as gauge
+// pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING: &str = "pending";
+// pending as gauge for pipeline
+const VERTEX_PENDING: &str = "pending_messages";
 
 // processing times as timers
 const E2E_TIME: &str = "processing_time";
@@ -204,6 +207,7 @@ pub(crate) struct MonoVtxMetrics {
 pub(crate) struct PipelineMetrics {
     pub(crate) forwarder: PipelineForwarderMetrics,
     pub(crate) isb: PipelineISBMetrics,
+    pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
 }
 
 /// Family of metrics for the sink
@@ -232,7 +236,6 @@ pub(crate) struct PipelineForwarderMetrics {
     pub(crate) write_time: Family<Vec<(String, String)>, Histogram>,
     pub(crate) read_bytes_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) processed_time: Family<Vec<(String, String)>, Histogram>,
-    pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
     pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
 }
 
@@ -398,7 +401,6 @@ impl PipelineMetrics {
                 ack_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                 }),
-                pending: Family::<Vec<(String, String)>, Gauge>::default(),
                 write_total: Family::<Vec<(String, String)>, Counter>::default(),
                 write_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
                     || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10)),
@@ -411,6 +413,7 @@ impl PipelineMetrics {
                         Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                     }),
             },
+            pending: Family::<Vec<(String, String)>, Gauge>::default(),
         };
         let mut registry = global_registry().registry.lock();
 
@@ -447,11 +450,6 @@ impl PipelineMetrics {
             metrics.forwarder.ack_time.clone(),
         );
         forwarder_registry.register(
-            PENDING,
-            "Number of pending messages",
-            metrics.forwarder.pending.clone(),
-        );
-        forwarder_registry.register(
             SINK_WRITE_TOTAL,
             "Total number of Data Messages Written",
             metrics.forwarder.write_total.clone(),
@@ -465,6 +463,13 @@ impl PipelineMetrics {
             WRITE_TIME,
             "Time taken to write data",
             metrics.forwarder.write_time.clone(),
+        );
+
+        let vertex_registry = registry.sub_registry_with_prefix("vertex");
+        vertex_registry.register(
+            VERTEX_PENDING,
+            "Total number of pending messages",
+            metrics.pending.clone(),
         );
         metrics
     }
@@ -710,14 +715,21 @@ struct TimestampedPending {
     timestamp: std::time::Instant,
 }
 
+#[derive(Clone)]
+pub(crate) enum LagReader {
+    Source(Source),
+    // TODO: Arc<[T]>
+    ISB(Vec<JetstreamReader>), // multiple partitions
+}
+
 /// PendingReader is responsible for periodically checking the lag of the reader
 /// and exposing the metrics. It maintains a list of pending stats and ensures that
 /// only the most recent entries are kept.
 pub(crate) struct PendingReader {
-    lag_reader: Source,
+    lag_reader: LagReader,
     lag_checking_interval: Duration,
     refresh_interval: Duration,
-    pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
+    pending_stats: Arc<Mutex<HashMap<String, Vec<TimestampedPending>>>>,
     lookback_seconds: u16,
 }
 
@@ -728,14 +740,14 @@ pub(crate) struct PendingReaderTasks {
 
 /// PendingReaderBuilder is used to build a [LagReader] instance.
 pub(crate) struct PendingReaderBuilder {
-    lag_reader: Source,
+    lag_reader: LagReader,
     lag_checking_interval: Option<Duration>,
     refresh_interval: Option<Duration>,
     lookback_seconds: Option<u16>,
 }
 
 impl PendingReaderBuilder {
-    pub(crate) fn new(lag_reader: Source) -> Self {
+    pub(crate) fn new(lag_reader: LagReader) -> Self {
         Self {
             lag_reader,
             lag_checking_interval: None,
@@ -760,6 +772,22 @@ impl PendingReaderBuilder {
     }
 
     pub(crate) fn build(self) -> PendingReader {
+        let mut pending_map = HashMap::new();
+        match &self.lag_reader {
+            LagReader::Source(_) => {
+                pending_map.insert("source".to_string(), Vec::with_capacity(MAX_PENDING_STATS));
+            }
+            LagReader::ISB(readers) => {
+                // need a lag reader per partition
+                for reader in readers {
+                    pending_map.insert(
+                        reader.name().to_string(),
+                        Vec::with_capacity(MAX_PENDING_STATS),
+                    );
+                }
+            }
+        }
+
         PendingReader {
             lag_reader: self.lag_reader,
             lag_checking_interval: self
@@ -769,7 +797,7 @@ impl PendingReaderBuilder {
                 .refresh_interval
                 .unwrap_or_else(|| Duration::from_secs(5)),
             lookback_seconds: self.lookback_seconds.unwrap_or(120),
-            pending_stats: Arc::new(Mutex::new(Vec::with_capacity(MAX_PENDING_STATS))),
+            pending_stats: Arc::new(Mutex::new(pending_map)),
         }
     }
 }
@@ -783,14 +811,14 @@ impl PendingReader {
     ///
     /// Dropping the PendingReaderTasks will abort the background tasks.
     pub async fn start(&self, is_mono_vertex: bool) -> PendingReaderTasks {
-        let pending_reader = self.lag_reader.clone();
         let lag_checking_interval = self.lag_checking_interval;
         let refresh_interval = self.refresh_interval;
         let pending_stats = Arc::clone(&self.pending_stats);
         let lookback_seconds = self.lookback_seconds;
 
+        let lag_reader = self.lag_reader.clone();
         let buildup_handle = tokio::spawn(async move {
-            build_pending_info(pending_reader, lag_checking_interval, pending_stats).await;
+            build_pending_info(lag_reader, lag_checking_interval, pending_stats).await;
         });
 
         let pending_stats = Arc::clone(&self.pending_stats);
@@ -821,37 +849,81 @@ impl Drop for PendingReaderTasks {
 
 /// Periodically checks the pending messages from the source client and build the pending stats.
 async fn build_pending_info(
-    source: Source,
+    mut lag_reader: LagReader,
     lag_checking_interval: Duration,
-    pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
+    pending_stats: Arc<Mutex<HashMap<String, Vec<TimestampedPending>>>>,
 ) {
     let mut ticker = time::interval(lag_checking_interval);
+
     loop {
         ticker.tick().await;
-        match fetch_pending(&source).await {
-            Ok(pending) => {
-                if pending != -1 {
-                    let mut stats = pending_stats.lock().await;
-                    stats.push(TimestampedPending {
-                        pending,
-                        timestamp: std::time::Instant::now(),
-                    });
-                    let n = stats.len();
-                    // Ensure only the most recent MAX_PENDING_STATS entries are kept
-                    if n >= MAX_PENDING_STATS {
-                        stats.drain(0..(n - MAX_PENDING_STATS));
+
+        match &mut lag_reader {
+            LagReader::Source(source) => {
+                match fetch_source_pending(&source).await {
+                    Ok(pending) => {
+                        if pending != -1 {
+                            let mut stats = pending_stats.lock().await;
+                            stats.get_mut("source").unwrap().push(TimestampedPending {
+                                pending,
+                                timestamp: std::time::Instant::now(),
+                            });
+                            let n = stats.len();
+                            // Ensure only the most recent MAX_PENDING_STATS entries are kept
+                            if n >= MAX_PENDING_STATS {
+                                stats
+                                    .get_mut("source")
+                                    .unwrap()
+                                    .drain(0..(n - MAX_PENDING_STATS));
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        error!("Failed to get pending messages: {:?}", err);
                     }
                 }
             }
-            Err(err) => {
-                error!("Failed to get pending messages: {:?}", err);
+
+            LagReader::ISB(readers) => {
+                for mut reader in readers {
+                    match fetch_isb_pending(&mut reader).await {
+                        Ok(pending) => {
+                            if pending != -1 {
+                                let mut stats = pending_stats.lock().await;
+                                stats
+                                    .get_mut(reader.name())
+                                    .unwrap()
+                                    .push(TimestampedPending {
+                                        pending,
+                                        timestamp: std::time::Instant::now(),
+                                    });
+                                let n = stats.len();
+                                // Ensure only the most recent MAX_PENDING_STATS entries are kept
+                                if n >= MAX_PENDING_STATS {
+                                    stats
+                                        .get_mut(reader.name())
+                                        .unwrap()
+                                        .drain(0..(n - MAX_PENDING_STATS));
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            error!("Failed to get pending messages: {:?}", err);
+                        }
+                    }
+                }
             }
         }
     }
 }
 
-async fn fetch_pending(lag_reader: &Source) -> crate::error::Result<i64> {
+async fn fetch_source_pending(lag_reader: &Source) -> crate::error::Result<i64> {
     let response: i64 = lag_reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
+    Ok(response)
+}
+
+async fn fetch_isb_pending(reader: &mut JetstreamReader) -> crate::error::Result<i64> {
+    let response: i64 = reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
     Ok(response)
 }
 
@@ -859,7 +931,7 @@ async fn fetch_pending(lag_reader: &Source) -> crate::error::Result<i64> {
 async fn expose_pending_metrics(
     is_mono_vertex: bool,
     refresh_interval: Duration,
-    pending_stats: Arc<Mutex<Vec<TimestampedPending>>>,
+    pending_map: Arc<Mutex<HashMap<String, Vec<TimestampedPending>>>>,
     lookback_seconds: u16,
 ) {
     let mut ticker = time::interval(refresh_interval);
@@ -877,46 +949,46 @@ async fn expose_pending_metrics(
 
     loop {
         ticker.tick().await;
-        for (label, seconds) in lookback_seconds_map {
-            let pending = calculate_pending(seconds as i64, &pending_stats).await;
-            if pending != -1 {
-                let mut metric_labels = mvtx_forward_metric_labels().clone();
-                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
-                pending_info.insert(label, pending);
-                if is_mono_vertex {
-                    monovertex_metrics()
-                        .pending
-                        .get_or_create(&metric_labels)
-                        .set(pending);
-                } else {
-                    pipeline_metrics()
-                        .forwarder
-                        .pending
-                        .get_or_create(&metric_labels)
-                        .set(pending);
+        for (name, pending_stats) in pending_map.lock().await.iter() {
+            for (label, seconds) in lookback_seconds_map {
+                let pending = calculate_pending(seconds as i64, pending_stats).await;
+                if pending != -1 {
+                    pending_info.insert(label, pending);
+                    if is_mono_vertex {
+                        let mut metric_labels = mvtx_forward_metric_labels().clone();
+                        metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
+                        monovertex_metrics()
+                            .pending
+                            .get_or_create(&metric_labels)
+                            .set(pending);
+                    } else {
+                        let mut metric_labels =
+                            pipeline_forward_metric_labels(name, Some(name)).clone();
+                        metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
+                        pipeline_metrics()
+                            .pending
+                            .get_or_create(&metric_labels)
+                            .set(pending);
+                    }
                 }
             }
-        }
-        // skip for those the pending is not implemented
-        if !pending_info.is_empty() {
-            info!("Pending messages {:?}", pending_info);
-            pending_info.clear();
+            // skip for those the pending is not implemented
+            if !pending_info.is_empty() {
+                info!("Pending messages {:?}", pending_info);
+                pending_info.clear();
+            }
         }
     }
 }
 
 /// Calculate the average pending messages over the last `seconds` seconds.
-async fn calculate_pending(
-    seconds: i64,
-    pending_stats: &Arc<Mutex<Vec<TimestampedPending>>>,
-) -> i64 {
+async fn calculate_pending(seconds: i64, pending_stats: &Vec<TimestampedPending>) -> i64 {
     let mut result = -1;
     let mut total = 0;
     let mut num = 0;
     let now = std::time::Instant::now();
 
-    let stats = pending_stats.lock().await;
-    for item in stats.iter().rev() {
+    for item in pending_stats.iter().rev() {
         if now.duration_since(item.timestamp).as_secs() < seconds as u64 {
             total += item.pending;
             num += 1;
@@ -1098,8 +1170,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_expose_pending_metrics() {
-        let pending_stats = Arc::new(Mutex::new(Vec::with_capacity(MAX_PENDING_STATS)));
+    async fn test_expose_pending_metrics_for_source() {
+        let mut pending_map = HashMap::new();
+        pending_map.insert("source".to_string(), Vec::with_capacity(MAX_PENDING_STATS));
+
+        let pending_stats = Arc::new(Mutex::new(pending_map));
         let refresh_interval = Duration::from_secs(1);
         let lookback_seconds = 120;
 
@@ -1107,19 +1182,20 @@ mod tests {
         // The array will be sorted by the timestamp with the most recent last.
         {
             let mut pending_stats = pending_stats.lock().await;
-            pending_stats.push(TimestampedPending {
+            let pending_vec = pending_stats.get_mut("source").unwrap();
+            pending_vec.push(TimestampedPending {
                 pending: 15,
                 timestamp: Instant::now() - Duration::from_secs(150),
             });
-            pending_stats.push(TimestampedPending {
+            pending_vec.push(TimestampedPending {
                 pending: 30,
                 timestamp: Instant::now() - Duration::from_secs(70),
             });
-            pending_stats.push(TimestampedPending {
+            pending_vec.push(TimestampedPending {
                 pending: 20,
                 timestamp: Instant::now() - Duration::from_secs(30),
             });
-            pending_stats.push(TimestampedPending {
+            pending_vec.push(TimestampedPending {
                 pending: 10,
                 timestamp: Instant::now(),
             });
@@ -1155,6 +1231,103 @@ mod tests {
         }
         assert_eq!(stored_values, [15, 20, 18, 18]);
     }
+
+    #[tokio::test]
+    async fn test_expose_pending_metrics_for_isb() {
+        let mut pending_map = HashMap::new();
+        pending_map.insert("stream1".to_string(), Vec::with_capacity(MAX_PENDING_STATS));
+        pending_map.insert("stream2".to_string(), Vec::with_capacity(MAX_PENDING_STATS));
+
+        let pending_stats = Arc::new(Mutex::new(pending_map));
+        let refresh_interval = Duration::from_secs(1);
+        let lookback_seconds = 120;
+
+        // Populate pending_stats with some values.
+        // The array will be sorted by the timestamp with the most recent last.
+        {
+            let mut pending_stats = pending_stats.lock().await;
+            let pending_vec = pending_stats.get_mut("stream1").unwrap();
+            pending_vec.push(TimestampedPending {
+                pending: 15,
+                timestamp: Instant::now() - Duration::from_secs(150),
+            });
+            pending_vec.push(TimestampedPending {
+                pending: 30,
+                timestamp: Instant::now() - Duration::from_secs(70),
+            });
+            pending_vec.push(TimestampedPending {
+                pending: 20,
+                timestamp: Instant::now() - Duration::from_secs(30),
+            });
+            pending_vec.push(TimestampedPending {
+                pending: 10,
+                timestamp: Instant::now(),
+            });
+
+            let pending_vec = pending_stats.get_mut("stream2").unwrap();
+            pending_vec.push(TimestampedPending {
+                pending: 15,
+                timestamp: Instant::now() - Duration::from_secs(150),
+            });
+            pending_vec.push(TimestampedPending {
+                pending: 30,
+                timestamp: Instant::now() - Duration::from_secs(70),
+            });
+            pending_vec.push(TimestampedPending {
+                pending: 20,
+                timestamp: Instant::now() - Duration::from_secs(30),
+            });
+            pending_vec.push(TimestampedPending {
+                pending: 10,
+                timestamp: Instant::now(),
+            });
+        }
+
+        tokio::spawn({
+            let pending_stats = Arc::clone(&pending_stats);
+            async move {
+                expose_pending_metrics(false, refresh_interval, pending_stats, lookback_seconds)
+                    .await;
+            }
+        });
+
+        // We use tokio::time::interval() as the ticker in the expose_pending_metrics() function.
+        // The first tick happens immediately, so we don't need to wait for the refresh_interval for the first iteration to complete.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let lookback_seconds_map: [(&str, u16); 4] =
+            [("1m", 60), ("default", 120), ("5m", 300), ("15m", 900)];
+
+        // Get the stored values for all time intervals
+        // We will store the values corresponding to the labels (from lookback_seconds_map) "1m", "default", "5m", "15" in the same order in this array
+        let mut stored_values_stream_one: [i64; 4] = [0; 4];
+        let mut stored_values_stream_two: [i64; 4] = [0; 4];
+
+        {
+            for (i, (label, _)) in lookback_seconds_map.iter().enumerate() {
+                let mut metric_labels =
+                    pipeline_forward_metric_labels("stream1", Some("stream1")).clone();
+                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
+                let guage = pipeline_metrics()
+                    .pending
+                    .get_or_create(&metric_labels)
+                    .get();
+                stored_values_stream_one[i] = guage;
+
+                let mut metric_labels =
+                    pipeline_forward_metric_labels("stream2", Some("stream2")).clone();
+                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
+                let guage = pipeline_metrics()
+                    .pending
+                    .get_or_create(&metric_labels)
+                    .get();
+                stored_values_stream_two[i] = guage;
+            }
+        }
+        assert_eq!(stored_values_stream_one, [15, 20, 18, 18]);
+        assert_eq!(stored_values_stream_two, [15, 20, 18, 18]);
+    }
+
     #[test]
     fn test_exponential_buckets_range_basic() {
         let min = 1.0;
