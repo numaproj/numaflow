@@ -2,12 +2,11 @@ use std::sync::Arc;
 
 pub(crate) use serving::ServingSource;
 
+use super::{get_vertex_name, Message, Offset};
 use crate::config::get_vertex_replica;
 use crate::message::{MessageID, StringOffset};
 use crate::Error;
 use crate::Result;
-
-use super::{get_vertex_name, Message, Offset};
 
 impl TryFrom<serving::Message> for Message {
     type Error = Error;
@@ -83,16 +82,16 @@ impl super::LagReader for ServingSource {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        message::{Message, MessageID, Offset, StringOffset},
-        source::{SourceAcker, SourceReader},
-    };
     use std::{collections::HashMap, sync::Arc, time::Duration};
 
     use bytes::Bytes;
     use serving::{ServingSource, Settings};
 
     use super::get_vertex_replica;
+    use crate::{
+        message::{Message, MessageID, Offset, StringOffset},
+        source::{SourceAcker, SourceReader},
+    };
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 

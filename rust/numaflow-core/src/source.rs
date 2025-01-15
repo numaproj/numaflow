@@ -1,5 +1,6 @@
-use numaflow_pulsar::source::PulsarSource;
 use std::sync::Arc;
+
+use numaflow_pulsar::source::PulsarSource;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::sync::{mpsc, oneshot};
