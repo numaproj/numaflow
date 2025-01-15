@@ -21,7 +21,7 @@ export const useMetricsFetch = ({
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
-      if (filters !== null && Object.keys(filters).length > 0 && metricReq?.dimension !== undefined) {
+      if ( Object.keys(filters).length > 0 && metricReq?.dimension !== undefined) {
         try {
           const response = await fetch(urlPath, {
             method: "POST",

@@ -212,7 +212,7 @@ const LineChartComponent = ({
 
   useEffect(() => {
     if (error) {
-      addError(error.toString());
+      addError(error?.toString());
     }
   }, [error, addError]);
 
@@ -361,7 +361,7 @@ const LineChartComponent = ({
         </Box>
       )}
 
-      {!isLoading && error && <EmptyChart message={error.toString() || "No data for the selected filters."}/>}
+      {!isLoading && error && <EmptyChart message={error?.toString()}/>}
 
       {!isLoading && !error && transformedData?.length > 0 && (
         <ResponsiveContainer width="100%" height={400}>
