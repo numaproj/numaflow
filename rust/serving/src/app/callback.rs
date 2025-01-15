@@ -12,17 +12,24 @@ use state::State as CallbackState;
 /// store for storing the state
 pub(crate) mod store;
 
+/// As message passes through each component (map, transformer, sink, etc.). it emits a beacon via callback
+/// to inform that message has been processed by this component.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct Callback {
     pub(crate) id: String,
     pub(crate) vertex: String,
     pub(crate) cb_time: u64,
     pub(crate) from_vertex: String,
+    /// Due to flat-map operation, we can have 0 or more responses.
+    // TODO: Arc<[T]>
     pub(crate) responses: Vec<Response>,
 }
 
+/// It contains details about the `To` vertex via tags (conditional forwarding).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct Response {
+    /// If tags is None, the message is forwarded to all vertices, if len(Vec) == 0, it means that
+    /// the message has been dropped. 
     pub(crate) tags: Option<Vec<String>>,
 }
 
