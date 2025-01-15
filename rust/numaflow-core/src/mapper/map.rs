@@ -1,3 +1,13 @@
+use std::sync::Arc;
+use std::time::Duration;
+
+use numaflow_pb::clients::map::map_client::MapClient;
+use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
+use tokio::task::JoinHandle;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
+use tonic::transport::Channel;
+
 use crate::config::pipeline::map::MapMode;
 use crate::error;
 use crate::error::Error;
@@ -6,14 +16,6 @@ use crate::mapper::map::user_defined::{
 };
 use crate::message::Message;
 use crate::tracker::TrackerHandle;
-use numaflow_pb::clients::map::map_client::MapClient;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
-use tokio::task::JoinHandle;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_stream::StreamExt;
-use tonic::transport::Channel;
 pub(super) mod user_defined;
 
 /// UnaryActorMessage is a message that is sent to the UnaryMapperActor.
@@ -482,18 +484,19 @@ impl MapHandle {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::Result;
     use std::time::Duration;
 
-    use crate::message::{MessageID, Offset, StringOffset};
-    use crate::shared::grpc::create_rpc_channel;
     use numaflow::mapstream;
     use numaflow::{batchmap, map};
     use numaflow_pb::clients::map::map_client::MapClient;
     use tempfile::TempDir;
     use tokio::sync::mpsc::Sender;
     use tokio::sync::oneshot;
+
+    use super::*;
+    use crate::message::{MessageID, Offset, StringOffset};
+    use crate::shared::grpc::create_rpc_channel;
+    use crate::Result;
 
     struct SimpleMapper;
 

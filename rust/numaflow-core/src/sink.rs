@@ -731,14 +731,15 @@ impl Drop for SinkWriter {
 mod tests {
     use std::sync::Arc;
 
-    use super::*;
-    use crate::message::{Message, MessageID, Offset, ReadAck, StringOffset};
-    use crate::shared::grpc::create_rpc_channel;
     use chrono::{TimeZone, Utc};
     use numaflow::sink;
     use numaflow_pb::clients::sink::{SinkRequest, SinkResponse};
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
+
+    use super::*;
+    use crate::message::{Message, MessageID, Offset, ReadAck, StringOffset};
+    use crate::shared::grpc::create_rpc_channel;
 
     struct SimpleSink;
     #[tonic::async_trait]

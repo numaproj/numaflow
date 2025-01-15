@@ -19,6 +19,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .with(tracing_subscriber::fmt::layer().with_ansi(false))
         .init();
+
+    // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Installing default CryptoProvider");
+
     if let Err(e) = run().await {
         error!("{e:?}");
         return Err(e);

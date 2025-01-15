@@ -197,7 +197,11 @@ loop:
 		// since the Read call is blocking, and runs in an infinite loop,
 		// we implement Read With Wait semantics
 		select {
-		case r := <-mg.srcChan:
+		case r, ok := <-mg.srcChan:
+			if !ok {
+				mg.logger.Info("All the messages have been read. returning.")
+				break loop
+			}
 			msgs = append(msgs, mg.newReadMessage(r.key, r.data, r.offset, r.ts))
 		case <-timeout:
 			break loop

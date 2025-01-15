@@ -226,14 +226,15 @@ impl TryFrom<Bytes> for Message {
 
 #[cfg(test)]
 mod tests {
-    use crate::error::Result;
+    use std::collections::HashMap;
+
     use chrono::TimeZone;
     use numaflow_pb::objects::isb::{
         Body, Header, Message as ProtoMessage, MessageId, MessageInfo,
     };
-    use std::collections::HashMap;
 
     use super::*;
+    use crate::error::Result;
 
     #[test]
     fn test_offset_display() {

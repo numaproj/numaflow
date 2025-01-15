@@ -171,9 +171,8 @@ impl TryFrom<HashMap<String, String>> for Settings {
 
 #[cfg(test)]
 mod tests {
-    use crate::pipeline::{Edge, Vertex};
-
     use super::*;
+    use crate::pipeline::{Edge, Vertex};
 
     #[test]
     fn test_default_config() {

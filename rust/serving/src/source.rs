@@ -241,9 +241,8 @@ impl ServingSource {
 mod tests {
     use std::{sync::Arc, time::Duration};
 
-    use crate::Settings;
-
     use super::ServingSource;
+    use crate::Settings;
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
     #[tokio::test]

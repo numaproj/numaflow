@@ -32,7 +32,6 @@ use crate::{app::callback::state, Message, MessageWrapper};
 //   "from_vertex": "a"
 // }
 
-const CALLBACK_URL_KEY: &str = "X-Numaflow-Callback-Url";
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
 
@@ -40,7 +39,6 @@ struct ProxyState<T> {
     message: mpsc::Sender<MessageWrapper>,
     tid_header: String,
     callback: state::State<T>,
-    callback_url: String,
 }
 
 pub(crate) async fn jetstream_proxy<T: Clone + Send + Sync + Store + 'static>(
@@ -50,10 +48,6 @@ pub(crate) async fn jetstream_proxy<T: Clone + Send + Sync + Store + 'static>(
         message: state.message.clone(),
         tid_header: state.settings.tid_header.clone(),
         callback: state.callback_state.clone(),
-        callback_url: format!(
-            "https://{}:{}/v1/process/callback",
-            state.settings.host_ip, state.settings.app_listen_port
-        ),
     });
 
     let router = Router::new()
