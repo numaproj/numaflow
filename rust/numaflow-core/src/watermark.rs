@@ -9,6 +9,7 @@ use prost::Message as ProtoMessage;
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use tracing::error;
 
 mod fetcher;
 mod manager;
@@ -98,7 +99,7 @@ struct WatermarkActor {
 }
 
 impl WatermarkActor {
-    pub fn new(fetcher: Fetcher, publisher: Publisher) -> Self {
+    fn new(fetcher: Fetcher, publisher: Publisher) -> Self {
         Self {
             fetcher,
             publisher,
@@ -106,7 +107,15 @@ impl WatermarkActor {
         }
     }
 
-    pub async fn handle_message(&mut self, message: ActorMessage) -> Result<()> {
+    async fn run(mut self, mut receiver: tokio::sync::mpsc::Receiver<ActorMessage>) {
+        while let Some(message) = receiver.recv().await {
+            if let Err(e) = self.handle_message(message).await {
+                error!("error handling message: {:?}", e);
+            }
+        }
+    }
+
+    async fn handle_message(&mut self, message: ActorMessage) -> Result<()> {
         match message {
             ActorMessage::FetchWatermark { offset, oneshot_tx } => {
                 let watermark = match offset {
@@ -212,18 +221,45 @@ impl WatermarkActor {
     }
 }
 
-pub(crate) struct WatermarkHandle {}
+#[derive(Clone)]
+pub(crate) struct WatermarkHandle {
+    sender: tokio::sync::mpsc::Sender<ActorMessage>,
+}
 
 impl WatermarkHandle {
-    pub(crate) fn new() -> Self {
-        Self {}
+    pub(crate) async fn new(fetcher: Fetcher, publisher: Publisher) -> Self {
+        let (sender, receiver) = tokio::sync::mpsc::channel(100);
+        let actor = WatermarkActor::new(fetcher, publisher);
+        tokio::spawn(async move { actor.run(receiver).await });
+        Self { sender }
     }
 
     pub(crate) async fn fetch_watermark(&self, offset: Offset) -> Result<Watermark> {
-        Ok(Watermark::default())
+        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
+        self.sender
+            .send(ActorMessage::FetchWatermark { offset, oneshot_tx })
+            .await
+            .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
+
+        oneshot_rx
+            .await
+            .map_err(|_| Error::Watermark("failed to receive response".to_string()))?
     }
 
-    pub(crate) async fn publish_watermark(&self, vertex_name: String, offset: Offset) {}
+    pub(crate) async fn publish_watermark(&self, vertex_name: String, offset: Offset) {
+        self.sender
+            .send(ActorMessage::PublishWatermark {
+                offset,
+                vertex_name,
+            })
+            .await
+            .unwrap();
+    }
 
-    pub(crate) async fn remove_offset(&self, offset: Offset) {}
+    pub(crate) async fn remove_offset(&self, offset: Offset) {
+        self.sender
+            .send(ActorMessage::RemoveOffset(offset))
+            .await
+            .unwrap();
+    }
 }

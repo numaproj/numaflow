@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::config::pipeline;
+use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
 use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
@@ -284,19 +285,19 @@ async fn create_buffer_writer(
 }
 
 async fn create_buffer_reader(
-    stream: (&'static str, u16),
+    stream: Stream,
     reader_config: BufferReaderConfig,
     js_context: Context,
     tracker_handle: TrackerHandle,
     batch_size: usize,
 ) -> Result<JetstreamReader> {
     JetstreamReader::new(
-        stream.0,
-        stream.1,
+        stream,
         js_context,
         reader_config,
         tracker_handle,
         batch_size,
+        None,
     )
     .await
 }
@@ -358,11 +359,11 @@ mod tests {
     async fn test_forwarder_for_source_vertex() {
         // Unique names for the streams we use in this test
         let streams = vec![
-            "default-test-forwarder-for-source-vertex-out-0",
-            "default-test-forwarder-for-source-vertex-out-1",
-            "default-test-forwarder-for-source-vertex-out-2",
-            "default-test-forwarder-for-source-vertex-out-3",
-            "default-test-forwarder-for-source-vertex-out-4",
+            Stream::new("default-test-forwarder-for-source-vertex-out-0", "test", 0),
+            Stream::new("default-test-forwarder-for-source-vertex-out-1", "test", 1),
+            Stream::new("default-test-forwarder-for-source-vertex-out-2", "test", 2),
+            Stream::new("default-test-forwarder-for-source-vertex-out-3", "test", 3),
+            Stream::new("default-test-forwarder-for-source-vertex-out-4", "test", 4),
         ];
 
         let js_url = "localhost:4222";
@@ -373,14 +374,13 @@ mod tests {
         // Create streams to which the generator source vertex we create later will forward
         // messages to. The consumers created for the corresponding streams will be used to ensure
         // that messages were actually written to the streams.
-        for stream_name in &streams {
-            let stream_name = *stream_name;
+        for stream in &streams {
             // Delete stream if it exists
-            let _ = context.delete_stream(stream_name).await;
+            let _ = context.delete_stream(stream.name).await;
             let _stream = context
                 .get_or_create_stream(stream::Config {
-                    name: stream_name.into(),
-                    subjects: vec![stream_name.into()],
+                    name: stream.name.to_string(),
+                    subjects: vec![stream.name.into()],
                     max_message_size: 64 * 1024,
                     max_messages: 10000,
                     ..Default::default()
@@ -391,15 +391,15 @@ mod tests {
             let c: consumer::PullConsumer = context
                 .create_consumer_on_stream(
                     consumer::pull::Config {
-                        name: Some(stream_name.to_string()),
+                        name: Some(stream.to_string()),
                         ack_policy: consumer::AckPolicy::Explicit,
                         ..Default::default()
                     },
-                    stream_name,
+                    stream.name,
                 )
                 .await
                 .unwrap();
-            consumers.push((stream_name.to_string(), c));
+            consumers.push((stream.to_string(), c));
         }
 
         let pipeline_config = PipelineConfig {
@@ -418,11 +418,7 @@ mod tests {
             to_vertex_config: vec![ToVertexConfig {
                 name: "out".to_string(),
                 writer_config: BufferWriterConfig {
-                    streams: streams
-                        .iter()
-                        .enumerate()
-                        .map(|(i, stream_name)| (stream_name.to_string(), i as u16))
-                        .collect(),
+                    streams: streams.clone(),
                     partitions: 5,
                     max_length: 30000,
                     usage_limit: 0.8,
@@ -488,8 +484,8 @@ mod tests {
         }
 
         // Delete all streams created in this test
-        for stream_name in streams {
-            context.delete_stream(stream_name).await.unwrap();
+        for stream in streams {
+            context.delete_stream(stream.name).await.unwrap();
         }
     }
 
@@ -500,11 +496,11 @@ mod tests {
     async fn test_forwarder_for_sink_vertex() {
         // Unique names for the streams we use in this test
         let streams = vec![
-            "default-test-forwarder-for-sink-vertex-out-0",
-            "default-test-forwarder-for-sink-vertex-out-1",
-            "default-test-forwarder-for-sink-vertex-out-2",
-            "default-test-forwarder-for-sink-vertex-out-3",
-            "default-test-forwarder-for-sink-vertex-out-4",
+            Stream::new("default-test-forwarder-for-sink-vertex-out-0", "test", 0),
+            Stream::new("default-test-forwarder-for-sink-vertex-out-1", "test", 1),
+            Stream::new("default-test-forwarder-for-sink-vertex-out-2", "test", 2),
+            Stream::new("default-test-forwarder-for-sink-vertex-out-3", "test", 3),
+            Stream::new("default-test-forwarder-for-sink-vertex-out-4", "test", 4),
         ];
 
         let js_url = "localhost:4222";
@@ -513,14 +509,13 @@ mod tests {
 
         const MESSAGE_COUNT: usize = 10;
         let mut consumers = vec![];
-        for stream_name in &streams {
-            let stream_name = *stream_name;
+        for stream in &streams {
             // Delete stream if it exists
-            let _ = context.delete_stream(stream_name).await;
+            let _ = context.delete_stream(stream.name).await;
             let _stream = context
                 .get_or_create_stream(stream::Config {
-                    name: stream_name.into(),
-                    subjects: vec![stream_name.into()],
+                    name: stream.name.into(),
+                    subjects: vec![stream.name.into()],
                     max_message_size: 64 * 1024,
                     max_messages: 10000,
                     ..Default::default()
@@ -550,7 +545,7 @@ mod tests {
 
             for _ in 0..MESSAGE_COUNT {
                 context
-                    .publish(stream_name.to_string(), message.clone().into())
+                    .publish(stream.name, message.clone().into())
                     .await
                     .unwrap()
                     .await
@@ -560,15 +555,15 @@ mod tests {
             let c: consumer::PullConsumer = context
                 .create_consumer_on_stream(
                     consumer::pull::Config {
-                        name: Some(stream_name.to_string()),
+                        name: Some(stream.name.to_string()),
                         ack_policy: consumer::AckPolicy::Explicit,
                         ..Default::default()
                     },
-                    stream_name,
+                    stream.name,
                 )
                 .await
                 .unwrap();
-            consumers.push((stream_name.to_string(), c));
+            consumers.push((stream.name.to_string(), c));
         }
 
         let pipeline_config = PipelineConfig {
@@ -588,11 +583,7 @@ mod tests {
                 name: "in".to_string(),
                 reader_config: BufferReaderConfig {
                     partitions: 5,
-                    streams: streams
-                        .iter()
-                        .enumerate()
-                        .map(|(i, key)| (*key, i as u16))
-                        .collect(),
+                    streams: streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
@@ -647,8 +638,8 @@ mod tests {
         }
 
         // Delete all streams created in this test
-        for stream_name in streams {
-            context.delete_stream(stream_name).await.unwrap();
+        for stream in streams {
+            context.delete_stream(stream.name).await.unwrap();
         }
     }
 
@@ -689,19 +680,19 @@ mod tests {
 
         // Unique names for the streams we use in this test
         let input_streams = vec![
-            "default-test-forwarder-for-map-vertex-in-0",
-            "default-test-forwarder-for-map-vertex-in-1",
-            "default-test-forwarder-for-map-vertex-in-2",
-            "default-test-forwarder-for-map-vertex-in-3",
-            "default-test-forwarder-for-map-vertex-in-4",
+            Stream::new("default-test-forwarder-for-map-vertex-in-0", "test", 0),
+            Stream::new("default-test-forwarder-for-map-vertex-in-1", "test", 1),
+            Stream::new("default-test-forwarder-for-map-vertex-in-2", "test", 2),
+            Stream::new("default-test-forwarder-for-map-vertex-in-3", "test", 3),
+            Stream::new("default-test-forwarder-for-map-vertex-in-4", "test", 4),
         ];
 
         let output_streams = vec![
-            "default-test-forwarder-for-map-vertex-out-0",
-            "default-test-forwarder-for-map-vertex-out-1",
-            "default-test-forwarder-for-map-vertex-out-2",
-            "default-test-forwarder-for-map-vertex-out-3",
-            "default-test-forwarder-for-map-vertex-out-4",
+            Stream::new("default-test-forwarder-for-map-vertex-out-0", "test", 0),
+            Stream::new("default-test-forwarder-for-map-vertex-out-1", "test", 1),
+            Stream::new("default-test-forwarder-for-map-vertex-out-2", "test", 2),
+            Stream::new("default-test-forwarder-for-map-vertex-out-3", "test", 3),
+            Stream::new("default-test-forwarder-for-map-vertex-out-4", "test", 4),
         ];
 
         let js_url = "localhost:4222";
@@ -711,14 +702,13 @@ mod tests {
         const MESSAGE_COUNT: usize = 10;
         let mut input_consumers = vec![];
         let mut output_consumers = vec![];
-        for stream_name in &input_streams {
-            let stream_name = *stream_name;
+        for stream in &input_streams {
             // Delete stream if it exists
-            let _ = context.delete_stream(stream_name).await;
+            let _ = context.delete_stream(stream.name).await;
             let _stream = context
                 .get_or_create_stream(stream::Config {
-                    name: stream_name.into(),
-                    subjects: vec![stream_name.into()],
+                    name: stream.name.to_string(),
+                    subjects: vec![stream.name.to_string()],
                     max_message_size: 64 * 1024,
                     max_messages: 10000,
                     ..Default::default()
@@ -748,7 +738,7 @@ mod tests {
 
             for _ in 0..MESSAGE_COUNT {
                 context
-                    .publish(stream_name.to_string(), message.clone().into())
+                    .publish(stream.name, message.clone().into())
                     .await
                     .unwrap()
                     .await
@@ -758,27 +748,26 @@ mod tests {
             let c: consumer::PullConsumer = context
                 .create_consumer_on_stream(
                     consumer::pull::Config {
-                        name: Some(stream_name.to_string()),
+                        name: Some(stream.name.to_string()),
                         ack_policy: consumer::AckPolicy::Explicit,
                         ..Default::default()
                     },
-                    stream_name,
+                    stream.name,
                 )
                 .await
                 .unwrap();
 
-            input_consumers.push((stream_name.to_string(), c));
+            input_consumers.push((stream.name.to_string(), c));
         }
 
         // Create output streams and consumers
-        for stream_name in &output_streams {
-            let stream_name = *stream_name;
+        for stream in &output_streams {
             // Delete stream if it exists
-            let _ = context.delete_stream(stream_name).await;
+            let _ = context.delete_stream(stream.name).await;
             let _stream = context
                 .get_or_create_stream(stream::Config {
-                    name: stream_name.into(),
-                    subjects: vec![stream_name.into()],
+                    name: stream.name.to_string(),
+                    subjects: vec![stream.name.into()],
                     max_message_size: 64 * 1024,
                     max_messages: 1000,
                     ..Default::default()
@@ -789,15 +778,15 @@ mod tests {
             let c: consumer::PullConsumer = context
                 .create_consumer_on_stream(
                     consumer::pull::Config {
-                        name: Some(stream_name.to_string()),
+                        name: Some(stream.name.to_string()),
                         ack_policy: consumer::AckPolicy::Explicit,
                         ..Default::default()
                     },
-                    stream_name,
+                    stream.name,
                 )
                 .await
                 .unwrap();
-            output_consumers.push((stream_name.to_string(), c));
+            output_consumers.push((stream.name.to_string(), c));
         }
 
         let pipeline_config = PipelineConfig {
@@ -815,11 +804,7 @@ mod tests {
             to_vertex_config: vec![ToVertexConfig {
                 name: "map-out".to_string(),
                 writer_config: BufferWriterConfig {
-                    streams: output_streams
-                        .iter()
-                        .enumerate()
-                        .map(|(i, stream_name)| ((*stream_name).to_string(), i as u16))
-                        .collect(),
+                    streams: output_streams.clone(),
                     partitions: 5,
                     max_length: 30000,
                     usage_limit: 0.8,
@@ -832,11 +817,7 @@ mod tests {
                 name: "map-in".to_string(),
                 reader_config: BufferReaderConfig {
                     partitions: 5,
-                    streams: input_streams
-                        .iter()
-                        .enumerate()
-                        .map(|(i, key)| (*key, i as u16))
-                        .collect(),
+                    streams: input_streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
@@ -893,8 +874,8 @@ mod tests {
         }
 
         // Delete all streams created in this test
-        for stream_name in input_streams.iter().chain(output_streams.iter()) {
-            context.delete_stream(stream_name).await.unwrap();
+        for stream in input_streams.iter().chain(output_streams.iter()) {
+            context.delete_stream(stream.name).await.unwrap();
         }
     }
 }

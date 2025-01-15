@@ -19,12 +19,11 @@ use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::config::pipeline::isb::BufferFullStrategy;
+use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::config::pipeline::ToVertexConfig;
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
-use crate::pipeline::isb::jetstream::Stream;
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
 use crate::Result;
@@ -40,7 +39,7 @@ const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
 pub(crate) struct JetstreamWriter {
     config: Arc<Vec<ToVertexConfig>>,
     js_ctx: Context,
-    is_full: HashMap<String, Arc<AtomicBool>>,
+    is_full: HashMap<&'static str, Arc<AtomicBool>>,
     cancel_token: CancellationToken,
     tracker_handle: TrackerHandle,
     sem: Arc<Semaphore>,
@@ -63,7 +62,7 @@ impl JetstreamWriter {
 
         let is_full = streams
             .iter()
-            .map(|stream| (stream.0.clone(), Arc::new(AtomicBool::new(false))))
+            .map(|stream| (stream.name, Arc::new(AtomicBool::new(false))))
             .collect::<HashMap<_, _>>();
 
         let this = Self {
@@ -96,19 +95,20 @@ impl JetstreamWriter {
                 _ = interval.tick() => {
                     for config in &*self.config {
                         for stream in &config.writer_config.streams {
-                            match Self::fetch_buffer_usage(self.js_ctx.clone(), stream.0.as_str(), config.writer_config.max_length).await {
+                            let stream = stream.name;
+                            match Self::fetch_buffer_usage(self.js_ctx.clone(), stream, config.writer_config.max_length).await {
                                 Ok((soft_usage, solid_usage)) => {
                                     if solid_usage >= config.writer_config.usage_limit && soft_usage >= config.writer_config.usage_limit {
-                                        if let Some(is_full) = self.is_full.get(stream.0.as_str()) {
+                                        if let Some(is_full) = self.is_full.get(stream) {
                                             is_full.store(true, Ordering::Relaxed);
                                         }
-                                    } else if let Some(is_full) = self.is_full.get(stream.0.as_str()) {
+                                    } else if let Some(is_full) = self.is_full.get(stream) {
                                         is_full.store(false, Ordering::Relaxed);
                                     }
                                 }
                                 Err(e) => {
-                                    error!(?e, "Failed to fetch buffer usage for stream {}, updating isFull to true", stream.0.as_str());
-                                    if let Some(is_full) = self.is_full.get(stream.0.as_str()) {
+                                    error!(?e, "Failed to fetch buffer usage for stream {}, updating isFull to true", stream);
+                                    if let Some(is_full) = self.is_full.get(stream) {
                                         is_full.store(true, Ordering::Relaxed);
                                     }
                                 }
@@ -283,13 +283,13 @@ impl JetstreamWriter {
             // let's write only if the buffer is not full for the stream
             match self
                 .is_full
-                .get(&stream.0)
+                .get(stream.name)
                 .map(|is_full| is_full.load(Ordering::Relaxed))
             {
                 Some(true) => {
                     // FIXME: add metrics
                     if counter >= 500 {
-                        warn!(stream=?stream.0, "stream is full (throttled logging)");
+                        warn!(stream=?stream, "stream is full (throttled logging)");
                         counter = 0;
                     }
                     counter += 1;
@@ -307,7 +307,7 @@ impl JetstreamWriter {
                 }
                 Some(false) => match self
                     .js_ctx
-                    .publish(stream.0.clone(), Bytes::from(payload.clone()))
+                    .publish(stream.name, Bytes::from(payload.clone()))
                     .await
                 {
                     Ok(paf) => {
@@ -318,7 +318,7 @@ impl JetstreamWriter {
                     }
                 },
                 None => {
-                    error!("Stream {} not found in is_full map", stream.0);
+                    error!("Stream {} not found in is_full map", stream);
                 }
             }
             // short-circuit out in failure mode if shutdown has been initiated
@@ -356,12 +356,15 @@ impl JetstreamWriter {
                         if ack.duplicate {
                             warn!(
                                 "Duplicate message detected for stream {}, ignoring {:?}",
-                                stream.0, ack
+                                stream, ack
                             );
                         }
                         offsets.push((
                             stream.clone(),
-                            Offset::ISB(OffsetType::Int(IntOffset::new(ack.sequence, stream.1))),
+                            Offset::ISB(OffsetType::Int(IntOffset::new(
+                                ack.sequence,
+                                stream.partition,
+                            ))),
                         ));
                         tracker_handle
                             .delete(result.offset.clone())
@@ -372,7 +375,7 @@ impl JetstreamWriter {
                         error!(
                             ?e,
                             "Failed to resolve the future for stream {}, trying blocking write",
-                            stream.0
+                            stream
                         );
                         match JetstreamWriter::blocking_write(
                             stream.clone(),
@@ -386,19 +389,19 @@ impl JetstreamWriter {
                                 if ack.duplicate {
                                     warn!(
                                         "Duplicate message detected for stream {}, ignoring {:?}",
-                                        stream.0, ack
+                                        stream, ack
                                     );
                                 }
                                 offsets.push((
                                     stream.clone(),
                                     Offset::ISB(OffsetType::Int(IntOffset::new(
                                         ack.sequence,
-                                        stream.1,
+                                        stream.partition,
                                     ))),
                                 ));
                             }
                             Err(e) => {
-                                error!(?e, "Blocking write failed for stream {}", stream.0);
+                                error!(?e, "Blocking write failed for stream {}", stream);
                                 // Since we failed to write to the stream, we need to send a NAK to the reader
                                 tracker_handle
                                     .discard(result.offset.clone())
@@ -429,10 +432,10 @@ impl JetstreamWriter {
         cln_token: CancellationToken,
     ) -> Result<PublishAck> {
         let start_time = Instant::now();
-        info!("Blocking write for stream {}", stream.0);
+        info!("Blocking write for stream {}", stream);
         loop {
             match js_ctx
-                .publish(stream.0.clone(), Bytes::from(payload.clone()))
+                .publish(stream.namespace, Bytes::from(payload.clone()))
                 .await
             {
                 Ok(paf) => match paf.await {
@@ -504,13 +507,13 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream_name = "test_async";
+        let stream = Stream::new("test-async", "temp", "temp", "temp", 0);
         // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
+        let _ = context.delete_stream(stream.name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
                 ..Default::default()
             })
             .await
@@ -519,11 +522,11 @@ mod tests {
         let _consumer = context
             .create_consumer_on_stream(
                 Config {
-                    name: Some(stream_name.to_string()),
+                    name: Some(stream.name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
                 },
-                stream_name,
+                stream.name,
             )
             .await
             .unwrap();
@@ -532,7 +535,7 @@ mod tests {
             vec![ToVertexConfig {
                 name: "test-vertex".to_string(),
                 writer_config: BufferWriterConfig {
-                    streams: vec![(stream_name.to_string(), 0)],
+                    streams: vec![stream.clone()],
                     ..Default::default()
                 },
                 conditions: None,
@@ -561,14 +564,14 @@ mod tests {
 
         let paf = writer
             .write(
-                (stream_name.to_string(), 0),
+                stream.clone(),
                 message,
                 BufferFullStrategy::RetryUntilSuccess,
             )
             .await;
         assert!(paf.unwrap().await.is_ok());
 
-        context.delete_stream(stream_name).await.unwrap();
+        context.delete_stream(stream.name).await.unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
@@ -580,13 +583,13 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream_name = "test_sync";
+        let stream = Stream::new("test-sync", "temp", "temp", "temp", 0);
         // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
+        let _ = context.delete_stream(stream.name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
                 ..Default::default()
             })
             .await
@@ -595,11 +598,11 @@ mod tests {
         let _consumer = context
             .create_consumer_on_stream(
                 Config {
-                    name: Some(stream_name.to_string()),
+                    name: Some(stream.name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
                 },
-                stream_name,
+                stream.name,
             )
             .await
             .unwrap();
@@ -621,7 +624,7 @@ mod tests {
 
         let message_bytes: BytesMut = message.try_into().unwrap();
         let result = JetstreamWriter::blocking_write(
-            (stream_name.to_string(), 0),
+            stream.clone(),
             message_bytes.into(),
             context.clone(),
             cln_token.clone(),
@@ -630,9 +633,9 @@ mod tests {
         assert!(result.is_ok());
 
         let publish_ack = result.unwrap();
-        assert_eq!(publish_ack.stream, stream_name);
+        assert_eq!(publish_ack.stream, stream.name);
 
-        context.delete_stream(stream_name).await.unwrap();
+        context.delete_stream(stream.name).await.unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
@@ -644,13 +647,13 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream_name = "test_cancellation";
+        let stream = Stream::new("test-cancellation", "temp", "temp", "temp", 0);
         // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
+        let _ = context.delete_stream(stream.name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
                 max_message_size: 1024,
                 ..Default::default()
             })
@@ -660,11 +663,11 @@ mod tests {
         let _consumer = context
             .create_consumer_on_stream(
                 Config {
-                    name: Some(stream_name.to_string()),
+                    name: Some(stream.name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
                 },
-                stream_name,
+                stream.name.to_string(),
             )
             .await
             .unwrap();
@@ -675,7 +678,7 @@ mod tests {
             vec![ToVertexConfig {
                 name: "test-vertex".to_string(),
                 writer_config: BufferWriterConfig {
-                    streams: vec![(stream_name.to_string(), 0)],
+                    streams: vec![stream.clone()],
                     ..Default::default()
                 },
                 conditions: None,
@@ -706,7 +709,7 @@ mod tests {
             };
             let paf = writer
                 .write(
-                    (stream_name.to_string(), 0),
+                    stream.clone(),
                     message,
                     BufferFullStrategy::RetryUntilSuccess,
                 )
@@ -732,7 +735,7 @@ mod tests {
         };
         let paf = writer
             .write(
-                (stream_name.to_string(), 0),
+                stream.clone(),
                 message,
                 BufferFullStrategy::RetryUntilSuccess,
             )
@@ -758,7 +761,7 @@ mod tests {
             }
         }
 
-        context.delete_stream(stream_name).await.unwrap();
+        context.delete_stream(stream.name).await.unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
@@ -769,13 +772,13 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream_name = "test_fetch_buffer_usage";
+        let stream = Stream::new("test_fetch_buffer_usage", "temp", "temp", "temp", 0);
         // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
+        let _ = context.delete_stream(stream.name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
                 max_messages: 1000,
                 max_message_size: 1024,
                 max_messages_per_subject: 1000,
@@ -788,22 +791,22 @@ mod tests {
         let _consumer = context
             .create_consumer_on_stream(
                 Config {
-                    name: Some(stream_name.to_string()),
+                    name: Some(stream.name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
                 },
-                stream_name,
+                stream.name.to_string(),
             )
             .await;
 
         let _consumer = context
             .create_consumer_on_stream(
                 Config {
-                    name: Some(stream_name.to_string()),
+                    name: Some(stream.name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
                 },
-                stream_name,
+                stream.name.to_string(),
             )
             .await
             .unwrap();
@@ -813,14 +816,14 @@ mod tests {
         // Publish messages to fill the buffer
         for _ in 0..80 {
             context
-                .publish(stream_name, Bytes::from("test message"))
+                .publish(stream.name, Bytes::from("test message"))
                 .await
                 .unwrap();
         }
 
         // Fetch buffer usage
         let (soft_usage, _) =
-            JetstreamWriter::fetch_buffer_usage(context.clone(), stream_name, max_length)
+            JetstreamWriter::fetch_buffer_usage(context.clone(), stream.name, max_length)
                 .await
                 .unwrap();
 
@@ -830,10 +833,10 @@ mod tests {
 
         // Clean up
         context
-            .delete_consumer_from_stream(stream_name, stream_name)
+            .delete_consumer_from_stream(stream.name, stream.name)
             .await
             .unwrap();
-        context.delete_stream(stream_name).await.unwrap();
+        context.delete_stream(stream.name).await.unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
@@ -845,13 +848,13 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream_name = "test_check_stream_status";
+        let stream = Stream::new("test_check_stream_status", "temp", "temp", "temp", 0);
         // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
+        let _ = context.delete_stream(stream.name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
                 max_messages: 1000,
                 max_message_size: 1024,
                 max_messages_per_subject: 1000,
@@ -864,11 +867,11 @@ mod tests {
         let _consumer = context
             .create_consumer_on_stream(
                 Config {
-                    name: Some(stream_name.to_string()),
+                    name: Some(stream.name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
                 },
-                stream_name,
+                stream.name.to_string(),
             )
             .await
             .unwrap();
@@ -878,7 +881,7 @@ mod tests {
             vec![ToVertexConfig {
                 name: "test-vertex".to_string(),
                 writer_config: BufferWriterConfig {
-                    streams: vec![(stream_name.to_string(), 0)],
+                    streams: vec![stream.clone()],
                     max_length: 100,
                     ..Default::default()
                 },
@@ -900,7 +903,7 @@ mod tests {
         // Publish messages to fill the buffer, since max_length is 100, we need to publish 80 messages
         for _ in 0..80 {
             context
-                .publish(stream_name, Bytes::from("test message"))
+                .publish(stream.name, Bytes::from("test message"))
                 .await
                 .unwrap();
         }
@@ -908,7 +911,7 @@ mod tests {
         let start_time = Instant::now();
         while !writer
             .is_full
-            .get(stream_name)
+            .get(stream.name)
             .map(|is_full| is_full.load(Ordering::Relaxed))
             .unwrap()
             && start_time.elapsed().as_millis() < 1000
@@ -920,14 +923,14 @@ mod tests {
         assert!(
             writer
                 .is_full
-                .get(stream_name)
+                .get(stream.name)
                 .map(|is_full| is_full.load(Ordering::Relaxed))
                 .unwrap(),
             "Buffer should be full after publishing messages"
         );
 
         // Clean up
-        context.delete_stream(stream_name).await.unwrap();
+        context.delete_stream(stream.name).await.unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
@@ -940,13 +943,13 @@ mod tests {
         let context = jetstream::new(client);
         let tracker_handle = TrackerHandle::new();
 
-        let stream_name = "test_publish_messages";
+        let stream = Stream::new("test_publish_messages", "temp", "temp", "temp", 0);
         // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
+        let _ = context.delete_stream(stream.name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.into()],
                 max_messages: 1000,
                 ..Default::default()
             })
@@ -956,11 +959,11 @@ mod tests {
         let _consumer = context
             .create_consumer_on_stream(
                 Config {
-                    name: Some(stream_name.to_string()),
+                    name: Some(stream.name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
                 },
-                stream_name,
+                stream.name,
             )
             .await
             .unwrap();
@@ -969,7 +972,7 @@ mod tests {
             vec![ToVertexConfig {
                 name: "test-vertex".to_string(),
                 writer_config: BufferWriterConfig {
-                    streams: vec![(stream_name.to_string(), 0)],
+                    streams: vec![stream.clone()],
                     max_length: 1000,
                     ..Default::default()
                 },
@@ -1018,7 +1021,7 @@ mod tests {
         }
         // make sure all messages are acked
         assert!(tracker_handle.is_empty().await.unwrap());
-        context.delete_stream(stream_name).await.unwrap();
+        context.delete_stream(stream.name).await.unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
@@ -1030,13 +1033,13 @@ mod tests {
         let context = jetstream::new(client);
         let tracker_handle = TrackerHandle::new();
 
-        let stream_name = "test_publish_cancellation";
+        let stream = Stream::new("test_publish_cancellation", "temp", "temp", "temp", 0);
         // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
+        let _ = context.delete_stream(stream.name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.into()],
                 max_message_size: 1024,
                 ..Default::default()
             })
@@ -1046,11 +1049,11 @@ mod tests {
         let _consumer = context
             .create_consumer_on_stream(
                 Config {
-                    name: Some(stream_name.to_string()),
+                    name: Some(stream.name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
                 },
-                stream_name,
+                stream.name,
             )
             .await
             .unwrap();
@@ -1060,7 +1063,7 @@ mod tests {
             vec![ToVertexConfig {
                 name: "test-vertex".to_string(),
                 writer_config: BufferWriterConfig {
-                    streams: vec![(stream_name.to_string(), 0)],
+                    streams: vec![stream.clone()],
                     ..Default::default()
                 },
                 conditions: None,
@@ -1141,7 +1144,7 @@ mod tests {
 
         // make sure all messages are acked
         assert!(tracker_handle.is_empty().await.unwrap());
-        context.delete_stream(stream_name).await.unwrap();
+        context.delete_stream(stream.name).await.unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
@@ -1153,9 +1156,18 @@ mod tests {
         let tracker_handle = TrackerHandle::new();
         let cln_token = CancellationToken::new();
 
-        let vertex1_streams = vec!["vertex1-0", "vertex1-1"];
-        let vertex2_streams = vec!["vertex2-0", "vertex2-1"];
-        let vertex3_streams = vec!["vertex3-0", "vertex3-1"];
+        let vertex1_streams = vec![
+            Stream::new("vertex1-0", "temp", "temp", "temp", 0),
+            Stream::new("vertex1-1", "temp", "temp", "temp", 0),
+        ];
+        let vertex2_streams = vec![
+            Stream::new("vertex2-0", "temp", "temp", "temp", 0),
+            Stream::new("vertex2-1", "temp", "temp", "temp", 0),
+        ];
+        let vertex3_streams = vec![
+            Stream::new("vertex3-0", "temp", "temp", "temp", 0),
+            Stream::new("vertex3-1", "temp", "temp", "temp", 0),
+        ];
 
         let (_, consumers1) = create_streams_and_consumers(&context, &vertex1_streams).await;
         let (_, consumers2) = create_streams_and_consumers(&context, &vertex2_streams).await;
@@ -1166,10 +1178,7 @@ mod tests {
                 ToVertexConfig {
                     name: "vertex1".to_string(),
                     writer_config: BufferWriterConfig {
-                        streams: vec![
-                            (vertex1_streams[0].to_string(), 0),
-                            (vertex1_streams[1].to_string(), 1),
-                        ],
+                        streams: vertex1_streams.clone(),
                         partitions: 2,
                         ..Default::default()
                     },
@@ -1182,10 +1191,7 @@ mod tests {
                 ToVertexConfig {
                     name: "vertex2".to_string(),
                     writer_config: BufferWriterConfig {
-                        streams: vec![
-                            (vertex2_streams[0].to_string(), 0),
-                            (vertex2_streams[1].to_string(), 1),
-                        ],
+                        streams: vertex2_streams.clone(),
                         partitions: 2,
                         ..Default::default()
                     },
@@ -1198,10 +1204,7 @@ mod tests {
                 ToVertexConfig {
                     name: "vertex3".to_string(),
                     writer_config: BufferWriterConfig {
-                        streams: vec![
-                            (vertex3_streams[0].to_string(), 0),
-                            (vertex3_streams[1].to_string(), 1),
-                        ],
+                        streams: vertex3_streams.clone(),
                         partitions: 2,
                         ..Default::default()
                     },
@@ -1283,23 +1286,23 @@ mod tests {
             .chain(&vertex2_streams)
             .chain(&vertex3_streams)
         {
-            context.delete_stream(stream_name).await.unwrap();
+            context.delete_stream(stream_name.name).await.unwrap();
         }
     }
 
     async fn create_streams_and_consumers(
         context: &Context,
-        stream_names: &[&str],
+        stream_names: &[Stream],
     ) -> (Vec<stream::Stream>, Vec<Consumer<Config>>) {
         let mut streams = Vec::new();
         let mut consumers = Vec::new();
 
         for stream_name in stream_names {
-            let _ = context.delete_stream(stream_name).await;
+            let _ = context.delete_stream(stream_name.name).await;
             let stream = context
                 .get_or_create_stream(stream::Config {
-                    name: stream_name.to_string(),
-                    subjects: vec![stream_name.to_string()],
+                    name: stream_name.name.to_string(),
+                    subjects: vec![stream_name.name.to_string()],
                     ..Default::default()
                 })
                 .await
@@ -1309,11 +1312,11 @@ mod tests {
             let consumer = context
                 .create_consumer_on_stream(
                     Config {
-                        name: Some(stream_name.to_string()),
+                        name: Some(stream_name.name.to_string()),
                         ack_policy: consumer::AckPolicy::Explicit,
                         ..Default::default()
                     },
-                    stream_name,
+                    stream_name.name,
                 )
                 .await
                 .unwrap();

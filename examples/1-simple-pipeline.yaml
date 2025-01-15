@@ -3,6 +3,9 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
+  limits:
+    bufferMaxLength: 1000
+    bufferUsageLimit: 10
   vertices:
     - name: in
       scale:
@@ -15,9 +18,10 @@ spec:
     - name: cat
       scale:
         min: 1
+        max: 50
       udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message
+        container:
+          image: quay.io/yhl25/sleep-cat:stable # A built-in UDF which simply cats the message
     - name: out
       scale:
         min: 1

@@ -113,7 +113,7 @@ mod tests {
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
-    use crate::config::pipeline::isb::BufferWriterConfig;
+    use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::ToVertexConfig;
     use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
     use crate::pipeline::source_forwarder::SourceForwarderBuilder;
@@ -254,13 +254,13 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream_name = "test_source_forwarder";
+        let stream = Stream::new("test_source_forwarder", "test", 0);
         // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
+        let _ = context.delete_stream(stream.name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.into()],
                 max_message_size: 1024,
                 ..Default::default()
             })
@@ -270,11 +270,11 @@ mod tests {
         let _consumer = context
             .create_consumer_on_stream(
                 consumer::Config {
-                    name: Some(stream_name.to_string()),
+                    name: Some(stream.name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
                 },
-                stream_name,
+                stream.name,
             )
             .await
             .unwrap();
@@ -282,7 +282,7 @@ mod tests {
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
                 writer_config: BufferWriterConfig {
-                    streams: vec![(stream_name.to_string(), 0)],
+                    streams: vec![stream.clone()],
                     ..Default::default()
                 },
                 conditions: None,

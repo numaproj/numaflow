@@ -1,5 +1,6 @@
 /// Jetstream ISB related configurations.
 use std::fmt;
+use std::fmt::Display;
 use std::time::Duration;
 
 const DEFAULT_PARTITION_IDX: u16 = 0;
@@ -30,8 +31,31 @@ pub(crate) mod jetstream {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Stream {
+    pub(crate) name: &'static str,
+    pub(crate) vertex: &'static str,
+    pub(crate) partition: u16,
+}
+
+impl Stream {
+    pub(crate) fn new(name: &'static str, vertex: &'static str, partition: u16) -> Self {
+        Stream {
+            name,
+            vertex,
+            partition,
+        }
+    }
+}
+
+impl Display for Stream {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct BufferWriterConfig {
-    pub streams: Vec<(String, u16)>,
+    pub streams: Vec<Stream>,
     pub partitions: u16,
     pub max_length: usize,
     pub usage_limit: f64,
@@ -41,7 +65,7 @@ pub(crate) struct BufferWriterConfig {
 impl Default for BufferWriterConfig {
     fn default() -> Self {
         BufferWriterConfig {
-            streams: vec![("default-0".to_string(), DEFAULT_PARTITION_IDX)],
+            streams: vec![],
             partitions: DEFAULT_PARTITIONS,
             max_length: DEFAULT_MAX_LENGTH,
             usage_limit: DEFAULT_USAGE_LIMIT,
@@ -81,7 +105,7 @@ impl fmt::Display for BufferFullStrategy {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct BufferReaderConfig {
     pub(crate) partitions: u16,
-    pub(crate) streams: Vec<(&'static str, u16)>,
+    pub(crate) streams: Vec<Stream>,
     pub(crate) wip_ack_interval: Duration,
 }
 
@@ -89,7 +113,7 @@ impl Default for BufferReaderConfig {
     fn default() -> Self {
         BufferReaderConfig {
             partitions: DEFAULT_PARTITIONS,
-            streams: vec![("default-0", DEFAULT_PARTITION_IDX)],
+            streams: vec![Stream::new("default-0", "default", DEFAULT_PARTITION_IDX)],
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
         }
     }
@@ -118,7 +142,7 @@ mod tests {
     #[test]
     fn test_default_buffer_writer_config() {
         let expected = BufferWriterConfig {
-            streams: vec![("default-0".to_string(), DEFAULT_PARTITION_IDX)],
+            streams: vec![Stream::new("default-0", "default", DEFAULT_PARTITION_IDX)],
             partitions: DEFAULT_PARTITIONS,
             max_length: DEFAULT_MAX_LENGTH,
             usage_limit: DEFAULT_USAGE_LIMIT,
@@ -142,7 +166,7 @@ mod tests {
     fn test_default_buffer_reader_config() {
         let expected = BufferReaderConfig {
             partitions: DEFAULT_PARTITIONS,
-            streams: vec![("default-0", DEFAULT_PARTITION_IDX)],
+            streams: vec![Stream::new("default-0", "default", DEFAULT_PARTITION_IDX)],
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
         };
         let config = BufferReaderConfig::default();

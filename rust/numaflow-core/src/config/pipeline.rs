@@ -13,7 +13,7 @@ use crate::config::components::sink::SinkType;
 use crate::config::components::source::SourceConfig;
 use crate::config::components::transformer::{TransformerConfig, TransformerType};
 use crate::config::get_vertex_replica;
-use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
+use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig, Stream};
 use crate::config::pipeline::map::MapMode;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::error::Error;
@@ -120,7 +120,7 @@ pub(crate) mod map {
 
     impl TryFrom<Box<Udf>> for MapType {
         type Error = Error;
-        fn try_from(udf: Box<Udf>) -> std::result::Result<Self, Self::Error> {
+        fn try_from(udf: Box<Udf>) -> Result<Self, Self::Error> {
             if let Some(builtin) = udf.builtin {
                 Ok(MapType::Builtin(BuiltinConfig {
                     name: builtin.name,
@@ -316,13 +316,15 @@ impl PipelineConfig {
         let mut from_vertex_config = vec![];
         for edge in from_edges {
             let partition_count = edge.to_vertex_partition_count.unwrap_or_default() as u16;
-            let buffer_name = format!("{}-{}-{}", namespace, pipeline_name, edge.to);
 
-            let streams: Vec<(&'static str, u16)> = (0..partition_count)
+            let streams: Vec<Stream> = (0..partition_count)
                 .map(|i| {
-                    let stream: &'static str =
-                        Box::leak(Box::new(format!("{}-{}", buffer_name, i)));
-                    (stream, i)
+                    let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
+                    let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
+                    let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
+                    let name: &'static str =
+                        Box::leak(format!("{}-{}-{}-{}", ns, pl, to, i).into_boxed_str());
+                    Stream::new(name, ns, pl, to, i)
                 })
                 .collect();
 
@@ -341,10 +343,16 @@ impl PipelineConfig {
         let mut to_vertex_config = vec![];
         for edge in to_edges {
             let partition_count = edge.to_vertex_partition_count.unwrap_or_default() as u16;
-            let buffer_name = format!("{}-{}-{}", namespace, pipeline_name, edge.to);
 
-            let streams: Vec<(String, u16)> = (0..partition_count)
-                .map(|i| (format!("{}-{}", buffer_name, i), i))
+            let streams: Vec<Stream> = (0..partition_count)
+                .map(|i| {
+                    let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
+                    let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
+                    let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
+                    let name: &'static str =
+                        Box::leak(format!("{}-{}-{}-{}", ns, pl, to, i).into_boxed_str());
+                    Stream::new(name, ns, pl, to, i)
+                })
                 .collect();
 
             let default_writer_config = BufferWriterConfig::default();
@@ -476,7 +484,13 @@ mod tests {
                 name: "in".to_string(),
                 reader_config: BufferReaderConfig {
                     partitions: 1,
-                    streams: vec![("default-simple-pipeline-out-0", 0)],
+                    streams: vec![Stream::new(
+                        "default-simple-pipeline-out-0",
+                        "default",
+                        "simple-pipeline",
+                        "out",
+                        0,
+                    )],
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
@@ -524,7 +538,13 @@ mod tests {
             to_vertex_config: vec![ToVertexConfig {
                 name: "out".to_string(),
                 writer_config: BufferWriterConfig {
-                    streams: vec![("default-simple-pipeline-out-0".to_string(), 0)],
+                    streams: vec![Stream::new(
+                        "default-simple-pipeline-out-0",
+                        "default",
+                        "simple-pipeline",
+                        "out",
+                        0,
+                    )],
                     partitions: 1,
                     max_length: 150000,
                     usage_limit: 0.85,
@@ -578,7 +598,13 @@ mod tests {
             to_vertex_config: vec![ToVertexConfig {
                 name: "out".to_string(),
                 writer_config: BufferWriterConfig {
-                    streams: vec![("default-simple-pipeline-out-0".to_string(), 0)],
+                    streams: vec![Stream::new(
+                        "default-simple-pipeline-out-0",
+                        "default",
+                        "simple-pipeline",
+                        "out",
+                        0,
+                    )],
                     partitions: 1,
                     max_length: 30000,
                     usage_limit: 0.8,
@@ -702,7 +728,13 @@ mod tests {
                 name: "in".to_string(),
                 reader_config: BufferReaderConfig {
                     partitions: 1,
-                    streams: vec![("default-simple-pipeline-map-0", 0)],
+                    streams: vec![Stream::new(
+                        "default-simple-pipeline-map-0",
+                        "default",
+                        "simple-pipeline",
+                        "map",
+                        0,
+                    )],
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,

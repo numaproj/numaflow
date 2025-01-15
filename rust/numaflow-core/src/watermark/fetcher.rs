@@ -16,7 +16,6 @@ impl Fetcher {
     async fn new(
         from_vertex_configs: Vec<FromVertexConfig>,
         js_context: async_nats::jetstream::Context,
-        source_watermark_config: Option<WatermarkConfig>,
     ) -> Result<Self> {
         let mut processor_managers = HashMap::new();
         let mut last_processed_wm = HashMap::new();
