@@ -270,10 +270,7 @@ mod tests {
                 vertex: "in".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
-                responses: vec![Response {
-                    index: 0,
-                    tags: None,
-                }],
+                responses: vec![Response { tags: None }],
             },
             Callback {
                 id: id.clone(),
@@ -281,7 +278,6 @@ mod tests {
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
                 responses: vec![Response {
-                    index: 0,
                     tags: Some(vec!["tiger".to_owned(), "asciiart".to_owned()]),
                 }],
             },
@@ -290,40 +286,28 @@ mod tests {
                 vertex: "tiger".to_string(),
                 cb_time: 12345,
                 from_vertex: "planner".to_string(),
-                responses: vec![Response {
-                    index: 0,
-                    tags: None,
-                }],
+                responses: vec![Response { tags: None }],
             },
             Callback {
                 id: id.clone(),
                 vertex: "asciiart".to_string(),
                 cb_time: 12345,
                 from_vertex: "planner".to_string(),
-                responses: vec![Response {
-                    index: 0,
-                    tags: None,
-                }],
+                responses: vec![Response { tags: None }],
             },
             Callback {
                 id: id.clone(),
                 vertex: "serve-sink".to_string(),
                 cb_time: 12345,
                 from_vertex: "tiger".to_string(),
-                responses: vec![Response {
-                    index: 0,
-                    tags: None,
-                }],
+                responses: vec![Response { tags: None }],
             },
             Callback {
                 id: id.clone(),
                 vertex: "serve-sink".to_string(),
                 cb_time: 12345,
                 from_vertex: "asciiart".to_string(),
-                responses: vec![Response {
-                    index: 0,
-                    tags: None,
-                }],
+                responses: vec![Response { tags: None }],
             },
         ];
         state.insert_callback_requests(cbs).await.unwrap();
@@ -362,10 +346,7 @@ mod tests {
             vertex: "in".to_string(),
             cb_time: 12345,
             from_vertex: "in".to_string(),
-            responses: vec![Response {
-                index: 0,
-                tags: None,
-            }],
+            responses: vec![Response { tags: None }],
         }];
 
         // Try to insert callback requests for an ID that hasn't been registered

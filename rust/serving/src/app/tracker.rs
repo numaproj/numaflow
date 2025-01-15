@@ -273,10 +273,7 @@ mod tests {
                     vertex: "a".to_string(),
                     cb_time: 1,
                     from_vertex: "a".to_string(),
-                    responses: vec![Response {
-                        index: 0,
-                        tags: None,
-                    }],
+                    responses: vec![Response { tags: None }],
                 }),
                 visited: false,
             }],
@@ -325,10 +322,7 @@ mod tests {
                     vertex: "a".to_string(),
                     cb_time: 1,
                     from_vertex: "a".to_string(),
-                    responses: vec![Response {
-                        index: 0,
-                        tags: None,
-                    }],
+                    responses: vec![Response { tags: None }],
                 }),
                 visited: false,
             }],
@@ -342,10 +336,7 @@ mod tests {
                     vertex: "b".to_string(),
                     cb_time: 1,
                     from_vertex: "a".to_string(),
-                    responses: vec![Response {
-                        index: 0,
-                        tags: None,
-                    }],
+                    responses: vec![Response { tags: None }],
                 }),
                 visited: false,
             }],
@@ -359,10 +350,7 @@ mod tests {
                     vertex: "c".to_string(),
                     cb_time: 1,
                     from_vertex: "a".to_string(),
-                    responses: vec![Response {
-                        index: 0,
-                        tags: None,
-                    }],
+                    responses: vec![Response { tags: None }],
                 }),
                 visited: false,
             }],
@@ -482,77 +470,77 @@ mod tests {
             "vertex": "a",
             "from_vertex": "a",
             "cb_time": 123456789,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "b",
             "from_vertex": "a",
             "cb_time": 123456867,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "c",
             "from_vertex": "a",
             "cb_time": 123456819,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "d",
             "from_vertex": "b",
             "cb_time": 123456840,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "e",
             "from_vertex": "c",
             "cb_time": 123456843,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "f",
             "from_vertex": "d",
             "cb_time": 123456854,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "f",
             "from_vertex": "e",
             "cb_time": 123456886,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "g",
             "from_vertex": "f",
             "cb_time": 123456885,
-            "responses": [{"index": 0, "tags": ["even"]}]
+            "responses": [{"tags": ["even"]}]
         },
         {
             "id": "xxxx",
             "vertex": "g",
             "from_vertex": "f",
             "cb_time": 123456888,
-            "responses": [{"index": 0, "tags": ["even"]}]
+            "responses": [{"tags": ["even"]}]
         },
         {
             "id": "xxxx",
             "vertex": "h",
             "from_vertex": "g",
             "cb_time": 123456889,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "h",
             "from_vertex": "g",
             "cb_time": 123456890,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         }
     ]"#;
 
@@ -621,7 +609,7 @@ mod tests {
             "vertex": "a",
             "from_vertex": "a",
             "cb_time": 123456789,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
@@ -760,14 +748,14 @@ mod tests {
             "vertex": "a",
             "from_vertex": "a",
             "cb_time": 123456789,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "b",
             "from_vertex": "a",
             "cb_time": 123456867,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
@@ -781,28 +769,28 @@ mod tests {
             "vertex": "d",
             "from_vertex": "b",
             "cb_time": 123456840,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "f",
             "from_vertex": "d",
             "cb_time": 123456854,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "g",
             "from_vertex": "f",
             "cb_time": 123456885,
-            "responses": [{"index": 0, "tags": ["even"]}]
+            "responses": [{"tags": ["even"]}]
         },
         {
             "id": "xxxx",
             "vertex": "h",
             "from_vertex": "g",
             "cb_time": 123456889,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         }
     ]"#;
 
@@ -876,21 +864,21 @@ mod tests {
                 "vertex": "a",
                 "from_vertex": "a",
                 "cb_time": 123456789,
-                "responses": [{"index": 0, "tags": null}]
+                "responses": [{"tags": null}]
             },
             {
                 "id": "xxxx",
                 "vertex": "b",
                 "from_vertex": "a",
                 "cb_time": 123456867,
-                "responses": [{"index": 0, "tags": ["failed"]}]
+                "responses": [{"tags": ["failed"]}]
             },
             {
                 "id": "xxxx",
                 "vertex": "a",
                 "from_vertex": "b",
                 "cb_time": 123456819,
-                 "responses": [{"index": 0, "tags": null}]
+                 "responses": [{"tags": null}]
 
             },
             {
@@ -898,7 +886,7 @@ mod tests {
                 "vertex": "b",
                 "from_vertex": "a",
                 "cb_time": 123456819,
-                "responses": [{"index": 0, "tags": null}]
+                "responses": [{"tags": null}]
 
             },
             {
@@ -906,7 +894,7 @@ mod tests {
                 "vertex": "c",
                 "from_vertex": "b",
                 "cb_time": 123456819,
-                "responses": [{"index": 0, "tags": null}]
+                "responses": [{"tags": null}]
 
             }
         ]"#;
@@ -958,10 +946,7 @@ mod tests {
             vertex: "invalid_vertex".to_string(),
             from_vertex: "invalid_vertex".to_string(),
             cb_time: 1,
-            responses: vec![Response {
-                index: 0,
-                tags: None,
-            }],
+            responses: vec![Response { tags: None }],
         })];
 
         // Call the function with the invalid callback
@@ -1010,7 +995,7 @@ mod tests {
             "from_vertex": "a",
             "cb_time": 123456789,
             "responses": [
-                {"index": 0, "tags": null},
+                {"tags": null},
                 {"index": 1, "tags": null}
             ]
         },
@@ -1020,7 +1005,7 @@ mod tests {
             "from_vertex": "a",
             "cb_time": 123456867,
             "responses": [
-                {"index": 0, "tags": null},
+                {"tags": null},
                 {"index": 1, "tags": null}
             ]
         },
@@ -1030,7 +1015,7 @@ mod tests {
             "from_vertex": "a",
             "cb_time": 123456868,
             "responses": [
-                {"index": 0, "tags": null},
+                {"tags": null},
                 {"index": 1, "tags": null}
             ]
         },
@@ -1039,28 +1024,28 @@ mod tests {
             "vertex": "c",
             "from_vertex": "b",
             "cb_time": 123456869,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "c",
             "from_vertex": "b",
             "cb_time": 123456870,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "c",
             "from_vertex": "b",
             "cb_time": 123456871,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "c",
             "from_vertex": "b",
             "cb_time": 123456872,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         }
     ]"#;
 
@@ -1191,7 +1176,7 @@ mod tests {
             "vertex": "a",
             "from_vertex": "a",
             "cb_time": 123456789,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
@@ -1199,7 +1184,7 @@ mod tests {
             "from_vertex": "a",
             "cb_time": 123456867,
             "responses": [
-                {"index": 0, "tags": null},
+                {"tags": null},
                 {"index": 1, "tags": null}
             ]
         },
@@ -1209,7 +1194,7 @@ mod tests {
             "from_vertex": "a",
             "cb_time": 123456819,
             "responses": [
-                {"index": 0, "tags": null},
+                {"tags": null},
                 {"index": 1, "tags": null},
                 {"index": 2, "tags": null}
             ]
@@ -1219,56 +1204,56 @@ mod tests {
             "vertex": "d",
             "from_vertex": "b",
             "cb_time": 123456840,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "d",
             "from_vertex": "b",
             "cb_time": 123456841,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "e",
             "from_vertex": "c",
             "cb_time": 123456843,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "e",
             "from_vertex": "c",
             "cb_time": 123456844,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "e",
             "from_vertex": "c",
             "cb_time": 123456845,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "f",
             "from_vertex": "d",
             "cb_time": 123456854,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "f",
             "from_vertex": "d",
             "cb_time": 123456854,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "f",
             "from_vertex": "e",
             "cb_time": 123456886,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
@@ -1289,7 +1274,7 @@ mod tests {
             "vertex": "g",
             "from_vertex": "f",
             "cb_time": 123456885,
-            "responses": [{"index": 0, "tags": ["even"]}]
+            "responses": [{"tags": ["even"]}]
         },
         {
             "id": "xxxx",
@@ -1324,35 +1309,35 @@ mod tests {
             "vertex": "h",
             "from_vertex": "g",
             "cb_time": 123456890,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "h",
             "from_vertex": "g",
             "cb_time": 123456891,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "i",
             "from_vertex": "g",
             "cb_time": 123456892,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "i",
             "from_vertex": "g",
             "cb_time": 123456893,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         },
         {
             "id": "xxxx",
             "vertex": "i",
             "from_vertex": "g",
             "cb_time": 123456894,
-            "responses": [{"index": 0, "tags": null}]
+            "responses": [{"tags": null}]
         }
     ]"#;
 

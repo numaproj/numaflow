@@ -109,10 +109,7 @@ mod tests {
             vertex: "in".to_string(),
             cb_time: 12345,
             from_vertex: "in".to_string(),
-            responses: vec![Response {
-                index: 0,
-                tags: None,
-            }],
+            responses: vec![Response { tags: None }],
         });
 
         // Save a callback
@@ -187,10 +184,7 @@ mod tests {
             vertex: "in".to_string(),
             cb_time: 12345,
             from_vertex: "in".to_string(),
-            responses: vec![Response {
-                index: 0,
-                tags: None,
-            }],
+            responses: vec![Response { tags: None }],
         });
 
         // Try to save a callback with an invalid key

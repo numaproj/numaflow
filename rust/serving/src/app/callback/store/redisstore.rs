@@ -230,10 +230,7 @@ mod tests {
                 vertex: String::from("prev_vertex"),
                 cb_time: 1234,
                 from_vertex: String::from("next_vertex"),
-                responses: vec![Response {
-                    index: 0,
-                    tags: None,
-                }],
+                responses: vec![Response { tags: None }],
             }),
         };
 
@@ -298,10 +295,7 @@ mod tests {
             vertex: String::from("vertex"),
             cb_time: 1234,
             from_vertex: String::from("next_vertex"),
-            responses: vec![Response {
-                index: 0,
-                tags: None,
-            }],
+            responses: vec![Response { tags: None }],
         });
 
         // Save with TTL of 1 second

@@ -23,7 +23,6 @@ pub(crate) struct Callback {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct Response {
-    pub(crate) index: u16,
     pub(crate) tags: Option<Vec<String>>,
 }
 
@@ -118,10 +117,7 @@ mod tests {
             vertex: "in".to_string(),
             cb_time: 12345,
             from_vertex: "in".to_string(),
-            responses: vec![Response {
-                index: 0,
-                tags: None,
-            }],
+            responses: vec![Response { tags: None }],
         }];
 
         let res = Request::builder()
@@ -157,30 +153,21 @@ mod tests {
                 vertex: "in".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
-                responses: vec![Response {
-                    index: 0,
-                    tags: None,
-                }],
+                responses: vec![Response { tags: None }],
             },
             Callback {
                 id: "test_id".to_string(),
                 vertex: "cat".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
-                responses: vec![Response {
-                    index: 0,
-                    tags: None,
-                }],
+                responses: vec![Response { tags: None }],
             },
             Callback {
                 id: "test_id".to_string(),
                 vertex: "out".to_string(),
                 cb_time: 12345,
                 from_vertex: "cat".to_string(),
-                responses: vec![Response {
-                    index: 0,
-                    tags: None,
-                }],
+                responses: vec![Response { tags: None }],
             },
         ];
 

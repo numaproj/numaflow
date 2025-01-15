@@ -360,30 +360,21 @@ mod tests {
                 vertex: "in".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
-                responses: vec![callback::Response {
-                    index: 0,
-                    tags: None,
-                }],
+                responses: vec![callback::Response { tags: None }],
             },
             Callback {
                 id: id.to_string(),
                 vertex: "cat".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
-                responses: vec![callback::Response {
-                    index: 0,
-                    tags: None,
-                }],
+                responses: vec![callback::Response { tags: None }],
             },
             Callback {
                 id: id.to_string(),
                 vertex: "out".to_string(),
                 cb_time: 12345,
                 from_vertex: "cat".to_string(),
-                responses: vec![callback::Response {
-                    index: 0,
-                    tags: None,
-                }],
+                responses: vec![callback::Response { tags: None }],
             },
         ]
     }
