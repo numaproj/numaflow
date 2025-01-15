@@ -718,7 +718,6 @@ struct TimestampedPending {
 #[derive(Clone)]
 pub(crate) enum LagReader {
     Source(Source),
-    // TODO: Arc<[T]>
     ISB(Vec<JetstreamReader>), // multiple partitions
 }
 
