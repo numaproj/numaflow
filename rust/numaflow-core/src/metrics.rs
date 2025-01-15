@@ -719,7 +719,7 @@ struct TimestampedPending {
 pub(crate) enum LagReader {
     Source(Source),
     // TODO: Arc<[T]>
-    ISB(Vec<JetstreamReader>) // multiple partitions
+    ISB(Vec<JetstreamReader>), // multiple partitions
 }
 
 /// PendingReader is responsible for periodically checking the lag of the reader
@@ -756,7 +756,6 @@ impl PendingReaderBuilder {
         }
     }
 
-
     pub(crate) fn lag_checking_interval(mut self, interval: Duration) -> Self {
         self.lag_checking_interval = Some(interval);
         self
@@ -775,7 +774,7 @@ impl PendingReaderBuilder {
     pub(crate) fn build(self) -> PendingReader {
         let mut pending_map = HashMap::new();
         match &self.lag_reader {
-            LagReader::Source(source) => {
+            LagReader::Source(_) => {
                 pending_map.insert("source".to_string(), Vec::with_capacity(MAX_PENDING_STATS));
             }
             LagReader::ISB(readers) => {
@@ -819,12 +818,7 @@ impl PendingReader {
 
         let lag_reader = self.lag_reader.clone();
         let buildup_handle = tokio::spawn(async move {
-            build_pending_info(
-                lag_reader,
-                lag_checking_interval,
-                pending_stats,
-            )
-            .await;
+            build_pending_info(lag_reader, lag_checking_interval, pending_stats).await;
         });
 
         let pending_stats = Arc::clone(&self.pending_stats);
@@ -860,7 +854,7 @@ async fn build_pending_info(
     pending_stats: Arc<Mutex<HashMap<String, Vec<TimestampedPending>>>>,
 ) {
     let mut ticker = time::interval(lag_checking_interval);
-    
+
     loop {
         ticker.tick().await;
 

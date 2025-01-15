@@ -9,7 +9,7 @@ use tracing::info;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
 use crate::config::{is_mono_vertex, pipeline};
-use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
+use crate::metrics::{LagReader, PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
@@ -77,8 +77,11 @@ async fn start_source_forwarder(
     )
     .await?;
 
-    let pending_reader =
-        shared::metrics::create_source_pending_reader(&config.metrics_config, source.clone()).await;
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::Source(source.clone()),
+    )
+    .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     start_metrics_server(
@@ -160,8 +163,11 @@ async fn start_map_forwarder(
         forwarder_components.push((buffer_reader, buffer_writer, mapper));
     }
 
-    let pending_reader =
-        shared::metrics::create_isb_pending_reader(&config.metrics_config, isb_lag_readers).await;
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(isb_lag_readers),
+    )
+    .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     start_metrics_server(
@@ -240,9 +246,11 @@ async fn start_sink_forwarder(
         sink_writers.push((sink_writer, sink_grpc_client, fb_sink_grpc_client));
     }
 
-    let pending_reader =
-        shared::metrics::create_isb_pending_reader(&config.metrics_config, buffer_readers.clone())
-            .await;
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(buffer_readers.clone()),
+    )
+    .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     // Start the metrics server with one of the clients
@@ -437,7 +445,7 @@ mod tests {
                     streams: streams
                         .iter()
                         .enumerate()
-                        .map(|(i, stream_name)| (stream_name.to_string(), i as u16))
+                        .map(|(i, stream_name)| ((*stream_name).to_string(), i as u16))
                         .collect(),
                     partitions: 5,
                     max_length: 30000,

@@ -6,10 +6,9 @@ use tracing::error;
 
 use crate::config::components::metrics::MetricsConfig;
 use crate::metrics::{
-    start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
+    start_metrics_https_server, LagReader, PendingReader, PendingReaderBuilder,
+    UserDefinedContainerState,
 };
-use crate::pipeline::isb::jetstream::reader::JetstreamReader;
-use crate::source::Source;
 
 /// Starts the metrics server
 pub(crate) async fn start_metrics_server(
@@ -30,11 +29,11 @@ pub(crate) async fn start_metrics_server(
 }
 
 /// Creates a pending reader
-pub(crate) async fn create_source_pending_reader(
+pub(crate) async fn create_pending_reader(
     metrics_config: &MetricsConfig,
-    lag_reader: Source,
+    lag_reader: LagReader,
 ) -> PendingReader {
-    PendingReaderBuilder::new()
+    PendingReaderBuilder::new(lag_reader)
         .lag_checking_interval(Duration::from_secs(
             metrics_config.lag_check_interval_in_secs.into(),
         ))
@@ -42,22 +41,5 @@ pub(crate) async fn create_source_pending_reader(
             metrics_config.lag_refresh_interval_in_secs.into(),
         ))
         .lookback_seconds(metrics_config.lookback_window_in_secs)
-        .source_lag_reader(lag_reader)
-        .build()
-}
-
-pub(crate) async fn create_isb_pending_reader(
-    metrics_config: &MetricsConfig,
-    lag_readers: Vec<JetstreamReader>,
-) -> PendingReader {
-    PendingReaderBuilder::new()
-        .lag_checking_interval(Duration::from_secs(
-            metrics_config.lag_check_interval_in_secs.into(),
-        ))
-        .refresh_interval(Duration::from_secs(
-            metrics_config.lag_refresh_interval_in_secs.into(),
-        ))
-        .lookback_seconds(metrics_config.lookback_window_in_secs)
-        .isb_lag_readers(lag_readers)
         .build()
 }
