@@ -144,7 +144,12 @@ const LineChartComponent = ({
         case "vertex":
           return vertexId;
         case "pod":
-          return `${pipelineId}-*`;
+          switch(type){
+            case "monoVertex":
+              return `${pipelineId}-*`;
+            default:
+              return `${pipelineId}-${vertexId}-*`;
+          }
         default:
           return "";
       }

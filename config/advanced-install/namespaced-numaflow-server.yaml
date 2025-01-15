@@ -212,6 +212,14 @@ data:
     \n    - metric_name: namespace_pod_cpu_utilization\n      display_name: CPU utilization
     by pod\n      required_filters:\n        - namespace\n        # to get only mono-vertex
     pods\n        - pod  \n      dimensions:\n        - name: mono-vertex\n          filters:
+    \n            - name: pod \n              required: false\n\n- name: pipeline-pod-cpu\n
+    \ object: vertex\n  title: cpu utilization by pod\n  description: cpu utilization
+    by pod for pipelines vertex\n  expr: avg_over_time($metric_name{$filters}[$duration]})\n
+    \ params:\n    - name: duration\n      required: true\n    - name: start_time\n
+    \     required: false\n    - name: end_time\n      required: false\n  metrics:
+    \n    - metric_name: namespace_pod_cpu_utilization\n      display_name: CPU utilization
+    by pod\n      required_filters:\n        - namespace\n        # to get only vertex
+    pods\n        - pod  \n      dimensions:\n        - name: vertex\n          filters:
     \n            - name: pod \n              required: false\n# - name: mono-vertex-container-cpu\n#
     \  object: mono-vertex\n#   title: cpu utilization by container\n#   description:
     cpu utilization by container for mono-vertex\n#   expr: avg_over_time($metric_name{$filters}[$duration]})\n#
