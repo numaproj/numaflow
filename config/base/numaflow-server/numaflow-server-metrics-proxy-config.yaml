@@ -7,7 +7,7 @@ data:
     # url is a required field, it should be the url of the service to which the metrics proxy will connect
     # url: service_name + "." + service_namespace + ".svc.cluster.local" + ":" + port
     # example for local prometheus service
-    # url: http://prometheus-operated.monitoring.svc.cluster.local:9090
+    # url: http://prometheus-operated.monitoring.svc.cluster.local:9090 
     patterns:
     - name: vertex_gauge
       object: vertex
@@ -179,3 +179,50 @@ data:
               filters:
                 - name: pod
                   required: false
+    - name: mono-vertex-pod-cpu
+      object: mono-vertex
+      title: cpu utilization by pod
+      description: cpu utilization by pod for mono-vertex
+      expr: avg_over_time($metric_name{$filters}[$duration]})
+      params:
+        - name: duration
+          required: true
+        - name: start_time
+          required: false
+        - name: end_time
+          required: false
+      metrics: 
+        - metric_name: namespace_pod_cpu_utilization
+          display_name: CPU utilization by pod
+          required_filters:
+            - namespace
+            # to get only mono-vertex pods
+            - pod  
+          dimensions:
+            - name: mono-vertex
+              filters: 
+                - name: pod 
+                  required: false
+    # - name: mono-vertex-container-cpu
+    #   object: mono-vertex
+    #   title: cpu utilization by container
+    #   description: cpu utilization by container for mono-vertex
+    #   expr: avg_over_time($metric_name{$filters}[$duration]})
+    #   params:
+    #     - name: duration
+    #       required: true
+    #     - name: start_time
+    #       required: false
+    #     - name: end_time
+    #       required: false
+    #   metrics: 
+    #     - metric_name: namespace_app_container_cpu_utilization
+    #       display_name: CPU utilization by container
+    #       required_filters:
+    #         - namespace
+    #       dimensions:
+    #         - name: container
+    #           filters: 
+    #             - name: container
+    #               required: false
+

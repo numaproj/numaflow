@@ -137,182 +137,90 @@ metadata:
 ---
 apiVersion: v1
 data:
-  config.yaml: |-
-    # url is a required field, it should be the url of the service to which the metrics proxy will connect
-    # url: service_name + "." + service_namespace + ".svc.cluster.local" + ":" + port
-    # example for local prometheus service
-    # url: http://prometheus-operated.monitoring.svc.cluster.local:9090
-    patterns:
-    - name: vertex_gauge
-      object: vertex
-      title: Vertex Pending Messages
-      description: This query is the total number of pending messages for the vertex
-      expr: |
-        sum($metric_name{$filters}) by ($dimension, period)
-      params:
-        - name: start_time
-          required: false
-        - name: end_time
-          required: false
-      metrics:
-        - metric_name: vertex_pending_messages
-          display_name: Vertex Pending Messages
-          # set "Units" or unset for default behaviour
-          # unit: Units
-          required_filters:
-            - namespace
-            - pipeline
-            - vertex
-          dimensions:
-            - name: pod
-              # expr: optional expression for prometheus query
-              # overrides the default expression
-              filters:
-                - name: pod
-                  required: false
-                - name: period
-                  required: false
-            - name: vertex
-              # expr: optional expression for prometheus query
-              # overrides the default expression
-              filters:
-                - name: period
-                  required: false
-
-    - name: mono_vertex_gauge
-      object: mono-vertex
-      title: Pending Messages Lag
-      description: This query is the total number of pending messages for the mono vertex
-      expr: |
-        sum($metric_name{$filters}) by ($dimension, period)
-      params:
-        - name: start_time
-          required: false
-        - name: end_time
-          required: false
-      metrics:
-        - metric_name: monovtx_pending
-          display_name: Mono Vertex Pending Messages
-          # set "Units" or unset for default behaviour
-          # unit: Units
-          required_filters:
-            - namespace
-            - mvtx_name
-          dimensions:
-            - name: pod
-              # expr: optional expression for prometheus query
-              # overrides the default expression
-              filters:
-                - name: pod
-                  required: false
-                - name: period
-                  required: false
-            - name: mono-vertex
-              # expr: optional expression for prometheus query
-              # overrides the default expression
-              filters:
-                - name: period
-                  required: false
-
-    - name: mono_vertex_histogram
-      object: mono-vertex
-      title: Processing Time Latency
-      description: This query pattern is for P99,P90 and P50 quantiles for a mono-vertex across different dimensions
-      expr: |
-        histogram_quantile($quantile, sum by($dimension,le) (rate($metric_name{$filters}[$duration])))
-      params:
-        - name: quantile
-          required: true
-        - name: duration
-          required: true
-        - name: start_time
-          required: false
-        - name: end_time
-          required: false
-      metrics:
-        - metric_name: monovtx_processing_time_bucket
-          display_name: Mono Vertex Processing Time Latency
-          # set "Units" or unset for default behaviour otherwise set "s" or "ms" for latency metrics
-          # Note: latency values are in μs
-          # unit: s
-          required_filters:
-            - namespace
-            - mvtx_name
-          dimensions:
-            - name: mono-vertex
-            - name: pod
-              filters:
-                - name: pod
-                  required: false
-        - metric_name: monovtx_sink_time_bucket
-          display_name: Mono Vertex Sink Write Time Latency
-          # set "Units" or unset for default behaviour otherwise set "s" or "ms" for latency metrics
-          # Note: latency values are in μs
-          # unit: ms
-          required_filters:
-            - namespace
-            - mvtx_name
-          dimensions:
-            - name: mono-vertex
-            - name: pod
-              filters:
-                - name: pod
-                  required: false
-
-    - name: vertex_throughput
-      object: vertex
-      title: Vertex Throughput and Message Rates
-      description: This pattern measures the throughput of a vertex in messages per second across different dimensions
-      expr: sum(rate($metric_name{$filters}[$duration])) by ($dimension)
-      params:
-        - name: duration
-          required: true
-        - name: start_time
-          required: false
-        - name: end_time
-          required: false
-      metrics:
-        - metric_name: forwarder_data_read_total
-          display_name: Vertex Read Processing Rate
-          # set "Units" or unset for default behaviour
-          # unit: Units
-          required_filters:
-            - namespace
-            - pipeline
-            - vertex
-          dimensions:
-            - name: vertex
-            - name: pod
-              filters:
-                - name: pod
-                  required: false
-
-    - name: mono_vertex_throughput
-      object: mono-vertex
-      title: Mono-Vertex Throughput and Message Rates
-      description: This pattern measures the throughput of a mono-vertex in messages per second across different dimensions
-      expr: sum(rate($metric_name{$filters}[$duration])) by ($dimension)
-      params:
-        - name: duration
-          required: true
-        - name: start_time
-          required: false
-        - name: end_time
-          required: false
-      metrics:
-        - metric_name: monovtx_read_total
-          display_name: Mono Vertex Read Processing Rate
-          # set "Units" or unset for default behaviour
-          # unit: Units
-          required_filters:
-            - namespace
-            - mvtx_name
-          dimensions:
-            - name: mono-vertex
-            - name: pod
-              filters:
-                - name: pod
-                  required: false
+  config.yaml: "# url is a required field, it should be the url of the service to
+    which the metrics proxy will connect\n# url: service_name + \".\" + service_namespace
+    + \".svc.cluster.local\" + \":\" + port\n# example for local prometheus service\n#
+    url: http://prometheus-operated.monitoring.svc.cluster.local:9090 \npatterns:\n-
+    name: vertex_gauge\n  object: vertex\n  title: Vertex Pending Messages\n  description:
+    This query is the total number of pending messages for the vertex\n  expr: |\n
+    \   sum($metric_name{$filters}) by ($dimension, period)\n  params:\n    - name:
+    start_time\n      required: false\n    - name: end_time\n      required: false\n
+    \ metrics:\n    - metric_name: vertex_pending_messages\n      display_name: Vertex
+    Pending Messages\n      # set \"Units\" or unset for default behaviour\n      #
+    unit: Units\n      required_filters:\n        - namespace\n        - pipeline\n
+    \       - vertex\n      dimensions:\n        - name: pod\n          # expr: optional
+    expression for prometheus query\n          # overrides the default expression\n
+    \         filters:\n            - name: pod\n              required: false\n            -
+    name: period\n              required: false\n        - name: vertex\n          #
+    expr: optional expression for prometheus query\n          # overrides the default
+    expression\n          filters:\n            - name: period\n              required:
+    false\n\n- name: mono_vertex_gauge\n  object: mono-vertex\n  title: Pending Messages
+    Lag\n  description: This query is the total number of pending messages for the
+    mono vertex\n  expr: |\n    sum($metric_name{$filters}) by ($dimension, period)\n
+    \ params:\n    - name: start_time\n      required: false\n    - name: end_time\n
+    \     required: false\n  metrics:\n    - metric_name: monovtx_pending\n      display_name:
+    Mono Vertex Pending Messages\n      # set \"Units\" or unset for default behaviour\n
+    \     # unit: Units\n      required_filters:\n        - namespace\n        - mvtx_name\n
+    \     dimensions:\n        - name: pod\n          # expr: optional expression
+    for prometheus query\n          # overrides the default expression\n          filters:\n
+    \           - name: pod\n              required: false\n            - name: period\n
+    \             required: false\n        - name: mono-vertex\n          # expr:
+    optional expression for prometheus query\n          # overrides the default expression\n
+    \         filters:\n            - name: period\n              required: false\n\n-
+    name: mono_vertex_histogram\n  object: mono-vertex\n  title: Processing Time Latency\n
+    \ description: This query pattern is for P99,P90 and P50 quantiles for a mono-vertex
+    across different dimensions\n  expr: |\n    histogram_quantile($quantile, sum
+    by($dimension,le) (rate($metric_name{$filters}[$duration])))\n  params:\n    -
+    name: quantile\n      required: true\n    - name: duration\n      required: true\n
+    \   - name: start_time\n      required: false\n    - name: end_time\n      required:
+    false\n  metrics:\n    - metric_name: monovtx_processing_time_bucket\n      display_name:
+    Mono Vertex Processing Time Latency\n      # set \"Units\" or unset for default
+    behaviour otherwise set \"s\" or \"ms\" for latency metrics\n      # Note: latency
+    values are in μs\n      # unit: s\n      required_filters:\n        - namespace\n
+    \       - mvtx_name\n      dimensions:\n        - name: mono-vertex\n        -
+    name: pod\n          filters:\n            - name: pod\n              required:
+    false\n    - metric_name: monovtx_sink_time_bucket\n      display_name: Mono Vertex
+    Sink Write Time Latency\n      # set \"Units\" or unset for default behaviour
+    otherwise set \"s\" or \"ms\" for latency metrics\n      # Note: latency values
+    are in μs\n      # unit: ms\n      required_filters:\n        - namespace\n        -
+    mvtx_name\n      dimensions:\n        - name: mono-vertex\n        - name: pod\n
+    \         filters:\n            - name: pod\n              required: false\n\n-
+    name: vertex_throughput\n  object: vertex\n  title: Vertex Throughput and Message
+    Rates\n  description: This pattern measures the throughput of a vertex in messages
+    per second across different dimensions\n  expr: sum(rate($metric_name{$filters}[$duration]))
+    by ($dimension)\n  params:\n    - name: duration\n      required: true\n    -
+    name: start_time\n      required: false\n    - name: end_time\n      required:
+    false\n  metrics:\n    - metric_name: forwarder_data_read_total\n      display_name:
+    Vertex Read Processing Rate\n      # set \"Units\" or unset for default behaviour\n
+    \     # unit: Units\n      required_filters:\n        - namespace\n        - pipeline\n
+    \       - vertex\n      dimensions:\n        - name: vertex\n        - name: pod\n
+    \         filters:\n            - name: pod\n              required: false\n\n-
+    name: mono_vertex_throughput\n  object: mono-vertex\n  title: Mono-Vertex Throughput
+    and Message Rates\n  description: This pattern measures the throughput of a mono-vertex
+    in messages per second across different dimensions\n  expr: sum(rate($metric_name{$filters}[$duration]))
+    by ($dimension)\n  params:\n    - name: duration\n      required: true\n    -
+    name: start_time\n      required: false\n    - name: end_time\n      required:
+    false\n  metrics:\n    - metric_name: monovtx_read_total\n      display_name:
+    Mono Vertex Read Processing Rate\n      # set \"Units\" or unset for default behaviour\n
+    \     # unit: Units\n      required_filters:\n        - namespace\n        - mvtx_name\n
+    \     dimensions:\n        - name: mono-vertex\n        - name: pod\n          filters:\n
+    \           - name: pod\n              required: false\n- name: mono-vertex-pod-cpu\n
+    \ object: mono-vertex\n  title: cpu utilization by pod\n  description: cpu utilization
+    by pod for mono-vertex\n  expr: avg_over_time($metric_name{$filters}[$duration]})\n
+    \ params:\n    - name: duration\n      required: true\n    - name: start_time\n
+    \     required: false\n    - name: end_time\n      required: false\n  metrics:
+    \n    - metric_name: namespace_pod_cpu_utilization\n      display_name: CPU utilization
+    by pod\n      required_filters:\n        - namespace\n        # to get only mono-vertex
+    pods\n        - pod  \n      dimensions:\n        - name: mono-vertex\n          filters:
+    \n            - name: pod \n              required: false\n# - name: mono-vertex-container-cpu\n#
+    \  object: mono-vertex\n#   title: cpu utilization by container\n#   description:
+    cpu utilization by container for mono-vertex\n#   expr: avg_over_time($metric_name{$filters}[$duration]})\n#
+    \  params:\n#     - name: duration\n#       required: true\n#     - name: start_time\n#
+    \      required: false\n#     - name: end_time\n#       required: false\n#   metrics:
+    \n#     - metric_name: namespace_app_container_cpu_utilization\n#       display_name:
+    CPU utilization by container\n#       required_filters:\n#         - namespace\n#
+    \      dimensions:\n#         - name: container\n#           filters: \n#             -
+    name: container\n#               required: false\n"
 kind: ConfigMap
 metadata:
   name: numaflow-server-metrics-proxy-config

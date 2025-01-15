@@ -27,7 +27,6 @@ interface TooltipProps {
 function CustomTooltip({ payload, label, active }: TooltipProps) {
   if (active && payload && payload.length) {
     const maxWidth = Math.max(...payload.map(entry => entry.name.length)) * 9.5;
-    console.log("max width: ", maxWidth)
     return (
       <div className="custom-tooltip" style={{ backgroundColor: '#fff', padding: '10px', border: '1px solid #ccc' }}>
         <p>{label}</p>
@@ -113,6 +112,7 @@ const LineChartComponent = ({
   type,
   metric,
   vertexId,
+  podDetails
 }: any) => {
   const [transformedData, setTransformedData] = useState<any[]>([]);
   const [chartLabels, setChartLabels] = useState<any[]>([]);
@@ -132,6 +132,7 @@ const LineChartComponent = ({
     return `hsl(${hue}, 50%, 50%)`;
   }, []);
 
+  // required filters
   const getFilterValue = useCallback(
     (filterName: string) => {
       switch (filterName) {
@@ -142,6 +143,8 @@ const LineChartComponent = ({
           return pipelineId;
         case "vertex":
           return vertexId;
+        case "pod":
+          return `${pipelineId}-*`;
         default:
           return "";
       }
@@ -335,6 +338,7 @@ const LineChartComponent = ({
               type={type}
               vertexId={vertexId}
               setFilters={setFilters}
+              selectedPodName={podDetails?.name}
             />
           </Box>
         )}

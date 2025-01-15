@@ -9,15 +9,17 @@ import { useMetricsDiscoveryDataFetch } from "../../../../../../../../../../../.
 import { dimensionReverseMap, metricNameMap } from "./utils/constants";
 
 import "./style.css";
+import { PodDetail } from "../../../../../../../../../../../../../types/declarations/pods";
 
 export interface MetricsProps {
   namespaceId: string;
   pipelineId: string;
   type: string;
   vertexId?: string;
+  podDetails?: PodDetail
 }
 
-export function Metrics({ namespaceId, pipelineId, type, vertexId }: MetricsProps) {
+export function Metrics({ namespaceId, pipelineId, type, vertexId, podDetails }: MetricsProps) {
   const {
     metricsDiscoveryData: discoveredMetrics,
     error: discoveredMetricsError,
@@ -94,6 +96,7 @@ export function Metrics({ namespaceId, pipelineId, type, vertexId }: MetricsProp
                   type={type}
                   metric={metric}
                   vertexId={vertexId}
+                  podDetails={podDetails}
                 />
               )}
             </AccordionDetails>

@@ -26,6 +26,7 @@ export function PodDetail({
   type,
   containerName,
   pod,
+  podDetails,
   vertexId
 }: PodDetailProps) {
   if (!pod) return null;
@@ -114,6 +115,7 @@ export function PodDetail({
                 pipelineId={pipelineId}
                 type={type}
                 vertexId={vertexId}
+                podDetails={podDetails}
               />
             </Box>
           )}
