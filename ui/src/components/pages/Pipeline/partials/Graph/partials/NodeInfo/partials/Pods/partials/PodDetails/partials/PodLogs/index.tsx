@@ -8,7 +8,10 @@ import {
   useState,
 } from "react";
 import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
 import InputBase from "@mui/material/InputBase";
 import IconButton from "@mui/material/IconButton";
 import ClearIcon from "@mui/icons-material/Clear";
@@ -18,6 +21,9 @@ import ArrowUpward from "@mui/icons-material/ArrowUpward";
 import ArrowDownward from "@mui/icons-material/ArrowDownward";
 import LightMode from "@mui/icons-material/LightMode";
 import DarkMode from "@mui/icons-material/DarkMode";
+import Download from "@mui/icons-material/Download";
+import WrapTextIcon from "@mui/icons-material/WrapText";
+import { ClockIcon } from "@mui/x-date-pickers";
 import Tooltip from "@mui/material/Tooltip";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Checkbox from "@mui/material/Checkbox";
@@ -30,57 +36,112 @@ import { AppContextProps } from "../../../../../../../../../../../../../types/de
 import { AppContext } from "../../../../../../../../../../../../../App";
 
 import "./style.css";
-import Typography from "@mui/material/Typography";
 
 const MAX_LOGS = 1000;
+// const LOGS_LEVEL_ERROR = "ERROR";
+// const LOGS_LEVEL_DEBUG = "DEBUG";
+// const LOGS_LEVEL_WARN = "WARN";
 
-const parsePodLogs = (value: string): string[] => {
+const parsePodLogs = (
+  value: string,
+  enableTimestamp: boolean,
+  levelFilter: string,
+  type: string
+): string[] => {
   const rawLogs = value.split("\n").filter((s) => s.length);
   return rawLogs.map((raw: string) => {
     try {
-      const obj = JSON.parse(raw);
-      let msg = ``;
-      if (obj?.ts) {
-        const date = obj.ts.split(/[-T:.Z]/);
-        const ds =
-          date[0] +
-          "/" +
-          date[1] +
-          "/" +
-          date[2] +
-          " " +
-          date[3] +
-          ":" +
-          date[4] +
-          ":" +
-          date[5];
-        msg = `${msg}${ds} | `;
+      if (type === "monoVertex") {
+        const msg = raw;
+        if (levelFilter !== "all" && !msg.toLowerCase().includes(levelFilter)) {
+          return "";
+        }
+        if (!enableTimestamp) {
+          // remove ISO 8601 timestamp from beginning of log if it exists
+          const date = msg.match(
+            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/
+          );
+          if (date) {
+            return msg.substring(28);
+          }
+        }
+        return msg;
+      } else {
+        const obj = JSON.parse(raw);
+        let msg = ``;
+        if (enableTimestamp && obj?.ts) {
+          const date = obj.ts.split(/[-T:.Z]/);
+          const ds =
+            date[0] +
+            "/" +
+            date[1] +
+            "/" +
+            date[2] +
+            " " +
+            date[3] +
+            ":" +
+            date[4] +
+            ":" +
+            date[5];
+          msg = `${msg}${ds} | `;
+        }
+        if (obj?.level) {
+          msg = `${msg}${obj.level.toUpperCase()} | `;
+          if (levelFilter !== "all" && obj.level !== levelFilter) {
+            return "";
+          }
+        }
+        msg = `${msg}${raw}`;
+        return msg;
       }
-      if (obj?.level) {
-        msg = `${msg}${obj.level.toUpperCase()} | `;
-      }
-      msg = `${msg}${raw}`;
-      return msg;
     } catch (e) {
       return raw;
     }
   });
 };
 
-const logColor = (log: string, colorMode: string): string => {
-  if (log.startsWith("ERROR", 22)) {
-    return "#B80000";
-  }
-  if (log.startsWith("WARN", 22)) {
-    return "#FFAD00";
-  }
-  if (log.startsWith("DEBUG", 22)) {
-    return "#81b8ef";
-  }
-  return colorMode === "light" ? "black" : "white";
-};
+// const logColor = (
+//   log: string,
+//   colorMode: string,
+//   enableTimestamp: boolean,
+//   type: string
+// ): string => {
+//   const logLevelColors: { [key: string]: string } = {
+//     ERROR: "#B80000",
+//     WARN: "#FFAD00",
+//     DEBUG: "#81b8ef",
+//   };
+//
+//   let startIndex = 0;
+//   if (enableTimestamp) {
+//     if (type === "monoVertex") {
+//       if (log?.includes(LOGS_LEVEL_ERROR) || log?.includes(LOGS_LEVEL_DEBUG))
+//         startIndex = 28;
+//       else startIndex = 29;
+//     } else {
+//       startIndex = 22;
+//     }
+//   } else {
+//     if (type === "monoVertex") {
+//       if (log?.includes(LOGS_LEVEL_WARN)) startIndex = 1;
+//     }
+//   }
+//
+//   for (const level in logLevelColors) {
+//     if (log.startsWith(level, startIndex)) {
+//       return logLevelColors[level];
+//     }
+//   }
+//
+//   return colorMode === "light" ? "black" : "white";
+// };
 
-export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
+export function PodLogs({
+  namespaceId,
+  podName,
+  containerName,
+  type,
+}: PodLogsProps) {
   const [logs, setLogs] = useState<string[]>([]);
   const [previousLogs, setPreviousLogs] = useState<string[]>([]);
   const [filteredLogs, setFilteredLogs] = useState<string[]>([]);
@@ -90,9 +151,12 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
   >();
   const [search, setSearch] = useState<string>("");
   const [negateSearch, setNegateSearch] = useState<boolean>(false);
+  const [wrapLines, setWrapLines] = useState<boolean>(false);
   const [paused, setPaused] = useState<boolean>(false);
   const [colorMode, setColorMode] = useState<string>("light");
   const [logsOrder, setLogsOrder] = useState<string>("desc");
+  const [enableTimestamp, setEnableTimestamp] = useState<boolean>(true);
+  const [levelFilter, setLevelFilter] = useState<string>("all");
   const [showPreviousLogs, setShowPreviousLogs] = useState(false);
   const { host } = useContext<AppContextProps>(AppContext);
 
@@ -138,7 +202,12 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
             }
             if (value) {
               setLogs((logs) => {
-                const latestLogs = parsePodLogs(value);
+                const latestLogs = parsePodLogs(
+                  value,
+                  enableTimestamp,
+                  levelFilter,
+                  type
+                )?.filter((logs) => logs !== "");
                 let updated = [...logs, ...latestLogs];
                 if (updated.length > MAX_LOGS) {
                   updated = updated.slice(updated.length - MAX_LOGS);
@@ -151,7 +220,16 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
         }
       })
       .catch(console.error);
-  }, [namespaceId, podName, containerName, reader, paused, host]);
+  }, [
+    namespaceId,
+    podName,
+    containerName,
+    reader,
+    paused,
+    host,
+    enableTimestamp,
+    levelFilter,
+  ]);
 
   useEffect(() => {
     if (showPreviousLogs) {
@@ -170,7 +248,12 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
               }
               if (value) {
                 setPreviousLogs((prevLogs) => {
-                  const latestLogs = parsePodLogs(value);
+                  const latestLogs = parsePodLogs(
+                    value,
+                    enableTimestamp,
+                    levelFilter,
+                    type
+                  )?.filter((logs) => logs !== "");
                   let updated = [...prevLogs, ...latestLogs];
                   if (updated.length > MAX_LOGS) {
                     updated = updated.slice(updated.length - MAX_LOGS);
@@ -187,7 +270,15 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
       // Clear previous logs when the checkbox is unchecked
       setPreviousLogs([]);
     }
-  }, [showPreviousLogs, namespaceId, podName, containerName, host]);
+  }, [
+    showPreviousLogs,
+    namespaceId,
+    podName,
+    containerName,
+    host,
+    enableTimestamp,
+    levelFilter,
+  ]);
 
   useEffect(() => {
     if (!search) {
@@ -224,6 +315,10 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
     []
   );
 
+  const handleWrapLines = useCallback(() => {
+    setWrapLines((prev) => !prev);
+  }, []);
+
   const handlePause = useCallback(() => {
     setPaused(!paused);
     if (!paused && reader) {
@@ -240,7 +335,49 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
     setLogsOrder(logsOrder === "asc" ? "desc" : "asc");
   }, [logsOrder]);
 
-  const logsBtnStyle = { height: "2.4rem", width: "2.4rem" };
+  const handleLogsDownload = useCallback(() => {
+    const blob = new Blob([logs.join("\n")], {
+      type: "text/plain;charset=utf-8",
+    });
+
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${podName}-${containerName}-logs.txt`;
+
+    document.body.appendChild(a);
+
+    a.click();
+
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [logs]);
+
+  const handleTimestamps = useCallback(() => {
+    setEnableTimestamp((prev) => !prev);
+    if (reader) {
+      reader.cancel();
+      setReader(undefined);
+    }
+  }, [reader]);
+
+  const handleLevelChange = useCallback(
+    (e) => {
+      setLevelFilter(e.target.value);
+      if (reader) {
+        reader.cancel();
+        setReader(undefined);
+      }
+    },
+    [reader]
+  );
+
+  const logsBtnStyle = {
+    height: "2.4rem",
+    width: "2.4rem",
+    color: "rgba(0, 0, 0, 0.54)",
+  };
 
   return (
     <Box sx={{ height: "100%" }}>
@@ -283,6 +420,25 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
             <Typography sx={{ fontSize: "1.6rem" }}>Negate search</Typography>
           }
         />
+        <Tooltip
+          title={
+            <div className={"icon-tooltip"}>
+              {wrapLines ? "Unwrap Lines" : "Wrap Lines"}
+            </div>
+          }
+          placement={"top"}
+          arrow
+        >
+          <IconButton data-testid="wrap-lines-button" onClick={handleWrapLines}>
+            <WrapTextIcon
+              sx={{
+                ...logsBtnStyle,
+                background: wrapLines ? "lightgray" : "none",
+                borderRadius: "1rem",
+              }}
+            />
+          </IconButton>
+        </Tooltip>
         <Tooltip
           title={
             <div className={"icon-tooltip"}>
@@ -334,6 +490,66 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
             )}
           </IconButton>
         </Tooltip>
+        <Tooltip
+          title={<div className={"icon-tooltip"}>Download logs</div>}
+          placement={"top"}
+          arrow
+        >
+          <IconButton
+            data-testid="download-logs-button"
+            onClick={handleLogsDownload}
+          >
+            <Download sx={logsBtnStyle} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip
+          title={
+            <div className={"icon-tooltip"}>
+              {enableTimestamp ? "Remove Timestamps" : "Add Timestamps"}
+            </div>
+          }
+          placement={"top"}
+          arrow
+        >
+          <IconButton
+            data-testid="toggle-timestamps-button"
+            onClick={handleTimestamps}
+            disabled={paused}
+          >
+            <ClockIcon
+              sx={{
+                height: "2.4rem",
+                width: "2.4rem",
+                background: enableTimestamp ? "lightgray" : "none",
+                borderRadius: "1rem",
+              }}
+            />
+          </IconButton>
+        </Tooltip>
+        <Select
+          labelId="level-filter"
+          id="level-filter"
+          value={levelFilter}
+          onChange={handleLevelChange}
+          sx={{ width: "13rem", fontSize: "1.6rem" }}
+          disabled={paused}
+        >
+          <MenuItem sx={{ fontSize: "1.4rem" }} value={"all"}>
+            All levels
+          </MenuItem>
+          <MenuItem sx={{ fontSize: "1.4rem" }} value={"info"}>
+            Info
+          </MenuItem>
+          <MenuItem sx={{ fontSize: "1.4rem" }} value={"error"}>
+            Error
+          </MenuItem>
+          <MenuItem sx={{ fontSize: "1.4rem" }} value={"warn"}>
+            Warn
+          </MenuItem>
+          <MenuItem sx={{ fontSize: "1.4rem" }} value={"debug"}>
+            Debug
+          </MenuItem>
+        </Select>
       </Box>
       <FormControlLabel
         control={
@@ -358,7 +574,7 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
             }`,
             fontWeight: 600,
             borderRadius: "0.4rem",
-            padding: "1rem 0.5rem",
+            padding: "1rem 0rem",
             height: "calc(100% - 6rem)",
             overflow: "scroll",
           }}
@@ -377,15 +593,28 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
                     key={`${idx}-${podName}-logs`}
                     component="span"
                     sx={{
-                      whiteSpace: "nowrap",
-                      paddingTop: "0.8rem",
+                      whiteSpace: wrapLines ? "normal" : "nowrap",
+                      height: wrapLines ? "auto" : "1.6rem",
+                      lineHeight: "1.6rem",
                     }}
                   >
                     <Highlighter
                       searchWords={[search]}
                       autoEscape={true}
                       textToHighlight={l}
-                      style={{ color: logColor(l, colorMode) }}
+                      style={{
+                        // uncomment to add color to logs
+                        // color: logColor(l, colorMode, enableTimestamp, type),
+                        color: colorMode === "light" ? "black" : "white",
+                        fontFamily:
+                          "Consolas,Liberation Mono,Courier,monospace",
+                        fontWeight: "normal",
+                        background:
+                          colorMode === "light" ? "#E6E6E6" : "#333333",
+                        fontSize: "1.4rem",
+                        textWrap: wrapLines ? "wrap" : "nowrap",
+                        border: "1px solid #cacaca",
+                      }}
                       highlightStyle={{
                         color: `${colorMode === "light" ? "white" : "black"}`,
                         backgroundColor: `${
@@ -405,15 +634,28 @@ export function PodLogs({ namespaceId, podName, containerName }: PodLogsProps) {
                     key={`${idx}-${podName}-logs`}
                     component="span"
                     sx={{
-                      whiteSpace: "nowrap",
-                      paddingTop: "0.8rem",
+                      whiteSpace: wrapLines ? "normal" : "nowrap",
+                      height: wrapLines ? "auto" : "1.6rem",
+                      lineHeight: "1.6rem",
                     }}
                   >
                     <Highlighter
                       searchWords={[search]}
                       autoEscape={true}
                       textToHighlight={l}
-                      style={{ color: logColor(l, colorMode) }}
+                      style={{
+                        // uncomment to add color to logs
+                        // color: logColor(l, colorMode, enableTimestamp, type),
+                        color: colorMode === "light" ? "black" : "white",
+                        fontFamily:
+                          "Consolas,Liberation Mono,Courier,monospace",
+                        fontWeight: "normal",
+                        background:
+                          colorMode === "light" ? "#E6E6E6" : "#333333",
+                        fontSize: "1.4rem",
+                        textWrap: wrapLines ? "wrap" : "nowrap",
+                        border: "1px solid #cacaca",
+                      }}
                       highlightStyle={{
                         color: `${colorMode === "light" ? "white" : "black"}`,
                         backgroundColor: `${
