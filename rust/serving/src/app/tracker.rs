@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::app::callback::CallbackRequest;
+use crate::app::callback::Callback;
 use crate::pipeline::{Edge, OperatorType, PipelineDCG};
 use crate::Error;
 
@@ -16,6 +16,8 @@ fn compare_slice(operator: &OperatorType, a: &[String], b: &[String]) -> bool {
     }
 }
 
+/// hash map of vertex and its edges. The key of the HashMap and `Edge.from` are same, `Edge.to` will
+/// help find the adjacent vertex.
 type Graph = HashMap<String, Vec<Edge>>;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -23,8 +25,6 @@ struct Subgraph {
     id: String,
     blocks: Vec<Block>,
 }
-
-const DROP: &str = "U+005C__DROP__";
 
 /// MessageGraph is a struct that generates the graph from the source vertex to the downstream vertices
 /// for a message using the given callbacks.
@@ -44,19 +44,21 @@ pub(crate) struct Block {
 // whether it has been visited or not. It is used to keep track of the visited callbacks.
 #[derive(Debug)]
 struct CallbackRequestWrapper {
-    callback_request: Arc<CallbackRequest>,
+    callback_request: Arc<Callback>,
     visited: bool,
 }
 
 impl MessageGraph {
-    /// This function generates a sub graph from a list of callbacks.
+    /// Generates a sub graph from a list of [Callback].
     /// It first creates a HashMap to map each vertex to its corresponding callbacks.
-    /// Then it finds the source vertex by checking if the vertex and from_vertex fields are the same.
-    /// Finally, it calls the `generate_subgraph` function to generate the subgraph from the source vertex.
+    /// NOTE: it finds checks whether the callback is from the originating source vertex by checking
+    /// if the vertex and from_vertex fields are the same.
+    /// Finally, it calls the [Self::generate_subgraph] function to generate the subgraph from the source
+    /// vertex.
     pub(crate) fn generate_subgraph_from_callbacks(
         &self,
         id: String,
-        callbacks: Vec<Arc<CallbackRequest>>,
+        callbacks: Vec<Arc<Callback>>,
     ) -> Result<Option<String>, Error> {
         // Create a HashMap to map each vertex to its corresponding callbacks
         let mut callback_map: HashMap<String, Vec<CallbackRequestWrapper>> = HashMap::new();
@@ -115,10 +117,13 @@ impl MessageGraph {
         }
     }
 
-    // generate_subgraph function is a recursive function that generates the sub graph from the source vertex for
-    // the given list of callbacks. The function returns true if the subgraph is generated successfully(if we are
-    // able to find a subgraph for the message using the given callbacks), it
-    // updates the subgraph with the path from the source vertex to the downstream vertices.
+    /// generate_subgraph function is a recursive function that generates the sub graph from the source
+    /// vertex for the given list of callbacks. The function returns true if the subgraph is
+    /// generated successfully (if we are able to find a subgraph for the message using the given
+    /// callbacks), it updates the subgraph with the path from the source vertex to the downstream
+    /// vertices.
+    /// It uses the pipeline DAG [Graph] and the [Callback]'s HashMap to check whether sub-graph is
+    /// complete.
     fn generate_subgraph(
         &self,
         current: String,
@@ -126,7 +131,7 @@ impl MessageGraph {
         callback_map: &mut HashMap<String, Vec<CallbackRequestWrapper>>,
         subgraph: &mut Subgraph,
     ) -> bool {
-        let mut current_callback: Option<Arc<CallbackRequest>> = None;
+        let mut current_callback: Option<Arc<Callback>> = None;
 
         // we need to borrow the callback_map as mutable to update the visited flag of the callback
         // so that next time when we visit the same callback, we can skip it. Because there can be cases
@@ -160,67 +165,74 @@ impl MessageGraph {
             cb_time: current_callback.cb_time,
         });
 
-        // if the current vertex has a DROP tag, then we should not proceed further
-        // and return true
-        if current_callback
-            .tags
-            .as_ref()
-            .map_or(false, |tags| tags.contains(&DROP.to_string()))
-        {
+        // if there are no responses, means the message is dropped, we can return true
+        if current_callback.responses.is_empty() {
             return true;
         }
 
-        // recursively invoke the downstream vertices of the current vertex, if any
-        if let Some(edges) = self.dag.get(&current) {
-            for edge in edges {
-                // check if the edge should proceed based on the conditions
-                // if there are no conditions, we should proceed with the edge
-                // if there are conditions, we should check the tags of the current callback
-                // with the tags of the edge and the operator of the tags to decide if we should
-                // proceed with the edge
-                let should_proceed = edge
-                    .conditions
-                    .as_ref()
-                    // If the edge has conditions, get the tags
-                    .and_then(|conditions| conditions.tags.as_ref())
-                    // If there are no conditions or tags, default to true (i.e., proceed with the edge)
-                    // If there are tags, compare the tags with the current callback's tags and the operator
-                    // to decide if we should proceed with the edge.
-                    .map_or(true, |tags| {
-                        current_callback
-                            .tags
-                            .as_ref()
-                            // If the current callback has no tags we should not proceed with the edge for "and" and "or" operators
-                            // because we expect the current callback to have tags specified in the edge.
-                            // If the current callback has no tags we should proceed with the edge for "not" operator.
-                            // because we don't expect the current callback to have tags specified in the edge.
-                            .map_or(
-                                tags.operator.as_ref() == Some(&OperatorType::Not),
-                                |callback_tags| {
-                                    tags.operator.as_ref().map_or(false, |operator| {
-                                        // If there is no operator, default to false (i.e., do not proceed with the edge)
-                                        // If there is an operator, compare the current callback's tags with the edge's tags
-                                        compare_slice(operator, callback_tags, &tags.values)
-                                    })
-                                },
-                            )
-                    });
+        // iterate over the responses of the current callback, for flatmap operation there can
+        // more than one response, so we need to make sure all the responses are processed.
+        // For example a -> b -> c, lets say vertex a has 2 responses. We will have to recursively
+        // find the subgraph for both the responses.
+        for response in current_callback.responses.iter() {
+            // recursively invoke the downstream vertices of the current vertex, if any
+            if let Some(edges) = self.dag.get(&current) {
+                for edge in edges {
+                    // check if the edge should proceed based on the conditions
+                    // if there are no conditions, we should proceed with the edge
+                    // if there are conditions, we should check the tags of the current callback
+                    // with the tags of the edge and the operator of the tags to decide if we should
+                    // proceed with the edge
+                    let will_continue_the_path = edge
+                        .conditions
+                        .as_ref()
+                        // If the edge has conditions, get the tags
+                        .and_then(|conditions| conditions.tags.as_ref())
+                        // If there are no conditions or tags, default to true (i.e., proceed with the edge)
+                        // If there are tags, compare the tags with the current callback's tags and the operator
+                        // to decide if we should proceed with the edge.
+                        .map_or(true, |tags| {
+                            response
+                                .tags
+                                .as_ref()
+                                // If the current callback has no tags we should not proceed with the edge for "and" and "or" operators
+                                // because we expect the current callback to have tags specified in the edge.
+                                // If the current callback has no tags we should proceed with the edge for "not" operator.
+                                // because we don't expect the current callback to have tags specified in the edge.
+                                .map_or(
+                                    tags.operator.as_ref() == Some(&OperatorType::Not),
+                                    |callback_tags| {
+                                        tags.operator.as_ref().map_or(false, |operator| {
+                                            // If there is no operator, default to false (i.e., do not proceed with the edge)
+                                            // If there is an operator, compare the current callback's tags with the edge's tags
+                                            compare_slice(operator, callback_tags, &tags.values)
+                                        })
+                                    },
+                                )
+                        });
 
-                // if the conditions are not met, then proceed to the next edge
-                if !should_proceed {
-                    continue;
-                }
+                    // if the conditions are not met, then proceed to the next edge because conditions
+                    // for forwarding the message did not match the conditional forwarding requirements.
+                    if !will_continue_the_path {
+                        // let's move on to the next edge
+                        continue;
+                    }
 
-                // proceed to the downstream vertex
-                // if any of the downstream vertex returns false, then we should return false.
-                if !self.generate_subgraph(edge.to.clone(), current.clone(), callback_map, subgraph)
-                {
-                    return false;
+                    // recursively proceed to the next downstream vertex
+                    // if any of the downstream vertex returns false, then we should return false.
+                    if !self.generate_subgraph(
+                        edge.to.clone(),
+                        current.clone(),
+                        callback_map,
+                        subgraph,
+                    ) {
+                        return false;
+                    }
                 }
             }
+            // if there are no downstream vertices, or all the downstream vertices returned true,
+            // we can return true
         }
-        // if there are no downstream vertices, or all the downstream vertices returned true,
-        // we can return true
         true
     }
 
@@ -238,6 +250,7 @@ impl MessageGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::callback::Response;
     use crate::pipeline::{Conditions, Tag, Vertex};
 
     #[test]
@@ -264,12 +277,12 @@ mod tests {
         callback_map.insert(
             "a".to_string(),
             vec![CallbackRequestWrapper {
-                callback_request: Arc::new(CallbackRequest {
+                callback_request: Arc::new(Callback {
                     id: "uuid1".to_string(),
                     vertex: "a".to_string(),
                     cb_time: 1,
                     from_vertex: "a".to_string(),
-                    tags: None,
+                    responses: vec![Response { tags: None }],
                 }),
                 visited: false,
             }],
@@ -313,12 +326,12 @@ mod tests {
         callback_map.insert(
             "a".to_string(),
             vec![CallbackRequestWrapper {
-                callback_request: Arc::new(CallbackRequest {
+                callback_request: Arc::new(Callback {
                     id: "uuid1".to_string(),
                     vertex: "a".to_string(),
                     cb_time: 1,
                     from_vertex: "a".to_string(),
-                    tags: None,
+                    responses: vec![Response { tags: None }],
                 }),
                 visited: false,
             }],
@@ -327,12 +340,12 @@ mod tests {
         callback_map.insert(
             "b".to_string(),
             vec![CallbackRequestWrapper {
-                callback_request: Arc::new(CallbackRequest {
+                callback_request: Arc::new(Callback {
                     id: "uuid1".to_string(),
                     vertex: "b".to_string(),
                     cb_time: 1,
                     from_vertex: "a".to_string(),
-                    tags: None,
+                    responses: vec![Response { tags: None }],
                 }),
                 visited: false,
             }],
@@ -341,12 +354,12 @@ mod tests {
         callback_map.insert(
             "c".to_string(),
             vec![CallbackRequestWrapper {
-                callback_request: Arc::new(CallbackRequest {
+                callback_request: Arc::new(Callback {
                     id: "uuid1".to_string(),
                     vertex: "c".to_string(),
                     cb_time: 1,
                     from_vertex: "a".to_string(),
-                    tags: None,
+                    responses: vec![Response { tags: None }],
                 }),
                 visited: false,
             }],
@@ -461,77 +474,86 @@ mod tests {
         let source_vertex = "a".to_string();
 
         let raw_callback = r#"[
-            {
-                "id": "xxxx",
-                "vertex": "a",
-                "from_vertex": "a",
-                "cb_time": 123456789
-            },
-            {
-                "id": "xxxx",
-                "vertex": "b",
-                "from_vertex": "a",
-                "cb_time": 123456867
-            },
-            {
-                "id": "xxxx",
-                "vertex": "c",
-                "from_vertex": "a",
-                "cb_time": 123456819
-            },
-            {
-                "id": "xxxx",
-                "vertex": "d",
-                "from_vertex": "b",
-                "cb_time": 123456840
-            },
-            {
-                "id": "xxxx",
-                "vertex": "e",
-                "from_vertex": "c",
-                "cb_time": 123456843
-            },
-            {
-                "id": "xxxx",
-                "vertex": "f",
-                "from_vertex": "d",
-                "cb_time": 123456854
-            },
-            {
-                "id": "xxxx",
-                "vertex": "f",
-                "from_vertex": "e",
-                "cb_time": 123456886
-            },
-            {
-                "id": "xxxx",
-                "vertex": "g",
-                "from_vertex": "f",
-                "tags": ["even"],
-                "cb_time": 123456885
-            },
-            {
-                "id": "xxxx",
-                "vertex": "g",
-                "from_vertex": "f",
-                "tags": ["even"],
-                "cb_time": 123456888
-            },
-            {
-                "id": "xxxx",
-                "vertex": "h",
-                "from_vertex": "g",
-                "cb_time": 123456889
-            },
-            {
-                "id": "xxxx",
-                "vertex": "h",
-                "from_vertex": "g",
-                "cb_time": 123456890
-            }
-        ]"#;
+        {
+            "id": "xxxx",
+            "vertex": "a",
+            "from_vertex": "a",
+            "cb_time": 123456789,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "b",
+            "from_vertex": "a",
+            "cb_time": 123456867,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "c",
+            "from_vertex": "a",
+            "cb_time": 123456819,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "d",
+            "from_vertex": "b",
+            "cb_time": 123456840,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "e",
+            "from_vertex": "c",
+            "cb_time": 123456843,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "f",
+            "from_vertex": "d",
+            "cb_time": 123456854,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "f",
+            "from_vertex": "e",
+            "cb_time": 123456886,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "g",
+            "from_vertex": "f",
+            "cb_time": 123456885,
+            "responses": [{"tags": ["even"]}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "g",
+            "from_vertex": "f",
+            "cb_time": 123456888,
+            "responses": [{"tags": ["even"]}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "h",
+            "from_vertex": "g",
+            "cb_time": 123456889,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "h",
+            "from_vertex": "g",
+            "cb_time": 123456890,
+            "responses": [{"tags": null}]
+        }
+    ]"#;
 
-        let callbacks: Vec<CallbackRequest> = serde_json::from_str(raw_callback).unwrap();
+        let callbacks: Vec<Callback> = serde_json::from_str(raw_callback).unwrap();
         let mut callback_map: HashMap<String, Vec<CallbackRequestWrapper>> = HashMap::new();
 
         for callback in callbacks {
@@ -590,23 +612,24 @@ mod tests {
         let source_vertex = "a".to_string();
 
         let raw_callback = r#"
-        [
-            {
-                "id": "xxxx",
-                "vertex": "a",
-                "from_vertex": "a",
-                "cb_time": 123456789
-            },
-            {
-                "id": "xxxx",
-                "vertex": "b",
-                "from_vertex": "a",
-                "cb_time": 123456867,
-                "tags": ["U+005C__DROP__"]
-            }
-       ]"#;
+    [
+        {
+            "id": "xxxx",
+            "vertex": "a",
+            "from_vertex": "a",
+            "cb_time": 123456789,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "b",
+            "from_vertex": "a",
+            "cb_time": 123456867,
+            "responses": []
+        }
+    ]"#;
 
-        let callbacks: Vec<CallbackRequest> = serde_json::from_str(raw_callback).unwrap();
+        let callbacks: Vec<Callback> = serde_json::from_str(raw_callback).unwrap();
         let mut callback_map: HashMap<String, Vec<CallbackRequestWrapper>> = HashMap::new();
 
         for callback in callbacks {
@@ -728,54 +751,59 @@ mod tests {
         let source_vertex = "a".to_string();
 
         let raw_callback = r#"
-        [
-            {
-                "id": "xxxx",
-                "vertex": "a",
-                "from_vertex": "a",
-                "cb_time": 123456789
-            },
-            {
-                "id": "xxxx",
-                "vertex": "b",
-                "from_vertex": "a",
-                "cb_time": 123456867
-            },
-            {
-                "id": "xxxx",
-                "vertex": "c",
-                "from_vertex": "a",
-                "cb_time": 123456819,
-                "tags": ["U+005C__DROP__"]
-            },
-            {
-                "id": "xxxx",
-                "vertex": "d",
-                "from_vertex": "b",
-                "cb_time": 123456840
-            },
-            {
-                "id": "xxxx",
-                "vertex": "f",
-                "from_vertex": "d",
-                "cb_time": 123456854
-            },
-            {
-                "id": "xxxx",
-                "vertex": "g",
-                "from_vertex": "f",
-                "tags": ["even"],
-                "cb_time": 123456885
-            },
-            {
-                "id": "xxxx",
-                "vertex": "h",
-                "from_vertex": "g",
-                "cb_time": 123456889
-            }
-        ]"#;
+    [
+        {
+            "id": "xxxx",
+            "vertex": "a",
+            "from_vertex": "a",
+            "cb_time": 123456789,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "b",
+            "from_vertex": "a",
+            "cb_time": 123456867,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "c",
+            "from_vertex": "a",
+            "cb_time": 123456819,
+            "responses": []
+        },
+        {
+            "id": "xxxx",
+            "vertex": "d",
+            "from_vertex": "b",
+            "cb_time": 123456840,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "f",
+            "from_vertex": "d",
+            "cb_time": 123456854,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "g",
+            "from_vertex": "f",
+            "cb_time": 123456885,
+            "responses": [{"tags": ["even"]}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "h",
+            "from_vertex": "g",
+            "cb_time": 123456889,
+            "responses": [{"tags": null}]
+        }
+    ]"#;
 
-        let callbacks: Vec<CallbackRequest> = serde_json::from_str(raw_callback).unwrap();
+        let callbacks: Vec<Callback> = serde_json::from_str(raw_callback).unwrap();
         let mut callback_map: HashMap<String, Vec<CallbackRequestWrapper>> = HashMap::new();
 
         for callback in callbacks {
@@ -844,36 +872,43 @@ mod tests {
                 "id": "xxxx",
                 "vertex": "a",
                 "from_vertex": "a",
-                "cb_time": 123456789
+                "cb_time": 123456789,
+                "responses": [{"tags": null}]
             },
             {
                 "id": "xxxx",
                 "vertex": "b",
                 "from_vertex": "a",
                 "cb_time": 123456867,
-                "tags": ["failed"]
+                "responses": [{"tags": ["failed"]}]
             },
             {
                 "id": "xxxx",
                 "vertex": "a",
                 "from_vertex": "b",
-                "cb_time": 123456819
+                "cb_time": 123456819,
+                 "responses": [{"tags": null}]
+
             },
             {
                 "id": "xxxx",
                 "vertex": "b",
                 "from_vertex": "a",
-                "cb_time": 123456819
+                "cb_time": 123456819,
+                "responses": [{"tags": null}]
+
             },
             {
                 "id": "xxxx",
                 "vertex": "c",
                 "from_vertex": "b",
-                "cb_time": 123456819
+                "cb_time": 123456819,
+                "responses": [{"tags": null}]
+
             }
         ]"#;
 
-        let callbacks: Vec<CallbackRequest> = serde_json::from_str(raw_callback).unwrap();
+        let callbacks: Vec<Callback> = serde_json::from_str(raw_callback).unwrap();
         let mut callback_map: HashMap<String, Vec<CallbackRequestWrapper>> = HashMap::new();
 
         for callback in callbacks {
@@ -915,12 +950,12 @@ mod tests {
         let message_graph = MessageGraph { dag };
 
         // Create a callback with an invalid vertex
-        let callbacks = vec![Arc::new(CallbackRequest {
+        let callbacks = vec![Arc::new(Callback {
             id: "test".to_string(),
             vertex: "invalid_vertex".to_string(),
             from_vertex: "invalid_vertex".to_string(),
             cb_time: 1,
-            tags: None,
+            responses: vec![Response { tags: None }],
         })];
 
         // Call the function with the invalid callback
@@ -929,5 +964,416 @@ mod tests {
         // Check that the function returned an error
         assert!(result.is_err());
         assert!(matches!(result, Err(Error::SubGraphInvalidInput(_))));
+    }
+
+    #[test]
+    fn test_flatmap_operation_with_simple_dag() {
+        let pipeline = PipelineDCG {
+            vertices: vec![
+                Vertex {
+                    name: "a".to_string(),
+                },
+                Vertex {
+                    name: "b".to_string(),
+                },
+                Vertex {
+                    name: "c".to_string(),
+                },
+            ],
+            edges: vec![
+                Edge {
+                    from: "a".to_string(),
+                    to: "b".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "b".to_string(),
+                    to: "c".to_string(),
+                    conditions: None,
+                },
+            ],
+        };
+
+        let message_graph = MessageGraph::from_pipeline(&pipeline).unwrap();
+        let source_vertex = "a".to_string();
+
+        let raw_callback = r#"[
+        {
+            "id": "xxxx",
+            "vertex": "a",
+            "from_vertex": "a",
+            "cb_time": 123456789,
+            "responses": [
+                {"tags": null},
+                {"index": 1, "tags": null}
+            ]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "b",
+            "from_vertex": "a",
+            "cb_time": 123456867,
+            "responses": [
+                {"tags": null},
+                {"index": 1, "tags": null}
+            ]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "b",
+            "from_vertex": "a",
+            "cb_time": 123456868,
+            "responses": [
+                {"tags": null},
+                {"index": 1, "tags": null}
+            ]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "c",
+            "from_vertex": "b",
+            "cb_time": 123456869,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "c",
+            "from_vertex": "b",
+            "cb_time": 123456870,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "c",
+            "from_vertex": "b",
+            "cb_time": 123456871,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "c",
+            "from_vertex": "b",
+            "cb_time": 123456872,
+            "responses": [{"tags": null}]
+        }
+    ]"#;
+
+        let callbacks: Vec<Callback> = serde_json::from_str(raw_callback).unwrap();
+        let mut callback_map: HashMap<String, Vec<CallbackRequestWrapper>> = HashMap::new();
+
+        for callback in callbacks {
+            callback_map
+                .entry(callback.vertex.clone())
+                .or_default()
+                .push(CallbackRequestWrapper {
+                    callback_request: Arc::new(callback),
+                    visited: false,
+                });
+        }
+
+        let mut subgraph: Subgraph = Subgraph {
+            id: "xxxx".to_string(),
+            blocks: Vec::new(),
+        };
+        let result = message_graph.generate_subgraph(
+            source_vertex.clone(),
+            source_vertex,
+            &mut callback_map,
+            &mut subgraph,
+        );
+
+        assert!(result);
+    }
+
+    #[test]
+    fn test_flatmap_operation_with_complex_dag() {
+        let pipeline = PipelineDCG {
+            vertices: vec![
+                Vertex {
+                    name: "a".to_string(),
+                },
+                Vertex {
+                    name: "b".to_string(),
+                },
+                Vertex {
+                    name: "c".to_string(),
+                },
+                Vertex {
+                    name: "d".to_string(),
+                },
+                Vertex {
+                    name: "e".to_string(),
+                },
+                Vertex {
+                    name: "f".to_string(),
+                },
+                Vertex {
+                    name: "g".to_string(),
+                },
+                Vertex {
+                    name: "h".to_string(),
+                },
+                Vertex {
+                    name: "i".to_string(),
+                },
+            ],
+            edges: vec![
+                Edge {
+                    from: "a".to_string(),
+                    to: "b".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "a".to_string(),
+                    to: "c".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "b".to_string(),
+                    to: "d".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "c".to_string(),
+                    to: "e".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "d".to_string(),
+                    to: "f".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "e".to_string(),
+                    to: "f".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "f".to_string(),
+                    to: "g".to_string(),
+                    conditions: None,
+                },
+                Edge {
+                    from: "g".to_string(),
+                    to: "h".to_string(),
+                    conditions: Some(Conditions {
+                        tags: Some(Tag {
+                            operator: Some(OperatorType::And),
+                            values: vec!["even".to_string()],
+                        }),
+                    }),
+                },
+                Edge {
+                    from: "g".to_string(),
+                    to: "i".to_string(),
+                    conditions: Some(Conditions {
+                        tags: Some(Tag {
+                            operator: Some(OperatorType::Or),
+                            values: vec!["odd".to_string()],
+                        }),
+                    }),
+                },
+            ],
+        };
+
+        let message_graph = MessageGraph::from_pipeline(&pipeline).unwrap();
+        let source_vertex = "a".to_string();
+
+        let raw_callback = r#"[
+        {
+            "id": "xxxx",
+            "vertex": "a",
+            "from_vertex": "a",
+            "cb_time": 123456789,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "b",
+            "from_vertex": "a",
+            "cb_time": 123456867,
+            "responses": [
+                {"tags": null},
+                {"index": 1, "tags": null}
+            ]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "c",
+            "from_vertex": "a",
+            "cb_time": 123456819,
+            "responses": [
+                {"tags": null},
+                {"index": 1, "tags": null},
+                {"index": 2, "tags": null}
+            ]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "d",
+            "from_vertex": "b",
+            "cb_time": 123456840,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "d",
+            "from_vertex": "b",
+            "cb_time": 123456841,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "e",
+            "from_vertex": "c",
+            "cb_time": 123456843,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "e",
+            "from_vertex": "c",
+            "cb_time": 123456844,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "e",
+            "from_vertex": "c",
+            "cb_time": 123456845,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "f",
+            "from_vertex": "d",
+            "cb_time": 123456854,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "f",
+            "from_vertex": "d",
+            "cb_time": 123456854,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "f",
+            "from_vertex": "e",
+            "cb_time": 123456886,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "f",
+            "from_vertex": "e",
+            "cb_time": 123456887,
+            "responses": [{"index": 1, "tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "f",
+            "from_vertex": "e",
+            "cb_time": 123456888,
+            "responses": [{"index": 2, "tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "g",
+            "from_vertex": "f",
+            "cb_time": 123456885,
+            "responses": [{"tags": ["even"]}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "g",
+            "from_vertex": "f",
+            "cb_time": 123456886,
+            "responses": [{"index": 1, "tags": ["even"]}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "g",
+            "from_vertex": "f",
+            "cb_time": 123456887,
+            "responses": [{"index": 2, "tags": ["odd"]}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "g",
+            "from_vertex": "f",
+            "cb_time": 123456888,
+            "responses": [{"index": 3, "tags": ["odd"]}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "g",
+            "from_vertex": "f",
+            "cb_time": 123456889,
+            "responses": [{"index": 4, "tags": ["odd"]}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "h",
+            "from_vertex": "g",
+            "cb_time": 123456890,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "h",
+            "from_vertex": "g",
+            "cb_time": 123456891,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "i",
+            "from_vertex": "g",
+            "cb_time": 123456892,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "i",
+            "from_vertex": "g",
+            "cb_time": 123456893,
+            "responses": [{"tags": null}]
+        },
+        {
+            "id": "xxxx",
+            "vertex": "i",
+            "from_vertex": "g",
+            "cb_time": 123456894,
+            "responses": [{"tags": null}]
+        }
+    ]"#;
+
+        let callbacks: Vec<Callback> = serde_json::from_str(raw_callback).unwrap();
+        let mut callback_map: HashMap<String, Vec<CallbackRequestWrapper>> = HashMap::new();
+
+        for callback in callbacks {
+            callback_map
+                .entry(callback.vertex.clone())
+                .or_default()
+                .push(CallbackRequestWrapper {
+                    callback_request: Arc::new(callback),
+                    visited: false,
+                });
+        }
+
+        let mut subgraph: Subgraph = Subgraph {
+            id: "xxxx".to_string(),
+            blocks: Vec::new(),
+        };
+        let result = message_graph.generate_subgraph(
+            source_vertex.clone(),
+            source_vertex,
+            &mut callback_map,
+            &mut subgraph,
+        );
+
+        assert!(result);
     }
 }
