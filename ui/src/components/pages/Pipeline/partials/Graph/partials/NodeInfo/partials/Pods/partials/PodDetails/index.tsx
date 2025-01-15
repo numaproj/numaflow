@@ -91,6 +91,7 @@ export function PodDetail({
                 namespaceId={namespaceId}
                 podName={pod.name}
                 containerName={containerName}
+                type={type}
               />
             </Box>
           </Box>

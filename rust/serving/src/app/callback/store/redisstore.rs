@@ -7,7 +7,7 @@ use redis::RedisError;
 use tokio::sync::Semaphore;
 
 use super::PayloadToSave;
-use crate::app::callback::CallbackRequest;
+use crate::app::callback::Callback;
 use crate::config::RedisConfig;
 use crate::consts::SAVED;
 use crate::Error;
@@ -130,7 +130,7 @@ impl super::Store for RedisConnection {
         Ok(())
     }
 
-    async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<CallbackRequest>>, Error> {
+    async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<Callback>>, Error> {
         let result: Result<Vec<Vec<u8>>, RedisError> = redis::cmd(LRANGE)
             .arg(id)
             .arg(0)
@@ -147,7 +147,7 @@ impl super::Store for RedisConnection {
                 let messages: Result<Vec<_>, _> = result
                     .into_iter()
                     .map(|msg| {
-                        let cbr: CallbackRequest = serde_json::from_slice(&msg).map_err(|e| {
+                        let cbr: Callback = serde_json::from_slice(&msg).map_err(|e| {
                             Error::StoreRead(format!("Parsing payload from bytes - {}", e))
                         })?;
                         Ok(Arc::new(cbr))
@@ -201,11 +201,11 @@ impl super::Store for RedisConnection {
 #[cfg(feature = "redis-tests")]
 #[cfg(test)]
 mod tests {
-    use axum::body::Bytes;
-    use redis::AsyncCommands;
-
     use super::*;
     use crate::app::callback::store::LocalStore;
+    use crate::app::callback::Response;
+    use axum::body::Bytes;
+    use redis::AsyncCommands;
 
     #[tokio::test]
     async fn test_redis_store() {
@@ -225,12 +225,12 @@ mod tests {
 
         let ps_cb = PayloadToSave::Callback {
             key: key.clone(),
-            value: Arc::new(CallbackRequest {
+            value: Arc::new(Callback {
                 id: String::from("1234"),
                 vertex: String::from("prev_vertex"),
                 cb_time: 1234,
                 from_vertex: String::from("next_vertex"),
-                tags: None,
+                responses: vec![Response { tags: None }],
             }),
         };
 
@@ -290,12 +290,12 @@ mod tests {
             .expect("Failed to connect to Redis");
 
         let key = uuid::Uuid::new_v4().to_string();
-        let value = Arc::new(CallbackRequest {
+        let value = Arc::new(Callback {
             id: String::from("test-redis-ttl"),
             vertex: String::from("vertex"),
             cb_time: 1234,
             from_vertex: String::from("next_vertex"),
-            tags: None,
+            responses: vec![Response { tags: None }],
         });
 
         // Save with TTL of 1 second

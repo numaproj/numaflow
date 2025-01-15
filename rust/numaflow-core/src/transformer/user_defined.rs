@@ -184,15 +184,17 @@ impl UserDefinedTransformer {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::message::StringOffset;
-    use crate::shared::grpc::create_rpc_channel;
-    use chrono::{TimeZone, Utc};
-    use numaflow::sourcetransform;
     use std::error::Error;
     use std::result::Result;
     use std::time::Duration;
+
+    use chrono::{TimeZone, Utc};
+    use numaflow::sourcetransform;
     use tempfile::TempDir;
+
+    use super::*;
+    use crate::message::StringOffset;
+    use crate::shared::grpc::create_rpc_channel;
 
     struct NowCat;
 
