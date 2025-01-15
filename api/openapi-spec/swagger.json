@@ -21780,6 +21780,10 @@
           "description": "SASL mechanism to use",
           "type": "string"
         },
+        "oauth": {
+          "description": "OAuth contains the oauth config",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLOAuth"
+        },
         "plain": {
           "description": "SASLPlain contains the sasl plain config",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain"
@@ -21791,6 +21795,28 @@
         "scramsha512": {
           "description": "SASLSCRAMSHA512 contains the sasl plain config",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SASLPlain"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.SASLOAuth": {
+      "type": "object",
+      "required": [
+        "clientID",
+        "clientSecret",
+        "tokenEndpoint"
+      ],
+      "properties": {
+        "clientID": {
+          "description": "ClientID refers to the secret that contains the client id",
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        },
+        "clientSecret": {
+          "description": "ClientSecret refers to the secret that contains the client secret",
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        },
+        "tokenEndpoint": {
+          "description": "TokenEndpoint refers to the token endpoint",
+          "type": "string"
         }
       }
     },

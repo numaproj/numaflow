@@ -220,7 +220,8 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 	if err := r.cleanUpPodsFromTo(ctx, vertex, desiredReplicas, math.MaxInt); err != nil {
 		return fmt.Errorf("failed to clean up vertex pods [%v, ∞): %w", desiredReplicas, err)
 	}
-	if currentReplicas := int(vertex.Status.Replicas); currentReplicas > desiredReplicas {
+	currentReplicas := int(vertex.Status.Replicas)
+	if currentReplicas > desiredReplicas {
 		vertex.Status.Replicas = uint32(desiredReplicas)
 	}
 	updatedReplicas := int(vertex.Status.UpdatedReplicas)
@@ -300,7 +301,6 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 		}
 	}
 
-	currentReplicas := int(vertex.Status.Replicas)
 	if currentReplicas != desiredReplicas {
 		log.Infow("Pipeline Vertex replicas changed", "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
 		r.recorder.Eventf(vertex, corev1.EventTypeNormal, "ReplicasScaled", "Replicas changed from %d to %d", currentReplicas, desiredReplicas)

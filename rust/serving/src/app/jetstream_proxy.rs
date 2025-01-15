@@ -32,7 +32,6 @@ use crate::{app::callback::state, Message, MessageWrapper};
 //   "from_vertex": "a"
 // }
 
-const CALLBACK_URL_KEY: &str = "X-Numaflow-Callback-Url";
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
 
@@ -40,7 +39,6 @@ struct ProxyState<T> {
     message: mpsc::Sender<MessageWrapper>,
     tid_header: String,
     callback: state::State<T>,
-    callback_url: String,
 }
 
 pub(crate) async fn jetstream_proxy<T: Clone + Send + Sync + Store + 'static>(
@@ -50,10 +48,6 @@ pub(crate) async fn jetstream_proxy<T: Clone + Send + Sync + Store + 'static>(
         message: state.message.clone(),
         tid_header: state.settings.tid_header.clone(),
         callback: state.callback_state.clone(),
-        callback_url: format!(
-            "https://{}:{}/v1/process/callback",
-            state.settings.host_ip, state.settings.app_listen_port
-        ),
     });
 
     let router = Router::new()
@@ -266,10 +260,11 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
+    use crate::app::callback;
     use crate::app::callback::state::State as CallbackState;
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::app::callback::store::PayloadToSave;
-    use crate::app::callback::CallbackRequest;
+    use crate::app::callback::Callback;
     use crate::app::tracker::MessageGraph;
     use crate::pipeline::PipelineDCG;
     use crate::{Error, Settings};
@@ -283,10 +278,7 @@ mod tests {
         async fn save(&mut self, _messages: Vec<PayloadToSave>) -> crate::Result<()> {
             Ok(())
         }
-        async fn retrieve_callbacks(
-            &mut self,
-            _id: &str,
-        ) -> Result<Vec<Arc<CallbackRequest>>, Error> {
+        async fn retrieve_callbacks(&mut self, _id: &str) -> Result<Vec<Arc<Callback>>, Error> {
             Ok(vec![])
         }
         async fn retrieve_datum(&mut self, _id: &str) -> Result<Vec<Vec<u8>>, Error> {
@@ -361,28 +353,28 @@ mod tests {
         resp
     }
 
-    fn create_default_callbacks(id: &str) -> Vec<CallbackRequest> {
+    fn create_default_callbacks(id: &str) -> Vec<Callback> {
         vec![
-            CallbackRequest {
+            Callback {
                 id: id.to_string(),
                 vertex: "in".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
-                tags: None,
+                responses: vec![callback::Response { tags: None }],
             },
-            CallbackRequest {
+            Callback {
                 id: id.to_string(),
                 vertex: "cat".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
-                tags: None,
+                responses: vec![callback::Response { tags: None }],
             },
-            CallbackRequest {
+            Callback {
                 id: id.to_string(),
                 vertex: "out".to_string(),
                 cb_time: 12345,
                 from_vertex: "cat".to_string(),
-                tags: None,
+                responses: vec![callback::Response { tags: None }],
             },
         ]
     }
@@ -423,10 +415,10 @@ mod tests {
         let app = jetstream_proxy(app_state).await.unwrap();
 
         tokio::spawn(async move {
-            let cbs = create_default_callbacks(ID_VALUE);
             let mut retries = 0;
             loop {
-                match callback_state.insert_callback_requests(cbs.clone()).await {
+                let cbs = create_default_callbacks(ID_VALUE);
+                match callback_state.insert_callback_requests(cbs).await {
                     Ok(_) => break,
                     Err(e) => {
                         retries += 1;
@@ -495,14 +487,14 @@ mod tests {
         let app = jetstream_proxy(app_state).await.unwrap();
 
         // pipeline is in -> cat -> out, so we will have 3 callback requests
-        let cbs = create_default_callbacks(ID_VALUE);
 
         // spawn a tokio task which will insert the callback requests to the callback state
         // if it fails, sleep for 10ms and retry
         tokio::spawn(async move {
             let mut retries = 0;
             loop {
-                match callback_state.insert_callback_requests(cbs.clone()).await {
+                let cbs = create_default_callbacks(ID_VALUE);
+                match callback_state.insert_callback_requests(cbs).await {
                     Ok(_) => {
                         // save a test message, we should get this message when serve is invoked
                         // with foobar id

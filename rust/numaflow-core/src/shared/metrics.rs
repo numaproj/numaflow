@@ -6,9 +6,9 @@ use tracing::error;
 
 use crate::config::components::metrics::MetricsConfig;
 use crate::metrics::{
-    start_metrics_https_server, PendingReader, PendingReaderBuilder, UserDefinedContainerState,
+    start_metrics_https_server, LagReader, PendingReader, PendingReaderBuilder,
+    UserDefinedContainerState,
 };
-use crate::source::Source;
 
 /// Starts the metrics server
 pub(crate) async fn start_metrics_server(
@@ -31,9 +31,9 @@ pub(crate) async fn start_metrics_server(
 /// Creates a pending reader
 pub(crate) async fn create_pending_reader(
     metrics_config: &MetricsConfig,
-    lag_reader_grpc_client: Source,
+    lag_reader: LagReader,
 ) -> PendingReader {
-    PendingReaderBuilder::new(lag_reader_grpc_client)
+    PendingReaderBuilder::new(lag_reader)
         .lag_checking_interval(Duration::from_secs(
             metrics_config.lag_check_interval_in_secs.into(),
         ))

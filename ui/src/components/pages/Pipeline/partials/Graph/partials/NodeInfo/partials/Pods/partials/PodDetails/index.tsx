@@ -26,7 +26,7 @@ export function PodDetail({
   type,
   containerName,
   pod,
-  vertexId
+  vertexId,
 }: PodDetailProps) {
   if (!pod) return null;
 
@@ -90,6 +90,7 @@ export function PodDetail({
                 namespaceId={namespaceId}
                 podName={pod.name}
                 containerName={containerName}
+                type={type}
               />
             </Box>
           </Box>
