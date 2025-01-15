@@ -165,9 +165,8 @@ impl MessageGraph {
 
         // iterate over the responses of the current callback, for flatmap operation there can
         // more than one response, so we need to make sure all the responses are processed.
-        // For example a -> b -> c, lets say vertex a has 2 responses. That means we need to
-        // wait for two callbacks from vertex b, each message from vertex b can have 2 responses
-        // we will have to wait for 4 callbacks from vertex c.
+        // For example a -> b -> c, lets say vertex a has 2 responses. We will have to recursively
+        // find the subgraph for both the responses.
         for response in current_callback.responses.clone() {
             // recursively invoke the downstream vertices of the current vertex, if any
             if let Some(edges) = self.dag.get(&current) {
