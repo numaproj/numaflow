@@ -179,11 +179,11 @@ data:
               filters:
                 - name: pod
                   required: false
-    - name: mono-vertex-pod-cpu
+    - name: mono_vertex_cpu_memory_utilization_pod
       object: mono-vertex
-      title: cpu utilization by pod
-      description: cpu utilization by pod for mono-vertex
-      expr: avg_over_time($metric_name{$filters}[$duration]})
+      title: cpu-memory utilization by pod
+      description: cpu and memory utilization by pod for mono-vertex
+      expr: avg_over_time($metric_name{$filters}[$duration])
       params:
         - name: duration
           required: true
@@ -193,7 +193,7 @@ data:
           required: false
       metrics: 
         - metric_name: namespace_pod_cpu_utilization
-          display_name: CPU utilization by pod
+          display_name: CPU Utilization per Pod (usage seconds/resource limits)
           required_filters:
             - namespace
             # to get only mono-vertex pods
@@ -203,12 +203,22 @@ data:
               filters: 
                 - name: pod 
                   required: false
-
-    - name: pipeline-pod-cpu
+        - metric_name: namespace_pod_memory_utilization
+          display_name: Memory Utilization per Pod (usage bytes/resource limits)
+          required_filters:
+            - namespace
+            # to get only mono-vertex pods
+            - pod  
+          dimensions:
+            - name: mono-vertex
+              filters: 
+                - name: pod 
+                  required: false
+    - name: pipeline_vertex_cpu_memory_utilization_pod
       object: vertex
-      title: cpu utilization by pod
-      description: cpu utilization by pod for pipelines vertex
-      expr: avg_over_time($metric_name{$filters}[$duration]})
+      title: cpu-memory utilization by pod
+      description: cpu and memory utilization by pod for pipeline's vertex
+      expr: avg_over_time($metric_name{$filters}[$duration])
       params:
         - name: duration
           required: true
@@ -218,7 +228,18 @@ data:
           required: false
       metrics: 
         - metric_name: namespace_pod_cpu_utilization
-          display_name: CPU utilization by pod
+          display_name: CPU Utilization per Pod (usage seconds/resource limits)
+          required_filters:
+            - namespace
+            # to get only vertex pods
+            - pod  
+          dimensions:
+            - name: vertex
+              filters: 
+                - name: pod 
+                  required: false
+        - metric_name: namespace_pod_memory_utilization
+          display_name: Memory Utilization per Pod (usage bytes/resource limits)
           required_filters:
             - namespace
             # to get only vertex pods

@@ -204,29 +204,39 @@ data:
     Mono Vertex Read Processing Rate\n      # set \"Units\" or unset for default behaviour\n
     \     # unit: Units\n      required_filters:\n        - namespace\n        - mvtx_name\n
     \     dimensions:\n        - name: mono-vertex\n        - name: pod\n          filters:\n
-    \           - name: pod\n              required: false\n- name: mono-vertex-pod-cpu\n
-    \ object: mono-vertex\n  title: cpu utilization by pod\n  description: cpu utilization
-    by pod for mono-vertex\n  expr: avg_over_time($metric_name{$filters}[$duration]})\n
+    \           - name: pod\n              required: false\n- name: mono_vertex_cpu_memory_utilization_pod\n
+    \ object: mono-vertex\n  title: cpu-memory utilization by pod\n  description:
+    cpu and memory utilization by pod for mono-vertex\n  expr: avg_over_time($metric_name{$filters}[$duration])\n
     \ params:\n    - name: duration\n      required: true\n    - name: start_time\n
     \     required: false\n    - name: end_time\n      required: false\n  metrics:
-    \n    - metric_name: namespace_pod_cpu_utilization\n      display_name: CPU utilization
-    by pod\n      required_filters:\n        - namespace\n        # to get only mono-vertex
-    pods\n        - pod  \n      dimensions:\n        - name: mono-vertex\n          filters:
-    \n            - name: pod \n              required: false\n\n- name: pipeline-pod-cpu\n
-    \ object: vertex\n  title: cpu utilization by pod\n  description: cpu utilization
-    by pod for pipelines vertex\n  expr: avg_over_time($metric_name{$filters}[$duration]})\n
+    \n    - metric_name: namespace_pod_cpu_utilization\n      display_name: CPU Utilization
+    per Pod (usage seconds/resource limits)\n      required_filters:\n        - namespace\n
+    \       # to get only mono-vertex pods\n        - pod  \n      dimensions:\n        -
+    name: mono-vertex\n          filters: \n            - name: pod \n              required:
+    false\n    - metric_name: namespace_pod_memory_utilization\n      display_name:
+    Memory Utilization per Pod (usage bytes/resource limits)\n      required_filters:\n
+    \       - namespace\n        # to get only mono-vertex pods\n        - pod  \n
+    \     dimensions:\n        - name: mono-vertex\n          filters: \n            -
+    name: pod \n              required: false\n- name: pipeline_vertex_cpu_memory_utilization_pod\n
+    \ object: vertex\n  title: cpu-memory utilization by pod\n  description: cpu and
+    memory utilization by pod for pipeline's vertex\n  expr: avg_over_time($metric_name{$filters}[$duration])\n
     \ params:\n    - name: duration\n      required: true\n    - name: start_time\n
     \     required: false\n    - name: end_time\n      required: false\n  metrics:
-    \n    - metric_name: namespace_pod_cpu_utilization\n      display_name: CPU utilization
-    by pod\n      required_filters:\n        - namespace\n        # to get only vertex
-    pods\n        - pod  \n      dimensions:\n        - name: vertex\n          filters:
-    \n            - name: pod \n              required: false\n# - name: mono-vertex-container-cpu\n#
-    \  object: mono-vertex\n#   title: cpu utilization by container\n#   description:
-    cpu utilization by container for mono-vertex\n#   expr: avg_over_time($metric_name{$filters}[$duration]})\n#
-    \  params:\n#     - name: duration\n#       required: true\n#     - name: start_time\n#
-    \      required: false\n#     - name: end_time\n#       required: false\n#   metrics:
-    \n#     - metric_name: namespace_app_container_cpu_utilization\n#       display_name:
-    CPU utilization by container\n#       required_filters:\n#         - namespace\n#
+    \n    - metric_name: namespace_pod_cpu_utilization\n      display_name: CPU Utilization
+    per Pod (usage seconds/resource limits)\n      required_filters:\n        - namespace\n
+    \       # to get only vertex pods\n        - pod  \n      dimensions:\n        -
+    name: vertex\n          filters: \n            - name: pod \n              required:
+    false\n    - metric_name: namespace_pod_memory_utilization\n      display_name:
+    Memory Utilization per Pod (usage bytes/resource limits)\n      required_filters:\n
+    \       - namespace\n        # to get only vertex pods\n        - pod  \n      dimensions:\n
+    \       - name: vertex\n          filters: \n            - name: pod \n              required:
+    false\n# - name: mono-vertex-container-cpu\n#   object: mono-vertex\n#   title:
+    cpu utilization by container\n#   description: cpu utilization by container for
+    mono-vertex\n#   expr: avg_over_time($metric_name{$filters}[$duration]})\n#   params:\n#
+    \    - name: duration\n#       required: true\n#     - name: start_time\n#       required:
+    false\n#     - name: end_time\n#       required: false\n#   metrics: \n#     -
+    metric_name: namespace_app_container_cpu_utilization\n#       display_name: CPU
+    utilization by container\n#       required_filters:\n#         - namespace\n#
     \      dimensions:\n#         - name: container\n#           filters: \n#             -
     name: container\n#               required: false\n"
 kind: ConfigMap
