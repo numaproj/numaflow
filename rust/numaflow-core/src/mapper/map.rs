@@ -344,14 +344,7 @@ impl MapHandle {
             match receiver.await {
                 Ok(Ok(mut mapped_messages)) => {
                     // update the tracker with the number of messages sent and send the mapped messages
-                    if let Err(e) = tracker_handle
-                        .update(
-                            read_msg.id.offset.clone(),
-                            mapped_messages.len() as u32,
-                            true,
-                        )
-                        .await
-                    {
+                    if let Err(e) = tracker_handle.update_many(&mapped_messages, true).await {
                         error_tx.send(e).await.expect("failed to send error");
                         return;
                     }
@@ -398,10 +391,7 @@ impl MapHandle {
         for receiver in receivers {
             match receiver.await {
                 Ok(Ok(mut mapped_messages)) => {
-                    let offset = mapped_messages.first().unwrap().id.offset.clone();
-                    tracker_handle
-                        .update(offset.clone(), mapped_messages.len() as u32, true)
-                        .await?;
+                    tracker_handle.update_many(&mapped_messages, true).await?;
                     for mapped_message in mapped_messages.drain(..) {
                         output_tx
                             .send(mapped_message)
@@ -455,8 +445,7 @@ impl MapHandle {
             while let Some(result) = receiver.recv().await {
                 match result {
                     Ok(mapped_message) => {
-                        let offset = mapped_message.id.offset.clone();
-                        if let Err(e) = tracker_handle.update(offset.clone(), 1, false).await {
+                        if let Err(e) = tracker_handle.update(&mapped_message).await {
                             error_tx.send(e).await.expect("failed to send error");
                             return;
                         }
@@ -475,7 +464,7 @@ impl MapHandle {
                 }
             }
 
-            if let Err(e) = tracker_handle.update(read_msg.id.offset, 0, true).await {
+            if let Err(e) = tracker_handle.update_eof(read_msg.id.offset).await {
                 error_tx.send(e).await.expect("failed to send error");
             }
         });
@@ -530,7 +519,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
@@ -623,7 +612,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
             MapMode::Unary,
@@ -714,7 +703,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
             MapMode::Unary,
@@ -810,7 +799,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
@@ -923,7 +912,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
             MapMode::Batch,
@@ -1035,7 +1024,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
@@ -1134,7 +1123,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let mapper = MapHandle::new(
             MapMode::Stream,
             500,

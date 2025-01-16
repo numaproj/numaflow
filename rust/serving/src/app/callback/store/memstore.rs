@@ -98,7 +98,7 @@ mod tests {
 
     use super::*;
     use crate::app::callback::store::{PayloadToSave, Store};
-    use crate::app::callback::{Callback, Response};
+    use crate::callback::{Callback, Response};
 
     #[tokio::test]
     async fn test_save_and_retrieve_callbacks() {

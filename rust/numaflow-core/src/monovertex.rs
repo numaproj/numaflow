@@ -26,7 +26,11 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: &MonovertexConfig,
 ) -> error::Result<()> {
-    let tracker_handle = TrackerHandle::new();
+    let callback_handler = config
+        .callback_config
+        .as_ref()
+        .map(|cb_cfg| CallbackHandler::new(config.name.clone(), cb_cfg.callback_concurrency));
+    let tracker_handle = TrackerHandle::new(callback_handler);
     let (source, source_grpc_client) = create_components::create_source(
         config.batch_size,
         config.read_timeout,
@@ -70,23 +74,7 @@ pub(crate) async fn start_forwarder(
     // FIXME: what to do with the handle
     shared::metrics::start_metrics_server(config.metrics_config.clone(), metrics_state).await;
 
-    let callback_handler = match config.callback_config {
-        Some(ref cb_cfg) => Some(CallbackHandler::new(
-            config.name.clone(),
-            cb_cfg.callback_concurrency,
-        )),
-        None => None,
-    };
-
-    start(
-        config.clone(),
-        source,
-        sink_writer,
-        transformer,
-        cln_token,
-        callback_handler,
-    )
-    .await?;
+    start(config.clone(), source, sink_writer, transformer, cln_token).await?;
 
     Ok(())
 }
@@ -97,7 +85,6 @@ async fn start(
     sink: SinkWriter,
     transformer: Option<Transformer>,
     cln_token: CancellationToken,
-    callback_handler: Option<CallbackHandler>,
 ) -> error::Result<()> {
     // start the pending reader to publish pending metrics
     let pending_reader = shared::metrics::create_pending_reader(
@@ -107,7 +94,7 @@ async fn start(
     .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    let mut forwarder_builder = ForwarderBuilder::new(source, sink, cln_token, callback_handler);
+    let mut forwarder_builder = ForwarderBuilder::new(source, sink, cln_token);
 
     // add transformer if exists
     if let Some(transformer_client) = transformer {

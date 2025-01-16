@@ -1,4 +1,3 @@
-use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::Error;
@@ -12,7 +11,6 @@ pub(crate) struct SinkForwarder {
     jetstream_reader: JetstreamReader,
     sink_writer: SinkWriter,
     cln_token: CancellationToken,
-    callback_handler: Option<CallbackHandler>,
 }
 
 impl SinkForwarder {
@@ -20,13 +18,11 @@ impl SinkForwarder {
         jetstream_reader: JetstreamReader,
         sink_writer: SinkWriter,
         cln_token: CancellationToken,
-        callback_handler: Option<CallbackHandler>,
     ) -> Self {
         Self {
             jetstream_reader,
             sink_writer,
             cln_token,
-            callback_handler,
         }
     }
 
@@ -38,15 +34,9 @@ impl SinkForwarder {
             .streaming_read(reader_cancellation_token.clone())
             .await?;
 
-        let callback_handler = self.callback_handler.clone();
-
         let sink_writer_handle = self
             .sink_writer
-            .streaming_write(
-                read_messages_stream,
-                self.cln_token.clone(),
-                callback_handler,
-            )
+            .streaming_write(read_messages_stream, self.cln_token.clone())
             .await?;
 
         // Join the reader and sink writer

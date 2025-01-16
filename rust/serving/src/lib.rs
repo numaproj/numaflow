@@ -15,7 +15,7 @@ use crate::metrics::start_https_metrics_server;
 mod app;
 
 mod config;
-pub use config::Settings;
+pub use {config::Settings, config::DEFAULT_CALLBACK_URL_HEADER_KEY, config::DEFAULT_ID_HEADER};
 
 mod consts;
 mod error;

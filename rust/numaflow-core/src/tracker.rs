@@ -11,10 +11,12 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
+use serving::callback::CallbackHandler;
+use serving::{DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::error::Error;
-use crate::message::ReadAck;
+use crate::message::{Message, ReadAck};
 use crate::Result;
 
 /// TrackerEntry represents the state of a tracked message.
@@ -23,6 +25,7 @@ struct TrackerEntry {
     ack_send: oneshot::Sender<ReadAck>,
     count: u32,
     eof: bool,
+    callback_info: Option<CallbackInfo>,
 }
 
 /// ActorMessage represents the messages that can be sent to the Tracker actor.
@@ -30,11 +33,19 @@ enum ActorMessage {
     Insert {
         offset: Bytes,
         ack_send: oneshot::Sender<ReadAck>,
+        callback_info: Option<CallbackInfo>,
     },
     Update {
         offset: Bytes,
-        count: u32,
+        responses: Option<Vec<String>>,
+    },
+    UpdateMany {
+        offset: Bytes,
+        responses: Vec<Option<Vec<String>>>,
         eof: bool,
+    },
+    UpdateEOF {
+        offset: Bytes,
     },
     Delete {
         offset: Bytes,
@@ -54,6 +65,61 @@ enum ActorMessage {
 struct Tracker {
     entries: HashMap<Bytes, TrackerEntry>,
     receiver: mpsc::Receiver<ActorMessage>,
+    callback_handler: Option<CallbackHandler>,
+}
+
+#[derive(Debug)]
+struct CallbackInfo {
+    id: String,
+    callback_url: String,
+    from_vertex: String,
+    responses: Vec<Option<Vec<String>>>,
+}
+
+impl TryFrom<&Message> for CallbackInfo {
+    type Error = Error;
+
+    fn try_from(message: &Message) -> std::result::Result<Self, Self::Error> {
+        let callback_url = message
+            .headers
+            .get(DEFAULT_CALLBACK_URL_HEADER_KEY)
+            .ok_or_else(|| {
+                Error::Source(format!(
+                "{DEFAULT_CALLBACK_URL_HEADER_KEY} header is not present in the message headers",
+            ))
+            })?
+            .to_owned();
+        let uuid = message
+            .headers
+            .get(DEFAULT_ID_HEADER)
+            .ok_or_else(|| {
+                Error::Source(format!(
+                    "{DEFAULT_ID_HEADER} is not found in message headers",
+                ))
+            })?
+            .to_owned();
+
+        let from_vertex = message
+            .metadata
+            .as_ref()
+            .ok_or_else(|| Error::Source("Metadata field is empty in the message".into()))?
+            .previous_vertex
+            .clone();
+
+        // FIXME: empty message tags
+        let mut msg_tags = None;
+        if let Some(ref tags) = message.tags {
+            if !tags.is_empty() {
+                msg_tags = Some(tags.iter().cloned().collect());
+            }
+        };
+        Ok(CallbackInfo {
+            id: uuid,
+            callback_url,
+            from_vertex,
+            responses: vec![msg_tags],
+        })
+    }
 }
 
 impl Drop for Tracker {
@@ -70,10 +136,14 @@ impl Drop for Tracker {
 
 impl Tracker {
     /// Creates a new Tracker instance with the given receiver for actor messages.
-    fn new(receiver: mpsc::Receiver<ActorMessage>) -> Self {
+    fn new(
+        receiver: mpsc::Receiver<ActorMessage>,
+        callback_handler: impl Into<Option<CallbackHandler>>,
+    ) -> Self {
         Self {
             entries: HashMap::new(),
             receiver,
+            callback_handler: callback_handler.into(),
         }
     }
 
@@ -90,11 +160,22 @@ impl Tracker {
             ActorMessage::Insert {
                 offset,
                 ack_send: respond_to,
+                callback_info,
             } => {
-                self.handle_insert(offset, respond_to);
+                self.handle_insert(offset, callback_info, respond_to);
             }
-            ActorMessage::Update { offset, count, eof } => {
-                self.handle_update(offset, count, eof);
+            ActorMessage::Update { offset, responses } => {
+                self.handle_update(offset, responses);
+            }
+            ActorMessage::UpdateMany {
+                offset,
+                responses,
+                eof,
+            } => {
+                self.handle_update_many(offset, responses, eof);
+            }
+            ActorMessage::UpdateEOF { offset } => {
+                self.handle_update_eof(offset);
             }
             ActorMessage::Delete { offset } => {
                 self.handle_delete(offset);
@@ -114,22 +195,73 @@ impl Tracker {
     }
 
     /// Inserts a new entry into the tracker with the given offset and ack sender.
-    fn handle_insert(&mut self, offset: Bytes, respond_to: oneshot::Sender<ReadAck>) {
+    fn handle_insert(
+        &mut self,
+        offset: Bytes,
+        callback_info: Option<CallbackInfo>,
+        respond_to: oneshot::Sender<ReadAck>,
+    ) {
         self.entries.insert(
             offset,
             TrackerEntry {
                 ack_send: respond_to,
                 count: 0,
                 eof: true,
+                callback_info,
             },
         );
     }
 
     /// Updates an existing entry in the tracker with the number of expected messages and EOF status.
-    fn handle_update(&mut self, offset: Bytes, count: u32, eof: bool) {
+    fn handle_update(&mut self, offset: Bytes, responses: Option<Vec<String>>) {
         if let Some(entry) = self.entries.get_mut(&offset) {
-            entry.count += count;
+            entry.count += 1;
+            entry
+                .callback_info
+                .as_mut()
+                .map(|cb| cb.responses.push(responses));
+            // if the count is zero, we can send an ack immediately
+            // this is case where map stream will send eof true after
+            // receiving all the messages.
+            if entry.count == 0 {
+                let entry = self.entries.remove(&offset).unwrap();
+                entry
+                    .ack_send
+                    .send(ReadAck::Ack)
+                    .expect("Failed to send ack");
+            }
+        }
+    }
+
+    fn handle_update_eof(&mut self, offset: Bytes) {
+        if let Some(entry) = self.entries.get_mut(&offset) {
+            entry.eof = true;
+            // if the count is zero, we can send an ack immediately
+            // this is case where map stream will send eof true after
+            // receiving all the messages.
+            if entry.count == 0 {
+                let entry = self.entries.remove(&offset).unwrap();
+                entry
+                    .ack_send
+                    .send(ReadAck::Ack)
+                    .expect("Failed to send ack");
+            }
+        }
+    }
+
+    fn handle_update_many(
+        &mut self,
+        offset: Bytes,
+        responses: Vec<Option<Vec<String>>>,
+        eof: bool,
+    ) {
+        if let Some(entry) = self.entries.get_mut(&offset) {
+            entry.count += responses.len() as u32;
             entry.eof = eof;
+            entry
+                .callback_info
+                .as_mut()
+                .map(|cb| cb.responses.extend(responses));
             // if the count is zero, we can send an ack immediately
             // this is case where map stream will send eof true after
             // receiving all the messages.
@@ -187,24 +319,38 @@ impl Tracker {
 #[derive(Clone)]
 pub(crate) struct TrackerHandle {
     sender: mpsc::Sender<ActorMessage>,
+    enable_callbacks: bool,
 }
 
 impl TrackerHandle {
     /// Creates a new TrackerHandle instance and spawns the Tracker.
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(callback_handler: Option<CallbackHandler>) -> Self {
+        let enable_callbacks = callback_handler.is_some();
         let (sender, receiver) = mpsc::channel(100);
-        let tracker = Tracker::new(receiver);
+        let tracker = Tracker::new(receiver, callback_handler);
         tokio::spawn(tracker.run());
-        Self { sender }
+        Self {
+            sender,
+            enable_callbacks,
+        }
     }
 
     /// Inserts a new message into the Tracker with the given offset and acknowledgment sender.
     pub(crate) async fn insert(
         &self,
-        offset: Bytes,
+        message: &Message,
         ack_send: oneshot::Sender<ReadAck>,
     ) -> Result<()> {
-        let message = ActorMessage::Insert { offset, ack_send };
+        let offset = message.id.offset.clone();
+        let mut callback_info = None;
+        if self.enable_callbacks {
+            callback_info = Some(message.try_into()?);
+        }
+        let message = ActorMessage::Insert {
+            offset,
+            ack_send,
+            callback_info,
+        };
         self.sender
             .send(message)
             .await
@@ -213,8 +359,59 @@ impl TrackerHandle {
     }
 
     /// Updates an existing message in the Tracker with the given offset, count, and EOF status.
-    pub(crate) async fn update(&self, offset: Bytes, count: u32, eof: bool) -> Result<()> {
-        let message = ActorMessage::Update { offset, count, eof };
+    pub(crate) async fn update(&self, message: &Message) -> Result<()> {
+        let offset = message.id.offset.clone();
+        let mut responses: Option<Vec<String>> = None;
+        if self.enable_callbacks {
+            // FIXME: empty message tags
+            if let Some(ref tags) = message.tags {
+                if !tags.is_empty() {
+                    responses = Some(tags.iter().cloned().collect());
+                }
+            };
+        }
+        let message = ActorMessage::Update { offset, responses };
+        self.sender
+            .send(message)
+            .await
+            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+        Ok(())
+    }
+
+    /// Updates an existing message in the Tracker with the given offset, count, and EOF status.
+    pub(crate) async fn update_eof(&self, offset: Bytes) -> Result<()> {
+        let message = ActorMessage::UpdateEOF { offset };
+        self.sender
+            .send(message)
+            .await
+            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+        Ok(())
+    }
+
+    /// Updates an existing message in the Tracker with the given offset, count, and EOF status.
+    pub(crate) async fn update_many(&self, messages: &[Message], eof: bool) -> Result<()> {
+        if messages.is_empty() {
+            return Ok(());
+        }
+        let offset = messages.first().unwrap().id.offset.clone();
+        let mut responses: Vec<Option<Vec<String>>> = vec![];
+        // if self.enable_callbacks {
+        // FIXME: empty message tags
+        for message in messages {
+            let mut response: Option<Vec<String>> = None;
+            if let Some(ref tags) = message.tags {
+                if !tags.is_empty() {
+                    response = Some(tags.iter().cloned().collect());
+                }
+            };
+            responses.push(response);
+        }
+        // }
+        let message = ActorMessage::UpdateMany {
+            offset,
+            responses,
+            eof,
+        };
         self.sender
             .send(message)
             .await
@@ -268,27 +465,42 @@ impl TrackerHandle {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use tokio::sync::oneshot;
     use tokio::time::{timeout, Duration};
+
+    use crate::message::MessageID;
 
     use super::*;
 
     #[tokio::test]
     async fn test_insert_update_delete() {
-        let handle = TrackerHandle::new();
+        let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
 
+        let offset = Bytes::from_static(b"offset1");
+        let message = Message {
+            keys: Arc::from([]),
+            tags: None,
+            value: Bytes::from_static(b"test"),
+            offset: None,
+            event_time: Default::default(),
+            id: MessageID {
+                vertex_name: "in".into(),
+                offset: offset.clone(),
+                index: 1,
+            },
+            headers: HashMap::new(),
+            metadata: None,
+        };
+
         // Insert a new message
-        handle
-            .insert("offset1".to_string().into(), ack_send)
-            .await
-            .unwrap();
+        handle.insert(&message, ack_send).await.unwrap();
 
         // Update the message
-        handle
-            .update("offset1".to_string().into(), 1, true)
-            .await
-            .unwrap();
+        handle.update(&message).await.unwrap();
+        handle.update_eof(offset).await.unwrap();
 
         // Delete the message
         handle.delete("offset1".to_string().into()).await.unwrap();
@@ -302,25 +514,36 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_with_multiple_deletes() {
-        let handle = TrackerHandle::new();
+        let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
 
-        // Insert a new message
-        handle
-            .insert("offset1".to_string().into(), ack_send)
-            .await
-            .unwrap();
+        let offset = Bytes::from_static(b"offset1");
+        let message = Message {
+            keys: Arc::from([]),
+            tags: None,
+            value: Bytes::from_static(b"test"),
+            offset: None,
+            event_time: Default::default(),
+            id: MessageID {
+                vertex_name: "in".into(),
+                offset: offset.clone(),
+                index: 1,
+            },
+            headers: HashMap::new(),
+            metadata: None,
+        };
 
+        // Insert a new message
+        handle.insert(&message, ack_send).await.unwrap();
+
+        let messages: Vec<Message> = std::iter::repeat(message).take(3).collect();
         // Update the message with a count of 3
-        handle
-            .update("offset1".to_string().into(), 3, true)
-            .await
-            .unwrap();
+        handle.update_many(&messages, true).await.unwrap();
 
         // Delete the message three times
-        handle.delete("offset1".to_string().into()).await.unwrap();
-        handle.delete("offset1".to_string().into()).await.unwrap();
-        handle.delete("offset1".to_string().into()).await.unwrap();
+        handle.delete(offset.clone()).await.unwrap();
+        handle.delete(offset.clone()).await.unwrap();
+        handle.delete(offset).await.unwrap();
 
         // Verify that the message was deleted and ack was received after the third delete
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
@@ -331,17 +554,30 @@ mod tests {
 
     #[tokio::test]
     async fn test_discard() {
-        let handle = TrackerHandle::new();
+        let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
 
+        let offset = Bytes::from_static(b"offset1");
+        let message = Message {
+            keys: Arc::from([]),
+            tags: None,
+            value: Bytes::from_static(b"test"),
+            offset: None,
+            event_time: Default::default(),
+            id: MessageID {
+                vertex_name: "in".into(),
+                offset: offset.clone(),
+                index: 1,
+            },
+            headers: HashMap::new(),
+            metadata: None,
+        };
+
         // Insert a new message
-        handle
-            .insert("offset1".to_string().into(), ack_send)
-            .await
-            .unwrap();
+        handle.insert(&message, ack_send).await.unwrap();
 
         // Discard the message
-        handle.discard("offset1".to_string().into()).await.unwrap();
+        handle.discard(offset).await.unwrap();
 
         // Verify that the message was discarded and nak was received
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
@@ -352,23 +588,34 @@ mod tests {
 
     #[tokio::test]
     async fn test_discard_after_update_with_higher_count() {
-        let handle = TrackerHandle::new();
+        let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
 
-        // Insert a new message
-        handle
-            .insert("offset1".to_string().into(), ack_send)
-            .await
-            .unwrap();
+        let offset = Bytes::from_static(b"offset1");
+        let message = Message {
+            keys: Arc::from([]),
+            tags: None,
+            value: Bytes::from_static(b"test"),
+            offset: None,
+            event_time: Default::default(),
+            id: MessageID {
+                vertex_name: "in".into(),
+                offset: offset.clone(),
+                index: 1,
+            },
+            headers: HashMap::new(),
+            metadata: None,
+        };
 
+        // Insert a new message
+        handle.insert(&message, ack_send).await.unwrap();
+
+        let messages: Vec<Message> = std::iter::repeat(message).take(3).collect();
         // Update the message with a count of 3
-        handle
-            .update("offset1".to_string().into(), 3, false)
-            .await
-            .unwrap();
+        handle.update_many(&messages, false).await.unwrap();
 
         // Discard the message
-        handle.discard("offset1".to_string().into()).await.unwrap();
+        handle.discard(offset).await.unwrap();
 
         // Verify that the message was discarded and nak was received
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();

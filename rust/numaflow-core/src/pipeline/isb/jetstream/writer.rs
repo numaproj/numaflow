@@ -10,7 +10,6 @@ use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
 use async_nats::jetstream::Context;
 use bytes::{Bytes, BytesMut};
-use serving::callback::CallbackHandler;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio::time;
@@ -45,7 +44,6 @@ pub(crate) struct JetstreamWriter {
     cancel_token: CancellationToken,
     tracker_handle: TrackerHandle,
     sem: Arc<Semaphore>,
-    callback_handler: Option<CallbackHandler>,
 }
 
 impl JetstreamWriter {
@@ -57,7 +55,6 @@ impl JetstreamWriter {
         paf_concurrency: usize,
         tracker_handle: TrackerHandle,
         cancel_token: CancellationToken,
-        callback_handler: Option<CallbackHandler>,
     ) -> Self {
         let streams = config
             .iter()
@@ -76,7 +73,6 @@ impl JetstreamWriter {
             cancel_token,
             tracker_handle,
             sem: Arc::new(Semaphore::new(paf_concurrency)),
-            callback_handler,
         };
 
         // spawn a task for checking whether buffer is_full
@@ -245,8 +241,7 @@ impl JetstreamWriter {
                     continue;
                 }
 
-                this.resolve_pafs(pafs, message, this.callback_handler.clone())
-                    .await?;
+                this.resolve_pafs(pafs, message).await?;
 
                 processed_msgs_count += 1;
                 if last_logged_at.elapsed().as_secs() >= 1 {
@@ -343,7 +338,6 @@ impl JetstreamWriter {
         &self,
         pafs: Vec<((String, u16), PublishAckFuture)>,
         message: Message,
-        callback_handler: Option<CallbackHandler>,
     ) -> Result<()> {
         let start_time = Instant::now();
         let permit = Arc::clone(&self.sem)
@@ -375,9 +369,6 @@ impl JetstreamWriter {
                             .delete(message.id.offset.clone())
                             .await
                             .expect("Failed to delete offset from tracker");
-                        if let Err(e) = do_callback(callback_handler.as_ref(), &message).await {
-                            tracing::error!(?e, "Failed to send callback request");
-                        }
                     }
                     Err(e) => {
                         error!(
@@ -404,11 +395,6 @@ impl JetstreamWriter {
                                     stream.clone(),
                                     Offset::Int(IntOffset::new(ack.sequence, stream.1)),
                                 ));
-                                if let Err(e) =
-                                    do_callback(callback_handler.as_ref(), &message).await
-                                {
-                                    tracing::error!(?e, "Failed to send callback request");
-                                }
                             }
                             Err(e) => {
                                 error!(?e, "Blocking write failed for stream {}", stream.0);
@@ -476,25 +462,6 @@ impl JetstreamWriter {
     }
 }
 
-async fn do_callback(callback_handler: Option<&CallbackHandler>, message: &Message) -> Result<()> {
-    let Some(callback_handler) = callback_handler else {
-        return Ok(());
-    };
-
-    let metadata = message.metadata.as_ref().ok_or_else(|| {
-        Error::Source("Message does not contain previous vertex name in the metadata".to_owned())
-    })?;
-
-    callback_handler
-        .callback(
-            &message.headers,
-            &message.tags,
-            metadata.previous_vertex.clone(),
-        )
-        .await
-        .map_err(|e| Error::Source(format!("Failed to send callback for message: {e:?}")))
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -515,7 +482,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_async_write() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let cln_token = CancellationToken::new();
         let js_url = "localhost:4222";
         // Create JetStream context
@@ -559,7 +526,6 @@ mod tests {
             100,
             tracker_handle,
             cln_token.clone(),
-            None,
         );
 
         let message = Message {
@@ -656,7 +622,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_write_with_cancellation() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
@@ -702,7 +668,6 @@ mod tests {
             100,
             tracker_handle,
             cancel_token.clone(),
-            None,
         );
 
         let mut result_receivers = Vec::new();
@@ -857,7 +822,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_check_stream_status() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
@@ -906,7 +871,6 @@ mod tests {
             100,
             tracker_handle,
             cancel_token.clone(),
-            None,
         );
 
         let mut js_writer = writer.clone();
@@ -956,7 +920,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
         let stream_name = "test_publish_messages";
         // Delete stream if it exists
@@ -997,7 +961,6 @@ mod tests {
             100,
             tracker_handle.clone(),
             cln_token.clone(),
-            None,
         );
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
@@ -1019,10 +982,7 @@ mod tests {
                 metadata: None,
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
-            tracker_handle
-                .insert(message.id.offset.clone(), ack_tx)
-                .await
-                .unwrap();
+            tracker_handle.insert(&message, ack_tx).await.unwrap();
             ack_rxs.push(ack_rx);
             messages_tx.send(message).await.unwrap();
         }
@@ -1046,7 +1006,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
         let stream_name = "test_publish_cancellation";
         // Delete stream if it exists
@@ -1087,7 +1047,6 @@ mod tests {
             100,
             tracker_handle.clone(),
             cancel_token.clone(),
-            None,
         );
 
         let (tx, rx) = tokio::sync::mpsc::channel(500);
@@ -1109,10 +1068,7 @@ mod tests {
                 metadata: None,
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
-            tracker_handle
-                .insert(message.id.offset.clone(), ack_tx)
-                .await
-                .unwrap();
+            tracker_handle.insert(&message, ack_tx).await.unwrap();
             ack_rxs.push(ack_rx);
             tx.send(message).await.unwrap();
         }
@@ -1137,10 +1093,7 @@ mod tests {
             metadata: None,
         };
         let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
-        tracker_handle
-            .insert("offset_101".to_string().into(), ack_tx)
-            .await
-            .unwrap();
+        tracker_handle.insert(&message, ack_tx).await.unwrap();
         ack_rxs.push(ack_rx);
         tx.send(message).await.unwrap();
         drop(tx);
@@ -1168,7 +1121,7 @@ mod tests {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let cln_token = CancellationToken::new();
 
         let vertex1_streams = vec!["vertex1-0", "vertex1-1"];
@@ -1231,7 +1184,6 @@ mod tests {
             100,
             tracker_handle.clone(),
             cln_token.clone(),
-            None,
         );
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
@@ -1252,10 +1204,7 @@ mod tests {
                 metadata: None,
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
-            tracker_handle
-                .insert(message.id.offset.clone(), ack_tx)
-                .await
-                .unwrap();
+            tracker_handle.insert(&message, ack_tx).await.unwrap();
             ack_rxs.push(ack_rx);
             messages_tx.send(message).await.unwrap();
         }

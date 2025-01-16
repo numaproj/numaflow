@@ -1,29 +1,32 @@
 use std::{
-    collections::HashMap,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
 
-use crate::config::DEFAULT_CALLBACK_URL_HEADER_KEY;
 use crate::config::DEFAULT_ID_HEADER;
-use crate::Error;
 
-/// The data to be sent in the POST request
-#[derive(serde::Serialize)]
-struct CallbackPayload {
-    /// Unique identifier of the message
-    id: String,
-    /// Name of the vertex
-    vertex: String,
-    /// Time when the callback was made
-    cb_time: u64,
-    /// Name of the vertex from which the message was sent
-    from_vertex: String,
-    /// List of tags associated with the message
-    tags: Option<Vec<String>>,
+/// As message passes through each component (map, transformer, sink, etc.). it emits a beacon via callback
+/// to inform that message has been processed by this component.
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct Callback {
+    pub(crate) id: String,
+    pub(crate) vertex: String,
+    pub(crate) cb_time: u64,
+    pub(crate) from_vertex: String,
+    /// Due to flat-map operation, we can have 0 or more responses.
+    pub(crate) responses: Vec<Response>,
+}
+
+/// It contains details about the `To` vertex via tags (conditional forwarding).
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct Response {
+    /// If tags is None, the message is forwarded to all vertices, if len(Vec) == 0, it means that
+    /// the message has been dropped.
+    pub(crate) tags: Option<Vec<String>>,
 }
 
 #[derive(Clone)]
@@ -52,43 +55,26 @@ impl CallbackHandler {
 
     pub async fn callback(
         &self,
-        message_headers: &HashMap<String, String>,
-        message_tags: &Option<Arc<[String]>>,
+        id: String,
+        callback_url: String,
         previous_vertex: String,
+        responses: Vec<Option<Vec<String>>>,
     ) -> crate::Result<()> {
-        let callback_url = message_headers
-            .get(DEFAULT_CALLBACK_URL_HEADER_KEY)
-            .ok_or_else(|| {
-                Error::Source(format!(
-                    "{DEFAULT_CALLBACK_URL_HEADER_KEY} header is not present in the message headers",
-                ))
-            })?
-            .to_owned();
-        let uuid = message_headers
-            .get(DEFAULT_ID_HEADER)
-            .ok_or_else(|| {
-                Error::Source(format!(
-                    "{DEFAULT_ID_HEADER} is not found in message headers",
-                ))
-            })?
-            .to_owned();
         let cb_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("System time is older than Unix epoch time")
             .as_millis() as u64;
 
-        let mut msg_tags = None;
-        if let Some(tags) = message_tags {
-            if !tags.is_empty() {
-                msg_tags = Some(tags.iter().cloned().collect());
-            }
-        };
+        let responses = responses
+            .into_iter()
+            .map(|tags| Response { tags })
+            .collect();
 
-        let callback_payload = CallbackPayload {
+        let callback_payload = Callback {
             vertex: self.vertex_name.clone(),
-            id: uuid.clone(),
+            id: id.clone(),
             cb_time,
-            tags: msg_tags,
+            responses,
             from_vertex: previous_vertex,
         };
 
@@ -104,7 +90,7 @@ impl CallbackHandler {
             for i in 1..=TOTAL_ATTEMPTS {
                 let resp = client
                     .post(&callback_url)
-                    .header(DEFAULT_ID_HEADER, uuid.clone())
+                    .header(DEFAULT_ID_HEADER, id.clone())
                     .json(&[&callback_payload])
                     .send()
                     .await;
@@ -175,17 +161,17 @@ mod tests {
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::app::start_main_server;
     use crate::app::tracker::MessageGraph;
-    use crate::callback::{CallbackHandler, DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
+    use crate::callback::CallbackHandler;
     use crate::config::generate_certs;
     use crate::pipeline::PipelineDCG;
     use crate::{AppState, Settings};
     use axum_server::tls_rustls::RustlsConfig;
-    use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::mpsc;
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
     #[tokio::test]
     async fn test_callback() -> Result<()> {
         // Set up the CryptoProvider (controls core cryptography used by rustls) for the process
@@ -241,22 +227,16 @@ mod tests {
         assert!(server_ready, "Server is not ready");
 
         let callback_handler = CallbackHandler::new("test".into(), 10);
-        let message_headers: HashMap<String, String> = [
-            (
-                DEFAULT_CALLBACK_URL_HEADER_KEY,
-                "https://localhost:3003/v1/process/callback",
-            ),
-            (DEFAULT_ID_HEADER, ID_VALUE),
-        ]
-        .into_iter()
-        .map(|(k, v)| (k.into(), v.into()))
-        .collect();
 
-        let tags = Arc::from(vec!["tag1".to_owned()]);
         // On the server, this fails with SubGraphInvalidInput("Invalid callback: 1234, vertex: in")
         // We get 200 OK response from the server, since we already registered this request ID in the store.
         callback_handler
-            .callback(&message_headers, &Some(tags), "in".into())
+            .callback(
+                ID_VALUE.into(),
+                "https://localhost:3003/v1/process/callback".into(),
+                "in".into(),
+                vec![],
+            )
             .await?;
         let mut data = None;
         for _ in 0..10 {
@@ -271,28 +251,6 @@ mod tests {
         }
         assert!(data.is_some(), "Callback data not found in store");
         server_handle.abort();
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_callback_missing_headers() -> Result<()> {
-        let callback_handler = CallbackHandler::new("test".into(), 10);
-        let message_headers: HashMap<String, String> = HashMap::new();
-        let result = callback_handler
-            .callback(&message_headers, &None, "in".into())
-            .await;
-        assert!(result.is_err());
-
-        let mut message_headers: HashMap<String, String> = HashMap::new();
-        message_headers.insert(
-            DEFAULT_CALLBACK_URL_HEADER_KEY.into(),
-            "https://localhost:3003/v1/process/callback".into(),
-        );
-        let result = callback_handler
-            .callback(&message_headers, &None, "in".into())
-            .await;
-        assert!(result.is_err());
-
         Ok(())
     }
 }

@@ -4,7 +4,6 @@ use std::time::Duration;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, Success};
-use serving::callback::CallbackHandler;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -256,7 +255,6 @@ impl SinkWriter {
         &self,
         messages_stream: ReceiverStream<Message>,
         cancellation_token: CancellationToken,
-        callback_handler: Option<CallbackHandler>,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             let mut this = self.clone();
@@ -310,22 +308,6 @@ impl SinkWriter {
                             }
                         }
                     }
-
-                    if let Some(ref callback_handler) = callback_handler {
-                        for message in batch {
-                            let metadata = message.metadata.ok_or_else(|| {
-                                Error::Source(format!(
-                                    "Writing to Sink: message does not contain previous vertex name in the metadata"
-                                ))
-                            })?;
-                            if let Err(e) = callback_handler
-                                .callback(&message.headers, &message.tags, metadata.previous_vertex)
-                                .await
-                            {
-                                tracing::error!(?e, "Failed to send callback for message");
-                            }
-                        }
-                    };
 
                     // publish sink metrics
                     if is_mono_vertex() {
@@ -769,7 +751,7 @@ mod tests {
             10,
             Duration::from_secs(1),
             SinkClientType::Log,
-            TrackerHandle::new(),
+            TrackerHandle::new(None),
         )
         .build()
         .await
@@ -800,7 +782,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_streaming_write() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
@@ -833,16 +815,13 @@ mod tests {
         for msg in messages {
             let (ack_tx, ack_rx) = oneshot::channel();
             ack_rxs.push(ack_rx);
-            tracker_handle
-                .insert(msg.id.offset.clone(), ack_tx)
-                .await
-                .unwrap();
+            tracker_handle.insert(&msg, ack_tx).await.unwrap();
             let _ = tx.send(msg).await;
         }
         drop(tx);
 
         let handle = sink_writer
-            .streaming_write(ReceiverStream::new(rx), CancellationToken::new(), None)
+            .streaming_write(ReceiverStream::new(rx), CancellationToken::new())
             .await
             .unwrap();
 
@@ -856,7 +835,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_streaming_write_error() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
@@ -912,16 +891,13 @@ mod tests {
         for msg in messages {
             let (ack_tx, ack_rx) = oneshot::channel();
             ack_rxs.push(ack_rx);
-            tracker_handle
-                .insert(msg.id.offset.clone(), ack_tx)
-                .await
-                .unwrap();
+            tracker_handle.insert(&msg, ack_tx).await.unwrap();
             let _ = tx.send(msg).await;
         }
         drop(tx);
         let cln_token = CancellationToken::new();
         let handle = sink_writer
-            .streaming_write(ReceiverStream::new(rx), cln_token.clone(), None)
+            .streaming_write(ReceiverStream::new(rx), cln_token.clone())
             .await
             .unwrap();
 
@@ -942,7 +918,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fallback_write() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -999,17 +975,14 @@ mod tests {
         let mut ack_rxs = vec![];
         for msg in messages {
             let (ack_tx, ack_rx) = oneshot::channel();
-            tracker_handle
-                .insert(msg.id.offset.clone(), ack_tx)
-                .await
-                .unwrap();
+            tracker_handle.insert(&msg, ack_tx).await.unwrap();
             ack_rxs.push(ack_rx);
             let _ = tx.send(msg).await;
         }
         drop(tx);
         let cln_token = CancellationToken::new();
         let handle = sink_writer
-            .streaming_write(ReceiverStream::new(rx), cln_token.clone(), None)
+            .streaming_write(ReceiverStream::new(rx), cln_token.clone())
             .await
             .unwrap();
 

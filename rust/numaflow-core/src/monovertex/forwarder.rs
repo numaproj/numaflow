@@ -28,7 +28,6 @@
 //! [Stream]: https://docs.rs/tokio-stream/latest/tokio_stream/wrappers/struct.ReceiverStream.html
 //! [Actor Pattern]: https://ryhl.io/blog/actors-with-tokio/
 
-use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 
 use crate::error;
@@ -45,7 +44,6 @@ pub(crate) struct Forwarder {
     transformer: Option<Transformer>,
     sink_writer: SinkWriter,
     cln_token: CancellationToken,
-    callback_handler: Option<CallbackHandler>,
 }
 
 pub(crate) struct ForwarderBuilder {
@@ -53,7 +51,6 @@ pub(crate) struct ForwarderBuilder {
     sink_writer: SinkWriter,
     cln_token: CancellationToken,
     transformer: Option<Transformer>,
-    callback_handler: Option<CallbackHandler>,
 }
 
 impl ForwarderBuilder {
@@ -62,14 +59,12 @@ impl ForwarderBuilder {
         streaming_source: Source,
         streaming_sink: SinkWriter,
         cln_token: CancellationToken,
-        callback_handler: Option<CallbackHandler>,
     ) -> Self {
         Self {
             source: streaming_source,
             sink_writer: streaming_sink,
             cln_token,
             transformer: None,
-            callback_handler,
         }
     }
 
@@ -87,7 +82,6 @@ impl ForwarderBuilder {
             sink_writer: self.sink_writer,
             transformer: self.transformer,
             cln_token: self.cln_token,
-            callback_handler: self.callback_handler,
         }
     }
 }
@@ -108,11 +102,7 @@ impl Forwarder {
 
         let sink_writer_handle = self
             .sink_writer
-            .streaming_write(
-                transformed_messages_stream,
-                self.cln_token.clone(),
-                self.callback_handler.clone(),
-            )
+            .streaming_write(transformed_messages_stream, self.cln_token.clone())
             .await?;
 
         match tokio::try_join!(
@@ -273,7 +263,7 @@ mod tests {
             .await
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
@@ -317,7 +307,7 @@ mod tests {
         .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = ForwarderBuilder::new(source.clone(), sink_writer, cln_token.clone(), None)
+        let forwarder = ForwarderBuilder::new(source.clone(), sink_writer, cln_token.clone())
             .transformer(transformer)
             .build();
 
@@ -372,7 +362,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_flatmap_operation() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
 
@@ -447,7 +437,7 @@ mod tests {
         .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = ForwarderBuilder::new(source.clone(), sink_writer, cln_token.clone(), None)
+        let forwarder = ForwarderBuilder::new(source.clone(), sink_writer, cln_token.clone())
             .transformer(transformer)
             .build();
 

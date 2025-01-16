@@ -247,6 +247,9 @@ mod tests {
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
     #[tokio::test]
     async fn test_serving_source() -> Result<()> {
+        // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
         let settings = Arc::new(Settings::default());
         let serving_source =
             ServingSource::new(Arc::clone(&settings), 10, Duration::from_millis(1), 0).await?;
