@@ -1,4 +1,4 @@
-//! Tracker is added because when do data forwarding in [MonoVertex](crate::monovertex::forwarder) or
+//! Tracker is added because when we do data forwarding in [MonoVertex](crate::monovertex::forwarder) or
 //! in [Pipeline](crate::pipeline::forwarder), immaterial whether we are in source, UDF, or Sink, we
 //! have to track whether the message has completely moved to the next vertex (N+1)th before we can
 //! mark that message as done in the Nth vertex. We use Tracker to let Read know that it can mark the
@@ -28,19 +28,19 @@ struct TrackerEntry {
 /// ActorMessage represents the messages that can be sent to the Tracker actor.
 enum ActorMessage {
     Insert {
-        offset: String,
+        offset: Bytes,
         ack_send: oneshot::Sender<ReadAck>,
     },
     Update {
-        offset: String,
+        offset: Bytes,
         count: u32,
         eof: bool,
     },
     Delete {
-        offset: String,
+        offset: Bytes,
     },
     Discard {
-        offset: String,
+        offset: Bytes,
     },
     DiscardAll, // New variant for discarding all messages
     #[cfg(test)]
@@ -52,7 +52,7 @@ enum ActorMessage {
 /// Tracker is responsible for managing the state of messages being processed.
 /// It keeps track of message offsets and their completeness, and sends acknowledgments.
 struct Tracker {
-    entries: HashMap<String, TrackerEntry>,
+    entries: HashMap<Bytes, TrackerEntry>,
     receiver: mpsc::Receiver<ActorMessage>,
 }
 
@@ -114,7 +114,7 @@ impl Tracker {
     }
 
     /// Inserts a new entry into the tracker with the given offset and ack sender.
-    fn handle_insert(&mut self, offset: String, respond_to: oneshot::Sender<ReadAck>) {
+    fn handle_insert(&mut self, offset: Bytes, respond_to: oneshot::Sender<ReadAck>) {
         self.entries.insert(
             offset,
             TrackerEntry {
@@ -126,7 +126,7 @@ impl Tracker {
     }
 
     /// Updates an existing entry in the tracker with the number of expected messages and EOF status.
-    fn handle_update(&mut self, offset: String, count: u32, eof: bool) {
+    fn handle_update(&mut self, offset: Bytes, count: u32, eof: bool) {
         if let Some(entry) = self.entries.get_mut(&offset) {
             entry.count += count;
             entry.eof = eof;
@@ -144,8 +144,8 @@ impl Tracker {
     }
 
     /// Removes an entry from the tracker and sends an acknowledgment if the count is zero
-    /// or the entry is marked as EOF.
-    fn handle_delete(&mut self, offset: String) {
+    /// and the entry is marked as EOF.
+    fn handle_delete(&mut self, offset: Bytes) {
         if let Some(mut entry) = self.entries.remove(&offset) {
             if entry.count > 0 {
                 entry.count -= 1;
@@ -162,7 +162,7 @@ impl Tracker {
     }
 
     /// Discards an entry from the tracker and sends a nak.
-    fn handle_discard(&mut self, offset: String) {
+    fn handle_discard(&mut self, offset: Bytes) {
         if let Some(entry) = self.entries.remove(&offset) {
             entry
                 .ack_send
@@ -204,10 +204,7 @@ impl TrackerHandle {
         offset: Bytes,
         ack_send: oneshot::Sender<ReadAck>,
     ) -> Result<()> {
-        let message = ActorMessage::Insert {
-            offset: String::from_utf8_lossy(&offset).to_string(),
-            ack_send,
-        };
+        let message = ActorMessage::Insert { offset, ack_send };
         self.sender
             .send(message)
             .await
@@ -217,11 +214,7 @@ impl TrackerHandle {
 
     /// Updates an existing message in the Tracker with the given offset, count, and EOF status.
     pub(crate) async fn update(&self, offset: Bytes, count: u32, eof: bool) -> Result<()> {
-        let message = ActorMessage::Update {
-            offset: String::from_utf8_lossy(&offset).to_string(),
-            count,
-            eof,
-        };
+        let message = ActorMessage::Update { offset, count, eof };
         self.sender
             .send(message)
             .await
@@ -231,9 +224,7 @@ impl TrackerHandle {
 
     /// Deletes a message from the Tracker with the given offset.
     pub(crate) async fn delete(&self, offset: Bytes) -> Result<()> {
-        let message = ActorMessage::Delete {
-            offset: String::from_utf8_lossy(&offset).to_string(),
-        };
+        let message = ActorMessage::Delete { offset };
         self.sender
             .send(message)
             .await
@@ -243,9 +234,7 @@ impl TrackerHandle {
 
     /// Discards a message from the Tracker with the given offset.
     pub(crate) async fn discard(&self, offset: Bytes) -> Result<()> {
-        let message = ActorMessage::Discard {
-            offset: String::from_utf8_lossy(&offset).to_string(),
-        };
+        let message = ActorMessage::Discard { offset };
         self.sender
             .send(message)
             .await
