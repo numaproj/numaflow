@@ -3,8 +3,6 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
-  watermark:
-    disabled: false
   vertices:
     - name: in
       scale:

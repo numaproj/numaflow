@@ -408,7 +408,11 @@ impl PipelineConfig {
             to_vertex_config,
             vertex_config: vertex,
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
-            watermark_config: vertex_obj.spec.watermark,
+            watermark_config: Some(Box::new(Watermark {
+                disabled: None,
+                idle_source: None,
+                max_delay: None,
+            })),
         })
     }
 }
