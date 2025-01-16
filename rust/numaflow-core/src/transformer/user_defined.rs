@@ -186,7 +186,10 @@ mod tests {
     use std::error::Error;
     use std::result::Result;
     use std::time::Duration;
+
     use tempfile::TempDir;
+
+    use super::*;
 
     struct NowCat;
 

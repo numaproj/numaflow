@@ -496,6 +496,7 @@ pub(crate) struct ResolveAndPublishResult {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::pipeline::isb::BufferWriterConfig;
     use std::collections::HashMap;
     use std::time::Instant;
 
@@ -509,7 +510,6 @@ mod tests {
 
     use super::*;
     use crate::message::{Message, MessageID, ReadAck};
-    use crate::pipeline::pipeline::isb::BufferWriterConfig;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]

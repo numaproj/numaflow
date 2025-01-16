@@ -303,6 +303,20 @@ impl JetstreamReader {
             }
         }
     }
+
+    pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
+        let x = self.consumer.info().await.map_err(|e| {
+            Error::ISB(format!(
+                "Failed to get consumer info for stream {}: {}",
+                self.stream.name, e
+            ))
+        })?;
+        Ok(Some(x.num_pending as usize + x.num_ack_pending))
+    }
+
+    pub(crate) fn name(&self) -> &'static str {
+        self.stream.name
+    }
 }
 
 impl fmt::Display for JetstreamReader {

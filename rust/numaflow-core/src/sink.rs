@@ -722,6 +722,8 @@ mod tests {
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
 
+    use super::*;
+
     struct SimpleSink;
     #[tonic::async_trait]
     impl sink::Sinker for SimpleSink {

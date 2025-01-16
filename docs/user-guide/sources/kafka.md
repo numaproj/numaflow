@@ -79,7 +79,15 @@ spec:
                 key: scram-sha-512-password-key
               # Send the Kafka SASL handshake first if enabled (defaults to true)
               # Set this to false if using a non-Kafka SASL proxy
-              handshake: true 
+              handshake: true
+            oauth:  #Optional, for OAUTHBEARER mechanism
+              clientID: # Pointing to a secret reference which contains the client id
+                name: kafka-oauth-client
+                key: clientid 
+              clientSecret: # Pointing to a secret reference which contains the client secret
+                name: kafka-oauth-client
+                key: clientsecret 
+              tokenEndpoint: https://oauth-token.com/v1/token
 ```
 
 ## FAQ

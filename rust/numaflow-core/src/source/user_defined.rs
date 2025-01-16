@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use std::time::Duration;
+
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use numaflow_pb::clients::source;
@@ -5,8 +8,6 @@ use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::source::{
     read_request, read_response, AckRequest, AckResponse, ReadRequest, ReadResponse,
 };
-use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
@@ -290,14 +291,15 @@ impl LagReader for UserDefinedSourceLagReader {
 mod tests {
     use std::collections::{HashMap, HashSet};
 
-    use super::*;
-    use crate::message::IntOffset;
-    use crate::shared::grpc::{create_rpc_channel, prost_timestamp_from_utc};
     use chrono::{TimeZone, Utc};
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
     use tokio::sync::mpsc::Sender;
+
+    use super::*;
+    use crate::message::IntOffset;
+    use crate::shared::grpc::{create_rpc_channel, prost_timestamp_from_utc};
 
     struct SimpleSource {
         num: usize,

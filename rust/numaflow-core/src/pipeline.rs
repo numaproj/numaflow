@@ -1,3 +1,6 @@
+use crate::config::is_mono_vertex;
+use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
+use crate::pipeline::pipeline::isb::BufferReaderConfig;
 use std::time::Duration;
 
 use async_nats::jetstream::Context;
@@ -9,21 +12,19 @@ use tracing::info;
 use crate::config::pipeline;
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
-use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
-use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
+use crate::metrics::{LagReader, PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
-use crate::pipeline::pipeline::isb::BufferReaderConfig;
 use crate::shared::create_components;
 use crate::shared::create_components::create_sink_writer;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;
-use crate::{error, Result};
+use crate::{error, shared, Result};
 
 mod forwarder;
-mod isb;
+pub(crate) mod isb;
 
 /// Starts the appropriate forwarder based on the pipeline configuration.
 pub(crate) async fn start_forwarder(
@@ -123,6 +124,13 @@ async fn start_source_forwarder(
     )
     .await?;
 
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::Source(source.clone()),
+    )
+    .await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+
     start_metrics_server(
         config.metrics_config.clone(),
         UserDefinedContainerState::Pipeline(PipelineContainerState::Source((
@@ -163,6 +171,7 @@ async fn start_map_forwarder(
     // Create buffer writers and buffer readers
     let mut forwarder_components = vec![];
     let mut mapper_grpc_client = None;
+    let mut isb_lag_readers = vec![];
 
     for stream in reader_config.streams.clone() {
         let tracker_handle = TrackerHandle::new(watermark_handle.clone());
@@ -175,6 +184,8 @@ async fn start_map_forwarder(
             watermark_handle.clone(),
         )
         .await?;
+
+        isb_lag_readers.push(buffer_reader.clone());
 
         let (mapper, mapper_rpc_client) = create_components::create_mapper(
             config.batch_size,
@@ -199,6 +210,13 @@ async fn start_map_forwarder(
         .await;
         forwarder_components.push((buffer_reader, buffer_writer, mapper));
     }
+
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(isb_lag_readers),
+    )
+    .await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     start_metrics_server(
         config.metrics_config.clone(),
@@ -276,6 +294,13 @@ async fn start_sink_forwarder(
         .await?;
         sink_writers.push((sink_writer, sink_grpc_client, fb_sink_grpc_client));
     }
+
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(buffer_readers.clone()),
+    )
+    .await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     // Start the metrics server with one of the clients
     if let Some((_, sink, fb_sink)) = sink_writers.first() {
@@ -376,7 +401,6 @@ async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Re
 
 #[cfg(test)]
 mod tests {
-    use crate::pipeline::pipeline::map::MapMode;
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
@@ -398,6 +422,7 @@ mod tests {
     use crate::message::OffsetType;
     use crate::pipeline::pipeline::isb;
     use crate::pipeline::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
+    use crate::pipeline::pipeline::map::MapMode;
     use crate::pipeline::pipeline::VertexType;
     use crate::pipeline::pipeline::{FromVertexConfig, ToVertexConfig};
     use crate::pipeline::pipeline::{SinkVtxConfig, SourceVtxConfig};

@@ -2,12 +2,11 @@ use std::sync::Arc;
 
 pub(crate) use serving::ServingSource;
 
+use super::{get_vertex_name, Message, Offset};
 use crate::config::get_vertex_replica;
 use crate::message::{MessageID, OffsetType, StringOffset};
 use crate::Error;
 use crate::Result;
-
-use super::{get_vertex_name, Message, Offset};
 
 impl TryFrom<serving::Message> for Message {
     type Error = Error;
@@ -87,14 +86,11 @@ impl super::LagReader for ServingSource {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        message::{Message, MessageID, Offset, StringOffset},
-        source::{SourceAcker, SourceReader},
-    };
     use std::{collections::HashMap, sync::Arc, time::Duration};
 
     use super::get_vertex_replica;
-    use crate::message::OffsetType;
+    use crate::message::{Message, MessageID, Offset, OffsetType, StringOffset};
+    use crate::source::{SourceAcker, SourceReader};
     use bytes::Bytes;
     use serving::{ServingSource, Settings};
 
@@ -143,6 +139,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "redis-tests")]
     #[tokio::test]
     async fn test_serving_source_reader_acker() -> Result<()> {
         let settings = Settings {
@@ -150,6 +147,10 @@ mod tests {
             ..Default::default()
         };
         let settings = Arc::new(settings);
+        // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
+        // ServingSource starts an Axum HTTPS server in the background. Rustls is used to generate
+        // self-signed certs when starting the server.
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let mut serving_source = ServingSource::new(
             Arc::clone(&settings),
             10,

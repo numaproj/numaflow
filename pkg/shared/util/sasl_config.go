@@ -17,6 +17,7 @@ limitations under the License.
 package util
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/sha512"
 	"fmt"
@@ -25,6 +26,9 @@ import (
 	"github.com/IBM/sarama"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/xdg-go/scram"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
+
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -101,6 +105,15 @@ func getSASLStrategy(saslConfig *dfv1.SASL, strategy volumeReader) (*struct {
 				return nil, err
 			}
 			config.Net.SASL.Handshake = scram.Handshake
+		}
+	case dfv1.SASLTypeOAuth:
+		if oauth := saslConfig.OAuth; oauth != nil {
+			config.Net.SASL.Enable = true
+			config.Net.SASL.Mechanism = sarama.SASLTypeOAuth
+			err := setOAuthClient(config, oauth, strategy)
+			if err != nil {
+				return nil, fmt.Errorf("error constructing oauth client, %w", err)
+			}
 		}
 	default:
 		return nil, fmt.Errorf("SASL mechanism not supported: %s", *saslConfig.Mechanism)
@@ -225,4 +238,55 @@ func (x *XDGSCRAMClient) Step(challenge string) (response string, err error) {
 
 func (x *XDGSCRAMClient) Done() bool {
 	return x.ClientConversation.Done()
+}
+
+func setOAuthClient(config *sarama.Config, oauthconfig *dfv1.SASLOAuth, strategy volumeReader) error {
+	if oauthconfig.ClientID == nil {
+		return fmt.Errorf("clientID is required for SASL/OAuth")
+	}
+
+	clientID, err := strategy.getSecretFromVolume(oauthconfig.ClientID)
+	if err != nil {
+		return err
+	}
+
+	if oauthconfig.ClientSecret == nil {
+		return fmt.Errorf("clientSecret is required for SASL/OAuth")
+	}
+
+	clientSecret, err := strategy.getSecretFromVolume(oauthconfig.ClientSecret)
+	if err != nil {
+		return err
+	}
+
+	config.Net.SASL.TokenProvider = NewTokenProvider(clientID, clientSecret, oauthconfig.TokenEndpoint)
+
+	return nil
+}
+
+type OAUTHTokenProvider struct {
+	tokenSource oauth2.TokenSource
+}
+
+func NewTokenProvider(clientID, clientSecret, tokenEndpoint string) sarama.AccessTokenProvider {
+	cfg := clientcredentials.Config{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		TokenURL:     tokenEndpoint,
+	}
+
+	return &OAUTHTokenProvider{
+		tokenSource: cfg.TokenSource(context.Background()),
+	}
+}
+
+func (o *OAUTHTokenProvider) Token() (*sarama.AccessToken, error) {
+	t, err := o.tokenSource.Token()
+	if err != nil {
+		return nil, err
+	}
+
+	return &sarama.AccessToken{
+		Token: t.AccessToken,
+	}, nil
 }
