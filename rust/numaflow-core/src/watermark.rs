@@ -1,3 +1,5 @@
+use crate::config::pipeline::isb::Stream;
+use crate::config::pipeline::{FromVertexConfig, ToVertexConfig};
 use crate::error::Error;
 use crate::error::Result;
 use crate::message::{Offset, OffsetType};
@@ -69,7 +71,7 @@ enum ActorMessage {
     },
     PublishWatermark {
         offset: Offset,
-        vertex_name: String,
+        stream: Stream,
     },
     RemoveOffset(Offset),
 }
@@ -146,10 +148,7 @@ impl WatermarkActor {
                     .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
             }
 
-            ActorMessage::PublishWatermark {
-                offset,
-                vertex_name,
-            } => match offset {
+            ActorMessage::PublishWatermark { offset, stream } => match offset {
                 Offset::Source(_) => {
                     // for publishing to source, we don't need to fetch (nothing to fetcher here :))
                 }
@@ -161,10 +160,9 @@ impl WatermarkActor {
 
                         self.publisher
                             .publish_watermark(
-                                int_offset.partition_idx,
+                                stream,
                                 int_offset.offset as i64,
                                 min_wm.timestamp_millis(),
-                                vertex_name,
                             )
                             .await?;
                     }
@@ -227,11 +225,19 @@ pub(crate) struct WatermarkHandle {
 }
 
 impl WatermarkHandle {
-    pub(crate) async fn new(fetcher: Fetcher, publisher: Publisher) -> Self {
+    pub(crate) async fn new(
+        js_context: async_nats::jetstream::Context,
+        from_vertex_config: Vec<FromVertexConfig>,
+        to_vertex_config: Vec<ToVertexConfig>,
+    ) -> Result<Self> {
+        let fetcher = Fetcher::new(js_context.clone(), from_vertex_config).await?;
+        let publisher = Publisher::new(js_context.clone(), to_vertex_config).await?;
+
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
+
         let actor = WatermarkActor::new(fetcher, publisher);
         tokio::spawn(async move { actor.run(receiver).await });
-        Self { sender }
+        Ok(Self { sender })
     }
 
     pub(crate) async fn fetch_watermark(&self, offset: Offset) -> Result<Watermark> {
@@ -246,20 +252,19 @@ impl WatermarkHandle {
             .map_err(|_| Error::Watermark("failed to receive response".to_string()))?
     }
 
-    pub(crate) async fn publish_watermark(&self, vertex_name: String, offset: Offset) {
+    pub(crate) async fn publish_watermark(&self, stream: Stream, offset: Offset) -> Result<()> {
         self.sender
-            .send(ActorMessage::PublishWatermark {
-                offset,
-                vertex_name,
-            })
+            .send(ActorMessage::PublishWatermark { offset, stream })
             .await
-            .unwrap();
+            .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
+        Ok(())
     }
 
-    pub(crate) async fn remove_offset(&self, offset: Offset) {
+    pub(crate) async fn remove_offset(&self, offset: Offset) -> Result<()> {
         self.sender
             .send(ActorMessage::RemoveOffset(offset))
             .await
-            .unwrap();
+            .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
+        Ok(())
     }
 }

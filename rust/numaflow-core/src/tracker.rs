@@ -13,6 +13,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::error::Error;
 use crate::message::{Offset, ReadAck};
+use crate::watermark::WatermarkHandle;
 use crate::Result;
 
 /// TrackerEntry represents the state of a tracked message.
@@ -52,6 +53,7 @@ enum ActorMessage {
 struct Tracker {
     entries: HashMap<String, TrackerEntry>,
     receiver: mpsc::Receiver<ActorMessage>,
+    watermark_handle: Option<WatermarkHandle>,
 }
 
 impl Drop for Tracker {
@@ -72,6 +74,7 @@ impl Tracker {
         Self {
             entries: HashMap::new(),
             receiver,
+            watermark_handle: None,
         }
     }
 
@@ -189,7 +192,7 @@ pub(crate) struct TrackerHandle {
 
 impl TrackerHandle {
     /// Creates a new TrackerHandle instance and spawns the Tracker.
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(watermark_handle: Option<WatermarkHandle>) -> Self {
         let (sender, receiver) = mpsc::channel(100);
         let tracker = Tracker::new(receiver);
         tokio::spawn(tracker.run());
@@ -284,7 +287,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_insert_update_delete() {
-        let handle = TrackerHandle::new();
+        let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
 
         let offset = Offset::ISB(OffsetType::Int(IntOffset::new(0, 0)));
@@ -307,7 +310,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_with_multiple_deletes() {
-        let handle = TrackerHandle::new();
+        let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
         let offset = Offset::ISB(OffsetType::Int(IntOffset::new(0, 0)));
 
@@ -331,7 +334,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_discard() {
-        let handle = TrackerHandle::new();
+        let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
         let offset = Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0)));
 
@@ -350,7 +353,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_discard_after_update_with_higher_count() {
-        let handle = TrackerHandle::new();
+        let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
         let offset = Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0)));
 

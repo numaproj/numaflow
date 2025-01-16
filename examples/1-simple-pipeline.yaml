@@ -3,9 +3,8 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
-  limits:
-    bufferMaxLength: 1000
-    bufferUsageLimit: 10
+  watermark:
+    disabled: false
   vertices:
     - name: in
       scale:
@@ -13,15 +12,15 @@ spec:
       # A self data generating source
       source:
         generator:
-          rpu: 5
+          rpu: 1
           duration: 1s
     - name: cat
       scale:
         min: 1
-        max: 50
       udf:
         container:
-          image: quay.io/yhl25/sleep-cat:stable # A built-in UDF which simply cats the message
+          image: quay.io/numaio/numaflow-go/map-forward-message:stable
+          imagePullPolicy: Always
     - name: out
       scale:
         min: 1

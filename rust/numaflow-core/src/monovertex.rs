@@ -24,7 +24,7 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: &MonovertexConfig,
 ) -> error::Result<()> {
-    let tracker_handle = TrackerHandle::new();
+    let tracker_handle = TrackerHandle::new(None);
     let (source, source_grpc_client) = create_components::create_source(
         config.batch_size,
         config.read_timeout,

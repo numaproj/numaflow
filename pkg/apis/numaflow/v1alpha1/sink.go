@@ -63,9 +63,9 @@ func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.C
 }
 
 func (s Sink) getMainContainer(req getContainerReq) corev1.Container {
-	if req.executeRustBinary {
-		return containerBuilder{}.init(req).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
-	}
+	//if req.executeRustBinary {
+	//	return containerBuilder{}.init(req).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
+	//}
 	return containerBuilder{}.init(req).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 

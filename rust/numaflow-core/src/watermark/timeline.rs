@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 #[derive(Clone)]
 pub struct OffsetTimeline {
@@ -29,10 +29,6 @@ impl OffsetTimeline {
         }
     }
 
-    pub fn capacity(&self) -> usize {
-        self.capacity
-    }
-
     pub(crate) async fn put(&self, node: WMB) {
         let mut watermarks = self.watermarks.write().await;
         for i in 0..watermarks.len() {
@@ -53,6 +49,7 @@ impl OffsetTimeline {
                         );
                         return;
                     }
+                    info!("Inserting watermark {:?} at index {}", node, i);
                     watermarks.insert(i, node);
                     if watermarks.len() > self.capacity {
                         watermarks.pop_back();

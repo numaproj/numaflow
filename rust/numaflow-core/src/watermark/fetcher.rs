@@ -1,9 +1,10 @@
-use crate::config::pipeline::{FromVertexConfig, WatermarkConfig};
+use crate::config::pipeline::FromVertexConfig;
 use crate::error::{Error, Result};
 use crate::watermark::manager::ProcessorManager;
 use crate::watermark::Watermark;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
+use tracing::info;
 
 #[allow(dead_code)]
 pub(crate) struct Fetcher {
@@ -13,9 +14,9 @@ pub(crate) struct Fetcher {
 }
 
 impl Fetcher {
-    async fn new(
-        from_vertex_configs: Vec<FromVertexConfig>,
+    pub(crate) async fn new(
         js_context: async_nats::jetstream::Context,
+        from_vertex_configs: Vec<FromVertexConfig>,
     ) -> Result<Self> {
         let mut processor_managers = HashMap::new();
         let mut last_processed_wm = HashMap::new();
@@ -84,6 +85,11 @@ impl Fetcher {
             return Ok(self.last_fetched_wm[partition_idx as usize].1);
         }
 
+        info!(
+            "Fetching watermark for offset and partition: {} {}",
+            offset, partition_idx
+        );
+
         for (edge, processor_manager) in self.processor_managers.iter() {
             let mut epoch = i64::MAX;
 
@@ -102,16 +108,19 @@ impl Fetcher {
                 }
 
                 if processor.is_deleted() && offset > head_offset as u64 {
+                    info!("Processor {} inactive, deleting", name);
                     processor_manager.delete_processor(name.as_str()).await;
                 }
             }
 
             if epoch != i64::MAX {
+                info!("Updating last processed watermark fo edge - {} and partition - {} with value={}", edge, partition_idx, epoch);
                 self.last_processed_wm.get_mut(edge).unwrap()[partition_idx as usize] = epoch;
             }
         }
 
         let watermark = self.get_watermark().await?;
+        info!("Fetched watermark: {}", watermark);
         self.last_fetched_wm[partition_idx as usize] = (watermark, Utc::now());
         Ok(watermark)
     }
@@ -119,8 +128,8 @@ impl Fetcher {
     pub(crate) async fn fetch_source_watermark(&self) -> Result<Watermark> {
         let mut min_wm = i64::MAX;
 
-        for (edge, processor_manager) in self.processor_managers.iter() {
-            for (name, processor) in processor_manager.get_all_processors().await {
+        for (_, processor_manager) in self.processor_managers.iter() {
+            for (_, processor) in processor_manager.get_all_processors().await {
                 if !processor.is_active() {
                     continue;
                 }

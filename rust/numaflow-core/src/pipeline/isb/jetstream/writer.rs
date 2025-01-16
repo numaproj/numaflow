@@ -5,6 +5,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
+use crate::config::pipeline::ToVertexConfig;
+use crate::error::Error;
+use crate::message::{IntOffset, Message, Offset};
+use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
+use crate::shared::forward;
+use crate::tracker::TrackerHandle;
+use crate::watermark::WatermarkHandle;
+use crate::Result;
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::publish::PublishAck;
@@ -18,15 +27,6 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
-
-use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
-use crate::config::pipeline::ToVertexConfig;
-use crate::error::Error;
-use crate::message::{IntOffset, Message, Offset};
-use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
-use crate::shared::forward;
-use crate::tracker::TrackerHandle;
-use crate::Result;
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
@@ -43,6 +43,7 @@ pub(crate) struct JetstreamWriter {
     cancel_token: CancellationToken,
     tracker_handle: TrackerHandle,
     sem: Arc<Semaphore>,
+    watermark_handle: Option<WatermarkHandle>,
 }
 
 impl JetstreamWriter {
@@ -54,6 +55,7 @@ impl JetstreamWriter {
         paf_concurrency: usize,
         tracker_handle: TrackerHandle,
         cancel_token: CancellationToken,
+        watermark_handle: Option<WatermarkHandle>,
     ) -> Self {
         let streams = config
             .iter()
@@ -72,6 +74,7 @@ impl JetstreamWriter {
             cancel_token,
             tracker_handle,
             sem: Arc::new(Semaphore::new(paf_concurrency)),
+            watermark_handle,
         };
 
         // spawn a task for checking whether buffer is_full
@@ -343,13 +346,15 @@ impl JetstreamWriter {
             .await
             .map_err(|_e| Error::ISB("Failed to acquire semaphore permit".to_string()))?;
 
-        let mut offsets = Vec::new();
         let js_ctx = self.js_ctx.clone();
         let cancel_token = self.cancel_token.clone();
         let tracker_handle = self.tracker_handle.clone();
+        let watermark_handle = self.watermark_handle.clone();
 
         tokio::spawn(async move {
             let _permit = permit;
+            let mut offsets = Vec::new();
+
             for (stream, paf) in result.pafs {
                 match paf.await {
                     Ok(ack) => {
@@ -413,6 +418,15 @@ impl JetstreamWriter {
                     }
                 }
             }
+            for (stream, offset) in offsets {
+                if let Some(watermark_handle) = watermark_handle.as_ref() {
+                    watermark_handle
+                        .publish_watermark(stream, offset)
+                        .await
+                        .map_err(|e| Error::ISB(format!("Failed to update watermark: {:?}", e)))
+                        .expect("Failed to publish watermark");
+                }
+            }
             pipeline_metrics()
                 .isb
                 .paf_resolution_time
@@ -435,7 +449,7 @@ impl JetstreamWriter {
         info!("Blocking write for stream {}", stream);
         loop {
             match js_ctx
-                .publish(stream.namespace, Bytes::from(payload.clone()))
+                .publish(stream.name, Bytes::from(payload.clone()))
                 .await
             {
                 Ok(paf) => match paf.await {
@@ -500,14 +514,14 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_async_write() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let cln_token = CancellationToken::new();
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream = Stream::new("test-async", "temp", "temp", "temp", 0);
+        let stream = Stream::new("test-async", "temp", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         let _stream = context
@@ -545,6 +559,7 @@ mod tests {
             100,
             tracker_handle,
             cln_token.clone(),
+            None,
         );
 
         let message = Message {
@@ -583,7 +598,7 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream = Stream::new("test-sync", "temp", "temp", "temp", 0);
+        let stream = Stream::new("test-sync", "temp", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         let _stream = context
@@ -641,13 +656,13 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_write_with_cancellation() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream = Stream::new("test-cancellation", "temp", "temp", "temp", 0);
+        let stream = Stream::new("test-cancellation", "temp", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         let _stream = context
@@ -688,6 +703,7 @@ mod tests {
             100,
             tracker_handle,
             cancel_token.clone(),
+            None,
         );
 
         let mut result_receivers = Vec::new();
@@ -772,7 +788,7 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream = Stream::new("test_fetch_buffer_usage", "temp", "temp", "temp", 0);
+        let stream = Stream::new("test_fetch_buffer_usage", "temp", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         let _stream = context
@@ -842,13 +858,13 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_check_stream_status() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream = Stream::new("test_check_stream_status", "temp", "temp", "temp", 0);
+        let stream = Stream::new("test_check_stream_status", "temp", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         let _stream = context
@@ -892,6 +908,7 @@ mod tests {
             100,
             tracker_handle,
             cancel_token.clone(),
+            None,
         );
 
         let mut js_writer = writer.clone();
@@ -941,9 +958,9 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
-        let stream = Stream::new("test_publish_messages", "temp", "temp", "temp", 0);
+        let stream = Stream::new("test_publish_messages", "temp", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         let _stream = context
@@ -983,6 +1000,7 @@ mod tests {
             100,
             tracker_handle.clone(),
             cln_token.clone(),
+            None,
         );
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
@@ -1031,9 +1049,9 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
-        let stream = Stream::new("test_publish_cancellation", "temp", "temp", "temp", 0);
+        let stream = Stream::new("test_publish_cancellation", "temp", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         let _stream = context
@@ -1073,6 +1091,7 @@ mod tests {
             100,
             tracker_handle.clone(),
             cancel_token.clone(),
+            None,
         );
 
         let (tx, rx) = tokio::sync::mpsc::channel(500);
@@ -1153,20 +1172,20 @@ mod tests {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let cln_token = CancellationToken::new();
 
         let vertex1_streams = vec![
-            Stream::new("vertex1-0", "temp", "temp", "temp", 0),
-            Stream::new("vertex1-1", "temp", "temp", "temp", 0),
+            Stream::new("vertex1-0", "temp", 0),
+            Stream::new("vertex1-1", "temp", 0),
         ];
         let vertex2_streams = vec![
-            Stream::new("vertex2-0", "temp", "temp", "temp", 0),
-            Stream::new("vertex2-1", "temp", "temp", "temp", 0),
+            Stream::new("vertex2-0", "temp", 0),
+            Stream::new("vertex2-1", "temp", 0),
         ];
         let vertex3_streams = vec![
-            Stream::new("vertex3-0", "temp", "temp", "temp", 0),
-            Stream::new("vertex3-1", "temp", "temp", "temp", 0),
+            Stream::new("vertex3-0", "temp", 0),
+            Stream::new("vertex3-1", "temp", 0),
         ];
 
         let (_, consumers1) = create_streams_and_consumers(&context, &vertex1_streams).await;
@@ -1219,6 +1238,7 @@ mod tests {
             100,
             tracker_handle.clone(),
             cln_token.clone(),
+            None,
         );
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);

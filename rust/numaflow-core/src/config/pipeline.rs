@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use numaflow_models::models::{ForwardConditions, Vertex};
+use numaflow_models::models::{ForwardConditions, Vertex, Watermark};
 use serde_json::from_slice;
 
 use crate::config::components::metrics::MetricsConfig;
@@ -47,6 +47,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) to_vertex_config: Vec<ToVertexConfig>,
     pub(crate) vertex_config: VertexType,
     pub(crate) metrics_config: MetricsConfig,
+    pub(crate) watermark_config: Option<Box<Watermark>>,
 }
 
 impl Default for PipelineConfig {
@@ -66,6 +67,7 @@ impl Default for PipelineConfig {
                 transformer_config: None,
             }),
             metrics_config: Default::default(),
+            watermark_config: None,
         }
     }
 }
@@ -182,11 +184,11 @@ pub(crate) struct FromVertexConfig {
     pub(crate) name: String,
     pub(crate) reader_config: BufferReaderConfig,
     pub(crate) partitions: u16,
-    pub(crate) watermark_config: Option<WatermarkConfig>,
+    pub(crate) watermark_config: Option<WatermarkBucketConfig>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct WatermarkConfig {
+pub(crate) struct WatermarkBucketConfig {
     pub(crate) ot_bucket: String,
     pub(crate) hb_bucket: String,
 }
@@ -196,7 +198,7 @@ pub(crate) struct ToVertexConfig {
     pub(crate) name: String,
     pub(crate) writer_config: BufferWriterConfig,
     pub(crate) conditions: Option<Box<ForwardConditions>>,
-    pub(crate) watermark_config: Option<WatermarkConfig>,
+    pub(crate) watermark_config: Option<WatermarkBucketConfig>,
 }
 
 impl PipelineConfig {
@@ -324,7 +326,7 @@ impl PipelineConfig {
                     let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
                     let name: &'static str =
                         Box::leak(format!("{}-{}-{}-{}", ns, pl, to, i).into_boxed_str());
-                    Stream::new(name, ns, pl, to, i)
+                    Stream::new(name, to, i)
                 })
                 .collect();
 
@@ -351,7 +353,7 @@ impl PipelineConfig {
                     let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
                     let name: &'static str =
                         Box::leak(format!("{}-{}-{}-{}", ns, pl, to, i).into_boxed_str());
-                    Stream::new(name, ns, pl, to, i)
+                    Stream::new(name, to, i)
                 })
                 .collect();
 
@@ -406,6 +408,7 @@ impl PipelineConfig {
             to_vertex_config,
             vertex_config: vertex,
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
+            watermark_config: vertex_obj.spec.watermark,
         })
     }
 }
@@ -437,6 +440,7 @@ mod tests {
                 transformer_config: None,
             }),
             metrics_config: Default::default(),
+            watermark_config: None,
         };
 
         let config = PipelineConfig::default();
@@ -484,13 +488,7 @@ mod tests {
                 name: "in".to_string(),
                 reader_config: BufferReaderConfig {
                     partitions: 1,
-                    streams: vec![Stream::new(
-                        "default-simple-pipeline-out-0",
-                        "default",
-                        "simple-pipeline",
-                        "out",
-                        0,
-                    )],
+                    streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
@@ -510,6 +508,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            watermark_config: None,
         };
         assert_eq!(pipeline_config, expected);
     }
@@ -538,13 +537,7 @@ mod tests {
             to_vertex_config: vec![ToVertexConfig {
                 name: "out".to_string(),
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new(
-                        "default-simple-pipeline-out-0",
-                        "default",
-                        "simple-pipeline",
-                        "out",
-                        0,
-                    )],
+                    streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
                     partitions: 1,
                     max_length: 150000,
                     usage_limit: 0.85,
@@ -569,6 +562,7 @@ mod tests {
                 transformer_config: None,
             }),
             metrics_config: Default::default(),
+            watermark_config: None,
         };
 
         assert_eq!(pipeline_config, expected);
@@ -598,13 +592,7 @@ mod tests {
             to_vertex_config: vec![ToVertexConfig {
                 name: "out".to_string(),
                 writer_config: BufferWriterConfig {
-                    streams: vec![Stream::new(
-                        "default-simple-pipeline-out-0",
-                        "default",
-                        "simple-pipeline",
-                        "out",
-                        0,
-                    )],
+                    streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
                     partitions: 1,
                     max_length: 30000,
                     usage_limit: 0.8,
@@ -628,6 +616,7 @@ mod tests {
                 transformer_config: None,
             }),
             metrics_config: Default::default(),
+            watermark_config: None,
         };
 
         assert_eq!(pipeline_config, expected);
@@ -728,13 +717,7 @@ mod tests {
                 name: "in".to_string(),
                 reader_config: BufferReaderConfig {
                     partitions: 1,
-                    streams: vec![Stream::new(
-                        "default-simple-pipeline-map-0",
-                        "default",
-                        "simple-pipeline",
-                        "map",
-                        0,
-                    )],
+                    streams: vec![Stream::new("default-simple-pipeline-map-0", "map", 0)],
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
@@ -751,6 +734,7 @@ mod tests {
                 map_mode: MapMode::Unary,
             }),
             metrics_config: MetricsConfig::default(),
+            watermark_config: None,
         };
 
         assert_eq!(pipeline_config, expected);

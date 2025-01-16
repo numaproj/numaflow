@@ -545,7 +545,7 @@ mod tests {
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
-            TrackerHandle::new(),
+            TrackerHandle::new(None),
             true,
         );
 

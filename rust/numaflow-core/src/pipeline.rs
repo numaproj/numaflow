@@ -19,6 +19,7 @@ use crate::shared::create_components;
 use crate::shared::create_components::create_sink_writer;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
+use crate::watermark::WatermarkHandle;
 use crate::{error, Result};
 
 mod forwarder;
@@ -29,18 +30,60 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: PipelineConfig,
 ) -> Result<()> {
+    let js_context = create_js_context(config.js_client_config.clone()).await?;
+
+    // create watermark handle, if watermark is enabled
+    let watermark_handle = match &config.watermark_config {
+        Some(wm) => {
+            if wm.disabled.unwrap_or(false) {
+                Some(
+                    WatermarkHandle::new(
+                        js_context.clone(),
+                        config.from_vertex_config.clone(),
+                        config.to_vertex_config.clone(),
+                    )
+                    .await?,
+                )
+            } else {
+                None
+            }
+        }
+        None => None,
+    };
+
     match &config.vertex_config {
         pipeline::VertexType::Source(source) => {
             info!("Starting source forwarder");
-            start_source_forwarder(cln_token, config.clone(), source.clone()).await?;
+            start_source_forwarder(
+                cln_token,
+                js_context,
+                config.clone(),
+                source.clone(),
+                watermark_handle,
+            )
+            .await?;
         }
         pipeline::VertexType::Sink(sink) => {
             info!("Starting sink forwarder");
-            start_sink_forwarder(cln_token, config.clone(), sink.clone()).await?;
+            start_sink_forwarder(
+                cln_token,
+                js_context,
+                config.clone(),
+                sink.clone(),
+                watermark_handle,
+            )
+            .await?;
         }
         pipeline::VertexType::Map(map) => {
             info!("Starting map forwarder");
-            start_map_forwarder(cln_token, config.clone(), map.clone()).await?;
+            start_map_forwarder(
+                cln_token,
+                js_context,
+                config.clone(),
+                map.clone(),
+                watermark_handle,
+            )
+            .await?;
         }
     }
     Ok(())
@@ -48,17 +91,19 @@ pub(crate) async fn start_forwarder(
 
 async fn start_source_forwarder(
     cln_token: CancellationToken,
+    js_context: Context,
     config: PipelineConfig,
     source_config: SourceVtxConfig,
+    watermark_handle: Option<WatermarkHandle>,
 ) -> Result<()> {
-    let tracker_handle = TrackerHandle::new();
-    let js_context = create_js_context(config.js_client_config.clone()).await?;
+    let tracker_handle = TrackerHandle::new(watermark_handle.clone());
 
     let buffer_writer = create_buffer_writer(
         &config,
         js_context.clone(),
         tracker_handle.clone(),
         cln_token.clone(),
+        watermark_handle,
     )
     .await;
 
@@ -102,11 +147,11 @@ async fn start_source_forwarder(
 
 async fn start_map_forwarder(
     cln_token: CancellationToken,
+    js_context: Context,
     config: PipelineConfig,
     map_vtx_config: MapVtxConfig,
+    watermark_handle: Option<WatermarkHandle>,
 ) -> Result<()> {
-    let js_context = create_js_context(config.js_client_config.clone()).await?;
-
     // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
     // to a common buffer, in the case of a join.
     let reader_config = &config
@@ -118,15 +163,16 @@ async fn start_map_forwarder(
     // Create buffer writers and buffer readers
     let mut forwarder_components = vec![];
     let mut mapper_grpc_client = None;
-    for stream in reader_config.streams.clone() {
-        let tracker_handle = TrackerHandle::new();
 
+    for stream in reader_config.streams.clone() {
+        let tracker_handle = TrackerHandle::new(watermark_handle.clone());
         let buffer_reader = create_buffer_reader(
             stream,
             reader_config.clone(),
             js_context.clone(),
             tracker_handle.clone(),
             config.batch_size,
+            watermark_handle.clone(),
         )
         .await?;
 
@@ -148,6 +194,7 @@ async fn start_map_forwarder(
             js_context.clone(),
             tracker_handle.clone(),
             cln_token.clone(),
+            watermark_handle.clone(),
         )
         .await;
         forwarder_components.push((buffer_reader, buffer_writer, mapper));
@@ -188,11 +235,11 @@ async fn start_map_forwarder(
 
 async fn start_sink_forwarder(
     cln_token: CancellationToken,
+    js_context: Context,
     config: PipelineConfig,
     sink: SinkVtxConfig,
+    watermark_handle: Option<WatermarkHandle>,
 ) -> Result<()> {
-    let js_context = create_js_context(config.js_client_config.clone()).await?;
-
     // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
     // to a common buffer, in the case of a join.
     let reader_config = &config
@@ -205,7 +252,7 @@ async fn start_sink_forwarder(
     let mut sink_writers = vec![];
     let mut buffer_readers = vec![];
     for stream in reader_config.streams.clone() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(watermark_handle.clone());
 
         let buffer_reader = create_buffer_reader(
             stream,
@@ -213,6 +260,7 @@ async fn start_sink_forwarder(
             js_context.clone(),
             tracker_handle.clone(),
             config.batch_size,
+            watermark_handle.clone(),
         )
         .await?;
         buffer_readers.push(buffer_reader);
@@ -274,6 +322,7 @@ async fn create_buffer_writer(
     js_context: Context,
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
+    watermark_handle: Option<WatermarkHandle>,
 ) -> JetstreamWriter {
     JetstreamWriter::new(
         config.to_vertex_config.clone(),
@@ -281,6 +330,7 @@ async fn create_buffer_writer(
         config.paf_concurrency,
         tracker_handle,
         cln_token,
+        watermark_handle,
     )
 }
 
@@ -290,6 +340,7 @@ async fn create_buffer_reader(
     js_context: Context,
     tracker_handle: TrackerHandle,
     batch_size: usize,
+    watermark_handle: Option<WatermarkHandle>,
 ) -> Result<JetstreamReader> {
     JetstreamReader::new(
         stream,
@@ -297,7 +348,7 @@ async fn create_buffer_reader(
         reader_config,
         tracker_handle,
         batch_size,
-        None,
+        watermark_handle,
     )
     .await
 }
@@ -448,6 +499,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            watermark_config: None,
         };
 
         let cancellation_token = CancellationToken::new();
@@ -602,6 +654,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            watermark_config: None,
         };
 
         let cancellation_token = CancellationToken::new();
@@ -838,6 +891,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            watermark_config: None,
         };
 
         let cancellation_token = CancellationToken::new();

@@ -750,7 +750,7 @@ mod tests {
             10,
             Duration::from_secs(1),
             SinkClientType::Log,
-            TrackerHandle::new(),
+            TrackerHandle::new(None),
         )
         .build()
         .await
@@ -781,7 +781,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_streaming_write() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
@@ -837,7 +837,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_streaming_write_error() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
@@ -923,7 +923,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fallback_write() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();

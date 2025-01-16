@@ -370,7 +370,7 @@ mod tests {
             stream.clone(),
             context.clone(),
             buf_reader_config,
-            TrackerHandle::new(),
+            TrackerHandle::new(None),
             500,
             None,
         )
@@ -416,7 +416,7 @@ mod tests {
         assert_eq!(
             buffer.len(),
             10,
-            "Expected 10 messages from the Jestream reader"
+            "Expected 10 messages from the jetstream reader"
         );
 
         reader_cancel_token.cancel();
@@ -432,15 +432,15 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
-        let stream_name = "test_ack";
+        let js_stream = Stream::new("test-ack", "test", 0);
         // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
+        let _ = context.delete_stream(js_stream.name).await;
         context
             .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
+                name: js_stream.to_string(),
+                subjects: vec![js_stream.to_string()],
                 max_message_size: 1024,
                 ..Default::default()
             })
@@ -450,11 +450,11 @@ mod tests {
         let _consumer = context
             .create_consumer_on_stream(
                 consumer::Config {
-                    name: Some(stream_name.to_string()),
+                    name: Some(js_stream.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
                 },
-                stream_name,
+                js_stream.name.to_string(),
             )
             .await
             .unwrap();
@@ -465,8 +465,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let js_reader = JetstreamReader::new(
-            stream,
-            0,
+            js_stream.clone(),
             context.clone(),
             buf_reader_config,
             tracker_handle.clone(),
@@ -502,7 +501,7 @@ mod tests {
             offsets.push(message.offset.clone());
             let message_bytes: BytesMut = message.try_into().unwrap();
             context
-                .publish(stream_name, message_bytes.into())
+                .publish(js_stream.name, message_bytes.into())
                 .await
                 .unwrap();
         }
@@ -528,7 +527,7 @@ mod tests {
         .expect("Tracker is not empty after 1 second");
 
         let mut consumer: PullConsumer = context
-            .get_consumer_from_stream(stream_name, stream_name)
+            .get_consumer_from_stream(js_stream.name, js_stream.name)
             .await
             .unwrap();
 
@@ -540,6 +539,6 @@ mod tests {
         reader_cancel_token.cancel();
         js_reader_task.await.unwrap().unwrap();
 
-        context.delete_stream(stream_name).await.unwrap();
+        context.delete_stream(js_stream.name).await.unwrap();
     }
 }

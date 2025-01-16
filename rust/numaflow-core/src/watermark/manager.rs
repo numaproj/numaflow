@@ -7,7 +7,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
-use tracing::debug;
+use tracing::{debug, info};
 
 const DEFAULT_PROCESSOR_REFRESH_RATE: u16 = 5;
 
@@ -167,6 +167,7 @@ impl ProcessorManager {
         while let Ok(mut kv) = hb_watcher.next().await.unwrap() {
             match kv.operation {
                 async_nats::jetstream::kv::Operation::Put => {
+                    info!("Received heartbeat from processor: {}", kv.key);
                     let processor_name = kv.key;
                     // convert Bytes to u32
                     let hb: u32 = kv.value.get_u32();
@@ -178,6 +179,7 @@ impl ProcessorManager {
                             processor.set_status(Status::Active);
                         }
                     } else {
+                        info!("Processor {} not found, adding it", processor_name);
                         processors.lock().await.insert(
                             processor_name.clone(),
                             Processor::new(

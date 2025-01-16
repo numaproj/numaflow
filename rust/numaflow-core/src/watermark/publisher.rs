@@ -1,4 +1,6 @@
+use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::ToVertexConfig;
+use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::{Error, Result};
 use crate::watermark::WMB;
 use bytes::BytesMut;
@@ -6,6 +8,7 @@ use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+use tracing::info;
 
 const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;
 
@@ -24,10 +27,11 @@ impl Drop for Publisher {
 
 impl Publisher {
     pub(crate) async fn new(
-        processor_name: String,
-        to_vertex_configs: Vec<ToVertexConfig>,
         js_context: async_nats::jetstream::Context,
+        to_vertex_configs: Vec<ToVertexConfig>,
     ) -> Result<Self> {
+        let processor_name = format!("{}-{}", get_vertex_name(), get_vertex_replica());
+
         let mut ot_buckets = HashMap::new();
         let mut hb_buckets = Vec::with_capacity(to_vertex_configs.len());
         let mut last_published_wm = HashMap::new();
@@ -97,27 +101,30 @@ impl Publisher {
 
     pub(crate) async fn publish_watermark(
         &mut self,
-        partition_idx: u16,
+        stream: Stream,
         offset: i64,
         watermark: i64,
-        vertex_name: String,
     ) -> Result<()> {
+        info!(
+            "Publishing watermark {} for offset {} and stream {}",
+            watermark, offset, stream
+        );
         // only publish if watermark is greater than last published watermark for this partition and vertex and
         // if the last published watermark is older than 100 milliseconds
-        if let Some(last_published_wm) = self.last_published_wm.get_mut(&vertex_name) {
-            if watermark > last_published_wm[partition_idx as usize].0
-                && offset > last_published_wm[partition_idx as usize].1
+        if let Some(last_published_wm) = self.last_published_wm.get_mut(stream.vertex) {
+            if watermark > last_published_wm[stream.partition as usize].0
+                && offset > last_published_wm[stream.partition as usize].1
                 && Utc::now()
-                    .signed_duration_since(last_published_wm[partition_idx as usize].2)
+                    .signed_duration_since(last_published_wm[stream.partition as usize].2)
                     .num_milliseconds()
                     > 100
             {
-                let ot_bucket = self.ot_buckets.get(&vertex_name).unwrap();
+                let ot_bucket = self.ot_buckets.get(stream.vertex).unwrap();
                 let wmb_bytes: BytesMut = WMB {
                     idle: false,
                     offset,
                     watermark,
-                    partition: partition_idx,
+                    partition: stream.partition,
                 }
                 .try_into()
                 .map_err(|e| Error::Watermark(format!("{}", e)))?;
@@ -125,7 +132,7 @@ impl Publisher {
                     .put(self.processor_name.clone(), wmb_bytes.freeze())
                     .await
                     .map_err(|e| Error::Watermark(e.to_string()))?;
-                last_published_wm[partition_idx as usize] = (offset, watermark, Utc::now());
+                last_published_wm[stream.partition as usize] = (offset, watermark, Utc::now());
             }
         }
         Ok(())

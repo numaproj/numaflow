@@ -522,7 +522,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
@@ -612,7 +612,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
             MapMode::Unary,
@@ -703,7 +703,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
             MapMode::Unary,
@@ -799,7 +799,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
@@ -912,7 +912,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
             MapMode::Batch,
@@ -1024,7 +1024,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
@@ -1123,7 +1123,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let mapper = MapHandle::new(
             MapMode::Stream,
             500,
