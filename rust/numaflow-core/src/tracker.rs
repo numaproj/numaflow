@@ -346,14 +346,16 @@ impl TrackerHandle {
         offset: Bytes,
         message_tags: Option<Arc<[String]>>,
     ) -> Result<()> {
-        let mut responses: Option<Vec<String>> = None;
-        if self.enable_callbacks {
-            if let Some(tags) = message_tags {
+        let responses: Option<Vec<String>> = match (self.enable_callbacks, message_tags) {
+            (true, Some(tags)) => {
                 if !tags.is_empty() {
-                    responses = Some(tags.iter().cloned().collect());
+                    Some(tags.iter().cloned().collect::<Vec<String>>())
+                } else {
+                    None
                 }
-            };
-        }
+            }
+            _ => None,
+        };
         let message = ActorMessage::Update { offset, responses };
         self.sender
             .send(message)
