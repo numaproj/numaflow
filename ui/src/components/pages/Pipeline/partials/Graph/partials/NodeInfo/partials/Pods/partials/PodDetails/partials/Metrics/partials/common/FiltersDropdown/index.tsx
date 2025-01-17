@@ -27,6 +27,7 @@ export interface FiltersDropdownProps {
   type: string;
   vertexId?: string;
   setFilters: any;
+  selectedPodName?: string;
 }
 
 const periodData = [
@@ -43,6 +44,7 @@ const FiltersDropdown = ({
   type,
   vertexId,
   setFilters,
+  selectedPodName
 }: FiltersDropdownProps) => {
   const { host } = useContext<AppContextProps>(AppContext);
   const [anchorEl, setAnchorEl] = useState(null);
@@ -81,11 +83,17 @@ const FiltersDropdown = ({
             return;
           }
           const data = await response.json();
-          const formattedData = data?.data
-            ?.filter((pod: any) => !pod?.metadata?.name.includes("daemon"))
-            .map((pod: any) => ({
-              name: pod?.metadata?.name,
-            }));
+          const formattedData = data && data.data
+            ? data.data
+                .filter((pod: any) => !pod?.metadata?.name.includes("daemon"))
+                .map((pod: any) => ({
+                  containerNames: [
+                    ...pod?.spec?.containers?.map((ele: any) => ele.name) || [],
+                    ...pod?.spec?.initContainers?.map((ele: any) => ele.name) || []
+                  ],
+                  name: pod?.metadata?.name,
+                }))
+            : [];
           callback(formattedData);
         } catch (error) {
           callback(null);
@@ -108,6 +116,9 @@ const FiltersDropdown = ({
   const getFilterValues = useCallback(
     (filterName: string) => {
       switch (filterName) {
+        case "container":
+          // get containers of selected pod
+          return podsData.find((pod: any) => pod.name === selectedPodName)?.containerNames?.map((containerName: any) => ({name: containerName}));
         case "pod":
           return podsData;
         case "period":

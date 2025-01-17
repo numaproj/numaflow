@@ -7,7 +7,7 @@ data:
     # url is a required field, it should be the url of the service to which the metrics proxy will connect
     # url: service_name + "." + service_namespace + ".svc.cluster.local" + ":" + port
     # example for local prometheus service
-    # url: http://prometheus-operated.monitoring.svc.cluster.local:9090
+    # url: http://prometheus-operated.monitoring.svc.cluster.local:9090 
     patterns:
     - name: vertex_gauge
       object: vertex
@@ -179,3 +179,108 @@ data:
               filters:
                 - name: pod
                   required: false
+    - name: mono_vertex_cpu_memory_utilization_pod
+      object: mono-vertex
+      title: cpu-memory utilization by pod
+      description: cpu and memory utilization by pod for mono-vertex
+      expr: avg_over_time($metric_name{$filters}[$duration])
+      params:
+        - name: duration
+          required: true
+        - name: start_time
+          required: false
+        - name: end_time
+          required: false
+      metrics: 
+        # set your cpu metric name here
+        - metric_name: namespace_pod_cpu_utilization
+          # set display name as per metric name
+          display_name: CPU Utilization per Pod (usage seconds/resource limits)
+          required_filters:
+            - namespace
+            - pod  
+          dimensions:
+            - name: mono-vertex
+              filters: 
+                - name: pod
+                  # expr: optional expression for prometheus query
+                  # overrides the default expression
+                  required: false
+        # set your memory metric name here
+        - metric_name: namespace_pod_memory_utilization
+          # set display name as per metric name
+          display_name: Memory Utilization per Pod (usage bytes/resource limits)
+          required_filters:
+            - namespace
+            - pod  
+          dimensions:
+            - name: mono-vertex
+              filters: 
+                - name: pod
+                  # expr: optional expression for prometheus query
+                  # overrides the default expression 
+                  required: false
+    - name: pipeline_vertex_cpu_memory_utilization_pod
+      object: vertex
+      title: cpu-memory utilization by pod
+      description: cpu and memory utilization by pod for pipeline's vertex
+      expr: avg_over_time($metric_name{$filters}[$duration])
+      params:
+        - name: duration
+          required: true
+        - name: start_time
+          required: false
+        - name: end_time
+          required: false
+      metrics: 
+        # set your cpu metric name here
+        - metric_name: namespace_pod_cpu_utilization
+          # set display name as per metric name
+          display_name: CPU Utilization per Pod (usage seconds/resource limits)
+          required_filters:
+            - namespace
+            - pod  
+          dimensions:
+            - name: vertex
+              filters: 
+                - name: pod
+                  # expr: optional expression for prometheus query
+                  # overrides the default expression 
+                  required: false
+        # set your memory metric name here
+        - metric_name: namespace_pod_memory_utilization
+          # set display name as per metric name
+          display_name: Memory Utilization per Pod (usage bytes/resource limits)
+          required_filters:
+            - namespace
+            - pod  
+          dimensions:
+            - name: vertex
+              filters: 
+                - name: pod
+                  # expr: optional expression for prometheus query
+                  # overrides the default expression 
+                  required: false
+    # - name: mono-vertex-container-cpu
+    #   object: mono-vertex
+    #   title: cpu utilization by container
+    #   description: cpu utilization by container for mono-vertex
+    #   expr: avg_over_time($metric_name{$filters}[$duration]})
+    #   params:
+    #     - name: duration
+    #       required: true
+    #     - name: start_time
+    #       required: false
+    #     - name: end_time
+    #       required: false
+    #   metrics: 
+    #     - metric_name: namespace_app_container_cpu_utilization
+    #       display_name: CPU utilization by container
+    #       required_filters:
+    #         - namespace
+    #       dimensions:
+    #         - name: container
+    #           filters: 
+    #             - name: container
+    #               required: false
+

@@ -83,7 +83,12 @@ func formatMapLabels(labels map[string]string) string {
 		if !first {
 			builder.WriteString(", ")
 		}
-		builder.WriteString(fmt.Sprintf("%s= \"%s\"", k, v))
+		// Check if the value contains ".*" - regex and use =~ if it does
+		if strings.Contains(v, ".*") {
+			builder.WriteString(fmt.Sprintf("%s =~ \"%s\"", k, v))
+		} else {
+			builder.WriteString(fmt.Sprintf("%s = \"%s\"", k, v))
+		}
 		first = false
 	}
 	return builder.String()

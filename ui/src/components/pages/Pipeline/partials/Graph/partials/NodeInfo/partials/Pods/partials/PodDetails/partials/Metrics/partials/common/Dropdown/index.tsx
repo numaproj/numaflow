@@ -25,10 +25,24 @@ const Dropdown = ({
   field,
   setMetricReq,
 }: MetricDropDownProps) => {
+
+  // to handle cases there is no "mono-vertex" as dimension at top level (for eg: container level cpu/memory)
+  let initialDimensionVal = "";
+  if (metric?.dimensions.length > 0) {
+    metric?.dimensions?.map((val: any)=>{
+      if (val.name === dimensionReverseMap[type]){
+        initialDimensionVal = val.name;
+        return;
+      }
+    })
+    if (initialDimensionVal === ""){
+      initialDimensionVal = metric?.dimensions[0]?.name
+    }
+  }
   const getInitialValue = useMemo(() => {
     switch (field) {
       case "dimension":
-        return dimensionReverseMap[type];
+        return initialDimensionVal;
       case "quantile":
         return quantileOptions[quantileOptions.length-1];
       case "duration":
