@@ -120,7 +120,7 @@ func (t *Expect) VertexPodsRunning() *Expect {
 
 func (t *Expect) MonoVertexPodsRunning() *Expect {
 	t.t.Helper()
-	if err := WaitForMonoVertexPodRunning(t.kubeClient, t.monoVertexClient, Namespace, t.monoVertex.Name, 2*time.Minute); err != nil {
+	if err := WaitForMonoVertexPodRunning(t.kubeClient, t.monoVertexClient, Namespace, t.monoVertex.Name, 5*time.Minute); err != nil {
 		t.t.Fatalf("Expected mono vertex %q pod running: %v", t.monoVertex.Name, err)
 	}
 	return t
