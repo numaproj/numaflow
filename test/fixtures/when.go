@@ -117,7 +117,7 @@ func (w *When) CreateMonoVertexAndWait() *When {
 		w.monoVertex = i
 	}
 	// wait
-	if err := WaitForMonoVertexRunning(ctx, w.monoVertexClient, w.monoVertex.Name, defaultTimeout); err != nil {
+	if err := WaitForMonoVertexRunning(ctx, w.monoVertexClient, w.monoVertex.Name, 5*time.Minute); err != nil {
 		w.t.Fatal(err)
 	}
 	return w
