@@ -118,6 +118,7 @@ const LineChartComponent = ({
   const [chartLabels, setChartLabels] = useState<any[]>([]);
   const [metricsReq, setMetricsReq] = useState<any>({
     metric_name: metric?.metric_name,
+    name: metric?.name,
   });
   const [paramsList, setParamsList] = useState<any[]>([]);
   // store all filters for each selected dimension
@@ -215,7 +216,13 @@ const LineChartComponent = ({
     filters,
   });
 
-  const groupByLabel = useCallback((dimension: string, metricName: string) => {
+  const groupByLabel = useCallback((dimension: string, metricName: string, patternName: string) => {
+    switch(patternName){
+      case "mono_vertex_cpu_memory_utilization_pod":
+      case "pipeline_vertex_cpu_memory_utilization_pod":
+        return ["pod"];
+    }
+
     switch (metricName) {
       case "monovtx_pending":
       case "vertex_pending_messages":
@@ -236,7 +243,8 @@ const LineChartComponent = ({
       const transformedData: any[] = [];
       const label = groupByLabel(
         metricsReq?.dimension,
-        metricsReq?.metric_name
+        metricsReq?.metric_name,
+        metricsReq?.name
       );
       chartData?.forEach((item) => {
         let labelVal = "";

@@ -192,27 +192,33 @@ data:
         - name: end_time
           required: false
       metrics: 
+        # set your cpu metric name here
         - metric_name: namespace_pod_cpu_utilization
+          # set display name as per metric name
           display_name: CPU Utilization per Pod (usage seconds/resource limits)
           required_filters:
             - namespace
-            # to get only mono-vertex pods
             - pod  
           dimensions:
             - name: mono-vertex
               filters: 
-                - name: pod 
+                - name: pod
+                  # expr: optional expression for prometheus query
+                  # overrides the default expression
                   required: false
+        # set your memory metric name here
         - metric_name: namespace_pod_memory_utilization
+          # set display name as per metric name
           display_name: Memory Utilization per Pod (usage bytes/resource limits)
           required_filters:
             - namespace
-            # to get only mono-vertex pods
             - pod  
           dimensions:
             - name: mono-vertex
               filters: 
-                - name: pod 
+                - name: pod
+                  # expr: optional expression for prometheus query
+                  # overrides the default expression 
                   required: false
     - name: pipeline_vertex_cpu_memory_utilization_pod
       object: vertex
@@ -227,27 +233,33 @@ data:
         - name: end_time
           required: false
       metrics: 
+        # set your cpu metric name here
         - metric_name: namespace_pod_cpu_utilization
+          # set display name as per metric name
           display_name: CPU Utilization per Pod (usage seconds/resource limits)
           required_filters:
             - namespace
-            # to get only vertex pods
             - pod  
           dimensions:
             - name: vertex
               filters: 
-                - name: pod 
+                - name: pod
+                  # expr: optional expression for prometheus query
+                  # overrides the default expression 
                   required: false
+        # set your memory metric name here
         - metric_name: namespace_pod_memory_utilization
+          # set display name as per metric name
           display_name: Memory Utilization per Pod (usage bytes/resource limits)
           required_filters:
             - namespace
-            # to get only vertex pods
             - pod  
           dimensions:
             - name: vertex
               filters: 
-                - name: pod 
+                - name: pod
+                  # expr: optional expression for prometheus query
+                  # overrides the default expression 
                   required: false
     # - name: mono-vertex-container-cpu
     #   object: mono-vertex
