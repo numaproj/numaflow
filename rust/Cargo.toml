@@ -8,7 +8,8 @@ members = [
     "numaflow-core",
     "numaflow-pb",
     "extns/numaflow-pulsar",
-    "numaflow",
+    "extns/numaflow-sqs",
+    "numaflow"
 ]
 
 [workspace.lints.rust]

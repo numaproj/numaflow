@@ -1845,6 +1845,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "numaflow-sqs"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "object"
 version = "0.36.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
