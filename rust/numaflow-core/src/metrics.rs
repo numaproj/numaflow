@@ -721,6 +721,7 @@ struct TimestampedPending {
 #[derive(Clone)]
 pub(crate) enum LagReader {
     Source(Source),
+    #[allow(clippy::upper_case_acronyms)]
     ISB(Vec<JetstreamReader>), // multiple partitions
 }
 
@@ -862,7 +863,7 @@ async fn build_pending_info(
 
         match &mut lag_reader {
             LagReader::Source(source) => {
-                match fetch_source_pending(&source).await {
+                match fetch_source_pending(source).await {
                     Ok(pending) => {
                         if pending != -1 {
                             let mut stats = pending_stats.lock().await;
@@ -887,8 +888,8 @@ async fn build_pending_info(
             }
 
             LagReader::ISB(readers) => {
-                for mut reader in readers {
-                    match fetch_isb_pending(&mut reader).await {
+                for reader in readers {
+                    match fetch_isb_pending(reader).await {
                         Ok(pending) => {
                             if pending != -1 {
                                 let mut stats = pending_stats.lock().await;
@@ -984,7 +985,7 @@ async fn expose_pending_metrics(
 }
 
 /// Calculate the average pending messages over the last `seconds` seconds.
-async fn calculate_pending(seconds: i64, pending_stats: &Vec<TimestampedPending>) -> i64 {
+async fn calculate_pending(seconds: i64, pending_stats: &[TimestampedPending]) -> i64 {
     let mut result = -1;
     let mut total = 0;
     let mut num = 0;

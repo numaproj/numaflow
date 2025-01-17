@@ -120,6 +120,7 @@ impl Transformer {
             let start_time = tokio::time::Instant::now();
             let _permit = permit;
 
+            let offset = read_msg.id.offset.clone();
             let (sender, receiver) = oneshot::channel();
             let msg = ActorMessage::Transform {
                 message: read_msg.clone(),
@@ -137,10 +138,16 @@ impl Transformer {
             // wait for one-shot
             match receiver.await {
                 Ok(Ok(mut transformed_messages)) => {
-                    if let Err(e) = tracker_handle
-                        .update_many(&transformed_messages, true)
-                        .await
-                    {
+                    for message in transformed_messages.iter() {
+                        if let Err(e) = tracker_handle
+                            .update(offset.clone(), message.tags.clone())
+                            .await
+                        {
+                            let _ = error_tx.send(e).await;
+                            return;
+                        }
+                    }
+                    if let Err(e) = tracker_handle.update_eof(offset).await {
                         let _ = error_tx.send(e).await;
                         return;
                     }

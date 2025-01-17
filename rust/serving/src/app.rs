@@ -104,7 +104,7 @@ where
                 .on_response(
                     |response: &Response<Body>, latency: Duration, _span: &Span| {
                         if response.status().is_server_error() {
-                            // 5xx responses will be captured in on_failure at and logged at 'error' level
+                            // 5xx responses will be logged at 'error' level in `on_failure`
                             return;
                         }
                         tracing::info!(status=?response.status(), ?latency)

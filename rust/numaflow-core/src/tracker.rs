@@ -9,6 +9,7 @@
 //! In the future Watermark will also be propagated based on this.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use bytes::Bytes;
 use serving::callback::CallbackHandler;
@@ -38,12 +39,6 @@ enum ActorMessage {
     Update {
         offset: Bytes,
         responses: Option<Vec<String>>,
-    },
-    UpdateMany {
-        offset: Bytes,
-        responses: Vec<Option<Vec<String>>>,
-        count: usize,
-        eof: bool,
     },
     UpdateEOF {
         offset: Bytes,
@@ -107,7 +102,6 @@ impl TryFrom<&Message> for CallbackInfo {
             .previous_vertex
             .clone();
 
-        // FIXME: empty message tags
         let mut msg_tags = None;
         if let Some(ref tags) = message.tags {
             if !tags.is_empty() {
@@ -139,12 +133,12 @@ impl Tracker {
     /// Creates a new Tracker instance with the given receiver for actor messages.
     fn new(
         receiver: mpsc::Receiver<ActorMessage>,
-        callback_handler: impl Into<Option<CallbackHandler>>,
+        callback_handler: Option<CallbackHandler>,
     ) -> Self {
         Self {
             entries: HashMap::new(),
             receiver,
-            callback_handler: callback_handler.into(),
+            callback_handler,
         }
     }
 
@@ -167,14 +161,6 @@ impl Tracker {
             }
             ActorMessage::Update { offset, responses } => {
                 self.handle_update(offset, responses);
-            }
-            ActorMessage::UpdateMany {
-                offset,
-                responses,
-                count,
-                eof,
-            } => {
-                self.handle_update_many(offset, responses, count, eof);
             }
             ActorMessage::UpdateEOF { offset } => {
                 self.handle_update_eof(offset).await;
@@ -221,10 +207,9 @@ impl Tracker {
         };
 
         entry.count += 1;
-        entry
-            .callback_info
-            .as_mut()
-            .map(|cb| cb.responses.push(responses));
+        if let Some(cb) = entry.callback_info.as_mut() {
+            cb.responses.push(responses);
+        }
     }
 
     async fn handle_update_eof(&mut self, offset: Bytes) {
@@ -239,25 +224,6 @@ impl Tracker {
             let entry = self.entries.remove(&offset).unwrap();
             self.ack_message(entry).await;
         }
-    }
-
-    fn handle_update_many(
-        &mut self,
-        offset: Bytes,
-        responses: Vec<Option<Vec<String>>>,
-        count: usize,
-        eof: bool,
-    ) {
-        let Some(entry) = self.entries.get_mut(&offset) else {
-            return;
-        };
-
-        entry.count += count;
-        entry.eof = eof;
-        entry
-            .callback_info
-            .as_mut()
-            .map(|cb| cb.responses.extend(responses));
     }
 
     /// Removes an entry from the tracker and sends an acknowledgment if the count is zero
@@ -373,13 +339,16 @@ impl TrackerHandle {
         Ok(())
     }
 
-    /// Updates an existing message in the Tracker with the given offset, count, and EOF status.
-    pub(crate) async fn update(&self, message: &Message) -> Result<()> {
-        let offset = message.id.offset.clone();
+    /// Informs the tracker that a new message has been generated. The tracker should contain
+    /// and entry for this message's offset.
+    pub(crate) async fn update(
+        &self,
+        offset: Bytes,
+        message_tags: Option<Arc<[String]>>,
+    ) -> Result<()> {
         let mut responses: Option<Vec<String>> = None;
         if self.enable_callbacks {
-            // FIXME: empty message tags
-            if let Some(ref tags) = message.tags {
+            if let Some(tags) = message_tags {
                 if !tags.is_empty() {
                     responses = Some(tags.iter().cloned().collect());
                 }
@@ -393,41 +362,9 @@ impl TrackerHandle {
         Ok(())
     }
 
-    /// Updates an existing message in the Tracker with the given offset, count, and EOF status.
+    /// Updates the EOF status for an offset in the Tracker
     pub(crate) async fn update_eof(&self, offset: Bytes) -> Result<()> {
         let message = ActorMessage::UpdateEOF { offset };
-        self.sender
-            .send(message)
-            .await
-            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
-        Ok(())
-    }
-
-    /// Updates an existing message in the Tracker with the given offset, count, and EOF status.
-    pub(crate) async fn update_many(&self, messages: &[Message], eof: bool) -> Result<()> {
-        if messages.is_empty() {
-            return Ok(());
-        }
-        let offset = messages.first().unwrap().id.offset.clone();
-        let mut responses: Vec<Option<Vec<String>>> = vec![];
-        // if self.enable_callbacks {
-        // FIXME: empty message tags
-        for message in messages {
-            let mut response: Option<Vec<String>> = None;
-            if let Some(ref tags) = message.tags {
-                if !tags.is_empty() {
-                    response = Some(tags.iter().cloned().collect());
-                }
-            };
-            responses.push(response);
-        }
-        // }
-        let message = ActorMessage::UpdateMany {
-            offset,
-            responses,
-            count: messages.len(),
-            eof,
-        };
         self.sender
             .send(message)
             .await
@@ -515,7 +452,10 @@ mod tests {
         handle.insert(&message, ack_send).await.unwrap();
 
         // Update the message
-        handle.update(&message).await.unwrap();
+        handle
+            .update(offset.clone(), message.tags.clone())
+            .await
+            .unwrap();
         handle.update_eof(offset).await.unwrap();
 
         // Delete the message
@@ -554,7 +494,12 @@ mod tests {
 
         let messages: Vec<Message> = std::iter::repeat(message).take(3).collect();
         // Update the message with a count of 3
-        handle.update_many(&messages, true).await.unwrap();
+        for message in messages {
+            handle
+                .update(offset.clone(), message.tags.clone())
+                .await
+                .unwrap();
+        }
 
         // Delete the message three times
         handle.delete(offset.clone()).await.unwrap();
@@ -627,8 +572,12 @@ mod tests {
         handle.insert(&message, ack_send).await.unwrap();
 
         let messages: Vec<Message> = std::iter::repeat(message).take(3).collect();
-        // Update the message with a count of 3
-        handle.update_many(&messages, false).await.unwrap();
+        for message in messages {
+            handle
+                .update(offset.clone(), message.tags.clone())
+                .await
+                .unwrap();
+        }
 
         // Discard the message
         handle.discard(offset).await.unwrap();

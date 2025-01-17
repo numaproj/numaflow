@@ -390,7 +390,7 @@ impl PipelineConfig {
             .unwrap_or(DEFAULT_LOOKBACK_WINDOW_IN_SECS);
 
         let mut callback_config = None;
-        if let Ok(_) = get_var(ENV_CALLBACK_ENABLED) {
+        if get_var(ENV_CALLBACK_ENABLED).is_ok() {
             let callback_concurrency: usize = get_var(ENV_CALLBACK_CONCURRENCY)
                 .unwrap_or_else(|_| format!("{DEFAULT_CALLBACK_CONCURRENCY}"))
                 .parse()

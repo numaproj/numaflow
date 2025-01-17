@@ -150,7 +150,7 @@ impl MonovertexConfig {
             .unwrap_or(DEFAULT_LOOKBACK_WINDOW_IN_SECS);
 
         let mut callback_config = None;
-        if let Ok(_) = env::var(ENV_CALLBACK_ENABLED) {
+        if env::var(ENV_CALLBACK_ENABLED).is_ok() {
             let callback_concurrency: usize = env::var(ENV_CALLBACK_CONCURRENCY)
                 .unwrap_or_else(|_| format!("{DEFAULT_CALLBACK_CONCURRENCY}"))
                 .parse()

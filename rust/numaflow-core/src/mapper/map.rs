@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use bytes::Bytes;
 use numaflow_pb::clients::map::map_client::MapClient;
 use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
@@ -328,6 +329,7 @@ impl MapHandle {
         tokio::spawn(async move {
             let _permit = permit;
 
+            let offset = read_msg.id.offset.clone();
             let (sender, receiver) = oneshot::channel();
             let msg = UnaryActorMessage {
                 message: read_msg.clone(),
@@ -344,7 +346,16 @@ impl MapHandle {
             match receiver.await {
                 Ok(Ok(mut mapped_messages)) => {
                     // update the tracker with the number of messages sent and send the mapped messages
-                    if let Err(e) = tracker_handle.update_many(&mapped_messages, true).await {
+                    for message in mapped_messages.iter() {
+                        if let Err(e) = tracker_handle
+                            .update(offset.clone(), message.tags.clone())
+                            .await
+                        {
+                            error_tx.send(e).await.expect("failed to send error");
+                            return;
+                        }
+                    }
+                    if let Err(e) = tracker_handle.update_eof(offset).await {
                         error_tx.send(e).await.expect("failed to send error");
                         return;
                     }
@@ -391,7 +402,18 @@ impl MapHandle {
         for receiver in receivers {
             match receiver.await {
                 Ok(Ok(mut mapped_messages)) => {
-                    tracker_handle.update_many(&mapped_messages, true).await?;
+                    let mut offset: Option<Bytes> = None;
+                    for message in mapped_messages.iter() {
+                        if offset.is_none() {
+                            offset = Some(message.id.offset.clone());
+                        }
+                        tracker_handle
+                            .update(message.id.offset.clone(), message.tags.clone())
+                            .await?;
+                    }
+                    if let Some(offset) = offset {
+                        tracker_handle.update_eof(offset).await?;
+                    }
                     for mapped_message in mapped_messages.drain(..) {
                         output_tx
                             .send(mapped_message)
@@ -445,7 +467,13 @@ impl MapHandle {
             while let Some(result) = receiver.recv().await {
                 match result {
                     Ok(mapped_message) => {
-                        if let Err(e) = tracker_handle.update(&mapped_message).await {
+                        if let Err(e) = tracker_handle
+                            .update(
+                                mapped_message.id.offset.clone(),
+                                mapped_message.tags.clone(),
+                            )
+                            .await
+                        {
                             error_tx.send(e).await.expect("failed to send error");
                             return;
                         }
