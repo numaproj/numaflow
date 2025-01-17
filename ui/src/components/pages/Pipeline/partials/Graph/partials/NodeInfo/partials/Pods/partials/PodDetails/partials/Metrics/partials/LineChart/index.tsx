@@ -24,49 +24,51 @@ interface TooltipProps {
   active?: boolean;
 }
 
-function CustomTooltip({ payload, label, active }: TooltipProps) {
+function CustomTooltip({ payload, label, active, patternName }: TooltipProps & { patternName: string }) {
   if (active && payload && payload.length) {
     const maxWidth = Math.max(...payload.map(entry => entry.name.length)) * 9.5;
-    console.log("max width: ", maxWidth)
     return (
       <div className="custom-tooltip" style={{ backgroundColor: '#fff', padding: '10px', border: '1px solid #ccc' }}>
         <p>{label}</p>
-        {payload.map((entry: any, index: any) => (
+        {payload.map((entry: any, index: any) => {
+          const formattedValue = getDefaultFormatter(entry.value, patternName);
+          return (
             <div key={`item-${index}`} style={{ display: 'flex' }}>
               <span style={{  width: `${maxWidth}px`, display: 'inline-block', paddingRight: '10px', color: entry.color }}>{entry.name}:</span>
-              <span style={{color: entry.color}}>{entry.value}</span>
+              <span style={{color: entry.color}}>{formattedValue}</span>
             </div>
-        ))}
+        );
+        })}
       </div>
     );
   }
-
   return null;
 }
 
-const getYAxisLabel = (unit: string) => {
+const getYAxisLabel = (unit: string, patternName: string) => {
   if (unit !== "") {
     return unit
   }
-  return "Units"
+  switch(patternName){
+    case "mono_vertex_histogram":
+      return ""
+    case "mono_vertex_cpu_memory_utilization_pod":
+    case "pipeline_vertex_cpu_memory_utilization_pod":
+      return "%"
+    default:
+      return "Units"
+  }
 };
 
-const getDefaultFormatter = (value: number, metricName: string) => {
+const getDefaultFormatter = (value: number, patternName: string) => {
   const formatValue = (value: number, suffix: string) => {
     const formattedValue = parseFloat(value.toFixed(2));
     return formattedValue % 1 === 0 
       ? `${Math.floor(formattedValue)}${suffix}` 
       : `${formattedValue}${suffix}`;
   };
-  switch(metricName){
-    case "monovtx_ack_time_bucket":
-    case "monovtx_read_time_bucket":
-    case "monovtx_processing_time_bucket":
-    case "monovtx_sink_time_bucket":
-    case "numaflow_monovtx_processing_time_bucket":
-    case "numaflow_monovtx_sink_time_bucket":
-    case "numaflow_monovtx_read_time_bucket":
-    case "numaflow_monovtx_ack_time_bucket":
+  switch(patternName){
+    case "mono_vertex_histogram":
       if (value === 0){
         return "0";
       } else if (value < 1000) {
@@ -89,7 +91,7 @@ const getDefaultFormatter = (value: number, metricName: string) => {
   }
 }
 
-const getTickFormatter = (unit: string, metricName: string) => {
+const getTickFormatter = (unit: string, patternName: string) => {
   const formatValue = (value: number) => {
     const formattedValue = parseFloat(value.toFixed(2));  // Format to 2 decimal places
     return formattedValue % 1 === 0 ? Math.floor(formattedValue) : formattedValue; // Remove trailing .0
@@ -101,7 +103,7 @@ const getTickFormatter = (unit: string, metricName: string) => {
       case 'ms':
         return `${formatValue(value / 1000)}`;
       default:
-        return getDefaultFormatter(value, metricName);
+        return getDefaultFormatter(value, patternName);
     }
   }
 };
@@ -118,6 +120,7 @@ const LineChartComponent = ({
   const [chartLabels, setChartLabels] = useState<any[]>([]);
   const [metricsReq, setMetricsReq] = useState<any>({
     metric_name: metric?.metric_name,
+    name: metric?.name,
   });
   const [paramsList, setParamsList] = useState<any[]>([]);
   // store all filters for each selected dimension
@@ -369,8 +372,8 @@ const LineChartComponent = ({
             <XAxis dataKey="time" padding={{ left: 30, right: 30 }} >
             </XAxis>
             <YAxis
-              label={<Text x={-160} y={15} dy={5} transform="rotate(-90)" fontSize={14} textAnchor="middle">{getYAxisLabel(metric?.unit)}</Text>}
-              tickFormatter={getTickFormatter(metric?.unit, metric?.metric_name)}
+              label={<Text x={-160} y={15} dy={5} transform="rotate(-90)" fontSize={14} textAnchor="middle">{getYAxisLabel(metric?.unit, metric?.name)}</Text>}
+              tickFormatter={getTickFormatter(metric?.unit, metric?.name)}
             />
             <CartesianGrid stroke="#f5f5f5">
             </CartesianGrid>
@@ -385,7 +388,7 @@ const LineChartComponent = ({
               />
             ))}
 
-            <Tooltip content={<CustomTooltip />}/>
+            <Tooltip content={<CustomTooltip patternName={metric?.name} />}/>
             <Legend />
           </LineChart>
         </ResponsiveContainer>

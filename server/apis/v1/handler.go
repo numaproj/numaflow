@@ -1340,7 +1340,7 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 					})
 				}
 
-				discoveredMetrics = append(discoveredMetrics, NewDiscoveryResponse(metric.Name, metric.DisplayName, metric.Unit, dimensionData))
+				discoveredMetrics = append(discoveredMetrics, NewDiscoveryResponse(pattern.Name, metric.Name, metric.DisplayName, metric.Unit, dimensionData))
 			}
 		}
 	}

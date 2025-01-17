@@ -11,13 +11,14 @@ const (
 )
 
 type MetricsRequestBody struct {
-	MetricName string            `json:"metric_name"`
-	Dimension  string            `json:"dimension"`
-	Filters    map[string]string `json:"filters"`
-	Duration   string            `json:"duration"`
-	Quantile   string            `json:"quantile"`
-	StartTime  string            `json:"start_time"`
-	EndTime    string            `json:"end_time"`
+	PatternName string            `json:"name"`
+	MetricName  string            `json:"metric_name"`
+	Dimension   string            `json:"dimension"`
+	Filters     map[string]string `json:"filters"`
+	Duration    string            `json:"duration"`
+	Quantile    string            `json:"quantile"`
+	StartTime   string            `json:"start_time"`
+	EndTime     string            `json:"end_time"`
 }
 
 type Filter struct {
