@@ -104,6 +104,8 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 		_ = reconciler.MonoVertexHealth.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
 		_ = reconciler.MonoVertexDesiredReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
 		_ = reconciler.MonoVertexCurrentReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
+		_ = reconciler.MonoVertexMaxReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
+		_ = reconciler.MonoVertexMinReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -188,6 +190,8 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 	defer func() {
 		reconciler.MonoVertexDesiredReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(desiredReplicas))
 		reconciler.MonoVertexCurrentReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(monoVtx.Status.Replicas))
+		reconciler.MonoVertexMinReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(monoVtx.Spec.Scale.GetMinReplicas()))
+		reconciler.MonoVertexMaxReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(monoVtx.Spec.Scale.GetMaxReplicas()))
 	}()
 
 	podSpec, err := mr.buildPodSpec(monoVtx)
