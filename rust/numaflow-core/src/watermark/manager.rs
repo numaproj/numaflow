@@ -1,6 +1,6 @@
 use crate::watermark::timeline::OffsetTimeline;
 use crate::watermark::WMB;
-use bytes::Buf;
+use prost::Message as ProtoMessage;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -52,9 +52,7 @@ impl Processor {
 }
 
 pub(crate) struct ProcessorManager {
-    partition_count: u16,
     processors: Arc<Mutex<HashMap<String, Processor>>>,
-    heartbeats: Arc<Mutex<HashMap<String, u32>>>,
     handles: Vec<tokio::task::JoinHandle<()>>,
 }
 
@@ -89,9 +87,7 @@ impl ProcessorManager {
         ));
 
         ProcessorManager {
-            partition_count,
             processors,
-            heartbeats,
             handles: vec![ot_handle, hb_handle, refresh_handle],
         }
     }
@@ -99,7 +95,7 @@ impl ProcessorManager {
     async fn start_refreshing_processors(
         refreshing_processors_rate: u16,
         processors: Arc<Mutex<HashMap<String, Processor>>>,
-        heartbeats: Arc<Mutex<HashMap<String, u32>>>,
+        heartbeats: Arc<Mutex<HashMap<String, i64>>>,
     ) {
         let mut interval =
             tokio::time::interval(Duration::from_secs(refreshing_processors_rate as u64));
@@ -115,9 +111,9 @@ impl ProcessorManager {
 
             for (p_name, &p_time) in heartbeats.iter() {
                 if let Some(p) = processors.get_mut(p_name) {
-                    if current_time - p_time as i64 > 10 * refreshing_processors_rate as i64 {
+                    if current_time - p_time > 10 * refreshing_processors_rate as i64 {
                         p.set_status(Status::Deleted);
-                    } else if current_time - p_time as i64 > refreshing_processors_rate as i64 {
+                    } else if current_time - p_time > refreshing_processors_rate as i64 {
                         p.set_status(Status::InActive);
                     } else {
                         p.set_status(Status::Active);
@@ -161,26 +157,29 @@ impl ProcessorManager {
     async fn start_hb_watcher(
         partition_count: u16,
         mut hb_watcher: async_nats::jetstream::kv::Watch,
-        heartbeats: Arc<Mutex<HashMap<String, u32>>>,
+        heartbeats: Arc<Mutex<HashMap<String, i64>>>,
         processors: Arc<Mutex<HashMap<String, Processor>>>,
     ) {
-        while let Ok(mut kv) = hb_watcher.next().await.unwrap() {
+        while let Ok(kv) = hb_watcher.next().await.unwrap() {
             match kv.operation {
                 async_nats::jetstream::kv::Operation::Put => {
                     info!("Received heartbeat from processor: {}", kv.key);
                     let processor_name = kv.key;
                     // convert Bytes to u32
-                    let hb: u32 = kv.value.get_u32();
+                    let hb = numaflow_pb::objects::watermark::Heartbeat::decode(kv.value)
+                        .expect("Failed to decode heartbeat")
+                        .heartbeat;
                     heartbeats.lock().await.insert(processor_name.clone(), hb);
                     // if the processor is not in the processors map, add it
                     // or if processor status is not active, set it to active
-                    if let Some(processor) = processors.lock().await.get_mut(&processor_name) {
+                    let mut processors = processors.lock().await;
+                    if let Some(processor) = processors.get_mut(&processor_name) {
                         if !processor.is_active() {
                             processor.set_status(Status::Active);
                         }
                     } else {
                         info!("Processor {} not found, adding it", processor_name);
-                        processors.lock().await.insert(
+                        processors.insert(
                             processor_name.clone(),
                             Processor::new(
                                 processor_name,

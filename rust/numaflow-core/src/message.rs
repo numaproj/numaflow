@@ -38,13 +38,13 @@ pub(crate) struct Message {
 }
 
 /// Offset of the message which will be used to acknowledge the message.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) enum Offset {
     Source(OffsetType),
     ISB(OffsetType),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) enum OffsetType {
     Int(IntOffset),
     String(StringOffset),
@@ -78,7 +78,7 @@ impl Message {
 }
 
 /// IntOffset is integer based offset enum type.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct IntOffset {
     pub(crate) offset: u64,
     pub(crate) partition_idx: u16,
@@ -100,7 +100,7 @@ impl fmt::Display for IntOffset {
 }
 
 /// StringOffset is string based offset enum type.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct StringOffset {
     /// offset could be a complex base64 string.
     pub(crate) offset: Bytes,
@@ -181,7 +181,7 @@ impl TryFrom<Message> for BytesMut {
         let proto_message = numaflow_pb::objects::isb::Message {
             header: Some(numaflow_pb::objects::isb::Header {
                 message_info: Some(numaflow_pb::objects::isb::MessageInfo {
-                    event_time: prost_timestamp_from_utc(message.event_time),
+                    event_time: Some(prost_timestamp_from_utc(message.event_time)),
                     is_late: false, // Set this according to your logic
                 }),
                 kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
@@ -259,7 +259,7 @@ mod tests {
         let proto_message = ProtoMessage {
             header: Some(Header {
                 message_info: Some(MessageInfo {
-                    event_time: prost_timestamp_from_utc(message.event_time),
+                    event_time: Some(prost_timestamp_from_utc(message.event_time)),
                     is_late: false,
                 }),
                 kind: numaflow_pb::objects::isb::MessageKind::Data as i32,

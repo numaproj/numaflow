@@ -419,9 +419,9 @@ mod tests {
                 offset: BASE64_STANDARD.encode("123").into_bytes(),
                 partition_id: 0,
             }),
-            event_time: Some(
-                prost_timestamp_from_utc(Utc.timestamp_opt(1627846261, 0).unwrap()).unwrap(),
-            ),
+            event_time: Some(prost_timestamp_from_utc(
+                Utc.timestamp_opt(1627846261, 0).unwrap(),
+            )),
             keys: vec!["key1".to_string()],
             headers: HashMap::new(),
         };

@@ -4,28 +4,62 @@ metadata:
   name: simple-pipeline
 spec:
   vertices:
-    - name: in
+    - name: input-one
       scale:
         min: 1
       # A self data generating source
       source:
         generator:
-          rpu: 1
+          rpu: 100
           duration: 1s
-    - name: cat
+    - name: input-two
+      scale:
+        min: 1
+      # A self data generating source
+      source:
+        generator:
+          rpu: 100
+          duration: 1s
+    - name: cat-one
+      partitions: 2
       scale:
         min: 1
       udf:
         container:
           image: quay.io/numaio/numaflow-go/map-forward-message:stable
-          imagePullPolicy: Always
+    - name: cat-two
+      partitions: 2
+      scale:
+        min: 1
+      udf:
+        container:
+          image: quay.io/numaio/numaflow-go/map-forward-message:stable
+    - name: counter
+      scale:
+        min: 1
+      udf:
+        groupBy:
+          window:
+            fixed:
+              length: 10s
+          keyed: true
+          storage:
+            emptyDir: { }
+        container:
+          image: quay.io/numaio/numaflow-go/reduce-counter:stable
     - name: out
       scale:
         min: 1
       sink:
         log: {}
   edges:
-    - from: in
-      to: cat
-    - from: cat
+    - from: input-one
+      to: cat-one
+    - from: input-two
+      to: cat-one
+    - from: cat-one
+      to: cat-two
+    - from: cat-two
+      to: counter
+    - from: counter
       to: out

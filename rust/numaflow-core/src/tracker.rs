@@ -27,19 +27,19 @@ struct TrackerEntry {
 /// ActorMessage represents the messages that can be sent to the Tracker actor.
 enum ActorMessage {
     Insert {
-        offset: String,
+        offset: Offset,
         ack_send: oneshot::Sender<ReadAck>,
     },
     Update {
-        offset: String,
+        offset: Offset,
         count: u32,
         eof: bool,
     },
     Delete {
-        offset: String,
+        offset: Offset,
     },
     Discard {
-        offset: String,
+        offset: Offset,
     },
     DiscardAll, // New variant for discarding all messages
     #[cfg(test)]
@@ -70,11 +70,14 @@ impl Drop for Tracker {
 
 impl Tracker {
     /// Creates a new Tracker instance with the given receiver for actor messages.
-    fn new(receiver: mpsc::Receiver<ActorMessage>) -> Self {
+    fn new(
+        receiver: mpsc::Receiver<ActorMessage>,
+        watermark_handle: Option<WatermarkHandle>,
+    ) -> Self {
         Self {
             entries: HashMap::new(),
             receiver,
-            watermark_handle: None,
+            watermark_handle,
         }
     }
 
@@ -92,16 +95,16 @@ impl Tracker {
                 offset,
                 ack_send: respond_to,
             } => {
-                self.handle_insert(offset, respond_to);
+                self.handle_insert(offset, respond_to).await;
             }
             ActorMessage::Update { offset, count, eof } => {
-                self.handle_update(offset, count, eof);
+                self.handle_update(offset, count, eof).await;
             }
             ActorMessage::Delete { offset } => {
-                self.handle_delete(offset);
+                self.handle_delete(offset).await;
             }
             ActorMessage::Discard { offset } => {
-                self.handle_discard(offset);
+                self.handle_discard(offset).await;
             }
             ActorMessage::DiscardAll => {
                 self.handle_discard_all().await;
@@ -115,9 +118,9 @@ impl Tracker {
     }
 
     /// Inserts a new entry into the tracker with the given offset and ack sender.
-    fn handle_insert(&mut self, offset: String, respond_to: oneshot::Sender<ReadAck>) {
+    async fn handle_insert(&mut self, offset: Offset, respond_to: oneshot::Sender<ReadAck>) {
         self.entries.insert(
-            offset,
+            offset.to_string(),
             TrackerEntry {
                 ack_send: respond_to,
                 count: 0,
@@ -127,27 +130,33 @@ impl Tracker {
     }
 
     /// Updates an existing entry in the tracker with the number of expected messages and EOF status.
-    fn handle_update(&mut self, offset: String, count: u32, eof: bool) {
-        if let Some(entry) = self.entries.get_mut(&offset) {
+    async fn handle_update(&mut self, offset: Offset, count: u32, eof: bool) {
+        if let Some(entry) = self.entries.get_mut(&offset.to_string()) {
             entry.count += count;
             entry.eof = eof;
             // if the count is zero, we can send an ack immediately
             // this is case where map stream will send eof true after
             // receiving all the messages.
             if entry.count == 0 {
-                let entry = self.entries.remove(&offset).unwrap();
+                let entry = self.entries.remove(&offset.to_string()).unwrap();
                 entry
                     .ack_send
                     .send(ReadAck::Ack)
                     .expect("Failed to send ack");
+                if let Some(watermark_handle) = &self.watermark_handle {
+                    watermark_handle
+                        .remove_offset(offset)
+                        .await
+                        .expect("Failed to remove offset");
+                }
             }
         }
     }
 
     /// Removes an entry from the tracker and sends an acknowledgment if the count is zero
     /// or the entry is marked as EOF.
-    fn handle_delete(&mut self, offset: String) {
-        if let Some(mut entry) = self.entries.remove(&offset) {
+    async fn handle_delete(&mut self, offset: Offset) {
+        if let Some(mut entry) = self.entries.remove(&offset.to_string()) {
             if entry.count > 0 {
                 entry.count -= 1;
             }
@@ -156,19 +165,31 @@ impl Tracker {
                     .ack_send
                     .send(ReadAck::Ack)
                     .expect("Failed to send ack");
+                if let Some(watermark_handle) = &self.watermark_handle {
+                    watermark_handle
+                        .remove_offset(offset)
+                        .await
+                        .expect("Failed to remove offset");
+                }
             } else {
-                self.entries.insert(offset, entry);
+                self.entries.insert(offset.to_string(), entry);
             }
         }
     }
 
     /// Discards an entry from the tracker and sends a nak.
-    fn handle_discard(&mut self, offset: String) {
-        if let Some(entry) = self.entries.remove(&offset) {
+    async fn handle_discard(&mut self, offset: Offset) {
+        if let Some(entry) = self.entries.remove(&offset.to_string()) {
             entry
                 .ack_send
                 .send(ReadAck::Nak)
                 .expect("Failed to send nak");
+            if let Some(watermark_handle) = &self.watermark_handle {
+                watermark_handle
+                    .remove_offset(offset)
+                    .await
+                    .expect("Failed to remove offset");
+            }
         }
     }
 
@@ -194,7 +215,7 @@ impl TrackerHandle {
     /// Creates a new TrackerHandle instance and spawns the Tracker.
     pub(crate) fn new(watermark_handle: Option<WatermarkHandle>) -> Self {
         let (sender, receiver) = mpsc::channel(100);
-        let tracker = Tracker::new(receiver);
+        let tracker = Tracker::new(receiver, watermark_handle);
         tokio::spawn(tracker.run());
         Self { sender }
     }
@@ -205,10 +226,7 @@ impl TrackerHandle {
         offset: Offset,
         ack_send: oneshot::Sender<ReadAck>,
     ) -> Result<()> {
-        let message = ActorMessage::Insert {
-            offset: offset.to_string(),
-            ack_send,
-        };
+        let message = ActorMessage::Insert { offset, ack_send };
         self.sender
             .send(message)
             .await
@@ -218,11 +236,7 @@ impl TrackerHandle {
 
     /// Updates an existing message in the Tracker with the given offset, count, and EOF status.
     pub(crate) async fn update(&self, offset: Offset, count: u32, eof: bool) -> Result<()> {
-        let message = ActorMessage::Update {
-            offset: offset.to_string(),
-            count,
-            eof,
-        };
+        let message = ActorMessage::Update { offset, count, eof };
         self.sender
             .send(message)
             .await
@@ -232,9 +246,7 @@ impl TrackerHandle {
 
     /// Deletes a message from the Tracker with the given offset.
     pub(crate) async fn delete(&self, offset: Offset) -> Result<()> {
-        let message = ActorMessage::Delete {
-            offset: offset.to_string(),
-        };
+        let message = ActorMessage::Delete { offset };
         self.sender
             .send(message)
             .await
@@ -244,9 +256,7 @@ impl TrackerHandle {
 
     /// Discards a message from the Tracker with the given offset.
     pub(crate) async fn discard(&self, offset: Offset) -> Result<()> {
-        let message = ActorMessage::Discard {
-            offset: offset.to_string(),
-        };
+        let message = ActorMessage::Discard { offset };
         self.sender
             .send(message)
             .await

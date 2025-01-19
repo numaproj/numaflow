@@ -27,8 +27,8 @@ impl From<Message> for SinkRequest {
             request: Some(numaflow_pb::clients::sink::sink_request::Request {
                 keys: message.keys.to_vec(),
                 value: message.value.to_vec(),
-                event_time: prost_timestamp_from_utc(message.event_time),
-                watermark: None,
+                event_time: Some(prost_timestamp_from_utc(message.event_time)),
+                watermark: message.watermark.map(prost_timestamp_from_utc),
                 id: message.id.to_string(),
                 headers: message.headers,
             }),

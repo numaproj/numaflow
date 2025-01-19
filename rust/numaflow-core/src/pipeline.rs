@@ -36,7 +36,7 @@ pub(crate) async fn start_forwarder(
     // create watermark handle, if watermark is enabled
     let watermark_handle = match &config.watermark_config {
         Some(wm) => {
-            if wm.disabled.unwrap_or(false) {
+            if wm.disabled.unwrap_or(true) {
                 Some(
                     WatermarkHandle::new(
                         js_context.clone(),
@@ -659,7 +659,6 @@ mod tests {
             from_vertex_config: vec![FromVertexConfig {
                 name: "in".to_string(),
                 reader_config: BufferReaderConfig {
-                    partitions: 5,
                     streams: streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
                 },
@@ -894,7 +893,6 @@ mod tests {
             from_vertex_config: vec![FromVertexConfig {
                 name: "map-in".to_string(),
                 reader_config: BufferReaderConfig {
-                    partitions: 5,
                     streams: input_streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
                 },

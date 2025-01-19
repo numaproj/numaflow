@@ -1,5 +1,6 @@
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::{FromVertexConfig, ToVertexConfig};
+use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::error::Result;
 use crate::message::{Offset, OffsetType};
@@ -21,7 +22,7 @@ mod timeline;
 type Watermark = DateTime<Utc>;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct WMB {
+pub(crate) struct WMB {
     pub idle: bool,
     pub offset: i64,
     pub watermark: i64,
@@ -32,7 +33,7 @@ impl TryFrom<Bytes> for WMB {
     type Error = Error;
 
     fn try_from(bytes: Bytes) -> std::result::Result<Self, Self::Error> {
-        let proto_wmb = numaflow_pb::objects::wmb::Wmb::decode(bytes)
+        let proto_wmb = numaflow_pb::objects::watermark::Wmb::decode(bytes)
             .map_err(|e| Error::Proto(e.to_string()))?;
 
         Ok(WMB {
@@ -49,7 +50,7 @@ impl TryFrom<WMB> for BytesMut {
 
     fn try_from(wmb: WMB) -> std::result::Result<Self, Self::Error> {
         let mut bytes = BytesMut::new();
-        let proto_wmb = numaflow_pb::objects::wmb::Wmb {
+        let proto_wmb = numaflow_pb::objects::watermark::Wmb {
             idle: wmb.idle,
             offset: wmb.offset,
             watermark: wmb.watermark,
@@ -231,7 +232,10 @@ impl WatermarkHandle {
         to_vertex_config: Vec<ToVertexConfig>,
     ) -> Result<Self> {
         let fetcher = Fetcher::new(js_context.clone(), from_vertex_config).await?;
-        let publisher = Publisher::new(js_context.clone(), to_vertex_config).await?;
+
+        let processor_name = format!("{}-{}", get_vertex_name(), get_vertex_replica());
+        let publisher =
+            Publisher::new(processor_name, js_context.clone(), to_vertex_config).await?;
 
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
 

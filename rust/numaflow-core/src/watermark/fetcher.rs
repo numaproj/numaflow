@@ -30,34 +30,48 @@ impl Fetcher {
                 .watermark_config
                 .expect("Watermark config not found");
 
+            info!(
+                "Creating bucket for ot and hb: {} {}",
+                config.ot_bucket, config.hb_bucket
+            );
+
             let ot_bucket = js_context
-                .create_key_value(async_nats::jetstream::kv::Config {
-                    bucket: config.ot_bucket.clone(),
-                    ..Default::default()
-                })
+                .get_key_value(config.ot_bucket.clone())
                 .await
-                .map_err(|e| Error::Watermark(e.to_string()))?;
+                .map_err(|e| {
+                    Error::Watermark(format!(
+                        "Failed to get kv bucket {}: {}",
+                        config.ot_bucket, e
+                    ))
+                })?;
+
+            info!("Created ot bucket");
 
             let hb_bucket = js_context
-                .create_key_value(async_nats::jetstream::kv::Config {
-                    bucket: config.hb_bucket.clone(),
-                    ..Default::default()
-                })
+                .get_key_value(config.hb_bucket.clone())
                 .await
-                .map_err(|e| Error::Watermark(e.to_string()))?;
+                .map_err(|e| {
+                    Error::Watermark(format!(
+                        "Failed to get kv bucket {}: {}",
+                        config.hb_bucket, e
+                    ))
+                })?;
 
-            let processor_manager = ProcessorManager::new(
-                from_vertex_config.partitions,
-                ot_bucket
-                    .watch_all()
-                    .await
-                    .map_err(|e| Error::Watermark(e.to_string()))?,
-                hb_bucket
-                    .watch_all()
-                    .await
-                    .map_err(|e| Error::Watermark(e.to_string()))?,
-            )
-            .await;
+            info!("Created hb bucket");
+
+            let processor_manager =
+                ProcessorManager::new(
+                    from_vertex_config.partitions,
+                    ot_bucket.watch_all().await.map_err(|e| {
+                        Error::Watermark(format!("Failed to watch ot bucket: {}", e))
+                    })?,
+                    hb_bucket.watch_all().await.map_err(|e| {
+                        Error::Watermark(format!("Failed to watch hb bucket: {}", e))
+                    })?,
+                )
+                .await;
+
+            info!("Created processor manager");
 
             processor_managers.insert(from_vertex_config.name.clone(), processor_manager);
             last_processed_wm.insert(
@@ -82,7 +96,7 @@ impl Fetcher {
             .num_milliseconds()
             < 100
         {
-            return Ok(self.last_fetched_wm[partition_idx as usize].1);
+            return Ok(self.last_fetched_wm[partition_idx as usize].0);
         }
 
         info!(
@@ -120,7 +134,7 @@ impl Fetcher {
         }
 
         let watermark = self.get_watermark().await?;
-        info!("Fetched watermark: {}", watermark);
+        info!("Fetched watermark: {}", watermark.timestamp_millis());
         self.last_fetched_wm[partition_idx as usize] = (watermark, Utc::now());
         Ok(watermark)
     }

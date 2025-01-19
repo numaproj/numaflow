@@ -33,8 +33,8 @@ impl From<Message> for MapRequest {
             request: Some(map::map_request::Request {
                 keys: message.keys.to_vec(),
                 value: message.value.to_vec(),
-                event_time: prost_timestamp_from_utc(message.event_time),
-                watermark: None,
+                event_time: Some(prost_timestamp_from_utc(message.event_time)),
+                watermark: message.watermark.map(prost_timestamp_from_utc),
                 headers: message.headers,
             }),
             id: message.offset.to_string(),

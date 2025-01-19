@@ -2,11 +2,6 @@ use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
 
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
-use numaflow_models::models::{ForwardConditions, Vertex, Watermark};
-use serde_json::from_slice;
-
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
@@ -18,6 +13,11 @@ use crate::config::pipeline::map::MapMode;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::error::Error;
 use crate::Result;
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use numaflow_models::models::{ForwardConditions, Vertex, Watermark};
+use serde_json::from_slice;
+use tracing::info;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
@@ -214,6 +214,8 @@ impl PipelineConfig {
         let vertex_obj: Vertex = from_slice(&decoded_spec)
             .map_err(|e| Error::Config(format!("Failed to parse pipeline spec: {:?}", e)))?;
 
+        info!("Loaded pipeline spec: {:?}", vertex_obj);
+
         let pipeline_name = vertex_obj.spec.pipeline_name;
         let vertex_name = vertex_obj.spec.name;
         let replica = get_vertex_replica();
@@ -331,14 +333,22 @@ impl PipelineConfig {
                 .collect();
 
             from_vertex_config.push(FromVertexConfig {
-                name: edge.from,
+                name: edge.from.clone(),
                 reader_config: BufferReaderConfig {
-                    partitions: partition_count,
                     streams,
                     ..Default::default()
                 },
-                partitions: 0,
-                watermark_config: None,
+                partitions: partition_count,
+                watermark_config: Some(WatermarkBucketConfig {
+                    ot_bucket: format!(
+                        "{}-{}-{}-{}_OT",
+                        namespace, pipeline_name, &edge.from, &edge.to
+                    ),
+                    hb_bucket: format!(
+                        "{}-{}-{}-{}_PROCESSORS",
+                        namespace, pipeline_name, &edge.from, &edge.to
+                    ),
+                }),
             });
         }
 
@@ -359,7 +369,7 @@ impl PipelineConfig {
 
             let default_writer_config = BufferWriterConfig::default();
             to_vertex_config.push(ToVertexConfig {
-                name: edge.to,
+                name: edge.to.clone(),
                 writer_config: BufferWriterConfig {
                     streams,
                     partitions: partition_count,
@@ -382,7 +392,16 @@ impl PipelineConfig {
                         .unwrap_or(default_writer_config.buffer_full_strategy),
                 },
                 conditions: edge.conditions,
-                watermark_config: None,
+                watermark_config: Some(WatermarkBucketConfig {
+                    ot_bucket: format!(
+                        "{}-{}-{}-{}_OT",
+                        namespace, pipeline_name, &edge.from, &edge.to
+                    ),
+                    hb_bucket: format!(
+                        "{}-{}-{}-{}_PROCESSORS",
+                        namespace, pipeline_name, &edge.from, &edge.to
+                    ),
+                }),
             });
         }
 
@@ -408,11 +427,7 @@ impl PipelineConfig {
             to_vertex_config,
             vertex_config: vertex,
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
-            watermark_config: Some(Box::new(Watermark {
-                disabled: None,
-                idle_source: None,
-                max_delay: None,
-            })),
+            watermark_config: vertex_obj.spec.watermark,
         })
     }
 }
@@ -491,11 +506,10 @@ mod tests {
             from_vertex_config: vec![FromVertexConfig {
                 name: "in".to_string(),
                 reader_config: BufferReaderConfig {
-                    partitions: 1,
                     streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
                     wip_ack_interval: Duration::from_secs(1),
                 },
-                partitions: 0,
+                partitions: 1,
                 watermark_config: None,
             }],
             to_vertex_config: vec![],
@@ -720,11 +734,10 @@ mod tests {
             from_vertex_config: vec![FromVertexConfig {
                 name: "in".to_string(),
                 reader_config: BufferReaderConfig {
-                    partitions: 1,
                     streams: vec![Stream::new("default-simple-pipeline-map-0", "map", 0)],
                     wip_ack_interval: Duration::from_secs(1),
                 },
-                partitions: 0,
+                partitions: 1,
                 watermark_config: None,
             }],
             to_vertex_config: vec![],

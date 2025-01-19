@@ -206,7 +206,7 @@ impl JetstreamReader {
                             if let Some(watermark_handle) = watermark_handle.as_ref() {
                                 let watermark = watermark_handle.fetch_watermark(offset.clone()).await?;
                                 message.watermark = Some(watermark);
-                                info!("Fetched watermark {:?} for offset {:?}", watermark, offset);
+                                info!("Fetched watermark {} for offset {}", watermark.timestamp_millis(), offset);
                             }
 
                             // Insert the message into the tracker and wait for the ack to be sent back.
@@ -376,7 +376,6 @@ mod tests {
             .unwrap();
 
         let buf_reader_config = BufferReaderConfig {
-            partitions: 0,
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
@@ -474,7 +473,6 @@ mod tests {
             .unwrap();
 
         let buf_reader_config = BufferReaderConfig {
-            partitions: 0,
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };

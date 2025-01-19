@@ -81,7 +81,7 @@ pub async fn run() -> Result<()> {
             }
         }
         CustomResourceType::Pipeline(config) => {
-            info!("Started pipeline forwarder with config: {:?}", config);
+            info!("Starting pipeline forwarder with config: {:?}", config);
             if let Err(e) = pipeline::start_forwarder(cln_token, config).await {
                 error!("Application error running pipeline: {:?}", e);
 

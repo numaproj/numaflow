@@ -26,7 +26,9 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
+	"google.golang.org/protobuf/proto"
 
+	wmbpb "github.com/numaproj/numaflow/pkg/apis/proto/watermark"
 	"github.com/numaproj/numaflow/pkg/isb"
 	natsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	natstest "github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
@@ -1693,7 +1695,12 @@ func manageHeartbeat(ctx context.Context, entityName string, hbStore kvs.KVStore
 				start = !start
 			default:
 				if start {
-					_ = hbStore.PutKV(ctx, entityName, []byte(fmt.Sprintf("%d", time.Now().Unix())))
+					hb := wmbpb.Heartbeat{Heartbeat: time.Now().Unix()}
+					marshal, err := proto.Marshal(&hb)
+					if err != nil {
+						return
+					}
+					_ = hbStore.PutKV(ctx, entityName, marshal)
 				}
 				time.Sleep(100 * time.Millisecond)
 			}
