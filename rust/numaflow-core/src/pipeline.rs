@@ -61,18 +61,20 @@ async fn start_source_forwarder(
     )
     .await;
 
-    let (source, source_grpc_client) = create_components::create_source(
+    let (transformer, transformer_grpc_client) = create_components::create_transformer(
         config.batch_size,
-        config.read_timeout,
-        &source_config.source_config,
+        source_config.transformer_config.clone(),
         tracker_handle.clone(),
         cln_token.clone(),
     )
     .await?;
-    let (transformer, transformer_grpc_client) = create_components::create_transformer(
+
+    let (source, source_grpc_client) = create_components::create_source(
         config.batch_size,
-        source_config.transformer_config.clone(),
+        config.read_timeout,
+        &source_config.source_config,
         tracker_handle,
+        transformer,
         cln_token.clone(),
     )
     .await?;
@@ -94,13 +96,7 @@ async fn start_source_forwarder(
     .await;
 
     let forwarder =
-        source_forwarder::SourceForwarderBuilder::new(source, buffer_writer, cln_token.clone());
-
-    let forwarder = if let Some(transformer) = transformer {
-        forwarder.with_transformer(transformer).build()
-    } else {
-        forwarder.build()
-    };
+        source_forwarder::SourceForwarder::new(source, buffer_writer, cln_token.clone());
 
     forwarder.start().await?;
     Ok(())
