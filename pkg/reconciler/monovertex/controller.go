@@ -68,7 +68,7 @@ func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	monoVtx := &dfv1.MonoVertex{}
 	if err := mr.client.Get(ctx, req.NamespacedName, monoVtx); err != nil {
 		if apierrors.IsNotFound(err) {
-			// Clean up metrics here, since there's a finalizer defined for MonoVertex
+			// Clean up metrics here, since there's a finalizer defined for MonoVertex, best effort
 			cleanupMetrics(req.NamespacedName.Namespace, req.NamespacedName.Name)
 			return reconcile.Result{}, nil
 		}
@@ -102,7 +102,7 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 	if !monoVtx.DeletionTimestamp.IsZero() {
 		log.Info("Deleting mono vertex")
 		mr.scaler.StopWatching(mVtxKey)
-		// Clean up metrics
+		// Clean up metrics, best effort
 		cleanupMetrics(monoVtx.Namespace, monoVtx.Name)
 		return ctrl.Result{}, nil
 	}
