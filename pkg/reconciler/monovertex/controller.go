@@ -68,7 +68,7 @@ func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	monoVtx := &dfv1.MonoVertex{}
 	if err := mr.client.Get(ctx, req.NamespacedName, monoVtx); err != nil {
 		if apierrors.IsNotFound(err) {
-			// Clean up metrics here, since there's a finalizer defined for MonoVertex, best effort
+			// Clean up metrics here, since there's no finalizer defined for MonoVertex objects, best effort
 			cleanupMetrics(req.NamespacedName.Namespace, req.NamespacedName.Name)
 			return reconcile.Result{}, nil
 		}
