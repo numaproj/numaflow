@@ -102,6 +102,8 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 	if !monoVtx.DeletionTimestamp.IsZero() {
 		log.Info("Deleting mono vertex")
 		mr.scaler.StopWatching(mVtxKey)
+		// Clean up metrics
+		cleanupMetrics(monoVtx.Namespace, monoVtx.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -619,7 +621,7 @@ func (mr *monoVertexReconciler) checkChildrenResourceStatus(ctx context.Context,
 	return nil
 }
 
-// Clean up metrics when corresponding mvtx is deleted
+// Clean up metrics, should be called when corresponding mvtx is deleted
 func cleanupMetrics(namespace, mvtx string) {
 	_ = reconciler.MonoVertexHealth.DeleteLabelValues(namespace, mvtx)
 	_ = reconciler.MonoVertexDesiredReplicas.DeleteLabelValues(namespace, mvtx)
