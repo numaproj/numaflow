@@ -22,12 +22,12 @@ import (
 	"time"
 
 	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/numaproj/numaflow/pkg/isb"
-	sdkerr "github.com/numaproj/numaflow/pkg/sdkclient/error"
 	"github.com/numaproj/numaflow/pkg/sdkclient/mapper"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
@@ -36,18 +36,20 @@ import (
 type GRPCBasedMap struct {
 	vertexName string
 	client     mapper.Client
+	log        *zap.SugaredLogger
 }
 
-func NewUDSgRPCBasedMap(vertexName string, client mapper.Client) *GRPCBasedMap {
+func NewUDSgRPCBasedMap(ctx context.Context, client mapper.Client, vertexName string) *GRPCBasedMap {
 	return &GRPCBasedMap{
 		vertexName: vertexName,
 		client:     client,
+		log:        logging.FromContext(ctx),
 	}
 }
 
-// CloseConn closes the gRPC client connection.
-func (u *GRPCBasedMap) CloseConn(ctx context.Context) error {
-	return u.client.CloseConn(ctx)
+// Close closes the gRPC client connection.
+func (u *GRPCBasedMap) Close() error {
+	return u.client.CloseConn()
 }
 
 // IsHealthy checks if the map udf is healthy.
@@ -73,98 +75,142 @@ func (u *GRPCBasedMap) WaitUntilReady(ctx context.Context) error {
 	}
 }
 
-func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessage *isb.ReadMessage) ([]*isb.WriteMessage, error) {
-	keys := readMessage.Keys
-	payload := readMessage.Body.Payload
-	parentMessageInfo := readMessage.MessageInfo
-	var req = &mappb.MapRequest{
-		Keys:      keys,
-		Value:     payload,
-		EventTime: timestamppb.New(parentMessageInfo.EventTime),
-		Watermark: timestamppb.New(readMessage.Watermark),
-		Headers:   readMessage.Headers,
-	}
+func (u *GRPCBasedMap) ApplyMap(ctx context.Context, readMessages []*isb.ReadMessage) ([]isb.ReadWriteMessagePair, error) {
+	requests := make([]*mappb.MapRequest, len(readMessages))
+	results := make([]isb.ReadWriteMessagePair, len(readMessages))
+	idToMsgMapping := make(map[string]*isb.ReadMessage)
 
-	response, err := u.client.MapFn(ctx, req)
-	if err != nil {
-		udfErr, _ := sdkerr.FromError(err)
-		switch udfErr.ErrorKind() {
-		case sdkerr.Retryable:
-			var success bool
-			_ = wait.ExponentialBackoffWithContext(ctx, wait.Backoff{
-				// retry every "duration * factor + [0, jitter]" interval for 5 times
-				Duration: 1 * time.Second,
-				Factor:   1,
-				Jitter:   0.1,
-				Steps:    5,
-			}, func(_ context.Context) (done bool, err error) {
-				response, err = u.client.MapFn(ctx, req)
-				if err != nil {
-					udfErr, _ = sdkerr.FromError(err)
-					switch udfErr.ErrorKind() {
-					case sdkerr.Retryable:
-						return false, nil
-					case sdkerr.NonRetryable:
-						return true, nil
-					default:
-						return true, nil
-					}
-				}
-				success = true
-				return true, nil
-			})
-			if !success {
-				return nil, &ApplyUDFErr{
-					UserUDFErr: false,
-					Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
-					InternalErr: InternalErr{
-						Flag:        true,
-						MainCarDown: false,
-					},
-				}
-			}
-		case sdkerr.NonRetryable:
-			return nil, &ApplyUDFErr{
-				UserUDFErr: false,
-				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
-				InternalErr: InternalErr{
-					Flag:        true,
-					MainCarDown: false,
-				},
-			}
-		default:
-			return nil, &ApplyUDFErr{
-				UserUDFErr: false,
-				Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
-				InternalErr: InternalErr{
-					Flag:        true,
-					MainCarDown: false,
-				},
-			}
-		}
-	}
-
-	writeMessages := make([]*isb.WriteMessage, 0)
-	for index, result := range response.GetResults() {
-		keys := result.Keys
-		taggedMessage := &isb.WriteMessage{
-			Message: isb.Message{
-				Header: isb.Header{
-					MessageInfo: parentMessageInfo,
-					Keys:        keys,
-					ID: isb.MessageID{
-						VertexName: u.vertexName,
-						Offset:     readMessage.ReadOffset.String(),
-						Index:      int32(index),
-					},
-				},
-				Body: isb.Body{
-					Payload: result.Value,
-				},
+	for i, msg := range readMessages {
+		// we track the id to the message mapping to be able to match the response with the original message.
+		// message info of response should be the same as the message info of the request.
+		id := msg.ReadOffset.String()
+		idToMsgMapping[id] = msg
+		req := &mappb.MapRequest{
+			Request: &mappb.MapRequest_Request{
+				Keys:      msg.Keys,
+				Value:     msg.Body.Payload,
+				EventTime: timestamppb.New(msg.MessageInfo.EventTime),
+				Watermark: timestamppb.New(msg.Watermark),
+				Headers:   msg.Headers,
 			},
-			Tags: result.Tags,
+			Id: id,
 		}
-		writeMessages = append(writeMessages, taggedMessage)
+		requests[i] = req
 	}
-	return writeMessages, nil
+
+	responses, err := u.client.MapFn(ctx, requests)
+
+	if err != nil {
+		err = &ApplyUDFErr{
+			UserUDFErr: false,
+			Message:    fmt.Sprintf("gRPC client.MapFn failed, %s", err),
+			InternalErr: InternalErr{
+				Flag:        true,
+				MainCarDown: false,
+			},
+		}
+		return nil, err
+	}
+
+	for i, resp := range responses {
+		parentMessage, ok := idToMsgMapping[resp.GetId()]
+		if !ok {
+			panic("tracker doesn't contain the message ID received from the response - " + resp.GetId())
+		}
+		taggedMessages := make([]*isb.WriteMessage, len(resp.GetResults()))
+		for j, result := range resp.GetResults() {
+			keys := result.Keys
+			taggedMessage := &isb.WriteMessage{
+				Message: isb.Message{
+					Header: isb.Header{
+						MessageInfo: parentMessage.MessageInfo,
+						ID: isb.MessageID{
+							VertexName: u.vertexName,
+							Offset:     parentMessage.ReadOffset.String(),
+							Index:      int32(j),
+						},
+						Keys: keys,
+					},
+					Body: isb.Body{
+						Payload: result.Value,
+					},
+				},
+				Tags: result.Tags,
+			}
+			taggedMessage.Headers = parentMessage.Headers
+			taggedMessages[j] = taggedMessage
+		}
+		results[i] = isb.ReadWriteMessagePair{
+			ReadMessage:   parentMessage,
+			WriteMessages: taggedMessages,
+		}
+	}
+	return results, nil
+}
+
+func (u *GRPCBasedMap) ApplyMapStream(ctx context.Context, message *isb.ReadMessage, writeMessageCh chan<- isb.WriteMessage) error {
+	defer close(writeMessageCh)
+
+	keys := message.Keys
+	payload := message.Body.Payload
+	offset := message.ReadOffset
+	parentMessageInfo := message.MessageInfo
+
+	var d = &mappb.MapRequest{
+		Request: &mappb.MapRequest_Request{
+			Keys:      keys,
+			Value:     payload,
+			EventTime: timestamppb.New(parentMessageInfo.EventTime),
+			Watermark: timestamppb.New(message.Watermark),
+			Headers:   message.Headers,
+		},
+		Id: offset.String(),
+	}
+
+	responseCh := make(chan *mappb.MapResponse)
+	errs, ctx := errgroup.WithContext(ctx)
+	errs.Go(func() error {
+		err := u.client.MapStreamFn(ctx, d, responseCh)
+		if err != nil {
+			err = &ApplyUDFErr{
+				UserUDFErr: false,
+				Message:    fmt.Sprintf("gRPC client.MapStreamFn failed, %s", err),
+				InternalErr: InternalErr{
+					Flag:        true,
+					MainCarDown: false,
+				},
+			}
+			return err
+		}
+		return nil
+	})
+
+	i := 0
+	for response := range responseCh {
+		results := response.GetResults()
+		for _, result := range results {
+			i++
+			keys := result.GetKeys()
+			taggedMessage := &isb.WriteMessage{
+				Message: isb.Message{
+					Header: isb.Header{
+						MessageInfo: parentMessageInfo,
+						ID: isb.MessageID{
+							VertexName: u.vertexName,
+							Offset:     offset.String(),
+							Index:      int32(i),
+						},
+						Keys: keys,
+					},
+					Body: isb.Body{
+						Payload: result.GetValue(),
+					},
+				},
+				Tags: result.GetTags(),
+			}
+			writeMessageCh <- *taggedMessage
+		}
+	}
+
+	return errs.Wait()
 }

@@ -27,6 +27,7 @@ import (
 func RunNatsServer(t *testing.T) *server.Server {
 	t.Helper()
 	opts := natstestserver.DefaultTestOptions
+	opts.Port = -1 // Use random port to avoid conflicts
 	return natstestserver.RunServer(&opts)
 }
 
@@ -34,7 +35,7 @@ func RunNatsServer(t *testing.T) *server.Server {
 func RunJetStreamServer(t *testing.T) *server.Server {
 	t.Helper()
 	opts := natstestserver.DefaultTestOptions
-	opts.Port = -1 // Random port
+	opts.Port = -1 // Use random port to avoid conflicts
 	opts.JetStream = true
 	storeDir, err := os.MkdirTemp("", "")
 	if err != nil {

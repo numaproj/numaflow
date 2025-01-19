@@ -149,3 +149,64 @@ func TestCompareSlice(t *testing.T) {
 		})
 	}
 }
+
+func TestDNS1035(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "simple lowercase conversion",
+			input:    "HELLO",
+			expected: "hello",
+		},
+		{
+			name:     "replace special characters",
+			input:    "hello@world!123",
+			expected: "hello-world-123",
+		},
+		{
+			name:     "multiple consecutive special chars",
+			input:    "hello!!!world###123",
+			expected: "hello-world-123",
+		},
+		{
+			name:     "spaces and underscores",
+			input:    "hello_world space test",
+			expected: "hello-world-space-test",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "only special characters",
+			input:    "@#$%^&*",
+			expected: "-",
+		},
+		{
+			name:     "mixed case with numbers and hyphens",
+			input:    "My-Cool-Service123",
+			expected: "my-cool-service123",
+		},
+		{
+			name:     "unicode characters",
+			input:    "héllo→wörld",
+			expected: "h-llo-w-rld",
+		},
+		{
+			name:     "empty",
+			input:    "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := DNS1035(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

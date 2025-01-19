@@ -83,7 +83,10 @@ func GetValidator(ctx context.Context, NumaClient v1alpha1.NumaflowV1alpha1Inter
 
 // DeniedResponse constructs a denied AdmissionResponse
 func DeniedResponse(reason string, args ...interface{}) *admissionv1.AdmissionResponse {
-	result := apierrors.NewBadRequest(fmt.Sprintf(reason, args...)).Status()
+	if len(args) > 0 {
+		reason = fmt.Sprintf(reason, args)
+	}
+	result := apierrors.NewBadRequest(reason).Status()
 	return &admissionv1.AdmissionResponse{
 		Result:  &result,
 		Allowed: false,

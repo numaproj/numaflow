@@ -44,8 +44,6 @@ type options struct {
 	unaryMapUdfApplier applier.MapApplier
 	// streamMapUdfApplier is the UDF applier for a server streaming map mode
 	streamMapUdfApplier applier.MapStreamApplier
-	// batchMapUdfApplier is the UDF applier for a batch map mode
-	batchMapUdfApplier applier.BatchMapApplier
 }
 
 type Option func(*options) error
@@ -57,7 +55,6 @@ func DefaultOptions() *options {
 		retryInterval:       time.Millisecond,
 		logger:              logging.NewLogger(),
 		unaryMapUdfApplier:  nil,
-		batchMapUdfApplier:  nil,
 		streamMapUdfApplier: nil,
 	}
 }
@@ -114,23 +111,11 @@ func WithCallbackUploader(cp *callback.Uploader) Option {
 // exactly one of the appliers should not be nil as only one mode can be active at a time, not more not less only 1
 // There is a case where none of them is set which cannot be allowed
 
-// WithUDFBatchMap enables the batch map for UDF if provided with a non-nil applier
-func WithUDFBatchMap(f applier.BatchMapApplier) Option {
+// WithUDFMap enables the unary map for UDF if provided with a non-nil applier
+func WithUDFMap(f applier.MapApplier) Option {
 	return func(o *options) error {
 		// only overwrite for the same option is allowed, other two cannot be set
-		if f != nil && o.unaryMapUdfApplier == nil && o.streamMapUdfApplier == nil {
-			o.batchMapUdfApplier = f
-			return nil
-		}
-		return fmt.Errorf("invalid option")
-	}
-}
-
-// WithUDFUnaryMap enables the unary map for UDF if provided with a non-nil applier
-func WithUDFUnaryMap(f applier.MapApplier) Option {
-	return func(o *options) error {
-		// only overwrite for the same option is allowed, other two cannot be set
-		if f != nil && o.batchMapUdfApplier == nil && o.streamMapUdfApplier == nil {
+		if f != nil && o.streamMapUdfApplier == nil {
 			o.unaryMapUdfApplier = f
 			return nil
 		}
@@ -142,7 +127,7 @@ func WithUDFUnaryMap(f applier.MapApplier) Option {
 func WithUDFStreamingMap(f applier.MapStreamApplier) Option {
 	return func(o *options) error {
 		// only overwrite for the same option is allowed, other two cannot be set
-		if f != nil && o.unaryMapUdfApplier == nil && o.batchMapUdfApplier == nil {
+		if f != nil && o.unaryMapUdfApplier == nil {
 			o.streamMapUdfApplier = f
 			return nil
 		}

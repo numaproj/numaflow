@@ -27,8 +27,9 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
-	sdkserverinfo "github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
+	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sideinput"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
@@ -83,10 +84,11 @@ func (sim *sideInputsManager) Start(ctx context.Context) error {
 	}
 
 	// Wait for server info to be ready
-	serverInfo, err := sdkserverinfo.SDKServerInfo(sdkserverinfo.WithServerInfoFilePath(sdkclient.SideInputServerInfoFile))
+	serverInfo, err := serverinfo.SDKServerInfo(serverinfo.WithServerInfoFilePath(sdkclient.SideInputServerInfoFile))
 	if err != nil {
 		return err
 	}
+	metrics.SDKInfo.WithLabelValues(dfv1.ComponentSideInputManager, fmt.Sprintf("%s-%s", sim.pipelineName, sim.sideInput.Name), string(serverinfo.ContainerTypeSideinput), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
 	// Create a new gRPC client for Side Input
 	sideInputClient, err := sideinput.New(serverInfo)

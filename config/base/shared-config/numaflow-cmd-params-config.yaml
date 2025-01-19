@@ -17,7 +17,7 @@ data:
   #   The configuration has to be: lease.duration > lease.renew.deadline > lease.renew.period
   # controller.leader.election.lease.duration: 15s
   #
-  ### The duration that the acting controlplane will retry refreshing leadership before giving up. 
+  ### The duration that the acting controlplane will retry refreshing leadership before giving up.
   #   Default value is 10 seconds.
   #   The configuration has to be: lease.duration > lease.renew.deadline > lease.renew.period
   # controller.leader.election.lease.renew.deadline: 10s

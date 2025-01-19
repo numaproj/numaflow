@@ -44,6 +44,16 @@ func TestValidateISBServiceUpdate(t *testing.T) {
 		{name: "changing ISB Service type is not allowed - redis to jetstream", old: fakeRedisISBSvc(), new: fakeJetStreamISBSvc(), want: false},
 		{name: "changing ISB Service type is not allowed - jetstream to redis", old: fakeJetStreamISBSvc(), new: fakeRedisISBSvc(), want: false},
 		{name: "valid new ISBSvc spec", old: fakeRedisISBSvc(), new: fakeRedisISBSvc(), want: true},
+		{name: "updating instance annotation is not allowed - jetstream", old: fakeJetStreamISBSvc(),
+			new: &dfv1.InterStepBufferService{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: testNamespace,
+					Name:      dfv1.DefaultISBSvcName,
+					Annotations: map[string]string{
+						dfv1.KeyInstance: "test",
+					},
+				},
+				Spec: fakeJetStreamISBSvc().Spec}, want: false},
 		{name: "removing persistence is not allowed - jetstream", old: fakeJetStreamISBSvc(),
 			new: &dfv1.InterStepBufferService{
 				ObjectMeta: metav1.ObjectMeta{

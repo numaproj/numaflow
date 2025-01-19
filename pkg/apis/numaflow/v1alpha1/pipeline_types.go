@@ -200,6 +200,8 @@ func (p Pipeline) GetDaemonDeploymentName() string {
 }
 
 func (p Pipeline) GetDaemonServiceURL() string {
+	// Note: the format of the URL is also used in `server/apis/v1/handler.go`
+	// Do not change it without updating the handler.
 	return fmt.Sprintf("%s.%s.svc:%d", p.GetDaemonServiceName(), p.Namespace, DaemonServicePort)
 }
 
@@ -417,10 +419,10 @@ func (p Pipeline) GetPipelineLimits() PipelineLimits {
 }
 
 type Lifecycle struct {
-	// DeleteGracePeriodSeconds used to delete pipeline gracefully
+	// DeletionGracePeriodSeconds used to delete pipeline gracefully
 	// +kubebuilder:default=30
 	// +optional
-	DeleteGracePeriodSeconds *int32 `json:"deleteGracePeriodSeconds,omitempty" protobuf:"varint,1,opt,name=deleteGracePeriodSeconds"`
+	DeletionGracePeriodSeconds *int64 `json:"deletionGracePeriodSeconds,omitempty" protobuf:"varint,1,opt,name=deletionGracePeriodSeconds"`
 	// DesiredPhase used to bring the pipeline from current phase to desired phase
 	// +kubebuilder:default=Running
 	// +optional
@@ -428,28 +430,39 @@ type Lifecycle struct {
 	// PauseGracePeriodSeconds used to pause pipeline gracefully
 	// +kubebuilder:default=30
 	// +optional
-	PauseGracePeriodSeconds *int32 `json:"pauseGracePeriodSeconds,omitempty" protobuf:"varint,3,opt,name=pauseGracePeriodSeconds"`
+	PauseGracePeriodSeconds *int64 `json:"pauseGracePeriodSeconds,omitempty" protobuf:"varint,3,opt,name=pauseGracePeriodSeconds"`
+	// DeleteGracePeriodSeconds used to delete pipeline gracefully
+	// +kubebuilder:default=30
+	// Deprecated: Use DeletionGracePeriodSeconds instead
+	// +optional
+	DeprecatedDeleteGracePeriodSeconds *int64 `json:"deleteGracePeriodSeconds,omitempty" protobuf:"varint,4,opt,name=deleteGracePeriodSeconds"`
 }
 
-// GetDeleteGracePeriodSeconds returns the value DeleteGracePeriodSeconds.
-func (lc Lifecycle) GetDeleteGracePeriodSeconds() int32 {
-	if lc.DeleteGracePeriodSeconds != nil {
-		return *lc.DeleteGracePeriodSeconds
+// GetTerminationGracePeriodSeconds returns the value DeleteGracePeriodSeconds.
+func (p Pipeline) GetTerminationGracePeriodSeconds() int64 {
+	if p.Spec.Lifecycle.DeletionGracePeriodSeconds != nil {
+		return *p.Spec.Lifecycle.DeletionGracePeriodSeconds
+	}
+	if p.Spec.Lifecycle.DeprecatedDeleteGracePeriodSeconds != nil {
+		return *p.Spec.Lifecycle.DeprecatedDeleteGracePeriodSeconds
+	}
+	if p.DeletionGracePeriodSeconds != nil {
+		return *p.DeletionGracePeriodSeconds
 	}
 	return 30
 }
 
-func (lc Lifecycle) GetDesiredPhase() PipelinePhase {
-	if string(lc.DesiredPhase) != "" {
-		return lc.DesiredPhase
+func (p Pipeline) GetDesiredPhase() PipelinePhase {
+	if string(p.Spec.Lifecycle.DesiredPhase) != "" {
+		return p.Spec.Lifecycle.DesiredPhase
 	}
 	return PipelinePhaseRunning
 }
 
 // return PauseGracePeriodSeconds if set
-func (lc Lifecycle) GetPauseGracePeriodSeconds() int32 {
-	if lc.PauseGracePeriodSeconds != nil {
-		return *lc.PauseGracePeriodSeconds
+func (p Pipeline) GetPauseGracePeriodSeconds() int64 {
+	if p.Spec.Lifecycle.PauseGracePeriodSeconds != nil {
+		return *p.Spec.Lifecycle.PauseGracePeriodSeconds
 	}
 	return 30
 }
@@ -609,17 +622,32 @@ type PipelineLimits struct {
 }
 
 type PipelineStatus struct {
-	Status             `json:",inline" protobuf:"bytes,1,opt,name=status"`
-	Phase              PipelinePhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=PipelinePhase"`
-	Message            string        `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
-	LastUpdated        metav1.Time   `json:"lastUpdated,omitempty" protobuf:"bytes,4,opt,name=lastUpdated"`
-	VertexCount        *uint32       `json:"vertexCount,omitempty" protobuf:"varint,5,opt,name=vertexCount"`
-	SourceCount        *uint32       `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
-	SinkCount          *uint32       `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
-	UDFCount           *uint32       `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
-	MapUDFCount        *uint32       `json:"mapUDFCount,omitempty" protobuf:"varint,9,opt,name=mapUDFCount"`
-	ReduceUDFCount     *uint32       `json:"reduceUDFCount,omitempty" protobuf:"varint,10,opt,name=reduceUDFCount"`
-	ObservedGeneration int64         `json:"observedGeneration,omitempty" protobuf:"varint,11,opt,name=observedGeneration"`
+	Status `json:",inline" protobuf:"bytes,1,opt,name=status"`
+	// +optional
+	Phase PipelinePhase `json:"phase,omitempty" protobuf:"bytes,2,opt,name=phase,casttype=PipelinePhase"`
+	// +optional
+	Message string `json:"message,omitempty" protobuf:"bytes,3,opt,name=message"`
+	// +optional
+	LastUpdated metav1.Time `json:"lastUpdated,omitempty" protobuf:"bytes,4,opt,name=lastUpdated"`
+	// +optional
+	VertexCount *uint32 `json:"vertexCount,omitempty" protobuf:"varint,5,opt,name=vertexCount"`
+	// +optional
+	SourceCount *uint32 `json:"sourceCount,omitempty" protobuf:"varint,6,opt,name=sourceCount"`
+	// +optional
+	SinkCount *uint32 `json:"sinkCount,omitempty" protobuf:"varint,7,opt,name=sinkCount"`
+	// +optional
+	UDFCount *uint32 `json:"udfCount,omitempty" protobuf:"varint,8,opt,name=udfCount"`
+	// +optional
+	MapUDFCount *uint32 `json:"mapUDFCount,omitempty" protobuf:"varint,9,opt,name=mapUDFCount"`
+	// +optional
+	ReduceUDFCount *uint32 `json:"reduceUDFCount,omitempty" protobuf:"varint,10,opt,name=reduceUDFCount"`
+	// The generation observed by the Pipeline controller.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,11,opt,name=observedGeneration"`
+	// Field to indicate if a pipeline drain successfully occurred, only meaningful when the pipeline is paused.
+	// True means it has been successfully drained.
+	// +optional
+	DrainedOnPause bool `json:"drainedOnPause,omitempty" protobuf:"bytes,12,opt,name=drainedOnPause"`
 }
 
 // SetVertexCounts sets the counts of vertices.
@@ -688,7 +716,7 @@ func (pls *PipelineStatus) MarkDeployFailed(reason, message string) {
 	pls.SetPhase(PipelinePhaseFailed, message)
 }
 
-// MarkVerticesHealthy set the daemon service of the pipeline is healthy.
+// MarkDaemonServiceHealthy set the daemon service of the pipeline is healthy.
 func (pls *PipelineStatus) MarkDaemonServiceHealthy() {
 	pls.MarkTrue(PipelineConditionDaemonServiceHealthy)
 }
@@ -751,17 +779,25 @@ func (pls *PipelineStatus) SetObservedGeneration(value int64) {
 	pls.ObservedGeneration = value
 }
 
+// MarkDrainedOnPauseTrue sets the DrainedOnPause field to true
+func (pls *PipelineStatus) MarkDrainedOnPauseTrue() {
+	pls.DrainedOnPause = true
+}
+
+// MarkDrainedOnPauseFalse sets the DrainedOnPause field to false
+func (pls *PipelineStatus) MarkDrainedOnPauseFalse() {
+	pls.DrainedOnPause = false
+}
+
 // IsHealthy indicates whether the pipeline is in healthy status
 func (pls *PipelineStatus) IsHealthy() bool {
 	switch pls.Phase {
 	case PipelinePhaseFailed:
 		return false
-	case PipelinePhaseRunning:
+	case PipelinePhaseRunning, PipelinePhasePaused:
 		return pls.IsReady()
 	case PipelinePhaseDeleting, PipelinePhasePausing:
 		// Transient phases, return true
-		return true
-	case PipelinePhasePaused:
 		return true
 	default:
 		return false

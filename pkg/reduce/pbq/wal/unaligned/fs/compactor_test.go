@@ -392,9 +392,6 @@ func TestCompactor_ContextClose(t *testing.T) {
 	}
 	time.Sleep(3 * time.Second)
 	err = c.Stop()
-	if err != nil {
-		println(err.Error())
-	}
 	assert.NoError(t, err)
 }
 

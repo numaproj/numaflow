@@ -18,25 +18,32 @@ package isbsvc
 
 import (
 	"context"
+	"strings"
 
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/yaml"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/numaproj/numaflow/pkg/reconciler/isbsvc/installer"
+	"github.com/numaproj/numaflow/pkg/reconciler/validator"
+	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
 const (
-	finalizerName = dfv1.ControllerISBSvc
+	finalizerName = "numaflow.numaproj.io/" + dfv1.ControllerISBSvc
+	// TODO: clean up the deprecated finalizer in v1.7
+	deprecatedFinalizerName = dfv1.ControllerISBSvc
 )
 
 // interStepBufferReconciler reconciles an Inter-Step Buffer Service object.
@@ -58,45 +65,56 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 	isbSvc := &dfv1.InterStepBufferService{}
 	if err := r.client.Get(ctx, req.NamespacedName, isbSvc); err != nil {
 		if apierrors.IsNotFound(err) {
-			return reconcile.Result{}, nil
+			return ctrl.Result{}, nil
 		}
 		r.logger.Errorw("Unable to get ISB Service", zap.Any("request", req), zap.Error(err))
 		return ctrl.Result{}, err
 	}
 	log := r.logger.With("namespace", isbSvc.Namespace).With("isbsvc", isbSvc.Name)
+	if instance := isbSvc.GetAnnotations()[dfv1.KeyInstance]; instance != r.config.GetInstance() {
+		log.Debugw("ISB Service not managed by this controller, skipping", zap.String("instance", instance))
+		return ctrl.Result{}, nil
+	}
+	ctx = logging.WithLogger(ctx, log)
 	isbSvcCopy := isbSvc.DeepCopy()
 	reconcileErr := r.reconcile(ctx, isbSvcCopy)
 	if reconcileErr != nil {
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
 	}
-	if r.needsUpdate(isbSvc, isbSvcCopy) {
-		// Update with a DeepCopy because .Status will be cleaned up.
-		if err := r.client.Update(ctx, isbSvcCopy.DeepCopy()); err != nil {
-			return reconcile.Result{}, err
+	if !equality.Semantic.DeepEqual(isbSvc.Finalizers, isbSvcCopy.Finalizers) {
+		patchYaml := "metadata:\n  finalizers: [" + strings.Join(isbSvcCopy.Finalizers, ",") + "]"
+		patchJson, _ := yaml.YAMLToJSON([]byte(patchYaml))
+		if err := r.client.Patch(ctx, isbSvc, client.RawPatch(types.MergePatchType, patchJson)); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 	if err := r.client.Status().Update(ctx, isbSvcCopy); err != nil {
-		return reconcile.Result{}, err
+		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, reconcileErr
 }
 
 // reconcile does the real logic
 func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc *dfv1.InterStepBufferService) error {
-	log := r.logger.With("namespace", isbSvc.Namespace).With("isbsvc", isbSvc.Name)
+	log := logging.FromContext(ctx)
 	if !isbSvc.DeletionTimestamp.IsZero() {
 		log.Info("Deleting ISB Service")
-		if controllerutil.ContainsFinalizer(isbSvc, finalizerName) {
+		if controllerutil.ContainsFinalizer(isbSvc, finalizerName) || controllerutil.ContainsFinalizer(isbSvc, deprecatedFinalizerName) {
 			// Finalizer logic should be added here.
 			if err := installer.Uninstall(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder); err != nil {
 				log.Errorw("Failed to uninstall", zap.Error(err))
+				isbSvc.Status.SetPhase(dfv1.ISBSvcPhaseDeleting, err.Error())
 				return err
 			}
 			controllerutil.RemoveFinalizer(isbSvc, finalizerName)
+			controllerutil.RemoveFinalizer(isbSvc, deprecatedFinalizerName)
 			// Clean up metrics
 			_ = reconciler.ISBSvcHealth.DeleteLabelValues(isbSvc.Namespace, isbSvc.Name)
 		}
 		return nil
+	}
+	if controllerutil.ContainsFinalizer(isbSvc, deprecatedFinalizerName) { // Remove deprecated finalizer if exists
+		controllerutil.RemoveFinalizer(isbSvc, deprecatedFinalizerName)
 	}
 	if needsFinalizer(isbSvc) {
 		controllerutil.AddFinalizer(isbSvc, finalizerName)
@@ -112,7 +130,7 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 
 	isbSvc.Status.InitConditions()
 	isbSvc.Status.SetObservedGeneration(isbSvc.Generation)
-	if err := ValidateInterStepBufferService(isbSvc); err != nil {
+	if err := validator.ValidateInterStepBufferService(isbSvc); err != nil {
 		log.Errorw("Validation failed", zap.Error(err))
 		isbSvc.Status.MarkNotConfigured("InvalidSpec", err.Error())
 		return err
@@ -120,16 +138,6 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 		isbSvc.Status.MarkConfigured()
 	}
 	return installer.Install(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder)
-}
-
-func (r *interStepBufferServiceReconciler) needsUpdate(old, new *dfv1.InterStepBufferService) bool {
-	if old == nil {
-		return true
-	}
-	if !equality.Semantic.DeepEqual(old.Finalizers, new.Finalizers) {
-		return true
-	}
-	return false
 }
 
 func needsFinalizer(isbSvc *dfv1.InterStepBufferService) bool {

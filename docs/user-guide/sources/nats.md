@@ -12,7 +12,7 @@ spec:
           subject: my-subject
           queue: my-queue # Queue subscription, see https://docs.nats.io/using-nats/developer/receiving/queues
           tls: # Optional.
-            insecureSkipVerify: # Optional, where to skip TLS verification. Default to false.
+            insecureSkipVerify: # Optional, whether to skip TLS verification. Default to false.
             caCertSecret: # Optional, a secret reference, which contains the CA Cert.
               name: my-ca-cert
               key: my-ca-cert-key

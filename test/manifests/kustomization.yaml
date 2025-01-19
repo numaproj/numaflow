@@ -60,5 +60,7 @@ patches:
 
 namespace: numaflow-system
 
-commonLabels:
-  "app.kubernetes.io/part-of": "numaflow"
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/part-of: numaflow

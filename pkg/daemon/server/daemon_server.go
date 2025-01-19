@@ -42,6 +42,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/daemon/server/service"
 	server "github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -156,7 +157,9 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	go ds.exposeMetrics(ctx)
 
 	version := numaflow.GetVersion()
-	pipeline_info.WithLabelValues(version.Version, version.Platform, ds.pipeline.Name).Set(1)
+	// TODO: clean it up in v1.6
+	deprecatedPipelineInfo.WithLabelValues(version.Version, version.Platform, ds.pipeline.Name).Set(1)
+	metrics.BuildInfo.WithLabelValues(v1alpha1.ComponentDaemon, ds.pipeline.Name, version.Version, version.Platform).Set(1)
 
 	log.Infof("Daemon server started successfully on %s", address)
 	<-ctx.Done()

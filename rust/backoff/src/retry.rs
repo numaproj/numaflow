@@ -147,9 +147,8 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
-    use crate::strategy::fixed;
-
     use super::*;
+    use crate::strategy::fixed;
 
     async fn always_successful() -> Result<u64, ()> {
         Ok(42)
@@ -191,7 +190,7 @@ mod tests {
         let interval = fixed::Interval::from_millis(1).take(10);
 
         let counter = Arc::new(AtomicUsize::new(0));
-        let cloned_counter = counter.clone();
+        let cloned_counter = Arc::clone(&counter);
 
         let fut = Retry::retry(
             interval,
@@ -214,7 +213,7 @@ mod tests {
         let interval = fixed::Interval::from_millis(1).take(attempts);
 
         let counter = Arc::new(AtomicUsize::new(0));
-        let cloned_counter = counter.clone();
+        let cloned_counter = Arc::clone(&counter);
 
         let fut = Retry::retry(
             interval,

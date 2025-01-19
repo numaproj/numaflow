@@ -255,6 +255,10 @@ func (j JetStreamBufferService) GetStatefulSetSpec(req GetJetStreamStatefulSetSp
 	}
 	j.AbstractPodTemplate.ApplyToPodSpec(podSpec)
 	spec := appv1.StatefulSetSpec{
+		PersistentVolumeClaimRetentionPolicy: &appv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+			WhenDeleted: appv1.DeletePersistentVolumeClaimRetentionPolicyType,
+			WhenScaled:  appv1.RetainPersistentVolumeClaimRetentionPolicyType,
+		},
 		PodManagementPolicy: appv1.ParallelPodManagement,
 		Replicas:            &replicas,
 		ServiceName:         req.ServiceName,

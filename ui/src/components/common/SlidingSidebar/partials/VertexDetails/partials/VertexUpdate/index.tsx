@@ -20,6 +20,7 @@ export interface VertexUpdateProps {
   pipelineId: string;
   vertexId: string;
   vertexSpec: any;
+  type: string;
   setModalOnClose?: (props: SpecEditorModalProps | undefined) => void;
   refresh: () => void;
 }
@@ -30,6 +31,7 @@ export function VertexUpdate({
   vertexId,
   vertexSpec,
   setModalOnClose,
+  type: vertexType,
   refresh,
 }: VertexUpdateProps) {
   const [loading, setLoading] = useState(false);
@@ -225,7 +227,11 @@ export function VertexUpdate({
     >
       <SpecEditor
         initialYaml={currentSpec}
-        viewType={isReadOnly ? ViewType.READ_ONLY : ViewType.TOGGLE_EDIT}
+        viewType={
+          isReadOnly || vertexType === "monoVertex"
+            ? ViewType.READ_ONLY
+            : ViewType.TOGGLE_EDIT
+        }
         loading={loading}
         mutationKey={mutationKey}
         editResetKey={mutationKey}

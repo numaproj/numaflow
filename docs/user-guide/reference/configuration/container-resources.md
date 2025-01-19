@@ -24,6 +24,8 @@ spec:
           requests:
             cpu: "1"
             memory: 4Gi
+          claims:
+            - name: my-claim
 ```
 
 ## UDF Container
@@ -47,6 +49,8 @@ spec:
             requests:
               cpu: "1"
               memory: 4Gi
+            claims:
+              - name: my-claim
 ```
 
 ## UDSource Container
@@ -71,6 +75,8 @@ spec:
               requests:
                 cpu: "1"
                 memory: 4Gi
+              claims:
+                - name: my-claim
 ```
 
 ## Source Transformer Container
@@ -95,6 +101,8 @@ spec:
               requests:
                 cpu: "1"
                 memory: 4Gi
+              claims:
+                - name: my-claim
 ```
 
 ## UDSink Container
@@ -109,6 +117,9 @@ metadata:
 spec:
   vertices:
     - name: my-vertex
+      resourceClaims:
+        - name: my-claim
+          xxx
       sink:
         udsink:
           container:
@@ -119,6 +130,8 @@ spec:
               requests:
                 cpu: "1"
                 memory: 4Gi
+              claims:
+                - name: my-claim
 ```
 
 ## Init Container
@@ -136,11 +149,11 @@ spec:
       initContainerTemplate:
         resources:
           limits:
-            cpu: "3"
-            memory: 6Gi
+            cpu: "2"
+            memory: 2Gi
           requests:
             cpu: "1"
-            memory: 4Gi
+            memory: 1Gi
 ```
 
 Container resources for [user init-containers](init-containers.md) are instead specified at `.spec.vertices[*].initContainers[*].resources`.

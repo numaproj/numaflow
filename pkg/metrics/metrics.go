@@ -28,12 +28,28 @@ const (
 	LabelISBService         = "isbsvc"
 	LabelPipeline           = "pipeline"
 	LabelVertex             = "vertex"
-	LabelMonoVertex         = "mono_vertex"
 	LabelVertexReplicaIndex = "replica"
 	LabelVertexType         = "vertex_type"
 	LabelPartitionName      = "partition_name"
+	LabelMonoVertexName     = "mvtx_name"
+	LabelComponent          = "component"
+	LabelComponentName      = "component_name"
+	LabelSDKLanguage        = "language"
+	LabelSDKVersion         = "version"
+	LabelSDKType            = "type" // container type, e.g sourcer, sourcetransformer, sinker, etc. see serverinfo.ContainerType
+	LabelReason             = "reason"
+)
 
-	LabelReason = "reason"
+var (
+	BuildInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "build_info",
+		Help: "A metric with a constant value '1', labeled by Numaflow binary version, platform, and other information",
+	}, []string{LabelComponent, LabelComponentName, LabelVersion, LabelPlatform})
+
+	SDKInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "sdk_info",
+		Help: "A metric with a constant value '1', labeled by SDK information such as version, language, and type",
+	}, []string{LabelComponent, LabelComponentName, LabelSDKType, LabelSDKVersion, LabelSDKLanguage})
 )
 
 // Generic forwarder metrics
@@ -72,6 +88,14 @@ var (
 		Help:      "Total number of Read Errors",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
+	// ReadProcessingTime is a histogram to observe read operation latency
+	ReadProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "forwarder",
+		Name:      "read_processing_time",
+		Help:      "Processing times of read operations (100 microseconds to 10 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*10, 10),
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
 	// WriteMessagesCount is used to indicate the number of messages written
 	WriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
@@ -86,11 +110,19 @@ var (
 		Help:      "Total number of bytes written",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
-	// WriteMessagesError is used to indicate the number of errors messages written
+	// WriteMessagesError is used to indicate the number of errors encountered while writing messages
 	WriteMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
 		Name:      "write_error_total",
 		Help:      "Total number of Write Errors",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// WriteProcessingTime is a histogram to observe write operation latency
+	WriteProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "forwarder",
+		Name:      "write_processing_time",
+		Help:      "Processing times of write operations (100 microseconds to 20 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// DropMessagesCount is used to indicate the number of messages dropped
@@ -112,6 +144,14 @@ var (
 		Subsystem: "forwarder",
 		Name:      "ack_total",
 		Help:      "Total number of Messages Acknowledged",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// AckProcessingTime is a histogram to observe acknowledgment operation latency
+	AckProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "forwarder",
+		Name:      "ack_processing_time",
+		Help:      "Processing times of acknowledgment operations (100 microseconds to 10 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*10, 10),
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// AckMessageError is used to indicate the errors in the number of  messages acknowledged
@@ -187,7 +227,7 @@ var (
 		Subsystem: "source_forwarder",
 		Name:      "transformer_error_total",
 		Help:      "Total number of source transformer Errors",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// SourceTransformerProcessingTime is a histogram to Observe Source Transformer Processing times as a whole
 	SourceTransformerProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
@@ -195,7 +235,7 @@ var (
 		Name:      "transformer_processing_time",
 		Help:      "Processing times of source transformer (100 microseconds to 15 minutes)",
 		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*15, 10),
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// SourceTransformerConcurrentProcessingTime is a histogram to Observe Source Transformer Processing times as a whole
 	SourceTransformerConcurrentProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
@@ -203,21 +243,21 @@ var (
 		Name:      "concurrent_transformer_processing_time",
 		Help:      "Processing times of Concurrent source transformer (100 microseconds to 20 minutes)",
 		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// SourceTransformerReadMessagesCount is used to indicate the number of messages read by source transformer
 	SourceTransformerReadMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "source_forwarder",
 		Name:      "transformer_read_total",
 		Help:      "Total number of Messages Read by source transformer",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// SourceTransformerWriteMessagesCount is used to indicate the number of messages written by source transformer
 	SourceTransformerWriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "source_forwarder",
 		Name:      "transformer_write_total",
 		Help:      "Total number of Messages Written by source transformer",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 )
 
 // Reduce forwarder specific metrics
@@ -296,5 +336,37 @@ var (
 		Subsystem: "idlemanager",
 		Name:      "ctrl_msg_total",
 		Help:      "Total number of ctrl Messages sent",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+)
+
+// Sink forwarder metrics
+var (
+	// FbSinkWriteMessagesCount is used to indicate the number of messages written to a fallback sink
+	FbSinkWriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "fbsink_write_total",
+		Help:      "Total number of Messages written to a fallback sink",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// FbSinkWriteBytesCount is to indicate the number of bytes written to a fallback sink
+	FbSinkWriteBytesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "fbsink_write_bytes_total",
+		Help:      "Total number of bytes written to a fallback sink",
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// FbSinkWriteProcessingTime is a histogram to observe write operation latency to a fallback sink
+	FbSinkWriteProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: "forwarder",
+		Name:      "fbsink_write_processing_time",
+		Help:      "Processing times of write operations to a fallback sink (100 microseconds to 20 minutes)",
+		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
+
+	// FbSinkWriteMessagesError is used to indicate the number of errors while writing to a fallback sink
+	FbSinkWriteMessagesError = promauto.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: "forwarder",
+		Name:      "fbsink_write_error_total",
+		Help:      "Total number of Write Errors while writing to a fallback sink",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 )

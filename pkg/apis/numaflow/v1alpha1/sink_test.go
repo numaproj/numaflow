@@ -22,11 +22,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 )
 
 func Test_Sink_getContainers(t *testing.T) {
 	s := Sink{}
-	c, err := s.getContainers(getContainerReq{
+	sc, c, err := s.getContainers(getContainerReq{
 		env: []corev1.EnvVar{
 			{Name: "test-env", Value: "test-val"},
 		},
@@ -36,6 +37,7 @@ func Test_Sink_getContainers(t *testing.T) {
 		resources:       corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}},
 	})
 	assert.NoError(t, err)
+	assert.Equal(t, 0, len(sc))
 	assert.Equal(t, 1, len(c))
 	assert.Equal(t, testFlowImage, c[0].Image)
 	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, c[0].Resources)
@@ -45,13 +47,19 @@ func Test_Sink_getUDSinkContainer(t *testing.T) {
 	x := Sink{
 		AbstractSink: AbstractSink{
 			UDSink: &UDSink{
-				Container: Container{
+				Container: &Container{
 					Image:           "my-image",
 					Args:            []string{"my-arg"},
 					SecurityContext: &corev1.SecurityContext{},
 					EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
 						LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
 					}}},
+					LivenessProbe: &Probe{
+						InitialDelaySeconds: ptr.To[int32](10),
+						TimeoutSeconds:      ptr.To[int32](15),
+						PeriodSeconds:       ptr.To[int32](14),
+						FailureThreshold:    ptr.To[int32](5),
+					},
 				},
 			},
 		},
@@ -78,13 +86,18 @@ func Test_Sink_getUDSinkContainer(t *testing.T) {
 	})
 	assert.Equal(t, testImagePullPolicy, c.ImagePullPolicy)
 	assert.True(t, c.LivenessProbe != nil)
+	assert.Equal(t, int32(10), c.LivenessProbe.InitialDelaySeconds)
+	assert.Equal(t, int32(15), c.LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(14), c.LivenessProbe.PeriodSeconds)
+	assert.Equal(t, int32(5), c.LivenessProbe.FailureThreshold)
+	assert.Equal(t, ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways), c.RestartPolicy)
 }
 
 func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
 	x := Sink{
 		AbstractSink: AbstractSink{
 			UDSink: &UDSink{
-				Container: Container{
+				Container: &Container{
 					Image:           "my-image",
 					Args:            []string{"my-arg"},
 					SecurityContext: &corev1.SecurityContext{},
@@ -96,13 +109,19 @@ func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
 		},
 		Fallback: &AbstractSink{
 			UDSink: &UDSink{
-				Container: Container{
+				Container: &Container{
 					Image:           "my-image",
 					Args:            []string{"my-arg"},
 					SecurityContext: &corev1.SecurityContext{},
 					EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
 						LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
 					}}},
+					LivenessProbe: &Probe{
+						InitialDelaySeconds: ptr.To[int32](20),
+						TimeoutSeconds:      ptr.To[int32](25),
+						PeriodSeconds:       ptr.To[int32](24),
+						FailureThreshold:    ptr.To[int32](10),
+					},
 				},
 			},
 		},
@@ -122,6 +141,11 @@ func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
 		envs[e.Name] = e.Value
 	}
 	assert.Equal(t, envs[EnvUDContainerType], UDContainerFallbackSink)
+	assert.True(t, c.LivenessProbe != nil)
+	assert.Equal(t, int32(20), c.LivenessProbe.InitialDelaySeconds)
+	assert.Equal(t, int32(25), c.LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(24), c.LivenessProbe.PeriodSeconds)
+	assert.Equal(t, int32(10), c.LivenessProbe.FailureThreshold)
 	x.UDSink.Container.ImagePullPolicy = &testImagePullPolicy
 	c = x.getUDSinkContainer(getContainerReq{
 		image:           "main-image",
@@ -129,4 +153,5 @@ func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
 	})
 	assert.Equal(t, testImagePullPolicy, c.ImagePullPolicy)
 	assert.True(t, c.LivenessProbe != nil)
+	assert.Equal(t, ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways), c.RestartPolicy)
 }

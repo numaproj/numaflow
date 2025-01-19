@@ -585,7 +585,11 @@ func (r *redisInstaller) createStatefulSet(ctx context.Context) error {
 func (r *redisInstaller) Uninstall(ctx context.Context) error {
 	// Clean up metrics
 	_ = reconciler.RedisISBSvcReplicas.DeleteLabelValues(r.isbSvc.Namespace, r.isbSvc.Name)
-	return r.uninstallPVCs(ctx)
+	// TODO: (k8s 1.27) Remove this once we deprecate the support for k8s < 1.27
+	if !dfv1.IsPVCRetentionPolicySupported() {
+		return r.uninstallPVCs(ctx)
+	}
+	return nil
 }
 
 func (r *redisInstaller) uninstallPVCs(ctx context.Context) error {

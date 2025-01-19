@@ -61,8 +61,6 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
-	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
-
 	done := make(chan struct{})
 	go func() {
 		// publish messages to source vertex, with event time starting from 60000
@@ -83,56 +81,9 @@ func (r *ReduceSuite) testReduceStream(lang string) {
 	// The reduce stream application summarizes the input messages and returns the sum when the sum is greater than 100.
 	// Since we are sending 3s, the first returned message should be 102.
 	// There should be no other values.
-	w.Expect().SinkContains("sink", "102")
-	w.Expect().SinkNotContains("sink", "99")
-	w.Expect().SinkNotContains("sink", "105")
-	done <- struct{}{}
-}
-
-func (r *ReduceSuite) TestSimpleSessionPipeline() {
-
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	w := r.Given().Pipeline("@testdata/session-reduce/simple-session-sum-pipeline.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "simple-session-sum"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	count := 0
-	done := make(chan struct{})
-	go func() {
-		// publish messages to source vertex, with event time starting from 60000
-		startTime := 60000
-		for i := 0; true; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			case <-done:
-				return
-			default:
-				if count == 10 {
-					startTime = startTime + (10 * 1000)
-					count = 0
-				} else {
-					startTime = startTime + 1000
-				}
-				eventTime := strconv.Itoa(startTime)
-				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("100")).WithHeader("X-Numaflow-Event-Time", eventTime))
-				count += 1
-			}
-		}
-	}()
-
-	w.Expect().SinkContains("sink", "1000")
+	w.Expect().RedisSinkContains(pipelineName+"-sink", "102")
+	w.Expect().RedisSinkNotContains(pipelineName+"-sink", "99")
+	w.Expect().RedisSinkNotContains(pipelineName+"-sink", "105")
 	done <- struct{}{}
 }
 
@@ -145,7 +96,6 @@ func (r *ReduceSuite) TestSimpleSessionKeyedPipelineJava() {
 }
 
 func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
-
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
@@ -161,8 +111,6 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
-
-	defer w.StreamVertexPodlogs("sink", "udsink").TerminateAllPodLogs()
 
 	count := 0
 	done := make(chan struct{})
@@ -190,16 +138,15 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 		}
 	}()
 
-	w.Expect().SinkContains("sink", "5")
-	w.Expect().SinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second))
-	w.Expect().SinkNotContains("sink", "1", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().RedisSinkContains(pipelineName+"-sink", "5")
+	w.Expect().RedisSinkNotContains(pipelineName+"-sink", "4", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().RedisSinkNotContains(pipelineName+"-sink", "3", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().RedisSinkNotContains(pipelineName+"-sink", "2", SinkCheckWithTimeout(20*time.Second))
+	w.Expect().RedisSinkNotContains(pipelineName+"-sink", "1", SinkCheckWithTimeout(20*time.Second))
 	done <- struct{}{}
 }
 
 func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
-
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
@@ -219,7 +166,6 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 	args := "kubectl delete po -n numaflow-system -l " +
 		"numaflow.numaproj.io/pipeline-name=simple-session-counter-go,numaflow.numaproj.io/vertex-name=compute-count"
 
-	defer w.StreamVertexPodlogs("compute-count", "numa").TerminateAllPodLogs()
 	// Kill the reducer pods before processing to trigger failover.
 	w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 	done := make(chan struct{})
@@ -245,7 +191,6 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 					w.Expect().VertexPodsRunning()
 					w.Exec("/bin/sh", []string{"-c", args}, CheckPodKillSucceeded)
 					w.Expect().VertexPodsRunning()
-					w.StreamVertexPodlogs("compute-sum", "numa")
 				}
 				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")).WithHeader("X-Numaflow-Event-Time", eventTime)).
 					SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")).WithHeader("X-Numaflow-Event-Time", eventTime))
@@ -255,11 +200,11 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 	}()
 
 	w.Expect().
-		SinkContains("sink", "5").
-		SinkNotContains("sink", "4", SinkCheckWithTimeout(20*time.Second)).
-		SinkNotContains("sink", "3", SinkCheckWithTimeout(20*time.Second)).
-		SinkNotContains("sink", "2", SinkCheckWithTimeout(20*time.Second)).
-		SinkNotContains("sink", "1", SinkCheckWithTimeout(20*time.Second))
+		RedisSinkContains("simple-session-counter-go-sink", "5").
+		RedisSinkNotContains("simple-session-counter-go-sink", "4", SinkCheckWithTimeout(20*time.Second)).
+		RedisSinkNotContains("simple-session-counter-go-sink", "3", SinkCheckWithTimeout(20*time.Second)).
+		RedisSinkNotContains("simple-session-counter-go-sink", "2", SinkCheckWithTimeout(20*time.Second)).
+		RedisSinkNotContains("simple-session-counter-go-sink", "1", SinkCheckWithTimeout(20*time.Second))
 	done <- struct{}{}
 }
 

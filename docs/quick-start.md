@@ -28,8 +28,8 @@ Once you have completed all the prerequisites, run the following command lines t
 
 ```shell
 kubectl create ns numaflow-system
-kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/stable/config/install.yaml
-kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/0-isbsvc-jetstream.yaml
+kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/main/config/install.yaml
+kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/main/examples/0-isbsvc-jetstream.yaml
 ```
 
 ## Creating a simple pipeline
@@ -39,7 +39,7 @@ As an example, we will create a `simple pipeline` that contains a source vertex 
 Run the command below to create a simple pipeline.
 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
+kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/main/examples/1-simple-pipeline.yaml
 ```
 
 To view a list of pipelines you've created, run:
@@ -92,14 +92,13 @@ This should generate an output like the sample below:
 2022/08/25 23:59:39 (out) {"Data":"jk4nN/a7Dhc=","Createdts":1661471978707963534}
 ```
 
-
 Numaflow also comes with a built-in user interface.
 
-**NOTE**: Please install the metrics server if your local Kubernetes cluster does not bring it by default (e.g., Kind). 
+**NOTE**: Please install the metrics server if your local Kubernetes cluster does not bring it by default (e.g., Kind).
 You can install it by running the below command.
 
 ```shell
-kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml 
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 kubectl patch -n kube-system deployment metrics-server --type=json -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
 ```
 
@@ -117,7 +116,7 @@ This renders the following UI on https://localhost:8443/.
 The pipeline can be deleted by issuing the following command:
 
 ```shell
-kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/stable/examples/1-simple-pipeline.yaml
+kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/main/examples/1-simple-pipeline.yaml
 ```
 
 ## Creating an advanced pipeline

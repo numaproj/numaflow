@@ -2,6 +2,16 @@
 
 A `Kafka` sink is used to forward the messages to a Kafka topic. Kafka sink supports configuration overrides.
 
+## Kafka Headers
+
+We will insert `keys` into the Kafka header, but since `keys` is an array, we will add `keys` into the header in the
+following format.
+
+* `__keys_len` will have the number of `key` in the header. if `__keys_len` == `0`, means no `keys` are present.
+* `__keys_%d` will have the `key`, e.g., `__key_0` will be the first key, and so forth.
+
+## Example 
+
 ```yaml
 spec:
   vertices:
@@ -24,7 +34,7 @@ spec:
               name: my-pk
               key: my-pk-key
           sasl: # Optional
-            mechanism: GSSAPI # PLAIN, GSSAPI, SCRAM-SHA-256 or SCRAM-SHA-512, other mechanisms not supported
+            mechanism: GSSAPI # PLAIN, GSSAPI, OAUTHBEARER, SCRAM-SHA-256 or SCRAM-SHA-512 other mechanisms not supported
             gssapi: # Optional, for GSSAPI mechanism
               serviceName: my-service
               realm: my-realm
@@ -75,6 +85,14 @@ spec:
               # Send the Kafka SASL handshake first if enabled (defaults to true)
               # Set this to false if using a non-Kafka SASL proxy
               handshake: true 
+            oauth:  #Optional, for OAUTHBEARER mechanism
+              clientID: # Pointing to a secret reference which contains the client id
+                name: kafka-oauth-client
+                key: clientid 
+              clientSecret: # Pointing to a secret reference which contains the client secret
+                name: kafka-oauth-client
+                key: clientsecret 
+              tokenEndpoint: https://oauth-token.com/v1/token
           # Optional, a yaml format string which could apply more configuration for the sink.
           # The configuration hierarchy follows the Struct of sarama.Config at https://github.com/IBM/sarama/blob/main/config.go.
           config: |

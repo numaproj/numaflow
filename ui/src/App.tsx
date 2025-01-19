@@ -46,6 +46,7 @@ export const AppContext = React.createContext<AppContextProps>({
   namespace: "",
   isPlugin: false,
   isReadOnly: false,
+  disableMetricsCharts: true,
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   setSidebarProps: () => {},
   errors: [],
@@ -288,6 +289,7 @@ function App(props: AppProps) {
           namespace,
           isPlugin: false,
           isReadOnly: systemInfo?.isReadOnly || false,
+          disableMetricsCharts: systemInfo?.disableMetricsCharts ?? true,
           sidebarProps,
           setSidebarProps,
           errors,

@@ -194,6 +194,47 @@ export function quantityToScalar(quantity: string): number | bigint {
   }
 }
 
+
+export function calculateMemoryPercent(usageMemory: string, requestedMemory: string): string {
+  try {
+    // Extract numeric values from strings (removing "Mi" suffix)
+    const usage = parseInt(usageMemory.replace("Mi", ""), 10);
+    const request = parseInt(requestedMemory.replace("Mi", ""), 10);
+
+    // Handle invalid input or zero requested memory
+    if (isNaN(usage) || isNaN(request) || request === 0) {
+      return "unavailable"
+    }
+
+    // Calculate percentage
+    const percent = (usage / request) * 100;
+    return `${percent.toFixed(2)}%`;
+
+  } catch (error) {
+    return "unavailable";
+  }
+}
+
+export function calculateCPUPercent(usageCPU: string, requestedCPU: string): string{
+  try {
+    // Extract numeric values from strings (removing "m" suffix)
+    const usage = parseInt(usageCPU.replace("m", ""), 10);
+    const request = parseInt(requestedCPU.replace("m", ""), 10);
+
+    // Handle invalid input or zero requested CPU
+    if (isNaN(usage) || isNaN(request) || request === 0) {
+      return "unavailable"; 
+    }
+
+    // Calculate percentage
+    const percent = (usage / request) * 100;
+    return `${percent.toFixed(2)}%`; 
+  } catch (error) {
+    return "unavailable"; 
+  }
+}
+
+
 export function getPodContainerUsePercentages(
   pod: Pod,
   podDetails: PodDetail,

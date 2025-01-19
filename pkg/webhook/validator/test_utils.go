@@ -56,8 +56,9 @@ func fakeJetStreamISBSvc() *dfv1.InterStepBufferService {
 func fakePipeline() *dfv1.Pipeline {
 	return &dfv1.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-pl",
-			Namespace: testNamespace,
+			Name:        "test-pl",
+			Namespace:   testNamespace,
+			Annotations: map[string]string{},
 		},
 		Spec: dfv1.PipelineSpec{
 			Vertices: []dfv1.AbstractVertex{

@@ -20,6 +20,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
@@ -28,14 +29,18 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
 	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
+	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 const (
@@ -166,6 +171,19 @@ func init() {
 	_ = corev1.AddToScheme(scheme.Scheme)
 }
 
+func fakeReconciler(t *testing.T, cl client.WithWatch) *vertexReconciler {
+	t.Helper()
+	return &vertexReconciler{
+		client:   cl,
+		scheme:   scheme.Scheme,
+		config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
+		image:    testFlowImage,
+		logger:   zaptest.NewLogger(t).Sugar(),
+		recorder: record.NewFakeRecorder(64),
+		scaler:   scaling.NewScaler(cl),
+	}
+}
+
 func Test_NewReconciler(t *testing.T) {
 	cl := fake.NewClientBuilder().Build()
 	r := NewReconciler(cl, scheme.Scheme, reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig), testFlowImage, scaling.NewScaler(cl), zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
@@ -173,19 +191,51 @@ func Test_NewReconciler(t *testing.T) {
 	assert.True(t, ok)
 }
 
+func TestReconcile(t *testing.T) {
+	t.Run("test not found", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		req := ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      "not-exist",
+				Namespace: testNamespace,
+			},
+		}
+		_, err := r.Reconcile(context.TODO(), req)
+		// Return nil when not found
+		assert.NoError(t, err)
+	})
+
+	t.Run("test found", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testVertex.DeepCopy()
+		err := cl.Create(context.TODO(), testObj)
+		assert.NoError(t, err)
+		o := &dfv1.Vertex{}
+		err = cl.Get(context.TODO(), types.NamespacedName{
+			Namespace: testObj.Namespace,
+			Name:      testObj.Name,
+		}, o)
+		assert.NoError(t, err)
+		assert.Equal(t, testObj.Name, o.Name)
+		req := ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      testObj.Name,
+				Namespace: testObj.Namespace,
+			},
+		}
+		_, err = r.Reconcile(context.TODO(), req)
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "not found")
+	})
+}
+
 func Test_BuildPodSpec(t *testing.T) {
 
-	fakeConfig := reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig)
 	t.Run("test source", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
-		r := &vertexReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   fakeConfig,
-			image:    testFlowImage,
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testSrcVertex.DeepCopy()
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 0)
 		assert.NoError(t, err)
@@ -211,14 +261,7 @@ func Test_BuildPodSpec(t *testing.T) {
 
 	t.Run("test source with transformer", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
-		r := &vertexReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   fakeConfig,
-			image:    testFlowImage,
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testSrcVertex.DeepCopy()
 		testObj.Spec.Source = &dfv1.Source{
 			HTTP: &dfv1.HTTPSource{},
@@ -230,20 +273,13 @@ func Test_BuildPodSpec(t *testing.T) {
 		}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 2)
 		assert.NoError(t, err)
-		assert.Equal(t, 1, len(spec.InitContainers))
-		assert.Equal(t, 2, len(spec.Containers))
+		assert.Equal(t, 2, len(spec.InitContainers))
+		assert.Equal(t, 1, len(spec.Containers))
 	})
 
 	t.Run("test user-defined source with transformer", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
-		r := &vertexReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   fakeConfig,
-			image:    testFlowImage,
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testSrcVertex.DeepCopy()
 		testObj.Spec.Source = &dfv1.Source{
 			UDSource: &dfv1.UDSource{
@@ -259,20 +295,13 @@ func Test_BuildPodSpec(t *testing.T) {
 		}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 2)
 		assert.NoError(t, err)
-		assert.Equal(t, 1, len(spec.InitContainers))
-		assert.Equal(t, 3, len(spec.Containers))
+		assert.Equal(t, 3, len(spec.InitContainers))
+		assert.Equal(t, 1, len(spec.Containers))
 	})
 
 	t.Run("test sink", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
-		r := &vertexReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   fakeConfig,
-			image:    testFlowImage,
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		testObj.Name = "test-pl-output"
 		testObj.Spec.Name = "output"
@@ -303,21 +332,14 @@ func Test_BuildPodSpec(t *testing.T) {
 
 	t.Run("test user-defined sink", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
-		r := &vertexReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   fakeConfig,
-			image:    testFlowImage,
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		testObj.Name = "test-pl-output"
 		testObj.Spec.Name = "output"
 		testObj.Spec.Sink = &dfv1.Sink{
 			AbstractSink: dfv1.AbstractSink{
 				UDSink: &dfv1.UDSink{
-					Container: dfv1.Container{
+					Container: &dfv1.Container{
 						Image:   "image",
 						Command: []string{"cmd"},
 						Args:    []string{"arg0"},
@@ -329,25 +351,18 @@ func Test_BuildPodSpec(t *testing.T) {
 		testObj.Spec.ToEdges = []dfv1.CombinedEdge{}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 0)
 		assert.NoError(t, err)
-		assert.Equal(t, 1, len(spec.InitContainers))
-		assert.Equal(t, 2, len(spec.Containers))
-		assert.Equal(t, "image", spec.Containers[1].Image)
-		assert.Equal(t, 1, len(spec.Containers[1].Command))
-		assert.Equal(t, "cmd", spec.Containers[1].Command[0])
-		assert.Equal(t, 1, len(spec.Containers[1].Args))
-		assert.Equal(t, "arg0", spec.Containers[1].Args[0])
+		assert.Equal(t, 2, len(spec.InitContainers))
+		assert.Equal(t, 1, len(spec.Containers))
+		assert.Equal(t, "image", spec.InitContainers[1].Image)
+		assert.Equal(t, 1, len(spec.InitContainers[1].Command))
+		assert.Equal(t, "cmd", spec.InitContainers[1].Command[0])
+		assert.Equal(t, 1, len(spec.InitContainers[1].Args))
+		assert.Equal(t, "arg0", spec.InitContainers[1].Args[0])
 	})
 
 	t.Run("test map udf", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
-		r := &vertexReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   fakeConfig,
-			image:    testFlowImage,
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.UDF = &dfv1.UDF{
 			Builtin: &dfv1.Function{
@@ -356,8 +371,8 @@ func Test_BuildPodSpec(t *testing.T) {
 		}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 0)
 		assert.NoError(t, err)
-		assert.Equal(t, 1, len(spec.InitContainers))
-		assert.Equal(t, 2, len(spec.Containers))
+		assert.Equal(t, 2, len(spec.InitContainers))
+		assert.Equal(t, 1, len(spec.Containers))
 		var envNames []string
 		for _, e := range spec.Containers[0].Env {
 			envNames = append(envNames, e.Name)
@@ -378,14 +393,7 @@ func Test_BuildPodSpec(t *testing.T) {
 
 	t.Run("test reduce udf", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
-		r := &vertexReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   fakeConfig,
-			image:    testFlowImage,
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		volSize, _ := resource.ParseQuantity("1Gi")
 		testObj.Spec.UDF = &dfv1.UDF{
@@ -402,8 +410,8 @@ func Test_BuildPodSpec(t *testing.T) {
 		}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 2)
 		assert.NoError(t, err)
-		assert.Equal(t, 1, len(spec.InitContainers))
-		assert.Equal(t, 2, len(spec.Containers))
+		assert.Equal(t, 2, len(spec.InitContainers))
+		assert.Equal(t, 1, len(spec.Containers))
 		containsPVC := false
 		containsPVCMount := false
 		for _, v := range spec.Volumes {
@@ -422,7 +430,54 @@ func Test_BuildPodSpec(t *testing.T) {
 }
 
 func Test_reconcile(t *testing.T) {
-	fakeConfig := reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig)
+
+	t.Run("test deletion", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testVertex.DeepCopy()
+		testObj.DeletionTimestamp = &metav1.Time{
+			Time: time.Now(),
+		}
+		_, err := r.reconcile(context.TODO(), testObj)
+		assert.NoError(t, err)
+	})
+
+	t.Run("test no isbsvc", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testVertex.DeepCopy()
+		_, err := r.reconcile(context.TODO(), testObj)
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "not found")
+		assert.Equal(t, testObj.Status.Phase, dfv1.VertexPhaseFailed)
+		assert.Equal(t, testObj.Status.Reason, "ISBSvcNotFound")
+		assert.Contains(t, testObj.Status.Message, "not found")
+	})
+
+	t.Run("test isbsvc unhealthy", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		err := cl.Create(context.TODO(), testIsbSvc)
+		assert.Nil(t, err)
+		testPl := testPipeline.DeepCopy()
+		err = cl.Create(context.TODO(), testPl)
+		assert.Nil(t, err)
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.Source = &dfv1.Source{
+			HTTP: &dfv1.HTTPSource{
+				Service: true,
+			},
+		}
+		_, err = r.reconcile(context.TODO(), testObj)
+		assert.Error(t, err)
+		assert.ErrorContains(t, err, "not healthy")
+		assert.Equal(t, testObj.Status.Phase, dfv1.VertexPhaseFailed)
+		assert.Equal(t, testObj.Status.Reason, "ISBSvcNotHealthy")
+		assert.Contains(t, testObj.Status.Message, "not healthy")
+	})
+
 	t.Run("test reconcile source", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
@@ -434,15 +489,7 @@ func Test_reconcile(t *testing.T) {
 		testPl := testPipeline.DeepCopy()
 		err = cl.Create(ctx, testPl)
 		assert.Nil(t, err)
-		r := &vertexReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   fakeConfig,
-			image:    testFlowImage,
-			scaler:   scaling.NewScaler(cl),
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Source = &dfv1.Source{
 			HTTP: &dfv1.HTTPSource{
@@ -462,7 +509,8 @@ func Test_reconcile(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(pods.Items))
 		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
-		assert.Equal(t, 2, len(pods.Items[0].Spec.Containers))
+		assert.Equal(t, 1, len(pods.Items[0].Spec.Containers))
+		assert.Equal(t, 2, len(pods.Items[0].Spec.InitContainers))
 		svcs := &corev1.ServiceList{}
 		err = r.client.List(ctx, svcs, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
 		assert.NoError(t, err)
@@ -486,15 +534,7 @@ func Test_reconcile(t *testing.T) {
 		testPl := testPipeline.DeepCopy()
 		err = cl.Create(ctx, testPl)
 		assert.Nil(t, err)
-		r := &vertexReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   fakeConfig,
-			image:    testFlowImage,
-			scaler:   scaling.NewScaler(cl),
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Sink = &dfv1.Sink{}
 		_, err = r.reconcile(ctx, testObj)
@@ -519,15 +559,7 @@ func Test_reconcile(t *testing.T) {
 		testPl := testPipeline.DeepCopy()
 		err = cl.Create(ctx, testPl)
 		assert.Nil(t, err)
-		r := &vertexReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   fakeConfig,
-			image:    testFlowImage,
-			scaler:   scaling.NewScaler(cl),
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.UDF = &dfv1.UDF{
 			Builtin: &dfv1.Function{
@@ -542,7 +574,56 @@ func Test_reconcile(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(pods.Items))
 		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
-		assert.Equal(t, 2, len(pods.Items[0].Spec.Containers))
+		assert.Equal(t, 1, len(pods.Items[0].Spec.Containers))
+		assert.Equal(t, 2, len(pods.Items[0].Spec.InitContainers))
+	})
+
+	t.Run("test reconcile reduce udf", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		testPl := testPipeline.DeepCopy()
+		err = cl.Create(ctx, testPl)
+		assert.Nil(t, err)
+		r := fakeReconciler(t, cl)
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.UDF = &dfv1.UDF{
+			Container: &dfv1.Container{
+				Image: "my-image",
+			},
+			GroupBy: &dfv1.GroupBy{
+				Window: dfv1.Window{
+					Fixed: &dfv1.FixedWindow{
+						Length: &metav1.Duration{
+							Duration: 10 * time.Second,
+						},
+					},
+				},
+				Storage: &dfv1.PBQStorage{
+					PersistentVolumeClaim: &dfv1.PersistenceStrategy{
+						AccessMode: ptr.To[corev1.PersistentVolumeAccessMode](corev1.ReadWriteOnce),
+					},
+				},
+			},
+		}
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		pods := &corev1.PodList{}
+		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + testPipelineName + "," + dfv1.KeyVertexName + "=" + testVertexSpecName)
+		err = r.client.List(ctx, pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(pods.Items))
+		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
+		assert.Equal(t, 1, len(pods.Items[0].Spec.Containers))
+		assert.Equal(t, 2, len(pods.Items[0].Spec.InitContainers))
+		pvc := &corev1.PersistentVolumeClaim{}
+		err = r.client.Get(ctx, types.NamespacedName{Name: dfv1.GeneratePBQStoragePVCName(testPl.Name, testObj.Spec.Name, 0), Namespace: testNamespace}, pvc)
+		assert.NoError(t, err)
+		assert.Equal(t, dfv1.GeneratePBQStoragePVCName(testPl.Name, testObj.Spec.Name, 0), pvc.Name)
 	})
 
 	t.Run("test reconcile vertex with customization", func(t *testing.T) {
@@ -556,15 +637,7 @@ func Test_reconcile(t *testing.T) {
 		testPl := testPipeline.DeepCopy()
 		err = cl.Create(ctx, testPl)
 		assert.Nil(t, err)
-		r := &vertexReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   fakeConfig,
-			image:    testFlowImage,
-			scaler:   scaling.NewScaler(cl),
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Sink = &dfv1.Sink{}
 		testObj.Spec.ContainerTemplate = &dfv1.ContainerTemplate{
@@ -629,15 +702,7 @@ func Test_reconcile(t *testing.T) {
 		testPl.Spec.Vertices[1].SideInputs = []string{"s1"}
 		err = cl.Create(ctx, testPl)
 		assert.Nil(t, err)
-		r := &vertexReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   fakeConfig,
-			image:    testFlowImage,
-			scaler:   scaling.NewScaler(cl),
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
-		}
+		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.UDF = &dfv1.UDF{
 			Builtin: &dfv1.Function{
@@ -653,13 +718,11 @@ func Test_reconcile(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(pods.Items))
 		assert.True(t, strings.HasPrefix(pods.Items[0].Name, testVertexName+"-0-"))
-		assert.Equal(t, 3, len(pods.Items[0].Spec.Containers))
-		assert.Equal(t, 2, len(pods.Items[0].Spec.InitContainers))
+		assert.Equal(t, 2, len(pods.Items[0].Spec.Containers))
+		assert.Equal(t, 3, len(pods.Items[0].Spec.InitContainers))
 	})
-}
 
-func Test_reconcileEvents(t *testing.T) {
-	t.Run("test reconcile - isbsvc doesn't exist", func(t *testing.T) {
+	t.Run("test reconcile rolling update", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
 		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
@@ -670,15 +733,83 @@ func Test_reconcileEvents(t *testing.T) {
 		testPl := testPipeline.DeepCopy()
 		err = cl.Create(ctx, testPl)
 		assert.Nil(t, err)
-		r := &vertexReconciler{
-			client:   cl,
-			scheme:   scheme.Scheme,
-			config:   reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig),
-			image:    testFlowImage,
-			scaler:   scaling.NewScaler(cl),
-			logger:   zaptest.NewLogger(t).Sugar(),
-			recorder: record.NewFakeRecorder(64),
+		r := fakeReconciler(t, cl)
+		testObj := testVertex.DeepCopy()
+		testObj.Spec.UDF = &dfv1.UDF{
+			Builtin: &dfv1.Function{
+				Name: "cat",
+			},
 		}
+		testObj.Spec.Replicas = ptr.To[int32](3)
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		pods := &corev1.PodList{}
+		selector, _ := labels.Parse(dfv1.KeyPipelineName + "=" + testPipelineName + "," + dfv1.KeyVertexName + "=" + testVertexSpecName)
+		err = r.client.List(ctx, pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 3, len(pods.Items))
+
+		tmpSpec, _ := r.buildPodSpec(testObj, testPl, testIsbSvc.Status.Config, 0)
+		hash := sharedutil.MustHash(tmpSpec)
+		testObj.Status.Replicas = 3
+		testObj.Status.ReadyReplicas = 3
+		testObj.Status.UpdateHash = hash
+		testObj.Status.CurrentHash = hash
+
+		// Reduce desired replicas
+		testObj.Spec.Replicas = ptr.To[int32](2)
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		err = r.client.List(ctx, pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 2, len(pods.Items))
+		assert.Equal(t, uint32(2), testObj.Status.Replicas)
+		assert.Equal(t, uint32(2), testObj.Status.UpdatedReplicas)
+
+		// updatedReplicas > desiredReplicas
+		testObj.Status.UpdatedReplicas = 3
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		assert.Equal(t, uint32(2), testObj.Status.UpdatedReplicas)
+
+		// Clean up
+		testObj.Spec.Replicas = ptr.To[int32](0)
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		err = r.client.List(ctx, pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(pods.Items))
+
+		// rolling update
+		testObj.Spec.Replicas = ptr.To[int32](20)
+		testObj.Status.UpdatedReplicas = 20
+		testObj.Status.UpdatedReadyReplicas = 20
+		testObj.Status.Replicas = 20
+		testObj.Status.CurrentHash = "123456"
+		testObj.Status.UpdateHash = "123456"
+		_, err = r.reconcile(ctx, testObj)
+		assert.NoError(t, err)
+		err = r.client.List(ctx, pods, &client.ListOptions{Namespace: testNamespace, LabelSelector: selector})
+		assert.NoError(t, err)
+		assert.Equal(t, 5, len(pods.Items))
+		assert.Equal(t, uint32(20), testObj.Status.Replicas)
+		assert.Equal(t, uint32(5), testObj.Status.UpdatedReplicas)
+	})
+}
+
+func Test_reconcileEvents(t *testing.T) {
+	t.Run("test reconcile - events", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		ctx := context.TODO()
+		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc.Status.MarkConfigured()
+		testIsbSvc.Status.MarkDeployed()
+		err := cl.Create(ctx, testIsbSvc)
+		assert.Nil(t, err)
+		testPl := testPipeline.DeepCopy()
+		err = cl.Create(ctx, testPl)
+		assert.Nil(t, err)
+		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.UDF = &dfv1.UDF{
 			Builtin: &dfv1.Function{

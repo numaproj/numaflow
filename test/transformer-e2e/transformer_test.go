@@ -21,9 +21,12 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -61,11 +64,11 @@ func (s *TransformerSuite) TestSourceFiltering() {
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect3))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect4)))
 
-	w.Expect().SinkContains("out", expect3)
-	w.Expect().SinkContains("out", expect4)
-	w.Expect().SinkNotContains("out", expect0)
-	w.Expect().SinkNotContains("out", expect1)
-	w.Expect().SinkNotContains("out", expect2)
+	w.Expect().RedisSinkContains("source-filtering-out", expect3)
+	w.Expect().RedisSinkContains("source-filtering-out", expect4)
+	w.Expect().RedisSinkNotContains("source-filtering-out", expect0)
+	w.Expect().RedisSinkNotContains("source-filtering-out", expect1)
+	w.Expect().RedisSinkNotContains("source-filtering-out", expect2)
 }
 
 func (s *TransformerSuite) TestTimeExtractionFilter() {
@@ -84,11 +87,10 @@ func (s *TransformerSuite) TestTimeExtractionFilter() {
 
 	testMsgTwo := `{"id": 101, "msg": "test", "time": "2021-01-18T21:54:42.123Z", "desc": "A bad ID."}`
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgTwo)))
-	w.Expect().SinkNotContains("out", testMsgTwo)
+	w.Expect().RedisSinkNotContains("time-extraction-filter-out", testMsgTwo)
 }
 
 func (s *TransformerSuite) TestBuiltinEventTimeExtractor() {
-
 	// this test is skipped for redis as watermark is not supported with this ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		s.T().SkipNow()
@@ -141,7 +143,7 @@ wmLoop:
 	for {
 		select {
 		case <-ctx.Done():
-			if ctx.Err() == context.DeadlineExceeded {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				s.T().Log("test timed out")
 				assert.Fail(s.T(), "timed out")
 				break wmLoop
@@ -163,6 +165,73 @@ wmLoop:
 		}
 	}
 	done <- struct{}{}
+}
+
+func (s *TransformerSuite) TestSourceTransformer() {
+	// the transformer feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		s.T().SkipNow()
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		s.testSourceTransformer("python")
+	}()
+	go func() {
+		defer wg.Done()
+		s.testSourceTransformer("java")
+	}()
+	go func() {
+		defer wg.Done()
+		s.testSourceTransformer("go")
+	}()
+	go func() {
+		defer wg.Done()
+		s.testSourceTransformer("rust")
+	}()
+	wg.Wait()
+}
+
+func (s *TransformerSuite) testSourceTransformer(lang string) {
+	w := s.Given().Pipeline(fmt.Sprintf("@testdata/event-time-filter-%s.yaml", lang)).
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := fmt.Sprintf("event-time-filter-%s", lang)
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	eventTimeBefore2022_1 := strconv.FormatInt(time.Date(2021, 4, 2, 7, 4, 5, 2, time.UTC).UnixMilli(), 10)
+	eventTimeBefore2022_2 := strconv.FormatInt(time.Date(1998, 4, 2, 8, 4, 5, 2, time.UTC).UnixMilli(), 10)
+	eventTimeBefore2022_3 := strconv.FormatInt(time.Date(2013, 4, 4, 7, 4, 5, 2, time.UTC).UnixMilli(), 10)
+
+	eventTimeAfter2022_1 := strconv.FormatInt(time.Date(2023, 4, 2, 7, 4, 5, 2, time.UTC).UnixMilli(), 10)
+	eventTimeAfter2022_2 := strconv.FormatInt(time.Date(2026, 4, 2, 3, 4, 5, 2, time.UTC).UnixMilli(), 10)
+
+	eventTimeWithin2022_1 := strconv.FormatInt(time.Date(2022, 4, 2, 3, 4, 5, 2, time.UTC).UnixMilli(), 10)
+
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("Before2022")).WithHeader("X-Numaflow-Event-Time", eventTimeBefore2022_1)).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("Before2022")).WithHeader("X-Numaflow-Event-Time", eventTimeBefore2022_2)).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("Before2022")).WithHeader("X-Numaflow-Event-Time", eventTimeBefore2022_3)).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("After2022")).WithHeader("X-Numaflow-Event-Time", eventTimeAfter2022_1)).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("After2022")).WithHeader("X-Numaflow-Event-Time", eventTimeAfter2022_2)).
+		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("Within2022")).WithHeader("X-Numaflow-Event-Time", eventTimeWithin2022_1))
+
+	janFirst2022 := time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
+	janFirst2023 := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	w.Expect().VertexPodLogContains("sink-within-2022", fmt.Sprintf("EventTime -  %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithCount(1)).
+		VertexPodLogContains("sink-after-2022", fmt.Sprintf("EventTime -  %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithCount(2)).
+		VertexPodLogContains("sink-all", fmt.Sprintf("EventTime -  %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithCount(1)).
+		VertexPodLogContains("sink-all", fmt.Sprintf("EventTime -  %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithCount(2)).
+		VertexPodLogNotContains("sink-within-2022", fmt.Sprintf("EventTime -  %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithTimeout(1*time.Second)).
+		VertexPodLogNotContains("sink-after-2022", fmt.Sprintf("EventTime -  %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithTimeout(1*time.Second)).
+		VertexPodLogNotContains("sink-all", "Before2022", PodLogCheckOptionWithTimeout(1*time.Second)).
+		VertexPodLogNotContains("sink-within-2022", "Before2022", PodLogCheckOptionWithTimeout(1*time.Second)).
+		VertexPodLogNotContains("sink-after-2022", "Before2022", PodLogCheckOptionWithTimeout(1*time.Second))
 }
 
 func TestTransformerSuite(t *testing.T) {

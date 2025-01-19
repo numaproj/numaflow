@@ -30,20 +30,6 @@ var kafkaSourceReadCount = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help:      "Total number of messages Read",
 }, []string{metrics.LabelVertex, metrics.LabelPipeline, metrics.LabelPartitionName})
 
-// kafkaSourceAckCount is used to indicate the number of messages Acknowledged
-var kafkaSourceAckCount = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "kafka_source",
-	Name:      "ack_total",
-	Help:      "Total number of messages Acknowledged",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline})
-
-// kafkaSourceOffsetAckErrors is used to indicate the number of errors while reading from kafka source with offsets
-var kafkaSourceOffsetAckErrors = promauto.NewCounterVec(prometheus.CounterOpts{
-	Subsystem: "kafka_source",
-	Name:      "ack_error_total",
-	Help:      "Total number of Kafka ID Errors",
-}, []string{metrics.LabelVertex, metrics.LabelPipeline})
-
 // kafkaPending is used to indicate the number of messages pending in the kafka source
 var kafkaPending = promauto.NewGaugeVec(prometheus.GaugeOpts{
 	Subsystem: "kafka_source",

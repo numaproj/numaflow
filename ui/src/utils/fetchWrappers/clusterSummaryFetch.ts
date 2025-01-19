@@ -33,14 +33,22 @@ const rawDataToClusterSummary = (
 
   rawData.forEach((ns: any) => {
     // Pipeline counts
-    const nsPipelinesHealthyCount = ns.pipelineSummary?.active?.Healthy || 0;
-    const nsPipelinesWarningCount = ns.pipelineSummary?.active?.Warning || 0;
-    const nsPipelinesCriticalCount = ns.pipelineSummary?.active?.Critical || 0;
+    const nsPipelinesHealthyCount =
+      (ns.pipelineSummary?.active?.Healthy || 0) +
+      (ns.monoVertexSummary?.active?.Healthy || 0);
+    const nsPipelinesWarningCount =
+      (ns.pipelineSummary?.active?.Warning || 0) +
+      (ns.monoVertexSummary?.active?.Warning || 0);
+    const nsPipelinesCriticalCount =
+      (ns.pipelineSummary?.active?.Critical || 0) +
+      (ns.monoVertexSummary?.active?.Critical || 0);
     const nsPipelinesActiveCount =
       nsPipelinesHealthyCount +
       nsPipelinesWarningCount +
       nsPipelinesCriticalCount;
-    const nsPipelinesInactiveCount = ns.pipelineSummary?.inactive || 0;
+    const nsPipelinesInactiveCount =
+      (ns.pipelineSummary?.inactive || 0) +
+      (ns.monoVertexSummary?.inactive || 0);
     const nsPipelinesCount = nsPipelinesActiveCount + nsPipelinesInactiveCount;
     // ISB counts
     const nsIsbsHealthyCount = ns.isbServiceSummary?.active?.Healthy || 0;

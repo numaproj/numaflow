@@ -411,7 +411,7 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 	svcName := generateJetStreamServiceName(r.isbSvc)
 	ssName := generateJetStreamStatefulSetName(r.isbSvc)
 	replicas := r.isbSvc.Spec.JetStream.GetReplicas()
-	routes := []string{}
+	var routes []string
 	for j := 0; j < replicas; j++ {
 		routes = append(routes, fmt.Sprintf("nats://%s-%s.%s.%s.svc:%s", ssName, strconv.Itoa(j), svcName, r.isbSvc.Namespace, strconv.Itoa(int(clusterPort))))
 	}
@@ -518,7 +518,11 @@ func (r *jetStreamInstaller) createConfigMap(ctx context.Context) error {
 func (r *jetStreamInstaller) Uninstall(ctx context.Context) error {
 	// Clean up metrics
 	_ = reconciler.JetStreamISBSvcReplicas.DeleteLabelValues(r.isbSvc.Namespace, r.isbSvc.Name)
-	return r.uninstallPVCs(ctx)
+	// TODO: (k8s 1.27) Remove this once we deprecate the support for k8s < 1.27
+	if !dfv1.IsPVCRetentionPolicySupported() {
+		return r.uninstallPVCs(ctx)
+	}
+	return nil
 }
 
 func (r *jetStreamInstaller) uninstallPVCs(ctx context.Context) error {

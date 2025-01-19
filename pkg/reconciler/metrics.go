@@ -43,7 +43,13 @@ var (
 		Subsystem: "controller",
 		Name:      "pipeline_health",
 		Help:      "A metric to indicate whether the Pipeline is healthy. '1' means healthy, '0' means unhealthy",
-	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
+	}, []string{metrics.LabelNamespace, metrics.LabelPipeline})
+
+	MonoVertexHealth = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "monovtx_health",
+		Help:      "A metric to indicate whether the MonoVertex is healthy. '1' means healthy, '0' means unhealthy",
+	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertexName})
 
 	// JetStreamISBSvcReplicas indicates the replicas of a JetStream ISB Service.
 	JetStreamISBSvcReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -72,8 +78,54 @@ var (
 		Name:      "vertex_current_replicas",
 		Help:      "A metric indicates the current replicas of a Vertex",
 	}, []string{metrics.LabelNamespace, metrics.LabelPipeline, metrics.LabelVertex})
+
+	// VertexMinReplicas indicates the min replicas of a Vertex.
+	VertexMinReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "vertex_min_replicas",
+		Help:      "A metric indicates the min replicas of a Vertex",
+	}, []string{metrics.LabelNamespace, metrics.LabelPipeline, metrics.LabelVertex})
+
+	// VertexMaxReplicas indicates the max replicas of a Vertex.
+	VertexMaxReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "vertex_max_replicas",
+		Help:      "A metric indicates the max replicas of a Vertex",
+	}, []string{metrics.LabelNamespace, metrics.LabelPipeline, metrics.LabelVertex})
+
+	// MonoVertexDesiredReplicas indicates the desired replicas of a MonoVertex.
+	MonoVertexDesiredReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "monovtx_desired_replicas",
+		Help:      "A metric indicates the desired replicas of a MonoVertex",
+	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertexName})
+
+	// MonoVertexCurrentReplicas indicates the current replicas of a MonoVertex.
+	MonoVertexCurrentReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "monovtx_current_replicas",
+		Help:      "A metric indicates the current replicas of a MonoVertex",
+	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertexName})
+
+	// MonoVertexMinReplicas indicates the min replicas of a MonoVertex.
+	MonoVertexMinReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "monovtx_min_replicas",
+		Help:      "A metric indicates the min replicas of a MonoVertex",
+	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertexName})
+
+	// MonoVertexMaxReplicas indicates the max replicas of a MonoVertex.
+	MonoVertexMaxReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "controller",
+		Name:      "monovtx_max_replicas",
+		Help:      "A metric indicates the max replicas of a MonoVertex",
+	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertexName})
 )
 
 func init() {
-	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcHealth, PipelineHealth, JetStreamISBSvcReplicas, RedisISBSvcReplicas, VertexDesiredReplicas, VertexCurrentReplicas)
+	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcHealth, PipelineHealth,
+		MonoVertexHealth, JetStreamISBSvcReplicas, RedisISBSvcReplicas,
+		VertexDesiredReplicas, VertexCurrentReplicas, VertexMinReplicas,
+		VertexMaxReplicas, MonoVertexDesiredReplicas, MonoVertexCurrentReplicas,
+		MonoVertexMinReplicas, MonoVertexMaxReplicas)
 }

@@ -1,3 +1,18 @@
+/*
+Copyright 2022 The Numaproj Authors.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package api_e2e
 
 import (
@@ -18,6 +33,10 @@ import (
 
 type APISuite struct {
 	E2ESuite
+}
+
+func TestAPISuite(t *testing.T) {
+	suite.Run(t, new(APISuite))
 }
 
 func (s *APISuite) TestGetSysInfo() {
@@ -194,9 +213,17 @@ func (s *APISuite) TestAPIsForIsbAndPipelineAndMonoVertex() {
 		Expect().
 		Status(200).Body().Raw()
 	assert.Contains(s.T(), listMonoVertexBody, testMonoVertex1Name)
+
+	// deletes a mono-vertex
+	deleteMonoVertex := HTTPExpect(s.T(), "https://localhost:8145").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s", Namespace, testMonoVertex1Name)).
+		Expect().
+		Status(200).Body().Raw()
+	var deleteMonoVertexSuccessExpect = `"data":null`
+	assert.Contains(s.T(), deleteMonoVertex, deleteMonoVertexSuccessExpect)
+
 }
 
-func (s *APISuite) TestAPIsForMetricsAndWatermarkAndPods() {
+func (s *APISuite) TestAPIsForMetricsAndWatermarkAndPodsForPipeline() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
@@ -260,8 +287,68 @@ func (s *APISuite) TestAPIsForMetricsAndWatermarkAndPods() {
 		Expect().
 		Status(200).Body().Raw()
 	assert.Contains(s.T(), getVerticesPodsBody, `simple-pipeline-input-0`)
+
+	// Call the DiscoverMetrics API for the vertex object
+	discoverMetricsBodyForVertex := HTTPExpect(s.T(), "https://localhost:8146").GET("/api/v1/metrics-discovery/object/vertex").
+		Expect().
+		Status(200).Body().Raw()
+
+	// Check that the response contains expected metrics for vertex object
+	assert.Contains(s.T(), discoverMetricsBodyForVertex, "forwarder_data_read_total")
+
+	// Call the API to get input vertex pods info
+	getVertexPodsInfoBody := HTTPExpect(s.T(), "https://localhost:8146").
+		GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s/vertices/%s/pods-info", Namespace, pipelineName, "input")).
+		Expect().
+		Status(200).Body().Raw()
+
+	// Check that the response contains expected pod details
+	assert.Contains(s.T(), getVertexPodsInfoBody, `"name":`)                // Check for pod name
+	assert.Contains(s.T(), getVertexPodsInfoBody, `"status":`)              // Check for pod status
+	assert.Contains(s.T(), getVertexPodsInfoBody, `"totalCPU":`)            // Check for pod's cpu usage
+	assert.Contains(s.T(), getVertexPodsInfoBody, `"totalMemory":`)         // Check for pod's memory usage
+	assert.Contains(s.T(), getVertexPodsInfoBody, `"containerDetailsMap":`) // Check for pod's containers
 }
 
-func TestAPISuite(t *testing.T) {
-	suite.Run(t, new(APISuite))
+func (s *APISuite) TestMetricsAPIsForMonoVertex() {
+	_, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	w := s.Given().MonoVertex("@testdata/mono-vertex.yaml").
+		When().
+		CreateMonoVertexAndWait()
+	defer w.DeleteMonoVertexAndWait()
+
+	monoVertexName := "mono-vertex"
+
+	defer w.UXServerPodPortForward(8149, 8443).TerminateAllPodPortForwards()
+
+	w.Expect().MonoVertexPodsRunning()
+	// Expect the messages to reach the sink.
+	w.Expect().RedisSinkContains("mono-vertex", "199")
+	w.Expect().RedisSinkContains("mono-vertex", "200")
+
+	// Call the API to get mono vertex pods info
+	getMonoVertexPodsInfoBody := HTTPExpect(s.T(), "https://localhost:8149").
+		GET(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s/pods-info", Namespace, monoVertexName)).
+		Expect().
+		Status(200).Body().Raw()
+
+	// Check that the response contains expected pod details
+	assert.Contains(s.T(), getMonoVertexPodsInfoBody, `"name":`)                // Check for pod name
+	assert.Contains(s.T(), getMonoVertexPodsInfoBody, `"status":`)              // Check for pod status
+	assert.Contains(s.T(), getMonoVertexPodsInfoBody, `"totalCPU":`)            // Check for pod's cpu usage
+	assert.Contains(s.T(), getMonoVertexPodsInfoBody, `"totalMemory":`)         // Check for pod's memory usage
+	assert.Contains(s.T(), getMonoVertexPodsInfoBody, `"containerDetailsMap":`) // Check for pod's containers
+
+	// Call the DiscoverMetrics API for mono-vertex
+	discoverMetricsBodyForMonoVertex := HTTPExpect(s.T(), "https://localhost:8149").GET("/api/v1/metrics-discovery/object/mono-vertex").
+		Expect().
+		Status(200).Body().Raw()
+
+	// Check that the response contains expected metrics for mono-vertex
+	assert.Contains(s.T(), discoverMetricsBodyForMonoVertex, "monovtx_processing_time_bucket")
+	assert.Contains(s.T(), discoverMetricsBodyForMonoVertex, "monovtx_sink_time_bucket")
+	assert.Contains(s.T(), discoverMetricsBodyForMonoVertex, "monovtx_read_total")
+	assert.Contains(s.T(), discoverMetricsBodyForMonoVertex, "monovtx_pending")
 }

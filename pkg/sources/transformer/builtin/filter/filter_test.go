@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/numaproj/numaflow-go/pkg/sourcetransformer"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -86,6 +87,7 @@ func TestExpression(t *testing.T) {
 			watermark: time.Time{},
 		})
 		assert.Equal(t, jsonMsg, string(result.Items()[0].Value()))
+		assert.Equal(t, _keys, result.Items()[0].Keys())
 	})
 
 	t.Run("invalid expression", func(t *testing.T) {
@@ -99,7 +101,7 @@ func TestExpression(t *testing.T) {
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
-		assert.Equal(t, "", string(result.Items()[0].Value()))
+		assert.Equal(t, sourcetransformer.MessageToDrop(time.Time{}), result.Items()[0])
 	})
 
 	t.Run("Json expression invalid", func(t *testing.T) {
@@ -113,7 +115,7 @@ func TestExpression(t *testing.T) {
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
-		assert.Equal(t, "", string(result.Items()[0].Value()))
+		assert.Equal(t, sourcetransformer.MessageToDrop(time.Time{}), result.Items()[0])
 	})
 
 	t.Run("String expression invalid", func(t *testing.T) {
@@ -127,7 +129,7 @@ func TestExpression(t *testing.T) {
 			eventTime: time.Time{},
 			watermark: time.Time{},
 		})
-		assert.Equal(t, "", string(result.Items()[0].Value()))
+		assert.Equal(t, sourcetransformer.MessageToDrop(time.Time{}), result.Items()[0])
 	})
 
 	t.Run("base64 expression valid", func(t *testing.T) {
@@ -142,6 +144,7 @@ func TestExpression(t *testing.T) {
 			watermark: time.Time{},
 		})
 		assert.Equal(t, base64Msg, string(result.Items()[0].Value()))
+		assert.Equal(t, _keys, result.Items()[0].Keys())
 	})
 
 	t.Run("event time unchanged", func(t *testing.T) {
@@ -157,5 +160,6 @@ func TestExpression(t *testing.T) {
 			watermark: time.Time{},
 		})
 		assert.Equal(t, testEventTime, result.Items()[0].EventTime())
+		assert.Equal(t, _keys, result.Items()[0].Keys())
 	})
 }

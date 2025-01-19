@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 )
 
 var (
@@ -80,4 +81,149 @@ func Test_ApplyToNumaflowContainers(t *testing.T) {
 	testContainerTemplate.ApplyToNumaflowContainers(cs)
 	assert.Equal(t, testContainerTemplate.Resources, cs[0].Resources)
 	assert.NotEqual(t, testContainerTemplate.Resources, cs[1].Resources)
+}
+
+func TestApplyProbes(t *testing.T) {
+	tests := []struct {
+		name     string
+		template *ContainerTemplate
+		input    *corev1.Container
+		expected *corev1.Container
+	}{
+		{
+			name: "Apply ReadinessProbe",
+			template: &ContainerTemplate{
+				ReadinessProbe: &Probe{
+					InitialDelaySeconds: ptr.To[int32](5),
+					TimeoutSeconds:      ptr.To[int32](10),
+					PeriodSeconds:       ptr.To[int32](15),
+					FailureThreshold:    ptr.To[int32](3),
+					SuccessThreshold:    ptr.To[int32](1),
+				},
+			},
+			input: &corev1.Container{
+				ReadinessProbe: &corev1.Probe{},
+			},
+			expected: &corev1.Container{
+				ReadinessProbe: &corev1.Probe{
+					InitialDelaySeconds: 5,
+					TimeoutSeconds:      10,
+					PeriodSeconds:       15,
+					FailureThreshold:    3,
+					SuccessThreshold:    1,
+				},
+			},
+		},
+		{
+			name: "Apply LivenessProbe",
+			template: &ContainerTemplate{
+				LivenessProbe: &Probe{
+					InitialDelaySeconds: ptr.To[int32](10),
+					TimeoutSeconds:      ptr.To[int32](5),
+					PeriodSeconds:       ptr.To[int32](20),
+					FailureThreshold:    ptr.To[int32](5),
+					SuccessThreshold:    ptr.To[int32](1),
+				},
+			},
+			input: &corev1.Container{
+				LivenessProbe: &corev1.Probe{},
+			},
+			expected: &corev1.Container{
+				LivenessProbe: &corev1.Probe{
+					InitialDelaySeconds: 10,
+					TimeoutSeconds:      5,
+					PeriodSeconds:       20,
+					FailureThreshold:    5,
+					SuccessThreshold:    1,
+				},
+			},
+		},
+		{
+			name: "Apply Both Probes",
+			template: &ContainerTemplate{
+				ReadinessProbe: &Probe{
+					InitialDelaySeconds: ptr.To[int32](5),
+					TimeoutSeconds:      ptr.To[int32](10),
+				},
+				LivenessProbe: &Probe{
+					PeriodSeconds:    ptr.To[int32](20),
+					FailureThreshold: ptr.To[int32](5),
+				},
+			},
+			input: &corev1.Container{
+				ReadinessProbe: &corev1.Probe{},
+				LivenessProbe:  &corev1.Probe{},
+			},
+			expected: &corev1.Container{
+				ReadinessProbe: &corev1.Probe{
+					InitialDelaySeconds: 5,
+					TimeoutSeconds:      10,
+				},
+				LivenessProbe: &corev1.Probe{
+					PeriodSeconds:    20,
+					FailureThreshold: 5,
+				},
+			},
+		},
+		{
+			name:     "No Probes in Template",
+			template: &ContainerTemplate{},
+			input: &corev1.Container{
+				ReadinessProbe: &corev1.Probe{InitialDelaySeconds: 30},
+				LivenessProbe:  &corev1.Probe{TimeoutSeconds: 15},
+			},
+			expected: &corev1.Container{
+				ReadinessProbe: &corev1.Probe{InitialDelaySeconds: 30},
+				LivenessProbe:  &corev1.Probe{TimeoutSeconds: 15},
+			},
+		},
+		{
+			name: "No Probes in Container",
+			template: &ContainerTemplate{
+				ReadinessProbe: &Probe{
+					InitialDelaySeconds: ptr.To[int32](5),
+					TimeoutSeconds:      ptr.To[int32](10),
+				},
+				LivenessProbe: &Probe{
+					PeriodSeconds:    ptr.To[int32](20),
+					FailureThreshold: ptr.To[int32](5),
+				},
+			},
+			input:    &corev1.Container{},
+			expected: &corev1.Container{},
+		},
+		{
+			name: "Partial Probe Updates",
+			template: &ContainerTemplate{
+				ReadinessProbe: &Probe{
+					InitialDelaySeconds: ptr.To[int32](25),
+				},
+				LivenessProbe: &Probe{
+					FailureThreshold: ptr.To[int32](4),
+				},
+			},
+			input: &corev1.Container{
+				ReadinessProbe: &corev1.Probe{TimeoutSeconds: 5},
+				LivenessProbe:  &corev1.Probe{PeriodSeconds: 10},
+			},
+			expected: &corev1.Container{
+				ReadinessProbe: &corev1.Probe{
+					InitialDelaySeconds: 25,
+					TimeoutSeconds:      5,
+				},
+				LivenessProbe: &corev1.Probe{
+					PeriodSeconds:    10,
+					FailureThreshold: 4,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.template.ApplyToContainer(tt.input)
+			assert.Equal(t, tt.expected.ReadinessProbe, tt.input.ReadinessProbe)
+			assert.Equal(t, tt.expected.LivenessProbe, tt.input.LivenessProbe)
+		})
+	}
 }

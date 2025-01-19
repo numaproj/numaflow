@@ -1,86 +1,80 @@
-ARG BASE_IMAGE=gcr.io/distroless/cc-debian12
+ARG BASE_IMAGE=scratch
 ARG ARCH=$TARGETARCH
 ####################################################################################################
 # base
 ####################################################################################################
-FROM debian:bullseye as base
+FROM alpine:3.17 AS base
 ARG ARCH
+RUN apk update && apk upgrade && \
+    apk add ca-certificates && \
+    apk --no-cache add tzdata
 
 COPY dist/numaflow-linux-${ARCH} /bin/numaflow
+COPY dist/numaflow-rs-linux-${ARCH} /bin/numaflow-rs
 
 RUN chmod +x /bin/numaflow
+RUN chmod +x /bin/numaflow-rs
 
 ####################################################################################################
-# extension base
+# Rust binary
 ####################################################################################################
-FROM rust:1.79-bookworm as extension-base
-
-RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-
-RUN apt-get update
-RUN apt-get install protobuf-compiler -y
-
-RUN cargo new numaflow
-# Create a new empty shell project
+FROM lukemathwalker/cargo-chef:latest-rust-1.82 AS chef
+ARG TARGETPLATFORM
 WORKDIR /numaflow
+RUN apt-get update && apt-get install -y protobuf-compiler
 
-RUN cargo new servesink
-COPY ./rust/servesink/Cargo.toml ./servesink/
+FROM chef AS planner
+COPY ./rust/ .
+RUN cargo chef prepare --recipe-path recipe.json
 
-RUN cargo new backoff
-COPY ./rust/backoff/Cargo.toml ./backoff/
-
-RUN cargo new numaflow-models
-COPY ./rust/numaflow-models/Cargo.toml ./numaflow-models/
-
-RUN cargo new monovertex
-COPY ./rust/monovertex/Cargo.toml ./monovertex/
-
-RUN cargo new serving
-COPY ./rust/serving/Cargo.toml ./serving/Cargo.toml
-
-# Copy all Cargo.toml and Cargo.lock files for caching dependencies
-COPY ./rust/Cargo.toml ./rust/Cargo.lock ./
+FROM chef AS rust-builder
+ARG TARGETPLATFORM
+ARG ARCH
+COPY --from=planner /numaflow/recipe.json recipe.json
 
 # Build to cache dependencies
-RUN mkdir -p src/bin && echo "fn main() {}" > src/bin/main.rs && \
-    cargo build --workspace --all --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    case ${TARGETPLATFORM} in \
+        "linux/amd64") TARGET="x86_64-unknown-linux-gnu" ;; \
+        "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
+    *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
+    esac && \
+    RUSTFLAGS='-C target-feature=+crt-static' cargo chef cook --workspace --release --target ${TARGET} --recipe-path recipe.json
 
 # Copy the actual source code files of the main project and the subprojects
-COPY ./rust/src ./src
-COPY ./rust/servesink/src ./servesink/src
-COPY ./rust/backoff/src ./backoff/src
-COPY ./rust/numaflow-models/src ./numaflow-models/src
-COPY ./rust/serving/src ./serving/src
-COPY ./rust/monovertex/src ./monovertex/src
-COPY ./rust/monovertex/build.rs ./monovertex/build.rs
-COPY ./rust/monovertex/proto ./monovertex/proto
+COPY ./rust/ .
 
 # Build the real binaries
-RUN touch src/bin/main.rs && \
-    cargo build --workspace --all --release
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    case ${TARGETPLATFORM} in \
+        "linux/amd64") TARGET="x86_64-unknown-linux-gnu" ;; \
+        "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
+    *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
+    esac && \
+    RUSTFLAGS='-C target-feature=+crt-static' cargo build --workspace --all --release --target ${TARGET} && \
+    cp -pv target/${TARGET}/release/numaflow /root/numaflow
 
 ####################################################################################################
 # numaflow
 ####################################################################################################
 ARG BASE_IMAGE
-FROM debian:bookworm as numaflow
+FROM ${BASE_IMAGE} AS numaflow
+ARG ARCH
 
-# Install necessary libraries
-RUN apt-get update && apt-get install -y libssl3
-
+COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=base /bin/numaflow /bin/numaflow
+COPY --from=base /bin/numaflow-rs /bin/numaflow-rs
 COPY ui/build /ui/build
-
-COPY --from=extension-base /numaflow/target/release/numaflow /bin/numaflow-rs
-COPY ./rust/serving/config config
 
 ENTRYPOINT [ "/bin/numaflow" ]
 
 ####################################################################################################
 # testbase
 ####################################################################################################
-FROM alpine:3.17 as testbase
+FROM alpine:3.17 AS testbase
 RUN apk update && apk upgrade && \
     apk add ca-certificates && \
     apk --no-cache add tzdata

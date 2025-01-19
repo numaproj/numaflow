@@ -26,7 +26,7 @@ Welcome to Numaflow! A Kubernetes-native, serverless platform for running scalab
 
 ## Roadmap
 
-- Map Streaming (1.3)
+- Inbuilt Debugging Experience (1.5)
 
 ## Demo
 

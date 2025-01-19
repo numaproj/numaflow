@@ -13,12 +13,14 @@ import "./style.css";
 export interface ProcessingRatesProps {
   vertexId: string;
   pipelineId: string;
+  type: string;
   vertexMetrics: any;
 }
 
 export function ProcessingRates({
   vertexMetrics,
   pipelineId,
+  type,
   vertexId,
 }: ProcessingRatesProps) {
   const [foundRates, setFoundRates] = useState<PipelineVertexMetric[]>([]);
@@ -27,13 +29,15 @@ export function ProcessingRates({
     if (!vertexMetrics || !pipelineId || !vertexId) {
       return;
     }
-    const vertexData = vertexMetrics[vertexId];
+    const vertexData =
+      type === "monoVertex" ? [vertexMetrics] : vertexMetrics[vertexId];
     if (!vertexData) {
       return;
     }
     const rates: PipelineVertexMetric[] = [];
     vertexData.forEach((item: any, index: number) => {
-      if (item.pipeline !== pipelineId || !item.processingRates) {
+      const key = type === "monoVertex" ? "monoVertex" : "pipeline";
+      if (item?.[key] !== pipelineId || !item.processingRates) {
         return; // continue
       }
       rates.push({
@@ -52,6 +56,10 @@ export function ProcessingRates({
     setFoundRates(rates);
   }, [vertexMetrics, pipelineId, vertexId]);
 
+  const formatRate = (rate?: number): string => {
+    return rate !== undefined && rate >= 0 ? `${rate}/sec` : "Not Available";
+  };
+
   return (
     <Box
       sx={{
@@ -64,7 +72,7 @@ export function ProcessingRates({
         <Table stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell>Partition</TableCell>
+              {type !== "monoVertex" && <TableCell>Partition</TableCell>}
               <TableCell>1m</TableCell>
               <TableCell>5m</TableCell>
               <TableCell>15m</TableCell>
@@ -81,10 +89,12 @@ export function ProcessingRates({
             {!!foundRates.length &&
               foundRates.map((metric) => (
                 <TableRow key={metric.partition}>
-                  <TableCell>{metric.partition}</TableCell>
-                  <TableCell>{metric.oneM}/sec</TableCell>
-                  <TableCell>{metric.fiveM}/sec</TableCell>
-                  <TableCell>{metric.fifteenM}/sec</TableCell>
+                  {type !== "monoVertex" && (
+                    <TableCell>{metric.partition}</TableCell>
+                  )}
+                  <TableCell>{formatRate(metric.oneM)}</TableCell>
+                  <TableCell>{formatRate(metric.fiveM)}</TableCell>
+                  <TableCell>{formatRate(metric.fifteenM)}</TableCell>
                 </TableRow>
               ))}
           </TableBody>

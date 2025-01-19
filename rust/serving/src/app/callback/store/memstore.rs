@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::app::callback::CallbackRequest;
+use super::PayloadToSave;
+use crate::app::callback::Callback;
 use crate::consts::SAVED;
 use crate::Error;
-
-use super::PayloadToSave;
 
 /// `InMemoryStore` is an in-memory implementation of the `Store` trait.
 /// It uses a `HashMap` to store data in memory.
@@ -56,14 +55,14 @@ impl super::Store for InMemoryStore {
 
     /// Retrieves callbacks for a given id from the `HashMap`.
     /// Each callback is deserialized from bytes into a `CallbackRequest`.
-    async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<CallbackRequest>>, Error> {
+    async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<Callback>>, Error> {
         let data = self.data.lock().unwrap();
         match data.get(id) {
             Some(result) => {
                 let messages: Result<Vec<_>, _> = result
                     .iter()
                     .map(|msg| {
-                        let cbr: CallbackRequest = serde_json::from_slice(msg).map_err(|_| {
+                        let cbr: Callback = serde_json::from_slice(msg).map_err(|_| {
                             Error::StoreRead(
                                 "Failed to parse CallbackRequest from bytes".to_string(),
                             )
@@ -97,28 +96,27 @@ impl super::Store for InMemoryStore {
 mod tests {
     use std::sync::Arc;
 
-    use crate::app::callback::store::{PayloadToSave, Store};
-    use crate::app::callback::CallbackRequest;
-
     use super::*;
+    use crate::app::callback::store::{PayloadToSave, Store};
+    use crate::app::callback::{Callback, Response};
 
     #[tokio::test]
     async fn test_save_and_retrieve_callbacks() {
         let mut store = InMemoryStore::new();
         let key = "test_key".to_string();
-        let value = Arc::new(CallbackRequest {
+        let value = Arc::new(Callback {
             id: "test_id".to_string(),
             vertex: "in".to_string(),
             cb_time: 12345,
             from_vertex: "in".to_string(),
-            tags: None,
+            responses: vec![Response { tags: None }],
         });
 
         // Save a callback
         store
             .save(vec![PayloadToSave::Callback {
                 key: key.clone(),
-                value: value.clone(),
+                value: Arc::clone(&value),
             }])
             .await
             .unwrap();
@@ -181,19 +179,19 @@ mod tests {
     #[tokio::test]
     async fn test_save_invalid_callback() {
         let mut store = InMemoryStore::new();
-        let value = Arc::new(CallbackRequest {
+        let value = Arc::new(Callback {
             id: "test_id".to_string(),
             vertex: "in".to_string(),
             cb_time: 12345,
             from_vertex: "in".to_string(),
-            tags: None,
+            responses: vec![Response { tags: None }],
         });
 
         // Try to save a callback with an invalid key
         let result = store
             .save(vec![PayloadToSave::Callback {
                 key: "".to_string(),
-                value: value.clone(),
+                value: Arc::clone(&value),
             }])
             .await;
 

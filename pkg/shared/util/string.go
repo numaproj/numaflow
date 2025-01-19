@@ -19,6 +19,7 @@ package util
 import (
 	"crypto/rand"
 	"math/big"
+	"regexp"
 	"strings"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -85,4 +86,9 @@ func CompareSlice(operator v1alpha1.LogicOperator, a []string, b []string) bool 
 		return true
 	}
 	return false
+}
+
+func DNS1035(str string) string {
+	re := regexp.MustCompile(`[^a-z0-9-]+`)
+	return re.ReplaceAllString(strings.ToLower(str), "-")
 }

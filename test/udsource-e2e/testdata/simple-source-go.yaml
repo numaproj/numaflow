@@ -11,7 +11,6 @@ spec:
             # A simple user-defined source for e2e testing
             # See https://github.com/numaproj/numaflow-go/tree/main/pkg/sourcer/examples/simple_source
             image: quay.io/numaio/numaflow-go/source-simple-source:stable
-            imagePullPolicy: Always
       limits:
         readBatchSize: 500
       scale:

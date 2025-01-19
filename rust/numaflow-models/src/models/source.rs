@@ -28,6 +28,8 @@ pub struct Source {
     pub kafka: Option<Box<crate::models::KafkaSource>>,
     #[serde(rename = "nats", skip_serializing_if = "Option::is_none")]
     pub nats: Option<Box<crate::models::NatsSource>>,
+    #[serde(rename = "pulsar", skip_serializing_if = "Option::is_none")]
+    pub pulsar: Option<Box<crate::models::PulsarSource>>,
     #[serde(rename = "serving", skip_serializing_if = "Option::is_none")]
     pub serving: Option<Box<crate::models::ServingSource>>,
     #[serde(rename = "transformer", skip_serializing_if = "Option::is_none")]
@@ -44,6 +46,7 @@ impl Source {
             jetstream: None,
             kafka: None,
             nats: None,
+            pulsar: None,
             serving: None,
             transformer: None,
             udsource: None,

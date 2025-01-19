@@ -23,7 +23,6 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -62,8 +61,6 @@ func (b *Blackhole) IsFull() bool {
 
 // Write writes to the blackhole.
 func (b *Blackhole) Write(_ context.Context, messages []isb.Message) ([]isb.Offset, []error) {
-	sinkWriteCount.With(map[string]string{metrics.LabelVertex: b.name, metrics.LabelPipeline: b.pipelineName}).Add(float64(len(messages)))
-
 	return nil, make([]error, len(messages))
 }
 

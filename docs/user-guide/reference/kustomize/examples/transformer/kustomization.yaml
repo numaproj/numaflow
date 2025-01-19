@@ -2,29 +2,31 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 configurations:
-- https://raw.githubusercontent.com/numaproj/numaflow/main/docs/user-guide/kustomize/numaflow-transformer-config.yaml
+  - https://raw.githubusercontent.com/numaproj/numaflow/main/docs/user-guide/kustomize/numaflow-transformer-config.yaml
 
 namePrefix: my-
 
 resources:
-- my-pipeline.yaml
+  - my-pipeline.yaml
 
 configMapGenerator:
-- name: my-cm
-  literals:
-  - FOO=BAR
+  - literals:
+      - FOO=BAR
+    name: my-cm
 
 secretGenerator:
-- name: my-secret
-  literals:
-  - password=Pa5SW0rD
+  - literals:
+      - password=Pa5SW0rD
+    name: my-secret
 
-commonLabels:
-  foo: bar
+labels:
+  - includeSelectors: true
+    pairs:
+      foo: bar
 
 commonAnnotations:
   foo: bar
 
 images:
-- name: my-pipeline/my-udf
-  newTag: my-version
+  - name: my-pipeline/my-udf
+    newTag: my-version

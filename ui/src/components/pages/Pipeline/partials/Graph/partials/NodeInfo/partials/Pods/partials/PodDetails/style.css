@@ -1,0 +1,23 @@
+.vertex-details-tab-panel {
+    height: 100%;
+}
+
+.vertex-details-tab.MuiTab-root {
+    font-size: 1.4rem !important;
+    font-style: normal !important;
+    font-weight: 600 !important;
+    color: #6B6C72 !important;
+    text-transform: none !important;
+}
+
+.vertex-details-tab-selected.MuiTab-root {
+    font-size: 1.4rem !important;
+    font-style: normal !important;
+    font-weight: 600 !important;
+    color: #393A3D !important;
+    text-transform: none !important;
+}
+
+.vertex-details-tabs > .MuiTabs-scroller > .MuiTabs-indicator {
+    background-color: #037C8F !important;
+}

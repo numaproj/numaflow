@@ -12,10 +12,9 @@ import {
 import "./style.css";
 
 export const MAXIMUM_RADIUS = 15;
-export const MAXIMUM_WIDTH = 350;
 export const MAXIMUM_HEIGHT = 100;
 export const TOOLTIP_OFFSET = 0;
-export const MIN_HEXAGONS = 7;
+export const MIN_HEXAGONS = 1;
 export const DEFAULT_COLOR = "#76b3f7";
 export const DEFAULT_STROKE = "rgb(25, 118, 210)"; //"#ffffff"
 export const DEFAULT_OPACITY = 0.5;
@@ -28,6 +27,7 @@ function HexagonHeatMap({
   tooltipComponent,
   tooltipClass,
   selected,
+  containerWidth,
 }: HexagonHeatMapProps) {
   const [hover, setHover] = useState<null | string>(null);
   const margin = {
@@ -36,11 +36,12 @@ function HexagonHeatMap({
     bottom: 0,
     left: 30,
   };
+  const MAXIMUM_WIDTH = containerWidth;
 
   const sqrtOfTotal = Math.ceil(Math.sqrt(data.length));
 
   // The number of columns and rows of the heatmap
-  // encourage more count along horizontal direction by adding 3
+  // encourage more count along horizontal direction by adding 1
   const mapColumns =
     data.length > sqrtOfTotal + MIN_HEXAGONS
       ? sqrtOfTotal + MIN_HEXAGONS

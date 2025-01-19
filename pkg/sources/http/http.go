@@ -33,7 +33,6 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isb"
-	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
@@ -211,7 +210,6 @@ loop:
 	for i := int64(0); i < count; i++ {
 		select {
 		case m := <-h.messages:
-			httpSourceReadCount.With(map[string]string{metrics.LabelVertex: h.vertexName, metrics.LabelPipeline: h.pipelineName}).Inc()
 			msgs = append(msgs, m)
 		case <-timeout:
 			h.logger.Debugw("Timed out waiting for messages to read.", zap.Duration("waited", h.readTimeout), zap.Int("read", len(msgs)))

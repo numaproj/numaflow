@@ -56,7 +56,7 @@ func New(args map[string]string) (sourcetransformer.SourceTransformFunc, error) 
 
 	return func(ctx context.Context, keys []string, datum sourcetransformer.Datum) sourcetransformer.Messages {
 		log := logging.FromContext(ctx)
-		resultMsg, err := e.apply(datum.Value(), datum.EventTime())
+		resultMsg, err := e.apply(datum.Value(), datum.EventTime(), keys)
 		if err != nil {
 			log.Warnf("event time extractor got an error: %v, skip updating event time...", err)
 		}
@@ -66,10 +66,10 @@ func New(args map[string]string) (sourcetransformer.SourceTransformFunc, error) 
 
 // apply compiles the payload to extract the new event time. If there is any error during extraction,
 // we pass on the original input event time. Otherwise, we assign the new event time to the message.
-func (e eventTimeExtractor) apply(payload []byte, et time.Time) (sourcetransformer.Message, error) {
+func (e eventTimeExtractor) apply(payload []byte, et time.Time, keys []string) (sourcetransformer.Message, error) {
 	timeStr, err := expr.EvalStr(e.expression, payload)
 	if err != nil {
-		return sourcetransformer.NewMessage(payload, et), err
+		return sourcetransformer.NewMessage(payload, et).WithKeys(keys), err
 	}
 
 	var newEventTime time.Time
@@ -80,8 +80,8 @@ func (e eventTimeExtractor) apply(payload []byte, et time.Time) (sourcetransform
 		newEventTime, err = dateparse.ParseStrict(timeStr)
 	}
 	if err != nil {
-		return sourcetransformer.NewMessage(payload, et), err
+		return sourcetransformer.NewMessage(payload, et).WithKeys(keys), err
 	} else {
-		return sourcetransformer.NewMessage(payload, newEventTime), nil
+		return sourcetransformer.NewMessage(payload, newEventTime).WithKeys(keys), nil
 	}
 }

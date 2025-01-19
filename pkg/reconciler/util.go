@@ -18,6 +18,7 @@ package reconciler
 
 import (
 	"fmt"
+	"slices"
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -25,13 +26,17 @@ import (
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
-// CheckVertexPodsStatus checks the status by iterating over pods objects
-func CheckVertexPodsStatus(vertexPods *corev1.PodList) (healthy bool, reason string, message string) {
+// unhealthyWaitingStatus contains the status messages for a pod in waiting state
+// which should be considered as unhealthy
+var unhealthyWaitingStatus = []string{"CrashLoopBackOff", "ImagePullBackOff"}
+
+// CheckPodsStatus checks the status by iterating over pods objects
+func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message string) {
 	// TODO: Need to revisit later.
-	if len(vertexPods.Items) == 0 {
+	if len(pods.Items) == 0 {
 		return true, "NoPodsFound", "No Pods found"
 	} else {
-		for _, pod := range vertexPods.Items {
+		for _, pod := range pods.Items {
 			if podHealthy, msg := isPodHealthy(&pod); !podHealthy {
 				message = fmt.Sprintf("Pod %s is unhealthy", pod.Name)
 				reason = "Pod" + msg
@@ -40,12 +45,12 @@ func CheckVertexPodsStatus(vertexPods *corev1.PodList) (healthy bool, reason str
 			}
 		}
 	}
-	return true, "Running", "All vertex pods are healthy"
+	return true, "Running", "All pods are healthy"
 }
 
 func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
 	for _, c := range pod.Status.ContainerStatuses {
-		if c.State.Waiting != nil && c.State.Waiting.Reason == "CrashLoopBackOff" {
+		if c.State.Waiting != nil && slices.Contains(unhealthyWaitingStatus, c.State.Waiting.Reason) {
 			return false, c.State.Waiting.Reason
 		}
 		if c.State.Terminated != nil && c.State.Terminated.Reason == "Error" {
@@ -53,6 +58,28 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
 		}
 	}
 	return true, ""
+}
+
+func NumOfReadyPods(pods corev1.PodList) int {
+	result := 0
+	for _, pod := range pods.Items {
+		if IsPodReady(pod) {
+			result++
+		}
+	}
+	return result
+}
+
+func IsPodReady(pod corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+	for _, c := range pod.Status.ContainerStatuses {
+		if !c.Ready {
+			return false
+		}
+	}
+	return true
 }
 
 // CheckVertexStatus will calculate the status of the vertices and return the status and reason

@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
@@ -74,6 +75,9 @@ func TestJetStreamGetStatefulSetSpec(t *testing.T) {
 			},
 		}
 		spec := s.GetStatefulSetSpec(req)
+		assert.NotNil(t, spec.PersistentVolumeClaimRetentionPolicy)
+		assert.Equal(t, appv1.DeletePersistentVolumeClaimRetentionPolicyType, spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted)
+		assert.Equal(t, appv1.RetainPersistentVolumeClaimRetentionPolicyType, spec.PersistentVolumeClaimRetentionPolicy.WhenScaled)
 		assert.True(t, len(spec.VolumeClaimTemplates) > 0)
 	})
 

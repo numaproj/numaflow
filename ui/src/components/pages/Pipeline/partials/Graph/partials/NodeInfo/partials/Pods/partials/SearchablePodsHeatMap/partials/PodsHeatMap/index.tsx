@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import HexagonHeatMap from "./partials/HexagonHeatMap";
 import Box from "@mui/material/Box";
 import {
@@ -20,6 +21,26 @@ export const PodsHeatMap = ({
   onPodClick,
   selectedPod,
 }: PodsHeatMapProps) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [maximumWidth, setMaximumWidth] = useState<number>(0);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setMaximumWidth(containerRef.current.offsetWidth * 0.7);
+      }
+    };
+
+    const resizeObserver = new ResizeObserver(updateWidth);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
+
   const cpuColors = {
     infinite: [100, 100000],
     red: [76, 1000],
@@ -173,15 +194,12 @@ export const PodsHeatMap = ({
     <Box
       sx={{
         border: "1px solid #E0E0E0",
-        padding: "0.8rem",
-        flexGrow: 1,
+        width: "100%",
       }}
     >
       <Box
         sx={{
           display: "flex",
-          flexDirection: "row",
-          padding: "0.8rem",
           borderBottom: "1px solid #E0E0E0",
         }}
       >
@@ -191,36 +209,26 @@ export const PodsHeatMap = ({
       <Box
         sx={{
           display: "flex",
-          flexDirection: "row",
-          marginTop: "1.6rem",
         }}
       >
-        <Box
-          sx={{
-            flexGrow: 1,
-            alignItems: "center",
-          }}
-        >
+        <Box ref={containerRef} sx={{ width: "50%" }}>
           <HexagonHeatMap
             data={cpuData}
             handleClick={onPodClick}
             tooltipComponent={tooltipComponent}
             tooltipClass="hexagon-tooltip"
             selected={selectedPod?.name}
+            containerWidth={maximumWidth}
           />
         </Box>
-        <Box
-          sx={{
-            flexGrow: 1,
-            alignItems: "center",
-          }}
-        >
+        <Box sx={{ width: "50%" }}>
           <HexagonHeatMap
             data={memData}
             handleClick={onPodClick}
             tooltipComponent={tooltipComponent}
             tooltipClass="hexagon-tooltip"
             selected={selectedPod?.name}
+            containerWidth={maximumWidth}
           />
         </Box>
       </Box>

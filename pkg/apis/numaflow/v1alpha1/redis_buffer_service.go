@@ -338,6 +338,10 @@ redis_exporter`},
 	nr.AbstractPodTemplate.ApplyToPodSpec(podSpec)
 
 	spec := appv1.StatefulSetSpec{
+		PersistentVolumeClaimRetentionPolicy: &appv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+			WhenDeleted: appv1.DeletePersistentVolumeClaimRetentionPolicyType,
+			WhenScaled:  appv1.RetainPersistentVolumeClaimRetentionPolicyType,
+		},
 		Replicas:    &replicas,
 		ServiceName: req.ServiceName,
 		Selector: &metav1.LabelSelector{

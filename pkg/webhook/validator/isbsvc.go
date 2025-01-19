@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	isbsvccontroller "github.com/numaproj/numaflow/pkg/reconciler/isbsvc"
+	"github.com/numaproj/numaflow/pkg/reconciler/validator"
 )
 
 type isbsvcValidator struct {
@@ -36,7 +36,7 @@ func NewISBServiceValidator(old, new *dfv1.InterStepBufferService) Validator {
 }
 
 func (v *isbsvcValidator) ValidateCreate(_ context.Context) *admissionv1.AdmissionResponse {
-	if err := isbsvccontroller.ValidateInterStepBufferService(v.newISBService); err != nil {
+	if err := validator.ValidateInterStepBufferService(v.newISBService); err != nil {
 		return DeniedResponse(err.Error())
 	}
 	return AllowedResponse()
@@ -44,24 +44,24 @@ func (v *isbsvcValidator) ValidateCreate(_ context.Context) *admissionv1.Admissi
 
 func (v *isbsvcValidator) ValidateUpdate(_ context.Context) *admissionv1.AdmissionResponse {
 	// check the new ISB Service is valid
-	if err := isbsvccontroller.ValidateInterStepBufferService(v.newISBService); err != nil {
+	if err := validator.ValidateInterStepBufferService(v.newISBService); err != nil {
 		return DeniedResponse(err.Error())
 	}
-	switch {
-	case v.oldISBService.Spec.JetStream != nil:
-		// check the type of ISB Service is not changed
-		if v.newISBService.Spec.Redis != nil {
-			return DeniedResponse("can not change ISB Service type from Jetstream to Redis")
-		}
+	// chck if the instance annotation is changed
+	if v.oldISBService.GetAnnotations()[dfv1.KeyInstance] != v.newISBService.GetAnnotations()[dfv1.KeyInstance] {
+		return DeniedResponse("cannot update instance annotation " + dfv1.KeyInstance)
+	}
+	// check the type of ISB Service is not changed
+	if v.oldISBService.GetType() != v.newISBService.GetType() {
+		return DeniedResponse("can not change ISB Service type")
+	}
+	switch v.newISBService.GetType() {
+	case dfv1.ISBSvcTypeJetStream:
 		// check the persistence of ISB Service is not changed
 		if !equality.Semantic.DeepEqual(v.oldISBService.Spec.JetStream.Persistence, v.newISBService.Spec.JetStream.Persistence) {
 			return DeniedResponse("can not change persistence of Jetstream ISB Service")
 		}
-	case v.oldISBService.Spec.Redis != nil:
-		// check the type of ISB Service is not changed
-		if v.newISBService.Spec.JetStream != nil {
-			return DeniedResponse("can not change ISB Service type from Redis to Jetstream")
-		}
+	case dfv1.ISBSvcTypeRedis:
 		// nil check for Redis Native, if one of them is nil and the other is not, it is NOT allowed
 		if oldRedisNative, newRedisNative := v.oldISBService.Spec.Redis.Native, v.newISBService.Spec.Redis.Native; oldRedisNative != nil && newRedisNative == nil {
 			return DeniedResponse("can not remove Redis Native from Redis ISB Service")
@@ -72,6 +72,7 @@ func (v *isbsvcValidator) ValidateUpdate(_ context.Context) *admissionv1.Admissi
 		if oldRedisNative, newRedisNative := v.oldISBService.Spec.Redis.Native, v.newISBService.Spec.Redis.Native; oldRedisNative != nil && newRedisNative != nil && !equality.Semantic.DeepEqual(oldRedisNative.Persistence, newRedisNative.Persistence) {
 			return DeniedResponse("can not change persistence of Redis ISB Service")
 		}
+	default:
 	}
 	return AllowedResponse()
 }

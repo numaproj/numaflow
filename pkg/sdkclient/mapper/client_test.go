@@ -18,80 +18,130 @@ package mapper
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"reflect"
+	"net"
 	"testing"
+	"time"
 
-	"github.com/golang/mock/gomock"
 	mappb "github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1"
-	"github.com/numaproj/numaflow-go/pkg/apis/proto/map/v1/mapmock"
-	"github.com/stretchr/testify/assert"
+	"github.com/numaproj/numaflow-go/pkg/mapper"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func TestClient_IsReady(t *testing.T) {
 	var ctx = context.Background()
+	svc := &mapper.Service{
+		Mapper: mapper.MapperFunc(func(ctx context.Context, keys []string, datum mapper.Datum) mapper.Messages {
+			return mapper.MessagesBuilder()
+		}),
+	}
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockClient := mapmock.NewMockMapClient(ctrl)
-	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&mappb.ReadyResponse{Ready: true}, nil)
-	mockClient.EXPECT().IsReady(gomock.Any(), gomock.Any()).Return(&mappb.ReadyResponse{Ready: false}, fmt.Errorf("mock connection refused"))
-
-	testClient, err := NewFromClient(mockClient)
-	assert.NoError(t, err)
-	reflect.DeepEqual(testClient, &client{
-		grpcClt: mockClient,
+	// Start the gRPC server
+	conn := newServer(t, func(server *grpc.Server) {
+		mappb.RegisterMapServer(server, svc)
 	})
+	defer func(conn *grpc.ClientConn) {
+		_ = conn.Close()
+	}(conn)
+
+	// Create a client connection to the server
+	client := mappb.NewMapClient(conn)
+
+	testClient, err := NewFromClient(ctx, client)
+	require.NoError(t, err)
 
 	ready, err := testClient.IsReady(ctx, &emptypb.Empty{})
-	assert.True(t, ready)
-	assert.NoError(t, err)
+	require.True(t, ready)
+	require.NoError(t, err)
+}
 
-	ready, err = testClient.IsReady(ctx, &emptypb.Empty{})
-	assert.False(t, ready)
-	assert.EqualError(t, err, "mock connection refused")
+func newServer(t *testing.T, register func(server *grpc.Server)) *grpc.ClientConn {
+	lis := bufconn.Listen(100)
+	t.Cleanup(func() {
+		_ = lis.Close()
+	})
+
+	server := grpc.NewServer()
+	t.Cleanup(func() {
+		server.Stop()
+	})
+
+	register(server)
+
+	errChan := make(chan error, 1)
+	go func() {
+		// t.Fatal should only be called from the goroutine running the test
+		if err := server.Serve(lis); err != nil {
+			errChan <- err
+		}
+	}()
+
+	dialer := func(context.Context, string) (net.Conn, error) {
+		return lis.Dial()
+	}
+
+	conn, err := grpc.NewClient("passthrough://", grpc.WithContextDialer(dialer), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+	if err != nil {
+		t.Fatalf("Creating new gRPC client connection: %v", err)
+	}
+
+	var grpcServerErr error
+	select {
+	case grpcServerErr = <-errChan:
+	case <-time.After(500 * time.Millisecond):
+		grpcServerErr = errors.New("gRPC server didn't start in 500ms")
+	}
+	if err != nil {
+		t.Fatalf("Failed to start gRPC server: %v", grpcServerErr)
+	}
+
+	return conn
 }
 
 func TestClient_MapFn(t *testing.T) {
-	var ctx = context.Background()
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockClient := mapmock.NewMockMapClient(ctrl)
-	mockClient.EXPECT().MapFn(gomock.Any(), gomock.Any()).Return(&mappb.MapResponse{Results: []*mappb.MapResponse_Result{
-		{
-			Keys:  []string{"temp-key"},
-			Value: []byte("mock result"),
-			Tags:  nil,
-		},
-	}}, nil)
-	mockClient.EXPECT().MapFn(gomock.Any(), gomock.Any()).Return(&mappb.MapResponse{Results: []*mappb.MapResponse_Result{
-		{
-			Keys:  []string{"temp-key"},
-			Value: []byte("mock result"),
-			Tags:  nil,
-		},
-	}}, fmt.Errorf("mock connection refused"))
-
-	testClient, err := NewFromClient(mockClient)
-	assert.NoError(t, err)
-	reflect.DeepEqual(testClient, &client{
-		grpcClt: mockClient,
+	svc := &mapper.Service{
+		Mapper: mapper.MapperFunc(func(ctx context.Context, keys []string, datum mapper.Datum) mapper.Messages {
+			msg := datum.Value()
+			return mapper.MessagesBuilder().Append(mapper.NewMessage(msg).WithKeys([]string{keys[0] + "_test"}))
+		}),
+	}
+	conn := newServer(t, func(server *grpc.Server) {
+		mappb.RegisterMapServer(server, svc)
 	})
+	mapClient := mappb.NewMapClient(conn)
+	var ctx = context.Background()
+	client, _ := NewFromClient(ctx, mapClient)
 
-	result, err := testClient.MapFn(ctx, &mappb.MapRequest{})
-	assert.Equal(t, &mappb.MapResponse{Results: []*mappb.MapResponse_Result{
-		{
-			Keys:  []string{"temp-key"},
-			Value: []byte("mock result"),
-			Tags:  nil,
-		},
-	}}, result)
-	assert.NoError(t, err)
+	requests := make([]*mappb.MapRequest, 5)
+	for i := 0; i < 5; i++ {
+		requests[i] = &mappb.MapRequest{
+			Request: &mappb.MapRequest_Request{
+				Keys:  []string{fmt.Sprintf("client_key_%d", i)},
+				Value: []byte("test"),
+			},
+		}
+	}
 
-	_, err = testClient.MapFn(ctx, &mappb.MapRequest{})
-	assert.EqualError(t, err, "NonRetryable: mock connection refused")
+	responses, err := client.MapFn(ctx, requests)
+	require.NoError(t, err)
+	var results [][]*mappb.MapResponse_Result
+	for _, resp := range responses {
+		results = append(results, resp.GetResults())
+	}
+	expected := [][]*mappb.MapResponse_Result{
+		{{Keys: []string{"client_key_0_test"}, Value: []byte("test")}},
+		{{Keys: []string{"client_key_1_test"}, Value: []byte("test")}},
+		{{Keys: []string{"client_key_2_test"}, Value: []byte("test")}},
+		{{Keys: []string{"client_key_3_test"}, Value: []byte("test")}},
+		{{Keys: []string{"client_key_4_test"}, Value: []byte("test")}},
+	}
+	require.ElementsMatch(t, expected, results)
 }

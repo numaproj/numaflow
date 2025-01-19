@@ -1,3 +1,10 @@
+SHELL:=/bin/bash
+
+.PHONY: generate
+generate:
+	$(MAKE) --directory numaflow-models generate
+	$(MAKE) --directory numaflow-pb generate
+
 .PHONY: build
 build:
 	cargo build --release

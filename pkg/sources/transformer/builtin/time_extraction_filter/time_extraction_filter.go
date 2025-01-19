@@ -59,7 +59,7 @@ func New(args map[string]string) (sourcetransformer.SourceTransformFunc, error) 
 
 	return func(ctx context.Context, keys []string, datum sourcetransformer.Datum) sourcetransformer.Messages {
 		log := logging.FromContext(ctx)
-		resultMsg, err := e.apply(datum.EventTime(), datum.Value())
+		resultMsg, err := e.apply(datum.EventTime(), datum.Value(), keys)
 		if err != nil {
 			log.Errorf("Filter or event time extractor got an error: %v", err)
 		}
@@ -68,7 +68,7 @@ func New(args map[string]string) (sourcetransformer.SourceTransformFunc, error) 
 
 }
 
-func (e expressions) apply(et time.Time, payload []byte) (sourcetransformer.Message, error) {
+func (e expressions) apply(et time.Time, payload []byte, keys []string) (sourcetransformer.Message, error) {
 	result, err := expr.EvalBool(e.filterExpr, payload)
 	if err != nil {
 		return sourcetransformer.MessageToDrop(et), err
@@ -76,7 +76,7 @@ func (e expressions) apply(et time.Time, payload []byte) (sourcetransformer.Mess
 	if result {
 		timeStr, err := expr.EvalStr(e.eventTimeExpr, payload)
 		if err != nil {
-			return sourcetransformer.NewMessage(payload, et), err
+			return sourcetransformer.NewMessage(payload, et).WithKeys(keys), err
 		}
 		var newEventTime time.Time
 		time.Local, _ = time.LoadLocation("UTC")
@@ -86,9 +86,9 @@ func (e expressions) apply(et time.Time, payload []byte) (sourcetransformer.Mess
 			newEventTime, err = dateparse.ParseStrict(timeStr)
 		}
 		if err != nil {
-			return sourcetransformer.NewMessage(payload, et), err
+			return sourcetransformer.NewMessage(payload, et).WithKeys(keys), err
 		} else {
-			return sourcetransformer.NewMessage(payload, newEventTime), nil
+			return sourcetransformer.NewMessage(payload, newEventTime).WithKeys(keys), nil
 		}
 	}
 	return sourcetransformer.MessageToDrop(et), nil
