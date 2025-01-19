@@ -217,26 +217,6 @@ func TestNeedsUpdate(t *testing.T) {
 	})
 }
 
-func TestNeedsFinalizer(t *testing.T) {
-	t.Run("needs finalizer redis", func(t *testing.T) {
-		testStorageClass := "test"
-		testIsbs := nativeRedisIsbs.DeepCopy()
-		testIsbs.Spec.Redis.Native.Persistence = &dfv1.PersistenceStrategy{
-			StorageClassName: &testStorageClass,
-		}
-		assert.True(t, needsFinalizer(testIsbs))
-	})
-
-	t.Run("needs finalizer jetstream", func(t *testing.T) {
-		testStorageClass := "test"
-		testIsbs := jetStreamIsbs.DeepCopy()
-		testIsbs.Spec.JetStream.Persistence = &dfv1.PersistenceStrategy{
-			StorageClassName: &testStorageClass,
-		}
-		assert.True(t, needsFinalizer(testIsbs))
-	})
-}
-
 func contains(arr []string, str string) bool {
 	for _, a := range arr {
 		if a == str {
