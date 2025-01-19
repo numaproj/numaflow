@@ -116,9 +116,7 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 	if controllerutil.ContainsFinalizer(isbSvc, deprecatedFinalizerName) { // Remove deprecated finalizer if exists
 		controllerutil.RemoveFinalizer(isbSvc, deprecatedFinalizerName)
 	}
-	if needsFinalizer(isbSvc) {
-		controllerutil.AddFinalizer(isbSvc, finalizerName)
-	}
+	controllerutil.AddFinalizer(isbSvc, finalizerName)
 
 	defer func() {
 		if isbSvc.Status.IsHealthy() {
@@ -138,14 +136,4 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 		isbSvc.Status.MarkConfigured()
 	}
 	return installer.Install(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder)
-}
-
-func needsFinalizer(isbSvc *dfv1.InterStepBufferService) bool {
-	if isbSvc.Spec.Redis != nil && isbSvc.Spec.Redis.Native != nil && isbSvc.Spec.Redis.Native.Persistence != nil {
-		return true
-	}
-	if isbSvc.Spec.JetStream != nil && isbSvc.Spec.JetStream.Persistence != nil {
-		return true
-	}
-	return false
 }

@@ -68,6 +68,8 @@ func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	monoVtx := &dfv1.MonoVertex{}
 	if err := mr.client.Get(ctx, req.NamespacedName, monoVtx); err != nil {
 		if apierrors.IsNotFound(err) {
+			// Clean up metrics here, since there's a finalizer defined for MonoVertex
+			cleanupMetrics(req.NamespacedName.Namespace, req.NamespacedName.Name)
 			return reconcile.Result{}, nil
 		}
 		mr.logger.Errorw("Unable to get MonoVertex", zap.Any("request", req), zap.Error(err))
@@ -100,12 +102,6 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 	if !monoVtx.DeletionTimestamp.IsZero() {
 		log.Info("Deleting mono vertex")
 		mr.scaler.StopWatching(mVtxKey)
-		// Clean up metrics
-		_ = reconciler.MonoVertexHealth.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
-		_ = reconciler.MonoVertexDesiredReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
-		_ = reconciler.MonoVertexCurrentReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
-		_ = reconciler.MonoVertexMaxReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
-		_ = reconciler.MonoVertexMinReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -621,4 +617,13 @@ func (mr *monoVertexReconciler) checkChildrenResourceStatus(ctx context.Context,
 	}
 
 	return nil
+}
+
+// Clean up metrics when corresponding mvtx is deleted
+func cleanupMetrics(namespace, mvtx string) {
+	_ = reconciler.MonoVertexHealth.DeleteLabelValues(namespace, mvtx)
+	_ = reconciler.MonoVertexDesiredReplicas.DeleteLabelValues(namespace, mvtx)
+	_ = reconciler.MonoVertexCurrentReplicas.DeleteLabelValues(namespace, mvtx)
+	_ = reconciler.MonoVertexMaxReplicas.DeleteLabelValues(namespace, mvtx)
+	_ = reconciler.MonoVertexMinReplicas.DeleteLabelValues(namespace, mvtx)
 }
