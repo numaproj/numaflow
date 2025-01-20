@@ -147,12 +147,14 @@ where
 }
 
 /// Source is used to read, ack, and get the pending messages count from the source.
+/// Source is responsible for invoking the transformer.
 #[derive(Clone)]
 pub(crate) struct Source {
     read_batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,
     tracker_handle: TrackerHandle,
     read_ahead: bool,
+    /// Transformer handler for transforming messages from Source.
     transformer: Option<Transformer>,
 }
 
@@ -297,7 +299,7 @@ impl Source {
                 Self::send_read_metrics(pipeline_labels, mvtx_labels, read_start_time, msgs_len);
 
                 if msgs_len == 0 {
-                    continue
+                    continue;
                 }
 
                 let mut ack_batch = Vec::with_capacity(msgs_len);
@@ -374,7 +376,7 @@ impl Source {
         let start = Instant::now();
         if !offsets_to_ack.is_empty() {
             Self::ack(source_handle, offsets_to_ack).await?;
-        } else { 
+        } else {
             warn!("no messages to ack, perhaps all are to be `nack'ed`");
         }
 
@@ -383,7 +385,12 @@ impl Source {
         Ok(())
     }
 
-    fn send_read_metrics(pipeline_labels: &Vec<(String, String)>, mvtx_labels: &Vec<(String, String)>, read_start_time: Instant, n: usize) {
+    fn send_read_metrics(
+        pipeline_labels: &Vec<(String, String)>,
+        mvtx_labels: &Vec<(String, String)>,
+        read_start_time: Instant,
+        n: usize,
+    ) {
         if is_mono_vertex() {
             monovertex_metrics()
                 .read_total

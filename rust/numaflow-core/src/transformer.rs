@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use tokio::sync::{mpsc, oneshot, Semaphore};
-use tonic::transport::Channel;
-use tracing::info;
 use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{monovertex_metrics, mvtx_forward_metric_labels};
 use crate::tracker::TrackerHandle;
 use crate::transformer::user_defined::UserDefinedTransformer;
 use crate::Result;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use tokio::sync::{mpsc, oneshot, Semaphore};
+use tonic::transport::Channel;
+use tracing::info;
 
 /// User-Defined Transformer is a custom transformer that can be built by the user.
 ///
