@@ -163,7 +163,7 @@ show-logs:
 	kubectl -n numaflow-system describe po -l 'app.kubernetes.io/component=mono-vertex'
 	echo "Numa Logs--"
 	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex' -c numa
-	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex'
+	kubectl -n numaflow-system logs -f -l 'app.kubernetes.io/component=mono-vertex'
 
 # To run just one of the e2e tests by name (i.e. 'make TestCreateSimplePipeline'):
 Test%:
