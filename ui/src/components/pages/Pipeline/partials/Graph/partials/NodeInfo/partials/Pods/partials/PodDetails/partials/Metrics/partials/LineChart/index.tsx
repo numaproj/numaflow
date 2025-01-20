@@ -49,14 +49,10 @@ const getYAxisLabel = (unit: string, patternName: string) => {
   if (unit !== "") {
     return unit
   }
+  // add units based on pattern name here
   switch(patternName){
-    case "mono_vertex_histogram":
-      return ""
-    case "mono_vertex_cpu_memory_utilization_pod":
-    case "pipeline_vertex_cpu_memory_utilization_pod":
-      return "%"
     default:
-      return "Units"
+      return ""
   }
 };
 
