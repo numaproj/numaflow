@@ -158,20 +158,10 @@ cleanup-e2e:
 	kubectl -n numaflow-system delete po -lnumaflow-e2e=true --ignore-not-found=true
 
 show-logs:
-	kubectl -n numaflow-system get mvtx && \
-	kubectl -n numaflow-system get po -l 'app.kubernetes.io/component=mono-vertex-daemon' && \
-	kubectl -n numaflow-system get po -l 'app.kubernetes.io/component=mono-vertex' && \
-	echo "Monovertex Daemon pod----" && \
-	kubectl -n numaflow-system describe po -l 'app.kubernetes.io/component=mono-vertex-daemon' && \
-	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex-daemon'
-	kubectl -n numaflow-system describe po -l 'app.kubernetes.io/component=mono-vertex' && \
-	echo -n numaflow-system "UDSource Logs--" && \
-	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex' -c udsource && \
-	echo "Transformer Logs--" && \
-	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex' -c transformer && \
-	echo "Udsink Logs--" && \
-	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex' -c udsink && \
-	echo "Numa Logs--" && \
+	kubectl -n numaflow-system get mvtx
+	kubectl -n numaflow-system get po -l 'app.kubernetes.io/component=mono-vertex'
+	kubectl -n numaflow-system describe po -l 'app.kubernetes.io/component=mono-vertex'
+	echo "Numa Logs--"
 	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex' -c numa
 	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex'
 

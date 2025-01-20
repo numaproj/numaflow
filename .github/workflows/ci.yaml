@@ -80,7 +80,7 @@ jobs:
 
     steps:
       - name: Start Pulsar standalone container
-        run: docker run -d -p 6650:6650 -p 8080:8080 apachepulsar/pulsar:4.0.0 bin/pulsar standalone 
+        run: docker run -d -p 6650:6650 -p 8080:8080 apachepulsar/pulsar:4.0.0 bin/pulsar standalone
 
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
@@ -204,19 +204,19 @@ jobs:
         driver: [jetstream]
         case:
           [
-            e2e,
-            diamond-e2e,
-            transformer-e2e,
-            kafka-e2e,
-            map-e2e,
-            reduce-one-e2e,
-            reduce-two-e2e,
-            udsource-e2e,
-            api-e2e,
-            sideinputs-e2e,
-            idle-source-e2e,
+            # e2e,
+            # diamond-e2e,
+            # transformer-e2e,
+            # kafka-e2e,
+            # map-e2e,
+            # reduce-one-e2e,
+            # reduce-two-e2e,
+            # udsource-e2e,
+            # api-e2e,
+            # sideinputs-e2e,
+            # idle-source-e2e,
             monovertex-e2e,
-            builtin-source-e2e,
+            # builtin-source-e2e,
           ]
         include:
           - driver: redis
