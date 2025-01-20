@@ -1,4 +1,3 @@
-use forwarder::ForwarderBuilder;
 use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -11,7 +10,6 @@ use crate::shared::create_components;
 use crate::sink::SinkWriter;
 use crate::source::Source;
 use crate::tracker::TrackerHandle;
-use crate::transformer::Transformer;
 use crate::{metrics, shared};
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
@@ -31,19 +29,20 @@ pub(crate) async fn start_forwarder(
         .as_ref()
         .map(|cb_cfg| CallbackHandler::new(config.name.clone(), cb_cfg.callback_concurrency));
     let tracker_handle = TrackerHandle::new(callback_handler);
-    let (source, source_grpc_client) = create_components::create_source(
+    let (transformer, transformer_grpc_client) = create_components::create_transformer(
         config.batch_size,
-        config.read_timeout,
-        &config.source_config,
+        config.transformer_config.clone(),
         tracker_handle.clone(),
         cln_token.clone(),
     )
     .await?;
 
-    let (transformer, transformer_grpc_client) = create_components::create_transformer(
+    let (source, source_grpc_client) = create_components::create_source(
         config.batch_size,
-        config.transformer_config.clone(),
+        config.read_timeout,
+        &config.source_config,
         tracker_handle.clone(),
+        transformer,
         cln_token.clone(),
     )
     .await?;
@@ -74,7 +73,7 @@ pub(crate) async fn start_forwarder(
     // FIXME: what to do with the handle
     shared::metrics::start_metrics_server(config.metrics_config.clone(), metrics_state).await;
 
-    start(config.clone(), source, sink_writer, transformer, cln_token).await?;
+    start(config.clone(), source, sink_writer, cln_token).await?;
 
     Ok(())
 }
@@ -83,7 +82,6 @@ async fn start(
     mvtx_config: MonovertexConfig,
     source: Source,
     sink: SinkWriter,
-    transformer: Option<Transformer>,
     cln_token: CancellationToken,
 ) -> error::Result<()> {
     // start the pending reader to publish pending metrics
@@ -94,18 +92,9 @@ async fn start(
     .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    let mut forwarder_builder = ForwarderBuilder::new(source, sink, cln_token);
-
-    // add transformer if exists
-    if let Some(transformer_client) = transformer {
-        forwarder_builder = forwarder_builder.transformer(transformer_client);
-    }
-
-    // build the final forwarder
-    let forwarder = forwarder_builder.build();
+    let forwarder = forwarder::Forwarder::new(source, sink, cln_token);
 
     info!("Forwarder is starting...");
-
     // start the forwarder, it will return only on Signal
     forwarder.start().await?;
 
