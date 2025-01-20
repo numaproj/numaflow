@@ -198,6 +198,7 @@ endif
 ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
+	docker run --entrypoint /bin/numaflow-rs $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --rust || true
 
 .PHONY: build-rust-in-docker
 build-rust-in-docker:
