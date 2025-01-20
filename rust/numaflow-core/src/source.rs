@@ -18,9 +18,10 @@ use tokio::sync::Semaphore;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time;
+use tokio::time::Instant;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -261,7 +262,7 @@ impl Source {
         let pipeline_labels = pipeline_forward_metric_labels("Source", Some(get_vertex_name()));
         let mvtx_labels = mvtx_forward_metric_labels();
 
-        info!("Started streaming source with batch size: {}", batch_size);
+        info!(?batch_size, "Started streaming source with batch size");
         let handle = tokio::spawn(async move {
             // this semaphore is used only if read-ahead is disabled. we hold this semaphore to
             // make sure we can read only if the current inflight ones are ack'ed.
@@ -291,30 +292,15 @@ impl Source {
                     }
                 };
 
-                let n = messages.len();
-                if is_mono_vertex() {
-                    monovertex_metrics()
-                        .read_total
-                        .get_or_create(mvtx_labels)
-                        .inc_by(n as u64);
-                    monovertex_metrics()
-                        .read_time
-                        .get_or_create(mvtx_labels)
-                        .observe(read_start_time.elapsed().as_micros() as f64);
-                } else {
-                    pipeline_metrics()
-                        .forwarder
-                        .read_total
-                        .get_or_create(pipeline_labels)
-                        .inc_by(n as u64);
-                    pipeline_metrics()
-                        .forwarder
-                        .read_time
-                        .get_or_create(pipeline_labels)
-                        .observe(read_start_time.elapsed().as_micros() as f64);
+                let msgs_len = messages.len();
+
+                Self::send_read_metrics(pipeline_labels, mvtx_labels, read_start_time, msgs_len);
+
+                if msgs_len == 0 {
+                    continue
                 }
 
-                let mut ack_batch = Vec::with_capacity(n);
+                let mut ack_batch = Vec::with_capacity(msgs_len);
                 for message in messages.iter() {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
                     let offset = message.offset.clone().expect("offset can never be none");
@@ -363,7 +349,7 @@ impl Source {
 
     /// Listens to the oneshot receivers and invokes ack on the source for the offsets that are acked.
     async fn invoke_ack(
-        e2e_start_time: time::Instant,
+        e2e_start_time: Instant,
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
         _permit: Option<OwnedSemaphorePermit>, // permit to release after acking the offsets.
@@ -377,22 +363,51 @@ impl Source {
                     offsets_to_ack.push(offset);
                 }
                 Ok(ReadAck::Nak) => {
-                    error!("Nak received for offset: {:?}", offset);
+                    error!(?offset, "Nak received for offset");
                 }
                 Err(e) => {
-                    error!(
-                        "Error receiving ack for offset: {:?}, error: {:?}",
-                        offset, e
-                    );
+                    error!(?offset, err=?e, "Error receiving ack for offset");
                 }
             }
         }
 
-        let start = time::Instant::now();
+        let start = Instant::now();
         if !offsets_to_ack.is_empty() {
             Self::ack(source_handle, offsets_to_ack).await?;
+        } else { 
+            warn!("no messages to ack, perhaps all are to be `nack'ed`");
         }
 
+        Self::send_ack_metrics(e2e_start_time, n, start);
+
+        Ok(())
+    }
+
+    fn send_read_metrics(pipeline_labels: &Vec<(String, String)>, mvtx_labels: &Vec<(String, String)>, read_start_time: Instant, n: usize) {
+        if is_mono_vertex() {
+            monovertex_metrics()
+                .read_total
+                .get_or_create(mvtx_labels)
+                .inc_by(n as u64);
+            monovertex_metrics()
+                .read_time
+                .get_or_create(mvtx_labels)
+                .observe(read_start_time.elapsed().as_micros() as f64);
+        } else {
+            pipeline_metrics()
+                .forwarder
+                .read_total
+                .get_or_create(pipeline_labels)
+                .inc_by(n as u64);
+            pipeline_metrics()
+                .forwarder
+                .read_time
+                .get_or_create(pipeline_labels)
+                .observe(read_start_time.elapsed().as_micros() as f64);
+        }
+    }
+
+    fn send_ack_metrics(e2e_start_time: Instant, n: usize, start: Instant) {
         if is_mono_vertex() {
             monovertex_metrics()
                 .ack_time
@@ -427,7 +442,6 @@ impl Source {
                 .get_or_create(pipeline_isb_metric_labels())
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         }
-        Ok(())
     }
 }
 
