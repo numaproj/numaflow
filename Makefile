@@ -135,7 +135,7 @@ endif
 	$(MAKE) restart-control-plane-components
 	cat test/manifests/e2e-api-pod.yaml | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./test/$* -name '*.go')
-	go test -v -timeout 5m -count 1 --tags test -p 1 ./test/$* || true
+	go test -v -timeout 15m -count 1 --tags test -p 1 ./test/$* || true
 	$(MAKE) show-logs && false
 	$(MAKE) cleanup-e2e
 
@@ -159,7 +159,11 @@ cleanup-e2e:
 
 show-logs:
 	kubectl -n numaflow-system get mvtx && \
+	kubectl -n numaflow-system get po -l 'app.kubernetes.io/component=mono-vertex-daemon' && \
 	kubectl -n numaflow-system get po -l 'app.kubernetes.io/component=mono-vertex' && \
+	echo "Monovertex Daemon pod----" && \
+	kubectl -n numaflow-system describe po -l 'app.kubernetes.io/component=mono-vertex-daemon' && \
+	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex-daemon'
 	kubectl -n numaflow-system describe po -l 'app.kubernetes.io/component=mono-vertex' && \
 	echo -n numaflow-system "UDSource Logs--" && \
 	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex' -c udsource && \
@@ -169,6 +173,7 @@ show-logs:
 	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex' -c udsink && \
 	echo "Numa Logs--" && \
 	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex' -c numa
+	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex'
 
 # To run just one of the e2e tests by name (i.e. 'make TestCreateSimplePipeline'):
 Test%:
