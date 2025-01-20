@@ -135,8 +135,8 @@ endif
 	$(MAKE) restart-control-plane-components
 	cat test/manifests/e2e-api-pod.yaml | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./test/$* -name '*.go')
-	go test -v -timeout 15m -count 1 --tags test -p 1 ./test/$* || true
-	$(MAKE) show-logs
+	go test -v -timeout 5m -count 1 --tags test -p 1 ./test/$* || true
+	$(MAKE) show-logs && false
 	$(MAKE) cleanup-e2e
 
 image-restart:
@@ -158,17 +158,17 @@ cleanup-e2e:
 	kubectl -n numaflow-system delete po -lnumaflow-e2e=true --ignore-not-found=true
 
 show-logs:
-	kubectl get mvtx && \
-	kubectl get po -l 'app.kubernetes.io/component=mono-vertex' && \
-	kubectl describe po -l 'app.kubernetes.io/component=mono-vertex' && \
-	echo "UDSource Logs--" && \
-	kubectl logs -l 'app.kubernetes.io/component=mono-vertex' -c udsource && \
+	kubectl -n numaflow-system get mvtx && \
+	kubectl -n numaflow-system get po -l 'app.kubernetes.io/component=mono-vertex' && \
+	kubectl -n numaflow-system describe po -l 'app.kubernetes.io/component=mono-vertex' && \
+	echo -n numaflow-system "UDSource Logs--" && \
+	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex' -c udsource && \
 	echo "Transformer Logs--" && \
-	kubectl logs -l 'app.kubernetes.io/component=mono-vertex' -c transformer && \
+	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex' -c transformer && \
 	echo "Udsink Logs--" && \
-	kubectl logs -l 'app.kubernetes.io/component=mono-vertex' -c udsink && \
+	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex' -c udsink && \
 	echo "Numa Logs--" && \
-	kubectl logs -l 'app.kubernetes.io/component=mono-vertex' -c numa
+	kubectl -n numaflow-system logs -l 'app.kubernetes.io/component=mono-vertex' -c numa
 
 # To run just one of the e2e tests by name (i.e. 'make TestCreateSimplePipeline'):
 Test%:
