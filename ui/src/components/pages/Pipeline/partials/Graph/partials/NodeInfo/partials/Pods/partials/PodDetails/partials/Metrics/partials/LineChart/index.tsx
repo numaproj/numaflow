@@ -233,9 +233,12 @@ const LineChartComponent = ({
 
   const groupByLabel = useCallback((dimension: string, metricName: string, patternName: string) => {
     switch(patternName){
-      case "mono_vertex_cpu_memory_utilization_pod":
-      case "pipeline_vertex_cpu_memory_utilization_pod":
+      case "mono_vertex_pod_cpu_memory_utilization":
+      case "pipeline_vertex_pod_cpu_memory_utilization":
         return ["pod"];
+      case "mono_vertex_container_cpu_memory_utilization":
+      case "pipeline_vertex_container_cpu_memory_utilization":
+        return ["container"];
     }
 
     switch (metricName) {
@@ -259,7 +262,7 @@ const LineChartComponent = ({
       const label = groupByLabel(
         metricsReq?.dimension,
         metricsReq?.metric_name,
-        metricsReq?.name
+        metricsReq?.pattern_name
       );
       chartData?.forEach((item) => {
         let labelVal = "";
