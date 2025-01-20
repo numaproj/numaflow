@@ -271,6 +271,7 @@ pub async fn create_source(
     read_timeout: Duration,
     source_config: &SourceConfig,
     tracker_handle: TrackerHandle,
+    transformer: Option<Transformer>,
     cln_token: CancellationToken,
 ) -> error::Result<(Source, Option<SourceClient<Channel>>)> {
     match &source_config.source_type {
@@ -283,6 +284,7 @@ pub async fn create_source(
                     source::SourceType::Generator(generator_read, generator_ack, generator_lag),
                     tracker_handle,
                     source_config.read_ahead,
+                    transformer,
                 ),
                 None,
             ))
@@ -321,6 +323,7 @@ pub async fn create_source(
                     source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
                     tracker_handle,
                     source_config.read_ahead,
+                    transformer,
                 ),
                 Some(source_grpc_client),
             ))
@@ -333,6 +336,7 @@ pub async fn create_source(
                     source::SourceType::Pulsar(pulsar),
                     tracker_handle,
                     source_config.read_ahead,
+                    transformer,
                 ),
                 None,
             ))
@@ -351,6 +355,7 @@ pub async fn create_source(
                     source::SourceType::Serving(serving),
                     tracker_handle,
                     source_config.read_ahead,
+                    transformer,
                 ),
                 None,
             ))
