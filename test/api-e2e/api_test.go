@@ -314,7 +314,7 @@ func (s *APISuite) TestMetricsAPIsForMonoVertex() {
 	w := s.Given().MonoVertex("@testdata/mono-vertex.yaml").
 		When().
 		CreateMonoVertexAndWait()
-	defer w.DeleteMonoVertexAndWait()
+	// defer w.DeleteMonoVertexAndWait()
 
 	monoVertexName := "mono-vertex"
 
