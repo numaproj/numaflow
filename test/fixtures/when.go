@@ -320,27 +320,6 @@ func (w *When) TerminateAllPodPortForwards() *When {
 	return w
 }
 
-func (w *When) StreamMonovertexPodLogs(vertexName, containerName string) *When {
-	w.t.Helper()
-	ctx := context.Background()
-	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, w.monoVertex.Name, dfv1.KeyComponent, vertexName)
-	w.t.Logf("Streaming logs for POD with label selector: %s", labelSelector)
-	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
-	if err != nil {
-		w.t.Fatalf("Error getting vertex pods: %v", err)
-	}
-	for _, pod := range podList.Items {
-		w.t.Logf("Streaming logs for POD: %s", pod.Name)
-		stopCh := make(chan struct{}, 1)
-		streamPodLogs(ctx, w.kubeClient, Namespace, pod.Name, containerName, stopCh)
-		if w.streamLogsStopChannels == nil {
-			w.streamLogsStopChannels = make(map[string]chan struct{})
-		}
-		w.streamLogsStopChannels[pod.Name+":"+containerName] = stopCh
-	}
-	return w
-}
-
 func (w *When) StreamVertexPodLogs(vertexName, containerName string) *When {
 	w.t.Helper()
 	ctx := context.Background()

@@ -162,9 +162,9 @@ show-logs:
 	kubectl -n numaflow-system get po -l 'app.kubernetes.io/name=transformer-mono-vertex'
 	kubectl -n numaflow-system describe po -l 'app.kubernetes.io/name=transformer-mono-vertex'
 	echo "Numa Logs--"
-	kubectl -n numaflow-system logs -l 'app.kubernetes.io/name=transformer-mono-vertex'
+	kubectl -n numaflow-system logs -l 'app.kubernetes.io/name=transformer-mono-vertex' -c numa
 	echo "Previous Logs--"
-	kubectl -n numaflow-system logs -p -l 'app.kubernetes.io/name=transformer-mono-vertex'
+	kubectl -n numaflow-system logs -p -l 'app.kubernetes.io/name=transformer-mono-vertex' -c numa
 
 # To run just one of the e2e tests by name (i.e. 'make TestCreateSimplePipeline'):
 Test%:

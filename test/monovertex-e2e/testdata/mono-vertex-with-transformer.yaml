@@ -3,6 +3,13 @@ kind: MonoVertex
 metadata:
   name: transformer-mono-vertex
 spec:
+  containerTemplate:
+    env:
+      - name: RUST_LOG
+        value: "debug"
+    livenessProbe:
+      periodSeconds: 300
+      initialDelaySeconds: 300
   scale:
     min: 1
   source:
