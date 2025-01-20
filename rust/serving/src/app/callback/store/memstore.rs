@@ -12,7 +12,7 @@ use crate::Error;
 pub(crate) struct InMemoryStore {
     /// The data field is a `HashMap` where the key is a `String` and the value is a `Vec<Vec<u8>>`.
     /// It is wrapped in an `Arc<Mutex<_>>` to allow shared ownership and thread safety.
-    data: Arc<std::sync::Mutex<HashMap<String, Vec<Vec<u8>>>>>,
+    pub(crate) data: Arc<std::sync::Mutex<HashMap<String, Vec<Vec<u8>>>>>,
 }
 
 impl InMemoryStore {
@@ -98,7 +98,7 @@ mod tests {
 
     use super::*;
     use crate::app::callback::store::{PayloadToSave, Store};
-    use crate::app::callback::{Callback, Response};
+    use crate::callback::{Callback, Response};
 
     #[tokio::test]
     async fn test_save_and_retrieve_callbacks() {

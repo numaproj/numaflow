@@ -15,7 +15,7 @@ use crate::metrics::start_https_metrics_server;
 mod app;
 
 mod config;
-pub use config::Settings;
+pub use {config::Settings, config::DEFAULT_CALLBACK_URL_HEADER_KEY, config::DEFAULT_ID_HEADER};
 
 mod consts;
 mod error;
@@ -23,9 +23,10 @@ mod metrics;
 mod pipeline;
 
 pub mod source;
+use source::MessageWrapper;
 pub use source::{Message, ServingSource};
 
-use crate::source::MessageWrapper;
+pub mod callback;
 
 #[derive(Clone)]
 pub(crate) struct AppState<T> {

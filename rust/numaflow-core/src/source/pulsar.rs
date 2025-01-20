@@ -26,6 +26,7 @@ impl TryFrom<PulsarMessage> for Message {
                 index: 0,
             },
             headers: message.headers,
+            metadata: None,
         })
     }
 }

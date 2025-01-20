@@ -311,13 +311,10 @@ func (s *APISuite) TestAPIsForMetricsAndWatermarkAndPodsForPipeline() {
 }
 
 func (s *APISuite) TestMetricsAPIsForMonoVertex() {
-	_, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-
 	w := s.Given().MonoVertex("@testdata/mono-vertex.yaml").
 		When().
 		CreateMonoVertexAndWait()
-	defer w.DeleteMonoVertexAndWait()
+	// defer w.DeleteMonoVertexAndWait()
 
 	monoVertexName := "mono-vertex"
 

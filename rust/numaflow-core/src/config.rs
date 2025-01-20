@@ -10,6 +10,10 @@ use crate::Result;
 const ENV_MONO_VERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 const ENV_VERTEX_OBJ: &str = "NUMAFLOW_VERTEX_OBJECT";
 
+const ENV_CALLBACK_ENABLED: &str = "NUMAFLOW_CALLBACK_ENABLED";
+const ENV_CALLBACK_CONCURRENCY: &str = "NUMAFLOW_CALLBACK_CONCURRENCY";
+const DEFAULT_CALLBACK_CONCURRENCY: usize = 100;
+
 /// Building blocks (Source, Sink, Transformer, FallBack, Metrics, etc.) to build a Pipeline or a
 /// MonoVertex.
 pub(crate) mod components;
@@ -97,7 +101,7 @@ pub(crate) struct Settings {
 impl Settings {
     /// load based on the CRD type, either a pipeline or a monovertex.
     /// Settings are populated through reading the env vars set via the controller. The main
-    /// CRD is the base64 spec of the CR.  
+    /// CRD is the base64 spec of the CR.
     fn load() -> Result<Self> {
         if let Ok(obj) = env::var(ENV_MONO_VERTEX_OBJ) {
             let cfg = MonovertexConfig::load(obj)?;
@@ -112,7 +116,7 @@ impl Settings {
                 custom_resource_type: CustomResourceType::Pipeline(cfg),
             });
         }
-        Err(Error::Config("No configuration found".to_string()))
+        Err(Error::Config("No configuration found - environment variable {ENV_MONO_VERTEX_OBJ} or {ENV_VERTEX_OBJ} is not set".to_string()))
     }
 }
 

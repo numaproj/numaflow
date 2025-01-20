@@ -212,6 +212,7 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 0,
                 },
+                metadata: None,
             },
             Message {
                 keys: Arc::from(vec![]),
@@ -225,6 +226,7 @@ mod tests {
                     offset: "2".to_string().into(),
                     index: 1,
                 },
+                metadata: None,
             },
         ];
 

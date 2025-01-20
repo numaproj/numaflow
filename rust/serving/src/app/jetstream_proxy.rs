@@ -260,12 +260,12 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
-    use crate::app::callback;
     use crate::app::callback::state::State as CallbackState;
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::app::callback::store::PayloadToSave;
-    use crate::app::callback::Callback;
     use crate::app::tracker::MessageGraph;
+    use crate::callback::{Callback, Response};
+    use crate::config::DEFAULT_ID_HEADER;
     use crate::pipeline::PipelineDCG;
     use crate::{Error, Settings};
 
@@ -360,21 +360,21 @@ mod tests {
                 vertex: "in".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
-                responses: vec![callback::Response { tags: None }],
+                responses: vec![Response { tags: None }],
             },
             Callback {
                 id: id.to_string(),
                 vertex: "cat".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
-                responses: vec![callback::Response { tags: None }],
+                responses: vec![Response { tags: None }],
             },
             Callback {
                 id: id.to_string(),
                 vertex: "out".to_string(),
                 cb_time: 12345,
                 from_vertex: "cat".to_string(),
-                responses: vec![callback::Response { tags: None }],
+                responses: vec![Response { tags: None }],
             },
         ]
     }
@@ -526,7 +526,7 @@ mod tests {
             .method("POST")
             .uri("/sync_serve")
             .header("Content-Type", "text/plain")
-            .header("ID", ID_VALUE)
+            .header(DEFAULT_ID_HEADER, ID_VALUE)
             .body(Body::from("Test Message"))
             .unwrap();
 

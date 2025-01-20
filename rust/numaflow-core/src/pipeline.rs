@@ -3,6 +3,7 @@ use std::time::Duration;
 use async_nats::jetstream::Context;
 use async_nats::{jetstream, ConnectOptions};
 use futures::future::try_join_all;
+use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -50,7 +51,10 @@ async fn start_source_forwarder(
     config: PipelineConfig,
     source_config: SourceVtxConfig,
 ) -> Result<()> {
-    let tracker_handle = TrackerHandle::new();
+    let callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
+        CallbackHandler::new(config.vertex_name.clone(), cb_cfg.callback_concurrency)
+    });
+    let tracker_handle = TrackerHandle::new(callback_handler);
     let js_context = create_js_context(config.js_client_config.clone()).await?;
 
     let buffer_writer = create_buffer_writer(
@@ -122,8 +126,12 @@ async fn start_map_forwarder(
     let mut mapper_grpc_client = None;
     let mut isb_lag_readers = vec![];
 
+    let callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
+        CallbackHandler::new(config.vertex_name.clone(), cb_cfg.callback_concurrency)
+    });
+
     for stream in reader_config.streams.clone() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(callback_handler.clone());
 
         let buffer_reader = create_buffer_reader(
             stream,
@@ -214,11 +222,15 @@ async fn start_sink_forwarder(
         .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
         .reader_config;
 
+    let callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
+        CallbackHandler::new(config.vertex_name.clone(), cb_cfg.callback_concurrency)
+    });
+
     // Create sink writers and buffer readers for each stream
     let mut sink_writers = vec![];
     let mut buffer_readers = vec![];
     for stream in reader_config.streams.clone() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(callback_handler.clone());
 
         let buffer_reader = create_buffer_reader(
             stream,
@@ -471,6 +483,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            callback_config: None,
         };
 
         let cancellation_token = CancellationToken::new();
@@ -563,6 +576,7 @@ mod tests {
                     index: 0,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let message: bytes::BytesMut = message.try_into().unwrap();
 
@@ -628,6 +642,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            callback_config: None,
         };
 
         let cancellation_token = CancellationToken::new();
@@ -759,6 +774,7 @@ mod tests {
                     index: 0,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let message: bytes::BytesMut = message.try_into().unwrap();
 
@@ -871,6 +887,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            callback_config: None,
         };
 
         let cancellation_token = CancellationToken::new();
