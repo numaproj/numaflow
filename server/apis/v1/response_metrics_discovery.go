@@ -7,7 +7,7 @@ type Dimensions struct {
 }
 
 type DiscoveryResponse struct {
-	PatternName string       `json:"name"`
+	PatternName string       `json:"pattern_name"`
 	MetricName  string       `json:"metric_name"`
 	DisplayName string       `json:"display_name"`
 	Unit        string       `json:"unit"`

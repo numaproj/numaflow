@@ -11,7 +11,7 @@ const (
 )
 
 type MetricsRequestBody struct {
-	PatternName string            `json:"name"`
+	PatternName string            `json:"pattern_name"`
 	MetricName  string            `json:"metric_name"`
 	Dimension   string            `json:"dimension"`
 	Filters     map[string]string `json:"filters"`

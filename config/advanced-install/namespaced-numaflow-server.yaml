@@ -204,49 +204,71 @@ data:
     Mono Vertex Read Processing Rate\n      # set \"Units\" or unset for default behaviour\n
     \     # unit: Units\n      required_filters:\n        - namespace\n        - mvtx_name\n
     \     dimensions:\n        - name: mono-vertex\n        - name: pod\n          filters:\n
-    \           - name: pod\n              required: false\n- name: mono_vertex_cpu_memory_utilization_pod\n
+    \           - name: pod\n              required: false\n- name: mono_vertex_pod_cpu_memory_utilization\n
     \ object: mono-vertex\n  title: cpu-memory utilization by pod\n  description:
     cpu and memory utilization by pod for mono-vertex\n  expr: avg_over_time($metric_name{$filters}[$duration])\n
     \ params:\n    - name: duration\n      required: true\n    - name: start_time\n
     \     required: false\n    - name: end_time\n      required: false\n  metrics:
     \n    # set your cpu metric name here\n    - metric_name: namespace_pod_cpu_utilization\n
     \     # set display name as per metric name\n      display_name: CPU Utilization
-    per Pod (usage seconds/resource limits)\n      required_filters:\n        - namespace\n
-    \       - pod  \n      dimensions:\n        - name: mono-vertex\n          filters:
-    \n            - name: pod\n              # expr: optional expression for prometheus
-    query\n              # overrides the default expression\n              required:
-    false\n    # set your memory metric name here\n    - metric_name: namespace_pod_memory_utilization\n
-    \     # set display name as per metric name\n      display_name: Memory Utilization
-    per Pod (usage bytes/resource limits)\n      required_filters:\n        - namespace\n
-    \       - pod  \n      dimensions:\n        - name: mono-vertex\n          filters:
-    \n            - name: pod\n              # expr: optional expression for prometheus
-    query\n              # overrides the default expression \n              required:
-    false\n- name: pipeline_vertex_cpu_memory_utilization_pod\n  object: vertex\n
+    per Pod\n      required_filters:\n        - namespace\n        - pod  \n      dimensions:\n
+    \       - name: mono-vertex\n          filters: \n            - name: pod\n              #
+    expr: optional expression for prometheus query\n              # overrides the
+    default expression\n              required: false\n    # set your memory metric
+    name here\n    - metric_name: namespace_pod_memory_utilization\n      # set display
+    name as per metric name\n      display_name: Memory Utilization per Pod\n      required_filters:\n
+    \       - namespace\n        - pod  \n      dimensions:\n        - name: mono-vertex\n
+    \         filters: \n            - name: pod\n              # expr: optional expression
+    for prometheus query\n              # overrides the default expression \n              required:
+    false\n- name: pipeline_vertex_pod_cpu_memory_utilization\n  object: vertex\n
     \ title: cpu-memory utilization by pod\n  description: cpu and memory utilization
     by pod for pipeline's vertex\n  expr: avg_over_time($metric_name{$filters}[$duration])\n
     \ params:\n    - name: duration\n      required: true\n    - name: start_time\n
     \     required: false\n    - name: end_time\n      required: false\n  metrics:
     \n    # set your cpu metric name here\n    - metric_name: namespace_pod_cpu_utilization\n
     \     # set display name as per metric name\n      display_name: CPU Utilization
-    per Pod (usage seconds/resource limits)\n      required_filters:\n        - namespace\n
-    \       - pod  \n      dimensions:\n        - name: vertex\n          filters:
-    \n            - name: pod\n              # expr: optional expression for prometheus
-    query\n              # overrides the default expression \n              required:
-    false\n    # set your memory metric name here\n    - metric_name: namespace_pod_memory_utilization\n
+    per Pod\n      required_filters:\n        - namespace\n        - pod  \n      dimensions:\n
+    \       - name: vertex\n          filters: \n            - name: pod\n              #
+    expr: optional expression for prometheus query\n              # overrides the
+    default expression \n              required: false\n    # set your memory metric
+    name here\n    - metric_name: namespace_pod_memory_utilization\n      # set display
+    name as per metric name\n      display_name: Memory Utilization per Pod\n      required_filters:\n
+    \       - namespace\n        - pod  \n      dimensions:\n        - name: vertex\n
+    \         filters: \n            - name: pod\n              # expr: optional expression
+    for prometheus query\n              # overrides the default expression \n              required:
+    false\n- name: mono_vertex_container_cpu_memory_utilization\n  object: mono-vertex\n
+    \ title: cpu-memory utilization by container for mono-vertex\n  description: cpu
+    and memory utilization by container for mono-vertex\n  expr: avg_over_time($metric_name{$filters}[$duration])\n
+    \ params:\n    - name: duration\n      required: true\n    - name: start_time\n
+    \     required: false\n    - name: end_time\n      required: false\n  metrics:\n
+    \   # set your cpu metric name here\n    - metric_name: namespace_app_container_cpu_utilization\n
+    \     # set display name as per metric name\n      display_name: CPU Utilization
+    per Container\n      required_filters:\n        - namespace\n      dimensions:\n
+    \       - name: mono-vertex\n          filters: \n            - name: container\n
+    \             # expr: optional expression for prometheus query\n              #
+    overrides the default expression \n              required: false\n    # set your
+    memory metric name here\n    - metric_name: namespace_app_container_memory_utilization\n
     \     # set display name as per metric name\n      display_name: Memory Utilization
-    per Pod (usage bytes/resource limits)\n      required_filters:\n        - namespace\n
-    \       - pod  \n      dimensions:\n        - name: vertex\n          filters:
-    \n            - name: pod\n              # expr: optional expression for prometheus
-    query\n              # overrides the default expression \n              required:
-    false\n# - name: mono-vertex-container-cpu\n#   object: mono-vertex\n#   title:
-    cpu utilization by container\n#   description: cpu utilization by container for
-    mono-vertex\n#   expr: avg_over_time($metric_name{$filters}[$duration]})\n#   params:\n#
-    \    - name: duration\n#       required: true\n#     - name: start_time\n#       required:
-    false\n#     - name: end_time\n#       required: false\n#   metrics: \n#     -
-    metric_name: namespace_app_container_cpu_utilization\n#       display_name: CPU
-    utilization by container\n#       required_filters:\n#         - namespace\n#
-    \      dimensions:\n#         - name: container\n#           filters: \n#             -
-    name: container\n#               required: false\n"
+    per Container\n      required_filters:\n        - namespace\n      dimensions:\n
+    \       - name: mono-vertex\n          filters: \n            - name: container\n
+    \             # expr: optional expression for prometheus query\n              #
+    overrides the default expression \n              required: false\n- name: pipeline_vertex_container_cpu_memory_utilization\n
+    \ object: vertex\n  title: cpu-memory utilization by container\n  description:
+    cpu and memory utilization by container for pipeline's vertex\n  expr: avg_over_time($metric_name{$filters}[$duration])\n
+    \ params:\n    - name: duration\n      required: true\n    - name: start_time\n
+    \     required: false\n    - name: end_time\n      required: false\n  metrics:\n
+    \   # set your cpu metric name here\n    - metric_name: namespace_app_container_cpu_utilization\n
+    \     # set display name as per metric name\n      display_name: CPU Utilization
+    per Container\n      required_filters:\n        - namespace\n      dimensions:\n
+    \       - name: vertex\n          filters: \n            - name: container\n              #
+    expr: optional expression for prometheus query\n              # overrides the
+    default expression \n              required: false\n    # set your memory metric
+    name here\n    - metric_name: namespace_app_container_memory_utilization\n      #
+    set display name as per metric name\n      display_name: Memory Utilization per
+    Container\n      required_filters:\n        - namespace\n      dimensions:\n        -
+    name: vertex\n          filters: \n            - name: container\n              #
+    expr: optional expression for prometheus query\n              # overrides the
+    default expression \n              required: false\n"
 kind: ConfigMap
 metadata:
   name: numaflow-server-metrics-proxy-config

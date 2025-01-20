@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -17,6 +17,8 @@ import FiltersDropdown from "../common/FiltersDropdown";
 import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
 import TimeSelector from "../common/TimeRange";
+import { AppContext } from "../../../../../../../../../../../../../../../App";
+import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
 
 interface TooltipProps {
   payload?: any[];
@@ -114,11 +116,12 @@ const LineChartComponent = ({
   vertexId,
   podDetails
 }: any) => {
+  const { addError } = useContext<AppContextProps>(AppContext); 
   const [transformedData, setTransformedData] = useState<any[]>([]);
   const [chartLabels, setChartLabels] = useState<any[]>([]);
   const [metricsReq, setMetricsReq] = useState<any>({
     metric_name: metric?.metric_name,
-    name: metric?.name,
+    pattern_name: metric?.pattern_name,
   });
   const [paramsList, setParamsList] = useState<any[]>([]);
   // store all filters for each selected dimension
@@ -145,11 +148,17 @@ const LineChartComponent = ({
         case "vertex":
           return vertexId;
         case "pod":
-          switch(type){
-            case "monoVertex":
-              return `${pipelineId}-.*`;
-            default:
-              return `${pipelineId}-${vertexId}-.*`;
+          // based on pattern names, update filter based on pod value or multiple pods based on regex
+          if (metric?.pattern_name === "pipeline_vertex_pod_cpu_memory_utilization" || metric?.pattern_name === "mono_vertex_pod_cpu_memory_utilization"){
+            switch(type){
+              case "monoVertex":
+                return `${pipelineId}-.*`;
+              default:
+                return `${pipelineId}-${vertexId}-.*`;
+            }
+          }
+          else {
+            return podDetails?.name
           }
         default:
           return "";
@@ -215,6 +224,12 @@ const LineChartComponent = ({
     metricReq: metricsReq,
     filters,
   });
+
+  useEffect(() => {
+    if (error) {
+      addError(error?.toString());
+    }
+  }, [error, addError]);
 
   const groupByLabel = useCallback((dimension: string, metricName: string, patternName: string) => {
     switch(patternName){
@@ -369,7 +384,7 @@ const LineChartComponent = ({
         </Box>
       )}
 
-      {!isLoading && error && <EmptyChart />}
+      {!isLoading && error && <EmptyChart message={error?.toString()}/>}
 
       {!isLoading && !error && transformedData?.length > 0 && (
         <ResponsiveContainer width="100%" height={400}>
@@ -408,7 +423,7 @@ const LineChartComponent = ({
         </ResponsiveContainer>
       )}
 
-      {!isLoading && !error && transformedData?.length === 0 && <EmptyChart />}
+      {!isLoading && !error && transformedData?.length === 0 && <EmptyChart/>}
     </Box>
   );
 };
