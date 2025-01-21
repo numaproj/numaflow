@@ -87,9 +87,9 @@ export function Buffers({
                         namespaceId={namespaceId}
                         pipelineId={pipelineId}
                         vertexId={vertexId}
-                        value={buffer?.totalMessages}
-                        metricName={"vertex_pending_messages"}
                         type={type}
+                        metricName={"vertex_pending_messages"}
+                        value={buffer?.totalMessages}
                       />
                     </TableCell>
                   </TableRow>

@@ -5,15 +5,24 @@ import { MetricsModal } from "./partials/MetricsModal";
 
 import "./style.css";
 
+interface MetricsModalWrapperProps {
+  namespaceId: string;
+  pipelineId: string;
+  vertexId: string;
+  type: string;
+  metricName: string;
+  value: any;
+}
+
 export function MetricsModalWrapper({
   namespaceId,
   pipelineId,
   vertexId,
-  value,
-  metricName,
   type,
-}: any) {
-  const [open, setOpen] = useState(false);
+  metricName,
+  value,
+}: MetricsModalWrapperProps) {
+  const [open, setOpen] = useState<boolean>(false);
 
   const handleOpen = useCallback(() => {
     setOpen(true);

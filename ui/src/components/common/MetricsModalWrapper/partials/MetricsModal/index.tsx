@@ -22,6 +22,16 @@ const style = {
   p: 4,
 };
 
+interface MetricsModalProps {
+  open: boolean;
+  handleClose: () => void;
+  metricName: string;
+  namespaceId: string;
+  pipelineId: string;
+  vertexId: string;
+  type: string;
+}
+
 export function MetricsModal({
   open,
   handleClose,
@@ -30,7 +40,7 @@ export function MetricsModal({
   pipelineId,
   vertexId,
   type,
-}: any) {
+}: MetricsModalProps) {
   const vertexDetailsContext =
     useContext<VertexDetailsContextProps>(VertexDetailsContext);
   const { setVertexTab, setPodsViewTab, setExpanded } = vertexDetailsContext;
@@ -84,7 +94,7 @@ export function MetricsModal({
               display: "flex",
               flexDirection: "row-reverse",
               textDecoration: "underline",
-              color: "blue",
+              color: "#0077C5",
               cursor: "pointer",
               mt: "0.5rem",
             }}
