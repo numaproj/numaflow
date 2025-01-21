@@ -304,7 +304,7 @@ impl MapHandle {
             }
             Ok(())
         });
-        
+
         Ok((ReceiverStream::new(output_rx), handle))
     }
 

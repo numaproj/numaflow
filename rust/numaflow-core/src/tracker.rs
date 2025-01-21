@@ -242,8 +242,8 @@ impl Tracker {
         if entry.count > 0 {
             entry.count -= 1;
         }
-        
-        // if count is 0 and is eof we are sure that we can ack the offset. 
+
+        // if count is 0 and is eof we are sure that we can ack the offset.
         // In map-streaming this won't happen because eof is not tied to the message, rather it is
         // tied to channel-close.
         if entry.count == 0 && entry.eof {
@@ -288,7 +288,7 @@ impl Tracker {
         } = entry;
 
         ack_send.send(ReadAck::Ack).expect("Failed to send ack");
-        
+
         let Some(ref callback_handler) = self.serving_callback_handler else {
             return;
         };
@@ -420,7 +420,7 @@ impl TrackerHandle {
             .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
         Ok(())
     }
-    
+
     /// Checks if the Tracker is empty. Used for testing to make sure all messages are acknowledged.
     #[cfg(test)]
     pub(crate) async fn is_empty(&self) -> Result<bool> {
