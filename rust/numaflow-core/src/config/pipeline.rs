@@ -295,7 +295,6 @@ impl PipelineConfig {
             .into_iter()
             .map(|(key, val)| (key.into(), val.into()))
             .filter(|(key, _val)| {
-                // FIXME(cr): this filter is non-exhaustive, should we invert?
                 [
                     ENV_NUMAFLOW_SERVING_JETSTREAM_URL,
                     ENV_NUMAFLOW_SERVING_JETSTREAM_USER,

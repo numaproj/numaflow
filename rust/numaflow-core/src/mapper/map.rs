@@ -304,8 +304,7 @@ impl MapHandle {
             }
             Ok(())
         });
-
-        tracing::info!("Returning output_rx stream");
+        
         Ok((ReceiverStream::new(output_rx), handle))
     }
 
@@ -344,7 +343,7 @@ impl MapHandle {
             }
 
             match receiver.await {
-                Ok(Ok(mut mapped_messages)) => {
+                Ok(Ok(mapped_messages)) => {
                     // update the tracker with the number of messages sent and send the mapped messages
                     for message in mapped_messages.iter() {
                         if let Err(e) = tracker_handle
@@ -355,19 +354,21 @@ impl MapHandle {
                             return;
                         }
                     }
+                    // done with the batch
                     if let Err(e) = tracker_handle.update_eof(offset).await {
                         error_tx.send(e).await.expect("failed to send error");
                         return;
                     }
-                    for mapped_message in mapped_messages.drain(..) {
+                    // send messages downstream
+                    for mapped_message in mapped_messages {
                         output_tx
                             .send(mapped_message)
                             .await
                             .expect("failed to send response");
                     }
                 }
-                Ok(Err(e)) => {
-                    error_tx.send(e).await.expect("failed to send error");
+                Ok(Err(_map_err)) => {
+                    error_tx.send(_map_err).await.expect("failed to send error");
                 }
                 Err(e) => {
                     error_tx
@@ -401,7 +402,7 @@ impl MapHandle {
 
         for receiver in receivers {
             match receiver.await {
-                Ok(Ok(mut mapped_messages)) => {
+                Ok(Ok(mapped_messages)) => {
                     let mut offset: Option<Bytes> = None;
                     for message in mapped_messages.iter() {
                         if offset.is_none() {
@@ -414,15 +415,15 @@ impl MapHandle {
                     if let Some(offset) = offset {
                         tracker_handle.update_eof(offset).await?;
                     }
-                    for mapped_message in mapped_messages.drain(..) {
+                    for mapped_message in mapped_messages {
                         output_tx
                             .send(mapped_message)
                             .await
                             .expect("failed to send response");
                     }
                 }
-                Ok(Err(e)) => {
-                    return Err(e);
+                Ok(Err(_map_err)) => {
+                    return Err(_map_err);
                 }
                 Err(e) => {
                     return Err(Error::Mapper(format!("failed to receive message: {}", e)));
@@ -464,6 +465,8 @@ impl MapHandle {
                 return;
             }
 
+            // map streaming is a streaming flat-map operation, so we will have to wait till
+            // recv is explicitly closed.
             while let Some(result) = receiver.recv().await {
                 match result {
                     Ok(mapped_message) => {

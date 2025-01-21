@@ -23,10 +23,14 @@ use crate::Result;
 /// TrackerEntry represents the state of a tracked message.
 #[derive(Debug)]
 struct TrackerEntry {
+    /// one shot to send the ack back
     ack_send: oneshot::Sender<ReadAck>,
+    /// number of messages in flight. the count to reach 0 for the ack to happen.
+    /// count++ happens during update and count-- during delete
     count: usize,
+    /// end of stream for this offset (not expecting any more streaming data).
     eof: bool,
-    callback_info: Option<CallbackInfo>,
+    serving_callback_info: Option<ServingCallbackInfo>,
 }
 
 /// ActorMessage represents the messages that can be sent to the Tracker actor.
@@ -34,7 +38,7 @@ enum ActorMessage {
     Insert {
         offset: Bytes,
         ack_send: oneshot::Sender<ReadAck>,
-        callback_info: Option<CallbackInfo>,
+        serving_callback_info: Option<ServingCallbackInfo>,
     },
     Update {
         offset: Bytes,
@@ -59,20 +63,22 @@ enum ActorMessage {
 /// Tracker is responsible for managing the state of messages being processed.
 /// It keeps track of message offsets and their completeness, and sends acknowledgments.
 struct Tracker {
+    /// number of entri
     entries: HashMap<Bytes, TrackerEntry>,
     receiver: mpsc::Receiver<ActorMessage>,
-    callback_handler: Option<CallbackHandler>,
+    serving_callback_handler: Option<CallbackHandler>,
 }
 
 #[derive(Debug)]
-struct CallbackInfo {
+struct ServingCallbackInfo {
     id: String,
     callback_url: String,
     from_vertex: String,
+    /// at the moment these are just tags.
     responses: Vec<Option<Vec<String>>>,
 }
 
-impl TryFrom<&Message> for CallbackInfo {
+impl TryFrom<&Message> for ServingCallbackInfo {
     type Error = Error;
 
     fn try_from(message: &Message) -> std::result::Result<Self, Self::Error> {
@@ -108,7 +114,7 @@ impl TryFrom<&Message> for CallbackInfo {
                 msg_tags = Some(tags.iter().cloned().collect());
             }
         };
-        Ok(CallbackInfo {
+        Ok(ServingCallbackInfo {
             id: uuid,
             callback_url,
             from_vertex,
@@ -133,12 +139,12 @@ impl Tracker {
     /// Creates a new Tracker instance with the given receiver for actor messages.
     fn new(
         receiver: mpsc::Receiver<ActorMessage>,
-        callback_handler: Option<CallbackHandler>,
+        serving_callback_handler: Option<CallbackHandler>,
     ) -> Self {
         Self {
             entries: HashMap::new(),
             receiver,
-            callback_handler,
+            serving_callback_handler,
         }
     }
 
@@ -155,7 +161,7 @@ impl Tracker {
             ActorMessage::Insert {
                 offset,
                 ack_send: respond_to,
-                callback_info,
+                serving_callback_info: callback_info,
             } => {
                 self.handle_insert(offset, callback_info, respond_to);
             }
@@ -186,7 +192,7 @@ impl Tracker {
     fn handle_insert(
         &mut self,
         offset: Bytes,
-        callback_info: Option<CallbackInfo>,
+        callback_info: Option<ServingCallbackInfo>,
         respond_to: oneshot::Sender<ReadAck>,
     ) {
         self.entries.insert(
@@ -195,30 +201,31 @@ impl Tracker {
                 ack_send: respond_to,
                 count: 0,
                 eof: true,
-                callback_info,
+                serving_callback_info: callback_info,
             },
         );
     }
 
-    /// Updates an existing entry in the tracker with the number of expected messages and EOF status.
+    /// Updates an existing entry in the tracker with the number of expected messages for this offset.
     fn handle_update(&mut self, offset: Bytes, responses: Option<Vec<String>>) {
         let Some(entry) = self.entries.get_mut(&offset) else {
             return;
         };
 
         entry.count += 1;
-        if let Some(cb) = entry.callback_info.as_mut() {
+        if let Some(cb) = entry.serving_callback_info.as_mut() {
             cb.responses.push(responses);
         }
     }
 
+    /// Update whether we have seen the eof (end of stream) for this offset.
     async fn handle_update_eof(&mut self, offset: Bytes) {
         let Some(entry) = self.entries.get_mut(&offset) else {
             return;
         };
         entry.eof = true;
         // if the count is zero, we can send an ack immediately
-        // this is case where map stream will send eof true after
+        // this is case where map-stream will send eof true after
         // receiving all the messages.
         if entry.count == 0 {
             let entry = self.entries.remove(&offset).unwrap();
@@ -235,9 +242,14 @@ impl Tracker {
         if entry.count > 0 {
             entry.count -= 1;
         }
+        
+        // if count is 0 and is eof we are sure that we can ack the offset. 
+        // In map-streaming this won't happen because eof is not tied to the message, rather it is
+        // tied to channel-close.
         if entry.count == 0 && entry.eof {
             self.ack_message(entry).await;
         } else {
+            // add it back because we removed it
             self.entries.insert(offset, entry);
         }
     }
@@ -263,16 +275,21 @@ impl Tracker {
         }
     }
 
+    /// This function is called once the message has been successfully processed. This is where
+    /// the bookkeeping for a successful message happens, things like,
+    /// - ack back
+    /// - call serving callbacks
+    /// - watermark progression
     async fn ack_message(&self, entry: TrackerEntry) {
         let TrackerEntry {
             ack_send,
-            callback_info,
+            serving_callback_info: callback_info,
             ..
         } = entry;
 
         ack_send.send(ReadAck::Ack).expect("Failed to send ack");
-
-        let Some(ref callback_handler) = self.callback_handler else {
+        
+        let Some(ref callback_handler) = self.serving_callback_handler else {
             return;
         };
         let Some(callback_info) = callback_info else {
@@ -330,7 +347,7 @@ impl TrackerHandle {
         let message = ActorMessage::Insert {
             offset,
             ack_send,
-            callback_info,
+            serving_callback_info: callback_info,
         };
         self.sender
             .send(message)
@@ -403,6 +420,7 @@ impl TrackerHandle {
             .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
         Ok(())
     }
+    
     /// Checks if the Tracker is empty. Used for testing to make sure all messages are acknowledged.
     #[cfg(test)]
     pub(crate) async fn is_empty(&self) -> Result<bool> {
@@ -452,7 +470,7 @@ mod tests {
             metadata: None,
         };
 
-        let callback_info: super::Result<CallbackInfo> = TryFrom::try_from(&message);
+        let callback_info: super::Result<ServingCallbackInfo> = TryFrom::try_from(&message);
         assert!(callback_info.is_err());
 
         const CALLBACK_URL: &str = "https://localhost/v1/process/callback";
@@ -470,7 +488,7 @@ mod tests {
             previous_vertex: FROM_VERTEX_NAME.into(),
         });
 
-        let callback_info: CallbackInfo = TryFrom::try_from(&message).unwrap();
+        let callback_info: ServingCallbackInfo = TryFrom::try_from(&message).unwrap();
         assert_eq!(callback_info.id, "1234");
         assert_eq!(callback_info.callback_url, CALLBACK_URL);
         assert_eq!(callback_info.from_vertex, FROM_VERTEX_NAME);

@@ -31,6 +31,7 @@ pub(crate) struct Response {
 
 #[derive(Clone)]
 pub struct CallbackHandler {
+    /// the client to callback to the request originating pod/container
     client: Client,
     vertex_name: String,
     semaphore: Arc<Semaphore>,
@@ -87,6 +88,7 @@ impl CallbackHandler {
             // When there is a failure, we retry after wait_secs. This value is doubled after each retry attempt.
             // Then longest wait time will be 64 seconds.
             let mut wait_secs = 1;
+            // TODO: let's do only 2 retries and write directly to the DB.
             const TOTAL_ATTEMPTS: usize = 7;
             for i in 1..=TOTAL_ATTEMPTS {
                 let resp = client
@@ -103,6 +105,9 @@ impl CallbackHandler {
                                 ?e,
                                 "Sending callback request failed. Will retry after a delay"
                             );
+                            // TODO: this sleep is a LOT, should in < 10ms. we do not want to retry
+                            //  for the pod/container to comeback but rather retrying to transient errors.
+                            //  Also see whether `reqwest` will do an internal retry.
                             tokio::time::sleep(Duration::from_secs(wait_secs)).await;
                             wait_secs *= 2;
                         } else {
