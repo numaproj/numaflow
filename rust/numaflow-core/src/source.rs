@@ -308,7 +308,7 @@ impl Source {
                     let offset = message.offset.clone().expect("offset can never be none");
 
                     // insert the offset and the ack one shot in the tracker.
-                    tracker_handle.insert(&message, resp_ack_tx).await?;
+                    tracker_handle.insert(message, resp_ack_tx).await?;
 
                     // store the ack one shot in the batch to invoke ack later.
                     ack_batch.push((offset, resp_ack_rx));

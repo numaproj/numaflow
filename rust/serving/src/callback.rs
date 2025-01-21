@@ -167,10 +167,10 @@ mod tests {
     use crate::pipeline::PipelineDCG;
     use crate::test_utils::get_port;
     use crate::{AppState, Settings};
+    use axum::http::StatusCode;
     use axum::routing::{get, post};
     use axum::{Json, Router};
     use axum_server::tls_rustls::RustlsConfig;
-    use reqwest::StatusCode;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
