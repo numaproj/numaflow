@@ -184,8 +184,11 @@ jobs:
         run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
       - name: Rename binary
         run: cp -pv target/x86_64-unknown-linux-gnu/release/numaflow ./numaflow-rs-linux-amd64
-      - name: List files
-        run: pwd && ls -al && file ./numaflow-rs-linux-amd64
+      - name: Verfiy binary is Statically Linked
+        run: |
+          pwd && ls -al
+          file ./numaflow-rs-linux-amd64
+          file ./numaflow-rs-linux-amd64 | grep 'static-pie linked'
       - name: Upload numaflow binary
         uses: actions/upload-artifact@v4
         with:
@@ -204,19 +207,19 @@ jobs:
         driver: [jetstream]
         case:
           [
-            # e2e,
-            # diamond-e2e,
-            # transformer-e2e,
-            # kafka-e2e,
-            # map-e2e,
-            # reduce-one-e2e,
-            # reduce-two-e2e,
-            # udsource-e2e,
-            # api-e2e,
-            # sideinputs-e2e,
-            # idle-source-e2e,
+            e2e,
+            diamond-e2e,
+            transformer-e2e,
+            kafka-e2e,
+            map-e2e,
+            reduce-one-e2e,
+            reduce-two-e2e,
+            udsource-e2e,
+            api-e2e,
+            sideinputs-e2e,
+            idle-source-e2e,
             monovertex-e2e,
-            # builtin-source-e2e,
+            builtin-source-e2e,
           ]
         include:
           - driver: redis

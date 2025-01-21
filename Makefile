@@ -135,8 +135,7 @@ endif
 	$(MAKE) restart-control-plane-components
 	cat test/manifests/e2e-api-pod.yaml | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./test/$* -name '*.go')
-	go test -v -timeout 15m -count 1 --tags test -p 1 ./test/$* || true
-	$(MAKE) show-logs && false
+	go test -v -timeout 15m -count 1 --tags test -p 1 ./test/$*
 	$(MAKE) cleanup-e2e
 
 image-restart:
@@ -156,15 +155,6 @@ cleanup-e2e:
 	kubectl -n numaflow-system delete cm -lnumaflow-e2e=true --ignore-not-found=true
 	kubectl -n numaflow-system delete secret -lnumaflow-e2e=true --ignore-not-found=true
 	kubectl -n numaflow-system delete po -lnumaflow-e2e=true --ignore-not-found=true
-
-show-logs:
-	kubectl -n numaflow-system get mvtx
-	kubectl -n numaflow-system get po -l 'app.kubernetes.io/name=transformer-mono-vertex'
-	kubectl -n numaflow-system describe po -l 'app.kubernetes.io/name=transformer-mono-vertex'
-	echo "Numa Logs--"
-	kubectl -n numaflow-system logs -l 'app.kubernetes.io/name=transformer-mono-vertex' -c numa
-	echo "Previous Logs--"
-	kubectl -n numaflow-system logs -p -l 'app.kubernetes.io/name=transformer-mono-vertex' -c numa
 
 # To run just one of the e2e tests by name (i.e. 'make TestCreateSimplePipeline'):
 Test%:
@@ -198,7 +188,6 @@ endif
 ifdef IMAGE_IMPORT_CMD
 	$(IMAGE_IMPORT_CMD) $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION)
 endif
-	docker run --entrypoint /bin/numaflow-rs $(IMAGE_NAMESPACE)/$(BINARY_NAME):$(VERSION) --rust || true
 
 .PHONY: build-rust-in-docker
 build-rust-in-docker:
