@@ -70,17 +70,30 @@ const getDefaultFormatter = (value: number, patternName: string) => {
       if (value === 0){
         return "0";
       } else if (value < 1000) {
-        return `${value} μs`;
+        return formatValue(value," μs");
       } else if (value < 1000000) {
         return formatValue(value / 1000, " ms");
       } else {
         return formatValue(value / 1000000, " s");
       }
+    case "pipeline_vertex_container_cpu_memory_utilization":
+    case "mono_vertex_container_cpu_memory_utilization":
+    case "pipeline_vertex_pod_cpu_memory_utilization":
+    case "mono_vertex_pod_cpu_memory_utilization":
+      if (value === 0){
+        return "0";
+      } else if (value < 1000) {
+        return formatValue(value," %");
+      } else if (value < 1000000) {
+        return formatValue(value / 1000, "k %");
+      } else {
+        return formatValue(value / 1000000, "M %");
+      }
     default:
       if (value === 0){
         return "0";
       } else if (value < 1000) {
-        return `${value}`;
+        return formatValue(value,"");
       } else if (value < 1000000) {
         return formatValue(value / 1000, " k");
       } else {
