@@ -15,7 +15,7 @@ use crate::metrics::start_https_metrics_server;
 mod app;
 
 mod config;
-pub use config::Settings;
+pub use {config::Settings, config::DEFAULT_CALLBACK_URL_HEADER_KEY, config::DEFAULT_ID_HEADER};
 
 mod consts;
 mod error;
@@ -23,9 +23,10 @@ mod metrics;
 mod pipeline;
 
 pub mod source;
+use source::MessageWrapper;
 pub use source::{Message, ServingSource};
 
-use crate::source::MessageWrapper;
+pub mod callback;
 
 #[derive(Clone)]
 pub(crate) struct AppState<T> {
@@ -69,5 +70,20 @@ async fn flatten<T>(handle: tokio::task::JoinHandle<Result<T>>) -> Result<T> {
         Ok(Ok(result)) => Ok(result),
         Ok(Err(err)) => Err(err),
         Err(err) => Err(Error::Other(format!("Spawning the server: {err:?}"))),
+    }
+}
+
+#[cfg(test)]
+pub mod test_utils {
+    use std::sync::{
+        atomic::{AtomicU16, Ordering},
+        OnceLock,
+    };
+
+    static CELL: OnceLock<AtomicU16> = OnceLock::new();
+
+    pub(crate) fn get_port() -> u16 {
+        let val = CELL.get_or_init(|| AtomicU16::new(62000));
+        val.fetch_add(1, Ordering::Relaxed)
     }
 }

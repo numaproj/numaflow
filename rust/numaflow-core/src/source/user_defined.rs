@@ -129,6 +129,7 @@ impl TryFrom<read_response::Result> for Message {
                 index: 0,
             },
             headers: result.headers,
+            metadata: None,
         })
     }
 }

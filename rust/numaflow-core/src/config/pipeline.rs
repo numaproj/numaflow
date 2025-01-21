@@ -19,12 +19,15 @@ use crate::config::pipeline::map::MapVtxConfig;
 use crate::error::Error;
 use crate::Result;
 
+use super::{DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED};
+
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
 const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
+const ENV_PAF_BATCH_SIZE: &str = "PAF_BATCH_SIZE";
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_MAP_SOCKET: &str = "/var/run/numaflow/map.sock";
 pub(crate) const DEFAULT_BATCH_MAP_SOCKET: &str = "/var/run/numaflow/batchmap.sock";
@@ -47,6 +50,12 @@ pub(crate) struct PipelineConfig {
     pub(crate) to_vertex_config: Vec<ToVertexConfig>,
     pub(crate) vertex_config: VertexType,
     pub(crate) metrics_config: MetricsConfig,
+    pub(crate) callback_config: Option<ServingCallbackConfig>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ServingCallbackConfig {
+    pub(crate) callback_concurrency: usize,
 }
 
 impl Default for PipelineConfig {
@@ -66,6 +75,7 @@ impl Default for PipelineConfig {
                 transformer_config: None,
             }),
             metrics_config: Default::default(),
+            callback_config: None,
         }
     }
 }
@@ -285,10 +295,15 @@ impl PipelineConfig {
             .into_iter()
             .map(|(key, val)| (key.into(), val.into()))
             .filter(|(key, _val)| {
-                // FIXME(cr): this filter is non-exhaustive, should we invert?
-                key == ENV_NUMAFLOW_SERVING_JETSTREAM_URL
-                    || key == ENV_NUMAFLOW_SERVING_JETSTREAM_USER
-                    || key == ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD
+                [
+                    ENV_NUMAFLOW_SERVING_JETSTREAM_URL,
+                    ENV_NUMAFLOW_SERVING_JETSTREAM_USER,
+                    ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD,
+                    ENV_PAF_BATCH_SIZE,
+                    ENV_CALLBACK_ENABLED,
+                    ENV_CALLBACK_CONCURRENCY,
+                ]
+                .contains(&key.as_str())
             })
             .collect();
 
@@ -373,10 +388,25 @@ impl PipelineConfig {
             .and_then(|scale| scale.lookback_seconds.map(|x| x as u16))
             .unwrap_or(DEFAULT_LOOKBACK_WINDOW_IN_SECS);
 
+        let mut callback_config = None;
+        if get_var(ENV_CALLBACK_ENABLED).is_ok() {
+            let callback_concurrency: usize = get_var(ENV_CALLBACK_CONCURRENCY)
+                .unwrap_or_else(|_| format!("{DEFAULT_CALLBACK_CONCURRENCY}"))
+                .parse()
+                .map_err(|e| {
+                    Error::Config(format!(
+                        "Parsing value of {ENV_CALLBACK_CONCURRENCY}: {e:?}"
+                    ))
+                })?;
+            callback_config = Some(ServingCallbackConfig {
+                callback_concurrency,
+            });
+        }
+
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
-            paf_concurrency: env::var("PAF_BATCH_SIZE")
-                .unwrap_or((DEFAULT_BATCH_SIZE * 2).to_string())
+            paf_concurrency: get_var(ENV_PAF_BATCH_SIZE)
+                .unwrap_or_else(|_| (DEFAULT_BATCH_SIZE * 2).to_string())
                 .parse()
                 .unwrap(),
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
@@ -388,6 +418,7 @@ impl PipelineConfig {
             to_vertex_config,
             vertex_config: vertex,
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
+            callback_config,
         })
     }
 }
@@ -419,6 +450,7 @@ mod tests {
                 transformer_config: None,
             }),
             metrics_config: Default::default(),
+            callback_config: None,
         };
 
         let config = PipelineConfig::default();
@@ -485,6 +517,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            ..Default::default()
         };
         assert_eq!(pipeline_config, expected);
     }
@@ -536,7 +569,7 @@ mod tests {
                 },
                 transformer_config: None,
             }),
-            metrics_config: Default::default(),
+            ..Default::default()
         };
 
         assert_eq!(pipeline_config, expected);
@@ -588,7 +621,7 @@ mod tests {
                 },
                 transformer_config: None,
             }),
-            metrics_config: Default::default(),
+            ..Default::default()
         };
 
         assert_eq!(pipeline_config, expected);
@@ -704,7 +737,7 @@ mod tests {
                 }),
                 map_mode: MapMode::Unary,
             }),
-            metrics_config: MetricsConfig::default(),
+            ..Default::default()
         };
 
         assert_eq!(pipeline_config, expected);
