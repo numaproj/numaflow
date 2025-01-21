@@ -6,12 +6,23 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import { MetricsModalWrapper } from "../../../../../MetricsModalWrapper";
 
 export interface BuffersProps {
   buffers: any[];
+  namespaceId: string;
+  pipelineId: string;
+  vertexId: string;
+  type: string;
 }
 
-export function Buffers({ buffers }: BuffersProps) {
+export function Buffers({
+  buffers,
+  namespaceId,
+  pipelineId,
+  vertexId,
+  type,
+}: BuffersProps) {
   if (!buffers) {
     return <div>{`No resources found.`}</div>;
   }
@@ -72,7 +83,14 @@ export function Buffers({ buffers }: BuffersProps) {
                     </TableCell>
                     <TableCell data-testid="usage">{bufferUsage}%</TableCell>
                     <TableCell data-testid="totalMessages">
-                      {buffer?.totalMessages}
+                      <MetricsModalWrapper
+                        namespaceId={namespaceId}
+                        pipelineId={pipelineId}
+                        vertexId={vertexId}
+                        value={buffer?.totalMessages}
+                        metricName={"vertex_pending_messages"}
+                        type={type}
+                      />
                     </TableCell>
                   </TableRow>
                 );
