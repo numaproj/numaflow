@@ -143,6 +143,8 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			// Delete corresponding vertex metrics
 			_ = reconciler.VertexDesiredReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
 			_ = reconciler.VertexCurrentReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
+			_ = reconciler.VertexMinReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
+			_ = reconciler.VertexMaxReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
 		}
 		return ctrl.Result{}, nil
 	}
@@ -378,6 +380,8 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 		// Clean up vertex replica metrics
 		reconciler.VertexDesiredReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
 		reconciler.VertexCurrentReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
+		reconciler.VertexMinReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
+		reconciler.VertexMaxReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
 	}
 
 	// Daemon service

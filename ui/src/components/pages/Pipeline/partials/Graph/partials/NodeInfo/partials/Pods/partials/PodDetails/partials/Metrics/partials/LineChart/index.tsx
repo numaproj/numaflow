@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -17,6 +17,8 @@ import FiltersDropdown from "../common/FiltersDropdown";
 import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
 import TimeSelector from "../common/TimeRange";
+import { AppContext } from "../../../../../../../../../../../../../../../App";
+import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
 
 interface TooltipProps {
   payload?: any[];
@@ -112,6 +114,7 @@ const LineChartComponent = ({
   metric,
   vertexId,
 }: any) => {
+  const { addError } = useContext<AppContextProps>(AppContext); 
   const [transformedData, setTransformedData] = useState<any[]>([]);
   const [chartLabels, setChartLabels] = useState<any[]>([]);
   const [metricsReq, setMetricsReq] = useState<any>({
@@ -205,6 +208,12 @@ const LineChartComponent = ({
     metricReq: metricsReq,
     filters,
   });
+
+  useEffect(() => {
+    if (error) {
+      addError(error?.toString());
+    }
+  }, [error, addError]);
 
   const groupByLabel = useCallback((dimension: string, metricName: string) => {
     switch (metricName) {
@@ -351,7 +360,7 @@ const LineChartComponent = ({
         </Box>
       )}
 
-      {!isLoading && error && <EmptyChart />}
+      {!isLoading && error && <EmptyChart message={error?.toString()}/>}
 
       {!isLoading && !error && transformedData?.length > 0 && (
         <ResponsiveContainer width="100%" height={400}>
@@ -390,7 +399,7 @@ const LineChartComponent = ({
         </ResponsiveContainer>
       )}
 
-      {!isLoading && !error && transformedData?.length === 0 && <EmptyChart />}
+      {!isLoading && !error && transformedData?.length === 0 && <EmptyChart/>}
     </Box>
   );
 };

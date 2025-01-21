@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import { Accordion, AccordionDetails, AccordionSummary, Tooltip, Typography } from "@mui/material";
@@ -7,9 +7,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import LineChartComponent from "./partials/LineChart";
 import { useMetricsDiscoveryDataFetch } from "../../../../../../../../../../../../../utils/fetchWrappers/metricsDiscoveryDataFetch";
 import { dimensionReverseMap, metricNameMap } from "./utils/constants";
-
 import "./style.css";
-
 export interface MetricsProps {
   namespaceId: string;
   pipelineId: string;

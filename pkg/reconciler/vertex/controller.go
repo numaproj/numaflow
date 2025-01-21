@@ -202,6 +202,8 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 	defer func() {
 		reconciler.VertexDesiredReplicas.WithLabelValues(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name).Set(float64(desiredReplicas))
 		reconciler.VertexCurrentReplicas.WithLabelValues(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name).Set(float64(vertex.Status.Replicas))
+		reconciler.VertexMinReplicas.WithLabelValues(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name).Set(float64(vertex.Spec.Scale.GetMinReplicas()))
+		reconciler.VertexMaxReplicas.WithLabelValues(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name).Set(float64(vertex.Spec.Scale.GetMaxReplicas()))
 	}()
 
 	// Build pod spec of the 1st replica to calculate the hash, which is used to determine whether the pod spec is changed
