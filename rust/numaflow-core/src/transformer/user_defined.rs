@@ -143,6 +143,7 @@ impl UserDefinedTransformer {
                         offset: Some(msg_info.offset.clone()),
                         event_time: utc_from_timestamp(result.event_time),
                         headers: msg_info.headers.clone(),
+                        metadata: None,
                     };
                     response_messages.push(message);
                 }
@@ -253,6 +254,7 @@ mod tests {
                 index: 0,
             },
             headers: Default::default(),
+            metadata: None,
         };
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -297,6 +299,7 @@ mod tests {
                 index: 0,
             },
             headers: HashMap::new(),
+            metadata: None,
         };
 
         let request: SourceTransformRequest = message.into();

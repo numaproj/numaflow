@@ -12,9 +12,10 @@ use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use tokio::signal;
 use tower::ServiceBuilder;
+use tower_http::classify::ServerErrorsFailureClass;
 use tower_http::timeout::TimeoutLayer;
-use tower_http::trace::{DefaultOnResponse, TraceLayer};
-use tracing::{info, info_span, Level};
+use tower_http::trace::TraceLayer;
+use tracing::{info, info_span, Span};
 use uuid::Uuid;
 
 use self::{
@@ -81,6 +82,11 @@ where
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(move |req: &Request<Body>| {
+                    let req_path = req.uri().path();
+                    if ["/metrics", "/readyz", "/livez", "/sidecar-livez"].contains(&req_path) {
+                        // We don't need request ID for these endpoints
+                        return info_span!("request", method=?req.method(), path=req_path);
+                    }
                     let tid = req
                         .headers()
                         .get(&tid_header)
@@ -93,9 +99,22 @@ where
                         .get::<MatchedPath>()
                         .map(MatchedPath::as_str);
 
-                    info_span!("request", tid, method=?req.method(), matched_path)
+                    info_span!("request", tid, method=?req.method(), path=req_path, matched_path)
                 })
-                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+                .on_response(
+                    |response: &Response<Body>, latency: Duration, _span: &Span| {
+                        if response.status().is_server_error() {
+                            // 5xx responses will be logged at 'error' level in `on_failure`
+                            return;
+                        }
+                        tracing::info!(status=?response.status(), ?latency)
+                    },
+                )
+                .on_failure(
+                    |error: ServerErrorsFailureClass, latency: Duration, _span: &Span| {
+                        tracing::error!(?error, ?latency, "Server error");
+                    },
+                ),
         )
         // capture metrics for all requests
         .layer(middleware::from_fn(capture_metrics))
