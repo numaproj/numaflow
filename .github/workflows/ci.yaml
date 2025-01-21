@@ -188,7 +188,7 @@ jobs:
         run: |
           pwd && ls -al
           file ./numaflow-rs-linux-amd64
-          file ./numaflow-rs-linux-amd64 | grep 'static-pie linked'
+          file ./numaflow-rs-linux-amd64 | grep -q 'static-pie linked'
       - name: Upload numaflow binary
         uses: actions/upload-artifact@v4
         with:

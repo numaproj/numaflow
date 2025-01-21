@@ -72,3 +72,18 @@ async fn flatten<T>(handle: tokio::task::JoinHandle<Result<T>>) -> Result<T> {
         Err(err) => Err(Error::Other(format!("Spawning the server: {err:?}"))),
     }
 }
+
+#[cfg(test)]
+pub mod test_utils {
+    use std::sync::{
+        atomic::{AtomicU16, Ordering},
+        OnceLock,
+    };
+
+    static CELL: OnceLock<AtomicU16> = OnceLock::new();
+
+    pub(crate) fn get_port() -> u16 {
+        let val = CELL.get_or_init(|| AtomicU16::new(62000));
+        val.fetch_add(1, Ordering::Relaxed)
+    }
+}

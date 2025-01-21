@@ -5,7 +5,7 @@ use std::{
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Semaphore;
+use tokio::{sync::Semaphore, task::JoinHandle};
 
 use crate::config::DEFAULT_ID_HEADER;
 
@@ -53,13 +53,14 @@ impl CallbackHandler {
         }
     }
 
+    /// Sends the callback request in a background task.
     pub async fn callback(
         &self,
         id: String,
         callback_url: String,
         previous_vertex: String,
         responses: Vec<Option<Vec<String>>>,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<JoinHandle<()>> {
         let cb_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("System time is older than Unix epoch time")
@@ -80,7 +81,7 @@ impl CallbackHandler {
 
         let permit = Arc::clone(&self.semaphore).acquire_owned().await.unwrap();
         let client = self.client.clone();
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let _permit = permit;
             // Retry in case of failure in making request.
             // When there is a failure, we retry after wait_secs. This value is doubled after each retry attempt.
@@ -151,7 +152,7 @@ impl CallbackHandler {
             }
         });
 
-        Ok(())
+        Ok(handle)
     }
 }
 
@@ -164,8 +165,13 @@ mod tests {
     use crate::callback::CallbackHandler;
     use crate::config::generate_certs;
     use crate::pipeline::PipelineDCG;
+    use crate::test_utils::get_port;
     use crate::{AppState, Settings};
+    use axum::routing::{get, post};
+    use axum::{Json, Router};
     use axum_server::tls_rustls::RustlsConfig;
+    use reqwest::StatusCode;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::mpsc;
@@ -173,7 +179,7 @@ mod tests {
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
     #[tokio::test]
-    async fn test_callback() -> Result<()> {
+    async fn test_successful_callback() -> Result<()> {
         // Set up the CryptoProvider (controls core cryptography used by rustls) for the process
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -183,8 +189,9 @@ mod tests {
             .await
             .map_err(|e| format!("Failed to create tls config {:?}", e))?;
 
+        let port = get_port();
         let settings = Settings {
-            app_listen_port: 3003,
+            app_listen_port: port,
             ..Default::default()
         };
         // We start the 'Serving' https server with an in-memory store
@@ -217,7 +224,10 @@ mod tests {
         // Wait for the server to be ready
         let mut server_ready = false;
         for _ in 0..10 {
-            let resp = client.get("https://localhost:3003/livez").send().await?;
+            let resp = client
+                .get(format!("https://localhost:{port}/livez"))
+                .send()
+                .await?;
             if resp.status().is_success() {
                 server_ready = true;
                 break;
@@ -233,7 +243,7 @@ mod tests {
         callback_handler
             .callback(
                 ID_VALUE.into(),
-                "https://localhost:3003/v1/process/callback".into(),
+                format!("https://localhost:{port}/v1/process/callback"),
                 "in".into(),
                 vec![],
             )
@@ -251,6 +261,85 @@ mod tests {
         }
         assert!(data.is_some(), "Callback data not found in store");
         server_handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    // Starts a custom server that handles requests to `/v1/process/callback`.
+    // The request handler will return INTERNAL_ERROR for the first 2 requests. This should result in
+    // retry on the client side. Then the handler responds with BAD_REQUEST, which should cause the client
+    // to abort.
+    async fn test_callback_retry() -> Result<()> {
+        // Set up the CryptoProvider (controls core cryptography used by rustls) for the process
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+        let (cert, key) = generate_certs()?;
+
+        let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
+            .await
+            .map_err(|e| format!("Failed to create tls config {:?}", e))?;
+
+        let port = get_port();
+        let server_addr = format!("127.0.0.1:{port}");
+        let callback_url = format!("https://{server_addr}/v1/process/callback");
+
+        let request_count = Arc::new(AtomicUsize::new(0));
+        let router = Router::new()
+            .route("/livez", get(|| async { StatusCode::OK }))
+            .route(
+                "/v1/process/callback",
+                post({
+                    let req_count = Arc::clone(&request_count);
+                    |payload: Json<serde_json::Value>| async move {
+                        tracing::info!(?payload, "Get request");
+                        if req_count.fetch_add(1, Ordering::Relaxed) < 2 {
+                            StatusCode::INTERNAL_SERVER_ERROR
+                        } else {
+                            StatusCode::BAD_REQUEST
+                        }
+                    }
+                }),
+            );
+
+        let sock_addr = server_addr.as_str().parse().unwrap();
+        let server = tokio::spawn(async move {
+            axum_server::bind_rustls(sock_addr, tls_config)
+                .serve(router.into_make_service())
+                .await
+                .unwrap();
+        });
+
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(2))
+            .danger_accept_invalid_certs(true)
+            .build()?;
+
+        // Wait for the server to be ready
+        let mut server_ready = false;
+        let health_url = format!("https://{server_addr}/livez");
+        for _ in 0..10 {
+            let Ok(resp) = client.get(&health_url).send().await else {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+                continue;
+            };
+            if resp.status().is_success() {
+                server_ready = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert!(server_ready, "Server is not ready");
+
+        let callback_handler = CallbackHandler::new("test".into(), 10);
+
+        // On the server, this fails with SubGraphInvalidInput("Invalid callback: 1234, vertex: in")
+        // We get 200 OK response from the server, since we already registered this request ID in the store.
+        let callback_task = callback_handler
+            .callback("1234".into(), callback_url, "in".into(), vec![])
+            .await?;
+        assert!(callback_task.await.is_ok());
+        server.abort();
+        assert_eq!(request_count.load(Ordering::Relaxed), 3);
         Ok(())
     }
 }
