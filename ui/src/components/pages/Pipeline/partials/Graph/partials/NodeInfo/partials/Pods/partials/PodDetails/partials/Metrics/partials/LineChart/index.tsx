@@ -26,7 +26,7 @@ interface TooltipProps {
   active?: boolean;
 }
 
-function CustomTooltip({ payload, label, active }: TooltipProps) {
+function CustomTooltip({ payload, label, active, patternName }: TooltipProps & { patternName: string }) {
   if (active && payload && payload.length) {
     const maxWidth =
       Math.max(...payload.map((entry) => entry?.name?.length)) * 9.5;
@@ -40,7 +40,9 @@ function CustomTooltip({ payload, label, active }: TooltipProps) {
         }}
       >
         <Box>{label}</Box>
-        {payload.map((entry: any, index: any) => (
+        {payload.map((entry: any, index: any) => {
+          const formattedValue = getDefaultFormatter(entry?.value, patternName);
+          return(
           <Box key={`item-${index}`} sx={{ display: "flex" }}>
             <Box
               sx={{
@@ -52,13 +54,13 @@ function CustomTooltip({ payload, label, active }: TooltipProps) {
             >
               {entry?.name}:
             </Box>
-            <Box sx={{ color: entry?.color }}>{entry?.value}</Box>
+            <Box sx={{ color: entry?.color }}>{formattedValue}</Box>
           </Box>
-        ))}
+          );
+        })}
       </Box>
     );
   }
-
   return null;
 }
 
@@ -66,39 +68,45 @@ const getYAxisLabel = (unit: string) => {
   if (unit !== "") {
     return unit;
   }
-  return "Units";
+  return "";
 };
 
-const getDefaultFormatter = (value: number, metricName: string) => {
+const getDefaultFormatter = (value: number, patternName: string) => {
   const formatValue = (value: number, suffix: string) => {
     const formattedValue = parseFloat(value?.toFixed(2));
     return formattedValue % 1 === 0
       ? `${Math.floor(formattedValue)}${suffix}`
       : `${formattedValue}${suffix}`;
   };
-  switch (metricName) {
-    case "monovtx_ack_time_bucket":
-    case "numaflow_monovtx_ack_time_bucket":
-    case "monovtx_read_time_bucket":
-    case "numaflow_monovtx_read_time_bucket":
-    case "monovtx_processing_time_bucket":
-    case "numaflow_monovtx_processing_time_bucket":
-    case "monovtx_sink_time_bucket":
-    case "numaflow_monovtx_sink_time_bucket":
-      if (value === 0) {
+  switch(patternName){
+    case "mono_vertex_histogram":
+      if (value === 0){
         return "0";
       } else if (value < 1000) {
-        return `${value} μs`;
+        return formatValue(value," μs");
       } else if (value < 1000000) {
         return formatValue(value / 1000, " ms");
       } else {
         return formatValue(value / 1000000, " s");
       }
+    case "pipeline_vertex_container_cpu_memory_utilization":
+    case "mono_vertex_container_cpu_memory_utilization":
+    case "pipeline_vertex_pod_cpu_memory_utilization":
+    case "mono_vertex_pod_cpu_memory_utilization":
+      if (value === 0){
+        return "0";
+      } else if (value < 1000) {
+        return formatValue(value," %");
+      } else if (value < 1000000) {
+        return formatValue(value / 1000, "k %");
+      } else {
+        return formatValue(value / 1000000, "M %");
+      }
     default:
       if (value === 0) {
         return "0";
       } else if (value < 1000) {
-        return `${value}`;
+        return formatValue(value,"");
       } else if (value < 1000000) {
         return formatValue(value / 1000, " k");
       } else {
@@ -107,7 +115,7 @@ const getDefaultFormatter = (value: number, metricName: string) => {
   }
 };
 
-const getTickFormatter = (unit: string, metricName: string) => {
+const getTickFormatter = (unit: string, patternName: string) => {
   const formatValue = (value: number) => {
     const formattedValue = parseFloat(value?.toFixed(2)); // Format to 2 decimal places
     return formattedValue % 1 === 0
@@ -121,7 +129,7 @@ const getTickFormatter = (unit: string, metricName: string) => {
       case "ms":
         return `${formatValue(value / 1000)}`;
       default:
-        return getDefaultFormatter(value, metricName);
+        return getDefaultFormatter(value, patternName);
     }
   };
 };
@@ -149,6 +157,7 @@ const LineChartComponent = ({
   const [chartLabels, setChartLabels] = useState<any[]>([]);
   const [metricsReq, setMetricsReq] = useState<any>({
     metric_name: metric?.metric_name,
+    pattern_name: metric?.pattern_name,
   });
   const [paramsList, setParamsList] = useState<any[]>([]);
   // store all filters for each selected dimension
@@ -435,7 +444,7 @@ const LineChartComponent = ({
               }
               tickFormatter={getTickFormatter(
                 metric?.unit,
-                metric?.metric_name
+                metric?.pattern_name
               )}
             />
             <CartesianGrid stroke="#f5f5f5"></CartesianGrid>
@@ -450,7 +459,7 @@ const LineChartComponent = ({
               />
             ))}
 
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CustomTooltip patternName={metric?.pattern_name} />}/>
             <Legend />
           </LineChart>
         </ResponsiveContainer>
