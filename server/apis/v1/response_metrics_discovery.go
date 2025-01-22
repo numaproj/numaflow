@@ -7,21 +7,25 @@ type Dimensions struct {
 }
 
 type DiscoveryResponse struct {
-	MetricName  string       `json:"metric_name"`
-	DisplayName string       `json:"display_name"`
-	Unit        string       `json:"unit"`
-	Dimensions  []Dimensions `json:"dimensions"`
+	PatternName       string       `json:"pattern_name"`
+	MetricName        string       `json:"metric_name"`
+	MetricDescription string       `json:"metric_description"`
+	DisplayName       string       `json:"display_name"`
+	Unit              string       `json:"unit"`
+	Dimensions        []Dimensions `json:"dimensions"`
 }
 
 // MetricsDiscoveryResponse is a list of DiscoveryResponse
 type MetricsDiscoveryResponse []DiscoveryResponse
 
 // NewDiscoveryResponse creates a new DiscoveryResponse object for each metric.
-func NewDiscoveryResponse(metricName, displayName, unitName string, dimensions []Dimensions) DiscoveryResponse {
+func NewDiscoveryResponse(patternName, metricName, metricDescription, displayName, unitName string, dimensions []Dimensions) DiscoveryResponse {
 	return DiscoveryResponse{
-		MetricName:  metricName,
-		DisplayName: displayName,
-		Unit:        unitName,
-		Dimensions:  dimensions,
+		PatternName:       patternName,
+		MetricName:        metricName,
+		MetricDescription: metricDescription,
+		DisplayName:       displayName,
+		Unit:              unitName,
+		Dimensions:        dimensions,
 	}
 }
