@@ -13,6 +13,7 @@ use tracing::error;
 use crate::config::get_vertex_name;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageID, Offset};
+use crate::shared::grpc::prost_timestamp_from_utc;
 
 type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
@@ -24,6 +25,23 @@ struct ParentMessageInfo {
     offset: Offset,
     event_time: DateTime<Utc>,
     headers: HashMap<String, String>,
+}
+
+impl From<Message> for MapRequest {
+    fn from(message: Message) -> Self {
+        Self {
+            request: Some(map::map_request::Request {
+                keys: message.keys.to_vec(),
+                value: message.value.to_vec(),
+                event_time: prost_timestamp_from_utc(message.event_time),
+                watermark: None,
+                headers: message.headers,
+            }),
+            id: message.offset.unwrap().to_string(),
+            handshake: None,
+            status: None,
+        }
+    }
 }
 
 /// UserDefinedUnaryMap is a grpc client that sends unary requests to the map server
@@ -243,6 +261,7 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
                 offset: Some(msg_info.offset.clone()),
                 event_time: msg_info.event_time,
                 headers: msg_info.headers.clone(),
+                metadata: None,
             };
             response_messages.push(message);
         }
@@ -369,6 +388,7 @@ impl UserDefinedStreamMap {
                     offset: None,
                     event_time: message_info.event_time,
                     headers: message_info.headers.clone(),
+                    metadata: None,
                 };
                 response_sender
                     .send(Ok(message))
@@ -412,12 +432,12 @@ impl UserDefinedStreamMap {
 
 #[cfg(test)]
 mod tests {
-    use numaflow::mapstream;
     use std::error::Error;
     use std::sync::Arc;
     use std::time::Duration;
 
     use numaflow::batchmap::Server;
+    use numaflow::mapstream;
     use numaflow::{batchmap, map};
     use numaflow_pb::clients::map::map_client::MapClient;
     use tempfile::TempDir;
@@ -478,6 +498,7 @@ mod tests {
                 index: 0,
             },
             headers: Default::default(),
+            metadata: None,
         };
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -568,6 +589,7 @@ mod tests {
                     index: 0,
                 },
                 headers: Default::default(),
+                metadata: None,
             },
             crate::message::Message {
                 keys: Arc::from(vec!["second".into()]),
@@ -584,6 +606,7 @@ mod tests {
                     index: 1,
                 },
                 headers: Default::default(),
+                metadata: None,
             },
         ];
 
@@ -683,6 +706,7 @@ mod tests {
                 index: 0,
             },
             headers: Default::default(),
+            metadata: None,
         };
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(3);

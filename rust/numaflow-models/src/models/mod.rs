@@ -142,6 +142,8 @@ pub mod sasl;
 pub use self::sasl::Sasl;
 pub mod sasl_plain;
 pub use self::sasl_plain::SaslPlain;
+pub mod saslo_auth;
+pub use self::saslo_auth::SasloAuth;
 pub mod scale;
 pub use self::scale::Scale;
 pub mod serving_source;

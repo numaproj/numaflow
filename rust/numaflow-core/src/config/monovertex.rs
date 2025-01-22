@@ -19,6 +19,10 @@ use crate::config::monovertex::sink::SinkType;
 use crate::error::Error;
 use crate::Result;
 
+use super::pipeline::ServingCallbackConfig;
+
+use super::{DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED};
+
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
 const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
@@ -36,6 +40,7 @@ pub(crate) struct MonovertexConfig {
     pub(crate) fb_sink_config: Option<SinkConfig>,
     pub(crate) metrics_config: MetricsConfig,
     pub(crate) daemon_server_address: String,
+    pub(crate) callback_config: Option<ServingCallbackConfig>,
 }
 
 impl Default for MonovertexConfig {
@@ -50,13 +55,14 @@ impl Default for MonovertexConfig {
                 source_type: source::SourceType::Generator(GeneratorConfig::default()),
             },
             sink_config: SinkConfig {
-                sink_type: sink::SinkType::Log(sink::LogConfig::default()),
+                sink_type: SinkType::Log(sink::LogConfig::default()),
                 retry_config: None,
             },
             transformer_config: None,
             fb_sink_config: None,
             metrics_config: MetricsConfig::default(),
             daemon_server_address: "".to_string(),
+            callback_config: None,
         }
     }
 }
@@ -153,6 +159,21 @@ impl MonovertexConfig {
             .and_then(|metadata| metadata.namespace.clone())
             .unwrap_or("default".to_string());
 
+        let mut callback_config = None;
+        if env::var(ENV_CALLBACK_ENABLED).is_ok() {
+            let callback_concurrency: usize = env::var(ENV_CALLBACK_CONCURRENCY)
+                .unwrap_or_else(|_| format!("{DEFAULT_CALLBACK_CONCURRENCY}"))
+                .parse()
+                .map_err(|e| {
+                    Error::Config(format!(
+                        "Parsing value of {ENV_CALLBACK_CONCURRENCY}: {e:?}"
+                    ))
+                })?;
+            callback_config = Some(ServingCallbackConfig {
+                callback_concurrency,
+            });
+        }
+
         Ok(MonovertexConfig {
             name: mono_vertex_name.clone(),
             replica: *get_vertex_replica(),
@@ -167,6 +188,7 @@ impl MonovertexConfig {
             sink_config,
             transformer_config,
             fb_sink_config,
+            callback_config,
         })
     }
 }

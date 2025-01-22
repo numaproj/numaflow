@@ -143,6 +143,8 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			// Delete corresponding vertex metrics
 			_ = reconciler.VertexDesiredReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
 			_ = reconciler.VertexCurrentReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
+			_ = reconciler.VertexMinReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
+			_ = reconciler.VertexMaxReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
 		}
 		return ctrl.Result{}, nil
 	}
@@ -222,8 +224,9 @@ func isLifecycleChange(pl *dfv1.Pipeline) bool {
 	// Check if the desired phase of the pipeline is 'Paused', or if the current phase of the
 	// pipeline is either 'Paused' or 'Pausing'. This indicates a transition into or out of
 	// a paused state which is a lifecycle phase change
-	if oldPhase := pl.Status.Phase; pl.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
-		oldPhase == dfv1.PipelinePhasePaused || oldPhase == dfv1.PipelinePhasePausing {
+	if currentPhase := pl.Status.Phase; pl.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
+		currentPhase == dfv1.PipelinePhasePaused || currentPhase == dfv1.PipelinePhasePausing ||
+		pl.GetAnnotations()[dfv1.KeyPauseTimestamp] != "" {
 		return true
 	}
 
@@ -378,6 +381,8 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 		// Clean up vertex replica metrics
 		reconciler.VertexDesiredReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
 		reconciler.VertexCurrentReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
+		reconciler.VertexMinReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
+		reconciler.VertexMaxReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
 	}
 
 	// Daemon service

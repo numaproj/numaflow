@@ -23,6 +23,8 @@ pub struct Sasl {
     /// SASL mechanism to use
     #[serde(rename = "mechanism")]
     pub mechanism: String,
+    #[serde(rename = "oauth", skip_serializing_if = "Option::is_none")]
+    pub oauth: Option<Box<crate::models::SasloAuth>>,
     #[serde(rename = "plain", skip_serializing_if = "Option::is_none")]
     pub plain: Option<Box<crate::models::SaslPlain>>,
     #[serde(rename = "scramsha256", skip_serializing_if = "Option::is_none")]
@@ -36,6 +38,7 @@ impl Sasl {
         Sasl {
             gssapi: None,
             mechanism,
+            oauth: None,
             plain: None,
             scramsha256: None,
             scramsha512: None,

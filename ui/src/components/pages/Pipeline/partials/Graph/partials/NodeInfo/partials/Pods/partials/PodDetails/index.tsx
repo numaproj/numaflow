@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext } from "react";
 import Box from "@mui/material/Box";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
@@ -7,6 +7,10 @@ import { PodLogs } from "./partials/PodLogs";
 import { PodDetailProps } from "../../../../../../../../../../../types/declarations/pods";
 import { AppContextProps } from "../../../../../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../../../../../App";
+import {
+  VertexDetailsContext,
+  VertexDetailsContextProps,
+} from "../../../../../../../../../../common/SlidingSidebar/partials/VertexDetails";
 
 import "./style.css";
 
@@ -26,15 +30,16 @@ export function PodDetail({
   type,
   containerName,
   pod,
-  vertexId
+  vertexId,
 }: PodDetailProps) {
   if (!pod) return null;
 
   const { disableMetricsCharts } = useContext<AppContextProps>(AppContext);
 
-  const [selectedTab, setSelectedTab] = useState<number>(0);
+  const { podsViewTab, setPodsViewTab } =
+    useContext<VertexDetailsContextProps>(VertexDetailsContext);
   const handleTabChange = (_: any, newValue: number) => {
-    setSelectedTab(newValue);
+    setPodsViewTab(newValue);
   };
 
   return (
@@ -47,13 +52,13 @@ export function PodDetail({
       }}
     >
       <Tabs
-        value={selectedTab}
+        value={podsViewTab}
         onChange={handleTabChange}
         aria-label="Pods Details Tabs"
       >
         <Tab
           className={
-            selectedTab === LOGS_TAB_INDEX
+            podsViewTab === LOGS_TAB_INDEX
               ? "vertex-details-tab-selected"
               : "vertex-details-tab"
           }
@@ -63,7 +68,7 @@ export function PodDetail({
         {!disableMetricsCharts && (
           <Tab
             className={
-              selectedTab === METRICS_TAB_INDEX
+              podsViewTab === METRICS_TAB_INDEX
                 ? "vertex-details-tab-selected"
                 : "vertex-details-tab"
             }
@@ -75,9 +80,9 @@ export function PodDetail({
       <div
         className="vertex-details-tab-panel"
         role="tabpanel"
-        hidden={selectedTab !== LOGS_TAB_INDEX}
+        hidden={podsViewTab !== LOGS_TAB_INDEX}
       >
-        {selectedTab === LOGS_TAB_INDEX && (
+        {podsViewTab === LOGS_TAB_INDEX && (
           <Box
             sx={{
               p: "1.6rem",
@@ -90,6 +95,7 @@ export function PodDetail({
                 namespaceId={namespaceId}
                 podName={pod.name}
                 containerName={containerName}
+                type={type}
               />
             </Box>
           </Box>
@@ -99,9 +105,9 @@ export function PodDetail({
         <div
           className="vertex-details-tab-panel"
           role="tabpanel"
-          hidden={selectedTab !== METRICS_TAB_INDEX}
+          hidden={podsViewTab !== METRICS_TAB_INDEX}
         >
-          {selectedTab === METRICS_TAB_INDEX && (
+          {podsViewTab === METRICS_TAB_INDEX && (
             <Box
               sx={{
                 p: "1.6rem",

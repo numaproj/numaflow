@@ -1,7 +1,6 @@
-use std::collections::HashMap;
 use std::env;
 use std::error::Error;
-use std::sync::Arc;
+use std::time::Duration;
 
 use tracing::error;
 use tracing_subscriber::layer::SubscriberExt;
@@ -21,8 +20,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .with(tracing_subscriber::fmt::layer().with_ansi(false))
         .init();
+
+    // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Installing default CryptoProvider");
+
     if let Err(e) = run().await {
         error!("{e:?}");
+        tracing::warn!("Sleeping after error");
+        tokio::time::sleep(Duration::from_secs(300)).await;
         return Err(e);
     }
     Ok(())
@@ -31,21 +38,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     // Based on the argument, run the appropriate component.
-    if args.contains(&"--serving".to_string()) {
-        let env_vars: HashMap<String, String> = env::vars().collect();
-        let settings: serving::Settings = env_vars.try_into()?;
-        let settings = Arc::new(settings);
-        serving::serve(settings)
-            .await
-            .map_err(|e| format!("Error running serving: {e:?}"))?;
-    } else if args.contains(&"--servesink".to_string()) {
+    if args.contains(&"--servesink".to_string()) {
         servesink::servesink()
             .await
             .map_err(|e| format!("Error running servesink: {e:?}"))?;
     } else if args.contains(&"--rust".to_string()) {
         numaflow_core::run()
             .await
-            .map_err(|e| format!("Error running rust binary: {e:?}"))?
+            .map_err(|e| format!("Error running rust binary: {e:?}"))?;
+    } else {
+        return Err(format!(
+            "Invalid argument. Use --servesink, or --rust. Current args = {:?}",
+            args
+        )
+        .into());
     }
-    Err("Invalid argument. Use --serving, --servesink, or --rust".into())
+    Ok(())
 }

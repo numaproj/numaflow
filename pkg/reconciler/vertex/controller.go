@@ -202,6 +202,8 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 	defer func() {
 		reconciler.VertexDesiredReplicas.WithLabelValues(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name).Set(float64(desiredReplicas))
 		reconciler.VertexCurrentReplicas.WithLabelValues(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name).Set(float64(vertex.Status.Replicas))
+		reconciler.VertexMinReplicas.WithLabelValues(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name).Set(float64(vertex.Spec.Scale.GetMinReplicas()))
+		reconciler.VertexMaxReplicas.WithLabelValues(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name).Set(float64(vertex.Spec.Scale.GetMaxReplicas()))
 	}()
 
 	// Build pod spec of the 1st replica to calculate the hash, which is used to determine whether the pod spec is changed
@@ -220,7 +222,8 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 	if err := r.cleanUpPodsFromTo(ctx, vertex, desiredReplicas, math.MaxInt); err != nil {
 		return fmt.Errorf("failed to clean up vertex pods [%v, ∞): %w", desiredReplicas, err)
 	}
-	if currentReplicas := int(vertex.Status.Replicas); currentReplicas > desiredReplicas {
+	currentReplicas := int(vertex.Status.Replicas)
+	if currentReplicas > desiredReplicas {
 		vertex.Status.Replicas = uint32(desiredReplicas)
 	}
 	updatedReplicas := int(vertex.Status.UpdatedReplicas)
@@ -300,7 +303,6 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 		}
 	}
 
-	currentReplicas := int(vertex.Status.Replicas)
 	if currentReplicas != desiredReplicas {
 		log.Infow("Pipeline Vertex replicas changed", "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
 		r.recorder.Eventf(vertex, corev1.EventTypeNormal, "ReplicasScaled", "Replicas changed from %d to %d", currentReplicas, desiredReplicas)

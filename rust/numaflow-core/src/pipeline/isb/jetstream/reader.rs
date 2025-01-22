@@ -155,12 +155,18 @@ impl JetstreamReader {
                                 index: 0,
                             };
 
+                            let metadata = crate::message::Metadata{
+                                // Copy previous vertex name from message id
+                                previous_vertex: String::from_utf8_lossy(&message.id.vertex_name).into(),
+                            };
+                            message.metadata = Some(metadata);
+
                             message.offset = Some(offset.clone());
                             message.id = message_id.clone();
 
                             // Insert the message into the tracker and wait for the ack to be sent back.
                             let (ack_tx, ack_rx) = oneshot::channel();
-                            tracker_handle.insert(message_id.offset.clone(), ack_tx).await?;
+                            tracker_handle.insert(&message, ack_tx).await?;
 
                             tokio::spawn(Self::start_work_in_progress(
                                 jetstream_message,
@@ -252,6 +258,20 @@ impl JetstreamReader {
             }
         }
     }
+
+    pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
+        let x = self.consumer.info().await.map_err(|e| {
+            Error::ISB(format!(
+                "Failed to get consumer info for stream {}: {}",
+                self.stream_name, e
+            ))
+        })?;
+        Ok(Some(x.num_pending as usize + x.num_ack_pending))
+    }
+
+    pub(crate) fn name(&self) -> &'static str {
+        self.stream_name
+    }
 }
 
 impl fmt::Display for JetstreamReader {
@@ -321,7 +341,7 @@ mod tests {
             0,
             context.clone(),
             buf_reader_config,
-            TrackerHandle::new(),
+            TrackerHandle::new(None),
             500,
         )
         .await
@@ -346,6 +366,7 @@ mod tests {
                     index: i,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
             context
@@ -381,7 +402,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
         let stream_name = "test_ack";
         // Delete stream if it exists
@@ -445,6 +466,7 @@ mod tests {
                     index: i,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             offsets.push(message.id.offset.clone());
             let message_bytes: BytesMut = message.try_into().unwrap();

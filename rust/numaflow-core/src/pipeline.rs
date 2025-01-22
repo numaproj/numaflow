@@ -3,13 +3,14 @@ use std::time::Duration;
 use async_nats::jetstream::Context;
 use async_nats::{jetstream, ConnectOptions};
 use futures::future::try_join_all;
+use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::config::pipeline;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
-use crate::metrics::{PipelineContainerState, UserDefinedContainerState};
+use crate::config::{is_mono_vertex, pipeline};
+use crate::metrics::{LagReader, PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
@@ -18,10 +19,10 @@ use crate::shared::create_components;
 use crate::shared::create_components::create_sink_writer;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
-use crate::{error, Result};
+use crate::{error, shared, Result};
 
 mod forwarder;
-mod isb;
+pub(crate) mod isb;
 
 /// Starts the appropriate forwarder based on the pipeline configuration.
 pub(crate) async fn start_forwarder(
@@ -50,7 +51,10 @@ async fn start_source_forwarder(
     config: PipelineConfig,
     source_config: SourceVtxConfig,
 ) -> Result<()> {
-    let tracker_handle = TrackerHandle::new();
+    let callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
+        CallbackHandler::new(config.vertex_name.clone(), cb_cfg.callback_concurrency)
+    });
+    let tracker_handle = TrackerHandle::new(callback_handler);
     let js_context = create_js_context(config.js_client_config.clone()).await?;
 
     let buffer_writer = create_buffer_writer(
@@ -61,21 +65,30 @@ async fn start_source_forwarder(
     )
     .await;
 
-    let (source, source_grpc_client) = create_components::create_source(
+    let (transformer, transformer_grpc_client) = create_components::create_transformer(
         config.batch_size,
-        config.read_timeout,
-        &source_config.source_config,
+        source_config.transformer_config.clone(),
         tracker_handle.clone(),
         cln_token.clone(),
     )
     .await?;
-    let (transformer, transformer_grpc_client) = create_components::create_transformer(
+
+    let (source, source_grpc_client) = create_components::create_source(
         config.batch_size,
-        source_config.transformer_config.clone(),
+        config.read_timeout,
+        &source_config.source_config,
         tracker_handle,
+        transformer,
         cln_token.clone(),
     )
     .await?;
+
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::Source(source.clone()),
+    )
+    .await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     start_metrics_server(
         config.metrics_config.clone(),
@@ -87,13 +100,7 @@ async fn start_source_forwarder(
     .await;
 
     let forwarder =
-        source_forwarder::SourceForwarderBuilder::new(source, buffer_writer, cln_token.clone());
-
-    let forwarder = if let Some(transformer) = transformer {
-        forwarder.with_transformer(transformer).build()
-    } else {
-        forwarder.build()
-    };
+        source_forwarder::SourceForwarder::new(source, buffer_writer, cln_token.clone());
 
     forwarder.start().await?;
     Ok(())
@@ -117,8 +124,14 @@ async fn start_map_forwarder(
     // Create buffer writers and buffer readers
     let mut forwarder_components = vec![];
     let mut mapper_grpc_client = None;
+    let mut isb_lag_readers = vec![];
+
+    let callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
+        CallbackHandler::new(config.vertex_name.clone(), cb_cfg.callback_concurrency)
+    });
+
     for stream in reader_config.streams.clone() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(callback_handler.clone());
 
         let buffer_reader = create_buffer_reader(
             stream,
@@ -128,6 +141,8 @@ async fn start_map_forwarder(
             config.batch_size,
         )
         .await?;
+
+        isb_lag_readers.push(buffer_reader.clone());
 
         let (mapper, mapper_rpc_client) = create_components::create_mapper(
             config.batch_size,
@@ -151,6 +166,13 @@ async fn start_map_forwarder(
         .await;
         forwarder_components.push((buffer_reader, buffer_writer, mapper));
     }
+
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(isb_lag_readers),
+    )
+    .await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     start_metrics_server(
         config.metrics_config.clone(),
@@ -200,11 +222,15 @@ async fn start_sink_forwarder(
         .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
         .reader_config;
 
+    let callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
+        CallbackHandler::new(config.vertex_name.clone(), cb_cfg.callback_concurrency)
+    });
+
     // Create sink writers and buffer readers for each stream
     let mut sink_writers = vec![];
     let mut buffer_readers = vec![];
     for stream in reader_config.streams.clone() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(callback_handler.clone());
 
         let buffer_reader = create_buffer_reader(
             stream,
@@ -227,6 +253,13 @@ async fn start_sink_forwarder(
         .await?;
         sink_writers.push((sink_writer, sink_grpc_client, fb_sink_grpc_client));
     }
+
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(buffer_readers.clone()),
+    )
+    .await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     // Start the metrics server with one of the clients
     if let Some((_, sink, fb_sink)) = sink_writers.first() {
@@ -324,7 +357,6 @@ async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Re
 
 #[cfg(test)]
 mod tests {
-    use crate::pipeline::pipeline::map::MapMode;
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
@@ -345,6 +377,7 @@ mod tests {
     use crate::config::pipeline::PipelineConfig;
     use crate::pipeline::pipeline::isb;
     use crate::pipeline::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
+    use crate::pipeline::pipeline::map::MapMode;
     use crate::pipeline::pipeline::VertexType;
     use crate::pipeline::pipeline::{FromVertexConfig, ToVertexConfig};
     use crate::pipeline::pipeline::{SinkVtxConfig, SourceVtxConfig};
@@ -420,7 +453,7 @@ mod tests {
                     streams: streams
                         .iter()
                         .enumerate()
-                        .map(|(i, stream_name)| (stream_name.to_string(), i as u16))
+                        .map(|(i, stream_name)| ((*stream_name).to_string(), i as u16))
                         .collect(),
                     partitions: 5,
                     max_length: 30000,
@@ -450,6 +483,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            callback_config: None,
         };
 
         let cancellation_token = CancellationToken::new();
@@ -542,6 +576,7 @@ mod tests {
                     index: 0,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let message: bytes::BytesMut = message.try_into().unwrap();
 
@@ -607,6 +642,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            callback_config: None,
         };
 
         let cancellation_token = CancellationToken::new();
@@ -738,6 +774,7 @@ mod tests {
                     index: 0,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let message: bytes::BytesMut = message.try_into().unwrap();
 
@@ -850,6 +887,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            callback_config: None,
         };
 
         let cancellation_token = CancellationToken::new();

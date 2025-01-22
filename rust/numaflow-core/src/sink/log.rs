@@ -1,8 +1,5 @@
-use crate::sink::Sink;
-use crate::{
-    error,
-    message::{Message, ResponseFromSink, ResponseStatusFromSink},
-};
+use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
+use crate::{error, message::Message};
 
 pub(crate) struct LogSink;
 
@@ -41,8 +38,8 @@ mod tests {
 
     use super::LogSink;
     use crate::message::IntOffset;
-    use crate::message::{Message, MessageID, Offset, ResponseFromSink, ResponseStatusFromSink};
-    use crate::sink::Sink;
+    use crate::message::{Message, MessageID, Offset};
+    use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 
     #[tokio::test]
     async fn test_log_sink() {
@@ -60,6 +57,7 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 0,
                 },
+                metadata: None,
             },
             Message {
                 keys: Arc::from(vec![]),
@@ -73,6 +71,7 @@ mod tests {
                     offset: "2".to_string().into(),
                     index: 1,
                 },
+                metadata: None,
             },
         ];
 

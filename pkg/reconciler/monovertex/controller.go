@@ -68,6 +68,8 @@ func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	monoVtx := &dfv1.MonoVertex{}
 	if err := mr.client.Get(ctx, req.NamespacedName, monoVtx); err != nil {
 		if apierrors.IsNotFound(err) {
+			// Clean up metrics here, since there's no finalizer defined for MonoVertex objects, best effort
+			cleanupMetrics(req.NamespacedName.Namespace, req.NamespacedName.Name)
 			return reconcile.Result{}, nil
 		}
 		mr.logger.Errorw("Unable to get MonoVertex", zap.Any("request", req), zap.Error(err))
@@ -100,10 +102,8 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 	if !monoVtx.DeletionTimestamp.IsZero() {
 		log.Info("Deleting mono vertex")
 		mr.scaler.StopWatching(mVtxKey)
-		// Clean up metrics
-		_ = reconciler.MonoVertexHealth.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
-		_ = reconciler.MonoVertexDesiredReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
-		_ = reconciler.MonoVertexCurrentReplicas.DeleteLabelValues(monoVtx.Namespace, monoVtx.Name)
+		// Clean up metrics, best effort
+		cleanupMetrics(monoVtx.Namespace, monoVtx.Name)
 		return ctrl.Result{}, nil
 	}
 
@@ -188,6 +188,8 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 	defer func() {
 		reconciler.MonoVertexDesiredReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(desiredReplicas))
 		reconciler.MonoVertexCurrentReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(monoVtx.Status.Replicas))
+		reconciler.MonoVertexMinReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(monoVtx.Spec.Scale.GetMinReplicas()))
+		reconciler.MonoVertexMaxReplicas.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(monoVtx.Spec.Scale.GetMaxReplicas()))
 	}()
 
 	podSpec, err := mr.buildPodSpec(monoVtx)
@@ -206,7 +208,8 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 	if err := mr.cleanUpPodsFromTo(ctx, monoVtx, desiredReplicas, math.MaxInt); err != nil {
 		return fmt.Errorf("failed to clean up mono vertex pods [%v, ∞): %w", desiredReplicas, err)
 	}
-	if currentReplicas := int(monoVtx.Status.Replicas); currentReplicas > desiredReplicas {
+	currentReplicas := int(monoVtx.Status.Replicas)
+	if currentReplicas > desiredReplicas {
 		monoVtx.Status.Replicas = uint32(desiredReplicas)
 	}
 	updatedReplicas := int(monoVtx.Status.UpdatedReplicas)
@@ -286,7 +289,6 @@ func (mr *monoVertexReconciler) orchestratePods(ctx context.Context, monoVtx *df
 		}
 	}
 
-	currentReplicas := int(monoVtx.Status.Replicas)
 	if currentReplicas != desiredReplicas {
 		log.Infow("MonoVertex replicas changed", "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
 		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "ReplicasScaled", "Replicas changed from %d to %d", currentReplicas, desiredReplicas)
@@ -617,4 +619,13 @@ func (mr *monoVertexReconciler) checkChildrenResourceStatus(ctx context.Context,
 	}
 
 	return nil
+}
+
+// Clean up metrics, should be called when corresponding mvtx is deleted
+func cleanupMetrics(namespace, mvtx string) {
+	_ = reconciler.MonoVertexHealth.DeleteLabelValues(namespace, mvtx)
+	_ = reconciler.MonoVertexDesiredReplicas.DeleteLabelValues(namespace, mvtx)
+	_ = reconciler.MonoVertexCurrentReplicas.DeleteLabelValues(namespace, mvtx)
+	_ = reconciler.MonoVertexMaxReplicas.DeleteLabelValues(namespace, mvtx)
+	_ = reconciler.MonoVertexMinReplicas.DeleteLabelValues(namespace, mvtx)
 }

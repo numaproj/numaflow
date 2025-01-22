@@ -1,15 +1,18 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use serving::ServingSource;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
+use crate::config::get_vertex_replica;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::{DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET};
 use crate::error::Error;
@@ -268,6 +271,7 @@ pub async fn create_source(
     read_timeout: Duration,
     source_config: &SourceConfig,
     tracker_handle: TrackerHandle,
+    transformer: Option<Transformer>,
     cln_token: CancellationToken,
 ) -> error::Result<(Source, Option<SourceClient<Channel>>)> {
     match &source_config.source_type {
@@ -280,6 +284,7 @@ pub async fn create_source(
                     source::SourceType::Generator(generator_read, generator_ack, generator_lag),
                     tracker_handle,
                     source_config.read_ahead,
+                    transformer,
                 ),
                 None,
             ))
@@ -318,6 +323,7 @@ pub async fn create_source(
                     source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
                     tracker_handle,
                     source_config.read_ahead,
+                    transformer,
                 ),
                 Some(source_grpc_client),
             ))
@@ -330,12 +336,29 @@ pub async fn create_source(
                     source::SourceType::Pulsar(pulsar),
                     tracker_handle,
                     source_config.read_ahead,
+                    transformer,
                 ),
                 None,
             ))
         }
-        SourceType::Serving(_) => {
-            unimplemented!("Serving as built-in source is not yet implemented")
+        SourceType::Serving(config) => {
+            let serving = ServingSource::new(
+                Arc::clone(config),
+                batch_size,
+                read_timeout,
+                *get_vertex_replica(),
+            )
+            .await?;
+            Ok((
+                Source::new(
+                    batch_size,
+                    source::SourceType::Serving(serving),
+                    tracker_handle,
+                    source_config.read_ahead,
+                    transformer,
+                ),
+                None,
+            ))
         }
     }
 }

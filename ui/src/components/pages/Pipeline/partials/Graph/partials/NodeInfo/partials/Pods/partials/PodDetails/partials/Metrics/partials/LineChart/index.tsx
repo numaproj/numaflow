@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -8,6 +8,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  Text,
 } from "recharts";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -16,6 +17,123 @@ import FiltersDropdown from "../common/FiltersDropdown";
 import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
 import TimeSelector from "../common/TimeRange";
+import { AppContext } from "../../../../../../../../../../../../../../../App";
+import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
+
+interface TooltipProps {
+  payload?: any[];
+  label?: string;
+  active?: boolean;
+}
+
+function CustomTooltip({ payload, label, active }: TooltipProps) {
+  if (active && payload && payload.length) {
+    const maxWidth =
+      Math.max(...payload.map((entry) => entry?.name?.length)) * 9.5;
+    return (
+      <Box
+        sx={{
+          backgroundColor: "#fff",
+          padding: "1rem",
+          border: "0.1rem solid #ccc",
+          borderRadius: "1rem",
+        }}
+      >
+        <Box>{label}</Box>
+        {payload.map((entry: any, index: any) => (
+          <Box key={`item-${index}`} sx={{ display: "flex" }}>
+            <Box
+              sx={{
+                width: `${maxWidth / 9}rem`,
+                display: "inline-block",
+                paddingRight: "1rem",
+                color: entry?.color,
+              }}
+            >
+              {entry?.name}:
+            </Box>
+            <Box sx={{ color: entry?.color }}>{entry?.value}</Box>
+          </Box>
+        ))}
+      </Box>
+    );
+  }
+
+  return null;
+}
+
+const getYAxisLabel = (unit: string) => {
+  if (unit !== "") {
+    return unit;
+  }
+  return "Units";
+};
+
+const getDefaultFormatter = (value: number, metricName: string) => {
+  const formatValue = (value: number, suffix: string) => {
+    const formattedValue = parseFloat(value?.toFixed(2));
+    return formattedValue % 1 === 0
+      ? `${Math.floor(formattedValue)}${suffix}`
+      : `${formattedValue}${suffix}`;
+  };
+  switch (metricName) {
+    case "monovtx_ack_time_bucket":
+    case "numaflow_monovtx_ack_time_bucket":
+    case "monovtx_read_time_bucket":
+    case "numaflow_monovtx_read_time_bucket":
+    case "monovtx_processing_time_bucket":
+    case "numaflow_monovtx_processing_time_bucket":
+    case "monovtx_sink_time_bucket":
+    case "numaflow_monovtx_sink_time_bucket":
+      if (value === 0) {
+        return "0";
+      } else if (value < 1000) {
+        return `${value} μs`;
+      } else if (value < 1000000) {
+        return formatValue(value / 1000, " ms");
+      } else {
+        return formatValue(value / 1000000, " s");
+      }
+    default:
+      if (value === 0) {
+        return "0";
+      } else if (value < 1000) {
+        return `${value}`;
+      } else if (value < 1000000) {
+        return formatValue(value / 1000, " k");
+      } else {
+        return formatValue(value / 1000000, " M");
+      }
+  }
+};
+
+const getTickFormatter = (unit: string, metricName: string) => {
+  const formatValue = (value: number) => {
+    const formattedValue = parseFloat(value?.toFixed(2)); // Format to 2 decimal places
+    return formattedValue % 1 === 0
+      ? Math.floor(formattedValue)
+      : formattedValue; // Remove trailing .0
+  };
+  return (value: number) => {
+    switch (unit) {
+      case "s":
+        return `${formatValue(value / 1000000)}`;
+      case "ms":
+        return `${formatValue(value / 1000)}`;
+      default:
+        return getDefaultFormatter(value, metricName);
+    }
+  };
+};
+
+interface LineChartComponentProps {
+  namespaceId: string;
+  pipelineId: string;
+  type: string;
+  metric: any;
+  vertexId?: string;
+  fromModal?: boolean;
+}
 
 // TODO have a check for metricReq against metric object to ensure required fields are passed
 const LineChartComponent = ({
@@ -24,7 +142,9 @@ const LineChartComponent = ({
   type,
   metric,
   vertexId,
-}: any) => {
+  fromModal,
+}: LineChartComponentProps) => {
+  const { addError } = useContext<AppContextProps>(AppContext);
   const [transformedData, setTransformedData] = useState<any[]>([]);
   const [chartLabels, setChartLabels] = useState<any[]>([]);
   const [metricsReq, setMetricsReq] = useState<any>({
@@ -40,7 +160,7 @@ const LineChartComponent = ({
 
   const getRandomColor = useCallback((index: number) => {
     const hue = (index * 137.508) % 360;
-    return `hsl(${hue}, 70%, 50%)`;
+    return `hsl(${hue}, 50%, 50%)`;
   }, []);
 
   const getFilterValue = useCallback(
@@ -118,6 +238,12 @@ const LineChartComponent = ({
     filters,
   });
 
+  useEffect(() => {
+    if (error) {
+      addError(error?.toString());
+    }
+  }, [error, addError]);
+
   const groupByLabel = useCallback((dimension: string, metricName: string) => {
     switch (metricName) {
       case "monovtx_pending":
@@ -188,7 +314,13 @@ const LineChartComponent = ({
 
   if (paramsList?.length === 0) return <></>;
 
-  const hasTimeParams = paramsList?.some((param) => ["start_time", "end_time"].includes(param.name)); 
+  const hasTimeParams = paramsList?.some((param) =>
+    ["start_time", "end_time"].includes(param?.name)
+  );
+
+  const getMetricsModalDesc = () => {
+    return `This chart represents the above metric at a ${metricsReq?.dimension} level over the selected time period.`;
+  };
 
   return (
     <Box>
@@ -201,34 +333,44 @@ const LineChartComponent = ({
         }}
       >
         {paramsList
-          ?.filter((param) => !["start_time", "end_time"]?.includes(param.name))
+          ?.filter(
+            (param) => !["start_time", "end_time"]?.includes(param?.name)
+          )
           ?.map((param: any) => {
             return (
               <Box
-                key={`line-chart-${param.name}`}
+                display={fromModal ? "none" : "flex"}
+                key={`line-chart-${param?.name}`}
                 sx={{ minWidth: 120, fontSize: "2rem" }}
               >
                 <Dropdown
                   metric={metric}
                   type={type}
-                  field={param.name}
+                  field={param?.name}
                   setMetricReq={setMetricsReq}
                 />
               </Box>
             );
           })}
+        {fromModal && (
+          <Box
+            sx={{ display: "flex", alignItems: "center", fontSize: "1.4rem" }}
+          >
+            {getMetricsModalDesc()}
+          </Box>
+        )}
         {hasTimeParams && (
           <Box key="line-chart-preset">
-              <TimeSelector setMetricReq={setMetricsReq} />
+            <TimeSelector setMetricReq={setMetricsReq} />
           </Box>
-          )}
+        )}
       </Box>
 
       {filtersList?.filter((filterEle: any) => !filterEle?.required)?.length >
         0 && (
         <Box
           sx={{
-            display: "flex",
+            display: fromModal ? "none" : "flex",
             alignItems: "center",
             justifyContent: "space-around",
             mt: "1rem",
@@ -263,7 +405,7 @@ const LineChartComponent = ({
         </Box>
       )}
 
-      {!isLoading && error && <EmptyChart />}
+      {!isLoading && error && <EmptyChart message={error?.toString()} />}
 
       {!isLoading && !error && transformedData?.length > 0 && (
         <ResponsiveContainer width="100%" height={400}>
@@ -277,9 +419,27 @@ const LineChartComponent = ({
             }}
           >
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="time" padding={{ left: 30, right: 30 }} />
-            <YAxis />
-            <CartesianGrid stroke="#f5f5f5" />
+            <XAxis dataKey="time" padding={{ left: 30, right: 30 }}></XAxis>
+            <YAxis
+              label={
+                <Text
+                  x={-160}
+                  y={15}
+                  dy={5}
+                  transform="rotate(-90)"
+                  fontSize={14}
+                  textAnchor="middle"
+                >
+                  {getYAxisLabel(metric?.unit)}
+                </Text>
+              }
+              tickFormatter={getTickFormatter(
+                metric?.unit,
+                metric?.metric_name
+              )}
+            />
+            <CartesianGrid stroke="#f5f5f5"></CartesianGrid>
+
             {chartLabels?.map((value, index) => (
               <Line
                 key={`${value}-line-chart`}
@@ -290,7 +450,7 @@ const LineChartComponent = ({
               />
             ))}
 
-            <Tooltip />
+            <Tooltip content={<CustomTooltip />} />
             <Legend />
           </LineChart>
         </ResponsiveContainer>

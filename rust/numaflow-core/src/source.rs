@@ -1,13 +1,4 @@
-use numaflow_pulsar::source::PulsarSource;
 use std::sync::Arc;
-use tokio::sync::OwnedSemaphorePermit;
-use tokio::sync::Semaphore;
-use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinHandle;
-use tokio::time;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
 
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::message::ReadAck;
@@ -21,6 +12,16 @@ use crate::{
     message::{Message, Offset},
     reader::LagReader,
 };
+use numaflow_pulsar::source::PulsarSource;
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
+use tokio::time;
+use tokio::time::Instant;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info, warn};
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -36,6 +37,10 @@ pub(crate) mod generator;
 ///
 /// [Pulsar]: https://numaflow.numaproj.io/user-guide/sources/pulsar/
 pub(crate) mod pulsar;
+
+pub(crate) mod serving;
+use crate::transformer::Transformer;
+use serving::ServingSource;
 
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
@@ -68,6 +73,7 @@ pub(crate) enum SourceType {
         generator::GeneratorLagReader,
     ),
     Pulsar(PulsarSource),
+    Serving(ServingSource),
 }
 
 enum ActorMessage {
@@ -141,12 +147,15 @@ where
 }
 
 /// Source is used to read, ack, and get the pending messages count from the source.
+/// Source is responsible for invoking the transformer.
 #[derive(Clone)]
 pub(crate) struct Source {
     read_batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,
     tracker_handle: TrackerHandle,
     read_ahead: bool,
+    /// Transformer handler for transforming messages from Source.
+    transformer: Option<Transformer>,
 }
 
 impl Source {
@@ -156,6 +165,7 @@ impl Source {
         src_type: SourceType,
         tracker_handle: TrackerHandle,
         read_ahead: bool,
+        transformer: Option<Transformer>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
         match src_type {
@@ -182,12 +192,20 @@ impl Source {
                     actor.run().await;
                 });
             }
+            SourceType::Serving(serving) => {
+                tokio::spawn(async move {
+                    let actor =
+                        SourceActor::new(receiver, serving.clone(), serving.clone(), serving);
+                    actor.run().await;
+                });
+            }
         };
         Self {
             read_batch_size: batch_size,
             sender,
             tracker_handle,
             read_ahead,
+            transformer,
         }
     }
 
@@ -237,15 +255,16 @@ impl Source {
         cln_token: CancellationToken,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let batch_size = self.read_batch_size;
-        let (messages_tx, messages_rx) = mpsc::channel(batch_size);
+        let (messages_tx, messages_rx) = mpsc::channel(2 * batch_size);
         let source_handle = self.sender.clone();
         let tracker_handle = self.tracker_handle.clone();
         let read_ahead_enabled = self.read_ahead;
+        let mut transformer = self.transformer.clone();
 
         let pipeline_labels = pipeline_forward_metric_labels("Source", Some(get_vertex_name()));
         let mvtx_labels = mvtx_forward_metric_labels();
 
-        info!("Started streaming source with batch size: {}", batch_size);
+        info!(?batch_size, "Started streaming source with batch size");
         let handle = tokio::spawn(async move {
             // this semaphore is used only if read-ahead is disabled. we hold this semaphore to
             // make sure we can read only if the current inflight ones are ack'ed.
@@ -260,16 +279,11 @@ impl Source {
                 if !read_ahead_enabled {
                     // Acquire the semaphore permit before reading the next batch to make
                     // sure we are not reading ahead and all the inflight messages are acked.
-                    let _permit = Arc::clone(&semaphore).acquire_owned().await.unwrap();
+                    let _permit = Arc::clone(&semaphore)
+                        .acquire_owned()
+                        .await
+                        .expect("acquiring permit should not fail");
                 }
-                // Reserve the permits before invoking the read method.
-                let mut permit = match messages_tx.reserve_many(batch_size).await {
-                    Ok(permit) => permit,
-                    Err(e) => {
-                        error!("Error while reserving permits: {:?}", e);
-                        return Err(crate::error::Error::Source(e.to_string()));
-                    }
-                };
 
                 let read_start_time = time::Instant::now();
                 let messages = match Self::read(source_handle.clone()).await {
@@ -280,52 +294,24 @@ impl Source {
                     }
                 };
 
-                let n = messages.len();
-                if is_mono_vertex() {
-                    monovertex_metrics()
-                        .read_total
-                        .get_or_create(mvtx_labels)
-                        .inc_by(n as u64);
-                    monovertex_metrics()
-                        .read_time
-                        .get_or_create(mvtx_labels)
-                        .observe(read_start_time.elapsed().as_micros() as f64);
-                } else {
-                    pipeline_metrics()
-                        .forwarder
-                        .read_total
-                        .get_or_create(pipeline_labels)
-                        .inc_by(n as u64);
-                    pipeline_metrics()
-                        .forwarder
-                        .read_time
-                        .get_or_create(pipeline_labels)
-                        .observe(read_start_time.elapsed().as_micros() as f64);
+                let msgs_len = messages.len();
+
+                Self::send_read_metrics(pipeline_labels, mvtx_labels, read_start_time, msgs_len);
+
+                if msgs_len == 0 {
+                    continue;
                 }
 
-                let mut ack_batch = Vec::with_capacity(n);
-                for message in messages {
+                let mut ack_batch = Vec::with_capacity(msgs_len);
+                for message in messages.iter() {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
                     let offset = message.offset.clone().expect("offset can never be none");
 
                     // insert the offset and the ack one shot in the tracker.
-                    tracker_handle
-                        .insert(message.id.offset.clone(), resp_ack_tx)
-                        .await?;
+                    tracker_handle.insert(message, resp_ack_tx).await?;
 
                     // store the ack one shot in the batch to invoke ack later.
                     ack_batch.push((offset, resp_ack_rx));
-
-                    match permit.next() {
-                        Some(permit) => {
-                            permit.send(message);
-                        }
-                        None => {
-                            unreachable!(
-                                "Permits should be reserved for all messages in the batch"
-                            );
-                        }
-                    }
                 }
 
                 // start a background task to invoke ack on the source for the offsets that are acked.
@@ -341,6 +327,21 @@ impl Source {
                         None
                     },
                 ));
+
+                // transform the batch if the transformer is present, this need not
+                // be streaming because transformation should be fast operation.
+                let messages = match transformer.as_mut() {
+                    None => messages,
+                    Some(transformer) => transformer.transform_batch(messages).await?,
+                };
+
+                // write the messages to downstream.
+                for message in messages {
+                    messages_tx
+                        .send(message)
+                        .await
+                        .expect("send should not fail");
+                }
             }
         });
         Ok((ReceiverStream::new(messages_rx), handle))
@@ -348,7 +349,7 @@ impl Source {
 
     /// Listens to the oneshot receivers and invokes ack on the source for the offsets that are acked.
     async fn invoke_ack(
-        e2e_start_time: time::Instant,
+        e2e_start_time: Instant,
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
         _permit: Option<OwnedSemaphorePermit>, // permit to release after acking the offsets.
@@ -362,22 +363,56 @@ impl Source {
                     offsets_to_ack.push(offset);
                 }
                 Ok(ReadAck::Nak) => {
-                    error!("Nak received for offset: {:?}", offset);
+                    error!(?offset, "Nak received for offset");
                 }
                 Err(e) => {
-                    error!(
-                        "Error receiving ack for offset: {:?}, error: {:?}",
-                        offset, e
-                    );
+                    error!(?offset, err=?e, "Error receiving ack for offset");
                 }
             }
         }
 
-        let start = time::Instant::now();
+        let start = Instant::now();
         if !offsets_to_ack.is_empty() {
             Self::ack(source_handle, offsets_to_ack).await?;
+        } else {
+            warn!("no messages to ack, perhaps all are to be `nack'ed`");
         }
 
+        Self::send_ack_metrics(e2e_start_time, n, start);
+
+        Ok(())
+    }
+
+    fn send_read_metrics(
+        pipeline_labels: &Vec<(String, String)>,
+        mvtx_labels: &Vec<(String, String)>,
+        read_start_time: Instant,
+        n: usize,
+    ) {
+        if is_mono_vertex() {
+            monovertex_metrics()
+                .read_total
+                .get_or_create(mvtx_labels)
+                .inc_by(n as u64);
+            monovertex_metrics()
+                .read_time
+                .get_or_create(mvtx_labels)
+                .observe(read_start_time.elapsed().as_micros() as f64);
+        } else {
+            pipeline_metrics()
+                .forwarder
+                .read_total
+                .get_or_create(pipeline_labels)
+                .inc_by(n as u64);
+            pipeline_metrics()
+                .forwarder
+                .read_time
+                .get_or_create(pipeline_labels)
+                .observe(read_start_time.elapsed().as_micros() as f64);
+        }
+    }
+
+    fn send_ack_metrics(e2e_start_time: Instant, n: usize, start: Instant) {
         if is_mono_vertex() {
             monovertex_metrics()
                 .ack_time
@@ -412,7 +447,6 @@ impl Source {
                 .get_or_create(pipeline_isb_metric_labels())
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         }
-        Ok(())
     }
 }
 
@@ -534,8 +568,9 @@ mod tests {
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
-            TrackerHandle::new(),
+            TrackerHandle::new(None),
             true,
+            None,
         );
 
         let cln_token = CancellationToken::new();

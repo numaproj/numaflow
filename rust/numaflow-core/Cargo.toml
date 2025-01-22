@@ -6,7 +6,8 @@ edition = "2021"
 [features]
 nats-tests = []
 pulsar-tests = []
-all-tests = ["nats-tests", "pulsar-tests"]
+redis-tests = []
+all-tests = ["nats-tests", "pulsar-tests", "redis-tests"]
 
 [lints]
 workspace = true
@@ -21,8 +22,10 @@ serving.workspace = true
 backoff.workspace = true
 axum.workspace = true
 axum-server.workspace = true
+bytes.workspace = true
+serde.workspace = true
+rustls.workspace = true
 tonic = { version = "0.12.3", features = ["tls"] }
-bytes = "1.7.1"
 thiserror = "2.0.3"
 tokio-util = "0.7.11"
 tokio-stream = "0.1.15"
@@ -35,7 +38,6 @@ serde_json = "1.0.122"
 trait-variant = "0.1.2"
 rcgen = "0.13.1"
 rustls = { version = "0.23.19", features = ["aws_lc_rs", "ring"] }
-serde = { version = "1.0.204", features = ["derive"] }
 semver = "1.0"
 pep440_rs = "0.6.6"
 parking_lot = "0.12.3"
@@ -56,6 +58,9 @@ log = "0.4.22"
 [dev-dependencies]
 tempfile = "3.11.0"
 numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "9ca9362ad511084501520e5a37d40cdcd0cdc9d9" }
-pulsar = { version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"] }
+pulsar = { version = "6.3.0", default-features = false, features = [
+    "tokio-rustls-runtime",
+] }
+reqwest = { workspace = true, features = ["json"] }
 
 [build-dependencies]

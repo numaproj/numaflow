@@ -55,39 +55,6 @@ checksum = "69f7f8c3906b62b754cd5326047894316021dcfe5a194c8ea52bdd94934a3457"
 
 [[package]]
 name = "async-nats"
-version = "0.35.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab8df97cb8fc4a884af29ab383e9292ea0939cfcdd7d2a17179086dc6c427e7f"
-dependencies = [
- "base64 0.22.1",
- "bytes",
- "futures",
- "memchr",
- "nkeys",
- "nuid",
- "once_cell",
- "portable-atomic",
- "rand",
- "regex",
- "ring",
- "rustls-native-certs 0.7.3",
- "rustls-pemfile 2.2.0",
- "rustls-webpki 0.102.8",
- "serde",
- "serde_json",
- "serde_nanos",
- "serde_repr",
- "thiserror 1.0.69",
- "time",
- "tokio",
- "tokio-rustls 0.26.1",
- "tracing",
- "tryhard",
- "url",
-]
-
-[[package]]
-name = "async-nats"
 version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76433c4de73442daedb3a59e991d94e85c14ebfc33db53dfcd347a21cd6ef4f8"
@@ -221,7 +188,7 @@ dependencies = [
  "serde_urlencoded",
  "sync_wrapper 1.0.2",
  "tokio",
- "tower 0.5.1",
+ "tower 0.5.2",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -1738,6 +1705,7 @@ dependencies = [
  "backoff",
  "numaflow-core",
  "numaflow-models",
+ "rustls 0.23.19",
  "servesink",
  "serving",
  "tokio",
@@ -1793,7 +1761,7 @@ dependencies = [
 name = "numaflow-core"
 version = "0.1.0"
 dependencies = [
- "async-nats 0.38.0",
+ "async-nats",
  "axum",
  "axum-server",
  "backoff",
@@ -1820,14 +1788,14 @@ dependencies = [
  "pulsar",
  "rand",
  "rcgen",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rustls 0.23.19",
  "semver",
  "serde",
  "serde_json",
  "serving",
  "tempfile",
- "thiserror 2.0.3",
+ "thiserror 2.0.8",
  "tokio",
  "tokio-rustls 0.26.1",
  "tokio-stream",
@@ -1872,7 +1840,7 @@ dependencies = [
  "prost 0.11.9",
  "pulsar",
  "serde",
- "thiserror 2.0.3",
+ "thiserror 2.0.8",
  "tokio",
  "tonic",
  "tracing",
@@ -2344,7 +2312,7 @@ dependencies = [
  "rustc-hash 2.1.0",
  "rustls 0.23.19",
  "socket2",
- "thiserror 2.0.3",
+ "thiserror 2.0.8",
  "tokio",
  "tracing",
 ]
@@ -2363,7 +2331,7 @@ dependencies = [
  "rustls 0.23.19",
  "rustls-pki-types",
  "slab",
- "thiserror 2.0.3",
+ "thiserror 2.0.8",
  "tinyvec",
  "tracing",
  "web-time",
@@ -2560,14 +2528,15 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.9"
+version = "0.12.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a77c62af46e79de0a562e1a9849205ffcb7fc1238876e9bd743357570e04046f"
+checksum = "43e734407157c3c2034e0258f5e4473ddb361b1e85f95a66690d67264d7cd1da"
 dependencies = [
  "base64 0.22.1",
  "bytes",
  "futures-core",
  "futures-util",
+ "h2 0.4.7",
  "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
@@ -2591,6 +2560,7 @@ dependencies = [
  "sync_wrapper 1.0.2",
  "tokio",
  "tokio-rustls 0.26.1",
+ "tower 0.5.2",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -2948,7 +2918,7 @@ name = "servesink"
 version = "0.1.0"
 dependencies = [
  "numaflow 0.1.1",
- "reqwest 0.12.9",
+ "reqwest 0.12.12",
  "tokio",
  "tonic",
  "tracing",
@@ -2958,12 +2928,12 @@ dependencies = [
 name = "serving"
 version = "0.1.0"
 dependencies = [
- "async-nats 0.35.1",
  "axum",
  "axum-macros",
  "axum-server",
  "backoff",
  "base64 0.22.1",
+ "bytes",
  "chrono",
  "hyper-util",
  "numaflow-models",
@@ -2971,6 +2941,8 @@ dependencies = [
  "prometheus-client",
  "rcgen",
  "redis",
+ "reqwest 0.12.12",
+ "rustls 0.23.19",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -3202,11 +3174,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.3"
+version = "2.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c006c85c7651b3cf2ada4584faa36773bd07bac24acfb39f3c431b36d7e667aa"
+checksum = "08f5383f3e0071702bf93ab5ee99b52d26936be9dedd9413067cbdcddcb6141a"
 dependencies = [
- "thiserror-impl 2.0.3",
+ "thiserror-impl 2.0.8",
 ]
 
 [[package]]
@@ -3222,9 +3194,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.3"
+version = "2.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f077553d607adc1caf65430528a576c757a71ed73944b66ebb58ef2bbd243568"
+checksum = "f2f357fcec90b3caef6623a099691be676d033b40a058ac95d2a6ade6fa0c943"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3479,14 +3451,14 @@ dependencies = [
 
 [[package]]
 name = "tower"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2873938d487c3cfb9aed7546dc9f2711d867c9f90c46b889989a2cb84eba6b4f"
+checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
 dependencies = [
  "futures-core",
  "futures-util",
  "pin-project-lite",
- "sync_wrapper 0.1.2",
+ "sync_wrapper 1.0.2",
  "tokio",
  "tower-layer",
  "tower-service",
