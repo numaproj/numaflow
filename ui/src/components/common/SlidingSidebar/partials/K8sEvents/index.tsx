@@ -23,9 +23,6 @@ const DEFAULT_PAGE_SIZE_OPTIONS = [2, 4, 6, 8, 10, 15, 20];
 
 const DEFAULT_FILTER_VALUE = "All";
 
-
-
-
 export interface K8sEventsProps {
   namespaceId: string;
   pipelineId?: string;
@@ -92,7 +89,7 @@ export function K8sEvents({
     }
     setFilteredEvents(pages[page - 1] || []);
     setTotalPages(pages.length);
-  }, [data, page, typeFilter]);
+  }, [data, page, pageSize, typeFilter]);
 
   const handlePageChange = useCallback(
     (event: React.ChangeEvent<unknown>, value: number) => {
@@ -122,11 +119,6 @@ export function K8sEvents({
     },
     []
   );
- 
-
-
-
-
   const typeCounts = useMemo(() => {
     return (
       <Box
@@ -184,33 +176,35 @@ export function K8sEvents({
         <Box
           sx={{
             display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-start",
+          flexDirection: "column",
+          marginRight: "0.8rem",
+          fontSize: "1.6rem",
+          color: "#6B6C72"
           }}
         >
-          <label style={{ fontSize: "1.4rem", color: "#6B6C72" }}>
-            Rows Per Page:
+          <label>
+          Rows Per Page
           </label>
           <Select
-  value={pageSize}
-  onChange={(event) => {
-    const newSize = Number(event.target.value); 
-    setPageSize(newSize); 
-    setPage(1); 
-  }}
-  sx={{
-    fontSize: "1.6rem",
-    background: "#fff",
-    border: "1px solid #6B6C72",
-    height: "3.4rem",
-  }}
->
-  {DEFAULT_PAGE_SIZE_OPTIONS.map((size) => (
-    <MenuItem key={size} value={size}>
-      {size}
-    </MenuItem>
-  ))}
-</Select>
+          value={pageSize}
+          onChange={(event) => {
+            const newSize = Number(event.target.value); 
+            setPageSize(newSize); 
+            setPage(1); 
+          }}
+          sx={{
+            fontSize: "1.6rem",
+            background: "#fff",
+            border: "1px solid #6B6C72",
+            height: "3.4rem",
+          }}
+            >
+      {DEFAULT_PAGE_SIZE_OPTIONS.map((size) => (
+          <MenuItem key={size} value={size} sx={{ fontSize: "1.6rem" }}>
+          {size}
+        </MenuItem>
+      ))}
+        </Select>
         </Box>
       </Box>
     );
