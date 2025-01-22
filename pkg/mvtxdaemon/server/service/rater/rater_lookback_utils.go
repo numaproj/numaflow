@@ -60,7 +60,8 @@ func (r *Rater) updateDynamicLookbackSecs() {
 	roundedProcessingTime := 60 * int(math.Ceil(processingTimeSeconds/60))
 	// step up case
 	if roundedProcessingTime > int(currentVal) {
-		r.userSpecifiedLookBackSeconds.Store(math.Min(MaxLookback.Seconds(), float64(roundedProcessingTime)))
+		roundedProcessingTime = int(math.Min(float64(roundedProcessingTime), MaxLookback.Seconds()))
+		r.userSpecifiedLookBackSeconds.Store(float64(roundedProcessingTime))
 		r.log.Infof("Lookback updated for mvtx %s, old %f new %d", vertexName, currentVal, roundedProcessingTime)
 	} else {
 		// step down case
@@ -87,6 +88,7 @@ func (r *Rater) CalculateVertexProcessingTime(q *sharedqueue.OverflowQueue[*Time
 	// we consider the last but one element as the end index because the last element might be incomplete
 	// we can be sure that the last but one element in the queue is complete.
 	endIndex := len(counts) - 2
+
 	// If we do not have data from previous timeline, then return the current
 	// lookback time itself
 	if startIndex == indexNotFound {
