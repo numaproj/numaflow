@@ -515,6 +515,51 @@ mod tests {
         assert_eq!(callback_info.responses, vec![None]);
     }
 
+    type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+    #[test]
+    fn test_message_to_callback_info_conversion() {
+        let offset = Bytes::from_static(b"offset1");
+        let mut message = Message {
+            keys: Arc::from([]),
+            tags: None,
+            value: Bytes::from_static(b"test"),
+            offset: None,
+            event_time: Default::default(),
+            id: MessageID {
+                vertex_name: "in".into(),
+                offset: offset.clone(),
+                index: 1,
+            },
+            headers: HashMap::new(),
+            metadata: None,
+        };
+
+        let callback_info: super::Result<ServingCallbackInfo> = TryFrom::try_from(&message);
+        assert!(callback_info.is_err());
+
+        const CALLBACK_URL: &str = "https://localhost/v1/process/callback";
+        let headers = [
+            (DEFAULT_CALLBACK_URL_HEADER_KEY, CALLBACK_URL),
+            (DEFAULT_ID_HEADER, "1234"),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+        message.headers = headers;
+
+        const FROM_VERTEX_NAME: &str = "source-vetext";
+        message.metadata = Some(Metadata {
+            previous_vertex: FROM_VERTEX_NAME.into(),
+        });
+
+        let callback_info: ServingCallbackInfo = TryFrom::try_from(&message).unwrap();
+        assert_eq!(callback_info.id, "1234");
+        assert_eq!(callback_info.callback_url, CALLBACK_URL);
+        assert_eq!(callback_info.from_vertex, FROM_VERTEX_NAME);
+        assert_eq!(callback_info.responses, vec![None]);
+    }
+
     #[tokio::test]
     async fn test_insert_update_delete() {
         let handle = TrackerHandle::new(None, None);
