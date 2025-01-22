@@ -245,7 +245,7 @@ mod tests {
 
         // On the server, this fails with SubGraphInvalidInput("Invalid callback: 1234, vertex: in")
         // We get 200 OK response from the server, since we already registered this request ID in the store.
-        callback_handler
+        let callback_task = callback_handler
             .callback(
                 ID_VALUE.into(),
                 format!("https://localhost:{port}/v1/process/callback"),
@@ -253,17 +253,8 @@ mod tests {
                 vec![],
             )
             .await?;
-        let mut data = None;
-        for _ in 0..10 {
-            tokio::time::sleep(Duration::from_millis(2)).await;
-            data = {
-                let guard = store.data.lock().unwrap();
-                guard.get(ID_VALUE).cloned()
-            };
-            if data.is_some() {
-                break;
-            }
-        }
+        callback_task.await.unwrap();
+        let data = store.data.lock().unwrap().get(ID_VALUE).cloned();
         assert!(data.is_some(), "Callback data not found in store");
         server_handle.abort();
         Ok(())
