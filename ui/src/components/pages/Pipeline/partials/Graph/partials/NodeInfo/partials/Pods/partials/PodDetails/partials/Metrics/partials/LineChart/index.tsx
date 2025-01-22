@@ -41,7 +41,7 @@ function CustomTooltip({ payload, label, active, patternName }: TooltipProps & {
       >
         <Box>{label}</Box>
         {payload.map((entry: any, index: any) => {
-          const formattedValue = getDefaultFormatter(entry.value, patternName);
+          const formattedValue = getDefaultFormatter(entry?.value, patternName);
           return(
           <Box key={`item-${index}`} sx={{ display: "flex" }}>
             <Box
