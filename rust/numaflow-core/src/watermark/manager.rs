@@ -1,13 +1,15 @@
-use crate::watermark::timeline::OffsetTimeline;
-use crate::watermark::WMB;
-use prost::Message as ProtoMessage;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
+
+use prost::Message as ProtoMessage;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 use tracing::{debug, info};
+
+use crate::watermark::timeline::OffsetTimeline;
+use crate::watermark::WMB;
 
 const DEFAULT_PROCESSOR_REFRESH_RATE: u16 = 5;
 
@@ -133,6 +135,7 @@ impl ProcessorManager {
                     let processor_name = kv.key;
                     let wmb: WMB = kv.value.try_into().unwrap();
 
+                    info!("Got WMB {:?} for processor {}", wmb, processor_name);
                     if let Some(processor) = processors.lock().await.get_mut(&processor_name) {
                         let timeline = &mut processor.timelines[wmb.partition as usize];
                         if wmb.idle {
@@ -144,11 +147,9 @@ impl ProcessorManager {
                         debug!(?processor_name, "Processor not found");
                     }
                 }
-                async_nats::jetstream::kv::Operation::Delete => {
-                    // we don't care about delete operations
-                }
-                async_nats::jetstream::kv::Operation::Purge => {
-                    // we don't care about purge operations
+                async_nats::jetstream::kv::Operation::Delete
+                | async_nats::jetstream::kv::Operation::Purge => {
+                    // we don't care about delete or purge operations
                 }
             }
         }
@@ -163,12 +164,12 @@ impl ProcessorManager {
         while let Ok(kv) = hb_watcher.next().await.unwrap() {
             match kv.operation {
                 async_nats::jetstream::kv::Operation::Put => {
-                    info!("Received heartbeat from processor: {}", kv.key);
                     let processor_name = kv.key;
                     // convert Bytes to u32
                     let hb = numaflow_pb::objects::watermark::Heartbeat::decode(kv.value)
                         .expect("Failed to decode heartbeat")
                         .heartbeat;
+                    info!("Got heartbeat {} for processor {}", hb, processor_name);
                     heartbeats.lock().await.insert(processor_name.clone(), hb);
                     // if the processor is not in the processors map, add it
                     // or if processor status is not active, set it to active
@@ -179,14 +180,12 @@ impl ProcessorManager {
                         }
                     } else {
                         info!("Processor {} not found, adding it", processor_name);
-                        processors.insert(
-                            processor_name.clone(),
-                            Processor::new(
-                                processor_name,
-                                Status::Active,
-                                partition_count as usize,
-                            ),
+                        let processor = Processor::new(
+                            processor_name,
+                            Status::Active,
+                            partition_count as usize,
                         );
+                        processors.insert(processor.name.clone(), processor);
                     }
                 }
                 async_nats::jetstream::kv::Operation::Delete => {

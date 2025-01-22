@@ -38,32 +38,17 @@ pub(crate) struct Message {
 }
 
 /// Offset of the message which will be used to acknowledge the message.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub(crate) enum Offset {
-    Source(OffsetType),
-    ISB(OffsetType),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) enum OffsetType {
     Int(IntOffset),
     String(StringOffset),
-}
-
-impl fmt::Display for OffsetType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            OffsetType::Int(offset) => write!(f, "{}", offset),
-            OffsetType::String(offset) => write!(f, "{}", offset),
-        }
-    }
 }
 
 impl fmt::Display for Offset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Offset::Source(offset) => write!(f, "{}", offset),
-            Offset::ISB(offset) => write!(f, "{}", offset),
+            Offset::Int(offset) => write!(f, "{}", offset),
+            Offset::String(offset) => write!(f, "{}", offset),
         }
     }
 }
@@ -80,12 +65,12 @@ impl Message {
 /// IntOffset is integer based offset enum type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct IntOffset {
-    pub(crate) offset: u64,
+    pub(crate) offset: i64,
     pub(crate) partition_idx: u16,
 }
 
 impl IntOffset {
-    pub(crate) fn new(seq: u64, partition_idx: u16) -> Self {
+    pub(crate) fn new(seq: i64, partition_idx: u16) -> Self {
         Self {
             offset: seq,
             partition_idx,
@@ -216,10 +201,10 @@ mod tests {
 
     #[test]
     fn test_offset_display() {
-        let offset = Offset::Source(OffsetType::String(StringOffset {
+        let offset = Offset::String(StringOffset {
             offset: "123".to_string().into(),
             partition_idx: 1,
-        }));
+        });
         assert_eq!(format!("{}", offset), "123-1");
     }
 
@@ -239,10 +224,10 @@ mod tests {
             keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),
-            offset: Offset::ISB(OffsetType::String(StringOffset {
+            offset: Offset::String(StringOffset {
                 offset: "123".to_string().into(),
                 partition_idx: 0,
-            })),
+            }),
             event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
             watermark: None,
             id: MessageID {
@@ -315,10 +300,10 @@ mod tests {
         assert_eq!(string_offset.partition_idx, 1);
         assert_eq!(format!("{}", string_offset), "42-1");
 
-        let offset_int = Offset::Source(OffsetType::Int(int_offset));
+        let offset_int = Offset::Int(int_offset);
         assert_eq!(format!("{}", offset_int), "42-1");
 
-        let offset_string = Offset::Source(OffsetType::String(string_offset));
+        let offset_string = Offset::String(string_offset);
         assert_eq!(format!("{}", offset_string), "42-1");
     }
 }

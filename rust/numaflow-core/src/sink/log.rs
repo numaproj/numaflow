@@ -37,7 +37,7 @@ mod tests {
     use chrono::Utc;
 
     use super::LogSink;
-    use crate::message::{IntOffset, OffsetType};
+    use crate::message::IntOffset;
     use crate::message::{Message, MessageID, Offset};
     use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 
@@ -49,7 +49,7 @@ mod tests {
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(1, 0))),
+                offset: Offset::Int(IntOffset::new(1, 0)),
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
@@ -63,7 +63,7 @@ mod tests {
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(1, 0))),
+                offset: Offset::Int(IntOffset::new(1, 0)),
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {

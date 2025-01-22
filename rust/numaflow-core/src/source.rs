@@ -1,5 +1,15 @@
 use std::sync::Arc;
 
+use numaflow_pulsar::source::PulsarSource;
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
+use tokio::time::Instant;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info, warn};
+
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::message::ReadAck;
 use crate::metrics::{
@@ -12,16 +22,6 @@ use crate::{
     message::{Message, Offset},
     reader::LagReader,
 };
-use numaflow_pulsar::source::PulsarSource;
-use tokio::sync::OwnedSemaphorePermit;
-use tokio::sync::Semaphore;
-use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinHandle;
-use tokio::time;
-use tokio::time::Instant;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -39,8 +39,10 @@ pub(crate) mod generator;
 pub(crate) mod pulsar;
 
 pub(crate) mod serving;
-use crate::transformer::Transformer;
 use serving::ServingSource;
+
+use crate::transformer::Transformer;
+use crate::watermark::SourceWatermarkHandle;
 
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
@@ -156,6 +158,7 @@ pub(crate) struct Source {
     read_ahead: bool,
     /// Transformer handler for transforming messages from Source.
     transformer: Option<Transformer>,
+    watermark_handle: Option<SourceWatermarkHandle>,
 }
 
 impl Source {
@@ -166,6 +169,7 @@ impl Source {
         tracker_handle: TrackerHandle,
         read_ahead: bool,
         transformer: Option<Transformer>,
+        watermark_handle: Option<SourceWatermarkHandle>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
         match src_type {
@@ -206,6 +210,7 @@ impl Source {
             tracker_handle,
             read_ahead,
             transformer,
+            watermark_handle,
         }
     }
 
@@ -260,6 +265,7 @@ impl Source {
         let tracker_handle = self.tracker_handle.clone();
         let read_ahead_enabled = self.read_ahead;
         let mut transformer = self.transformer.clone();
+        let mut watermark_handle = self.watermark_handle.clone();
 
         let pipeline_labels = pipeline_forward_metric_labels("Source", Some(get_vertex_name()));
         let mvtx_labels = mvtx_forward_metric_labels();
@@ -285,7 +291,7 @@ impl Source {
                         .expect("acquiring permit should not fail");
                 }
 
-                let read_start_time = time::Instant::now();
+                let read_start_time = Instant::now();
                 let messages = match Self::read(source_handle.clone()).await {
                     Ok(messages) => messages,
                     Err(e) => {
@@ -336,6 +342,10 @@ impl Source {
                     None => messages,
                     Some(transformer) => transformer.transform_batch(messages).await?,
                 };
+
+                if let Some(watermark_handle) = watermark_handle.as_mut() {
+                    watermark_handle.publish_source_watermark(&messages).await?;
+                }
 
                 // write the messages to downstream.
                 for message in messages {
@@ -572,6 +582,7 @@ mod tests {
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
             TrackerHandle::new(None),
             true,
+            None,
             None,
         );
 

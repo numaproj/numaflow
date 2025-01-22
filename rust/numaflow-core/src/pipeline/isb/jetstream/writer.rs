@@ -1,19 +1,9 @@
-use crate::message::OffsetType;
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
-use crate::config::pipeline::ToVertexConfig;
-use crate::error::Error;
-use crate::message::{IntOffset, Message, Offset};
-use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
-use crate::shared::forward;
-use crate::tracker::TrackerHandle;
-use crate::watermark::WatermarkHandle;
-use crate::Result;
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::publish::PublishAck;
@@ -27,6 +17,16 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
+
+use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
+use crate::config::pipeline::ToVertexConfig;
+use crate::error::Error;
+use crate::message::{IntOffset, Message, Offset};
+use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
+use crate::shared::forward;
+use crate::tracker::TrackerHandle;
+use crate::watermark::WatermarkHandle;
+use crate::Result;
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
@@ -209,7 +209,7 @@ impl JetstreamWriter {
                     // check to which partition the message should be written
                     let partition = forward::determine_partition(
                         String::from_utf8_lossy(&message.id.offset).to_string(),
-                        vertex.writer_config.partitions,
+                        vertex.partitions,
                         &mut hash,
                     );
 
@@ -366,10 +366,7 @@ impl JetstreamWriter {
                         }
                         offsets.push((
                             stream.clone(),
-                            Offset::ISB(OffsetType::Int(IntOffset::new(
-                                ack.sequence,
-                                stream.partition,
-                            ))),
+                            Offset::Int(IntOffset::new(ack.sequence as i64, stream.partition)),
                         ));
                         tracker_handle
                             .delete(result.offset.clone())
@@ -399,10 +396,10 @@ impl JetstreamWriter {
                                 }
                                 offsets.push((
                                     stream.clone(),
-                                    Offset::ISB(OffsetType::Int(IntOffset::new(
-                                        ack.sequence,
+                                    Offset::Int(IntOffset::new(
+                                        ack.sequence as i64,
                                         stream.partition,
-                                    ))),
+                                    )),
                                 ));
                             }
                             Err(e) => {
@@ -420,11 +417,31 @@ impl JetstreamWriter {
             }
             for (stream, offset) in offsets {
                 if let Some(watermark_handle) = watermark_handle.as_ref() {
-                    watermark_handle
-                        .publish_watermark(stream, offset)
-                        .await
-                        .map_err(|e| Error::ISB(format!("Failed to update watermark: {:?}", e)))
-                        .expect("Failed to publish watermark");
+                    match watermark_handle {
+                        WatermarkHandle::Edge(handle) => {
+                            handle
+                                .publish_watermark(stream, offset)
+                                .await
+                                .map_err(|e| {
+                                    Error::ISB(format!("Failed to update watermark: {:?}", e))
+                                })
+                                .expect("Failed to publish watermark");
+                        }
+                        WatermarkHandle::Source(handle) => {
+                            let input_partition = match &result.offset {
+                                Offset::Int(offset) => offset.partition_idx,
+                                Offset::String(offset) => offset.partition_idx,
+                            };
+
+                            handle
+                                .publish_source_edge_watermark(stream, offset, input_partition)
+                                .await
+                                .map_err(|e| {
+                                    Error::ISB(format!("Failed to update watermark: {:?}", e))
+                                })
+                                .expect("Failed to publish watermark");
+                        }
+                    }
                 }
             }
             pipeline_metrics()
@@ -496,7 +513,6 @@ pub(crate) struct ResolveAndPublishResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::pipeline::isb::BufferWriterConfig;
     use std::collections::HashMap;
     use std::time::Instant;
 
@@ -509,6 +525,7 @@ mod tests {
     use numaflow_models::models::TagConditions;
 
     use super::*;
+    use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::message::{Message, MessageID, ReadAck};
 
     #[cfg(feature = "nats-tests")]
@@ -548,12 +565,12 @@ mod tests {
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
                 name: "test-vertex".to_string(),
+                partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
                     ..Default::default()
                 },
                 conditions: None,
-                watermark_config: None,
             }],
             context.clone(),
             100,
@@ -566,7 +583,7 @@ mod tests {
             keys: Arc::from(vec!["key_0".to_string()]),
             tags: None,
             value: "message 0".as_bytes().to_vec().into(),
-            offset: Offset::ISB(OffsetType::Int(IntOffset::new(0, 0))),
+            offset: Offset::Int(IntOffset::new(0, 0)),
             event_time: Utc::now(),
             watermark: None,
             id: MessageID {
@@ -626,7 +643,7 @@ mod tests {
             keys: Arc::from(vec!["key_0".to_string()]),
             tags: None,
             value: "message 0".as_bytes().to_vec().into(),
-            offset: Offset::ISB(OffsetType::Int(IntOffset::new(0, 0))),
+            offset: Offset::Int(IntOffset::new(0, 0)),
             event_time: Utc::now(),
             watermark: None,
             id: MessageID {
@@ -692,12 +709,12 @@ mod tests {
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
                 name: "test-vertex".to_string(),
+                partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
                     ..Default::default()
                 },
                 conditions: None,
-                watermark_config: None,
             }],
             context.clone(),
             100,
@@ -713,7 +730,7 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
+                offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
@@ -739,7 +756,7 @@ mod tests {
             keys: Arc::from(vec!["key_11".to_string()]),
             tags: None,
             value: vec![0; 1025].into(),
-            offset: Offset::ISB(OffsetType::Int(IntOffset::new(11, 0))),
+            offset: Offset::Int(IntOffset::new(11, 0)),
             event_time: Utc::now(),
             watermark: None,
             id: MessageID {
@@ -896,13 +913,13 @@ mod tests {
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
                 name: "test-vertex".to_string(),
+                partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
                     max_length: 100,
                     ..Default::default()
                 },
                 conditions: None,
-                watermark_config: None,
             }],
             context.clone(),
             100,
@@ -988,13 +1005,13 @@ mod tests {
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
                 name: "test-vertex".to_string(),
+                partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
                     max_length: 1000,
                     ..Default::default()
                 },
                 conditions: None,
-                watermark_config: None,
             }],
             context.clone(),
             100,
@@ -1011,7 +1028,7 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
+                offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -1080,12 +1097,12 @@ mod tests {
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
                 name: "test-vertex".to_string(),
+                partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
                     ..Default::default()
                 },
                 conditions: None,
-                watermark_config: None,
             }],
             context.clone(),
             100,
@@ -1102,7 +1119,7 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
+                offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -1130,7 +1147,7 @@ mod tests {
             keys: Arc::from(vec!["key_101".to_string()]),
             tags: None,
             value: vec![0; 1025].into(),
-            offset: Offset::ISB(OffsetType::Int(IntOffset::new(101, 0))),
+            offset: Offset::Int(IntOffset::new(101, 0)),
             event_time: Utc::now(),
             watermark: None,
             id: MessageID {
@@ -1196,42 +1213,39 @@ mod tests {
             vec![
                 ToVertexConfig {
                     name: "vertex1".to_string(),
+                    partitions: 2,
                     writer_config: BufferWriterConfig {
                         streams: vertex1_streams.clone(),
-                        partitions: 2,
                         ..Default::default()
                     },
                     conditions: Some(Box::new(ForwardConditions::new(TagConditions {
                         operator: Some("and".to_string()),
                         values: vec!["tag1".to_string(), "tag2".to_string()],
                     }))),
-                    watermark_config: None,
                 },
                 ToVertexConfig {
                     name: "vertex2".to_string(),
+                    partitions: 2,
                     writer_config: BufferWriterConfig {
                         streams: vertex2_streams.clone(),
-                        partitions: 2,
                         ..Default::default()
                     },
                     conditions: Some(Box::new(ForwardConditions::new(TagConditions {
                         operator: Some("or".to_string()),
                         values: vec!["tag2".to_string()],
                     }))),
-                    watermark_config: None,
                 },
                 ToVertexConfig {
                     name: "vertex3".to_string(),
+                    partitions: 2,
                     writer_config: BufferWriterConfig {
                         streams: vertex3_streams.clone(),
-                        partitions: 2,
                         ..Default::default()
                     },
                     conditions: Some(Box::new(ForwardConditions::new(TagConditions {
                         operator: Some("not".to_string()),
                         values: vec!["tag1".to_string()],
                     }))),
-                    watermark_config: None,
                 },
             ],
             context.clone(),
@@ -1248,7 +1262,7 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: Some(Arc::from(vec!["tag1".to_string(), "tag2".to_string()])),
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
+                offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
                 watermark: None,
                 id: MessageID {

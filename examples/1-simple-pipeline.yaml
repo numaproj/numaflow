@@ -3,24 +3,49 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
+  interStepBufferServiceName: "default"
   vertices:
     - name: input-one
+      containerTemplate:
+        resources:
+          requests:
+              memory: "64Mi"
+              cpu: "250m"
+          limits:
+              memory: "128Mi"
+              cpu: "500m"
       scale:
         min: 1
       # A self data generating source
       source:
         generator:
-          rpu: 100
+          rpu: 1000
           duration: 1s
     - name: input-two
+      containerTemplate:
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
       scale:
         min: 1
       # A self data generating source
       source:
         generator:
-          rpu: 100
+          rpu: 1000
           duration: 1s
     - name: cat-one
+      containerTemplate:
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
       partitions: 2
       scale:
         min: 1
@@ -28,6 +53,14 @@ spec:
         container:
           image: quay.io/numaio/numaflow-go/map-forward-message:stable
     - name: cat-two
+      containerTemplate:
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
       partitions: 2
       scale:
         min: 1
@@ -48,6 +81,14 @@ spec:
         container:
           image: quay.io/numaio/numaflow-go/reduce-counter:stable
     - name: out
+      containerTemplate:
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
       scale:
         min: 1
       sink:

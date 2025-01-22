@@ -1,6 +1,3 @@
-use crate::config::is_mono_vertex;
-use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
-use crate::pipeline::pipeline::isb::BufferReaderConfig;
 use std::time::Duration;
 
 use async_nats::jetstream::Context;
@@ -9,18 +6,22 @@ use futures::future::try_join_all;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+use crate::config::is_mono_vertex;
 use crate::config::pipeline;
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
+use crate::config::pipeline::watermark::WatermarkConfig;
+use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
 use crate::metrics::{LagReader, PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+use crate::pipeline::pipeline::isb::BufferReaderConfig;
 use crate::shared::create_components;
 use crate::shared::create_components::create_sink_writer;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
-use crate::watermark::WatermarkHandle;
+use crate::watermark::{EdgeWatermarkHandle, SourceWatermarkHandle, WatermarkHandle};
 use crate::{error, shared, Result};
 
 mod forwarder;
@@ -33,56 +34,71 @@ pub(crate) async fn start_forwarder(
 ) -> Result<()> {
     let js_context = create_js_context(config.js_client_config.clone()).await?;
 
-    // create watermark handle, if watermark is enabled
-    let watermark_handle = match &config.watermark_config {
-        Some(wm) => {
-            if wm.disabled.unwrap_or(true) {
-                Some(
-                    WatermarkHandle::new(
-                        js_context.clone(),
-                        config.from_vertex_config.clone(),
-                        config.to_vertex_config.clone(),
-                    )
-                    .await?,
-                )
-            } else {
-                None
-            }
-        }
-        None => None,
-    };
-
     match &config.vertex_config {
         pipeline::VertexType::Source(source) => {
+            // create watermark handle, if watermark is enabled
+            let source_watermark_handle = match &config.watermark_config {
+                Some(wm_config) => {
+                    if let WatermarkConfig::Source(source_config) = wm_config {
+                        Some(SourceWatermarkHandle::new(js_context.clone(), source_config).await?)
+                    } else {
+                        None
+                    }
+                }
+                None => None,
+            };
+
             info!("Starting source forwarder");
             start_source_forwarder(
                 cln_token,
                 js_context,
                 config.clone(),
                 source.clone(),
-                watermark_handle,
+                source_watermark_handle,
             )
             .await?;
         }
         pipeline::VertexType::Sink(sink) => {
             info!("Starting sink forwarder");
+            // create watermark handle, if watermark is enabled
+            let edge_watermark_handle = match &config.watermark_config {
+                Some(wm_config) => {
+                    if let WatermarkConfig::Edge(edge_config) = wm_config {
+                        Some(EdgeWatermarkHandle::new(js_context.clone(), edge_config).await?)
+                    } else {
+                        None
+                    }
+                }
+                None => None,
+            };
             start_sink_forwarder(
                 cln_token,
                 js_context,
                 config.clone(),
                 sink.clone(),
-                watermark_handle,
+                edge_watermark_handle,
             )
             .await?;
         }
         pipeline::VertexType::Map(map) => {
             info!("Starting map forwarder");
+            // create watermark handle, if watermark is enabled
+            let edge_watermark_handle = match &config.watermark_config {
+                Some(wm_config) => {
+                    if let WatermarkConfig::Edge(edge_config) = wm_config {
+                        Some(EdgeWatermarkHandle::new(js_context.clone(), edge_config).await?)
+                    } else {
+                        None
+                    }
+                }
+                None => None,
+            };
             start_map_forwarder(
                 cln_token,
                 js_context,
                 config.clone(),
                 map.clone(),
-                watermark_handle,
+                edge_watermark_handle,
             )
             .await?;
         }
@@ -95,16 +111,15 @@ async fn start_source_forwarder(
     js_context: Context,
     config: PipelineConfig,
     source_config: SourceVtxConfig,
-    watermark_handle: Option<WatermarkHandle>,
+    source_watermark_handle: Option<SourceWatermarkHandle>,
 ) -> Result<()> {
-    let tracker_handle = TrackerHandle::new(watermark_handle.clone());
-
+    let tracker_handle = TrackerHandle::new(None);
     let buffer_writer = create_buffer_writer(
         &config,
         js_context.clone(),
         tracker_handle.clone(),
         cln_token.clone(),
-        watermark_handle,
+        source_watermark_handle.clone().map(WatermarkHandle::Source),
     )
     .await;
 
@@ -122,6 +137,7 @@ async fn start_source_forwarder(
         &source_config.source_config,
         tracker_handle,
         transformer,
+        source_watermark_handle,
         cln_token.clone(),
     )
     .await?;
@@ -154,7 +170,7 @@ async fn start_map_forwarder(
     js_context: Context,
     config: PipelineConfig,
     map_vtx_config: MapVtxConfig,
-    watermark_handle: Option<WatermarkHandle>,
+    watermark_handle: Option<EdgeWatermarkHandle>,
 ) -> Result<()> {
     // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
     // to a common buffer, in the case of a join.
@@ -201,7 +217,7 @@ async fn start_map_forwarder(
             js_context.clone(),
             tracker_handle.clone(),
             cln_token.clone(),
-            watermark_handle.clone(),
+            watermark_handle.clone().map(|h| WatermarkHandle::Edge(h)),
         )
         .await;
         forwarder_components.push((buffer_reader, buffer_writer, mapper));
@@ -252,7 +268,7 @@ async fn start_sink_forwarder(
     js_context: Context,
     config: PipelineConfig,
     sink: SinkVtxConfig,
-    watermark_handle: Option<WatermarkHandle>,
+    watermark_handle: Option<EdgeWatermarkHandle>,
 ) -> Result<()> {
     // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
     // to a common buffer, in the case of a join.
@@ -361,7 +377,7 @@ async fn create_buffer_reader(
     js_context: Context,
     tracker_handle: TrackerHandle,
     batch_size: usize,
-    watermark_handle: Option<WatermarkHandle>,
+    watermark_handle: Option<EdgeWatermarkHandle>,
 ) -> Result<JetstreamReader> {
     JetstreamReader::new(
         stream,
@@ -415,7 +431,6 @@ mod tests {
     use crate::config::components::source::SourceType;
     use crate::config::pipeline::map::{MapType, UserDefinedConfig};
     use crate::config::pipeline::PipelineConfig;
-    use crate::message::OffsetType;
     use crate::pipeline::pipeline::isb;
     use crate::pipeline::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
     use crate::pipeline::pipeline::map::MapMode;
@@ -489,15 +504,14 @@ mod tests {
             from_vertex_config: vec![],
             to_vertex_config: vec![ToVertexConfig {
                 name: "out".to_string(),
+                partitions: 5,
                 writer_config: BufferWriterConfig {
                     streams: streams.clone(),
-                    partitions: 5,
                     max_length: 30000,
                     usage_limit: 0.8,
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
-                watermark_config: None,
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
@@ -604,7 +618,7 @@ mod tests {
                 keys: Arc::from(vec!["key1".to_string()]),
                 tags: None,
                 value: vec![1, 2, 3].into(),
-                offset: Offset::ISB(OffsetType::String(StringOffset::new("123".to_string(), 0))),
+                offset: Offset::String(StringOffset::new("123".to_string(), 0)),
                 event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
                 watermark: None,
                 id: MessageID {
@@ -659,7 +673,6 @@ mod tests {
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
-                watermark_config: None,
             }],
             vertex_config: VertexType::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
@@ -797,7 +810,7 @@ mod tests {
                 keys: Arc::from(vec!["key1".to_string()]),
                 tags: None,
                 value: vec![1, 2, 3].into(),
-                offset: Offset::ISB(OffsetType::String(StringOffset::new("123".to_string(), 0))),
+                offset: Offset::String(StringOffset::new("123".to_string(), 0)),
                 event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
                 watermark: None,
                 id: MessageID {
@@ -876,15 +889,14 @@ mod tests {
             },
             to_vertex_config: vec![ToVertexConfig {
                 name: "map-out".to_string(),
+                partitions: 5,
                 writer_config: BufferWriterConfig {
                     streams: output_streams.clone(),
-                    partitions: 5,
                     max_length: 30000,
                     usage_limit: 0.8,
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
-                watermark_config: None,
             }],
             from_vertex_config: vec![FromVertexConfig {
                 name: "map-in".to_string(),
@@ -893,7 +905,6 @@ mod tests {
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
-                watermark_config: None,
             }],
             vertex_config: VertexType::Map(MapVtxConfig {
                 concurrency: 10,

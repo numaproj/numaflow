@@ -1,10 +1,12 @@
-use crate::watermark::WMB;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::fmt;
 use std::sync::Arc;
+
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
+
+use crate::watermark::WMB;
 
 #[derive(Clone)]
 pub struct OffsetTimeline {
@@ -31,8 +33,16 @@ impl OffsetTimeline {
 
     pub(crate) async fn put(&self, node: WMB) {
         let mut watermarks = self.watermarks.write().await;
+        info!(
+            "Put invoked with node {:?} current timeline {:?}",
+            node, watermarks
+        );
         for i in 0..watermarks.len() {
             let element_node = watermarks[i];
+            info!(
+                "Comparing node {:?} with element_node {:?}",
+                node, element_node
+            );
             match node.watermark.cmp(&element_node.watermark) {
                 Ordering::Equal => {
                     if node.offset > element_node.offset {
@@ -109,16 +119,6 @@ impl OffsetTimeline {
     pub(crate) async fn get_head_wmb(&self) -> Option<WMB> {
         let watermarks = self.watermarks.read().await;
         watermarks.front().copied()
-    }
-
-    pub(crate) async fn get_offset(&self, event_time: i64) -> i64 {
-        let watermarks = self.watermarks.read().await;
-        for w in watermarks.iter() {
-            if event_time >= w.watermark {
-                return w.offset;
-            }
-        }
-        -1
     }
 
     pub(crate) async fn get_event_time(&self, input_offset: i64) -> i64 {

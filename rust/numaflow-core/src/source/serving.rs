@@ -4,7 +4,7 @@ pub(crate) use serving::ServingSource;
 
 use super::{get_vertex_name, Message, Offset};
 use crate::config::get_vertex_replica;
-use crate::message::{MessageID, OffsetType, StringOffset};
+use crate::message::{MessageID, StringOffset};
 use crate::Error;
 use crate::Result;
 
@@ -12,10 +12,7 @@ impl TryFrom<serving::Message> for Message {
     type Error = Error;
 
     fn try_from(message: serving::Message) -> Result<Self> {
-        let offset = Offset::Source(OffsetType::String(StringOffset::new(
-            message.id.clone(),
-            *get_vertex_replica(),
-        )));
+        let offset = Offset::String(StringOffset::new(message.id.clone(), *get_vertex_replica()));
 
         Ok(Message {
             // we do not support keys from HTTP client
@@ -66,7 +63,7 @@ impl super::SourceAcker for ServingSource {
     async fn ack(&mut self, offsets: Vec<Offset>) -> Result<()> {
         let mut serving_offsets = vec![];
         for offset in offsets {
-            let Offset::Source(OffsetType::String(offset)) = offset else {
+            let Offset::String(offset) = offset else {
                 return Err(Error::Source(format!(
                     "Expected string offset for Serving source. Got {offset:?}"
                 )));
@@ -88,11 +85,12 @@ impl super::LagReader for ServingSource {
 mod tests {
     use std::{collections::HashMap, sync::Arc, time::Duration};
 
-    use super::get_vertex_replica;
-    use crate::message::{Message, MessageID, Offset, OffsetType, StringOffset};
-    use crate::source::{SourceAcker, SourceReader};
     use bytes::Bytes;
     use serving::{ServingSource, Settings};
+
+    use super::get_vertex_replica;
+    use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::source::{SourceAcker, SourceReader};
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -112,7 +110,7 @@ mod tests {
         assert_eq!(message.value, Bytes::from_static(b"test"));
         assert_eq!(
             message.offset,
-            Offset::Source(OffsetType::String(StringOffset::new(MSG_ID.into(), 0)))
+            Offset::String(StringOffset::new(MSG_ID.into(), 0))
         );
         assert_eq!(
             message.id,

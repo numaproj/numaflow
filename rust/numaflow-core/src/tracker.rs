@@ -9,11 +9,12 @@
 //! In the future Watermark will also be propagated based on this.
 
 use std::collections::HashMap;
+
 use tokio::sync::{mpsc, oneshot};
 
 use crate::error::Error;
 use crate::message::{Offset, ReadAck};
-use crate::watermark::WatermarkHandle;
+use crate::watermark::EdgeWatermarkHandle;
 use crate::Result;
 
 /// TrackerEntry represents the state of a tracked message.
@@ -53,7 +54,7 @@ enum ActorMessage {
 struct Tracker {
     entries: HashMap<String, TrackerEntry>,
     receiver: mpsc::Receiver<ActorMessage>,
-    watermark_handle: Option<WatermarkHandle>,
+    watermark_handle: Option<EdgeWatermarkHandle>,
 }
 
 impl Drop for Tracker {
@@ -72,7 +73,7 @@ impl Tracker {
     /// Creates a new Tracker instance with the given receiver for actor messages.
     fn new(
         receiver: mpsc::Receiver<ActorMessage>,
-        watermark_handle: Option<WatermarkHandle>,
+        watermark_handle: Option<EdgeWatermarkHandle>,
     ) -> Self {
         Self {
             entries: HashMap::new(),
@@ -213,7 +214,7 @@ pub(crate) struct TrackerHandle {
 
 impl TrackerHandle {
     /// Creates a new TrackerHandle instance and spawns the Tracker.
-    pub(crate) fn new(watermark_handle: Option<WatermarkHandle>) -> Self {
+    pub(crate) fn new(watermark_handle: Option<EdgeWatermarkHandle>) -> Self {
         let (sender, receiver) = mpsc::channel(100);
         let tracker = Tracker::new(receiver, watermark_handle);
         tokio::spawn(tracker.run());
@@ -290,17 +291,18 @@ impl TrackerHandle {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::message::{IntOffset, OffsetType, StringOffset};
     use tokio::sync::oneshot;
     use tokio::time::{timeout, Duration};
+
+    use super::*;
+    use crate::message::{IntOffset, StringOffset};
 
     #[tokio::test]
     async fn test_insert_update_delete() {
         let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
 
-        let offset = Offset::ISB(OffsetType::Int(IntOffset::new(0, 0)));
+        let offset = Offset::Int(IntOffset::new(0, 0));
 
         // Insert a new message
         handle.insert(offset.clone(), ack_send).await.unwrap();
@@ -322,7 +324,7 @@ mod tests {
     async fn test_update_with_multiple_deletes() {
         let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
-        let offset = Offset::ISB(OffsetType::Int(IntOffset::new(0, 0)));
+        let offset = Offset::Int(IntOffset::new(0, 0));
 
         // Insert a new message
         handle.insert(offset.clone(), ack_send).await.unwrap();
@@ -346,7 +348,7 @@ mod tests {
     async fn test_discard() {
         let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
-        let offset = Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0)));
+        let offset = Offset::String(StringOffset::new("0".to_string(), 0));
 
         // Insert a new message
         handle.insert(offset.clone(), ack_send).await.unwrap();
@@ -365,7 +367,7 @@ mod tests {
     async fn test_discard_after_update_with_higher_count() {
         let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
-        let offset = Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0)));
+        let offset = Offset::String(StringOffset::new("0".to_string(), 0));
 
         // Insert a new message
         handle.insert(offset.clone(), ack_send).await.unwrap();

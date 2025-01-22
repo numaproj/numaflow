@@ -147,7 +147,7 @@ mod tests {
 
     use super::*;
     use crate::error::Result;
-    use crate::message::{IntOffset, Message, MessageID, Offset, OffsetType};
+    use crate::message::{IntOffset, Message, MessageID, Offset};
     use crate::shared::grpc::create_rpc_channel;
     use crate::sink::user_defined::UserDefinedSink;
 
@@ -204,7 +204,7 @@ mod tests {
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(0, 0))),
+                offset: Offset::Int(IntOffset::new(0, 0)),
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
@@ -218,7 +218,7 @@ mod tests {
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(0, 0))),
+                offset: Offset::Int(IntOffset::new(0, 0)),
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {

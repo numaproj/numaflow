@@ -178,18 +178,17 @@ impl UserDefinedTransformer {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::message::{OffsetType, StringOffset};
-    use crate::shared::grpc::create_rpc_channel;
-    use chrono::{TimeZone, Utc};
-    use numaflow::sourcetransform;
     use std::error::Error;
     use std::result::Result;
     use std::time::Duration;
 
+    use chrono::{TimeZone, Utc};
+    use numaflow::sourcetransform;
     use tempfile::TempDir;
 
     use super::*;
+    use crate::message::StringOffset;
+    use crate::shared::grpc::create_rpc_channel;
 
     struct NowCat;
 
@@ -199,7 +198,7 @@ mod tests {
             &self,
             input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
-            let message = sourcetransform::Message::new(input.value, chrono::offset::Utc::now())
+            let message = sourcetransform::Message::new(input.value, Utc::now())
                 .keys(input.keys)
                 .tags(vec![]);
             vec![message]
@@ -208,7 +207,7 @@ mod tests {
 
     #[tokio::test]
     async fn transformer_operations() -> Result<(), Box<dyn Error>> {
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new()?;
         let sock_file = tmp_dir.path().join("sourcetransform.sock");
         let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
@@ -237,11 +236,8 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: crate::message::Offset::Source(OffsetType::String(StringOffset::new(
-                "0".to_string(),
-                0,
-            ))),
-            event_time: chrono::Utc::now(),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+            event_time: Utc::now(),
             watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
@@ -251,7 +247,7 @@ mod tests {
             headers: Default::default(),
         };
 
-        let (tx, rx) = tokio::sync::oneshot::channel();
+        let (tx, rx) = oneshot::channel();
 
         tokio::time::timeout(Duration::from_secs(2), client.transform(message, tx))
             .await
@@ -282,10 +278,10 @@ mod tests {
             keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),
-            offset: Offset::Source(OffsetType::String(StringOffset {
+            offset: Offset::String(StringOffset {
                 offset: "123".to_string().into(),
                 partition_idx: 0,
-            })),
+            }),
             event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
             watermark: None,
             id: MessageID {

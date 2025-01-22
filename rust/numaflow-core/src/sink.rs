@@ -713,9 +713,6 @@ impl Drop for SinkWriter {
 mod tests {
     use std::sync::Arc;
 
-    use super::*;
-    use crate::message::{IntOffset, Message, MessageID, Offset, OffsetType, ReadAck};
-    use crate::shared::grpc::create_rpc_channel;
     use chrono::{TimeZone, Utc};
     use numaflow::sink;
     use numaflow_pb::clients::sink::{SinkRequest, SinkResponse};
@@ -723,6 +720,8 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use super::*;
+    use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
+    use crate::shared::grpc::create_rpc_channel;
 
     struct SimpleSink;
     #[tonic::async_trait]
@@ -763,7 +762,7 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
+                offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -799,7 +798,7 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
+                offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -878,7 +877,7 @@ mod tests {
                 keys: Arc::from(vec!["error".to_string()]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
+                offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -966,7 +965,7 @@ mod tests {
                 keys: Arc::from(vec!["fallback".to_string()]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
+                offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -1011,7 +1010,7 @@ mod tests {
             keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),
-            offset: Offset::ISB(OffsetType::Int(IntOffset::new(0, 0))),
+            offset: Offset::Int(IntOffset::new(0, 0)),
             event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
             watermark: None,
             id: MessageID {

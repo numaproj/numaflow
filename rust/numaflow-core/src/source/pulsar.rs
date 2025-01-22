@@ -5,17 +5,14 @@ use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, Offset, OffsetType};
+use crate::message::{IntOffset, Message, MessageID, Offset};
 use crate::source;
 
 impl TryFrom<PulsarMessage> for Message {
     type Error = Error;
 
     fn try_from(message: PulsarMessage) -> crate::Result<Self> {
-        let offset = Offset::Source(OffsetType::Int(IntOffset::new(
-            message.offset,
-            *get_vertex_replica(),
-        ))); // FIXME: partition id
+        let offset = Offset::Int(IntOffset::new(message.offset as i64, *get_vertex_replica()));
 
         Ok(Message {
             keys: Arc::from(vec![message.key]),
@@ -80,12 +77,12 @@ impl source::SourceAcker for PulsarSource {
     async fn ack(&mut self, offsets: Vec<Offset>) -> crate::error::Result<()> {
         let mut pulsar_offsets = Vec::with_capacity(offsets.len());
         for offset in offsets {
-            let Offset::Source(OffsetType::Int(int_offset)) = offset else {
+            let Offset::Int(int_offset) = offset else {
                 return Err(Error::Source(format!(
                     "Expected Offset::Int type for Pulsar. offset={offset:?}"
                 )));
             };
-            pulsar_offsets.push(int_offset.offset);
+            pulsar_offsets.push(int_offset.offset as u64);
         }
         self.ack_offsets(pulsar_offsets).await.map_err(Into::into)
     }

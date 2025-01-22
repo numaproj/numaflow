@@ -1,15 +1,16 @@
 use std::sync::Arc;
 
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use tokio::sync::{mpsc, oneshot, Semaphore};
+use tonic::transport::Channel;
+use tracing::info;
+
 use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{monovertex_metrics, mvtx_forward_metric_labels};
 use crate::tracker::TrackerHandle;
 use crate::transformer::user_defined::UserDefinedTransformer;
 use crate::Result;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use tokio::sync::{mpsc, oneshot, Semaphore};
-use tonic::transport::Channel;
-use tracing::info;
 
 /// User-Defined Transformer is a custom transformer that can be built by the user.
 ///
@@ -182,8 +183,8 @@ mod tests {
     use tokio::sync::oneshot;
 
     use super::*;
+    use crate::message::StringOffset;
     use crate::message::{Message, MessageID, Offset};
-    use crate::message::{OffsetType, StringOffset};
     use crate::shared::grpc::create_rpc_channel;
 
     struct SimpleTransformer;
@@ -229,7 +230,7 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Offset::Source(OffsetType::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
             watermark: None,
             id: MessageID {
@@ -244,7 +245,7 @@ mod tests {
             Transformer::transform(transformer.sender.clone(), message).await;
 
         assert!(transformed_messages.is_ok());
-        let transformed_messages = transformed_messages.unwrap();
+        let transformed_messages = transformed_messages?;
         assert_eq!(transformed_messages.len(), 1);
         assert_eq!(transformed_messages[0].value, "hello");
 
@@ -294,7 +295,7 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("value_{}", i).into(),
-                offset: Offset::Source(OffsetType::String(StringOffset::new(i.to_string(), 0))),
+                offset: Offset::String(StringOffset::new(i.to_string(), 0)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -368,7 +369,7 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Offset::Source(OffsetType::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
             watermark: None,
             id: MessageID {

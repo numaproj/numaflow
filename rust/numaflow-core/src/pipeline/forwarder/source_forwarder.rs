@@ -226,6 +226,7 @@ mod tests {
             tracker_handle.clone(),
             true,
             Some(transformer),
+            None,
         );
 
         // create a js writer
@@ -261,13 +262,13 @@ mod tests {
 
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
+                partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
                     ..Default::default()
                 },
                 conditions: None,
                 name: "test-vertex".to_string(),
-                watermark_config: None,
             }],
             context.clone(),
             100,

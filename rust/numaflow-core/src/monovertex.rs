@@ -38,6 +38,7 @@ pub(crate) async fn start_forwarder(
         &config.source_config,
         tracker_handle.clone(),
         transformer,
+        None,
         cln_token.clone(),
     )
     .await?;

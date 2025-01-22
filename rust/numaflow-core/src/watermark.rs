@@ -1,18 +1,21 @@
-use crate::config::pipeline::isb::Stream;
-use crate::config::pipeline::{FromVertexConfig, ToVertexConfig};
-use crate::config::{get_vertex_name, get_vertex_replica};
-use crate::error::Error;
-use crate::error::Result;
-use crate::message::{Offset, OffsetType};
-use crate::watermark::fetcher::Fetcher;
-use crate::watermark::publisher::Publisher;
 use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use prost::Message as ProtoMessage;
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::fmt::Debug;
+use tokio::sync::mpsc::Receiver;
 use tracing::error;
+
+use crate::config::pipeline::isb::Stream;
+use crate::config::pipeline::watermark::{EdgeWatermarkConfig, SourceWatermarkConfig};
+use crate::config::{get_vertex_name, get_vertex_replica};
+use crate::error::Error;
+use crate::error::Result;
+use crate::message::{IntOffset, Message, Offset};
+use crate::watermark::fetcher::{EdgeFetcher, SourceFetcher};
+use crate::watermark::publisher::{EdgePublisher, SourcePublisher};
 
 mod fetcher;
 mod manager;
@@ -65,21 +68,32 @@ impl TryFrom<WMB> for BytesMut {
     }
 }
 
-enum ActorMessage {
+enum EdgeActorMessage {
     FetchWatermark {
-        offset: Offset,
+        offset: IntOffset,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     },
     PublishWatermark {
-        offset: Offset,
+        offset: IntOffset,
         stream: Stream,
     },
-    RemoveOffset(Offset),
+    RemoveOffset(IntOffset),
+}
+
+enum SourceActorMessage {
+    PublishSourceWatermark {
+        map: HashMap<u16, i64>,
+    },
+    PublishEdgeWatermark {
+        offset: IntOffset,
+        stream: Stream,
+        input_partition: u16,
+    },
 }
 
 #[derive(Eq, PartialEq)]
 struct OffsetWatermark {
-    offset: u64,
+    offset: i64,
     watermark: Watermark,
 }
 
@@ -95,14 +109,14 @@ impl PartialOrd for OffsetWatermark {
     }
 }
 
-struct WatermarkActor {
-    fetcher: Fetcher,
-    publisher: Publisher,
+struct EdgeWatermarkActor {
+    fetcher: EdgeFetcher,
+    publisher: EdgePublisher,
     offset_set: HashMap<u16, BTreeSet<OffsetWatermark>>, // partition_id -> BTreeSet of OffsetWatermark
 }
 
-impl WatermarkActor {
-    fn new(fetcher: Fetcher, publisher: Publisher) -> Self {
+impl EdgeWatermarkActor {
+    fn new(fetcher: EdgeFetcher, publisher: EdgePublisher) -> Self {
         Self {
             fetcher,
             publisher,
@@ -110,7 +124,7 @@ impl WatermarkActor {
         }
     }
 
-    async fn run(mut self, mut receiver: tokio::sync::mpsc::Receiver<ActorMessage>) {
+    async fn run(mut self, mut receiver: Receiver<EdgeActorMessage>) {
         while let Some(message) = receiver.recv().await {
             if let Err(e) = self.handle_message(message).await {
                 error!("error handling message: {:?}", e);
@@ -118,90 +132,44 @@ impl WatermarkActor {
         }
     }
 
-    async fn handle_message(&mut self, message: ActorMessage) -> Result<()> {
+    async fn handle_message(&mut self, message: EdgeActorMessage) -> Result<()> {
         match message {
-            ActorMessage::FetchWatermark { offset, oneshot_tx } => {
-                let watermark = match offset {
-                    Offset::Source(_) => {
-                        return Err(Error::Watermark(
-                            "source offset is not supported".to_string(),
-                        ));
-                    }
-                    Offset::ISB(offset) => match offset {
-                        OffsetType::Int(offset) => {
-                            let watermark = self
-                                .fetcher
-                                .fetch_watermark(offset.offset, offset.partition_idx)
-                                .await?;
-                            self.insert_offset(offset.partition_idx, offset.offset, watermark);
-                            watermark
-                        }
-                        OffsetType::String(_) => {
-                            return Err(Error::Watermark(
-                                "string offset is not supported".to_string(),
-                            ));
-                        }
-                    },
-                };
+            EdgeActorMessage::FetchWatermark { offset, oneshot_tx } => {
+                let watermark = self
+                    .fetcher
+                    .fetch_watermark(offset.offset, offset.partition_idx)
+                    .await?;
+                self.insert_offset(offset.partition_idx, offset.offset, watermark);
 
                 oneshot_tx
                     .send(Ok(watermark))
                     .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
             }
 
-            ActorMessage::PublishWatermark { offset, stream } => match offset {
-                Offset::Source(_) => {
-                    // for publishing to source, we don't need to fetch (nothing to fetcher here :))
-                }
-                Offset::ISB(offset_type) => match offset_type {
-                    OffsetType::Int(int_offset) => {
-                        let min_wm = self
-                            .get_lowest_watermark()
-                            .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap());
+            EdgeActorMessage::PublishWatermark { offset, stream } => {
+                let min_wm = self
+                    .get_lowest_watermark()
+                    .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap());
 
-                        self.publisher
-                            .publish_watermark(
-                                stream,
-                                int_offset.offset as i64,
-                                min_wm.timestamp_millis(),
-                            )
-                            .await?;
-                    }
-                    OffsetType::String(_) => {}
-                },
-            },
+                self.publisher
+                    .publish_watermark(stream, offset.offset, min_wm.timestamp_millis())
+                    .await?;
+            }
 
-            ActorMessage::RemoveOffset(offset) => {
-                // remove the offset from the heap
-                match offset {
-                    Offset::Source(_) => {
-                        return Err(Error::Watermark(
-                            "source offset is not supported".to_string(),
-                        ));
-                    }
-                    Offset::ISB(offset) => match offset {
-                        OffsetType::Int(offset) => {
-                            self.remove_offset(offset.partition_idx, offset.offset)?;
-                        }
-                        OffsetType::String(_) => {
-                            return Err(Error::Watermark(
-                                "string offset is not supported".to_string(),
-                            ));
-                        }
-                    },
-                }
+            EdgeActorMessage::RemoveOffset(offset) => {
+                self.remove_offset(offset.partition_idx, offset.offset)?;
             }
         }
 
         Ok(())
     }
 
-    fn insert_offset(&mut self, partition_id: u16, offset: u64, watermark: Watermark) {
+    fn insert_offset(&mut self, partition_id: u16, offset: i64, watermark: Watermark) {
         let set = self.offset_set.entry(partition_id).or_default();
         set.insert(OffsetWatermark { offset, watermark });
     }
 
-    fn remove_offset(&mut self, partition_id: u16, offset: u64) -> Result<()> {
+    fn remove_offset(&mut self, partition_id: u16, offset: i64) -> Result<()> {
         if let Some(set) = self.offset_set.get_mut(&partition_id) {
             if let Some(&OffsetWatermark { watermark, .. }) =
                 set.iter().find(|ow| ow.offset == offset)
@@ -220,55 +188,196 @@ impl WatermarkActor {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct WatermarkHandle {
-    sender: tokio::sync::mpsc::Sender<ActorMessage>,
+struct SourceWatermarkActor {
+    publisher: SourcePublisher,
+    fetcher: SourceFetcher,
 }
 
-impl WatermarkHandle {
+impl SourceWatermarkActor {
+    fn new(publisher: SourcePublisher, fetcher: SourceFetcher) -> Self {
+        Self { publisher, fetcher }
+    }
+
+    async fn run(mut self, mut receiver: Receiver<SourceActorMessage>) {
+        while let Some(message) = receiver.recv().await {
+            if let Err(e) = self.handle_message(message).await {
+                error!("error handling message: {:?}", e);
+            }
+        }
+    }
+
+    async fn handle_message(&mut self, message: SourceActorMessage) -> Result<()> {
+        match message {
+            SourceActorMessage::PublishSourceWatermark { map } => {
+                for (partition, event_time) in map {
+                    self.publisher
+                        .publish_source_watermark(partition, event_time)
+                        .await;
+                }
+            }
+            SourceActorMessage::PublishEdgeWatermark {
+                offset,
+                stream,
+                input_partition,
+            } => {
+                let watermark = self.fetcher.fetch_source_watermark().await?;
+                self.publisher
+                    .publish_edge_watermark(
+                        input_partition,
+                        stream,
+                        offset.offset,
+                        watermark.timestamp_millis(),
+                    )
+                    .await;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub(crate) enum WatermarkHandle {
+    Edge(EdgeWatermarkHandle),
+    Source(SourceWatermarkHandle),
+}
+
+#[derive(Clone)]
+pub(crate) struct EdgeWatermarkHandle {
+    sender: tokio::sync::mpsc::Sender<EdgeActorMessage>,
+}
+
+impl EdgeWatermarkHandle {
     pub(crate) async fn new(
         js_context: async_nats::jetstream::Context,
-        from_vertex_config: Vec<FromVertexConfig>,
-        to_vertex_config: Vec<ToVertexConfig>,
+        config: &EdgeWatermarkConfig,
     ) -> Result<Self> {
-        let fetcher = Fetcher::new(js_context.clone(), from_vertex_config).await?;
+        let (sender, receiver) = tokio::sync::mpsc::channel(100);
+        let fetcher = EdgeFetcher::new(js_context.clone(), &config.from_vertex_config).await?;
 
         let processor_name = format!("{}-{}", get_vertex_name(), get_vertex_replica());
         let publisher =
-            Publisher::new(processor_name, js_context.clone(), to_vertex_config).await?;
+            EdgePublisher::new(processor_name, js_context.clone(), &config.to_vertex_config)
+                .await?;
 
-        let (sender, receiver) = tokio::sync::mpsc::channel(100);
-
-        let actor = WatermarkActor::new(fetcher, publisher);
+        let actor = EdgeWatermarkActor::new(fetcher, publisher);
         tokio::spawn(async move { actor.run(receiver).await });
         Ok(Self { sender })
     }
 
     pub(crate) async fn fetch_watermark(&self, offset: Offset) -> Result<Watermark> {
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        self.sender
-            .send(ActorMessage::FetchWatermark { offset, oneshot_tx })
-            .await
-            .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
+        if let Offset::Int(offset) = offset {
+            let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
+            self.sender
+                .send(EdgeActorMessage::FetchWatermark { offset, oneshot_tx })
+                .await
+                .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
 
-        oneshot_rx
-            .await
-            .map_err(|_| Error::Watermark("failed to receive response".to_string()))?
+            oneshot_rx
+                .await
+                .map_err(|_| Error::Watermark("failed to receive response".to_string()))?
+        } else {
+            Err(Error::Watermark("invalid offset type".to_string()))
+        }
     }
 
     pub(crate) async fn publish_watermark(&self, stream: Stream, offset: Offset) -> Result<()> {
+        if let Offset::Int(offset) = offset {
+            self.sender
+                .send(EdgeActorMessage::PublishWatermark { offset, stream })
+                .await
+                .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
+            Ok(())
+        } else {
+            Err(Error::Watermark("invalid offset type".to_string()))
+        }
+    }
+
+    pub(crate) async fn remove_offset(&self, offset: Offset) -> Result<()> {
+        if let Offset::Int(offset) = offset {
+            self.sender
+                .send(EdgeActorMessage::RemoveOffset(offset))
+                .await
+                .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
+            Ok(())
+        } else {
+            Err(Error::Watermark("invalid offset type".to_string()))
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct SourceWatermarkHandle {
+    sender: tokio::sync::mpsc::Sender<SourceActorMessage>,
+}
+
+impl SourceWatermarkHandle {
+    pub(crate) async fn new(
+        js_context: async_nats::jetstream::Context,
+        config: &SourceWatermarkConfig,
+    ) -> Result<Self> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(100);
+        let fetcher = SourceFetcher::new(js_context.clone(), &config.source_bucket_config)
+            .await
+            .map_err(|e| Error::Watermark(e.to_string()))?;
+
+        let publisher = SourcePublisher::new(
+            js_context.clone(),
+            config.source_bucket_config.clone(),
+            config.to_vertex_bucket_config.clone(),
+        )
+        .await
+        .map_err(|e| Error::Watermark(e.to_string()))?;
+
+        let actor = SourceWatermarkActor::new(publisher, fetcher);
+        tokio::spawn(async move { actor.run(receiver).await });
+        Ok(Self { sender })
+    }
+
+    pub(crate) async fn publish_source_watermark(&self, messages: &[Message]) -> Result<()> {
+        // from the offsets of the transformed messages store the lowest eventtime for each partition using HashMap<u16, i64>
+        let partition_to_lowest_event_time =
+            messages.iter().fold(HashMap::new(), |mut acc, message| {
+                let partition_id = match &message.offset {
+                    Offset::Int(offset) => offset.partition_idx,
+                    Offset::String(offset) => offset.partition_idx,
+                };
+
+                let event_time = message.event_time.timestamp_millis();
+                let lowest_event_time = acc.entry(partition_id).or_insert(event_time);
+                if event_time < *lowest_event_time {
+                    *lowest_event_time = event_time;
+                }
+                acc
+            });
+
         self.sender
-            .send(ActorMessage::PublishWatermark { offset, stream })
+            .send(SourceActorMessage::PublishSourceWatermark {
+                map: partition_to_lowest_event_time,
+            })
             .await
             .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
         Ok(())
     }
 
-    pub(crate) async fn remove_offset(&self, offset: Offset) -> Result<()> {
-        self.sender
-            .send(ActorMessage::RemoveOffset(offset))
-            .await
-            .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
-        Ok(())
+    pub(crate) async fn publish_source_edge_watermark(
+        &self,
+        stream: Stream,
+        offset: Offset,
+        input_partition: u16,
+    ) -> Result<()> {
+        if let Offset::Int(offset) = offset {
+            self.sender
+                .send(SourceActorMessage::PublishEdgeWatermark {
+                    offset,
+                    stream,
+                    input_partition,
+                })
+                .await
+                .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
+            Ok(())
+        } else {
+            Err(Error::Watermark("invalid offset type".to_string()))
+        }
     }
 }

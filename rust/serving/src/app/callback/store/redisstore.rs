@@ -201,11 +201,12 @@ impl super::Store for RedisConnection {
 #[cfg(feature = "redis-tests")]
 #[cfg(test)]
 mod tests {
+    use axum::body::Bytes;
+    use redis::AsyncCommands;
+
     use super::*;
     use crate::app::callback::store::LocalStore;
     use crate::app::callback::Response;
-    use axum::body::Bytes;
-    use redis::AsyncCommands;
 
     #[tokio::test]
     async fn test_redis_store() {

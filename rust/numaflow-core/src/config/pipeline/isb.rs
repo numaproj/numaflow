@@ -4,7 +4,6 @@ use std::fmt::Display;
 use std::time::Duration;
 
 const DEFAULT_PARTITION_IDX: u16 = 0;
-const DEFAULT_PARTITIONS: u16 = 1;
 const DEFAULT_MAX_LENGTH: usize = 30000;
 const DEFAULT_USAGE_LIMIT: f64 = 0.8;
 const DEFAULT_BUFFER_FULL_STRATEGY: BufferFullStrategy = BufferFullStrategy::RetryUntilSuccess;
@@ -55,18 +54,16 @@ impl Display for Stream {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct BufferWriterConfig {
-    pub streams: Vec<Stream>,
-    pub partitions: u16,
-    pub max_length: usize,
-    pub usage_limit: f64,
-    pub buffer_full_strategy: BufferFullStrategy,
+    pub(crate) streams: Vec<Stream>,
+    pub(crate) max_length: usize,
+    pub(crate) usage_limit: f64,
+    pub(crate) buffer_full_strategy: BufferFullStrategy,
 }
 
 impl Default for BufferWriterConfig {
     fn default() -> Self {
         BufferWriterConfig {
             streams: vec![],
-            partitions: DEFAULT_PARTITIONS,
             max_length: DEFAULT_MAX_LENGTH,
             usage_limit: DEFAULT_USAGE_LIMIT,
             buffer_full_strategy: DEFAULT_BUFFER_FULL_STRATEGY,
@@ -141,7 +138,6 @@ mod tests {
     fn test_default_buffer_writer_config() {
         let expected = BufferWriterConfig {
             streams: vec![Stream::new("default-0", "default", DEFAULT_PARTITION_IDX)],
-            partitions: DEFAULT_PARTITIONS,
             max_length: DEFAULT_MAX_LENGTH,
             usage_limit: DEFAULT_USAGE_LIMIT,
             buffer_full_strategy: DEFAULT_BUFFER_FULL_STRATEGY,

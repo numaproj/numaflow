@@ -251,6 +251,7 @@ mod tests {
             tracker_handle.clone(),
             true,
             Some(transformer),
+            None,
         );
 
         let sink_writer = SinkWriterBuilder::new(
@@ -380,6 +381,7 @@ mod tests {
             tracker_handle.clone(),
             true,
             Some(transformer),
+            None,
         );
 
         let sink_writer = SinkWriterBuilder::new(

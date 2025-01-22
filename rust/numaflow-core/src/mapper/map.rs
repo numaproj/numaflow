@@ -481,8 +481,6 @@ impl MapHandle {
 mod tests {
     use std::time::Duration;
 
-    use crate::message::{MessageID, Offset, OffsetType, StringOffset};
-    use crate::shared::grpc::create_rpc_channel;
     use numaflow::mapstream;
     use numaflow::{batchmap, map};
     use numaflow_pb::clients::map::map_client::MapClient;
@@ -491,6 +489,8 @@ mod tests {
     use tokio::sync::oneshot;
 
     use super::*;
+    use crate::message::{MessageID, Offset, StringOffset};
+    use crate::shared::grpc::create_rpc_channel;
     use crate::Result;
 
     struct SimpleMapper;
@@ -542,7 +542,7 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
             watermark: None,
             id: MessageID {
@@ -635,7 +635,7 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("value_{}", i).into(),
-                offset: Offset::ISB(OffsetType::String(StringOffset::new(i.to_string(), 0))),
+                offset: Offset::String(StringOffset::new(i.to_string(), 0)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -725,7 +725,7 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
             watermark: None,
             id: MessageID {
@@ -820,7 +820,7 @@ mod tests {
                 keys: Arc::from(vec!["first".into()]),
                 tags: None,
                 value: "hello".into(),
-                offset: Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0))),
+                offset: Offset::String(StringOffset::new("0".to_string(), 0)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -834,7 +834,7 @@ mod tests {
                 keys: Arc::from(vec!["second".into()]),
                 tags: None,
                 value: "world".into(),
-                offset: Offset::ISB(OffsetType::String(StringOffset::new("1".to_string(), 1))),
+                offset: Offset::String(StringOffset::new("1".to_string(), 1)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -932,7 +932,7 @@ mod tests {
                 keys: Arc::from(vec!["first".into()]),
                 tags: None,
                 value: "hello".into(),
-                offset: Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0))),
+                offset: Offset::String(StringOffset::new("0".to_string(), 0)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -946,7 +946,7 @@ mod tests {
                 keys: Arc::from(vec!["second".into()]),
                 tags: None,
                 value: "world".into(),
-                offset: Offset::ISB(OffsetType::String(StringOffset::new("1".to_string(), 1))),
+                offset: Offset::String(StringOffset::new("1".to_string(), 1)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -1044,7 +1044,7 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "test,map,stream".into(),
-            offset: Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
             watermark: None,
             id: MessageID {
@@ -1141,7 +1141,7 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "panic".into(),
-            offset: Offset::ISB(OffsetType::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
             watermark: None,
             id: MessageID {

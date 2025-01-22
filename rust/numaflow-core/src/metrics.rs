@@ -859,7 +859,7 @@ async fn build_pending_info(
 
         match &mut lag_reader {
             LagReader::Source(source) => {
-                match fetch_source_pending(&source).await {
+                match fetch_source_pending(source).await {
                     Ok(pending) => {
                         if pending != -1 {
                             let mut stats = pending_stats.lock().await;
@@ -981,7 +981,7 @@ async fn expose_pending_metrics(
 }
 
 /// Calculate the average pending messages over the last `seconds` seconds.
-async fn calculate_pending(seconds: i64, pending_stats: &Vec<TimestampedPending>) -> i64 {
+async fn calculate_pending(seconds: i64, pending_stats: &[TimestampedPending]) -> i64 {
     let mut result = -1;
     let mut total = 0;
     let mut num = 0;

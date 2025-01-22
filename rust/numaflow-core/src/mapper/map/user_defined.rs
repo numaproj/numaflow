@@ -445,7 +445,7 @@ mod tests {
     use crate::mapper::map::user_defined::{
         UserDefinedBatchMap, UserDefinedStreamMap, UserDefinedUnaryMap,
     };
-    use crate::message::{MessageID, OffsetType, StringOffset};
+    use crate::message::{MessageID, StringOffset};
     use crate::shared::grpc::create_rpc_channel;
 
     struct Cat;
@@ -487,10 +487,7 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: crate::message::Offset::ISB(OffsetType::String(StringOffset::new(
-                "0".to_string(),
-                0,
-            ))),
+            offset: crate::message::Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
             watermark: None,
             id: MessageID {
@@ -578,10 +575,7 @@ mod tests {
                 keys: Arc::from(vec!["first".into()]),
                 tags: None,
                 value: "hello".into(),
-                offset: crate::message::Offset::ISB(OffsetType::String(StringOffset::new(
-                    "0".to_string(),
-                    0,
-                ))),
+                offset: crate::message::Offset::String(StringOffset::new("0".to_string(), 0)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -595,10 +589,7 @@ mod tests {
                 keys: Arc::from(vec!["second".into()]),
                 tags: None,
                 value: "world".into(),
-                offset: crate::message::Offset::ISB(OffsetType::String(StringOffset::new(
-                    "1".to_string(),
-                    1,
-                ))),
+                offset: crate::message::Offset::String(StringOffset::new("1".to_string(), 1)),
                 event_time: chrono::Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -695,10 +686,7 @@ mod tests {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "test,map,stream".into(),
-            offset: crate::message::Offset::ISB(OffsetType::String(StringOffset::new(
-                "0".to_string(),
-                0,
-            ))),
+            offset: crate::message::Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
             watermark: None,
             id: MessageID {

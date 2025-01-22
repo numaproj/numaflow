@@ -17,13 +17,13 @@ use tracing::{error, info};
 use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, Offset, OffsetType, ReadAck};
+use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
 use crate::metrics::{
     pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
 };
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
-use crate::watermark::WatermarkHandle;
+use crate::watermark::EdgeWatermarkHandle;
 use crate::Result;
 
 /// The JetstreamReader is a handle to the background actor that continuously fetches messages from Jetstream.
@@ -37,7 +37,7 @@ pub(crate) struct JetstreamReader {
     consumer: PullConsumer,
     tracker_handle: TrackerHandle,
     batch_size: usize,
-    watermark_handle: Option<WatermarkHandle>,
+    watermark_handle: Option<EdgeWatermarkHandle>,
 }
 
 /// JSWrappedMessage is a wrapper around the Jetstream message that includes the
@@ -72,10 +72,10 @@ impl TryFrom<JSWrappedMessage> for Message {
         let message_info = header
             .message_info
             .ok_or(Error::Proto("Missing message_info".to_string()))?;
-        let offset = Offset::ISB(OffsetType::Int(IntOffset::new(
-            msg_info.stream_sequence,
+        let offset = Offset::Int(IntOffset::new(
+            msg_info.stream_sequence as i64,
             value.partition_idx,
-        )));
+        ));
 
         Ok(Message {
             keys: Arc::from(header.keys.into_boxed_slice()),
@@ -101,7 +101,7 @@ impl JetstreamReader {
         config: BufferReaderConfig,
         tracker_handle: TrackerHandle,
         batch_size: usize,
-        watermark_handle: Option<WatermarkHandle>,
+        watermark_handle: Option<EdgeWatermarkHandle>,
     ) -> Result<Self> {
         let mut config = config;
 
@@ -206,7 +206,6 @@ impl JetstreamReader {
                             if let Some(watermark_handle) = watermark_handle.as_ref() {
                                 let watermark = watermark_handle.fetch_watermark(offset.clone()).await?;
                                 message.watermark = Some(watermark);
-                                info!("Fetched watermark {} for offset {}", watermark.timestamp_millis(), offset);
                             }
 
                             // Insert the message into the tracker and wait for the ack to be sent back.
@@ -334,13 +333,14 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
 
-    use super::*;
-    use crate::message::{Message, MessageID};
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
     use chrono::Utc;
     use tokio::time::sleep;
+
+    use super::*;
+    use crate::message::{Message, MessageID};
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -401,7 +401,7 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i, 0))),
+                offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -500,7 +500,7 @@ mod tests {
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: Offset::ISB(OffsetType::Int(IntOffset::new(i + 1, 0))),
+                offset: Offset::Int(IntOffset::new(i + 1, 0)),
                 event_time: Utc::now(),
                 watermark: None,
                 id: MessageID {

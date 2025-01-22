@@ -1,85 +1,43 @@
-use crate::config::pipeline::FromVertexConfig;
+use std::collections::HashMap;
+
+use chrono::{DateTime, Utc};
+use tracing::info;
+
+use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::{Error, Result};
 use crate::watermark::manager::ProcessorManager;
 use crate::watermark::Watermark;
-use chrono::{DateTime, Utc};
-use std::collections::HashMap;
-use tracing::info;
 
-#[allow(dead_code)]
-pub(crate) struct Fetcher {
-    processor_managers: HashMap<String, ProcessorManager>,
-    last_processed_wm: HashMap<String, Vec<i64>>,
+pub(crate) struct EdgeFetcher {
+    processor_managers: HashMap<&'static str, ProcessorManager>,
+    last_processed_wm: HashMap<&'static str, Vec<i64>>,
     last_fetched_wm: Vec<(Watermark, DateTime<Utc>)>,
 }
 
-impl Fetcher {
+impl EdgeFetcher {
     pub(crate) async fn new(
         js_context: async_nats::jetstream::Context,
-        from_vertex_configs: Vec<FromVertexConfig>,
+        bucket_configs: &[BucketConfig],
     ) -> Result<Self> {
         let mut processor_managers = HashMap::new();
         let mut last_processed_wm = HashMap::new();
         let last_fetched_wm = vec![
             (Watermark::from_timestamp_millis(-1).unwrap(), Utc::now());
-            from_vertex_configs.first().unwrap().partitions as usize
+            bucket_configs
+                .first()
+                .expect("one edge should be present")
+                .partitions as usize
         ];
 
-        for from_vertex_config in from_vertex_configs {
-            let config = from_vertex_config
-                .watermark_config
-                .expect("Watermark config not found");
+        for config in bucket_configs {
+            let (processor_manager, processed_wm, _) =
+                create_processor_manager(js_context.clone(), config).await?;
 
-            info!(
-                "Creating bucket for ot and hb: {} {}",
-                config.ot_bucket, config.hb_bucket
-            );
-
-            let ot_bucket = js_context
-                .get_key_value(config.ot_bucket.clone())
-                .await
-                .map_err(|e| {
-                    Error::Watermark(format!(
-                        "Failed to get kv bucket {}: {}",
-                        config.ot_bucket, e
-                    ))
-                })?;
-
-            info!("Created ot bucket");
-
-            let hb_bucket = js_context
-                .get_key_value(config.hb_bucket.clone())
-                .await
-                .map_err(|e| {
-                    Error::Watermark(format!(
-                        "Failed to get kv bucket {}: {}",
-                        config.hb_bucket, e
-                    ))
-                })?;
-
-            info!("Created hb bucket");
-
-            let processor_manager =
-                ProcessorManager::new(
-                    from_vertex_config.partitions,
-                    ot_bucket.watch_all().await.map_err(|e| {
-                        Error::Watermark(format!("Failed to watch ot bucket: {}", e))
-                    })?,
-                    hb_bucket.watch_all().await.map_err(|e| {
-                        Error::Watermark(format!("Failed to watch hb bucket: {}", e))
-                    })?,
-                )
-                .await;
-
-            info!("Created processor manager");
-
-            processor_managers.insert(from_vertex_config.name.clone(), processor_manager);
-            last_processed_wm.insert(
-                from_vertex_config.name,
-                vec![-1; from_vertex_config.partitions as usize],
-            );
+            processor_managers.insert(config.vertex, processor_manager);
+            last_processed_wm.insert(config.vertex, processed_wm);
         }
-        Ok(Fetcher {
+
+        Ok(EdgeFetcher {
             processor_managers,
             last_processed_wm,
             last_fetched_wm,
@@ -88,7 +46,7 @@ impl Fetcher {
 
     pub(crate) async fn fetch_watermark(
         &mut self,
-        offset: u64,
+        offset: i64,
         partition_idx: u16,
     ) -> Result<Watermark> {
         if Utc::now()
@@ -98,12 +56,6 @@ impl Fetcher {
         {
             return Ok(self.last_fetched_wm[partition_idx as usize].0);
         }
-
-        info!(
-            "Fetching watermark for offset and partition: {} {}",
-            offset, partition_idx
-        );
-
         for (edge, processor_manager) in self.processor_managers.iter() {
             let mut epoch = i64::MAX;
 
@@ -111,7 +63,7 @@ impl Fetcher {
                 let mut head_offset = -1;
                 for (index, timeline) in processor.timelines.iter().enumerate() {
                     if index == partition_idx as usize {
-                        let t = timeline.get_event_time(offset as i64).await;
+                        let t = timeline.get_event_time(offset).await;
                         if t < epoch {
                             epoch = t;
                         }
@@ -121,52 +73,24 @@ impl Fetcher {
                     }
                 }
 
-                if processor.is_deleted() && offset > head_offset as u64 {
+                if processor.is_deleted() && offset > head_offset {
                     info!("Processor {} inactive, deleting", name);
                     processor_manager.delete_processor(name.as_str()).await;
                 }
             }
 
             if epoch != i64::MAX {
-                info!("Updating last processed watermark fo edge - {} and partition - {} with value={}", edge, partition_idx, epoch);
                 self.last_processed_wm.get_mut(edge).unwrap()[partition_idx as usize] = epoch;
             }
         }
 
         let watermark = self.get_watermark().await?;
-        info!("Fetched watermark: {}", watermark.timestamp_millis());
         self.last_fetched_wm[partition_idx as usize] = (watermark, Utc::now());
+        info!("Fetched watermark: {}", watermark.timestamp_millis());
         Ok(watermark)
     }
 
-    pub(crate) async fn fetch_source_watermark(&self) -> Result<Watermark> {
-        let mut min_wm = i64::MAX;
-
-        for (_, processor_manager) in self.processor_managers.iter() {
-            for (_, processor) in processor_manager.get_all_processors().await {
-                if !processor.is_active() {
-                    continue;
-                }
-                let head_wm = processor
-                    .timelines
-                    .first()
-                    .unwrap()
-                    .get_head_watermark()
-                    .await;
-
-                if head_wm < min_wm {
-                    min_wm = head_wm;
-                }
-            }
-        }
-
-        if min_wm == i64::MAX {
-            return Ok(Watermark::from_timestamp_millis(-1).unwrap());
-        }
-
-        Ok(Watermark::from_timestamp_millis(min_wm).unwrap())
-    }
-
+    #[allow(dead_code)]
     pub(crate) async fn fetch_head_idle_watermark(&mut self, partition_idx: u16) -> Result<i64> {
         let mut min_wm = i64::MAX;
         for (edge, processor_manager) in self.processor_managers.iter() {
@@ -212,7 +136,6 @@ impl Fetcher {
 
     async fn get_watermark(&self) -> Result<Watermark> {
         let mut min_wm = i64::MAX;
-
         for wm in self.last_processed_wm.values() {
             for &w in wm {
                 if min_wm > w {
@@ -224,7 +147,94 @@ impl Fetcher {
         if min_wm == i64::MAX {
             return Ok(Watermark::from_timestamp_millis(-1).unwrap());
         }
+        Ok(Watermark::from_timestamp_millis(min_wm).unwrap())
+    }
+}
+
+pub(crate) struct SourceFetcher {
+    processor_manager: ProcessorManager,
+}
+
+impl SourceFetcher {
+    pub(crate) async fn new(
+        js_context: async_nats::jetstream::Context,
+        bucket_config: &BucketConfig,
+    ) -> Result<Self> {
+        let (processor_manager, _last_processed_wm, _last_fetched_wm) =
+            create_processor_manager(js_context, bucket_config).await?;
+
+        Ok(SourceFetcher { processor_manager })
+    }
+
+    pub(crate) async fn fetch_source_watermark(&self) -> Result<Watermark> {
+        let mut min_wm = i64::MAX;
+
+        for (_, processor) in self.processor_manager.get_all_processors().await {
+            if !processor.is_active() {
+                continue;
+            }
+            let head_wm = processor
+                .timelines
+                .first()
+                .unwrap()
+                .get_head_watermark()
+                .await;
+
+            if head_wm < min_wm {
+                min_wm = head_wm;
+            }
+        }
+
+        if min_wm == i64::MAX {
+            return Ok(Watermark::from_timestamp_millis(-1).unwrap());
+        }
 
         Ok(Watermark::from_timestamp_millis(min_wm).unwrap())
     }
+}
+
+async fn create_processor_manager(
+    js_context: async_nats::jetstream::Context,
+    bucket_config: &BucketConfig,
+) -> Result<(ProcessorManager, Vec<i64>, Vec<(Watermark, DateTime<Utc>)>)> {
+    let last_fetched_wm = vec![
+        (Watermark::from_timestamp_millis(-1).unwrap(), Utc::now());
+        bucket_config.partitions as usize
+    ];
+
+    let ot_bucket = js_context
+        .get_key_value(bucket_config.ot_bucket)
+        .await
+        .map_err(|e| {
+            Error::Watermark(format!(
+                "Failed to get kv bucket {}: {}",
+                bucket_config.ot_bucket, e
+            ))
+        })?;
+
+    let hb_bucket = js_context
+        .get_key_value(bucket_config.hb_bucket)
+        .await
+        .map_err(|e| {
+            Error::Watermark(format!(
+                "Failed to get kv bucket {}: {}",
+                bucket_config.hb_bucket, e
+            ))
+        })?;
+
+    let processor_manager = ProcessorManager::new(
+        bucket_config.partitions,
+        ot_bucket
+            .watch_all()
+            .await
+            .map_err(|e| Error::Watermark(format!("Failed to watch ot bucket: {}", e)))?,
+        hb_bucket
+            .watch_all()
+            .await
+            .map_err(|e| Error::Watermark(format!("Failed to watch hb bucket: {}", e)))?,
+    )
+    .await;
+
+    let last_processed_wm = vec![-1; bucket_config.partitions as usize];
+    Ok((processor_manager, last_processed_wm, last_fetched_wm))
 }

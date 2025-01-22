@@ -1,6 +1,11 @@
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use numaflow_models::models::{ForwardConditions, Vertex};
+use serde_json::from_slice;
 use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
+use tracing::info;
 
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
@@ -11,13 +16,11 @@ use crate::config::get_vertex_replica;
 use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig, Stream};
 use crate::config::pipeline::map::MapMode;
 use crate::config::pipeline::map::MapVtxConfig;
+use crate::config::pipeline::watermark::SourceWatermarkConfig;
+use crate::config::pipeline::watermark::WatermarkConfig;
+use crate::config::pipeline::watermark::{BucketConfig, EdgeWatermarkConfig};
 use crate::error::Error;
 use crate::Result;
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
-use numaflow_models::models::{ForwardConditions, Vertex, Watermark};
-use serde_json::from_slice;
-use tracing::info;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
@@ -32,6 +35,7 @@ pub(crate) const DEFAULT_STREAM_MAP_SOCKET: &str = "/var/run/numaflow/mapstream.
 const DEFAULT_MAP_SERVER_INFO_FILE: &str = "/var/run/numaflow/mapper-server-info";
 
 pub(crate) mod isb;
+pub(crate) mod watermark;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PipelineConfig {
@@ -47,7 +51,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) to_vertex_config: Vec<ToVertexConfig>,
     pub(crate) vertex_config: VertexType,
     pub(crate) metrics_config: MetricsConfig,
-    pub(crate) watermark_config: Option<Box<Watermark>>,
+    pub(crate) watermark_config: Option<WatermarkConfig>,
 }
 
 impl Default for PipelineConfig {
@@ -184,21 +188,14 @@ pub(crate) struct FromVertexConfig {
     pub(crate) name: String,
     pub(crate) reader_config: BufferReaderConfig,
     pub(crate) partitions: u16,
-    pub(crate) watermark_config: Option<WatermarkBucketConfig>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct WatermarkBucketConfig {
-    pub(crate) ot_bucket: String,
-    pub(crate) hb_bucket: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ToVertexConfig {
     pub(crate) name: String,
+    pub(crate) partitions: u16,
     pub(crate) writer_config: BufferWriterConfig,
     pub(crate) conditions: Option<Box<ForwardConditions>>,
-    pub(crate) watermark_config: Option<WatermarkBucketConfig>,
 }
 
 impl PipelineConfig {
@@ -339,16 +336,6 @@ impl PipelineConfig {
                     ..Default::default()
                 },
                 partitions: partition_count,
-                watermark_config: Some(WatermarkBucketConfig {
-                    ot_bucket: format!(
-                        "{}-{}-{}-{}_OT",
-                        namespace, pipeline_name, &edge.from, &edge.to
-                    ),
-                    hb_bucket: format!(
-                        "{}-{}-{}-{}_PROCESSORS",
-                        namespace, pipeline_name, &edge.from, &edge.to
-                    ),
-                }),
             });
         }
 
@@ -370,9 +357,9 @@ impl PipelineConfig {
             let default_writer_config = BufferWriterConfig::default();
             to_vertex_config.push(ToVertexConfig {
                 name: edge.to.clone(),
+                partitions: partition_count,
                 writer_config: BufferWriterConfig {
                     streams,
-                    partitions: partition_count,
                     max_length: edge
                         .to_vertex_limits
                         .as_ref()
@@ -392,18 +379,25 @@ impl PipelineConfig {
                         .unwrap_or(default_writer_config.buffer_full_strategy),
                 },
                 conditions: edge.conditions,
-                watermark_config: Some(WatermarkBucketConfig {
-                    ot_bucket: format!(
-                        "{}-{}-{}-{}_OT",
-                        namespace, pipeline_name, &edge.from, &edge.to
-                    ),
-                    hb_bucket: format!(
-                        "{}-{}-{}-{}_PROCESSORS",
-                        namespace, pipeline_name, &edge.from, &edge.to
-                    ),
-                }),
             });
         }
+
+        let watermark_config = if vertex_obj
+            .spec
+            .watermark
+            .map_or(true, |w| w.disabled.unwrap_or(true))
+        {
+            Self::create_watermark_config(
+                &namespace,
+                &pipeline_name,
+                &vertex_name,
+                &vertex,
+                &from_vertex_config,
+                &to_vertex_config,
+            )
+        } else {
+            None
+        };
 
         let look_back_window = vertex_obj
             .spec
@@ -427,8 +421,103 @@ impl PipelineConfig {
             to_vertex_config,
             vertex_config: vertex,
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
-            watermark_config: vertex_obj.spec.watermark,
+            watermark_config,
         })
+    }
+    fn create_watermark_config(
+        namespace: &str,
+        pipeline_name: &str,
+        vertex_name: &str,
+        vertex: &VertexType,
+        from_vertex_config: &[FromVertexConfig],
+        to_vertex_config: &[ToVertexConfig],
+    ) -> Option<WatermarkConfig> {
+        match vertex {
+            VertexType::Source(_) => Some(WatermarkConfig::Source(SourceWatermarkConfig {
+                source_bucket_config: BucketConfig {
+                    vertex: Box::leak(vertex_name.to_string().into_boxed_str()),
+                    partitions: 1, // source will have only one partition
+                    ot_bucket: Box::leak(
+                        format!("{}-{}-{}_SOURCE_OT", namespace, pipeline_name, vertex_name)
+                            .into_boxed_str(),
+                    ),
+                    hb_bucket: Box::leak(
+                        format!(
+                            "{}-{}-{}_SOURCE_PROCESSORS",
+                            namespace, pipeline_name, vertex_name
+                        )
+                        .into_boxed_str(),
+                    ),
+                },
+                to_vertex_bucket_config: to_vertex_config
+                    .iter()
+                    .map(|to| BucketConfig {
+                        vertex: Box::leak(to.name.clone().into_boxed_str()),
+                        partitions: to.partitions,
+                        ot_bucket: Box::leak(
+                            format!(
+                                "{}-{}-{}-{}_OT",
+                                namespace, pipeline_name, vertex_name, &to.name
+                            )
+                            .into_boxed_str(),
+                        ),
+                        hb_bucket: Box::leak(
+                            format!(
+                                "{}-{}-{}-{}_PROCESSORS",
+                                namespace, pipeline_name, vertex_name, &to.name
+                            )
+                            .into_boxed_str(),
+                        ),
+                    })
+                    .collect(),
+            })),
+            VertexType::Sink(_) | VertexType::Map(_) => {
+                Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
+                    from_vertex_config: from_vertex_config
+                        .iter()
+                        .map(|from| BucketConfig {
+                            vertex: Box::leak(from.name.clone().into_boxed_str()),
+                            partitions: from.partitions,
+                            ot_bucket: Box::leak(
+                                format!(
+                                    "{}-{}-{}-{}_OT",
+                                    namespace, pipeline_name, &from.name, vertex_name
+                                )
+                                .into_boxed_str(),
+                            ),
+                            hb_bucket: Box::leak(
+                                format!(
+                                    "{}-{}-{}-{}_PROCESSORS",
+                                    namespace, pipeline_name, &from.name, vertex_name
+                                )
+                                .into_boxed_str(),
+                            ),
+                        })
+                        .collect(),
+                    to_vertex_config: to_vertex_config
+                        .iter()
+                        .map(|to| BucketConfig {
+                            vertex: Box::leak(to.name.clone().into_boxed_str()),
+                            partitions: to.partitions,
+                            ot_bucket: Box::leak(
+                                format!(
+                                    "{}-{}-{}-{}_OT",
+                                    namespace, pipeline_name, vertex_name, &to.name
+                                )
+                                .into_boxed_str(),
+                            ),
+                            hb_bucket: Box::leak(
+                                format!(
+                                    "{}-{}-{}-{}_PROCESSORS",
+                                    namespace, pipeline_name, vertex_name, &to.name
+                                )
+                                .into_boxed_str(),
+                            ),
+                        })
+                        .collect(),
+                }))
+            }
+        }
     }
 }
 
@@ -510,7 +599,6 @@ mod tests {
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 1,
-                watermark_config: None,
             }],
             to_vertex_config: vec![],
             vertex_config: VertexType::Sink(SinkVtxConfig {
@@ -554,15 +642,14 @@ mod tests {
             from_vertex_config: vec![],
             to_vertex_config: vec![ToVertexConfig {
                 name: "out".to_string(),
+                partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
-                    partitions: 1,
                     max_length: 150000,
                     usage_limit: 0.85,
                     ..Default::default()
                 },
                 conditions: None,
-                watermark_config: None,
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
@@ -609,15 +696,14 @@ mod tests {
             from_vertex_config: vec![],
             to_vertex_config: vec![ToVertexConfig {
                 name: "out".to_string(),
+                partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
-                    partitions: 1,
                     max_length: 30000,
                     usage_limit: 0.8,
                     ..Default::default()
                 },
                 conditions: None,
-                watermark_config: None,
             }],
             vertex_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
@@ -738,7 +824,6 @@ mod tests {
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 1,
-                watermark_config: None,
             }],
             to_vertex_config: vec![],
             vertex_config: VertexType::Map(MapVtxConfig {
