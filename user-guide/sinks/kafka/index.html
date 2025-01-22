@@ -898,16 +898,36 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#kafka-headers" class="md-nav__link">
-    Kafka Headers
+  <a href="#option-1-user-defined-kafka-sink" class="md-nav__link">
+    Option 1: User-Defined Kafka Sink
   </a>
   
 </li>
       
         <li class="md-nav__item">
+  <a href="#option-2-built-in-kafka-sink" class="md-nav__link">
+    Option 2: Built-in Kafka Sink
+  </a>
+  
+    <nav class="md-nav" aria-label="Option 2: Built-in Kafka Sink">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#kafka-headers" class="md-nav__link">
+    Kafka Headers
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#example" class="md-nav__link">
     Example
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2321,16 +2341,36 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#kafka-headers" class="md-nav__link">
-    Kafka Headers
+  <a href="#option-1-user-defined-kafka-sink" class="md-nav__link">
+    Option 1: User-Defined Kafka Sink
   </a>
   
 </li>
       
         <li class="md-nav__item">
+  <a href="#option-2-built-in-kafka-sink" class="md-nav__link">
+    Option 2: Built-in Kafka Sink
+  </a>
+  
+    <nav class="md-nav" aria-label="Option 2: Built-in Kafka Sink">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#kafka-headers" class="md-nav__link">
+    Kafka Headers
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#example" class="md-nav__link">
     Example
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2353,15 +2393,28 @@
 
 
 <h1 id="kafka-sink">Kafka Sink<a class="headerlink" href="#kafka-sink" title="Permanent link">&para;</a></h1>
+<p>Two methods are available for integrating Kafka topics into your Numaflow pipeline:
+using a user-defined Kafka Sink or opting for the built-in Kafka Sink provided by Numaflow.</p>
+<h2 id="option-1-user-defined-kafka-sink">Option 1: User-Defined Kafka Sink<a class="headerlink" href="#option-1-user-defined-kafka-sink" title="Permanent link">&para;</a></h2>
+<p>Developed and maintained by the Numaflow contributor community,
+the <a href="https://github.com/numaproj-contrib/kafka-java">Kafka Sink</a> provides a reliable and feature-complete solution for publishing messages to Kafka topics.</p>
+<p>Key Features:</p>
+<ul>
+<li><strong>Customization:</strong> Offers complete control over Kafka Sink configurations to tailor to specific requirements.</li>
+<li><strong>Kafka Java Client Utilization:</strong> Leverages the Kafka Java client for reliable message publishing to Kafka topics.</li>
+<li><strong>Schema Management:</strong> Integrates seamlessly with the Confluent Schema Registry to support schema validation and manage schema evolution effectively.</li>
+</ul>
+<p>More details on how to use the Kafka Sink can be found <a href="https://github.com/numaproj-contrib/kafka-java?tab=readme-ov-file#write-data-to-kafka">here</a>.</p>
+<h2 id="option-2-built-in-kafka-sink">Option 2: Built-in Kafka Sink<a class="headerlink" href="#option-2-built-in-kafka-sink" title="Permanent link">&para;</a></h2>
 <p>A <code>Kafka</code> sink is used to forward the messages to a Kafka topic. Kafka sink supports configuration overrides.</p>
-<h2 id="kafka-headers">Kafka Headers<a class="headerlink" href="#kafka-headers" title="Permanent link">&para;</a></h2>
+<h3 id="kafka-headers">Kafka Headers<a class="headerlink" href="#kafka-headers" title="Permanent link">&para;</a></h3>
 <p>We will insert <code>keys</code> into the Kafka header, but since <code>keys</code> is an array, we will add <code>keys</code> into the header in the
 following format.</p>
 <ul>
 <li><code>__keys_len</code> will have the number of <code>key</code> in the header. if <code>__keys_len</code> == <code>0</code>, means no <code>keys</code> are present.</li>
 <li><code>__keys_%d</code> will have the <code>key</code>, e.g., <code>__key_0</code> will be the first key, and so forth.</li>
 </ul>
-<h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
+<h3 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-output</span>
