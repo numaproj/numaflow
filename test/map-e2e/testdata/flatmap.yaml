@@ -19,11 +19,10 @@ spec:
       scale:
         min: 1
       sink:
-        udsink:
-          container:
-            # https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/log
-            image: quay.io/numaio/numaflow-go/sink-log:stable
-            imagePullPolicy: Always
+        container:
+          # https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/log
+          image: quay.io/numaio/numaflow-go/sink-log:stable
+          imagePullPolicy: Always
     - name: python-split
       scale:
         min: 1
@@ -39,14 +38,13 @@ spec:
       scale:
         min: 1
       sink:
-        udsink:
-          container:
-            args:
-            - python
-            - example.py
-            # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/log
-            image: quay.io/numaio/numaflow-python/sink-log:stable
-            imagePullPolicy: Always
+        container:
+          args:
+          - python
+          - example.py
+          # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/log
+          image: quay.io/numaio/numaflow-python/sink-log:stable
+          imagePullPolicy: Always
     - name: java-split
       scale:
         min: 1
@@ -59,11 +57,10 @@ spec:
       scale:
         min: 1
       sink:
-        udsink:
-          container:
-            # https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple
-            image: quay.io/numaio/numaflow-java/simple-sink:stable
-            imagePullPolicy: Always
+        container:
+          # https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple
+          image: quay.io/numaio/numaflow-java/simple-sink:stable
+          imagePullPolicy: Always
   edges:
     - from: in
       to: go-split
