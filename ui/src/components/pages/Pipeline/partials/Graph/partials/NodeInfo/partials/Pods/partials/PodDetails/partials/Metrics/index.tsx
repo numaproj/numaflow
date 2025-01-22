@@ -1,8 +1,9 @@
 import React, { Dispatch, SetStateAction, useContext } from "react";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
-import { Accordion, AccordionDetails, AccordionSummary } from "@mui/material";
+import { Accordion, AccordionDetails, AccordionSummary, Tooltip, Typography } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import LineChartComponent from "./partials/LineChart";
 import { useMetricsDiscoveryDataFetch } from "../../../../../../../../../../../../../utils/fetchWrappers/metricsDiscoveryDataFetch";
 import {
@@ -117,10 +118,25 @@ export function Metrics({
               aria-controls={`${metric?.metric_name}-content`}
               id={`${metric?.metric_name}-header`}
             >
-              <Box>
-                {metric?.display_name ||
-                  metricNameMap[metric?.metric_name] ||
-                  metric?.metric_name}
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                {metric?.display_name || 
+                 metricNameMap[metric?.metric_name] || 
+                 metric?.metric_name}
+                <Tooltip 
+                  title={
+                    <Typography sx={{ fontSize: '1rem' }}>
+                      {metric?.metric_description || 
+                       metric?.display_name || 
+                       metricNameMap[metric?.metric_name] || 
+                       metric?.metric_name }
+                    </Typography>
+                  } 
+                  arrow
+                >
+                  <Box sx={{ marginLeft: 1 }}>
+                    <InfoOutlinedIcon sx={{ cursor: 'pointer'}} />
+                  </Box>
+                </Tooltip>
               </Box>
             </AccordionSummary>
             <AccordionDetails>
