@@ -253,7 +253,7 @@ export function K8sEvents({
       >
         <TableContainer
           sx={{
-            maxHeight: "60rem",
+            maxHeight: "75%",
             backgroundColor: "#FFF",
           }}
         >
