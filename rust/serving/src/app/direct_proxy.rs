@@ -35,7 +35,7 @@ pub(crate) fn direct_proxy(client: Client, upstream_addr: String) -> Router {
 
     Router::new()
         // https://docs.rs/axum/latest/axum/struct.Router.html#wildcards
-        .route("/*upstream", get(proxy))
+        .route("/{*upstream}", get(proxy))
         .with_state(proxy_state)
 }
 
