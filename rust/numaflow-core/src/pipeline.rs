@@ -3,9 +3,10 @@ use std::time::Duration;
 use async_nats::jetstream::Context;
 use async_nats::{jetstream, ConnectOptions};
 use futures::future::try_join_all;
-use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+
+use serving::callback::CallbackHandler;
 
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
@@ -88,7 +89,7 @@ async fn start_source_forwarder(
         LagReader::Source(source.clone()),
     )
     .await;
-    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex(), "".to_string()).await;
 
     start_metrics_server(
         config.metrics_config.clone(),
@@ -172,7 +173,7 @@ async fn start_map_forwarder(
         LagReader::ISB(isb_lag_readers),
     )
     .await;
-    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex(), "".to_string()).await;
 
     start_metrics_server(
         config.metrics_config.clone(),
@@ -259,7 +260,7 @@ async fn start_sink_forwarder(
         LagReader::ISB(buffer_readers.clone()),
     )
     .await;
-    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex(), "".to_string()).await;
 
     // Start the metrics server with one of the clients
     if let Some((_, sink, fb_sink)) = sink_writers.first() {
@@ -367,7 +368,6 @@ mod tests {
     use tempfile::TempDir;
     use tokio_stream::StreamExt;
 
-    use super::*;
     use crate::config::components::metrics::MetricsConfig;
     use crate::config::components::sink::{BlackholeConfig, SinkConfig, SinkType};
     use crate::config::components::source::GeneratorConfig;
@@ -382,6 +382,8 @@ mod tests {
     use crate::pipeline::pipeline::{FromVertexConfig, ToVertexConfig};
     use crate::pipeline::pipeline::{SinkVtxConfig, SourceVtxConfig};
     use crate::pipeline::tests::isb::BufferFullStrategy::RetryUntilSuccess;
+
+    use super::*;
 
     // e2e test for source forwarder, reads from generator and writes to
     // multi-partitioned buffer.

@@ -1,10 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
-use std::io::ErrorKind;
 use std::iter;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
-use std::{env, iter};
 
 use axum::body::Body;
 use axum::extract::State;
@@ -33,8 +31,8 @@ use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
-use crate::shared::insecure_tls::HTTPSClient;
 use crate::pipeline::isb::jetstream::reader::JetstreamReader;
+use crate::shared::insecure_tls::HTTPSClient;
 use crate::source::Source;
 use crate::Error;
 
@@ -818,7 +816,11 @@ impl PendingReader {
     /// - Another to periodically expose the pending metrics.
     ///
     /// Dropping the PendingReaderTasks will abort the background tasks.
-    pub async fn start(&self, is_mono_vertex: bool, daemon_server_address: String) -> PendingReaderTasks {
+    pub async fn start(
+        &self,
+        is_mono_vertex: bool,
+        daemon_server_address: String,
+    ) -> PendingReaderTasks {
         let lag_checking_interval = self.lag_checking_interval;
         let refresh_interval = self.refresh_interval;
         let pending_stats = Arc::clone(&self.pending_stats);
@@ -1370,8 +1372,14 @@ mod tests {
         tokio::spawn({
             let pending_stats = Arc::clone(&pending_stats);
             async move {
-                expose_pending_metrics(false, refresh_interval, pending_stats, lookback_seconds)
-                    .await;
+                expose_pending_metrics(
+                    false,
+                    refresh_interval,
+                    pending_stats,
+                    lookback_seconds,
+                    "".to_string(),
+                )
+                .await;
             }
         });
 

@@ -1,9 +1,7 @@
-use serving::callback::CallbackHandler;
-
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use forwarder::ForwarderBuilder;
+use serving::callback::CallbackHandler;
 
 use crate::config::is_mono_vertex;
 use crate::config::monovertex::MonovertexConfig;
@@ -93,7 +91,9 @@ async fn start(
         LagReader::Source(source.clone()),
     )
     .await;
-    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+    let _pending_reader_handle = pending_reader
+        .start(is_mono_vertex(), mvtx_config.daemon_server_address)
+        .await;
 
     let forwarder = forwarder::Forwarder::new(source, sink, cln_token);
 
