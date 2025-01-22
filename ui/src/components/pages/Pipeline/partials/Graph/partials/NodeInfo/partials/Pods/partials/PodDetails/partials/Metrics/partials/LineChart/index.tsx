@@ -8,7 +8,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  Text
+  Text,
 } from "recharts";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -28,41 +28,54 @@ interface TooltipProps {
 
 function CustomTooltip({ payload, label, active, patternName }: TooltipProps & { patternName: string }) {
   if (active && payload && payload.length) {
-    const maxWidth = Math.max(...payload.map(entry => entry.name.length)) * 9.5;
+    const maxWidth =
+      Math.max(...payload.map((entry) => entry?.name?.length)) * 9.5;
     return (
-      <div className="custom-tooltip" style={{ backgroundColor: '#fff', padding: '10px', border: '1px solid #ccc' }}>
-        <p>{label}</p>
+      <Box
+        sx={{
+          backgroundColor: "#fff",
+          padding: "1rem",
+          border: "0.1rem solid #ccc",
+          borderRadius: "1rem",
+        }}
+      >
+        <Box>{label}</Box>
         {payload.map((entry: any, index: any) => {
           const formattedValue = getDefaultFormatter(entry.value, patternName);
-          return (
-            <div key={`item-${index}`} style={{ display: 'flex' }}>
-              <span style={{  width: `${maxWidth}px`, display: 'inline-block', paddingRight: '10px', color: entry.color }}>{entry.name}:</span>
-              <span style={{color: entry.color}}>{formattedValue}</span>
-            </div>
-        );
+          return(
+          <Box key={`item-${index}`} sx={{ display: "flex" }}>
+            <Box
+              sx={{
+                width: `${maxWidth / 9}rem`,
+                display: "inline-block",
+                paddingRight: "1rem",
+                color: entry?.color,
+              }}
+            >
+              {entry?.name}:
+            </Box>
+            <Box sx={{ color: entry?.color }}>{formattedValue}</Box>
+          </Box>
+          );
         })}
-      </div>
+      </Box>
     );
   }
   return null;
 }
 
-const getYAxisLabel = (unit: string, patternName: string) => {
+const getYAxisLabel = (unit: string) => {
   if (unit !== "") {
-    return unit
+    return unit;
   }
-  // add units based on pattern name here
-  switch(patternName){
-    default:
-      return ""
-  }
+  return "";
 };
 
 const getDefaultFormatter = (value: number, patternName: string) => {
   const formatValue = (value: number, suffix: string) => {
-    const formattedValue = parseFloat(value.toFixed(2));
-    return formattedValue % 1 === 0 
-      ? `${Math.floor(formattedValue)}${suffix}` 
+    const formattedValue = parseFloat(value?.toFixed(2));
+    return formattedValue % 1 === 0
+      ? `${Math.floor(formattedValue)}${suffix}`
       : `${formattedValue}${suffix}`;
   };
   switch(patternName){
@@ -90,7 +103,7 @@ const getDefaultFormatter = (value: number, patternName: string) => {
         return formatValue(value / 1000000, "M %");
       }
     default:
-      if (value === 0){
+      if (value === 0) {
         return "0";
       } else if (value < 1000) {
         return formatValue(value,"");
@@ -100,24 +113,35 @@ const getDefaultFormatter = (value: number, patternName: string) => {
         return formatValue(value / 1000000, " M");
       }
   }
-}
+};
 
 const getTickFormatter = (unit: string, patternName: string) => {
   const formatValue = (value: number) => {
-    const formattedValue = parseFloat(value.toFixed(2));  // Format to 2 decimal places
-    return formattedValue % 1 === 0 ? Math.floor(formattedValue) : formattedValue; // Remove trailing .0
+    const formattedValue = parseFloat(value?.toFixed(2)); // Format to 2 decimal places
+    return formattedValue % 1 === 0
+      ? Math.floor(formattedValue)
+      : formattedValue; // Remove trailing .0
   };
   return (value: number) => {
     switch (unit) {
-      case 's':
+      case "s":
         return `${formatValue(value / 1000000)}`;
-      case 'ms':
+      case "ms":
         return `${formatValue(value / 1000)}`;
       default:
         return getDefaultFormatter(value, patternName);
     }
-  }
+  };
 };
+
+interface LineChartComponentProps {
+  namespaceId: string;
+  pipelineId: string;
+  type: string;
+  metric: any;
+  vertexId?: string;
+  fromModal?: boolean;
+}
 
 // TODO have a check for metricReq against metric object to ensure required fields are passed
 const LineChartComponent = ({
@@ -126,13 +150,14 @@ const LineChartComponent = ({
   type,
   metric,
   vertexId,
-}: any) => {
-  const { addError } = useContext<AppContextProps>(AppContext); 
+  fromModal,
+}: LineChartComponentProps) => {
+  const { addError } = useContext<AppContextProps>(AppContext);
   const [transformedData, setTransformedData] = useState<any[]>([]);
   const [chartLabels, setChartLabels] = useState<any[]>([]);
   const [metricsReq, setMetricsReq] = useState<any>({
     metric_name: metric?.metric_name,
-    name: metric?.name,
+    pattern_name: metric?.pattern_name,
   });
   const [paramsList, setParamsList] = useState<any[]>([]);
   // store all filters for each selected dimension
@@ -298,7 +323,13 @@ const LineChartComponent = ({
 
   if (paramsList?.length === 0) return <></>;
 
-  const hasTimeParams = paramsList?.some((param) => ["start_time", "end_time"].includes(param.name)); 
+  const hasTimeParams = paramsList?.some((param) =>
+    ["start_time", "end_time"].includes(param?.name)
+  );
+
+  const getMetricsModalDesc = () => {
+    return `This chart represents the above metric at a ${metricsReq?.dimension} level over the selected time period.`;
+  };
 
   return (
     <Box>
@@ -311,54 +342,64 @@ const LineChartComponent = ({
         }}
       >
         {paramsList
-          ?.filter((param) => !["start_time", "end_time"]?.includes(param.name))
+          ?.filter(
+            (param) => !["start_time", "end_time"]?.includes(param?.name)
+          )
           ?.map((param: any) => {
             return (
               <Box
-                key={`line-chart-${param.name}`}
+                display={fromModal ? "none" : "flex"}
+                key={`line-chart-${param?.name}`}
                 sx={{ minWidth: 120, fontSize: "2rem" }}
               >
                 <Dropdown
                   metric={metric}
                   type={type}
-                  field={param.name}
+                  field={param?.name}
                   setMetricReq={setMetricsReq}
                 />
               </Box>
             );
           })}
+        {fromModal && (
+          <Box
+            sx={{ display: "flex", alignItems: "center", fontSize: "1.4rem" }}
+          >
+            {getMetricsModalDesc()}
+          </Box>
+        )}
         {hasTimeParams && (
           <Box key="line-chart-preset">
-              <TimeSelector setMetricReq={setMetricsReq} />
+            <TimeSelector setMetricReq={setMetricsReq} />
           </Box>
-          )}
+        )}
       </Box>
 
       {filtersList?.filter((filterEle: any) => !filterEle?.required)?.length >
         0 && (
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-around",
-              mt: "1rem",
-              mb: "2rem",
-              px: "6rem",
-            }}
-          >
-            <Box sx={{ mr: "1rem" }}>Filters</Box>
-            <FiltersDropdown
-              items={filtersList?.filter(
-                (filterEle: any) => !filterEle?.required
-              )}
-              namespaceId={namespaceId}
-              pipelineId={pipelineId}
-              type={type}
-              vertexId={vertexId}
-              setFilters={setFilters}
-            />
-          </Box>
-        )}
+        <Box
+          sx={{
+            display: fromModal ? "none" : "flex",
+            alignItems: "center",
+            justifyContent: "space-around",
+            mt: "1rem",
+            mb: "2rem",
+            px: "6rem",
+          }}
+        >
+          <Box sx={{ mr: "1rem" }}>Filters</Box>
+          <FiltersDropdown
+            items={filtersList?.filter(
+              (filterEle: any) => !filterEle?.required
+            )}
+            namespaceId={namespaceId}
+            pipelineId={pipelineId}
+            type={type}
+            vertexId={vertexId}
+            setFilters={setFilters}
+          />
+        </Box>
+      )}
 
       {isLoading && (
         <Box
@@ -373,7 +414,7 @@ const LineChartComponent = ({
         </Box>
       )}
 
-      {!isLoading && error && <EmptyChart message={error?.toString()}/>}
+      {!isLoading && error && <EmptyChart message={error?.toString()} />}
 
       {!isLoading && !error && transformedData?.length > 0 && (
         <ResponsiveContainer width="100%" height={400}>
@@ -387,14 +428,26 @@ const LineChartComponent = ({
             }}
           >
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="time" padding={{ left: 30, right: 30 }} >
-            </XAxis>
+            <XAxis dataKey="time" padding={{ left: 30, right: 30 }}></XAxis>
             <YAxis
-              label={<Text x={-160} y={15} dy={5} transform="rotate(-90)" fontSize={14} textAnchor="middle">{getYAxisLabel(metric?.unit, metric?.name)}</Text>}
-              tickFormatter={getTickFormatter(metric?.unit, metric?.name)}
+              label={
+                <Text
+                  x={-160}
+                  y={15}
+                  dy={5}
+                  transform="rotate(-90)"
+                  fontSize={14}
+                  textAnchor="middle"
+                >
+                  {getYAxisLabel(metric?.unit)}
+                </Text>
+              }
+              tickFormatter={getTickFormatter(
+                metric?.unit,
+                metric?.pattern_name
+              )}
             />
-            <CartesianGrid stroke="#f5f5f5">
-            </CartesianGrid>
+            <CartesianGrid stroke="#f5f5f5"></CartesianGrid>
 
             {chartLabels?.map((value, index) => (
               <Line
@@ -406,13 +459,13 @@ const LineChartComponent = ({
               />
             ))}
 
-            <Tooltip content={<CustomTooltip patternName={metric?.name} />}/>
+            <Tooltip content={<CustomTooltip patternName={metric?.pattern_name} />}/>
             <Legend />
           </LineChart>
         </ResponsiveContainer>
       )}
 
-      {!isLoading && !error && transformedData?.length === 0 && <EmptyChart/>}
+      {!isLoading && !error && transformedData?.length === 0 && <EmptyChart />}
     </Box>
   );
 };

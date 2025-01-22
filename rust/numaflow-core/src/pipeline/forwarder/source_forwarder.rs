@@ -163,7 +163,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_source_forwarder() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
 
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
