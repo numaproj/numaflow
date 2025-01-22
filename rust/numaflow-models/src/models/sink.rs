@@ -20,6 +20,8 @@ limitations under the License.
 pub struct Sink {
     #[serde(rename = "blackhole", skip_serializing_if = "Option::is_none")]
     pub blackhole: Option<Box<crate::models::Blackhole>>,
+    #[serde(rename = "container", skip_serializing_if = "Option::is_none")]
+    pub container: Option<Box<crate::models::Container>>,
     #[serde(rename = "fallback", skip_serializing_if = "Option::is_none")]
     pub fallback: Option<Box<crate::models::AbstractSink>>,
     #[serde(rename = "kafka", skip_serializing_if = "Option::is_none")]
@@ -36,6 +38,7 @@ impl Sink {
     pub fn new() -> Sink {
         Sink {
             blackhole: None,
+            container: None,
             fallback: None,
             kafka: None,
             log: None,

@@ -472,16 +472,16 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 	containers := []corev1.Container{mainContainer}
 
 	sidecarContainers := []corev1.Container{}
-	if mvspec.Source.UDSource != nil { // Only support UDSource for now.
+	if mvspec.Source.IsUserDefinedSource() { // TODO(UDSS): Only support UDSource for now.
 		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDSourceContainer(req))
 	}
 	if mvspec.Source.UDTransformer != nil {
 		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDTransformerContainer(req))
 	}
-	if mvspec.Sink.UDSink != nil { // Only support UDSink for now.
+	if mvspec.Sink.IsUserDefinedSink() { // TODO(UDSS): Only support UDSink for now.
 		sidecarContainers = append(sidecarContainers, mvspec.Sink.getUDSinkContainer(req))
 	}
-	if mvspec.Sink.Fallback != nil && mvspec.Sink.Fallback.UDSink != nil {
+	if mvspec.Sink.Fallback != nil && mvspec.Sink.Fallback.IsUserDefinedSink() { // TODO(UDSS): Only support UDSink for now.
 		sidecarContainers = append(sidecarContainers, mvspec.Sink.getFallbackUDSinkContainer(req))
 	}
 	sidecarContainers = append(sidecarContainers, mvspec.Sidecars...)

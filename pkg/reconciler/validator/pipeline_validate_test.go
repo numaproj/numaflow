@@ -309,25 +309,9 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "can not specify both builtin transformer, and a customized image")
 	})
 
-	t.Run("udsource no image specified", func(t *testing.T) {
-		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Vertices[0].Source.UDSource = &dfv1.UDSource{}
-		err := ValidatePipeline(testObj)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "a customized image is required")
-		testObj.Spec.Vertices[0].Source.UDSource = &dfv1.UDSource{
-			Container: &dfv1.Container{
-				Image: "",
-			},
-		}
-		err = ValidatePipeline(testObj)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "a customized image is required")
-	})
-
 	t.Run("source vertex having both udsource and built-in source specified ", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Vertices[0].Source.UDSource = &dfv1.UDSource{Container: &dfv1.Container{Image: "xxxx"}}
+		testObj.Spec.Vertices[0].Source.Container = &dfv1.Container{Image: "xxxx"}
 		testObj.Spec.Vertices[0].Source.Generator = &dfv1.GeneratorSource{}
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
@@ -1119,7 +1103,7 @@ func TestValidateSink(t *testing.T) {
 				RetryStrategy: dfv1.RetryStrategy{OnFailure: &onFailFallback},
 				// represents a valid fallback sink
 				Fallback: &dfv1.AbstractSink{
-					UDSink: &dfv1.UDSink{},
+					Container: &dfv1.Container{Image: "my-image"},
 				},
 			},
 			expectedError: false,
@@ -1165,7 +1149,7 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 		{
 			name: "valid strategy with fallback configured",
 			sink: dfv1.Sink{Fallback: &dfv1.AbstractSink{
-				UDSink: &dfv1.UDSink{},
+				Container: &dfv1.Container{Image: "my-image"},
 			}},
 			strategy: dfv1.RetryStrategy{
 				OnFailure: func() *dfv1.OnFailureRetryStrategy { str := dfv1.OnFailureFallback; return &str }(),

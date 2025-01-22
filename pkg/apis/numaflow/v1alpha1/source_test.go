@@ -30,27 +30,25 @@ var testImagePullPolicy = corev1.PullNever
 
 func TestSource_getContainers(t *testing.T) {
 	x := Source{
-		UDSource: &UDSource{
-			Container: &Container{
-				Image:        "my-image-s",
-				VolumeMounts: []corev1.VolumeMount{{Name: "my-vm"}},
-				Command:      []string{"my-cmd-s"},
-				Args:         []string{"my-arg-s"},
-				Env:          []corev1.EnvVar{{Name: "my-envvar-s"}},
-				EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
-				}}},
-				Resources: corev1.ResourceRequirements{
-					Requests: map[corev1.ResourceName]resource.Quantity{
-						"cpu": resource.MustParse("2"),
-					},
+		Container: &Container{
+			Image:        "my-image-s",
+			VolumeMounts: []corev1.VolumeMount{{Name: "my-vm"}},
+			Command:      []string{"my-cmd-s"},
+			Args:         []string{"my-arg-s"},
+			Env:          []corev1.EnvVar{{Name: "my-envvar-s"}},
+			EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
+			}}},
+			Resources: corev1.ResourceRequirements{
+				Requests: map[corev1.ResourceName]resource.Quantity{
+					"cpu": resource.MustParse("2"),
 				},
-				LivenessProbe: &Probe{
-					InitialDelaySeconds: ptr.To[int32](10),
-					TimeoutSeconds:      ptr.To[int32](15),
-					PeriodSeconds:       ptr.To[int32](14),
-					FailureThreshold:    ptr.To[int32](5),
-				},
+			},
+			LivenessProbe: &Probe{
+				InitialDelaySeconds: ptr.To[int32](10),
+				TimeoutSeconds:      ptr.To[int32](15),
+				PeriodSeconds:       ptr.To[int32](14),
+				FailureThreshold:    ptr.To[int32](5),
 			},
 		},
 		UDTransformer: &UDTransformer{
@@ -85,16 +83,16 @@ func TestSource_getContainers(t *testing.T) {
 	assert.Equal(t, 1, len(c))
 	assert.Equal(t, "main-image", c[0].Image)
 
-	assert.Equal(t, x.UDSource.Container.Image, sc[1].Image)
+	assert.Equal(t, x.Container.Image, sc[1].Image)
 	assert.Contains(t, sc[1].VolumeMounts, sc[1].VolumeMounts[0])
-	assert.Equal(t, x.UDSource.Container.Command, sc[1].Command)
-	assert.Equal(t, x.UDSource.Container.Args, sc[1].Args)
+	assert.Equal(t, x.Container.Command, sc[1].Command)
+	assert.Equal(t, x.Container.Args, sc[1].Args)
 	envsUDSource := map[string]string{}
 	for _, e := range sc[1].Env {
 		envsUDSource[e.Name] = e.Value
 	}
 	assert.Equal(t, envsUDSource[EnvUDContainerType], UDContainerSource)
-	assert.Equal(t, x.UDSource.Container.EnvFrom, sc[1].EnvFrom)
+	assert.Equal(t, x.Container.EnvFrom, sc[1].EnvFrom)
 	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, sc[1].Resources)
 	assert.Equal(t, c[0].ImagePullPolicy, sc[1].ImagePullPolicy)
 	assert.NotNil(t, sc[0].LivenessProbe)
@@ -102,7 +100,7 @@ func TestSource_getContainers(t *testing.T) {
 	assert.Equal(t, int32(15), sc[1].LivenessProbe.TimeoutSeconds)
 	assert.Equal(t, int32(14), sc[1].LivenessProbe.PeriodSeconds)
 	assert.Equal(t, int32(5), sc[1].LivenessProbe.FailureThreshold)
-	x.UDSource.Container.ImagePullPolicy = &testImagePullPolicy
+	x.Container.ImagePullPolicy = &testImagePullPolicy
 	assert.Equal(t, ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways), sc[0].RestartPolicy)
 	assert.Equal(t, ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways), sc[1].RestartPolicy)
 	sc, c, _ = x.getContainers(getContainerReq{

@@ -19473,6 +19473,9 @@
           "description": "Blackhole sink is used to write the data to the blackhole sink, which is a sink that discards all the data written to it.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"
         },
+        "container": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
+        },
         "kafka": {
           "description": "Kafka sink is used to write the data to the Kafka.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.KafkaSink"
@@ -19482,7 +19485,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
         },
         "udsink": {
-          "description": "UDSink sink is used to write the data to the user-defined sink.",
+          "description": "UDSink sink is used to write the data to the user-defined sink. Deprecated: Use Container instead",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink"
         }
       }
@@ -22093,6 +22096,9 @@
           "description": "Blackhole sink is used to write the data to the blackhole sink, which is a sink that discards all the data written to it.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Blackhole"
         },
+        "container": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
+        },
         "fallback": {
           "description": "Fallback sink can be imagined as DLQ for primary Sink. The writes to Fallback sink will only be initiated if the ud-sink response field sets it.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AbstractSink"
@@ -22110,7 +22116,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RetryStrategy"
         },
         "udsink": {
-          "description": "UDSink sink is used to write the data to the user-defined sink.",
+          "description": "UDSink sink is used to write the data to the user-defined sink. Deprecated: Use Container instead",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink"
         }
       }
@@ -22136,6 +22142,9 @@
     "io.numaproj.numaflow.v1alpha1.Source": {
       "type": "object",
       "properties": {
+        "container": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
+        },
         "generator": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.GeneratorSource"
         },
@@ -22161,6 +22170,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"
         },
         "udsource": {
+          "description": "Deprecated: Use Container instead",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSource"
         }
       }
@@ -22278,6 +22288,7 @@
       }
     },
     "io.numaproj.numaflow.v1alpha1.UDSink": {
+      "description": "Deprecated: Use Container instead",
       "type": "object",
       "required": [
         "container"
@@ -22289,6 +22300,7 @@
       }
     },
     "io.numaproj.numaflow.v1alpha1.UDSource": {
+      "description": "Deprecated: Use Container instead",
       "type": "object",
       "required": [
         "container"

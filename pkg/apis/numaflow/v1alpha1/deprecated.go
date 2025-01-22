@@ -42,3 +42,15 @@ func IsPVCRetentionPolicySupported() bool {
 	k8sVersion, _ := strconv.ParseFloat(v, 32)
 	return k8sVersion >= 1.27
 }
+
+// TODO(UDSS): Clean up
+// Deprecated: Use Container instead
+type UDSource struct {
+	Container *Container `json:"container" protobuf:"bytes,1,opt,name=container"`
+}
+
+// TODO(UDSS): Clean up
+// Deprecated: Use Container instead
+type UDSink struct {
+	Container *Container `json:"container" protobuf:"bytes,1,opt,name=container"`
+}

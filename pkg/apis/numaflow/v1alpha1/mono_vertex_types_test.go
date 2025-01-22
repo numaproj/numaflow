@@ -53,10 +53,8 @@ var (
 				Max: ptr.To[int32](4),
 			},
 			Source: &Source{
-				UDSource: &UDSource{
-					Container: &Container{
-						Image: "test-image1",
-					},
+				Container: &Container{
+					Image: "test-image1",
 				},
 				UDTransformer: &UDTransformer{
 					Container: &Container{
@@ -66,10 +64,8 @@ var (
 			},
 			Sink: &Sink{
 				AbstractSink: AbstractSink{
-					UDSink: &UDSink{
-						Container: &Container{
-							Image: "test-image3",
-						},
+					Container: &Container{
+						Image: "test-image3",
 					},
 				},
 			},

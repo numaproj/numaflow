@@ -148,7 +148,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		return fmt.Errorf("unrecognized isb svc type %q", u.ISBSvcType)
 	}
 	maxMessageSize := sharedutil.LookupEnvIntOr(dfv1.EnvGRPCMaxMessageSize, sdkclient.DefaultGRPCMaxMessageSize)
-	if udSink := u.VertexInstance.Vertex.Spec.Sink.UDSink; udSink != nil {
+	if u.VertexInstance.Vertex.Spec.Sink.IsUserDefinedSink() {
 		// Wait for server info to be ready
 		serverInfo, err := serverinfo.SDKServerInfo(serverinfo.WithServerInfoFilePath(sdkclient.SinkServerInfoFile))
 		if err != nil {
@@ -317,7 +317,7 @@ func (u *SinkProcessor) createSinkWriter(ctx context.Context, abstractSink *dfv1
 		return kafkasink.NewToKafka(ctx, u.VertexInstance)
 	} else if x := abstractSink.Blackhole; x != nil {
 		return blackhole.NewBlackhole(ctx, u.VertexInstance)
-	} else if x := abstractSink.UDSink; x != nil {
+	} else if abstractSink.IsUserDefinedSink() {
 		// if the sink is a user-defined sink, then we need to pass the sinkHandler to it which will be used to invoke the user-defined sink
 		return udsink.NewUserDefinedSink(ctx, u.VertexInstance, sinkHandler)
 	}

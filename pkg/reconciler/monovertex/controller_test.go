@@ -60,10 +60,8 @@ var (
 				Min: ptr.To[int32](2),
 			},
 			Source: &dfv1.Source{
-				UDSource: &dfv1.UDSource{
-					Container: &dfv1.Container{
-						Image: "test-source-image",
-					},
+				Container: &dfv1.Container{
+					Image: "test-source-image",
 				},
 				UDTransformer: &dfv1.UDTransformer{
 					Container: &dfv1.Container{
@@ -73,17 +71,13 @@ var (
 			},
 			Sink: &dfv1.Sink{
 				AbstractSink: dfv1.AbstractSink{
-					UDSink: &dfv1.UDSink{
-						Container: &dfv1.Container{
-							Image: "test-sink",
-						},
+					Container: &dfv1.Container{
+						Image: "test-sink",
 					},
 				},
 				Fallback: &dfv1.AbstractSink{
-					UDSink: &dfv1.UDSink{
-						Container: &dfv1.Container{
-							Image: "test-fb-sink",
-						},
+					Container: &dfv1.Container{
+						Image: "test-fb-sink",
 					},
 				},
 			},

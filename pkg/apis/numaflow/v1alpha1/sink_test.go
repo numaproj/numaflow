@@ -46,20 +46,18 @@ func Test_Sink_getContainers(t *testing.T) {
 func Test_Sink_getUDSinkContainer(t *testing.T) {
 	x := Sink{
 		AbstractSink: AbstractSink{
-			UDSink: &UDSink{
-				Container: &Container{
-					Image:           "my-image",
-					Args:            []string{"my-arg"},
-					SecurityContext: &corev1.SecurityContext{},
-					EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
-						LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
-					}}},
-					LivenessProbe: &Probe{
-						InitialDelaySeconds: ptr.To[int32](10),
-						TimeoutSeconds:      ptr.To[int32](15),
-						PeriodSeconds:       ptr.To[int32](14),
-						FailureThreshold:    ptr.To[int32](5),
-					},
+			Container: &Container{
+				Image:           "my-image",
+				Args:            []string{"my-arg"},
+				SecurityContext: &corev1.SecurityContext{},
+				EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
+				}}},
+				LivenessProbe: &Probe{
+					InitialDelaySeconds: ptr.To[int32](10),
+					TimeoutSeconds:      ptr.To[int32](15),
+					PeriodSeconds:       ptr.To[int32](14),
+					FailureThreshold:    ptr.To[int32](5),
 				},
 			},
 		},
@@ -79,7 +77,7 @@ func Test_Sink_getUDSinkContainer(t *testing.T) {
 		envs[e.Name] = e.Value
 	}
 	assert.Equal(t, envs[EnvUDContainerType], UDContainerSink)
-	x.UDSink.Container.ImagePullPolicy = &testImagePullPolicy
+	x.Container.ImagePullPolicy = &testImagePullPolicy
 	c = x.getUDSinkContainer(getContainerReq{
 		image:           "main-image",
 		imagePullPolicy: corev1.PullAlways,
@@ -96,32 +94,28 @@ func Test_Sink_getUDSinkContainer(t *testing.T) {
 func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
 	x := Sink{
 		AbstractSink: AbstractSink{
-			UDSink: &UDSink{
-				Container: &Container{
-					Image:           "my-image",
-					Args:            []string{"my-arg"},
-					SecurityContext: &corev1.SecurityContext{},
-					EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
-						LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
-					}}},
-				},
+			Container: &Container{
+				Image:           "my-image",
+				Args:            []string{"my-arg"},
+				SecurityContext: &corev1.SecurityContext{},
+				EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
+				}}},
 			},
 		},
 		Fallback: &AbstractSink{
-			UDSink: &UDSink{
-				Container: &Container{
-					Image:           "my-image",
-					Args:            []string{"my-arg"},
-					SecurityContext: &corev1.SecurityContext{},
-					EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
-						LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
-					}}},
-					LivenessProbe: &Probe{
-						InitialDelaySeconds: ptr.To[int32](20),
-						TimeoutSeconds:      ptr.To[int32](25),
-						PeriodSeconds:       ptr.To[int32](24),
-						FailureThreshold:    ptr.To[int32](10),
-					},
+			Container: &Container{
+				Image:           "my-image",
+				Args:            []string{"my-arg"},
+				SecurityContext: &corev1.SecurityContext{},
+				EnvFrom: []corev1.EnvFromSource{{ConfigMapRef: &corev1.ConfigMapEnvSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "test-cm"},
+				}}},
+				LivenessProbe: &Probe{
+					InitialDelaySeconds: ptr.To[int32](20),
+					TimeoutSeconds:      ptr.To[int32](25),
+					PeriodSeconds:       ptr.To[int32](24),
+					FailureThreshold:    ptr.To[int32](10),
 				},
 			},
 		},
@@ -146,7 +140,7 @@ func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {
 	assert.Equal(t, int32(25), c.LivenessProbe.TimeoutSeconds)
 	assert.Equal(t, int32(24), c.LivenessProbe.PeriodSeconds)
 	assert.Equal(t, int32(10), c.LivenessProbe.FailureThreshold)
-	x.UDSink.Container.ImagePullPolicy = &testImagePullPolicy
+	x.Container.ImagePullPolicy = &testImagePullPolicy
 	c = x.getUDSinkContainer(getContainerReq{
 		image:           "main-image",
 		imagePullPolicy: corev1.PullAlways,

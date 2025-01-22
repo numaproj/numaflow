@@ -28,23 +28,26 @@ import (
 
 type Source struct {
 	// +optional
-	Generator *GeneratorSource `json:"generator,omitempty" protobuf:"bytes,1,opt,name=generator"`
+	Container *Container `json:"container" protobuf:"bytes,1,opt,name=container"`
 	// +optional
-	Kafka *KafkaSource `json:"kafka,omitempty" protobuf:"bytes,2,opt,name=kafka"`
+	Generator *GeneratorSource `json:"generator,omitempty" protobuf:"bytes,2,opt,name=generator"`
 	// +optional
-	HTTP *HTTPSource `json:"http,omitempty" protobuf:"bytes,3,opt,name=http"`
+	Kafka *KafkaSource `json:"kafka,omitempty" protobuf:"bytes,3,opt,name=kafka"`
 	// +optional
-	Nats *NatsSource `json:"nats,omitempty" protobuf:"bytes,4,opt,name=nats"`
+	HTTP *HTTPSource `json:"http,omitempty" protobuf:"bytes,4,opt,name=http"`
 	// +optional
-	UDTransformer *UDTransformer `json:"transformer,omitempty" protobuf:"bytes,5,opt,name=transformer"`
+	Nats *NatsSource `json:"nats,omitempty" protobuf:"bytes,5,opt,name=nats"`
 	// +optional
-	UDSource *UDSource `json:"udsource,omitempty" protobuf:"bytes,6,opt,name=udSource"`
+	UDTransformer *UDTransformer `json:"transformer,omitempty" protobuf:"bytes,6,opt,name=transformer"`
 	// +optional
-	JetStream *JetStreamSource `json:"jetstream,omitempty" protobuf:"bytes,7,opt,name=jetstream"`
+	// Deprecated: Use Container instead
+	DeprecatedUDSource *UDSource `json:"udsource,omitempty" protobuf:"bytes,7,opt,name=udSource"`
 	// +optional
-	Serving *ServingSource `json:"serving,omitempty" protobuf:"bytes,8,opt,name=serving"`
+	JetStream *JetStreamSource `json:"jetstream,omitempty" protobuf:"bytes,8,opt,name=jetstream"`
 	// +optional
-	Pulsar *PulsarSource `json:"pulsar,omitempty" protobuf:"bytes,9,opt,name=pulsar"`
+	Serving *ServingSource `json:"serving,omitempty" protobuf:"bytes,9,opt,name=serving"`
+	// +optional
+	Pulsar *PulsarSource `json:"pulsar,omitempty" protobuf:"bytes,10,opt,name=pulsar"`
 }
 
 func (s Source) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
@@ -55,7 +58,7 @@ func (s Source) getContainers(req getContainerReq) ([]corev1.Container, []corev1
 	if s.UDTransformer != nil {
 		sidecarContainers = append(sidecarContainers, s.getUDTransformerContainer(req))
 	}
-	if s.UDSource != nil {
+	if s.IsUserDefinedSource() {
 		sidecarContainers = append(sidecarContainers, s.getUDSourceContainer(req))
 	}
 	return sidecarContainers, containers, nil
@@ -138,7 +141,7 @@ func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Co
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
 		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
 	c = c.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerSource})
-	if x := s.UDSource.Container; x != nil && x.Image != "" { // customized image
+	if x := s.GetUDContainerDefinition(); x != nil && x.Image != "" { // customized image
 		c = c.image(x.Image)
 		if len(x.Command) > 0 {
 			c = c.command(x.Command...)
@@ -147,7 +150,7 @@ func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Co
 			c = c.args(x.Args...)
 		}
 	}
-	if x := s.UDSource.Container; x != nil {
+	if x := s.GetUDContainerDefinition(); x != nil {
 		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...).appendPorts(x.Ports...)
 		if x.ImagePullPolicy != nil {
 			c = c.imagePullPolicy(*x.ImagePullPolicy)
@@ -156,7 +159,7 @@ func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Co
 	container := c.build()
 
 	var initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold int32 = UDContainerLivezInitialDelaySeconds, UDContainerLivezPeriodSeconds, UDContainerLivezTimeoutSeconds, UDContainerLivezFailureThreshold
-	if x := s.UDSource.Container; x != nil {
+	if x := s.GetUDContainerDefinition(); x != nil {
 		initialDelaySeconds = GetProbeInitialDelaySecondsOr(x.LivenessProbe, initialDelaySeconds)
 		periodSeconds = GetProbePeriodSecondsOr(x.LivenessProbe, periodSeconds)
 		timeoutSeconds = GetProbeTimeoutSecondsOr(x.LivenessProbe, timeoutSeconds)
@@ -176,4 +179,25 @@ func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Co
 		FailureThreshold:    failureThreshold,
 	}
 	return container
+}
+
+func (s Source) IsUserDefinedSource() bool {
+	if s.Container != nil && len(s.Container.Image) > 0 {
+		return true
+	}
+	if s.DeprecatedUDSource != nil && s.DeprecatedUDSource.Container != nil && len(s.DeprecatedUDSource.Container.Image) > 0 {
+		return true
+	}
+	return false
+}
+
+// TODO(UDSS): This function might not needed after clean up
+func (s Source) GetUDContainerDefinition() *Container {
+	if s.Container != nil && len(s.Container.Image) > 0 {
+		return s.Container
+	}
+	if s.DeprecatedUDSource != nil && s.DeprecatedUDSource.Container != nil && len(s.DeprecatedUDSource.Container.Image) > 0 {
+		return s.DeprecatedUDSource.Container
+	}
+	return nil
 }

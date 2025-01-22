@@ -290,6 +290,11 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref common.ReferenceCallback
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
+					"container": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"),
+						},
+					},
 					"log": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Log sink is used to write the data to the log.",
@@ -310,7 +315,7 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref common.ReferenceCallback
 					},
 					"udsink": {
 						SchemaProps: spec.SchemaProps{
-							Description: "UDSink sink is used to write the data to the user-defined sink.",
+							Description: "UDSink sink is used to write the data to the user-defined sink. Deprecated: Use Container instead",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"),
 						},
 					},
@@ -318,7 +323,7 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
 	}
 }
 
@@ -5116,6 +5121,11 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
+					"container": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"),
+						},
+					},
 					"log": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Log sink is used to write the data to the log.",
@@ -5136,7 +5146,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 					},
 					"udsink": {
 						SchemaProps: spec.SchemaProps{
-							Description: "UDSink sink is used to write the data to the user-defined sink.",
+							Description: "UDSink sink is used to write the data to the user-defined sink. Deprecated: Use Container instead",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"),
 						},
 					},
@@ -5157,7 +5167,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
 	}
 }
 
@@ -5201,6 +5211,11 @@ func schema_pkg_apis_numaflow_v1alpha1_Source(ref common.ReferenceCallback) comm
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
+					"container": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"),
+						},
+					},
 					"generator": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource"),
@@ -5228,7 +5243,8 @@ func schema_pkg_apis_numaflow_v1alpha1_Source(ref common.ReferenceCallback) comm
 					},
 					"udsource": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource"),
+							Description: "Deprecated: Use Container instead",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource"),
 						},
 					},
 					"jetstream": {
@@ -5250,7 +5266,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Source(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"},
 	}
 }
 
@@ -5482,7 +5498,8 @@ func schema_pkg_apis_numaflow_v1alpha1_UDSink(ref common.ReferenceCallback) comm
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "Deprecated: Use Container instead",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"container": {
 						SchemaProps: spec.SchemaProps{
@@ -5502,7 +5519,8 @@ func schema_pkg_apis_numaflow_v1alpha1_UDSource(ref common.ReferenceCallback) co
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "Deprecated: Use Container instead",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"container": {
 						SchemaProps: spec.SchemaProps{

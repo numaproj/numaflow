@@ -347,12 +347,10 @@ func TestGetPodSpec(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Sink = &Sink{
 			AbstractSink: AbstractSink{
-				UDSink: &UDSink{
-					Container: &Container{
-						Image:   "image",
-						Command: []string{"cmd"},
-						Args:    []string{"arg0"},
-					},
+				Container: &Container{
+					Image:   "image",
+					Command: []string{"cmd"},
+					Args:    []string{"arg0"},
 				},
 			},
 		}
@@ -378,12 +376,10 @@ func TestGetPodSpec(t *testing.T) {
 	t.Run("test user-defined source, with a source transformer", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Source = &Source{
-			UDSource: &UDSource{
-				Container: &Container{
-					Image:   "image",
-					Command: []string{"cmd"},
-					Args:    []string{"arg0"},
-				},
+			Container: &Container{
+				Image:   "image",
+				Command: []string{"cmd"},
+				Args:    []string{"arg0"},
 			},
 			UDTransformer: &UDTransformer{
 				Container: &Container{
@@ -643,7 +639,7 @@ func Test_VertexIsSource(t *testing.T) {
 	o.Spec.Source = &Source{}
 	assert.True(t, o.IsASource())
 	assert.False(t, o.IsUDSource())
-	o.Spec.Source.UDSource = &UDSource{}
+	o.Spec.Source.Container = &Container{Image: "my-image"}
 	assert.True(t, o.IsUDSource())
 }
 
@@ -667,7 +663,7 @@ func Test_VertexHasFallbackUDSink(t *testing.T) {
 	}
 	assert.False(t, o.HasFallbackUDSink())
 	o.Spec.Sink.Fallback = &AbstractSink{
-		UDSink: &UDSink{},
+		Container: &Container{Image: "my-image"},
 	}
 	assert.True(t, o.HasFallbackUDSink())
 }
@@ -677,7 +673,7 @@ func Test_VertexIsSink(t *testing.T) {
 	o.Spec.Sink = &Sink{}
 	assert.True(t, o.IsASink())
 	assert.False(t, o.IsUDSink())
-	o.Spec.Sink.UDSink = &UDSink{}
+	o.Spec.Sink.Container = &Container{Image: "my-image"}
 	assert.True(t, o.IsUDSink())
 }
 
@@ -736,7 +732,7 @@ func TestScalable(t *testing.T) {
 	}
 	assert.True(t, v.Scalable())
 	v.Spec.Source = &Source{
-		UDSource: &UDSource{},
+		Container: &Container{Image: "my-image"},
 	}
 	assert.True(t, v.Scalable())
 }

@@ -562,11 +562,8 @@ func validateSource(source dfv1.Source) error {
 		}
 	}
 	// TODO: add more validations for each source type
-	if source.UDSource != nil {
-		if source.UDSource.Container == nil || source.UDSource.Container.Image == "" {
-			return fmt.Errorf("invalid user-defined source spec, a customized image is required")
-		}
-		if source.HTTP != nil || source.Kafka != nil || source.Nats != nil || source.Generator != nil {
+	if source.IsUserDefinedSource() {
+		if source.HTTP != nil || source.Kafka != nil || source.Nats != nil || source.Generator != nil || source.JetStream != nil || source.Pulsar != nil || source.Serving != nil {
 			return fmt.Errorf("invalid user-defined source spec, only one of 'http', 'kafka', 'nats', 'generator' and 'udSource' can be specified")
 		}
 	}
@@ -601,5 +598,5 @@ func hasValidSinkRetryStrategy(s dfv1.Sink) bool {
 
 // HasValidFallbackSink checks if the Sink vertex has a valid fallback sink configured
 func hasValidFallbackSink(s *dfv1.Sink) bool {
-	return s.Fallback != nil && s.Fallback.UDSink != nil
+	return s.Fallback != nil && s.Fallback.IsUserDefinedSink() // TODO(UDSS): Should also support builtin sinks
 }

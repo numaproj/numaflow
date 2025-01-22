@@ -669,11 +669,11 @@ func (av AbstractVertex) HasUDTransformer() bool {
 }
 
 func (av AbstractVertex) HasFallbackUDSink() bool {
-	return av.IsASink() && av.Sink.Fallback != nil && av.Sink.Fallback.UDSink != nil
+	return av.IsASink() && av.Sink.Fallback != nil && av.Sink.Fallback.IsUserDefinedSink() // TODO(UDSS): Should also support builtin sink
 }
 
 func (av AbstractVertex) IsUDSource() bool {
-	return av.IsASource() && av.Source.UDSource != nil
+	return av.IsASource() && av.Source.IsUserDefinedSource()
 }
 
 func (av AbstractVertex) IsASink() bool {
@@ -681,7 +681,7 @@ func (av AbstractVertex) IsASink() bool {
 }
 
 func (av AbstractVertex) IsUDSink() bool {
-	return av.IsASink() && av.Sink.UDSink != nil
+	return av.IsASink() && av.Sink.IsUserDefinedSink()
 }
 
 func (av AbstractVertex) IsMapUDF() bool {

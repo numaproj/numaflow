@@ -346,7 +346,7 @@ func (sp *SourceProcessor) createSourceReader(ctx context.Context, udsGRPCClient
 	}
 
 	src := sp.VertexInstance.Vertex.Spec.Source
-	if x := src.UDSource; x != nil && udsGRPCClient != nil {
+	if src.IsUserDefinedSource() && udsGRPCClient != nil {
 		return udsource.NewUserDefinedSource(ctx, sp.VertexInstance, udsGRPCClient, udsource.WithReadTimeout(readTimeout))
 	} else if x := src.Generator; x != nil {
 		return generator.NewMemGen(ctx, sp.VertexInstance, generator.WithReadTimeout(readTimeout))

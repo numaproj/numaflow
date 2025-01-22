@@ -33,19 +33,22 @@ type Sink struct {
 }
 
 type AbstractSink struct {
+	// +optional
+	Container *Container `json:"container" protobuf:"bytes,1,opt,name=container"`
 	// Log sink is used to write the data to the log.
 	// +optional
-	Log *Log `json:"log,omitempty" protobuf:"bytes,1,opt,name=log"`
+	Log *Log `json:"log,omitempty" protobuf:"bytes,2,opt,name=log"`
 	// Kafka sink is used to write the data to the Kafka.
 	// +optional
-	Kafka *KafkaSink `json:"kafka,omitempty" protobuf:"bytes,2,opt,name=kafka"`
+	Kafka *KafkaSink `json:"kafka,omitempty" protobuf:"bytes,3,opt,name=kafka"`
 	// Blackhole sink is used to write the data to the blackhole sink,
 	// which is a sink that discards all the data written to it.
 	// +optional
-	Blackhole *Blackhole `json:"blackhole,omitempty" protobuf:"bytes,3,opt,name=blackhole"`
+	Blackhole *Blackhole `json:"blackhole,omitempty" protobuf:"bytes,4,opt,name=blackhole"`
 	// UDSink sink is used to write the data to the user-defined sink.
 	// +optional
-	UDSink *UDSink `json:"udsink,omitempty" protobuf:"bytes,4,opt,name=udsink"`
+	// Deprecated: Use Container instead
+	DeprecatedUDSink *UDSink `json:"udsink,omitempty" protobuf:"bytes,5,opt,name=udsink"`
 }
 
 func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
@@ -53,10 +56,10 @@ func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.C
 		s.getMainContainer(req),
 	}
 	sidecarContainers := []corev1.Container{}
-	if s.UDSink != nil {
+	if s.IsUserDefinedSink() {
 		sidecarContainers = append(sidecarContainers, s.getUDSinkContainer(req))
 	}
-	if s.Fallback != nil && s.Fallback.UDSink != nil {
+	if s.Fallback != nil && s.Fallback.IsUserDefinedSink() { // TODO(UDSS): should also support builtin sinks
 		sidecarContainers = append(sidecarContainers, s.getFallbackUDSinkContainer(req))
 	}
 	return sidecarContainers, containers, nil
@@ -74,7 +77,7 @@ func (s Sink) getUDSinkContainer(mainContainerReq getContainerReq) corev1.Contai
 		name(CtrUdsink).
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
 		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
-	x := s.UDSink.Container
+	x := s.GetUDContainerDefinition()
 	c = c.image(x.Image)
 	if len(x.Command) > 0 {
 		c = c.command(x.Command...)
@@ -109,7 +112,7 @@ func (s Sink) getFallbackUDSinkContainer(mainContainerReq getContainerReq) corev
 		name(CtrFallbackUdsink).
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
 		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
-	x := s.Fallback.UDSink.Container
+	x := s.Fallback.GetUDContainerDefinition()
 	c = c.image(x.Image)
 	if len(x.Command) > 0 {
 		c = c.command(x.Command...)
@@ -140,6 +143,27 @@ func (s Sink) getFallbackUDSinkContainer(mainContainerReq getContainerReq) corev
 }
 
 // IsAnySinkSpecified returns true if any sink is specified.
-func (a *AbstractSink) IsAnySinkSpecified() bool {
-	return a.Log != nil || a.Kafka != nil || a.Blackhole != nil || a.UDSink != nil
+func (a AbstractSink) IsAnySinkSpecified() bool {
+	return a.Log != nil || a.Kafka != nil || a.Blackhole != nil || a.DeprecatedUDSink != nil
+}
+
+func (a AbstractSink) IsUserDefinedSink() bool {
+	if a.Container != nil && len(a.Container.Image) > 0 {
+		return true
+	}
+	if a.DeprecatedUDSink != nil && a.DeprecatedUDSink.Container != nil && len(a.DeprecatedUDSink.Container.Image) > 0 {
+		return true
+	}
+	return false
+}
+
+// TODO(UDSS): This function might not needed after clean up
+func (a AbstractSink) GetUDContainerDefinition() *Container {
+	if a.Container != nil && len(a.Container.Image) > 0 {
+		return a.Container
+	}
+	if a.DeprecatedUDSink != nil && a.DeprecatedUDSink.Container != nil && len(a.DeprecatedUDSink.Container.Image) > 0 {
+		return a.DeprecatedUDSink.Container
+	}
+	return nil
 }

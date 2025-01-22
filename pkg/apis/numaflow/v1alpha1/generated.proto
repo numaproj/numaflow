@@ -126,22 +126,26 @@ message AbstractPodTemplate {
 }
 
 message AbstractSink {
+  // +optional
+  optional Container container = 1;
+
   // Log sink is used to write the data to the log.
   // +optional
-  optional Log log = 1;
+  optional Log log = 2;
 
   // Kafka sink is used to write the data to the Kafka.
   // +optional
-  optional KafkaSink kafka = 2;
+  optional KafkaSink kafka = 3;
 
   // Blackhole sink is used to write the data to the blackhole sink,
   // which is a sink that discards all the data written to it.
   // +optional
-  optional Blackhole blackhole = 3;
+  optional Blackhole blackhole = 4;
 
   // UDSink sink is used to write the data to the user-defined sink.
   // +optional
-  optional UDSink udsink = 4;
+  // Deprecated: Use Container instead
+  optional UDSink udsink = 5;
 }
 
 message AbstractVertex {
@@ -1629,31 +1633,35 @@ message SlidingWindow {
 
 message Source {
   // +optional
-  optional GeneratorSource generator = 1;
+  optional Container container = 1;
 
   // +optional
-  optional KafkaSource kafka = 2;
+  optional GeneratorSource generator = 2;
 
   // +optional
-  optional HTTPSource http = 3;
+  optional KafkaSource kafka = 3;
 
   // +optional
-  optional NatsSource nats = 4;
+  optional HTTPSource http = 4;
 
   // +optional
-  optional UDTransformer transformer = 5;
+  optional NatsSource nats = 5;
 
   // +optional
-  optional UDSource udSource = 6;
+  optional UDTransformer transformer = 6;
 
   // +optional
-  optional JetStreamSource jetstream = 7;
+  // Deprecated: Use Container instead
+  optional UDSource udSource = 7;
 
   // +optional
-  optional ServingSource serving = 8;
+  optional JetStreamSource jetstream = 8;
 
   // +optional
-  optional PulsarSource pulsar = 9;
+  optional ServingSource serving = 9;
+
+  // +optional
+  optional PulsarSource pulsar = 10;
 }
 
 // Status is a common structure which can be used for Status field.
@@ -1733,10 +1741,14 @@ message UDF {
   optional GroupBy groupBy = 3;
 }
 
+// TODO(UDSS): Clean up
+// Deprecated: Use Container instead
 message UDSink {
   optional Container container = 1;
 }
 
+// TODO(UDSS): Clean up
+// Deprecated: Use Container instead
 message UDSource {
   optional Container container = 1;
 }

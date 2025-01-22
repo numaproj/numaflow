@@ -20,6 +20,8 @@ limitations under the License.
 pub struct AbstractSink {
     #[serde(rename = "blackhole", skip_serializing_if = "Option::is_none")]
     pub blackhole: Option<Box<crate::models::Blackhole>>,
+    #[serde(rename = "container", skip_serializing_if = "Option::is_none")]
+    pub container: Option<Box<crate::models::Container>>,
     #[serde(rename = "kafka", skip_serializing_if = "Option::is_none")]
     pub kafka: Option<Box<crate::models::KafkaSink>>,
     #[serde(rename = "log", skip_serializing_if = "Option::is_none")]
@@ -32,6 +34,7 @@ impl AbstractSink {
     pub fn new() -> AbstractSink {
         AbstractSink {
             blackhole: None,
+            container: None,
             kafka: None,
             log: None,
             udsink: None,

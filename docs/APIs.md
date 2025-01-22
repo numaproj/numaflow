@@ -437,6 +437,21 @@ Description
 
 <td>
 
+<code>container</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>log</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.Log">
 Log </a> </em>
 </td>
@@ -508,6 +523,7 @@ a sink that discards all the data written to it.
 <p>
 
 UDSink sink is used to write the data to the user-defined sink.
+Deprecated: Use Container instead
 </p>
 
 </td>
@@ -1420,7 +1436,9 @@ Container
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink">AbstractSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.SideInput">SideInput</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.Source">Source</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.UDF">UDF</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.UDSink">UDSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.UDSource">UDSource</a>,
@@ -10652,6 +10670,21 @@ Description
 
 <td>
 
+<code>container</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>generator</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.GeneratorSource">
 GeneratorSource </a> </em>
@@ -10739,6 +10772,11 @@ GeneratorSource </a> </em>
 <td>
 
 <em>(Optional)</em>
+<p>
+
+Deprecated: Use Container instead
+</p>
+
 </td>
 
 </tr>
@@ -11374,6 +11412,11 @@ UDSink
 
 <p>
 
+<p>
+
+TODO(UDSS): Clean up Deprecated: Use Container instead
+</p>
+
 </p>
 
 <table>
@@ -11428,6 +11471,11 @@ UDSource
 </p>
 
 <p>
+
+<p>
+
+TODO(UDSS): Clean up Deprecated: Use Container instead
+</p>
 
 </p>
 

@@ -18,6 +18,8 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Source {
+    #[serde(rename = "container", skip_serializing_if = "Option::is_none")]
+    pub container: Option<Box<crate::models::Container>>,
     #[serde(rename = "generator", skip_serializing_if = "Option::is_none")]
     pub generator: Option<Box<crate::models::GeneratorSource>>,
     #[serde(rename = "http", skip_serializing_if = "Option::is_none")]
@@ -41,6 +43,7 @@ pub struct Source {
 impl Source {
     pub fn new() -> Source {
         Source {
+            container: None,
             generator: None,
             http: None,
             jetstream: None,

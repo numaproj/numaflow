@@ -51,25 +51,19 @@ var (
 				UDTransformer: &dfv1.UDTransformer{
 					Builtin: &dfv1.Transformer{Name: "filter"},
 				},
-				UDSource: &dfv1.UDSource{
-					Container: &dfv1.Container{
-						Image: "my-image:latest",
-					},
+				Container: &dfv1.Container{
+					Image: "my-image:latest",
 				},
 			},
 			Sink: &dfv1.Sink{
 				AbstractSink: dfv1.AbstractSink{
-					UDSink: &dfv1.UDSink{
-						Container: &dfv1.Container{
-							Image: "my-image:latest",
-						},
+					Container: &dfv1.Container{
+						Image: "my-image:latest",
 					},
 				},
 				Fallback: &dfv1.AbstractSink{
-					UDSink: &dfv1.UDSink{
-						Container: &dfv1.Container{
-							Image: "my-fb-image:latest",
-						},
+					Container: &dfv1.Container{
+						Image: "my-fb-image:latest",
 					},
 				},
 			},
