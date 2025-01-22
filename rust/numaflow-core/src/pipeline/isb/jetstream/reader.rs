@@ -17,7 +17,7 @@ use tracing::{error, info};
 use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
+use crate::message::{IntOffset, Message, MessageID, Metadata, Offset, ReadAck};
 use crate::metrics::{
     pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
 };
@@ -90,6 +90,12 @@ impl TryFrom<JSWrappedMessage> for Message {
             },
             headers: header.headers,
             watermark: None,
+            metadata: Some(Metadata {
+                previous_vertex: header
+                    .id
+                    .ok_or(Error::Proto("Missing id".to_string()))?
+                    .vertex_name,
+            }),
         })
     }
 }
@@ -201,16 +207,14 @@ impl JetstreamReader {
                                 }
                             };
 
-                            let offset = message.offset.clone();
-
                             if let Some(watermark_handle) = watermark_handle.as_ref() {
-                                let watermark = watermark_handle.fetch_watermark(offset.clone()).await?;
+                                let watermark = watermark_handle.fetch_watermark(message.offset.clone()).await?;
                                 message.watermark = Some(watermark);
                             }
 
                             // Insert the message into the tracker and wait for the ack to be sent back.
                             let (ack_tx, ack_rx) = oneshot::channel();
-                            tracker_handle.insert(offset.clone(), ack_tx).await?;
+                            tracker_handle.insert(&message, ack_tx).await?;
 
                             tokio::spawn(Self::start_work_in_progress(
                                 jetstream_message,
@@ -218,6 +222,7 @@ impl JetstreamReader {
                                 config.wip_ack_interval,
                             ));
 
+                            let offset = message.offset.clone();
                             if let Err(e) = messages_tx.send(message).await {
                                 // nak the read message and return
                                 tracker_handle.discard(offset).await?;
@@ -383,7 +388,7 @@ mod tests {
             stream.clone(),
             context.clone(),
             buf_reader_config,
-            TrackerHandle::new(None),
+            TrackerHandle::new(None, None),
             500,
             None,
         )
@@ -410,6 +415,7 @@ mod tests {
                     index: i as i32,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
             context
@@ -445,7 +451,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
 
         let js_stream = Stream::new("test-ack", "test", 0);
         // Delete stream if it exists
@@ -509,6 +515,7 @@ mod tests {
                     index: i as i32,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             offsets.push(message.offset.clone());
             let message_bytes: BytesMut = message.try_into().unwrap();

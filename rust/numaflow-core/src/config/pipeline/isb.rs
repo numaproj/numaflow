@@ -137,7 +137,7 @@ mod tests {
     #[test]
     fn test_default_buffer_writer_config() {
         let expected = BufferWriterConfig {
-            streams: vec![Stream::new("default-0", "default", DEFAULT_PARTITION_IDX)],
+            streams: vec![],
             max_length: DEFAULT_MAX_LENGTH,
             usage_limit: DEFAULT_USAGE_LIMIT,
             buffer_full_strategy: DEFAULT_BUFFER_FULL_STRATEGY,

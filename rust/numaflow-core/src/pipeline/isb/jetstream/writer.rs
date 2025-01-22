@@ -184,6 +184,7 @@ impl JetstreamWriter {
         let this = self.clone();
 
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
+            info!("Starting streaming Jetstream writer");
             let mut messages_stream = messages_stream;
             let mut hash = DefaultHasher::new();
 
@@ -199,6 +200,7 @@ impl JetstreamWriter {
                     continue;
                 }
 
+                // List of PAFs(one message can be written to multiple streams)
                 let mut pafs = vec![];
                 for vertex in &*this.config {
                     // check whether we need to write to this downstream vertex
@@ -242,12 +244,7 @@ impl JetstreamWriter {
                     continue;
                 }
 
-                this.resolve_pafs(ResolveAndPublishResult {
-                    pafs,
-                    payload: message.value.clone().into(),
-                    offset: message.offset,
-                })
-                .await?;
+                this.resolve_pafs(pafs, message).await?;
 
                 processed_msgs_count += 1;
                 if last_logged_at.elapsed().as_secs() >= 1 {
@@ -260,6 +257,7 @@ impl JetstreamWriter {
                     last_logged_at = Instant::now();
                 }
             }
+            info!("Streaming jetstream writer finished");
             Ok(())
         });
         Ok(handle)
@@ -339,7 +337,11 @@ impl JetstreamWriter {
     /// asynchronously, if it fails it will do a blocking write to resolve the PAFs.
     /// At any point in time, we will only have X PAF resolvers running, this will help us create a
     /// natural backpressure.
-    pub(super) async fn resolve_pafs(&self, result: ResolveAndPublishResult) -> Result<()> {
+    pub(super) async fn resolve_pafs(
+        &self,
+        pafs: Vec<(Stream, PublishAckFuture)>,
+        message: Message,
+    ) -> Result<()> {
         let start_time = Instant::now();
         let permit = Arc::clone(&self.sem)
             .acquire_owned()
@@ -355,7 +357,7 @@ impl JetstreamWriter {
             let _permit = permit;
             let mut offsets = Vec::new();
 
-            for (stream, paf) in result.pafs {
+            for (stream, paf) in pafs {
                 match paf.await {
                     Ok(ack) => {
                         if ack.duplicate {
@@ -369,7 +371,7 @@ impl JetstreamWriter {
                             Offset::Int(IntOffset::new(ack.sequence as i64, stream.partition)),
                         ));
                         tracker_handle
-                            .delete(result.offset.clone())
+                            .delete(message.offset.clone())
                             .await
                             .expect("Failed to delete offset from tracker");
                     }
@@ -381,7 +383,7 @@ impl JetstreamWriter {
                         );
                         match JetstreamWriter::blocking_write(
                             stream.clone(),
-                            result.payload.clone(),
+                            message.value.clone(),
                             js_ctx.clone(),
                             cancel_token.clone(),
                         )
@@ -406,7 +408,7 @@ impl JetstreamWriter {
                                 error!(?e, "Blocking write failed for stream {}", stream);
                                 // Since we failed to write to the stream, we need to send a NAK to the reader
                                 tracker_handle
-                                    .discard(result.offset.clone())
+                                    .discard(message.offset.clone())
                                     .await
                                     .expect("Failed to discard offset from the tracker");
                                 return;
@@ -428,7 +430,7 @@ impl JetstreamWriter {
                                 .expect("Failed to publish watermark");
                         }
                         WatermarkHandle::Source(handle) => {
-                            let input_partition = match &result.offset {
+                            let input_partition = match &message.offset {
                                 Offset::Int(offset) => offset.partition_idx,
                                 Offset::String(offset) => offset.partition_idx,
                             };
@@ -458,17 +460,14 @@ impl JetstreamWriter {
     /// an error it means it is fatal non-retryable error.
     async fn blocking_write(
         stream: Stream,
-        payload: Vec<u8>,
+        payload: Bytes,
         js_ctx: Context,
         cln_token: CancellationToken,
     ) -> Result<PublishAck> {
         let start_time = Instant::now();
         info!("Blocking write for stream {}", stream);
         loop {
-            match js_ctx
-                .publish(stream.name, Bytes::from(payload.clone()))
-                .await
-            {
+            match js_ctx.publish(stream.name, payload.clone()).await {
                 Ok(paf) => match paf.await {
                     Ok(ack) => {
                         if ack.duplicate {
@@ -500,17 +499,6 @@ impl JetstreamWriter {
     }
 }
 
-/// ResolveAndPublishResult resolves the result of the write PAF operation.
-/// It contains the list of pafs(one message can be written to multiple streams)
-/// and the payload that was written. Once the PAFs for all the streams have been
-/// resolved, the information is published to callee_tx.
-#[derive(Debug)]
-pub(crate) struct ResolveAndPublishResult {
-    pub(crate) pafs: Vec<(Stream, PublishAckFuture)>,
-    pub(crate) payload: Vec<u8>,
-    pub(crate) offset: Offset,
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -531,7 +519,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_async_write() {
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let cln_token = CancellationToken::new();
         let js_url = "localhost:4222";
         // Create JetStream context
@@ -592,6 +580,7 @@ mod tests {
                 index: 0,
             },
             headers: HashMap::new(),
+            metadata: None,
         };
 
         let paf = writer
@@ -652,6 +641,7 @@ mod tests {
                 index: 0,
             },
             headers: HashMap::new(),
+            metadata: None,
         };
 
         let message_bytes: BytesMut = message.try_into().unwrap();
@@ -673,7 +663,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_write_with_cancellation() {
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
@@ -739,6 +729,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
                 watermark: None,
+                metadata: None,
             };
             let paf = writer
                 .write(
@@ -765,6 +756,7 @@ mod tests {
                 index: 11,
             },
             headers: HashMap::new(),
+            metadata: None,
         };
         let paf = writer
             .write(
@@ -875,7 +867,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_check_stream_status() {
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
@@ -975,7 +967,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
 
         let stream = Stream::new("test_publish_messages", "temp", 0);
         // Delete stream if it exists
@@ -1037,12 +1029,10 @@ mod tests {
                     index: i as i32,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
-            tracker_handle
-                .insert(message.offset.clone(), ack_tx)
-                .await
-                .unwrap();
+            tracker_handle.insert(&message, ack_tx).await.unwrap();
             ack_rxs.push(ack_rx);
             messages_tx.send(message).await.unwrap();
         }
@@ -1066,7 +1056,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
 
         let stream = Stream::new("test_publish_cancellation", "temp", 0);
         // Delete stream if it exists
@@ -1128,12 +1118,10 @@ mod tests {
                     index: i as i32,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
-            tracker_handle
-                .insert(message.offset.clone(), ack_tx)
-                .await
-                .unwrap();
+            tracker_handle.insert(&message, ack_tx).await.unwrap();
             ack_rxs.push(ack_rx);
             tx.send(message).await.unwrap();
         }
@@ -1156,12 +1144,10 @@ mod tests {
                 index: 101,
             },
             headers: HashMap::new(),
+            metadata: None,
         };
         let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
-        tracker_handle
-            .insert(message.offset.clone(), ack_tx)
-            .await
-            .unwrap();
+        tracker_handle.insert(&message, ack_tx).await.unwrap();
         ack_rxs.push(ack_rx);
         tx.send(message).await.unwrap();
         drop(tx);
@@ -1189,7 +1175,7 @@ mod tests {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let cln_token = CancellationToken::new();
 
         let vertex1_streams = vec![
@@ -1271,12 +1257,10 @@ mod tests {
                     index: i as i32,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
-            tracker_handle
-                .insert(message.offset.clone(), ack_tx)
-                .await
-                .unwrap();
+            tracker_handle.insert(&message, ack_tx).await.unwrap();
             ack_rxs.push(ack_rx);
             messages_tx.send(message).await.unwrap();
         }

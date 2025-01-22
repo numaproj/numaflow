@@ -206,7 +206,9 @@ mod tests {
 
     use super::*;
     use crate::app::callback::store::LocalStore;
-    use crate::app::callback::Response;
+    use crate::callback::Response;
+    use axum::body::Bytes;
+    use redis::AsyncCommands;
 
     #[tokio::test]
     async fn test_redis_store() {

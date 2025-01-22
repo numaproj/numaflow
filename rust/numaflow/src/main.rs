@@ -1,5 +1,6 @@
 use std::env;
 use std::error::Error;
+use std::time::Duration;
 
 use tracing::{error, info};
 use tracing_subscriber::layer::SubscriberExt;
@@ -28,6 +29,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     if let Err(e) = run().await {
         error!("{e:?}");
+        tracing::warn!("Sleeping after error");
+        tokio::time::sleep(Duration::from_secs(300)).await;
         return Err(e);
     }
     Ok(())
@@ -43,7 +46,13 @@ async fn run() -> Result<(), Box<dyn Error>> {
     } else if args.contains(&"--rust".to_string()) {
         numaflow_core::run()
             .await
-            .map_err(|e| format!("Error running rust binary: {e:?}"))?
+            .map_err(|e| format!("Error running rust binary: {e:?}"))?;
+    } else {
+        return Err(format!(
+            "Invalid argument. Use --servesink, or --rust. Current args = {:?}",
+            args
+        )
+        .into());
     }
-    Err("Invalid argument. Use --servesink, or --rust".into())
+    Ok(())
 }

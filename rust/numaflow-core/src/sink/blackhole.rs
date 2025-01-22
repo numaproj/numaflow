@@ -45,6 +45,7 @@ mod tests {
                     index: 0,
                 },
                 watermark: None,
+                metadata: None,
             },
             Message {
                 keys: Arc::from(vec![]),
@@ -59,6 +60,7 @@ mod tests {
                     index: 1,
                 },
                 watermark: None,
+                metadata: None,
             },
         ];
 

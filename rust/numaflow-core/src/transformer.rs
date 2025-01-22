@@ -147,13 +147,12 @@ impl Transformer {
                         Transformer::transform(transform_handle, read_msg.clone()).await?;
 
                     // update the tracker with the number of responses for each message
-                    tracker_handle
-                        .update(
-                            read_msg.offset.clone(),
-                            transformed_messages.len() as u32,
-                            true,
-                        )
-                        .await?;
+                    for message in transformed_messages.iter() {
+                        tracker_handle
+                            .update(read_msg.offset.clone(), message.tags.clone())
+                            .await?;
+                    }
+                    tracker_handle.update_eof(read_msg.offset.clone()).await?;
 
                     Ok::<Vec<Message>, Error>(transformed_messages)
                 })
@@ -221,7 +220,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
@@ -239,6 +238,7 @@ mod tests {
                 index: 0,
             },
             headers: Default::default(),
+            metadata: None,
         };
 
         let transformed_messages =
@@ -285,7 +285,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
 
@@ -304,6 +304,7 @@ mod tests {
                     index: i,
                 },
                 headers: Default::default(),
+                metadata: None,
             };
             messages.push(message);
         }
@@ -361,7 +362,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
 
@@ -378,6 +379,7 @@ mod tests {
                 index: 0,
             },
             headers: Default::default(),
+            metadata: None,
         };
 
         let result = transformer.transform_batch(vec![message]).await;

@@ -605,6 +605,9 @@ pub(crate) async fn start_metrics_https_server(
     addr: SocketAddr,
     metrics_state: UserDefinedContainerState,
 ) -> crate::Result<()> {
+    // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
     // Generate a self-signed certificate
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| Error::Metrics(format!("Generating self-signed certificate: {}", e)))?;
@@ -718,6 +721,7 @@ struct TimestampedPending {
 #[derive(Clone)]
 pub(crate) enum LagReader {
     Source(Source),
+    #[allow(clippy::upper_case_acronyms)]
     ISB(Vec<JetstreamReader>), // multiple partitions
 }
 
@@ -884,8 +888,8 @@ async fn build_pending_info(
             }
 
             LagReader::ISB(readers) => {
-                for mut reader in readers {
-                    match fetch_isb_pending(&mut reader).await {
+                for reader in readers {
+                    match fetch_isb_pending(reader).await {
                         Ok(pending) => {
                             if pending != -1 {
                                 let mut stats = pending_stats.lock().await;

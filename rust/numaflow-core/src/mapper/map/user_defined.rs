@@ -262,6 +262,7 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
                 event_time: msg_info.event_time,
                 headers: msg_info.headers.clone(),
                 watermark: None,
+                metadata: None,
             };
             response_messages.push(message);
         }
@@ -389,6 +390,7 @@ impl UserDefinedStreamMap {
                     event_time: message_info.event_time,
                     headers: message_info.headers.clone(),
                     watermark: None,
+                    metadata: None,
                 };
                 response_sender
                     .send(Ok(message))
@@ -496,6 +498,7 @@ mod tests {
                 index: 0,
             },
             headers: Default::default(),
+            metadata: None,
         };
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -584,6 +587,7 @@ mod tests {
                     index: 0,
                 },
                 headers: Default::default(),
+                metadata: None,
             },
             crate::message::Message {
                 keys: Arc::from(vec!["second".into()]),
@@ -598,6 +602,7 @@ mod tests {
                     index: 1,
                 },
                 headers: Default::default(),
+                metadata: None,
             },
         ];
 
@@ -695,6 +700,7 @@ mod tests {
                 index: 0,
             },
             headers: Default::default(),
+            metadata: None,
         };
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(3);

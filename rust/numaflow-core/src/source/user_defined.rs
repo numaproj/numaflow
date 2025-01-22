@@ -130,6 +130,7 @@ impl TryFrom<read_response::Result> for Message {
             },
             headers: result.headers,
             watermark: None,
+            metadata: None,
         })
     }
 }

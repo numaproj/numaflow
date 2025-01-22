@@ -176,6 +176,7 @@ mod stream_generator {
                     index: Default::default(),
                 },
                 headers: Default::default(),
+                metadata: None,
             }
         }
 

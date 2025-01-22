@@ -35,10 +35,19 @@ pub(crate) struct Message {
     pub(crate) id: MessageID,
     /// headers of the message
     pub(crate) headers: HashMap<String, String>,
+    /// Additional metadata that could be passed per message between the vertices.
+    pub(crate) metadata: Option<Metadata>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct Metadata {
+    /// name of the previous vertex.
+    pub(crate) previous_vertex: String,
+    // In the future we could use this for OTLP, etc.
 }
 
 /// Offset of the message which will be used to acknowledge the message.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Hash, Serialize, Deserialize, Eq, PartialEq)]
 pub(crate) enum Offset {
     Int(IntOffset),
     String(StringOffset),
@@ -63,7 +72,7 @@ impl Message {
 }
 
 /// IntOffset is integer based offset enum type.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub(crate) struct IntOffset {
     pub(crate) offset: i64,
     pub(crate) partition_idx: u16,
@@ -85,7 +94,7 @@ impl fmt::Display for IntOffset {
 }
 
 /// StringOffset is string based offset enum type.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub(crate) struct StringOffset {
     /// offset could be a complex base64 string.
     pub(crate) offset: Bytes,
@@ -236,6 +245,7 @@ mod tests {
                 index: 0,
             },
             headers: HashMap::new(),
+            metadata: None,
         };
 
         let result: Result<BytesMut> = message.clone().try_into();

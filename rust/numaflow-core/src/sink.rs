@@ -293,7 +293,7 @@ impl SinkWriter {
 
                     let sink_start = time::Instant::now();
                     let total_valid_msgs = batch.len();
-                    match this.write(batch, cancellation_token.clone()).await {
+                    match this.write(batch.clone(), cancellation_token.clone()).await {
                         Ok(_) => {
                             for offset in offsets {
                                 // Delete the message from the tracker
@@ -751,7 +751,7 @@ mod tests {
             10,
             Duration::from_secs(1),
             SinkClientType::Log,
-            TrackerHandle::new(None),
+            TrackerHandle::new(None, None),
         )
         .build()
         .await
@@ -771,6 +771,7 @@ mod tests {
                     index: i as i32,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             })
             .collect();
 
@@ -782,7 +783,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_streaming_write() {
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
@@ -807,6 +808,7 @@ mod tests {
                     index: i as i32,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             })
             .collect();
 
@@ -815,10 +817,7 @@ mod tests {
         for msg in messages {
             let (ack_tx, ack_rx) = oneshot::channel();
             ack_rxs.push(ack_rx);
-            tracker_handle
-                .insert(msg.offset.clone(), ack_tx)
-                .await
-                .unwrap();
+            tracker_handle.insert(&msg, ack_tx).await.unwrap();
             let _ = tx.send(msg).await;
         }
         drop(tx);
@@ -838,7 +837,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_streaming_write_error() {
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
@@ -886,6 +885,7 @@ mod tests {
                     index: i as i32,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             })
             .collect();
 
@@ -894,10 +894,7 @@ mod tests {
         for msg in messages {
             let (ack_tx, ack_rx) = oneshot::channel();
             ack_rxs.push(ack_rx);
-            tracker_handle
-                .insert(msg.offset.clone(), ack_tx)
-                .await
-                .unwrap();
+            tracker_handle.insert(&msg, ack_tx).await.unwrap();
             let _ = tx.send(msg).await;
         }
         drop(tx);
@@ -924,7 +921,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fallback_write() {
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
 
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -974,6 +971,7 @@ mod tests {
                     index: i as i32,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             })
             .collect();
 
@@ -981,10 +979,7 @@ mod tests {
         let mut ack_rxs = vec![];
         for msg in messages {
             let (ack_tx, ack_rx) = oneshot::channel();
-            tracker_handle
-                .insert(msg.offset.clone(), ack_tx)
-                .await
-                .unwrap();
+            tracker_handle.insert(&msg, ack_tx).await.unwrap();
             ack_rxs.push(ack_rx);
             let _ = tx.send(msg).await;
         }
@@ -1019,6 +1014,7 @@ mod tests {
                 index: 0,
             },
             headers: HashMap::new(),
+            metadata: None,
         };
 
         let request: SinkRequest = message.into();
