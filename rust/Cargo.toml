@@ -69,6 +69,7 @@ axum = { version = "0.8.2", default-features = false, features = [
     "matched-path",
     "query",
     "tracing",
+    "tokio",
 ] }
 axum-server = { version = "0.7.1", features = ["tls-rustls"] }
 serde = { version = "1.0.217", features = ["derive"] }
