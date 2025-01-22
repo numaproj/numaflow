@@ -54,10 +54,6 @@ mod tracker;
 mod mapper;
 
 pub async fn run() -> Result<()> {
-    rustls::crypto::ring::default_provider()
-        .install_default()
-        .expect("Failed to install rustls crypto provider");
-
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
 

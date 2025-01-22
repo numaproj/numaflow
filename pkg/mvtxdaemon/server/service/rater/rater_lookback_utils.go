@@ -52,7 +52,7 @@ func (r *Rater) updateDynamicLookbackSecs() {
 	if !update {
 		return
 	}
-	r.log.Debugf("Calulcated processingTimeSeconds for mvtx %s : %f ", vertexName, processingTimeSeconds)
+	r.log.Debugf("Calculated processingTimeSeconds for mvtx %s : %f ", vertexName, processingTimeSeconds)
 	// if the current calculated processing time is greater than the lookback Seconds, update it
 	currentVal := r.userSpecifiedLookBackSeconds.Load()
 	// round up to the nearest minute, also ensure that while going up and down we have the consistent value for
