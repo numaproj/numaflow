@@ -17,10 +17,14 @@ spec:
   sink:
     udsink:
       container:
-        # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
-        image: quay.io/numaio/numaflow-go/redis-sink:stable
+        image: quay.io/numaio/numaflow-go/fb-sink-log:stable
         imagePullPolicy: Always
-        env:
-          - name: SINK_HASH_KEY
-            # Use the name of the mono vertex as the key
-            value: "transformer-mono-vertex"
+    fallback:
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
+            image: quay.io/numaio/numaflow-go/redis-sink:stable
+            imagePullPolicy: Always
+            env:
+              - name: SINK_HASH_KEY
+                value: "fallback-transformer-mono-vertex"

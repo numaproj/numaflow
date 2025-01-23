@@ -54,9 +54,13 @@ func (s *MonoVertexSuite) TestMonoVertexWithTransformer() {
 	// Expect the messages to be processed by the transformer.
 	w.Expect().MonoVertexPodLogContains("AssignEventTime", PodLogCheckOptionWithContainer("transformer"))
 
-	// Expect the messages to reach the sink.
-	w.Expect().RedisSinkContains("transformer-mono-vertex", "199")
-	w.Expect().RedisSinkContains("transformer-mono-vertex", "200")
+	// Simulate primary sink failure and check fallback sink
+	w.Expect().MonoVertexPodLogContains("Primary sink under maintenance", PodLogCheckOptionWithContainer("udsink"))
+
+	// Expect the messages to reach the fallback sink.
+	w.Expect().RedisSinkContains("fallback-transformer-mono-vertex", "1000")
+	w.Expect().RedisSinkContains("fallback-transformer-mono-vertex", "1001")
+
 }
 
 func TestMonoVertexSuite(t *testing.T) {
