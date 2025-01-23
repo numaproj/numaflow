@@ -28,4 +28,4 @@ spec:
             imagePullPolicy: Always
             env:
               - name: SINK_HASH_KEY
-                value: "fallback-transformer-mono-vertex"
+                value: "fallback-sink-key"
