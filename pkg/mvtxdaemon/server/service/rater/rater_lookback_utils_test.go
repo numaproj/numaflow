@@ -71,17 +71,6 @@ func (m *processingTimeMockHttpClient) Head(url string) (*http.Response, error) 
 	}
 }
 
-// Mock structure for TimestampedProcessingTime for testing
-type TimestampedProcessingTimeMock struct {
-	timestamp         int64
-	podProcessingTime map[string]float64
-}
-
-// Implement PodProcessingTimeSnapshot for the mock structure
-func (t *TimestampedProcessingTimeMock) PodProcessingTimeSnapshot() map[string]float64 {
-	return t.podProcessingTime
-}
-
 // Unit Tests for PodProcessingTime
 func TestPodProcessingTime_Name(t *testing.T) {
 	podProcessingTime := &PodProcessingTime{name: "test-pod"}
