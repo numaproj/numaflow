@@ -308,9 +308,7 @@ impl Source {
                     let offset = message.offset.clone().expect("offset can never be none");
 
                     // insert the offset and the ack one shot in the tracker.
-                    tracker_handle
-                        .insert(message.id.offset.clone(), resp_ack_tx)
-                        .await?;
+                    tracker_handle.insert(message, resp_ack_tx).await?;
 
                     // store the ack one shot in the batch to invoke ack later.
                     ack_batch.push((offset, resp_ack_rx));
@@ -570,7 +568,7 @@ mod tests {
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
-            TrackerHandle::new(),
+            TrackerHandle::new(None),
             true,
             None,
         );

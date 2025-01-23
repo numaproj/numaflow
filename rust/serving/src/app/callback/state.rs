@@ -228,7 +228,7 @@ where
 mod tests {
     use super::*;
     use crate::app::callback::store::memstore::InMemoryStore;
-    use crate::app::callback::Response;
+    use crate::callback::Response;
     use crate::pipeline::PipelineDCG;
     use axum::body::Bytes;
 

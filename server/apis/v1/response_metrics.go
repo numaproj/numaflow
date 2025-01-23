@@ -33,9 +33,10 @@ type Dimension struct {
 }
 
 type Metric struct {
-	Name        string `yaml:"metric_name"`
-	DisplayName string `yaml:"display_name"`
-	Unit        string `yaml:"unit"`
+	Name              string `yaml:"metric_name"`
+	DisplayName       string `yaml:"display_name"`
+	MetricDescription string `yaml:"metric_description"`
+	Unit              string `yaml:"unit"`
 	// array of required labels.
 	Filters []string `yaml:"required_filters"`
 	//array of dimensions and their data
@@ -49,7 +50,8 @@ type Params struct {
 
 type Pattern struct {
 	Name        string   `yaml:"name" json:"name"`
-	Object      string   `yaml:"object" json:"object"`
+	Object      string   `yaml:"object,omitempty" json:"object,omitempty"`
+	Objects     []string `yaml:"objects,omitempty" json:"objects,omitempty"`
 	Title       string   `yaml:"title"`
 	Description string   `yaml:"description"`
 	Expression  string   `yaml:"expr"`

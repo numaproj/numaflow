@@ -9,6 +9,7 @@ use tokio::time::Instant;
 use crate::app::callback::state::State as CallbackState;
 use crate::app::callback::store::redisstore::RedisConnection;
 use crate::app::tracker::MessageGraph;
+use crate::config::{DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
 use crate::Settings;
 use crate::{Error, Result};
 
@@ -50,6 +51,7 @@ struct ServingSourceActor {
     /// has been successfully processed.
     tracker: HashMap<String, oneshot::Sender<()>>,
     vertex_replica_id: u16,
+    callback_url: String,
 }
 
 impl ServingSourceActor {
@@ -72,12 +74,17 @@ impl ServingSourceActor {
         })?;
         let callback_state = CallbackState::new(msg_graph, redis_store).await?;
 
+        let callback_url = format!(
+            "https://{}:{}/v1/process/callback",
+            &settings.host_ip, &settings.app_listen_port
+        );
         tokio::spawn(async move {
             let mut serving_actor = ServingSourceActor {
                 messages: messages_rx,
                 handler_rx,
                 tracker: HashMap::new(),
                 vertex_replica_id,
+                callback_url,
             };
             serving_actor.run().await;
         });
@@ -140,10 +147,17 @@ impl ServingSourceActor {
             };
             let MessageWrapper {
                 confirm_save,
-                message,
+                mut message,
             } = message;
 
             self.tracker.insert(message.id.clone(), confirm_save);
+            message.headers.insert(
+                DEFAULT_CALLBACK_URL_HEADER_KEY.into(),
+                self.callback_url.clone(),
+            );
+            message
+                .headers
+                .insert(DEFAULT_ID_HEADER.into(), message.id.clone());
             messages.push(message);
         }
         Ok(messages)
@@ -233,6 +247,9 @@ mod tests {
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
     #[tokio::test]
     async fn test_serving_source() -> Result<()> {
+        // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
         let settings = Arc::new(Settings::default());
         let serving_source =
             ServingSource::new(Arc::clone(&settings), 10, Duration::from_millis(1), 0).await?;

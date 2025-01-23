@@ -1,8 +1,26 @@
 # Kafka Sink
 
+Two methods are available for integrating Kafka topics into your Numaflow pipeline:
+using a user-defined Kafka Sink or opting for the built-in Kafka Sink provided by Numaflow.
+
+## Option 1: User-Defined Kafka Sink
+
+Developed and maintained by the Numaflow contributor community,
+the [Kafka Sink](https://github.com/numaproj-contrib/kafka-java) provides a reliable and feature-complete solution for publishing messages to Kafka topics.
+
+Key Features:
+
+* **Customization:** Offers complete control over Kafka Sink configurations to tailor to specific requirements.
+* **Kafka Java Client Utilization:** Leverages the Kafka Java client for reliable message publishing to Kafka topics.
+* **Schema Management:** Integrates seamlessly with the Confluent Schema Registry to support schema validation and manage schema evolution effectively.
+
+More details on how to use the Kafka Sink can be found [here](https://github.com/numaproj-contrib/kafka-java?tab=readme-ov-file#write-data-to-kafka).
+
+## Option 2: Built-in Kafka Sink
+
 A `Kafka` sink is used to forward the messages to a Kafka topic. Kafka sink supports configuration overrides.
 
-## Kafka Headers
+### Kafka Headers
 
 We will insert `keys` into the Kafka header, but since `keys` is an array, we will add `keys` into the header in the
 following format.
@@ -10,7 +28,7 @@ following format.
 * `__keys_len` will have the number of `key` in the header. if `__keys_len` == `0`, means no `keys` are present.
 * `__keys_%d` will have the `key`, e.g., `__key_0` will be the first key, and so forth.
 
-## Example 
+### Example 
 
 ```yaml
 spec:

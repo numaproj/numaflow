@@ -1296,6 +1296,16 @@ func (h *handler) GetMetricData(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, result))
 }
 
+// Helper function to check if an object is in the list
+func isObjectInList(objects []string, object string) bool {
+	for _, o := range objects {
+		if o == object {
+			return true
+		}
+	}
+	return false
+}
+
 // DiscoverMetrics is used to provide a metrics list for each
 // dimension along with necessary params and filters for a given object
 func (h *handler) DiscoverMetrics(c *gin.Context) {
@@ -1312,7 +1322,7 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 	var discoveredMetrics MetricsDiscoveryResponse
 
 	for _, pattern := range configData.Patterns {
-		if pattern.Object == object {
+		if pattern.Object == object || isObjectInList(pattern.Objects, object) {
 			for _, metric := range pattern.Metrics {
 				var requiredFilters []Filter
 				// Populate the required filters
@@ -1325,6 +1335,14 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 				// Computing dimension data for each metric
 				var dimensionData []Dimensions
 				for _, dimension := range metric.Dimensions {
+					// Check if the object is "mono-vertex", skip the "vertex"(pipeline) dimension
+					if object == "mono-vertex" && dimension.Name == "vertex" {
+						continue
+					}
+					// Check if the object is "vertex"(pipeline), skip the "mono-vertex" dimension
+					if object == "vertex" && dimension.Name == "mono-vertex" {
+						continue
+					}
 					var combinedFilters = requiredFilters
 					// Add the dimension filters
 					for _, filter := range dimension.Filters {
@@ -1340,7 +1358,7 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 					})
 				}
 
-				discoveredMetrics = append(discoveredMetrics, NewDiscoveryResponse(pattern.Name, metric.Name, metric.DisplayName, metric.Unit, dimensionData))
+				discoveredMetrics = append(discoveredMetrics, NewDiscoveryResponse(pattern.Name, metric.Name, metric.MetricDescription, metric.DisplayName, metric.Unit, dimensionData))
 			}
 		}
 	}

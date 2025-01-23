@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::app::callback::Callback;
+use crate::callback::Callback;
 use crate::pipeline::{Edge, OperatorType, PipelineDCG};
 use crate::Error;
 
@@ -250,7 +250,7 @@ impl MessageGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::callback::Response;
+    use crate::callback::Response;
     use crate::pipeline::{Conditions, Tag, Vertex};
 
     #[test]

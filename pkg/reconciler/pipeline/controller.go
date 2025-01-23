@@ -224,8 +224,9 @@ func isLifecycleChange(pl *dfv1.Pipeline) bool {
 	// Check if the desired phase of the pipeline is 'Paused', or if the current phase of the
 	// pipeline is either 'Paused' or 'Pausing'. This indicates a transition into or out of
 	// a paused state which is a lifecycle phase change
-	if oldPhase := pl.Status.Phase; pl.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
-		oldPhase == dfv1.PipelinePhasePaused || oldPhase == dfv1.PipelinePhasePausing {
+	if currentPhase := pl.Status.Phase; pl.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
+		currentPhase == dfv1.PipelinePhasePaused || currentPhase == dfv1.PipelinePhasePausing ||
+		pl.GetAnnotations()[dfv1.KeyPauseTimestamp] != "" {
 		return true
 	}
 

@@ -1,6 +1,25 @@
 # Kafka Source
 
-A `Kafka` source is used to ingest the messages from a Kafka topic. Numaflow uses consumer-groups to manage offsets.
+Two methods are available for integrating Kafka topics into your Numaflow pipeline:
+using a user-defined Kafka Source or opting for the built-in Kafka Source provided by Numaflow.
+
+## Option 1: User-Defined Kafka Source
+
+Developed and maintained by the Numaflow contributor community,
+the [Kafka Source](https://github.com/numaproj-contrib/kafka-java) offers a robust and feature-complete solution
+for integrating Kafka as a data source into your Numaflow pipeline.
+
+Key Features:
+
+* **Flexibility:** Allows full customization of Kafka Source configurations to suit specific needs.
+* **Kafka Java Client Utilization:** Leverages the Kafka Java client for robust message consumption from Kafka topics.
+* **Schema Management:** Integrates seamlessly with the Confluent Schema Registry to support schema validation and manage schema evolution effectively.
+
+More details on how to use the Kafka Source can be found [here](https://github.com/numaproj-contrib/kafka-java/blob/main/README.md#read-data-from-kafka).
+
+## Option 2: Built-in Kafka Source
+
+Numaflow provides a built-in `Kafka` source to ingest messages from a Kafka topic. The source uses consumer-groups to manage offsets.
 
 ```yaml
 spec:
