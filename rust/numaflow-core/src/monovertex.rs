@@ -19,7 +19,7 @@ use crate::{metrics, shared};
 /// - Invokes the SourceTransformer concurrently
 /// - Calls the Sinker to write the batch to the Sink
 /// - Send Acknowledgement back to the Source
-mod forwarder;
+pub(crate) mod forwarder;
 
 pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
