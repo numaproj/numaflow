@@ -72,7 +72,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       nats:
-        image: "bitnami/nats:latest"
+        image: "bitnami/nats:2.10.23"
         ports:
           - 4222:4222
         env:
