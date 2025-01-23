@@ -31,8 +31,8 @@ type MonoVertexSuite struct {
 	E2ESuite
 }
 
-func (s *MonoVertexSuite) TestMonoVertexWithTransformer() {
-	w := s.Given().MonoVertex("@testdata/mono-vertex-with-transformer.yaml").
+func (s *MonoVertexSuite) TestMonoVertexWithAllContainers() {
+	w := s.Given().MonoVertex("@testdata/mono-vertex-with-all-containers.yaml").
 		When().CreateMonoVertexAndWait()
 	defer w.DeleteMonoVertexAndWait()
 
