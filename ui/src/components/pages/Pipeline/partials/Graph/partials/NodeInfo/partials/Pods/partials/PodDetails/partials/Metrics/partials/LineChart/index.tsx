@@ -19,7 +19,6 @@ import { useMetricsFetch } from "../../../../../../../../../../../../../../../ut
 import TimeSelector from "../common/TimeRange";
 import { AppContext } from "../../../../../../../../../../../../../../../App";
 import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
-import { PodDetail } from "../../../../../../../../../../../../../../../types/declarations/pods";
 
 interface TooltipProps {
   payload?: any[];
