@@ -58,8 +58,8 @@ func (s *MonoVertexSuite) TestMonoVertexWithAllContainers() {
 	w.Expect().MonoVertexPodLogContains("Primary sink under maintenance", PodLogCheckOptionWithContainer("udsink"))
 
 	// Expect the messages to reach the fallback sink.
-	w.Expect().RedisSinkContains("fallback-transformer-mono-vertex", "1000")
-	w.Expect().RedisSinkContains("fallback-transformer-mono-vertex", "1001")
+	w.Expect().RedisSinkContains("fallback-sink-key", "1000")
+	w.Expect().RedisSinkContains("fallback-sink-key", "1001")
 
 }
 
