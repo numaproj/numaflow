@@ -173,12 +173,54 @@ func TestRater_updateDynamicLookbackSecs_max(t *testing.T) {
 	tc3.Update(&PodProcessingTime{"pod1", 4000000000.0, 1})
 	rater.timestampedPodProcessingTime.Append(tc3)
 
-	// Test: Update case when processing time exceeds current lookback
+	// Test: Update case when processing time exceeds max lookback
 	rater.updateDynamicLookbackSecs()
 	newLookback := rater.userSpecifiedLookBackSeconds.Load()
 	assert.NotEqual(t, oldLookback, newLookback)
 	assert.Greater(t, newLookback, oldLookback)
 	assert.Equal(t, newLookback, float64(600))
+}
+
+func TestRater_updateDynamicLookbackSecs_min(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*29)
+	defer cancel()
+	lookBackSeconds := uint32(120)
+	mvtx := &v1alpha1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "p",
+			Namespace: "default",
+		},
+		Spec: v1alpha1.MonoVertexSpec{
+			Scale: v1alpha1.Scale{LookbackSeconds: &lookBackSeconds},
+		},
+	}
+	rater := NewRater(ctx, mvtx, WithTaskInterval(1000))
+
+	rater.httpClient = &processingTimeMockHttpClient{podOneCount: 0, podTwoCount: 10, lock: &sync.RWMutex{}}
+
+	// Test: No update with insufficient data
+	oldLookback := rater.userSpecifiedLookBackSeconds.Load()
+	rater.updateDynamicLookbackSecs()
+	assert.Equal(t, oldLookback, rater.userSpecifiedLookBackSeconds.Load())
+
+	startTime := time.Now()
+	tc1 := NewTimestampedProcessingTime(startTime.Truncate(CountWindow).Unix() - 20)
+	tc1.Update(&PodProcessingTime{"pod1", 40000.0, 1})
+	rater.timestampedPodProcessingTime.Append(tc1)
+
+	tc2 := NewTimestampedProcessingTime(startTime.Truncate(CountWindow).Unix() - 10)
+	tc2.Update(&PodProcessingTime{"pod1", 40000.0, 1})
+	rater.timestampedPodProcessingTime.Append(tc2)
+
+	tc3 := NewTimestampedProcessingTime(startTime.Truncate(CountWindow).Unix())
+	tc3.Update(&PodProcessingTime{"pod1", 40000.0, 1})
+	rater.timestampedPodProcessingTime.Append(tc3)
+
+	// Test: Update case when processing time exceeds max lookback
+	rater.updateDynamicLookbackSecs()
+	newLookback := rater.userSpecifiedLookBackSeconds.Load()
+	assert.Equal(t, oldLookback, newLookback)
+	assert.Equal(t, newLookback, float64(120))
 }
 
 func TestRater_updateDynamicLookbackSecs_stepDown(t *testing.T) {
