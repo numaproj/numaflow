@@ -29,6 +29,7 @@ DOCKER_BUILD_ARGS?=
 IMAGE_NAMESPACE?=quay.io/numaproj
 VERSION?=latest
 BASE_VERSION:=latest
+DOC_VERSION?=latest
 
 override LDFLAGS += \
   -X ${PACKAGE}.version=${VERSION} \
@@ -281,7 +282,7 @@ ifdef IMAGE_IMPORT_CMD
 endif
 
 /usr/local/bin/mkdocs:
-	$(PYTHON) -m pip install mkdocs==1.3.0 mkdocs_material==8.3.9 mkdocs-embed-external-markdown==2.3.0
+	$(PYTHON) -m pip install mkdocs==1.3.0 mkdocs_material==8.3.9 mkdocs-embed-external-markdown==2.3.0 mike
 
 /usr/local/bin/lychee:
 ifeq (, $(shell which lychee))
@@ -296,7 +297,8 @@ endif
 
 .PHONY: docs
 docs: /usr/local/bin/mkdocs docs-linkcheck
-	$(PYTHON) -m mkdocs build
+	#$(PYTHON) -m mkdocs build
+	mike deploy $(DOC_VERSION)
 
 .PHONY: docs-serve
 docs-serve: docs

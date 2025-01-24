@@ -27,6 +27,9 @@ extra:
   analytics:
     provider: google
     property: G-M7DD40E8RV
+  version:
+    provider: mike
+    default: stable
 markdown_extensions:
   - codehilite
   - admonition
