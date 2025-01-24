@@ -77,7 +77,7 @@ jobs:
         run: docker run -d -p 6650:6650 -p 8080:8080 apachepulsar/pulsar:4.0.0 bin/pulsar standalone
 
       - name: Start JetStream
-        run: docker run -d -p 4222:4222 nats:latest
+        run: docker run -d -p 4222:4222 nats:latest -js
 
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
