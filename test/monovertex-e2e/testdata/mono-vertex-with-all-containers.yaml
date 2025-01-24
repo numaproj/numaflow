@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: MonoVertex
 metadata:
-  name: transformer-mono-vertex
+  name: all-containers-mono-vertex
 spec:
   scale:
     min: 1
