@@ -31,8 +31,8 @@ type MonoVertexSuite struct {
 	E2ESuite
 }
 
-func (s *MonoVertexSuite) TestMonoVertexWithTransformer() {
-	w := s.Given().MonoVertex("@testdata/mono-vertex-with-transformer.yaml").
+func (s *MonoVertexSuite) TestMonoVertexWithAllContainers() {
+	w := s.Given().MonoVertex("@testdata/mono-vertex-with-all-containers.yaml").
 		When().CreateMonoVertexAndWait()
 	defer w.DeleteMonoVertexAndWait()
 
@@ -54,9 +54,13 @@ func (s *MonoVertexSuite) TestMonoVertexWithTransformer() {
 	// Expect the messages to be processed by the transformer.
 	w.Expect().MonoVertexPodLogContains("AssignEventTime", PodLogCheckOptionWithContainer("transformer"))
 
-	// Expect the messages to reach the sink.
-	w.Expect().RedisSinkContains("transformer-mono-vertex", "199")
-	w.Expect().RedisSinkContains("transformer-mono-vertex", "200")
+	// Simulate primary sink failure and check fallback sink
+	w.Expect().MonoVertexPodLogContains("Primary sink under maintenance", PodLogCheckOptionWithContainer("udsink"))
+
+	// Expect the messages to reach the fallback sink.
+	w.Expect().RedisSinkContains("fallback-sink-key", "1000")
+	w.Expect().RedisSinkContains("fallback-sink-key", "1001")
+
 }
 
 func TestMonoVertexSuite(t *testing.T) {
