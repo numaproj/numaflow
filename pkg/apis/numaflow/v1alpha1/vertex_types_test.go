@@ -493,7 +493,7 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
-		assert.Equal(t, 2, len(s.Containers))
+		assert.Equal(t, 1, len(s.Containers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[0].ImagePullPolicy)
@@ -513,11 +513,8 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, 1, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 
-		assert.Equal(t, CtrServing, s.Containers[1].Name)
-		assert.Equal(t, "test-f-image", s.Containers[1].Image)
-		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[1].ImagePullPolicy)
 		envNames = []string{}
-		for _, e := range s.Containers[1].Env {
+		for _, e := range s.Containers[0].Env {
 			envNames = append(envNames, e.Name)
 		}
 		assert.Contains(t, envNames, "test-env")
