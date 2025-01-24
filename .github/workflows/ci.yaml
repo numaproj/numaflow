@@ -73,7 +73,7 @@ jobs:
           --health-retries 5
       nats:
         image: "bitnami/nats:latest"
-        entrypoint: /nats-server -js
+        entrypoint: "/nats-server -js"
         ports:
           - 4222:4222
 
