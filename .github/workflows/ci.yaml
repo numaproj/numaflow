@@ -76,7 +76,7 @@ jobs:
         ports:
           - 4222:4222
         options: >-
-          --entrypoint "/nats-server"
+          --entrypoint "/nats-server -js"
 
     steps:
       - name: Start Pulsar standalone container
