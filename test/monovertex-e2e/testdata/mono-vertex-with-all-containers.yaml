@@ -17,7 +17,7 @@ spec:
   sink:
     udsink:
       container:
-         # Logger which creates messages to be sent to the fallback sink, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker
+         # Sink which returns a fallback response, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker
         image: quay.io/numaio/numaflow-go/fb-sink-log:stable
         imagePullPolicy: Always
     fallback:
