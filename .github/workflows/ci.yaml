@@ -72,11 +72,9 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       nats:
-        image: "bitnami/nats:latest"
+        image: "nats:latest"
         ports:
           - 4222:4222
-        options: >-
-          --entrypoint "/nats-server -js"
 
     steps:
       - name: Start Pulsar standalone container
