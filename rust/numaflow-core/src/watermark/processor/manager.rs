@@ -3,13 +3,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use crate::watermark::processor::timeline::OffsetTimeline;
+use crate::watermark::wmb::WMB;
 use prost::Message as ProtoMessage;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 use tracing::{debug, info};
-
-use crate::watermark::timeline::OffsetTimeline;
-use crate::watermark::WMB;
 
 const DEFAULT_PROCESSOR_REFRESH_RATE: u16 = 5;
 
@@ -20,10 +19,15 @@ pub(crate) enum Status {
     Deleted,
 }
 
+/// Processor is the smallest unit of entity (from which we fetch data) that does inorder processing
+/// or contains inorder data. It tracks OT for all the partitions of the from buffer.
 #[derive(Clone, Debug)]
 pub(crate) struct Processor {
+    /// Name of the processor
     pub(crate) name: String,
+    /// Status of the processor (Active, InActive, Deleted)
     pub(crate) status: Status,
+    /// OffsetTimeline for each partition
     pub(crate) timelines: Vec<OffsetTimeline>,
 }
 
@@ -40,21 +44,30 @@ impl Processor {
         }
     }
 
+    /// Set the status of the processor
     pub(crate) fn set_status(&mut self, status: Status) {
         self.status = status;
     }
 
+    /// Check if the processor is active
     pub(crate) fn is_active(&self) -> bool {
         self.status == Status::Active
     }
 
+    /// Check if the processor is deleted
     pub(crate) fn is_deleted(&self) -> bool {
         self.status == Status::Deleted
     }
 }
 
+/// processorManager manages the point of view of Vn-1 from Vn vertex processors (or source processor).
+/// The code is running on Vn vertex. It has the mapping of all the processors which in turn has all the
+/// information about each processor timelines.
+#[derive(Debug)]
 pub(crate) struct ProcessorManager {
+    /// Mapping of processor name to processor
     processors: Arc<Mutex<HashMap<String, Processor>>>,
+    /// Handles of ot listener, hb listener and processor refresher tasks
     handles: Vec<tokio::task::JoinHandle<()>>,
 }
 
@@ -67,6 +80,7 @@ impl Drop for ProcessorManager {
 }
 
 impl ProcessorManager {
+    /// Create a new ProcessorManager
     pub(crate) async fn new(
         partition_count: u16,
         ot_watcher: async_nats::jetstream::kv::Watch,
@@ -75,13 +89,20 @@ impl ProcessorManager {
         let processors = Arc::new(Mutex::new(HashMap::new()));
         let heartbeats = Arc::new(Mutex::new(HashMap::new()));
 
+        // start the ot watcher, to listen to the OT bucket and update the timelines
         let ot_handle = tokio::spawn(Self::start_ot_watcher(ot_watcher, Arc::clone(&processors)));
+
+        // start the hb watcher, to listen to the HB bucket and update the list of
+        // active processors
         let hb_handle = tokio::spawn(Self::start_hb_watcher(
             partition_count,
             hb_watcher,
             Arc::clone(&heartbeats),
             Arc::clone(&processors),
         ));
+
+        // start the processor refresher, to update the status of the processors
+        // based on the last heartbeat
         let refresh_handle = tokio::spawn(Self::start_refreshing_processors(
             DEFAULT_PROCESSOR_REFRESH_RATE,
             Arc::clone(&processors),
@@ -94,6 +115,8 @@ impl ProcessorManager {
         }
     }
 
+    /// Starts refreshing the processors status based on the last heartbeat, if the last heartbeat
+    /// is more than 10 times the refreshing rate, the processor is marked as deleted
     async fn start_refreshing_processors(
         refreshing_processors_rate: u16,
         processors: Arc<Mutex<HashMap<String, Processor>>>,
@@ -125,24 +148,26 @@ impl ProcessorManager {
         }
     }
 
+    /// Starts the ot watcher, to listen to the OT bucket and update the timelines
+    /// for the processors
     async fn start_ot_watcher(
         mut ot_watcher: async_nats::jetstream::kv::Watch,
         processors: Arc<Mutex<HashMap<String, Processor>>>,
     ) {
-        while let Ok(kv) = ot_watcher.next().await.unwrap() {
+        while let Ok(kv) = ot_watcher
+            .next()
+            .await
+            .expect("Failed to get next kv entry")
+        {
             match kv.operation {
                 async_nats::jetstream::kv::Operation::Put => {
                     let processor_name = kv.key;
-                    let wmb: WMB = kv.value.try_into().unwrap();
+                    let wmb: WMB = kv.value.try_into().expect("Failed to decode WMB");
 
                     info!("Got WMB {:?} for processor {}", wmb, processor_name);
                     if let Some(processor) = processors.lock().await.get_mut(&processor_name) {
                         let timeline = &mut processor.timelines[wmb.partition as usize];
-                        if wmb.idle {
-                            timeline.put_idle(wmb).await;
-                        } else {
-                            timeline.put(wmb).await;
-                        }
+                        timeline.put(wmb).await;
                     } else {
                         debug!(?processor_name, "Processor not found");
                     }
@@ -155,13 +180,19 @@ impl ProcessorManager {
         }
     }
 
+    /// Starts the hb watcher, to listen to the HB bucket, will also create the processor if it
+    /// doesn't exist.
     async fn start_hb_watcher(
         partition_count: u16,
         mut hb_watcher: async_nats::jetstream::kv::Watch,
         heartbeats: Arc<Mutex<HashMap<String, i64>>>,
         processors: Arc<Mutex<HashMap<String, Processor>>>,
     ) {
-        while let Ok(kv) = hb_watcher.next().await.unwrap() {
+        while let Ok(kv) = hb_watcher
+            .next()
+            .await
+            .expect("Failed to get next kv entry")
+        {
             match kv.operation {
                 async_nats::jetstream::kv::Operation::Put => {
                     let processor_name = kv.key;
@@ -209,6 +240,7 @@ impl ProcessorManager {
         }
     }
 
+    /// Get all the processors
     pub(crate) async fn get_all_processors(&self) -> HashMap<String, Processor> {
         let mut processors = HashMap::new();
         for (name, processor) in self.processors.lock().await.iter() {
@@ -217,6 +249,7 @@ impl ProcessorManager {
         processors
     }
 
+    /// Delete a processor from the processors map
     pub(crate) async fn delete_processor(&self, processor_name: &str) {
         let mut processors = self.processors.lock().await;
         processors.remove(processor_name);

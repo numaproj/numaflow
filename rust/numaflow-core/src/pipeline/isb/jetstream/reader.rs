@@ -23,7 +23,7 @@ use crate::metrics::{
 };
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
-use crate::watermark::EdgeWatermarkHandle;
+use crate::watermark::edge::EdgeWatermarkHandle;
 use crate::Result;
 
 /// The JetstreamReader is a handle to the background actor that continuously fetches messages from Jetstream.

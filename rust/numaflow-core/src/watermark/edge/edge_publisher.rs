@@ -5,7 +5,7 @@ use std::time::UNIX_EPOCH;
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::{Error, Result};
-use crate::watermark::WMB;
+use crate::watermark::wmb::WMB;
 use bytes::BytesMut;
 use chrono::{DateTime, Utc};
 use prost::Message;
@@ -14,6 +14,8 @@ use tracing::info;
 
 const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;
 
+/// LastPublishedState is the state of the last published watermark and offset
+/// for a partition.
 #[derive(Clone, Debug)]
 struct LastPublishedState {
     offset: i64,
@@ -21,10 +23,15 @@ struct LastPublishedState {
     publish_time: DateTime<Utc>,
 }
 
+/// EdgePublisher is the watermark publisher for the outgoing edges.
 pub(crate) struct EdgePublisher {
+    // name of the processor(node) that is publishing the watermark
     processor_name: String,
+    // handle to the heartbeat publishing task
     hb_handle: tokio::task::JoinHandle<()>,
+    // last published watermark for each vertex and partition
     last_published_wm: HashMap<&'static str, Vec<LastPublishedState>>,
+    // map of vertex to its ot bucket
     ot_buckets: HashMap<&'static str, async_nats::jetstream::kv::Store>,
 }
 
@@ -35,6 +42,7 @@ impl Drop for EdgePublisher {
 }
 
 impl EdgePublisher {
+    /// Creates a new EdgePublisher.
     pub(crate) async fn new(
         processor_name: String,
         js_context: async_nats::jetstream::Context,
@@ -44,6 +52,7 @@ impl EdgePublisher {
         let mut hb_buckets = Vec::with_capacity(bucket_configs.len());
         let mut last_published_wm = HashMap::new();
 
+        // create ot and hb buckets
         for config in bucket_configs {
             let js_context = js_context.clone();
             let ot_bucket = js_context
@@ -82,6 +91,7 @@ impl EdgePublisher {
         })
     }
 
+    /// start_heartbeat starts publishing heartbeats to the hb buckets
     async fn start_heartbeat(
         processor_name: String,
         hb_buckets: Vec<async_nats::jetstream::kv::Store>,
@@ -115,18 +125,21 @@ impl EdgePublisher {
         }
     }
 
+    /// publish_watermark publishes the watermark for the given offset and the stream.
     pub(crate) async fn publish_watermark(
         &mut self,
         stream: Stream,
         offset: i64,
         watermark: i64,
     ) -> Result<()> {
-        let last_published_wm = match self.last_published_wm.get_mut(stream.vertex) {
+        let last_published_wm_state = match self.last_published_wm.get_mut(stream.vertex) {
             Some(wm) => wm,
-            None => return Ok(()),
+            None => return Err(Error::Watermark("Invalid vertex".to_string())),
         };
 
-        let last_state = &last_published_wm[stream.partition as usize];
+        // we can avoid publishing the watermark if it is smaller than the last published watermark
+        // or if the last watermark was published in the last 100ms
+        let last_state = &last_published_wm_state[stream.partition as usize];
         if offset <= last_state.offset
             || watermark <= last_state.watermark
             || Utc::now()
@@ -156,102 +169,20 @@ impl EdgePublisher {
             .await
             .map_err(|e| Error::Watermark(e.to_string()))?;
 
-        last_published_wm[stream.partition as usize] = LastPublishedState {
+        // update the last published watermark state
+        last_published_wm_state[stream.partition as usize] = LastPublishedState {
             offset,
             watermark,
             publish_time: Utc::now(),
         };
 
-        Ok(())
-    }
-}
-
-pub(crate) struct SourcePublisher {
-    js_context: async_nats::jetstream::Context,
-    source_config: BucketConfig,
-    to_vertex_configs: Vec<BucketConfig>,
-    publishers: HashMap<String, EdgePublisher>,
-}
-
-impl SourcePublisher {
-    pub(crate) async fn new(
-        js_context: async_nats::jetstream::Context,
-        source_config: BucketConfig,
-        to_vertex_configs: Vec<BucketConfig>,
-    ) -> Result<Self> {
-        Ok(SourcePublisher {
-            js_context,
-            source_config,
-            to_vertex_configs,
-            publishers: HashMap::new(),
-        })
-    }
-
-    pub(crate) async fn publish_source_watermark(&mut self, partition: u16, watermark: i64) {
-        let processor_name = format!("{}-{}", self.source_config.vertex, partition);
-        if !self.publishers.contains_key(&processor_name) {
-            let publisher = EdgePublisher::new(
-                processor_name.clone(),
-                self.js_context.clone(),
-                &[self.source_config.clone()],
-            )
-            .await
-            .expect("Failed to create publisher");
-            info!(
-                "Creating new publisher at source publish for processor {} and partition{}",
-                processor_name, partition
-            );
-            self.publishers.insert(processor_name.clone(), publisher);
-        }
-
-        self.publishers
-            .get_mut(&processor_name)
-            .expect("Publisher not found")
-            .publish_watermark(
-                Stream {
-                    name: "source",
-                    vertex: self.source_config.vertex,
-                    partition,
-                },
-                Utc::now().timestamp_micros(), // we don't care about the offsets
-                watermark,
-            )
-            .await
-            .expect("Failed to publish watermark");
-        info!(
-            "Updating last published watermark for partition {} to {}",
-            partition, watermark
+        // Add debug string
+        let debug_info = format!(
+            "Published watermark: offset={}, stream={:?}, watermark={}",
+            offset, stream, watermark
         );
-    }
+        info!("{}", debug_info);
 
-    pub(crate) async fn publish_edge_watermark(
-        &mut self,
-        input_partition: u16,
-        stream: Stream,
-        offset: i64,
-        watermark: i64,
-    ) {
-        let processor_name = format!("{}-{}", stream.vertex, input_partition);
-        if !self.publishers.contains_key(&processor_name) {
-            info!(
-                "Creating new publisher for processor at edge publish {} and input partition {}",
-                processor_name, input_partition
-            );
-            let publisher = EdgePublisher::new(
-                processor_name.clone(),
-                self.js_context.clone(),
-                &self.to_vertex_configs,
-            )
-            .await
-            .expect("Failed to create publisher");
-            self.publishers.insert(processor_name.clone(), publisher);
-        }
-
-        self.publishers
-            .get_mut(&processor_name)
-            .expect("Publisher not found")
-            .publish_watermark(stream, offset, watermark)
-            .await
-            .expect("Failed to publish watermark");
+        Ok(())
     }
 }

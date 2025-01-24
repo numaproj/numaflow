@@ -67,7 +67,7 @@ impl Message {
     pub(crate) fn dropped(&self) -> bool {
         self.tags
             .as_ref()
-            .map_or(false, |tags| tags.contains(&DROP.to_string()))
+            .is_some_and(|tags| tags.contains(&DROP.to_string()))
     }
 }
 

@@ -42,7 +42,7 @@ pub(crate) mod serving;
 use serving::ServingSource;
 
 use crate::transformer::Transformer;
-use crate::watermark::SourceWatermarkHandle;
+use crate::watermark::source::SourceWatermarkHandle;
 
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {

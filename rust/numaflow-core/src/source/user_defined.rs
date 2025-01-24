@@ -176,7 +176,7 @@ impl SourceReader for UserDefinedSourceRead {
         let mut messages = Vec::with_capacity(self.num_records);
 
         while let Some(response) = self.resp_stream.message().await? {
-            if response.status.map_or(false, |status| status.eot) {
+            if response.status.is_some_and(|status| status.eot) {
                 break;
             }
 

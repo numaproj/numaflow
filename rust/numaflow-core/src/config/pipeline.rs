@@ -316,6 +316,8 @@ impl PipelineConfig {
             })
             .collect();
 
+        info!("Env vars found - {:#?}", env_vars);
+
         let get_var = |var: &str| -> Result<String> {
             Ok(env_vars
                 .get(var)
@@ -423,6 +425,7 @@ impl PipelineConfig {
 
         let mut callback_config = None;
         if get_var(ENV_CALLBACK_ENABLED).is_ok() {
+            info!("Callback enabled");
             let callback_concurrency: usize = get_var(ENV_CALLBACK_CONCURRENCY)
                 .unwrap_or_else(|_| format!("{DEFAULT_CALLBACK_CONCURRENCY}"))
                 .parse()

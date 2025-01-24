@@ -607,7 +607,7 @@ impl SinkWriter {
                     // construct the error map for the failed messages
                     messages_to_send.retain(|msg| {
                         if let Some(result) = result_map.get(&msg.id.to_string()) {
-                            return match result {
+                            match result {
                                 ResponseStatusFromSink::Success => false,
                                 ResponseStatusFromSink::Failed(err_msg) => {
                                     *fallback_error_map.entry(err_msg.clone()).or_insert(0) += 1;
@@ -617,7 +617,7 @@ impl SinkWriter {
                                     contains_fallback_status = true;
                                     false
                                 }
-                            };
+                            }
                         } else {
                             false
                         }

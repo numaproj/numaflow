@@ -115,7 +115,7 @@ impl Sink for UserDefinedSink {
                 .await?
                 .ok_or(Error::Sink("failed to receive response".to_string()))?;
 
-            if response.status.map_or(false, |s| s.eot) {
+            if response.status.is_some_and(|s| s.eot) {
                 if responses.len() != num_requests {
                     error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
                 } else {

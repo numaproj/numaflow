@@ -26,7 +26,7 @@ use crate::source::user_defined::new_source;
 use crate::source::Source;
 use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
-use crate::watermark::SourceWatermarkHandle;
+use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
 
 /// Creates a sink writer based on the configuration

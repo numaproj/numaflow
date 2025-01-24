@@ -9,11 +9,11 @@ spec:
       containerTemplate:
         resources:
           requests:
-              memory: "64Mi"
-              cpu: "250m"
+            memory: "1Gi"
+            cpu: "1"
           limits:
-              memory: "128Mi"
-              cpu: "500m"
+            memory: "1Gi"
+            cpu: "1"
       scale:
         min: 1
       # A self data generating source
@@ -25,11 +25,11 @@ spec:
       containerTemplate:
         resources:
           requests:
-            memory: "64Mi"
-            cpu: "250m"
+            memory: "1Gi"
+            cpu: "1"
           limits:
-            memory: "128Mi"
-            cpu: "500m"
+            memory: "1Gi"
+            cpu: "1"
       scale:
         min: 1
       # A self data generating source
@@ -41,11 +41,11 @@ spec:
       containerTemplate:
         resources:
           requests:
-            memory: "64Mi"
-            cpu: "250m"
+            memory: "1Gi"
+            cpu: "1"
           limits:
-            memory: "128Mi"
-            cpu: "500m"
+            memory: "1Gi"
+            cpu: "1"
       partitions: 2
       scale:
         min: 1
@@ -56,11 +56,11 @@ spec:
       containerTemplate:
         resources:
           requests:
-            memory: "64Mi"
-            cpu: "250m"
+            memory: "1Gi"
+            cpu: "1"
           limits:
-            memory: "128Mi"
-            cpu: "500m"
+            memory: "1Gi"
+            cpu: "1"
       partitions: 2
       scale:
         min: 1
@@ -84,11 +84,11 @@ spec:
       containerTemplate:
         resources:
           requests:
-            memory: "64Mi"
-            cpu: "250m"
+            memory: "1Gi"
+            cpu: "1"
           limits:
-            memory: "128Mi"
-            cpu: "500m"
+            memory: "1Gi"
+            cpu: "1"
       scale:
         min: 1
       sink:

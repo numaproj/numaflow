@@ -22,7 +22,9 @@ use crate::shared::create_components;
 use crate::shared::create_components::create_sink_writer;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
-use crate::watermark::{EdgeWatermarkHandle, SourceWatermarkHandle, WatermarkHandle};
+use crate::watermark::edge::EdgeWatermarkHandle;
+use crate::watermark::source::SourceWatermarkHandle;
+use crate::watermark::WatermarkHandle;
 use crate::{error, shared, Result};
 
 mod forwarder;
