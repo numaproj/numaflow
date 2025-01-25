@@ -9,7 +9,7 @@ use crate::config::pipeline::watermark::EdgeWatermarkConfig;
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
-use crate::watermark::isb::wm_fetcher::EdgeFetcher;
+use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 use crate::watermark::wmb::Watermark;
 
@@ -54,13 +54,13 @@ impl PartialOrd for OffsetWatermark {
 /// Tracks the watermarks of all the inflight messages for each partition, and publishes
 /// the lowest watermark.
 struct ISBWatermarkActor {
-    fetcher: EdgeFetcher,
+    fetcher: ISBWatermarkFetcher,
     publisher: ISBWatermarkPublisher,
     offset_set: HashMap<u16, BTreeSet<OffsetWatermark>>, // partition_id -> BTreeSet of OffsetWatermark
 }
 
 impl ISBWatermarkActor {
-    fn new(fetcher: EdgeFetcher, publisher: ISBWatermarkPublisher) -> Self {
+    fn new(fetcher: ISBWatermarkFetcher, publisher: ISBWatermarkPublisher) -> Self {
         Self {
             fetcher,
             publisher,
@@ -155,12 +155,16 @@ impl ISBWatermarkHandle {
         config: &EdgeWatermarkConfig,
     ) -> Result<Self> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
-        let fetcher = EdgeFetcher::new(js_context.clone(), &config.from_vertex_config).await?;
+        let fetcher =
+            ISBWatermarkFetcher::new(js_context.clone(), &config.from_vertex_config).await?;
 
         let processor_name = format!("{}-{}", get_vertex_name(), get_vertex_replica());
-        let publisher =
-            ISBWatermarkPublisher::new(processor_name, js_context.clone(), &config.to_vertex_config)
-                .await?;
+        let publisher = ISBWatermarkPublisher::new(
+            processor_name,
+            js_context.clone(),
+            &config.to_vertex_config,
+        )
+        .await?;
 
         let actor = ISBWatermarkActor::new(fetcher, publisher);
         tokio::spawn(async move { actor.run(receiver).await });

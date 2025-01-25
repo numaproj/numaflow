@@ -11,9 +11,6 @@ pub(crate) mod isb;
 /// Manages the processors for watermark.
 mod processor;
 
-/// some common utilities for watermark.
-mod shared;
-
 /// Responsible for fetching and publishing watermarks for source.
 pub(crate) mod source;
 

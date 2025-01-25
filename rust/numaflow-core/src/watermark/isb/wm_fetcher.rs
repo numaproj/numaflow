@@ -6,11 +6,10 @@ use tracing::info;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::{Error, Result};
 use crate::watermark::processor::manager::ProcessorManager;
-use crate::watermark::shared::create_processor_manager;
 use crate::watermark::wmb::Watermark;
 
-/// EdgeFetcher is the watermark fetcher for the incoming edges.
-pub(crate) struct EdgeFetcher {
+/// ISBWatermarkFetcher is the watermark fetcher for the incoming edges.
+pub(crate) struct ISBWatermarkFetcher {
     /// A map of vertex to its ProcessorManager.
     processor_managers: HashMap<&'static str, ProcessorManager>,
     /// A map of vertex to its last processed watermark for each partition.
@@ -19,8 +18,8 @@ pub(crate) struct EdgeFetcher {
     last_fetched_wm: Vec<(Watermark, DateTime<Utc>)>,
 }
 
-impl EdgeFetcher {
-    /// Creates a new EdgeFetcher.
+impl ISBWatermarkFetcher {
+    /// Creates a new ISBWatermarkFetcher.
     pub(crate) async fn new(
         js_context: async_nats::jetstream::Context,
         bucket_configs: &[BucketConfig],
@@ -40,14 +39,14 @@ impl EdgeFetcher {
 
         // Create a ProcessorManager for each edge.
         for config in bucket_configs {
-            let processor_manager = create_processor_manager(js_context.clone(), config).await?;
+            let processor_manager = ProcessorManager::new(js_context.clone(), config).await?;
             let processed_wm = vec![-1; config.partitions as usize];
 
             processor_managers.insert(config.vertex, processor_manager);
             last_processed_wm.insert(config.vertex, processed_wm);
         }
 
-        Ok(EdgeFetcher {
+        Ok(ISBWatermarkFetcher {
             processor_managers,
             last_processed_wm,
             last_fetched_wm,

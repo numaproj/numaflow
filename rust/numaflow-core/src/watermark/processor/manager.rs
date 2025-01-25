@@ -3,14 +3,15 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use crate::config::pipeline::watermark::BucketConfig;
+use crate::error::{Error, Result};
+use crate::watermark::processor::timeline::OffsetTimeline;
+use crate::watermark::wmb::WMB;
 use bytes::Bytes;
 use prost::Message as ProtoMessage;
 use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
 use tracing::{debug, info};
-
-use crate::watermark::processor::timeline::OffsetTimeline;
-use crate::watermark::wmb::WMB;
 
 const DEFAULT_PROCESSOR_REFRESH_RATE: u16 = 5;
 
@@ -85,10 +86,38 @@ impl Drop for ProcessorManager {
 impl ProcessorManager {
     /// Creates a new ProcessorManager.
     pub(crate) async fn new(
-        partition_count: u16,
-        ot_watcher: async_nats::jetstream::kv::Watch,
-        hb_watcher: async_nats::jetstream::kv::Watch,
-    ) -> Self {
+        js_context: async_nats::jetstream::Context,
+        bucket_config: &BucketConfig,
+    ) -> Result<Self> {
+        let ot_bucket = js_context
+            .get_key_value(bucket_config.ot_bucket)
+            .await
+            .map_err(|e| {
+                Error::Watermark(format!(
+                    "Failed to get kv bucket {}: {}",
+                    bucket_config.ot_bucket, e
+                ))
+            })?;
+
+        let hb_bucket = js_context
+            .get_key_value(bucket_config.hb_bucket)
+            .await
+            .map_err(|e| {
+                Error::Watermark(format!(
+                    "Failed to get kv bucket {}: {}",
+                    bucket_config.hb_bucket, e
+                ))
+            })?;
+
+        let ot_watcher = ot_bucket
+            .watch_all()
+            .await
+            .map_err(|e| Error::Watermark(format!("Failed to watch ot bucket: {}", e)))?;
+        let hb_watcher = hb_bucket
+            .watch_all()
+            .await
+            .map_err(|e| Error::Watermark(format!("Failed to watch hb bucket: {}", e)))?;
+
         let processors = Arc::new(RwLock::new(HashMap::new()));
         let heartbeats = Arc::new(RwLock::new(HashMap::new()));
 
@@ -98,7 +127,7 @@ impl ProcessorManager {
         // start the hb watcher, to listen to the HB bucket and update the list of
         // active processors
         let hb_handle = tokio::spawn(Self::start_hb_watcher(
-            partition_count,
+            bucket_config.partitions,
             hb_watcher,
             Arc::clone(&heartbeats),
             Arc::clone(&processors),
@@ -112,10 +141,10 @@ impl ProcessorManager {
             Arc::clone(&heartbeats),
         ));
 
-        ProcessorManager {
+        Ok(ProcessorManager {
             processors,
             handles: vec![ot_handle, hb_handle, refresh_handle],
-        }
+        })
     }
 
     /// Starts refreshing the processors status based on the last heartbeat, if the last heartbeat
@@ -248,5 +277,239 @@ impl ProcessorManager {
     pub(crate) async fn delete_processor(&self, processor_name: &Bytes) {
         let mut processors = self.processors.write().await;
         processors.remove(processor_name);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_nats::jetstream;
+    use async_nats::jetstream::kv::Config;
+    use async_nats::jetstream::kv::Store;
+    use async_nats::jetstream::Context;
+    use bytes::{Bytes, BytesMut};
+    use prost::Message;
+
+    async fn setup_nats() -> Context {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        jetstream::new(client)
+    }
+
+    async fn create_kv_bucket(js: &Context, bucket_name: &str) -> Store {
+        js.create_key_value(Config {
+            bucket: bucket_name.to_string(),
+            history: 1,
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_processor_manager_tracks_heartbeats_and_wmbs() {
+        let js_context = setup_nats().await;
+        let ot_bucket = create_kv_bucket(&js_context, "ot_bucket").await;
+        let hb_bucket = create_kv_bucket(&js_context, "hb_bucket").await;
+
+        let bucket_config = BucketConfig {
+            vertex: "test",
+            ot_bucket: "ot_bucket",
+            hb_bucket: "hb_bucket",
+            partitions: 1,
+        };
+
+        let processor_manager = ProcessorManager::new(js_context.clone(), &bucket_config)
+            .await
+            .unwrap();
+
+        let processor_name = Bytes::from("processor1");
+
+        // Spawn a task to keep publishing heartbeats
+        let hb_task = tokio::spawn(async move {
+            loop {
+                let heartbeat = numaflow_pb::objects::watermark::Heartbeat { heartbeat: 100 };
+                let mut bytes = BytesMut::new();
+                heartbeat
+                    .encode(&mut bytes)
+                    .expect("Failed to encode heartbeat");
+                hb_bucket.put("processor1", bytes.freeze()).await.unwrap();
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        });
+
+        // Spawn a task to keep publishing WMBs
+        let ot_task = tokio::spawn(async move {
+            loop {
+                let wmb_bytes: BytesMut = WMB {
+                    watermark: 200,
+                    offset: 1,
+                    idle: false,
+                    partition: 0,
+                }
+                .try_into()
+                .unwrap();
+                ot_bucket
+                    .put("processor1", wmb_bytes.freeze())
+                    .await
+                    .unwrap();
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        });
+
+        // Check every 10ms if the processor is added and the WMB is tracked
+        let start_time = tokio::time::Instant::now();
+        loop {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            let processors = processor_manager.processors.read().await;
+            if let Some(processor) = processors.get(&processor_name) {
+                if processor.status == Status::Active {
+                    let timeline = &processor.timelines[0];
+                    if let Some(head_wmb) = timeline.get_head_wmb().await {
+                        if head_wmb.watermark == 200 && head_wmb.offset == 1 {
+                            break;
+                        }
+                    }
+                }
+            }
+            if start_time.elapsed() > Duration::from_secs(1) {
+                panic!(
+                    "Test failed: Processor was not added or WMB was not tracked within 1 second"
+                );
+            }
+        }
+
+        // Abort the tasks
+        hb_task.abort();
+        ot_task.abort();
+
+        // delete the kv store
+        js_context.delete_key_value("ot_bucket").await.unwrap();
+        js_context.delete_key_value("hb_bucket").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_processor_manager_tracks_multiple_processors() {
+        let js_context = setup_nats().await;
+        let ot_bucket = create_kv_bucket(&js_context, "ot_bucket").await;
+        let hb_bucket = create_kv_bucket(&js_context, "hb_bucket").await;
+
+        let bucket_config = BucketConfig {
+            vertex: "test",
+            ot_bucket: "ot_bucket",
+            hb_bucket: "hb_bucket",
+            partitions: 1,
+        };
+
+        let processor_manager = ProcessorManager::new(js_context.clone(), &bucket_config)
+            .await
+            .unwrap();
+
+        let processor_names = [
+            Bytes::from("processor1"),
+            Bytes::from("processor2"),
+            Bytes::from("processor3"),
+        ];
+
+        // Spawn tasks to keep publishing heartbeats and WMBs for each processor
+        let hb_tasks: Vec<_> = processor_names
+            .iter()
+            .map(|processor_name| {
+                let hb_bucket = hb_bucket.clone();
+                let processor_name = processor_name.clone();
+                tokio::spawn(async move {
+                    loop {
+                        let heartbeat =
+                            numaflow_pb::objects::watermark::Heartbeat { heartbeat: 100 };
+                        let mut bytes = BytesMut::new();
+                        heartbeat
+                            .encode(&mut bytes)
+                            .expect("Failed to encode heartbeat");
+                        hb_bucket
+                            .put(
+                                String::from_utf8(processor_name.to_vec()).unwrap(),
+                                bytes.freeze(),
+                            )
+                            .await
+                            .unwrap();
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                })
+            })
+            .collect();
+
+        let ot_tasks: Vec<_> = processor_names
+            .iter()
+            .map(|processor_name| {
+                let ot_bucket = ot_bucket.clone();
+                let processor_name = processor_name.clone();
+                tokio::spawn(async move {
+                    loop {
+                        let wmb_bytes: BytesMut = WMB {
+                            watermark: 200,
+                            offset: 1,
+                            idle: false,
+                            partition: 0,
+                        }
+                        .try_into()
+                        .unwrap();
+                        ot_bucket
+                            .put(
+                                String::from_utf8(processor_name.to_vec()).unwrap(),
+                                wmb_bytes.freeze(),
+                            )
+                            .await
+                            .unwrap();
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                })
+            })
+            .collect();
+
+        // Check every 10ms if the processors are added and the WMBs are tracked
+        let start_time = tokio::time::Instant::now();
+        loop {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            let processors = processor_manager.processors.read().await;
+
+            let futures: Vec<_> = processor_names
+                .iter()
+                .map(|processor_name| {
+                    let processor = processors.get(processor_name).cloned();
+                    async move {
+                        if let Some(processor) = processor {
+                            if processor.status == Status::Active {
+                                if let Some(head_wmb) = processor.timelines[0].get_head_wmb().await
+                                {
+                                    return head_wmb.watermark == 200 && head_wmb.offset == 1;
+                                }
+                            }
+                        }
+                        false
+                    }
+                })
+                .collect();
+
+            let results = futures::future::join_all(futures).await;
+            let all_processors_tracked = results.into_iter().all(|tracked| tracked);
+
+            if all_processors_tracked {
+                break;
+            }
+
+            if start_time.elapsed() > Duration::from_secs(1) {
+                panic!("Test failed: Processors were not added or WMBs were not tracked within 1 second");
+            }
+        }
+        // Abort the tasks
+        for hb_task in hb_tasks {
+            hb_task.abort();
+        }
+        for ot_task in ot_tasks {
+            ot_task.abort();
+        }
+
+        // delete the kv store
+        js_context.delete_key_value("ot_bucket").await.unwrap();
+        js_context.delete_key_value("hb_bucket").await.unwrap();
     }
 }

@@ -25,7 +25,7 @@ struct LastPublishedState {
     publish_time: DateTime<Utc>,
 }
 
-/// EdgePublisher is the watermark publisher for the outgoing edges.
+/// ISBWatermarkPublisher is the watermark publisher for the outgoing edges.
 pub(crate) struct ISBWatermarkPublisher {
     /// name of the processor(node) that is publishing the watermark.
     processor_name: String,
@@ -44,7 +44,7 @@ impl Drop for ISBWatermarkPublisher {
 }
 
 impl ISBWatermarkPublisher {
-    /// Creates a new EdgePublisher.
+    /// Creates a new ISBWatermarkPublisher.
     pub(crate) async fn new(
         processor_name: String,
         js_context: async_nats::jetstream::Context,

@@ -7,7 +7,7 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Message, Offset};
-use crate::watermark::source::source_wm_fetcher::SourceFetcher;
+use crate::watermark::source::source_wm_fetcher::SourceWatermarkFetcher;
 use crate::watermark::source::source_wm_publisher::SourceWatermarkPublisher;
 
 /// fetcher for fetching the source watermark
@@ -31,12 +31,12 @@ enum SourceActorMessage {
 /// SourceWatermarkActor comprises SourcePublisher and SourceFetcher.
 struct SourceWatermarkActor {
     publisher: SourceWatermarkPublisher,
-    fetcher: SourceFetcher,
+    fetcher: SourceWatermarkFetcher,
 }
 
 impl SourceWatermarkActor {
     /// Creates a new SourceWatermarkActor.
-    fn new(publisher: SourceWatermarkPublisher, fetcher: SourceFetcher) -> Self {
+    fn new(publisher: SourceWatermarkPublisher, fetcher: SourceWatermarkFetcher) -> Self {
         Self { publisher, fetcher }
     }
 
@@ -94,7 +94,7 @@ impl SourceWatermarkHandle {
         config: &SourceWatermarkConfig,
     ) -> Result<Self> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
-        let fetcher = SourceFetcher::new(js_context.clone(), &config.source_bucket_config)
+        let fetcher = SourceWatermarkFetcher::new(js_context.clone(), &config.source_bucket_config)
             .await
             .map_err(|e| Error::Watermark(e.to_string()))?;
 

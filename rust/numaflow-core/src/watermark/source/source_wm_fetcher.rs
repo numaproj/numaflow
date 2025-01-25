@@ -1,22 +1,21 @@
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::Result;
 use crate::watermark::processor::manager::ProcessorManager;
-use crate::watermark::shared::create_processor_manager;
 use crate::watermark::wmb::Watermark;
 
-/// SourceFetcher is the watermark fetcher for the source.
-pub struct SourceFetcher {
+/// SourceWatermarkFetcher is the watermark fetcher for the source.
+pub struct SourceWatermarkFetcher {
     processor_manager: ProcessorManager,
 }
 
-impl SourceFetcher {
-    /// Creates a new SourceFetcher.
+impl SourceWatermarkFetcher {
+    /// Creates a new [SourceWatermarkFetcher].
     pub(crate) async fn new(
         js_context: async_nats::jetstream::Context,
         bucket_config: &BucketConfig,
     ) -> Result<Self> {
-        let processor_manager = create_processor_manager(js_context, bucket_config).await?;
-        Ok(SourceFetcher { processor_manager })
+        let processor_manager = ProcessorManager::new(js_context, bucket_config).await?;
+        Ok(SourceWatermarkFetcher { processor_manager })
     }
 
     /// Fetches the watermark for the source, which is the minimum watermark of all the active

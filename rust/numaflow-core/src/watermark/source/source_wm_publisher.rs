@@ -17,7 +17,7 @@ pub(crate) struct SourceWatermarkPublisher {
 }
 
 impl SourceWatermarkPublisher {
-    /// Creates a new SourcePublisher.
+    /// Creates a new [SourceWatermarkPublisher].
     pub(crate) async fn new(
         js_context: async_nats::jetstream::Context,
         source_config: BucketConfig,
