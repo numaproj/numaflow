@@ -298,6 +298,13 @@ impl Tracker {
 
         ack_send.send(ReadAck::Ack).expect("Failed to send ack");
 
+        if let Some(watermark_handle) = &self.watermark_handle {
+            watermark_handle
+                .remove_offset(offset)
+                .await
+                .expect("Failed to remove offset");
+        }
+
         let Some(ref callback_handler) = self.serving_callback_handler else {
             return;
         };
@@ -317,12 +324,6 @@ impl Tracker {
             .await;
         if let Err(e) = result {
             tracing::error!(?e, id, "Failed to send callback");
-        }
-        if let Some(watermark_handle) = &self.watermark_handle {
-            watermark_handle
-                .remove_offset(offset)
-                .await
-                .expect("Failed to remove offset");
         }
     }
 }
@@ -465,10 +466,9 @@ mod tests {
     use tokio::sync::oneshot;
     use tokio::time::{timeout, Duration};
 
-    use crate::message::{IntOffset, MessageID, Metadata, Offset};
-
     use super::*;
     use crate::message::StringOffset;
+    use crate::message::{IntOffset, MessageID, Metadata, Offset};
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 

@@ -1,7 +1,8 @@
-use crate::error::Error;
 use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use prost::Message;
+
+use crate::error::Error;
 
 /// WMB is the watermark message that is sent by the processor to the downstream
 #[derive(Clone, Copy, Debug, PartialEq)]

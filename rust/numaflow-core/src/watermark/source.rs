@@ -1,12 +1,14 @@
+use std::collections::HashMap;
+
+use tokio::sync::mpsc::Receiver;
+use tracing::error;
+
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Message, Offset};
 use crate::watermark::source::source_fetcher::SourceFetcher;
 use crate::watermark::source::source_publisher::SourcePublisher;
-use std::collections::HashMap;
-use tokio::sync::mpsc::Receiver;
-use tracing::error;
 
 /// fetcher for fetching the source watermark
 pub(crate) mod source_fetcher;

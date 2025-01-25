@@ -1,10 +1,12 @@
+use std::collections::HashMap;
+
+use chrono::Utc;
+use tracing::info;
+
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error;
 use crate::watermark::edge::edge_publisher::EdgePublisher;
-use chrono::Utc;
-use std::collections::HashMap;
-use tracing::info;
 
 /// SourcePublisher is the watermark publisher for the source vertex.
 pub(crate) struct SourcePublisher {

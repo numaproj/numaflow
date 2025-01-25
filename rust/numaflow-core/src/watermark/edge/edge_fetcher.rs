@@ -28,7 +28,10 @@ impl EdgeFetcher {
         let mut processor_managers = HashMap::new();
         let mut last_processed_wm = HashMap::new();
         let last_fetched_wm = vec![
-            (Watermark::from_timestamp_millis(-1).unwrap(), Utc::now());
+            (
+                Watermark::from_timestamp_millis(-1).expect("failed to parse time"),
+                Utc::now()
+            );
             bucket_configs
                 .first()
                 .expect("one edge should be present")
@@ -69,9 +72,10 @@ impl EdgeFetcher {
         // Iterate over all the processor managers and get the smallest watermark. (join case)
         for (edge, processor_manager) in self.processor_managers.iter() {
             let mut epoch = i64::MAX;
+            let mut processors_to_delete = Vec::new();
 
             // iterate over all the timelines of the processor and get the smallest watermark
-            for (name, processor) in processor_manager.get_all_processors().await {
+            for (name, processor) in processor_manager.get_all_processors().await.iter() {
                 // headOffset is used to check whether this pod can be deleted.
                 let mut head_offset = -1;
 
@@ -93,15 +97,22 @@ impl EdgeFetcher {
                 // if the pod is not active and the head offset of all the timelines is less than the input offset, delete
                 // the processor (this means we are processing data later than what the stale processor has processed)
                 if processor.is_deleted() && offset > head_offset {
-                    info!("Processor {} inactive, deleting", name);
-                    processor_manager.delete_processor(name.as_str()).await;
+                    info!("Processor {:?} inactive, deleting", name);
+                    processors_to_delete.push(name.clone());
                 }
+            }
+
+            // delete the processors that are inactive
+            for name in processors_to_delete {
+                processor_manager.delete_processor(&name).await;
             }
 
             // if the epoch is not i64::MAX, update the last processed watermark for this particular edge and the partition
             // while fetching watermark we need to consider the smallest last processed watermark among all the partitions
             if epoch != i64::MAX {
-                self.last_processed_wm.get_mut(edge).unwrap()[partition_idx as usize] = epoch;
+                self.last_processed_wm
+                    .get_mut(edge)
+                    .expect("failed to acquire lock")[partition_idx as usize] = epoch;
             }
         }
 
@@ -111,15 +122,12 @@ impl EdgeFetcher {
         // update the last fetched watermark for this partition
         self.last_fetched_wm[partition_idx as usize] = (watermark, Utc::now());
 
-        // Add debug string
-        let debug_info = format!(
-            "Fetched watermark: offset={}, partition={}, processors={:?}",
+        info!(
+            "Fetched watermark: offset={}, watermark={} partition={}",
             offset,
-            partition_idx,
-            self.processor_managers.values().collect::<Vec<_>>()
+            watermark.timestamp_millis(),
+            partition_idx
         );
-        info!("{}", debug_info);
-
         Ok(watermark)
     }
 
@@ -163,7 +171,8 @@ impl EdgeFetcher {
 
             if epoch != i64::MAX {
                 // update the last processed watermark for this particular edge and the partition
-                self.last_processed_wm.get_mut(edge).unwrap()[partition_idx as usize] = epoch;
+                self.last_processed_wm.get_mut(edge).expect("invalid edge")
+                    [partition_idx as usize] = epoch;
             }
         }
 
@@ -186,8 +195,8 @@ impl EdgeFetcher {
         }
 
         if min_wm == i64::MAX {
-            return Ok(Watermark::from_timestamp_millis(-1).unwrap());
+            return Ok(Watermark::from_timestamp_millis(-1).expect("failed to parse time"));
         }
-        Ok(Watermark::from_timestamp_millis(min_wm).unwrap())
+        Ok(Watermark::from_timestamp_millis(min_wm).expect("failed to parse time"))
     }
 }

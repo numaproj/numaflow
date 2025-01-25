@@ -1,12 +1,14 @@
+use std::collections::HashMap;
+use std::env;
+use std::time::Duration;
+
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use numaflow_models::models::{ForwardConditions, Vertex};
 use serde_json::from_slice;
-use std::collections::HashMap;
-use std::env;
-use std::time::Duration;
 use tracing::info;
 
+use super::{DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED};
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
@@ -21,8 +23,6 @@ use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::watermark::{BucketConfig, EdgeWatermarkConfig};
 use crate::error::Error;
 use crate::Result;
-
-use super::{DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED};
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
@@ -424,8 +424,10 @@ impl PipelineConfig {
             .unwrap_or(DEFAULT_LOOKBACK_WINDOW_IN_SECS);
 
         let mut callback_config = None;
-        if get_var(ENV_CALLBACK_ENABLED).is_ok() {
-            info!("Callback enabled");
+        if get_var(ENV_CALLBACK_ENABLED)
+            .map(|v| v == "true")
+            .unwrap_or(false)
+        {
             let callback_concurrency: usize = get_var(ENV_CALLBACK_CONCURRENCY)
                 .unwrap_or_else(|_| format!("{DEFAULT_CALLBACK_CONCURRENCY}"))
                 .parse()

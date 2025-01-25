@@ -434,7 +434,6 @@ impl JetstreamWriter {
                                 Offset::Int(offset) => offset.partition_idx,
                                 Offset::String(offset) => offset.partition_idx,
                             };
-
                             handle
                                 .publish_source_edge_watermark(stream, offset, input_partition)
                                 .await

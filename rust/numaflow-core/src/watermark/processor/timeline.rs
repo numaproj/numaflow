@@ -3,9 +3,10 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::sync::Arc;
 
-use crate::watermark::wmb::WMB;
 use tokio::sync::RwLock;
 use tracing::{error, warn};
+
+use crate::watermark::wmb::WMB;
 
 /// OffsetTimeline is to store the event time to the offset records.
 /// Our list is sorted by event time from highest to lowest.
@@ -36,7 +37,9 @@ impl OffsetTimeline {
     pub(crate) async fn put(&self, node: WMB) {
         let mut watermarks = self.watermarks.write().await;
 
-        let element_node = watermarks.front_mut().unwrap();
+        let element_node = watermarks
+            .front_mut()
+            .expect("timeline should never be empty");
         /*
         Different cases:
         1. Watermark is the same but the offset is larger - we should store the larger offset

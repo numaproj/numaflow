@@ -1,3 +1,9 @@
+use std::cmp::Ordering;
+use std::collections::{BTreeSet, HashMap};
+
+use tokio::sync::mpsc::Receiver;
+use tracing::error;
+
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
 use crate::config::{get_vertex_name, get_vertex_replica};
@@ -6,10 +12,6 @@ use crate::message::{IntOffset, Offset};
 use crate::watermark::edge::edge_fetcher::EdgeFetcher;
 use crate::watermark::edge::edge_publisher::EdgePublisher;
 use crate::watermark::wmb::Watermark;
-use std::cmp::Ordering;
-use std::collections::{BTreeSet, HashMap};
-use tokio::sync::mpsc::Receiver;
-use tracing::error;
 
 pub(crate) mod edge_fetcher;
 pub(crate) mod edge_publisher;

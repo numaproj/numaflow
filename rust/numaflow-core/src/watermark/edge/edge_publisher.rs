@@ -2,15 +2,16 @@ use std::collections::HashMap;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use crate::config::pipeline::isb::Stream;
-use crate::config::pipeline::watermark::BucketConfig;
-use crate::error::{Error, Result};
-use crate::watermark::wmb::WMB;
 use bytes::BytesMut;
 use chrono::{DateTime, Utc};
 use prost::Message;
 use tokio::time::sleep;
 use tracing::info;
+
+use crate::config::pipeline::isb::Stream;
+use crate::config::pipeline::watermark::BucketConfig;
+use crate::error::{Error, Result};
+use crate::watermark::wmb::WMB;
 
 const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;
 
@@ -73,7 +74,7 @@ impl EdgePublisher {
                     LastPublishedState {
                         offset: -1,
                         watermark: -1,
-                        publish_time: DateTime::from_timestamp_millis(-1).unwrap()
+                        publish_time: DateTime::from_timestamp_millis(-1).expect("Invalid time"),
                     };
                     config.partitions as usize
                 ],
@@ -103,7 +104,7 @@ impl EdgePublisher {
             let heartbeat = numaflow_pb::objects::watermark::Heartbeat {
                 heartbeat: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .unwrap()
+                    .expect("Failed to get duration since epoch")
                     .as_secs() as i64,
             };
 
@@ -150,12 +151,10 @@ impl EdgePublisher {
             return Ok(());
         }
 
-        info!(
-            "Publishing watermark for processor {} and partition {} and watermark {}",
-            stream.vertex, stream.partition, watermark
-        );
+        let ot_bucket = self.ot_buckets.get(stream.vertex).ok_or(Error::Watermark(
+            "Invalid vertex, no ot bucket found".to_string(),
+        ))?;
 
-        let ot_bucket = self.ot_buckets.get(stream.vertex).unwrap();
         let wmb_bytes: BytesMut = WMB {
             idle: false,
             offset,
@@ -176,13 +175,10 @@ impl EdgePublisher {
             publish_time: Utc::now(),
         };
 
-        // Add debug string
-        let debug_info = format!(
+        info!(
             "Published watermark: offset={}, stream={:?}, watermark={}",
             offset, stream, watermark
         );
-        info!("{}", debug_info);
-
         Ok(())
     }
 }

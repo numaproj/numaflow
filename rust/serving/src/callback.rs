@@ -163,6 +163,16 @@ impl CallbackHandler {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use axum::http::StatusCode;
+    use axum::routing::{get, post};
+    use axum::{Json, Router};
+    use axum_server::tls_rustls::RustlsConfig;
+    use tokio::sync::mpsc;
+
     use crate::app::callback::state::State as CallbackState;
     use crate::app::callback::store::memstore::InMemoryStore;
     use crate::app::start_main_server;
@@ -172,14 +182,6 @@ mod tests {
     use crate::pipeline::PipelineDCG;
     use crate::test_utils::get_port;
     use crate::{AppState, Settings};
-    use axum::http::StatusCode;
-    use axum::routing::{get, post};
-    use axum::{Json, Router};
-    use axum_server::tls_rustls::RustlsConfig;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::Arc;
-    use std::time::Duration;
-    use tokio::sync::mpsc;
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
