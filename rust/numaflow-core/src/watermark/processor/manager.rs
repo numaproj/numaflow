@@ -14,6 +14,7 @@ use crate::watermark::wmb::WMB;
 
 const DEFAULT_PROCESSOR_REFRESH_RATE: u16 = 5;
 
+/// Status of a processor.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Status {
     InActive,
@@ -22,14 +23,14 @@ pub(crate) enum Status {
 }
 
 /// Processor is the smallest unit of entity (from which we fetch data) that does inorder processing
-/// or contains inorder data. It tracks OT for all the partitions of the from buffer.
+/// or contains inorder data. It tracks OT for all the partitions of the from-buffer.
 #[derive(Clone, Debug)]
 pub(crate) struct Processor {
-    /// Name of the processor
+    /// Name of the processor.
     pub(crate) name: Bytes,
-    /// Status of the processor (Active, InActive, Deleted)
+    /// [Status] of the processor.
     pub(crate) status: Status,
-    /// OffsetTimeline for each partition
+    /// OffsetTimeline for each partition.
     pub(crate) timelines: Vec<OffsetTimeline>,
 }
 
@@ -46,17 +47,17 @@ impl Processor {
         }
     }
 
-    /// Set the status of the processor
+    /// Set the status of the processor.
     pub(crate) fn set_status(&mut self, status: Status) {
         self.status = status;
     }
 
-    /// Check if the processor is active
+    /// Check if the processor is active.
     pub(crate) fn is_active(&self) -> bool {
         self.status == Status::Active
     }
 
-    /// Check if the processor is deleted
+    /// Check if the processor is deleted.
     pub(crate) fn is_deleted(&self) -> bool {
         self.status == Status::Deleted
     }
@@ -68,7 +69,7 @@ impl Processor {
 #[derive(Debug)]
 pub(crate) struct ProcessorManager {
     /// Mapping of processor name to processor
-    processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
+    pub(crate) processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
     /// Handles of ot listener, hb listener and processor refresher tasks
     handles: Vec<tokio::task::JoinHandle<()>>,
 }
@@ -82,7 +83,7 @@ impl Drop for ProcessorManager {
 }
 
 impl ProcessorManager {
-    /// Create a new ProcessorManager
+    /// Creates a new ProcessorManager.
     pub(crate) async fn new(
         partition_count: u16,
         ot_watcher: async_nats::jetstream::kv::Watch,
@@ -150,8 +151,8 @@ impl ProcessorManager {
         }
     }
 
-    /// Starts the ot watcher, to listen to the OT bucket and update the timelines
-    /// for the processors
+    /// Starts the ot watcher, to listen to the OT bucket and update the timelines for the
+    /// processors.
     async fn start_ot_watcher(
         mut ot_watcher: async_nats::jetstream::kv::Watch,
         processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
@@ -241,13 +242,6 @@ impl ProcessorManager {
                 }
             }
         }
-    }
-
-    /// Get all the processors, returns a read guard to the processors map
-    pub(crate) async fn get_all_processors(
-        &self,
-    ) -> tokio::sync::RwLockReadGuard<'_, HashMap<Bytes, Processor>> {
-        self.processors.read().await
     }
 
     /// Delete a processor from the processors map

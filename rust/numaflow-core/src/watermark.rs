@@ -1,19 +1,23 @@
+//! [Watermark] _is a monotonically increasing timestamp of the oldest work/event not yet completed_
+//!
+//! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
+
 use crate::watermark::edge::EdgeWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 
 /// Responsible for fetching and publishing watermarks for edge
 pub(crate) mod edge;
 
-/// Manages the processors for watermark
+/// Manages the processors for watermark.
 mod processor;
 
-/// some common utilities for watermark
+/// some common utilities for watermark.
 mod shared;
 
-/// Responsible for fetching and publishing watermarks for source
+/// Responsible for fetching and publishing watermarks for source.
 pub(crate) mod source;
 
-/// Stores WMB related data
+/// Stores WMB related data.
 mod wmb;
 
 /// Watermark handle, enum to hold both edge and source watermark handles

@@ -16,7 +16,7 @@ use crate::watermark::wmb::Watermark;
 pub(crate) mod edge_fetcher;
 pub(crate) mod edge_publisher;
 
-/// Messages that can be sent to the EdgeWatermarkActor
+/// Messages that can be sent to the [EdgeWatermarkActor].
 enum EdgeActorMessage {
     FetchWatermark {
         offset: IntOffset,
@@ -29,9 +29,10 @@ enum EdgeActorMessage {
     RemoveOffset(IntOffset),
 }
 
-/// OffsetWatermark is a tuple of offset and watermark
+/// OffsetWatermark is a tuple of offset and watermark.
 #[derive(Eq, PartialEq)]
 struct OffsetWatermark {
+    /// offset can be -1 if watermark cannot be derived.
     offset: i64,
     watermark: Watermark,
 }
@@ -148,7 +149,7 @@ pub(crate) struct EdgeWatermarkHandle {
 }
 
 impl EdgeWatermarkHandle {
-    /// new creates a new EdgeWatermarkHandle
+    /// new creates a new [EdgeWatermarkHandle].
     pub(crate) async fn new(
         js_context: async_nats::jetstream::Context,
         config: &EdgeWatermarkConfig,
@@ -166,7 +167,7 @@ impl EdgeWatermarkHandle {
         Ok(Self { sender })
     }
 
-    /// fetch_watermark fetches the watermark for the given offset
+    /// Fetches the watermark for the given offset.
     pub(crate) async fn fetch_watermark(&self, offset: Offset) -> Result<Watermark> {
         if let Offset::Int(offset) = offset {
             let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
@@ -183,7 +184,7 @@ impl EdgeWatermarkHandle {
         }
     }
 
-    /// publish_watermark publishes the watermark for the given stream and offset
+    /// publish_watermark publishes the watermark for the given stream and offset.
     pub(crate) async fn publish_watermark(&self, stream: Stream, offset: Offset) -> Result<()> {
         if let Offset::Int(offset) = offset {
             self.sender
@@ -196,7 +197,7 @@ impl EdgeWatermarkHandle {
         }
     }
 
-    /// remove_offset removes the offset from the tracked offsets
+    /// remove_offset removes the offset from the tracked offsets.
     pub(crate) async fn remove_offset(&self, offset: Offset) -> Result<()> {
         if let Offset::Int(offset) = offset {
             self.sender

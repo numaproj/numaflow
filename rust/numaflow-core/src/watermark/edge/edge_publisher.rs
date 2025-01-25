@@ -13,6 +13,7 @@ use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::{Error, Result};
 use crate::watermark::wmb::WMB;
 
+/// Interval at which the pod sends heartbeats.
 const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;
 
 /// LastPublishedState is the state of the last published watermark and offset
@@ -26,13 +27,13 @@ struct LastPublishedState {
 
 /// EdgePublisher is the watermark publisher for the outgoing edges.
 pub(crate) struct EdgePublisher {
-    // name of the processor(node) that is publishing the watermark
+    /// name of the processor(node) that is publishing the watermark.
     processor_name: String,
-    // handle to the heartbeat publishing task
+    /// handle to the heartbeat publishing task.
     hb_handle: tokio::task::JoinHandle<()>,
-    // last published watermark for each vertex and partition
+    /// last published watermark for each vertex and partition.
     last_published_wm: HashMap<&'static str, Vec<LastPublishedState>>,
-    // map of vertex to its ot bucket
+    /// map of vertex to its ot bucket.
     ot_buckets: HashMap<&'static str, async_nats::jetstream::kv::Store>,
 }
 

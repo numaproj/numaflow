@@ -14,6 +14,18 @@ pub(crate) struct WMB {
     pub partition: u16,
 }
 
+impl Default for WMB {
+    fn default() -> Self {
+        Self {
+            watermark: -1,
+            offset: -1,
+            idle: false,
+            partition: 0,
+        }
+    }
+}
+
+/// Watermark is a monotonically increasing time.
 pub(crate) type Watermark = DateTime<Utc>;
 
 /// Converts a protobuf bytes to WMB

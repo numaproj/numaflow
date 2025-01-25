@@ -75,7 +75,7 @@ impl EdgeFetcher {
             let mut processors_to_delete = Vec::new();
 
             // iterate over all the timelines of the processor and get the smallest watermark
-            for (name, processor) in processor_manager.get_all_processors().await.iter() {
+            for (name, processor) in processor_manager.processors.read().await.iter() {
                 // headOffset is used to check whether this pod can be deleted.
                 let mut head_offset = -1;
 
@@ -138,7 +138,7 @@ impl EdgeFetcher {
         let mut min_wm = i64::MAX;
         for (edge, processor_manager) in self.processor_managers.iter() {
             let mut epoch = i64::MAX;
-            for processor in processor_manager.get_all_processors().await.values() {
+            for processor in processor_manager.processors.read().await.values() {
                 // if the processor is not active, skip
                 if !processor.is_active() {
                     continue;

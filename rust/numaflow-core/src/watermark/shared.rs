@@ -2,7 +2,7 @@ use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::Error;
 use crate::watermark::processor::manager::ProcessorManager;
 
-/// Creates a ProcessorManager for the given bucket config, also creates the last
+/// Creates a ProcessorManager for the given bucket config.
 pub(super) async fn create_processor_manager(
     js_context: async_nats::jetstream::Context,
     bucket_config: &BucketConfig,

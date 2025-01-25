@@ -24,7 +24,7 @@ impl SourceFetcher {
     pub(crate) async fn fetch_source_watermark(&self) -> Result<Watermark> {
         let mut min_wm = i64::MAX;
 
-        for (_, processor) in self.processor_manager.get_all_processors().await.iter() {
+        for (_, processor) in self.processor_manager.processors.read().await.iter() {
             // We only consider active processors.
             if !processor.is_active() {
                 continue;

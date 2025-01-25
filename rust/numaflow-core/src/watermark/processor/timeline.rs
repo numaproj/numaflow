@@ -20,13 +20,9 @@ impl OffsetTimeline {
     pub(crate) fn new(capacity: usize) -> Self {
         let mut watermarks = VecDeque::with_capacity(capacity);
         for _ in 0..capacity {
-            watermarks.push_back(WMB {
-                watermark: -1,
-                offset: -1,
-                idle: false,
-                partition: 0,
-            });
+            watermarks.push_back(WMB::default());
         }
+
         OffsetTimeline {
             watermarks: Arc::new(RwLock::new(watermarks)),
             capacity,
@@ -40,14 +36,14 @@ impl OffsetTimeline {
         let element_node = watermarks
             .front_mut()
             .expect("timeline should never be empty");
-        /*
-        Different cases:
-        1. Watermark is the same but the offset is larger - we should store the larger offset
-        2. Watermark is the same but the offset is smaller - we should skip
-        3. Watermark is larger and the offset is larger - we should store the larger offset and the watermark
-        4. Watermark is larger but the offset is smaller - should not happen (offset should be increasing)
-        5. Watermark is smaller - should not happen (watermark should be increasing)
-         */
+
+        // Different cases:
+        // 1. Watermark is the same but the offset is larger - we should store the larger offset
+        // 2. Watermark is the same but the offset is smaller - we should skip
+        // 3. Watermark is larger and the offset is larger - we should store the larger offset and the watermark
+        // 4. Watermark is larger but the offset is smaller - should not happen (offset should be increasing)
+        // 5. Watermark is smaller - should not happen (watermark should be increasing)
+
         match (
             node.watermark.cmp(&element_node.watermark),
             node.offset.cmp(&element_node.offset),
