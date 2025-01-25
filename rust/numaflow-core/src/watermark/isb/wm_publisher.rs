@@ -26,7 +26,7 @@ struct LastPublishedState {
 }
 
 /// EdgePublisher is the watermark publisher for the outgoing edges.
-pub(crate) struct EdgePublisher {
+pub(crate) struct ISBWatermarkPublisher {
     /// name of the processor(node) that is publishing the watermark.
     processor_name: String,
     /// handle to the heartbeat publishing task.
@@ -37,13 +37,13 @@ pub(crate) struct EdgePublisher {
     ot_buckets: HashMap<&'static str, async_nats::jetstream::kv::Store>,
 }
 
-impl Drop for EdgePublisher {
+impl Drop for ISBWatermarkPublisher {
     fn drop(&mut self) {
         self.hb_handle.abort();
     }
 }
 
-impl EdgePublisher {
+impl ISBWatermarkPublisher {
     /// Creates a new EdgePublisher.
     pub(crate) async fn new(
         processor_name: String,
@@ -85,7 +85,7 @@ impl EdgePublisher {
         // start publishing heartbeats
         let hb_handle = tokio::spawn(Self::start_heartbeat(processor_name.clone(), hb_buckets));
 
-        Ok(EdgePublisher {
+        Ok(ISBWatermarkPublisher {
             processor_name,
             hb_handle,
             last_published_wm,

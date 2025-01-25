@@ -9,15 +9,15 @@ use crate::config::pipeline::watermark::EdgeWatermarkConfig;
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
-use crate::watermark::edge::edge_fetcher::EdgeFetcher;
-use crate::watermark::edge::edge_publisher::EdgePublisher;
+use crate::watermark::isb::wm_fetcher::EdgeFetcher;
+use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 use crate::watermark::wmb::Watermark;
 
-pub(crate) mod edge_fetcher;
-pub(crate) mod edge_publisher;
+pub(crate) mod wm_fetcher;
+pub(crate) mod wm_publisher;
 
-/// Messages that can be sent to the [EdgeWatermarkActor].
-enum EdgeActorMessage {
+/// Messages that can be sent to the [ISBWatermarkActor].
+enum ISBWaterMarkActorMessage {
     FetchWatermark {
         offset: IntOffset,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
@@ -53,14 +53,14 @@ impl PartialOrd for OffsetWatermark {
 /// EdgeWatermarkActor comprises EdgeFetcher and EdgePublisher.
 /// Tracks the watermarks of all the inflight messages for each partition, and publishes
 /// the lowest watermark.
-struct EdgeWatermarkActor {
+struct ISBWatermarkActor {
     fetcher: EdgeFetcher,
-    publisher: EdgePublisher,
+    publisher: ISBWatermarkPublisher,
     offset_set: HashMap<u16, BTreeSet<OffsetWatermark>>, // partition_id -> BTreeSet of OffsetWatermark
 }
 
-impl EdgeWatermarkActor {
-    fn new(fetcher: EdgeFetcher, publisher: EdgePublisher) -> Self {
+impl ISBWatermarkActor {
+    fn new(fetcher: EdgeFetcher, publisher: ISBWatermarkPublisher) -> Self {
         Self {
             fetcher,
             publisher,
@@ -69,7 +69,7 @@ impl EdgeWatermarkActor {
     }
 
     /// run listens for messages and handles them
-    async fn run(mut self, mut receiver: Receiver<EdgeActorMessage>) {
+    async fn run(mut self, mut receiver: Receiver<ISBWaterMarkActorMessage>) {
         while let Some(message) = receiver.recv().await {
             if let Err(e) = self.handle_message(message).await {
                 error!("error handling message: {:?}", e);
@@ -78,10 +78,10 @@ impl EdgeWatermarkActor {
     }
 
     /// handle_message handles the incoming actor message
-    async fn handle_message(&mut self, message: EdgeActorMessage) -> Result<()> {
+    async fn handle_message(&mut self, message: ISBWaterMarkActorMessage) -> Result<()> {
         match message {
             // fetches the watermark for the given offset
-            EdgeActorMessage::FetchWatermark { offset, oneshot_tx } => {
+            ISBWaterMarkActorMessage::FetchWatermark { offset, oneshot_tx } => {
                 let watermark = self
                     .fetcher
                     .fetch_watermark(offset.offset, offset.partition_idx)
@@ -95,7 +95,7 @@ impl EdgeWatermarkActor {
 
             // gets the lowest watermark among the inflight requests and publishes the watermark
             // for the offset and stream
-            EdgeActorMessage::PublishWatermark { offset, stream } => {
+            ISBWaterMarkActorMessage::PublishWatermark { offset, stream } => {
                 let min_wm = self
                     .get_lowest_watermark()
                     .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap());
@@ -106,7 +106,7 @@ impl EdgeWatermarkActor {
             }
 
             // removes the offset from the tracked offsets
-            EdgeActorMessage::RemoveOffset(offset) => {
+            ISBWaterMarkActorMessage::RemoveOffset(offset) => {
                 self.remove_offset(offset.partition_idx, offset.offset)?;
             }
         }
@@ -144,12 +144,12 @@ impl EdgeWatermarkActor {
 /// Handle to interact with the EdgeWatermarkActor, exposes methods to fetch and publish watermarks
 /// for the edges
 #[derive(Clone)]
-pub(crate) struct EdgeWatermarkHandle {
-    sender: tokio::sync::mpsc::Sender<EdgeActorMessage>,
+pub(crate) struct ISBWatermarkHandle {
+    sender: tokio::sync::mpsc::Sender<ISBWaterMarkActorMessage>,
 }
 
-impl EdgeWatermarkHandle {
-    /// new creates a new [EdgeWatermarkHandle].
+impl ISBWatermarkHandle {
+    /// new creates a new [ISBWatermarkHandle].
     pub(crate) async fn new(
         js_context: async_nats::jetstream::Context,
         config: &EdgeWatermarkConfig,
@@ -159,10 +159,10 @@ impl EdgeWatermarkHandle {
 
         let processor_name = format!("{}-{}", get_vertex_name(), get_vertex_replica());
         let publisher =
-            EdgePublisher::new(processor_name, js_context.clone(), &config.to_vertex_config)
+            ISBWatermarkPublisher::new(processor_name, js_context.clone(), &config.to_vertex_config)
                 .await?;
 
-        let actor = EdgeWatermarkActor::new(fetcher, publisher);
+        let actor = ISBWatermarkActor::new(fetcher, publisher);
         tokio::spawn(async move { actor.run(receiver).await });
         Ok(Self { sender })
     }
@@ -172,7 +172,7 @@ impl EdgeWatermarkHandle {
         if let Offset::Int(offset) = offset {
             let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
             self.sender
-                .send(EdgeActorMessage::FetchWatermark { offset, oneshot_tx })
+                .send(ISBWaterMarkActorMessage::FetchWatermark { offset, oneshot_tx })
                 .await
                 .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
 
@@ -188,7 +188,7 @@ impl EdgeWatermarkHandle {
     pub(crate) async fn publish_watermark(&self, stream: Stream, offset: Offset) -> Result<()> {
         if let Offset::Int(offset) = offset {
             self.sender
-                .send(EdgeActorMessage::PublishWatermark { offset, stream })
+                .send(ISBWaterMarkActorMessage::PublishWatermark { offset, stream })
                 .await
                 .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
             Ok(())
@@ -201,7 +201,7 @@ impl EdgeWatermarkHandle {
     pub(crate) async fn remove_offset(&self, offset: Offset) -> Result<()> {
         if let Offset::Int(offset) = offset {
             self.sender
-                .send(EdgeActorMessage::RemoveOffset(offset))
+                .send(ISBWaterMarkActorMessage::RemoveOffset(offset))
                 .await
                 .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
             Ok(())

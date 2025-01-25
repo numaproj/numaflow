@@ -23,7 +23,7 @@ use crate::metrics::{
 };
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
-use crate::watermark::edge::EdgeWatermarkHandle;
+use crate::watermark::isb::ISBWatermarkHandle;
 use crate::Result;
 
 /// The JetstreamReader is a handle to the background actor that continuously fetches messages from Jetstream.
@@ -37,7 +37,7 @@ pub(crate) struct JetstreamReader {
     consumer: PullConsumer,
     tracker_handle: TrackerHandle,
     batch_size: usize,
-    watermark_handle: Option<EdgeWatermarkHandle>,
+    watermark_handle: Option<ISBWatermarkHandle>,
 }
 
 /// JSWrappedMessage is a wrapper around the Jetstream message that includes the
@@ -107,7 +107,7 @@ impl JetstreamReader {
         config: BufferReaderConfig,
         tracker_handle: TrackerHandle,
         batch_size: usize,
-        watermark_handle: Option<EdgeWatermarkHandle>,
+        watermark_handle: Option<ISBWatermarkHandle>,
     ) -> Result<Self> {
         let mut config = config;
 

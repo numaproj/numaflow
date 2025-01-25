@@ -22,7 +22,7 @@ use crate::shared::create_components;
 use crate::shared::create_components::create_sink_writer;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
-use crate::watermark::edge::EdgeWatermarkHandle;
+use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::watermark::WatermarkHandle;
 use crate::{error, shared, Result};
@@ -43,7 +43,10 @@ pub(crate) async fn start_forwarder(
             let source_watermark_handle = match &config.watermark_config {
                 Some(wm_config) => {
                     if let WatermarkConfig::Source(source_config) = wm_config {
-                        Some(SourceWatermarkHandle::new(js_context.clone(), source_config).await?)
+                        Some(
+                            SourceWatermarkHandle::new(js_context.clone(), source_config)
+                                .await?,
+                        )
                     } else {
                         None
                     }
@@ -67,7 +70,7 @@ pub(crate) async fn start_forwarder(
             let edge_watermark_handle = match &config.watermark_config {
                 Some(wm_config) => {
                     if let WatermarkConfig::Edge(edge_config) = wm_config {
-                        Some(EdgeWatermarkHandle::new(js_context.clone(), edge_config).await?)
+                        Some(ISBWatermarkHandle::new(js_context.clone(), edge_config).await?)
                     } else {
                         None
                     }
@@ -89,7 +92,7 @@ pub(crate) async fn start_forwarder(
             let edge_watermark_handle = match &config.watermark_config {
                 Some(wm_config) => {
                     if let WatermarkConfig::Edge(edge_config) = wm_config {
-                        Some(EdgeWatermarkHandle::new(js_context.clone(), edge_config).await?)
+                        Some(ISBWatermarkHandle::new(js_context.clone(), edge_config).await?)
                     } else {
                         None
                     }
@@ -177,7 +180,7 @@ async fn start_map_forwarder(
     js_context: Context,
     config: PipelineConfig,
     map_vtx_config: MapVtxConfig,
-    watermark_handle: Option<EdgeWatermarkHandle>,
+    watermark_handle: Option<ISBWatermarkHandle>,
 ) -> Result<()> {
     // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
     // to a common buffer, in the case of a join.
@@ -280,7 +283,7 @@ async fn start_sink_forwarder(
     js_context: Context,
     config: PipelineConfig,
     sink: SinkVtxConfig,
-    watermark_handle: Option<EdgeWatermarkHandle>,
+    watermark_handle: Option<ISBWatermarkHandle>,
 ) -> Result<()> {
     // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
     // to a common buffer, in the case of a join.
@@ -393,7 +396,7 @@ async fn create_buffer_reader(
     js_context: Context,
     tracker_handle: TrackerHandle,
     batch_size: usize,
-    watermark_handle: Option<EdgeWatermarkHandle>,
+    watermark_handle: Option<ISBWatermarkHandle>,
 ) -> Result<JetstreamReader> {
     JetstreamReader::new(
         stream,

@@ -4,7 +4,7 @@ use prost::Message;
 
 use crate::error::Error;
 
-/// WMB is the watermark message that is sent by the processor to the downstream
+/// WMB is the watermark message that is sent by the processor to the downstream.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[allow(clippy::upper_case_acronyms)]
 pub(crate) struct WMB {
@@ -28,7 +28,7 @@ impl Default for WMB {
 /// Watermark is a monotonically increasing time.
 pub(crate) type Watermark = DateTime<Utc>;
 
-/// Converts a protobuf bytes to WMB
+/// Converts a protobuf bytes to WMB.
 impl TryFrom<Bytes> for WMB {
     type Error = Error;
 
@@ -45,7 +45,7 @@ impl TryFrom<Bytes> for WMB {
     }
 }
 
-/// Converts WMB to protobuf bytes
+/// Converts WMB to protobuf bytes.
 impl TryFrom<WMB> for BytesMut {
     type Error = Error;
 

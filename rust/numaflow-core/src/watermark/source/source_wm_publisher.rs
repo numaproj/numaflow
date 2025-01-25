@@ -6,24 +6,24 @@ use tracing::info;
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error;
-use crate::watermark::edge::edge_publisher::EdgePublisher;
+use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 
 /// SourcePublisher is the watermark publisher for the source vertex.
-pub(crate) struct SourcePublisher {
+pub(crate) struct SourceWatermarkPublisher {
     js_context: async_nats::jetstream::Context,
     source_config: BucketConfig,
     to_vertex_configs: Vec<BucketConfig>,
-    publishers: HashMap<String, EdgePublisher>,
+    publishers: HashMap<String, ISBWatermarkPublisher>,
 }
 
-impl SourcePublisher {
+impl SourceWatermarkPublisher {
     /// Creates a new SourcePublisher.
     pub(crate) async fn new(
         js_context: async_nats::jetstream::Context,
         source_config: BucketConfig,
         to_vertex_configs: Vec<BucketConfig>,
     ) -> error::Result<Self> {
-        Ok(SourcePublisher {
+        Ok(SourceWatermarkPublisher {
             js_context,
             source_config,
             to_vertex_configs,
@@ -39,7 +39,7 @@ impl SourcePublisher {
         // and publish the watermark to it.
         let processor_name = format!("{}-{}", self.source_config.vertex, partition);
         if !self.publishers.contains_key(&processor_name) {
-            let publisher = EdgePublisher::new(
+            let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),
                 self.js_context.clone(),
                 &[self.source_config.clone()],
@@ -89,7 +89,7 @@ impl SourcePublisher {
                 "Creating new publisher for processor at edge publish {} and input partition {}",
                 processor_name, input_partition
             );
-            let publisher = EdgePublisher::new(
+            let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),
                 self.js_context.clone(),
                 &self.to_vertex_configs,

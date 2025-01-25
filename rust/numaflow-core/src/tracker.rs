@@ -17,7 +17,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::error::Error;
 use crate::message::{Message, Offset, ReadAck};
-use crate::watermark::edge::EdgeWatermarkHandle;
+use crate::watermark::isb::ISBWatermarkHandle;
 use crate::Result;
 
 /// TrackerEntry represents the state of a tracked message.
@@ -66,7 +66,7 @@ struct Tracker {
     /// number of entries in the tracker
     entries: HashMap<Offset, TrackerEntry>,
     receiver: mpsc::Receiver<ActorMessage>,
-    watermark_handle: Option<EdgeWatermarkHandle>,
+    watermark_handle: Option<ISBWatermarkHandle>,
     serving_callback_handler: Option<CallbackHandler>,
 }
 
@@ -140,7 +140,7 @@ impl Tracker {
     /// Creates a new Tracker instance with the given receiver for actor messages.
     fn new(
         receiver: mpsc::Receiver<ActorMessage>,
-        watermark_handle: Option<EdgeWatermarkHandle>,
+        watermark_handle: Option<ISBWatermarkHandle>,
         serving_callback_handler: Option<CallbackHandler>,
     ) -> Self {
         Self {
@@ -339,7 +339,7 @@ pub(crate) struct TrackerHandle {
 impl TrackerHandle {
     /// Creates a new TrackerHandle instance and spawns the Tracker.
     pub(crate) fn new(
-        watermark_handle: Option<EdgeWatermarkHandle>,
+        watermark_handle: Option<ISBWatermarkHandle>,
         callback_handler: Option<CallbackHandler>,
     ) -> Self {
         let enable_callbacks = callback_handler.is_some();

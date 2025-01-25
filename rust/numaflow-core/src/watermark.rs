@@ -2,11 +2,11 @@
 //!
 //! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
-use crate::watermark::edge::EdgeWatermarkHandle;
+use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 
 /// Responsible for fetching and publishing watermarks for edge
-pub(crate) mod edge;
+pub(crate) mod isb;
 
 /// Manages the processors for watermark.
 mod processor;
@@ -24,6 +24,6 @@ mod wmb;
 /// This is used to fetch and publish watermarks
 #[derive(Clone)]
 pub(crate) enum WatermarkHandle {
-    Edge(EdgeWatermarkHandle),
+    Edge(ISBWatermarkHandle),
     Source(SourceWatermarkHandle),
 }

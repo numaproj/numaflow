@@ -7,14 +7,14 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Message, Offset};
-use crate::watermark::source::source_fetcher::SourceFetcher;
-use crate::watermark::source::source_publisher::SourcePublisher;
+use crate::watermark::source::source_wm_fetcher::SourceFetcher;
+use crate::watermark::source::source_wm_publisher::SourceWatermarkPublisher;
 
 /// fetcher for fetching the source watermark
-pub(crate) mod source_fetcher;
+pub(crate) mod source_wm_fetcher;
 
 /// publisher for publishing the source watermark
-pub(crate) mod source_publisher;
+pub(crate) mod source_wm_publisher;
 
 /// Messages that can be sent to the SourceWatermarkActor
 enum SourceActorMessage {
@@ -30,13 +30,13 @@ enum SourceActorMessage {
 
 /// SourceWatermarkActor comprises SourcePublisher and SourceFetcher.
 struct SourceWatermarkActor {
-    publisher: SourcePublisher,
+    publisher: SourceWatermarkPublisher,
     fetcher: SourceFetcher,
 }
 
 impl SourceWatermarkActor {
     /// Creates a new SourceWatermarkActor.
-    fn new(publisher: SourcePublisher, fetcher: SourceFetcher) -> Self {
+    fn new(publisher: SourceWatermarkPublisher, fetcher: SourceFetcher) -> Self {
         Self { publisher, fetcher }
     }
 
@@ -98,7 +98,7 @@ impl SourceWatermarkHandle {
             .await
             .map_err(|e| Error::Watermark(e.to_string()))?;
 
-        let publisher = SourcePublisher::new(
+        let publisher = SourceWatermarkPublisher::new(
             js_context.clone(),
             config.source_bucket_config.clone(),
             config.to_vertex_bucket_config.clone(),
