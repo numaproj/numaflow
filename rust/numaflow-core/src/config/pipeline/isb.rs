@@ -1,4 +1,4 @@
-/// Jetstream ISB related configurations.
+/// JetStream ISB related configurations.
 use std::fmt;
 use std::fmt::Display;
 use std::time::Duration;

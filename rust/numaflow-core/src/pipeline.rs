@@ -15,7 +15,7 @@ use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
 use crate::metrics::{LagReader, PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::forwarder::source_forwarder;
-use crate::pipeline::isb::jetstream::reader::JetstreamReader;
+use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::pipeline::pipeline::isb::BufferReaderConfig;
 use crate::shared::create_components;
@@ -397,8 +397,8 @@ async fn create_buffer_reader(
     tracker_handle: TrackerHandle,
     batch_size: usize,
     watermark_handle: Option<ISBWatermarkHandle>,
-) -> Result<JetstreamReader> {
-    JetstreamReader::new(
+) -> Result<JetStreamReader> {
+    JetStreamReader::new(
         stream,
         js_context,
         reader_config,

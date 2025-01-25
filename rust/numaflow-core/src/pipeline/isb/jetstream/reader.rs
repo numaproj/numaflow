@@ -26,12 +26,12 @@ use crate::tracker::TrackerHandle;
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::Result;
 
-/// The JetstreamReader is a handle to the background actor that continuously fetches messages from Jetstream.
-/// It can be used to cancel the background task and stop reading from Jetstream.
+/// The JetStreamReader is a handle to the background actor that continuously fetches messages from JetStream.
+/// It can be used to cancel the background task and stop reading from JetStream.
 /// The sender end of the channel is not stored in this struct, since the struct is clone-able and the mpsc channel is only closed when all the senders are dropped.
 /// Storing the Sender end of channel in this struct would make it difficult to close the channel with `cancel` method.
 #[derive(Clone)]
-pub(crate) struct JetstreamReader {
+pub(crate) struct JetStreamReader {
     stream: Stream,
     config: BufferReaderConfig,
     consumer: PullConsumer,
@@ -40,7 +40,7 @@ pub(crate) struct JetstreamReader {
     watermark_handle: Option<ISBWatermarkHandle>,
 }
 
-/// JSWrappedMessage is a wrapper around the Jetstream message that includes the
+/// JSWrappedMessage is a wrapper around the JetStream message that includes the
 /// partition index and the vertex name.
 struct JSWrappedMessage {
     partition_idx: u16,
@@ -54,7 +54,7 @@ impl TryFrom<JSWrappedMessage> for Message {
     fn try_from(value: JSWrappedMessage) -> Result<Self> {
         let msg_info = value.message.info().map_err(|e| {
             Error::ISB(format!(
-                "Failed to get message info from Jetstream: {:?}",
+                "Failed to get message info from JetStream: {:?}",
                 e
             ))
         })?;
@@ -100,7 +100,7 @@ impl TryFrom<JSWrappedMessage> for Message {
     }
 }
 
-impl JetstreamReader {
+impl JetStreamReader {
     pub(crate) async fn new(
         stream: Stream,
         js_ctx: Context,
@@ -139,7 +139,7 @@ impl JetstreamReader {
         })
     }
 
-    /// streaming_read is a background task that continuously fetches messages from Jetstream and
+    /// streaming_read is a background task that continuously fetches messages from JetStream and
     /// emits them on a channel. When we encounter an error, we log the error and return from the
     /// function. This drops the sender end of the channel. The closing of the channel should propagate
     /// to the receiver end and the receiver should exit gracefully. Within the loop, we only consider
@@ -323,7 +323,7 @@ impl JetstreamReader {
     }
 }
 
-impl fmt::Display for JetstreamReader {
+impl fmt::Display for JetStreamReader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -384,7 +384,7 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let js_reader = JetstreamReader::new(
+        let js_reader = JetStreamReader::new(
             stream.clone(),
             context.clone(),
             buf_reader_config,
@@ -482,7 +482,7 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let js_reader = JetstreamReader::new(
+        let js_reader = JetStreamReader::new(
             js_stream.clone(),
             context.clone(),
             buf_reader_config,

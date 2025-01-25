@@ -1,21 +1,21 @@
 use tokio_util::sync::CancellationToken;
 
 use crate::error::Error;
-use crate::pipeline::isb::jetstream::reader::JetstreamReader;
+use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::sink::SinkWriter;
 use crate::Result;
 
 /// Sink forwarder is a component which starts a streaming reader and a sink writer
 /// and manages the lifecycle of these components.
 pub(crate) struct SinkForwarder {
-    jetstream_reader: JetstreamReader,
+    jetstream_reader: JetStreamReader,
     sink_writer: SinkWriter,
     cln_token: CancellationToken,
 }
 
 impl SinkForwarder {
     pub(crate) async fn new(
-        jetstream_reader: JetstreamReader,
+        jetstream_reader: JetStreamReader,
         sink_writer: SinkWriter,
         cln_token: CancellationToken,
     ) -> Self {
