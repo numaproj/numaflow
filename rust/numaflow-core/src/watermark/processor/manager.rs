@@ -36,7 +36,7 @@ pub(crate) struct Processor {
 }
 
 impl Processor {
-    fn new(name: Bytes, status: Status, partition_count: usize) -> Self {
+    pub(crate) fn new(name: Bytes, status: Status, partition_count: usize) -> Self {
         let mut timelines = Vec::with_capacity(partition_count);
         for _ in 0..partition_count {
             timelines.push(OffsetTimeline::new(10));
@@ -72,7 +72,7 @@ pub(crate) struct ProcessorManager {
     /// Mapping of processor name to processor
     pub(crate) processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
     /// Handles of ot listener, hb listener and processor refresher tasks
-    handles: Vec<tokio::task::JoinHandle<()>>,
+    pub(crate) handles: Vec<tokio::task::JoinHandle<()>>,
 }
 
 impl Drop for ProcessorManager {

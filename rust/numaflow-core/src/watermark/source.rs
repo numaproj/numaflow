@@ -7,6 +7,7 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Message, Offset};
+use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::source::source_wm_fetcher::SourceWatermarkFetcher;
 use crate::watermark::source::source_wm_publisher::SourceWatermarkPublisher;
 
@@ -94,7 +95,10 @@ impl SourceWatermarkHandle {
         config: &SourceWatermarkConfig,
     ) -> Result<Self> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
-        let fetcher = SourceWatermarkFetcher::new(js_context.clone(), &config.source_bucket_config)
+        let processor_manager =
+            ProcessorManager::new(js_context.clone(), &config.source_bucket_config).await?;
+
+        let fetcher = SourceWatermarkFetcher::new(processor_manager)
             .await
             .map_err(|e| Error::Watermark(e.to_string()))?;
 

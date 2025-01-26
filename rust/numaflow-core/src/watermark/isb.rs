@@ -11,6 +11,7 @@ use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
 use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
+use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::Watermark;
 
 pub(crate) mod wm_fetcher;
@@ -155,8 +156,16 @@ impl ISBWatermarkHandle {
         config: &EdgeWatermarkConfig,
     ) -> Result<Self> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
+
+        // create a processor manager map (from_vertex -> ProcessorManager)
+        let mut processor_managers = HashMap::new();
+        for from_bucket_config in &config.from_vertex_config {
+            let processor_manager =
+                ProcessorManager::new(js_context.clone(), from_bucket_config).await?;
+            processor_managers.insert(from_bucket_config.vertex, processor_manager);
+        }
         let fetcher =
-            ISBWatermarkFetcher::new(js_context.clone(), &config.from_vertex_config).await?;
+            ISBWatermarkFetcher::new(processor_managers, &config.from_vertex_config).await?;
 
         let processor_name = format!("{}-{}", get_vertex_name(), get_vertex_replica());
         let publisher = ISBWatermarkPublisher::new(
