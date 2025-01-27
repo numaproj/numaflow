@@ -25,6 +25,7 @@ impl TryFrom<SQSMessage> for Message {
                 index: 0,
             },
             headers: message.headers,
+            metadata: None,
         })
     }
 }
@@ -166,8 +167,14 @@ pub mod tests {
 
         // create SQS source with test client
         use crate::tracker::TrackerHandle;
-        let tracker_handle = TrackerHandle::new();
-        let source = Source::new(1, SourceType::SQS(sqs_source), tracker_handle.clone(), true);
+        let tracker_handle = TrackerHandle::new(None);
+        let source = Source::new(
+            1, 
+            SourceType::SQS(sqs_source), 
+            tracker_handle.clone(), 
+            true, 
+            None,
+        );
 
         // create sink writer
         use crate::sink::{SinkClientType, SinkWriterBuilder};
@@ -183,12 +190,11 @@ pub mod tests {
 
         // create the forwarder with the source and sink writer
         let cln_token = CancellationToken::new();
-        let forwarder = crate::monovertex::forwarder::ForwarderBuilder::new(
+        let forwarder = crate::monovertex::forwarder::Forwarder::new(
             source.clone(),
             sink_writer,
             cln_token.clone(),
-        )
-        .build();
+        );
 
         let forwarder_handle: JoinHandle<crate::error::Result<()>> = tokio::spawn(async move {
             forwarder.start().await?;
