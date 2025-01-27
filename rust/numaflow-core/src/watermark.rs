@@ -1,6 +1,6 @@
 //! [Watermark] _is a monotonically increasing timestamp of the oldest work/event not yet completed_
-//! 
-//! 
+//!
+//!
 //! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
 use crate::watermark::isb::ISBWatermarkHandle;
