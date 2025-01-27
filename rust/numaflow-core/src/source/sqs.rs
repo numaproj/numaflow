@@ -33,7 +33,6 @@ impl From<numaflow_sqs::Error> for Error {
     fn from(value: numaflow_sqs::Error) -> Self {
         match value {
             numaflow_sqs::Error::SQS(e) => Error::Source(e.to_string()),
-            numaflow_sqs::Error::UnknownOffset(_) => Error::Source(value.to_string()),
             numaflow_sqs::Error::ActorTaskTerminated(_) => {
                 Error::ActorPatternRecv(value.to_string())
             }
@@ -77,6 +76,7 @@ impl source::SourceAcker for SQSSource {
                     "Expected Offset::String type for SQS. offset={offset:?}"
                 )));
             };
+            sqs_offsets.push(string_offset.offset);
         }
         self.ack_offsets(sqs_offsets).await.map_err(Into::into)
     }
@@ -90,13 +90,20 @@ impl source::LagReader for SQSSource {
 
 #[cfg(feature = "sqs-tests")]
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::source::{Source, SourceType};
+pub mod tests {
+    use std::collections::HashMap;
+
+    use aws_sdk_sqs::config::BehaviorVersion;
+    use aws_sdk_sqs::types::MessageSystemAttributeName;
+    use aws_sdk_sqs::Config;
+    use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, Rule, RuleMode};
     use bytes::Bytes;
     use chrono::Utc;
-    use std::collections::HashMap;
+    use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
+
+    use super::*;
+    use crate::source::{Source, SourceType};
 
     #[tokio::test]
     async fn test_sqs_message_conversion() {
@@ -126,47 +133,33 @@ mod tests {
         assert_eq!(message.headers, headers);
     }
 
-    use aws_sdk_sqs::Config;
-    use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
-    use aws_smithy_types::body::SdkBody;
-    use tokio::task::JoinHandle;
-    use tracing_subscriber::layer::SubscriberExt;
-    use tracing_subscriber::util::SubscriberInitExt;
-
     #[tokio::test]
     async fn test_sqs_e2e() {
+        let queue_url_output = get_queue_url_output();
 
-        tracing_subscriber::registry()
-            .with(
-                tracing_subscriber::EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| "info".into()),
-            )
-            .with(tracing_subscriber::fmt::layer().with_ansi(false))
-            .init();
+        let receive_message_output = get_receive_message_output();
 
-        // Setup SQS static replay client for testing purposes
-        let queue_url = get_queue_url_request_response();
-        let message = get_messages_request_response();
-        let delete_message = get_delete_message_request_response();
-        let queue_attributes = get_queue_attributes_request_response();
+        let delete_message_output = get_delete_message_output();
 
-        let replay_client = StaticReplayClient::new(vec![
-            queue_url,
-            message,
-            delete_message,
-            queue_attributes,
-        ]);
-        let config = get_test_config(replay_client.clone());
-        let client = aws_sdk_sqs::Client::from_conf(config);
+        let queue_attributes_output = get_queue_attributes_output();
 
+        let sqs_operation_mocks = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::MatchAny)
+            .with_rule(&queue_url_output)
+            .with_rule(&receive_message_output)
+            .with_rule(&delete_message_output)
+            .with_rule(&queue_attributes_output);
+
+        let sqs_client =
+            aws_sdk_sqs::Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
         let sqs_source = SQSSource::new(
             SQSSourceConfig {
-                region: "us-west-1".to_string(),
+                region: "us-west-2".to_string(),
                 queue_name: "test-q".to_string(),
             },
-            10,
+            1,
             Duration::from_secs(1),
-            Some(client),
+            Some(sqs_client),
         )
         .await
         .unwrap();
@@ -209,7 +202,6 @@ mod tests {
         let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
             loop {
                 let pending = source.pending().await.unwrap();
-                // println!("Pending: {:?}", pending);
                 if pending == Some(0) {
                     break;
                 }
@@ -222,117 +214,88 @@ mod tests {
             tokio_result.is_ok(),
             "Timeout occurred before pending became zero"
         );
+
+        tracing::info!("queue url output calls: {}", queue_url_output.num_calls());
+        tracing::info!(
+            "receive message output calls: {}",
+            receive_message_output.num_calls()
+        );
+        tracing::info!(
+            "delete message output calls: {}",
+            delete_message_output.num_calls()
+        );
+        tracing::info!(
+            "queue attributes output calls: {}",
+            queue_attributes_output.num_calls()
+        );
     }
 
-    fn get_messages_request_response() -> ReplayEvent {
-        ReplayEvent::new(
-            http::Request::builder()
-                .method("POST")
-                .uri(http::uri::Uri::from_static("https://sqs.us-west-2.amazonaws.com/"))
-                .header("Content-Type", "application/x-amz-json-1.0")
-                .body(SdkBody::from(r#"{"QueueUrl": "https://sqs.us-west-2.amazonaws.com/926113353675/test-q", "MaxNumberOfMessages": 2, "MessageAttributeNames": ["All"], "WaitTimeSeconds":0}"#))
-                .unwrap(),
-            http::Response::builder()
-                .status(http::StatusCode::from_u16(200).unwrap())
-                .header("Content-Type", "application/x-amz-json-1.0")
-                .body(SdkBody::from(r#"{
-    "Messages": [
-        {
-            "Attributes": {
-                "SenderId": "AIDASSYFHUBOBT7F4XT75",
-                "ApproximateFirstReceiveTimestamp": "1677112433437",
-                "ApproximateReceiveCount": "1",
-                "SentTimestamp": "1677112427387"
-            },
-            "Body": "This is a test message",
-            "MD5OfBody": "fafb00f5732ab283681e124bf8747ed1",
-            "MessageId": "219f8380-5770-4cc2-8c3e-5c715e145f5e",
-            "ReceiptHandle": "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q"
-        },
-        {
-            "Attributes": {
-                "SenderId": "AIDASSYFHUBOBT7F4XT75",
-                "ApproximateFirstReceiveTimestamp": "1677112433437",
-                "ApproximateReceiveCount": "1",
-                "SentTimestamp": "1677112427387"
-            },
-            "Body": "This is a second test message",
-            "MD5OfBody": "fafb00f5732ab283681e124bf8747ed1",
-            "MessageId": "219f8380-5770-4cc2-8c3e-5c715e145f5e",
-            "ReceiptHandle": "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q"
-        }
-    ]
-}"#))
-                .unwrap(),
-        )
+    fn get_queue_attributes_output() -> Rule {
+        let queue_attributes_output = mock!(aws_sdk_sqs::Client::get_queue_attributes)
+            .match_requests(|inp| {
+                inp.queue_url().unwrap()
+                    == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
+            })
+            .then_output(|| {
+                aws_sdk_sqs::operation::get_queue_attributes::GetQueueAttributesOutput::builder()
+                    .attributes(
+                        aws_sdk_sqs::types::QueueAttributeName::ApproximateNumberOfMessages,
+                        "0",
+                    )
+                    .build()
+            });
+        queue_attributes_output
     }
 
-    fn get_queue_url_request_response() -> ReplayEvent {
-        ReplayEvent::new(
-            http::Request::builder()
-                .method("POST")
-                .uri(http::uri::Uri::from_static(
-                    "https://sqs.us-west-2.amazonaws.com/",
-                ))
-                .header("Content-Type", "application/x-amz-json-1.0")
-                .body(SdkBody::from(r#"{"QueueName": "test-q"}"#))
-                .unwrap(),
-            http::Response::builder()
-                .status(http::StatusCode::from_u16(200).unwrap())
-                .header("Content-Type", "application/x-amz-json-1.0")
-                .body(SdkBody::from(
-                    r#"{
-                "QueueUrl": "https://sqs.us-west-2.amazonaws.com/926113353675/test-q"
-            }"#,
-                ))
-                .unwrap(),
-        )
+    fn get_delete_message_output() -> Rule {
+        let delete_message_output = mock!(aws_sdk_sqs::Client::delete_message)
+            .match_requests(|inp| {
+                inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
+                    && inp.receipt_handle().unwrap() == "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q"
+            })
+            .then_output(|| {
+                aws_sdk_sqs::operation::delete_message::DeleteMessageOutput::builder().build()
+            });
+        delete_message_output
     }
 
-    fn get_delete_message_request_response() -> ReplayEvent {
-        ReplayEvent::new(
-            http::Request::builder()
-                .method("POST")
-                .uri(http::uri::Uri::from_static("https://sqs.us-west-2.amazonaws.com/"))
-                .header("Content-Type", "application/x-amz-json-1.0")
-                .body(SdkBody::from(r#"{"QueueUrl": "https://sqs.us-west-2.amazonaws.com/926113353675/test-q", "ReceiptHandle": "test_receipt_handle"}"#))
-                .unwrap(),
-            http::Response::builder()
-                .status(http::StatusCode::from_u16(200).unwrap())
-                .header("Content-Type", "application/x-amz-json-1.0")
-                .body(SdkBody::from(r#"{}"#))
-                .unwrap(),
-        )
+    fn get_receive_message_output() -> Rule {
+        let receive_message_output = mock!(aws_sdk_sqs::Client::receive_message)
+            .match_requests(|inp| {
+                inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
+            })
+            .then_output(|| {
+                aws_sdk_sqs::operation::receive_message::ReceiveMessageOutput::builder()
+                    .messages(
+                        aws_sdk_sqs::types::Message::builder()
+                            .message_id("219f8380-5770-4cc2-8c3e-5c715e145f5e")
+                            .body("This is a test message")
+                            .receipt_handle("AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q")
+                            .attributes(MessageSystemAttributeName::SentTimestamp, "1677112427387")
+                            .build()
+                    )
+                    .build()
+            });
+        receive_message_output
     }
 
-    fn get_queue_attributes_request_response() -> ReplayEvent {
-        ReplayEvent::new(
-            http::Request::builder()
-                .method("POST")
-                .uri(http::uri::Uri::from_static("https://sqs.us-west-2.amazonaws.com/"))
-                .header("Content-Type", "application/x-amz-json-1.0")
-                .body(SdkBody::from(r#"{"QueueUrl": "https://sqs.us-west-2.amazonaws.com/926113353675/test-q", "AttributeNames": ["ApproximateNumberOfMessages"]}"#))
-                .unwrap(),
-            http::Response::builder()
-                .status(http::StatusCode::from_u16(200).unwrap())
-                .header("Content-Type", "application/x-amz-json-1.0")
-                .body(SdkBody::from(r#"{
-    "Attributes": {
-        "ApproximateNumberOfMessages": "0"
-    }
-}"#))
-                .unwrap(),
-        )
+    fn get_queue_url_output() -> Rule {
+        let queue_url_output = mock!(aws_sdk_sqs::Client::get_queue_url)
+            .match_requests(|inp| inp.queue_name().unwrap() == "test-q")
+            .then_output(|| {
+                aws_sdk_sqs::operation::get_queue_url::GetQueueUrlOutput::builder()
+                    .queue_url("https://sqs.us-west-2.amazonaws.com/926113353675/test-q/")
+                    .build()
+            });
+        queue_url_output
     }
 
-    fn get_test_config(replay_client: StaticReplayClient) -> Config {
-        use aws_config::BehaviorVersion;
-
+    fn get_test_config_with_interceptor(interceptor: MockResponseInterceptor) -> Config {
         aws_sdk_sqs::Config::builder()
             .behavior_version(BehaviorVersion::latest())
             .credentials_provider(make_sqs_test_credentials())
             .region(aws_sdk_sqs::config::Region::new("us-west-2"))
-            .http_client(replay_client.clone())
+            .interceptor(interceptor)
             .build()
     }
 

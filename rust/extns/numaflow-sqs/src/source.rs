@@ -1,23 +1,41 @@
+/// Implementation of the SQS message source using an actor-based architecture.
+///
+/// Key design features:
+/// - Actor model for thread-safe state management
+/// - Batched message handling for efficiency
+/// - Robust error handling and retry logic
+/// - Configurable timeouts and batch sizes
 use std::collections::HashMap;
 use std::time::Duration;
-use tokio::sync::{mpsc, oneshot};
-use tokio::time::Instant;
 
 use aws_config::{meta::region::RegionProviderChain, BehaviorVersion};
 use aws_sdk_sqs::config::Region;
 use aws_sdk_sqs::types::{MessageSystemAttributeName, QueueAttributeName};
-use aws_sdk_sqs::{Client};
+use aws_sdk_sqs::Client;
 use bytes::Bytes;
 use chrono::{DateTime, TimeZone, Utc};
+use tokio::sync::{mpsc, oneshot};
+use tokio::time::Instant;
 
+use crate::Error::ActorTaskTerminated;
 use crate::{Error, Result};
 
+/// Configuration for an SQS message source.
+///
+/// Used to initialize the SQS client with region and queue settings.
+/// Implements serde::Deserialize to support loading from configuration files.
 #[derive(serde::Deserialize, Clone, PartialEq)]
 pub struct SQSSourceConfig {
     pub region: String,
     pub queue_name: String,
 }
 
+/// Internal message types for the actor implementation.
+///
+/// The actor pattern is used to:
+/// - Ensure thread-safe access to the SQS client
+/// - Manage connection state and retries
+/// - Handle concurrent requests without locks
 enum SQSActorMessage {
     Receive {
         respond_to: oneshot::Sender<Result<Vec<SQSMessage>>>,
@@ -28,7 +46,7 @@ enum SQSActorMessage {
     Delete {
         respond_to: oneshot::Sender<Result<()>>,
         queue_name: String,
-        offsets: Vec<String>,
+        offsets: Vec<Bytes>,
     },
     GetQueueAttributes {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
@@ -37,6 +55,12 @@ enum SQSActorMessage {
     },
 }
 
+/// Represents a message received from SQS with metadata.
+///
+/// Design choices:
+/// - Uses Bytes for efficient handling of message payloads
+/// - Includes full message metadata for debugging
+/// - Maintains original SQS attributes and headers
 #[derive(Debug)]
 pub struct SQSMessage {
     pub key: String,
@@ -47,6 +71,12 @@ pub struct SQSMessage {
     pub headers: HashMap<String, String>,
 }
 
+/// Internal actor implementation for managing SQS interactions.
+///
+/// The actor maintains:
+/// - Single SQS client instance
+/// - Queue URL caching
+/// - Message channel for handling concurrent requests
 struct SQSActor {
     handler_rx: mpsc::Receiver<SQSActorMessage>,
     client: Client,
@@ -168,6 +198,13 @@ impl SQSActor {
         }
     }
 
+    /// Retrieves messages from SQS with timeout and batching.
+    ///
+    /// Implementation details:
+    /// - Handles queue URL caching/refresh
+    /// - Respects timeout for long polling
+    /// - Processes message attributes and system metadata
+    /// - Returns messages in a normalized format
     async fn get_messages(
         &mut self,
         queue_name: String,
@@ -255,7 +292,7 @@ impl SQSActor {
         Ok(messages)
     }
 
-    async fn delete_messages(&mut self, queue_name: String, offsets: Vec<String>) -> Result<()> {
+    async fn delete_messages(&mut self, queue_name: String, offsets: Vec<Bytes>) -> Result<()> {
         let get_queue_url_response = self.get_queue_url(queue_name.clone()).await;
 
         if let Err(err) = get_queue_url_response {
@@ -268,6 +305,13 @@ impl SQSActor {
         }
 
         for offset in offsets {
+            let offset = match std::str::from_utf8(&offset) {
+                Ok(offset) => offset,
+                Err(err) => {
+                    tracing::error!(?err, "Failed to parse offset");
+                    return Err(Error::Other("Failed to parse offset".to_string()));
+                }
+            };
             if let Err(err) = self
                 .client
                 .delete_message()
@@ -344,6 +388,13 @@ impl SQSActor {
     }
 }
 
+/// Public interface for interacting with SQS queues.
+///
+/// Design principles:
+/// - Thread-safe through actor model
+/// - Configurable batch sizes and timeouts
+/// - Clean abstraction of SQS complexity
+/// - Efficient message processing
 #[derive(Clone)]
 pub struct SQSSource {
     batch_size: usize,
@@ -385,7 +436,7 @@ impl SQSSource {
         };
 
         let _ = self.actor_tx.send(msg).await;
-        let messages = rx.await.map_err(Error::ActorTaskTerminated)??;
+        let messages = rx.await.map_err(ActorTaskTerminated)??;
         tracing::info!(
             count = messages.len(),
             requested_count = self.batch_size,
@@ -395,7 +446,7 @@ impl SQSSource {
         Ok(messages)
     }
 
-    pub async fn ack_offsets(&self, offsets: Vec<String>) -> Result<()> {
+    pub async fn ack_offsets(&self, offsets: Vec<Bytes>) -> Result<()> {
         tracing::debug!(offsets = ?offsets, "Acknowledging offsets");
         let (tx, rx) = oneshot::channel();
         let msg = SQSActorMessage::Delete {
@@ -425,75 +476,221 @@ impl SQSSource {
         }
     }
 
-    pub fn partitions(&self) ->  Vec<u16> {
+    pub fn partitions(&self) -> Vec<u16> {
         unimplemented!()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use aws_sdk_sqs::Config;
+    use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, Rule, RuleMode};
 
-    use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
-    use aws_smithy_types::body::SdkBody;
+    use super::*;
 
     #[tokio::test]
     async fn test_sqssourcehandle_read() {
-        // Test case 1: Successful message retrieval
-        // Verifies that we can successfully:
-        // - Get the queue URL
-        // - Receive multiple messages
-        // - Parse and forward messages correctly
-        {
-            let queue_url = get_queue_url_request_response();
-            let message = get_messages_request_response();
+        let queue_url_output = get_queue_url_output();
 
-            let replay_client = StaticReplayClient::new(vec![queue_url, message]);
-            let config = get_test_config(replay_client.clone());
-            let client = aws_sdk_sqs::Client::from_conf(config);
+        let receive_message_output = get_receive_message_output();
 
-            let source = SQSSource::new(
-                SQSSourceConfig {
-                    region: "us-west-2".to_string(),
-                    queue_name: "test-q".to_string(),
-                },
-                2,
-                Duration::from_secs(0),
-                Some(client),
-            ).await.unwrap();
+        let sqs_operation_mocks = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::MatchAny)
+            .with_rule(&queue_url_output)
+            .with_rule(&receive_message_output);
 
-            // Read messages from the source
-            let messages = source.read_messages().await.unwrap();
+        let sqs_mock_client =
+            Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-            // Assert we got the expected number of messages
-            assert_eq!(messages.len(), 2, "Should receive exactly 2 messages");
+        let source = SQSSource::new(
+            SQSSourceConfig {
+                region: "us-west-2".to_string(),
+                queue_name: "test-q".to_string(),
+            },
+            1,
+            Duration::from_secs(0),
+            Some(sqs_mock_client),
+        )
+        .await
+        .unwrap();
 
-            // Verify first message
-            let msg1 = &messages[0];
-            assert_eq!(msg1.key, "219f8380-5770-4cc2-8c3e-5c715e145f5e");
-            assert_eq!(msg1.payload, "This is a test message");
-            assert_eq!(
-                msg1.offset,
-                "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q"
-            );
+        // Read messages from the source
+        let messages = source.read_messages().await.unwrap();
 
-            // Verify second message
-            let msg2 = &messages[1];
-            assert_eq!(msg2.key, "219f8380-5770-4cc2-8c3e-5c715e145f5e");
-            assert_eq!(msg2.payload, "This is a second test message");
-            assert_eq!(
-                msg2.offset,
-                "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q"
-            );
-        }
+        // Assert we got the expected number of messages
+        assert_eq!(messages.len(), 1, "Should receive exactly 1 message");
+
+        // Verify first message
+        let msg1 = &messages[0];
+        assert_eq!(msg1.key, "219f8380-5770-4cc2-8c3e-5c715e145f5e");
+        assert_eq!(msg1.payload, "This is a test message");
+        assert_eq!(
+            msg1.offset,
+            "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q"
+        );
     }
 
-    fn get_test_config(replay_client: StaticReplayClient) -> aws_sdk_sqs::Config {
+    #[tokio::test]
+    async fn test_sqssource_ack() {
+        let queue_url_output = get_queue_url_output();
+        let delete_message_output = get_delete_message_output();
+
+        let sqs_operation_mocks = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::MatchAny)
+            .with_rule(&queue_url_output)
+            .with_rule(&delete_message_output);
+
+        let sqs_mock_client =
+            Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
+
+        let source = SQSSource::new(
+            SQSSourceConfig {
+                region: "us-west-2".to_string(),
+                queue_name: "test-q".to_string(),
+            },
+            1,
+            Duration::from_secs(0),
+            Some(sqs_mock_client),
+        )
+        .await
+        .unwrap();
+
+        // Test acknowledgment
+        let offset = "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q";
+        let result = source.ack_offsets(vec![Bytes::from(offset)]).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_sqssource_pending_count() {
+        let queue_url_output = get_queue_url_output();
+        let queue_attrs_output = get_queue_attributes_output();
+
+        let sqs_operation_mocks = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::MatchAny)
+            .with_rule(&queue_url_output)
+            .with_rule(&queue_attrs_output);
+
+        let sqs_mock_client =
+            Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
+
+        let source = SQSSource::new(
+            SQSSourceConfig {
+                region: "us-west-2".to_string(),
+                queue_name: "test-q".to_string(),
+            },
+            1,
+            Duration::from_secs(0),
+            Some(sqs_mock_client),
+        )
+        .await
+        .unwrap();
+
+        let count = source.pending_count().await;
+        assert_eq!(count, Some(0));
+    }
+
+    #[tokio::test]
+    async fn test_error_cases() {
+        // Test invalid region error
+        let source = SQSSource::new(
+            SQSSourceConfig {
+                region: "invalid-region".to_string(),
+                queue_name: "test-q".to_string(),
+            },
+            1,
+            Duration::from_secs(0),
+            None,
+        )
+        .await;
+        assert!(source.is_ok()); // Should still create but fail on operations
+
+        // Test invalid offset format
+        let source = source.unwrap();
+        let result = source
+            .ack_offsets(vec![Bytes::from(vec![255, 255, 255])])
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "not implemented")]
+    async fn test_partitions_unimplemented() {
+        let source = SQSSource {
+            batch_size: 1,
+            timeout: Duration::from_secs(0),
+            actor_tx: mpsc::channel(1).0,
+            queue_name: "test-q".to_string(),
+        };
+        source.partitions();
+    }
+
+    fn get_queue_attributes_output() -> Rule {
+        let queue_attributes_output = mock!(aws_sdk_sqs::Client::get_queue_attributes)
+            .match_requests(|inp| {
+                inp.queue_url().unwrap()
+                    == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
+            })
+            .then_output(|| {
+                aws_sdk_sqs::operation::get_queue_attributes::GetQueueAttributesOutput::builder()
+                    .attributes(
+                        aws_sdk_sqs::types::QueueAttributeName::ApproximateNumberOfMessages,
+                        "0",
+                    )
+                    .build()
+            });
+        queue_attributes_output
+    }
+
+    fn get_delete_message_output() -> Rule {
+        let delete_message_output = mock!(aws_sdk_sqs::Client::delete_message)
+            .match_requests(|inp| {
+                inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
+                    && inp.receipt_handle().unwrap() == "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q"
+            })
+            .then_output(|| {
+                aws_sdk_sqs::operation::delete_message::DeleteMessageOutput::builder().build()
+            });
+        delete_message_output
+    }
+
+    fn get_receive_message_output() -> Rule {
+        let receive_message_output = mock!(aws_sdk_sqs::Client::receive_message)
+            .match_requests(|inp| {
+                inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
+            })
+            .then_output(|| {
+                aws_sdk_sqs::operation::receive_message::ReceiveMessageOutput::builder()
+                    .messages(
+                        aws_sdk_sqs::types::Message::builder()
+                            .message_id("219f8380-5770-4cc2-8c3e-5c715e145f5e")
+                            .body("This is a test message")
+                            .receipt_handle("AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q")
+                            .attributes(MessageSystemAttributeName::SentTimestamp, "1677112427387")
+                            .build()
+                    )
+                    .build()
+            });
+        receive_message_output
+    }
+
+    fn get_queue_url_output() -> Rule {
+        let queue_url_output = mock!(aws_sdk_sqs::Client::get_queue_url)
+            .match_requests(|inp| inp.queue_name().unwrap() == "test-q")
+            .then_output(|| {
+                aws_sdk_sqs::operation::get_queue_url::GetQueueUrlOutput::builder()
+                    .queue_url("https://sqs.us-west-2.amazonaws.com/926113353675/test-q/")
+                    .build()
+            });
+        queue_url_output
+    }
+
+    fn get_test_config_with_interceptor(interceptor: MockResponseInterceptor) -> Config {
         aws_sdk_sqs::Config::builder()
             .behavior_version(BehaviorVersion::latest())
             .credentials_provider(make_sqs_test_credentials())
             .region(aws_sdk_sqs::config::Region::new("us-west-2"))
-            .http_client(replay_client.clone())
+            .interceptor(interceptor)
             .build()
     }
 
@@ -504,71 +701,6 @@ mod tests {
             Some("atestsessiontoken".to_string()),
             None,
             "",
-        )
-    }
-
-    fn get_messages_request_response() -> ReplayEvent {
-        ReplayEvent::new(
-            http::Request::builder()
-                .method("POST")
-                .uri(http::uri::Uri::from_static("https://sqs.us-west-2.amazonaws.com/"))
-                .header("Content-Type", "application/x-amz-json-1.0")
-                .body(SdkBody::from(r#"{"QueueUrl": "https://sqs.us-west-2.amazonaws.com/926113353675/test-q", "MaxNumberOfMessages": 2, "MessageAttributeNames": ["All"], "WaitTimeSeconds":0}"#))
-                .unwrap(),
-            http::Response::builder()
-                .status(http::StatusCode::from_u16(200).unwrap())
-                .header("Content-Type", "application/x-amz-json-1.0")
-                .body(SdkBody::from(r#"{
-    "Messages": [
-        {
-            "Attributes": {
-                "SenderId": "AIDASSYFHUBOBT7F4XT75",
-                "ApproximateFirstReceiveTimestamp": "1677112433437",
-                "ApproximateReceiveCount": "1",
-                "SentTimestamp": "1677112427387"
-            },
-            "Body": "This is a test message",
-            "MD5OfBody": "fafb00f5732ab283681e124bf8747ed1",
-            "MessageId": "219f8380-5770-4cc2-8c3e-5c715e145f5e",
-            "ReceiptHandle": "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q"
-        },
-        {
-            "Attributes": {
-                "SenderId": "AIDASSYFHUBOBT7F4XT75",
-                "ApproximateFirstReceiveTimestamp": "1677112433437",
-                "ApproximateReceiveCount": "1",
-                "SentTimestamp": "1677112427387"
-            },
-            "Body": "This is a second test message",
-            "MD5OfBody": "fafb00f5732ab283681e124bf8747ed1",
-            "MessageId": "219f8380-5770-4cc2-8c3e-5c715e145f5e",
-            "ReceiptHandle": "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q"
-        }
-    ]
-}"#))
-                .unwrap(),
-        )
-    }
-
-    fn get_queue_url_request_response() -> ReplayEvent {
-        ReplayEvent::new(
-            http::Request::builder()
-                .method("POST")
-                .uri(http::uri::Uri::from_static(
-                    "https://sqs.us-west-2.amazonaws.com/",
-                ))
-                .header("Content-Type", "application/x-amz-json-1.0")
-                .body(SdkBody::from(r#"{"QueueName": "test-q"}"#))
-                .unwrap(),
-            http::Response::builder()
-                .status(http::StatusCode::from_u16(200).unwrap())
-                .header("Content-Type", "application/x-amz-json-1.0")
-                .body(SdkBody::from(
-                    r#"{
-                "QueueUrl": "https://sqs.us-west-2.amazonaws.com/926113353675/test-q"
-            }"#,
-                ))
-                .unwrap(),
         )
     }
 }

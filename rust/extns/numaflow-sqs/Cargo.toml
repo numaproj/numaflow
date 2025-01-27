@@ -9,14 +9,17 @@ workspace = true
 [dependencies]
 tokio.workspace = true
 tracing.workspace = true
+bytes.workspace = true
+serde.workspace = true
 aws-config = "1.5.11"
 aws-sdk-sqs = "1.51.0"
 aws-smithy-runtime = { version = "1.7.6", features = ["test-util"] }
 aws-smithy-types = "1.2.11"
 chrono = "0.4.38"
-bytes = "1.7.2"
 tonic = "0.12.3"
 prost = "0.11.9"
-serde = { version = "1.0.204", features = ["derive"] }
 thiserror = "1.0.69"
 http = "1.2.0"
+
+[dev-dependencies]
+aws-smithy-mocks-experimental = "0.2.1"
