@@ -229,7 +229,7 @@ async fn start_map_forwarder(
             js_context.clone(),
             tracker_handle.clone(),
             cln_token.clone(),
-            watermark_handle.clone().map(WatermarkHandle::Edge),
+            watermark_handle.clone().map(WatermarkHandle::ISB),
         )
         .await;
         forwarder_components.push((buffer_reader, buffer_writer, mapper));

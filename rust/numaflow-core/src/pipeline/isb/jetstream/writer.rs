@@ -420,7 +420,7 @@ impl JetstreamWriter {
             for (stream, offset) in offsets {
                 if let Some(watermark_handle) = watermark_handle.as_ref() {
                     match watermark_handle {
-                        WatermarkHandle::Edge(handle) => {
+                        WatermarkHandle::ISB(handle) => {
                             handle
                                 .publish_watermark(stream, offset)
                                 .await

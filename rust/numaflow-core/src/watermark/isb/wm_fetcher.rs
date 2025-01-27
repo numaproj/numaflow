@@ -10,7 +10,8 @@ use crate::watermark::wmb::Watermark;
 
 /// ISBWatermarkFetcher is the watermark fetcher for the incoming edges.
 pub(crate) struct ISBWatermarkFetcher {
-    /// A map of vertex to its ProcessorManager.
+    /// A map of vertex to its ProcessorManager. Each key represents the incoming vertex, it will be
+    /// > 1 only during JOIN.
     processor_managers: HashMap<&'static str, ProcessorManager>,
     /// A map of vertex to its last processed watermark for each partition.
     last_processed_wm: HashMap<&'static str, Vec<i64>>,
