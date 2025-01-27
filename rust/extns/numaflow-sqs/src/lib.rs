@@ -1,5 +1,5 @@
 /// Library for robust SQS message handling using an actor-based architecture.
-/// 
+///
 /// This module provides a fault-tolerant interface for interacting with Amazon SQS,
 /// with a focus on:
 /// - Error propagation and handling for AWS SDK errors
@@ -10,10 +10,10 @@ use tokio::sync::oneshot;
 pub mod source;
 
 /// Custom error types for the SQS client library.
-/// 
+///
 /// Design goals:
 /// - Ergonomic error handling with thiserror
-/// - Clear error propagation from AWS SDK 
+/// - Clear error propagation from AWS SDK
 /// - Explicit handling of actor communication failures
 #[derive(thiserror::Error, Debug)]
 pub enum Error {

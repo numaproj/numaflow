@@ -169,10 +169,10 @@ pub mod tests {
         use crate::tracker::TrackerHandle;
         let tracker_handle = TrackerHandle::new(None);
         let source = Source::new(
-            1, 
-            SourceType::SQS(sqs_source), 
-            tracker_handle.clone(), 
-            true, 
+            1,
+            SourceType::SQS(sqs_source),
+            tracker_handle.clone(),
+            true,
             None,
         );
 
