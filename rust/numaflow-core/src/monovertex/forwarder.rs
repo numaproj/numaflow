@@ -33,7 +33,6 @@ use tokio_util::sync::CancellationToken;
 use crate::error;
 use crate::sink::SinkWriter;
 use crate::source::Source;
-use crate::transformer::Transformer;
 use crate::Error;
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
@@ -41,78 +40,34 @@ use crate::Error;
 /// back to the source.
 pub(crate) struct Forwarder {
     source: Source,
-    transformer: Option<Transformer>,
     sink_writer: SinkWriter,
     cln_token: CancellationToken,
-}
-
-pub(crate) struct ForwarderBuilder {
-    source: Source,
-    sink_writer: SinkWriter,
-    cln_token: CancellationToken,
-    transformer: Option<Transformer>,
-}
-
-impl ForwarderBuilder {
-    /// Create a new builder with mandatory fields
-    pub(crate) fn new(
-        streaming_source: Source,
-        streaming_sink: SinkWriter,
-        cln_token: CancellationToken,
-    ) -> Self {
-        Self {
-            source: streaming_source,
-            sink_writer: streaming_sink,
-            cln_token,
-            transformer: None,
-        }
-    }
-
-    /// Set the optional transformer client
-    pub(crate) fn transformer(mut self, transformer: Transformer) -> Self {
-        self.transformer = Some(transformer);
-        self
-    }
-
-    /// Build the StreamingForwarder instance
-    #[must_use]
-    pub(crate) fn build(self) -> Forwarder {
-        Forwarder {
-            source: self.source,
-            sink_writer: self.sink_writer,
-            transformer: self.transformer,
-            cln_token: self.cln_token,
-        }
-    }
 }
 
 impl Forwarder {
+    pub(crate) fn new(
+        source: Source,
+        sink_writer: SinkWriter,
+        cln_token: CancellationToken,
+    ) -> Self {
+        Self {
+            source,
+            sink_writer,
+            cln_token,
+        }
+    }
     pub(crate) async fn start(&self) -> error::Result<()> {
         let (messages_stream, reader_handle) =
             self.source.streaming_read(self.cln_token.clone())?;
 
-        let (transformed_messages_stream, transformer_handle) =
-            if let Some(transformer) = &self.transformer {
-                let (transformed_messages_rx, transformer_handle) =
-                    transformer.transform_stream(messages_stream)?;
-                (transformed_messages_rx, Some(transformer_handle))
-            } else {
-                (messages_stream, None)
-            };
-
         let sink_writer_handle = self
             .sink_writer
-            .streaming_write(transformed_messages_stream, self.cln_token.clone())
+            .streaming_write(messages_stream, self.cln_token.clone())
             .await?;
 
-        match tokio::try_join!(
-            reader_handle,
-            transformer_handle.unwrap_or_else(|| tokio::spawn(async { Ok(()) })),
-            sink_writer_handle,
-        ) {
-            Ok((reader_result, transformer_result, sink_writer_result)) => {
+        match tokio::try_join!(reader_handle, sink_writer_handle,) {
+            Ok((reader_result, sink_writer_result)) => {
                 sink_writer_result?;
-                transformer_result?;
                 reader_result?;
                 Ok(())
             }
@@ -141,7 +96,7 @@ mod tests {
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
-    use crate::monovertex::forwarder::ForwarderBuilder;
+    use crate::monovertex::forwarder::Forwarder;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::user_defined::new_source;
@@ -233,8 +188,35 @@ mod tests {
 
     #[tokio::test]
     async fn test_forwarder() {
+        let tracker_handle = TrackerHandle::new(None);
+
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
+
+        // create a transformer
+        let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sourcetransform.sock");
+        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let transformer_handle = tokio::spawn(async move {
+            sourcetransform::Server::new(SimpleTransformer)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(st_shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let transformer = Transformer::new(10, 10, client, tracker_handle.clone())
+            .await
+            .unwrap();
 
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
@@ -263,38 +245,14 @@ mod tests {
             .await
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
             tracker_handle.clone(),
             true,
+            Some(transformer),
         );
-
-        // create a transformer
-        let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();
-        let tmp_dir = TempDir::new().unwrap();
-        let sock_file = tmp_dir.path().join("sourcetransform.sock");
-        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
-
-        let server_info = server_info_file.clone();
-        let server_socket = sock_file.clone();
-        let transformer_handle = tokio::spawn(async move {
-            sourcetransform::Server::new(SimpleTransformer)
-                .with_socket_file(server_socket)
-                .with_server_info_file(server_info)
-                .start_with_shutdown(st_shutdown_rx)
-                .await
-                .expect("server failed");
-        });
-
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let transformer = Transformer::new(10, 10, client, tracker_handle.clone())
-            .await
-            .unwrap();
 
         let sink_writer = SinkWriterBuilder::new(
             10,
@@ -307,9 +265,7 @@ mod tests {
         .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = ForwarderBuilder::new(source.clone(), sink_writer, cln_token.clone())
-            .transformer(transformer)
-            .build();
+        let forwarder = Forwarder::new(source.clone(), sink_writer, cln_token.clone());
 
         let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             forwarder.start().await?;
@@ -362,9 +318,34 @@ mod tests {
 
     #[tokio::test]
     async fn test_flatmap_operation() {
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None);
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
+
+        // create a transformer
+        let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sourcetransform.sock");
+        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let transformer_handle = tokio::spawn(async move {
+            sourcetransform::Server::new(FlatMapTransformer)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(st_shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
+        let transformer = Transformer::new(10, 10, client, tracker_handle.clone())
+            .await
+            .unwrap();
 
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
@@ -399,32 +380,8 @@ mod tests {
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
             tracker_handle.clone(),
             true,
+            Some(transformer),
         );
-
-        // create a transformer
-        let (st_shutdown_tx, st_shutdown_rx) = oneshot::channel();
-        let tmp_dir = TempDir::new().unwrap();
-        let sock_file = tmp_dir.path().join("sourcetransform.sock");
-        let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
-
-        let server_info = server_info_file.clone();
-        let server_socket = sock_file.clone();
-        let transformer_handle = tokio::spawn(async move {
-            sourcetransform::Server::new(FlatMapTransformer)
-                .with_socket_file(server_socket)
-                .with_server_info_file(server_info)
-                .start_with_shutdown(st_shutdown_rx)
-                .await
-                .expect("server failed");
-        });
-
-        // wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let transformer = Transformer::new(10, 10, client, tracker_handle.clone())
-            .await
-            .unwrap();
 
         let sink_writer = SinkWriterBuilder::new(
             10,
@@ -437,9 +394,7 @@ mod tests {
         .unwrap();
 
         // create the forwarder with the source, transformer, and writer
-        let forwarder = ForwarderBuilder::new(source.clone(), sink_writer, cln_token.clone())
-            .transformer(transformer)
-            .build();
+        let forwarder = Forwarder::new(source.clone(), sink_writer, cln_token.clone());
 
         let forwarder_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             forwarder.start().await?;

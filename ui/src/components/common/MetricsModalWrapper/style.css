@@ -1,0 +1,7 @@
+ .metrics-hyperlink {
+     color: #0077C5;
+     text-decoration-color: #0077C5;
+     text-decoration: underline dotted;
+     width: fit-content;
+     cursor: pointer;
+ }

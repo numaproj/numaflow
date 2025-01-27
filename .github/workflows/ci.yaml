@@ -71,16 +71,13 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      nats:
-        image: "bitnami/nats:latest"
-        ports:
-          - 4222:4222
-        env:
-          NATS_EXTRA_ARGS: -js
 
     steps:
+      - name: Start JetStream
+        run: docker run -d -p 4222:4222 nats:latest -js
+
       - name: Start Pulsar standalone container
-        run: docker run -d -p 6650:6650 -p 8080:8080 apachepulsar/pulsar:4.0.0 bin/pulsar standalone 
+        run: docker run -d -p 6650:6650 -p 8080:8080 apachepulsar/pulsar:4.0.0 bin/pulsar standalone
 
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
@@ -184,8 +181,11 @@ jobs:
         run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
       - name: Rename binary
         run: cp -pv target/x86_64-unknown-linux-gnu/release/numaflow ./numaflow-rs-linux-amd64
-      - name: List files
-        run: pwd && ls -al && file ./numaflow-rs-linux-amd64
+      - name: Verfiy binary is Statically Linked
+        run: |
+          pwd && ls -al
+          file ./numaflow-rs-linux-amd64
+          file ./numaflow-rs-linux-amd64 | grep -q 'static-pie linked'
       - name: Upload numaflow binary
         uses: actions/upload-artifact@v4
         with:
