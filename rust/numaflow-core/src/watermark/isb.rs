@@ -28,6 +28,10 @@ enum ISBWaterMarkActorMessage {
         stream: Stream,
     },
     RemoveOffset(IntOffset),
+    InsertOffset {
+        offset: IntOffset,
+        watermark: Watermark,
+    },
 }
 
 /// OffsetWatermark is a tuple of offset and watermark.
@@ -87,7 +91,6 @@ impl ISBWatermarkActor {
                     .fetcher
                     .fetch_watermark(offset.offset, offset.partition_idx)
                     .await?;
-                self.insert_offset(offset.partition_idx, offset.offset, watermark);
 
                 oneshot_tx
                     .send(Ok(watermark))
@@ -109,6 +112,11 @@ impl ISBWatermarkActor {
             // removes the offset from the tracked offsets
             ISBWaterMarkActorMessage::RemoveOffset(offset) => {
                 self.remove_offset(offset.partition_idx, offset.offset)?;
+            }
+
+            // inserts the offset to the tracked offsets
+            ISBWaterMarkActorMessage::InsertOffset { offset, watermark } => {
+                self.insert_offset(offset.partition_idx, offset.offset, watermark);
             }
         }
 
@@ -215,6 +223,28 @@ impl ISBWatermarkHandle {
         if let Offset::Int(offset) = offset {
             self.sender
                 .send(ISBWaterMarkActorMessage::RemoveOffset(offset))
+                .await
+                .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
+            Ok(())
+        } else {
+            Err(Error::Watermark("invalid offset type".to_string()))
+        }
+    }
+
+    /// insert_offset inserts the offset to the tracked offsets.
+    pub(crate) async fn insert_offset(
+        &self,
+        offset: Offset,
+        watermark: Option<Watermark>,
+    ) -> Result<()> {
+        if let Offset::Int(offset) = offset {
+            self.sender
+                .send(ISBWaterMarkActorMessage::InsertOffset {
+                    offset,
+                    watermark: watermark.unwrap_or(
+                        Watermark::from_timestamp_millis(-1).expect("failed to parse time"),
+                    ),
+                })
                 .await
                 .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
             Ok(())

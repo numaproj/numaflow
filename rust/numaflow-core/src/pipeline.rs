@@ -43,10 +43,7 @@ pub(crate) async fn start_forwarder(
             let source_watermark_handle = match &config.watermark_config {
                 Some(wm_config) => {
                     if let WatermarkConfig::Source(source_config) = wm_config {
-                        Some(
-                            SourceWatermarkHandle::new(js_context.clone(), source_config)
-                                .await?,
-                        )
+                        Some(SourceWatermarkHandle::new(js_context.clone(), source_config).await?)
                     } else {
                         None
                     }

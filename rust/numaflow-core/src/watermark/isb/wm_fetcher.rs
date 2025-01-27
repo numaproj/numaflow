@@ -199,14 +199,16 @@ impl ISBWatermarkFetcher {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use bytes::Bytes;
+    use tokio::sync::RwLock;
+
     use super::*;
     use crate::watermark::processor::manager::{Processor, Status};
     use crate::watermark::processor::timeline::OffsetTimeline;
     use crate::watermark::wmb::WMB;
-    use bytes::Bytes;
-    use std::collections::HashMap;
-    use std::sync::Arc;
-    use tokio::sync::RwLock;
 
     #[tokio::test]
     async fn test_fetch_watermark_single_edge_single_processor_single_partition() {

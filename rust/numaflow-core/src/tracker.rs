@@ -11,6 +11,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
 use serving::callback::CallbackHandler;
 use serving::{DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
 use tokio::sync::{mpsc, oneshot};
@@ -39,6 +40,7 @@ enum ActorMessage {
         offset: Offset,
         ack_send: oneshot::Sender<ReadAck>,
         serving_callback_info: Option<ServingCallbackInfo>,
+        watermark: Option<DateTime<Utc>>,
     },
     Update {
         offset: Offset,
@@ -165,8 +167,10 @@ impl Tracker {
                 offset,
                 ack_send: respond_to,
                 serving_callback_info: callback_info,
+                watermark,
             } => {
-                self.handle_insert(offset, callback_info, respond_to).await;
+                self.handle_insert(offset, callback_info, watermark, respond_to)
+                    .await;
             }
             ActorMessage::Update { offset, responses } => {
                 self.handle_update(offset, responses);
@@ -196,10 +200,11 @@ impl Tracker {
         &mut self,
         offset: Offset,
         callback_info: Option<ServingCallbackInfo>,
+        watermark: Option<DateTime<Utc>>,
         respond_to: oneshot::Sender<ReadAck>,
     ) {
         self.entries.insert(
-            offset,
+            offset.clone(),
             TrackerEntry {
                 ack_send: respond_to,
                 count: 0,
@@ -207,6 +212,13 @@ impl Tracker {
                 serving_callback_info: callback_info,
             },
         );
+
+        if let Some(watermark_handle) = &self.watermark_handle {
+            watermark_handle
+                .insert_offset(offset, watermark)
+                .await
+                .expect("Failed to insert offset");
+        }
     }
 
     /// Updates an existing entry in the tracker with the number of expected messages for this offset.
@@ -367,6 +379,7 @@ impl TrackerHandle {
             offset,
             ack_send,
             serving_callback_info: callback_info,
+            watermark: message.watermark,
         };
         self.sender
             .send(message)

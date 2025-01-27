@@ -3,15 +3,16 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use crate::config::pipeline::watermark::BucketConfig;
-use crate::error::{Error, Result};
-use crate::watermark::processor::timeline::OffsetTimeline;
-use crate::watermark::wmb::WMB;
 use bytes::Bytes;
 use prost::Message as ProtoMessage;
 use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
 use tracing::{debug, info};
+
+use crate::config::pipeline::watermark::BucketConfig;
+use crate::error::{Error, Result};
+use crate::watermark::processor::timeline::OffsetTimeline;
+use crate::watermark::wmb::WMB;
 
 const DEFAULT_PROCESSOR_REFRESH_RATE: u16 = 5;
 
@@ -282,13 +283,14 @@ impl ProcessorManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
     use async_nats::jetstream::kv::Store;
     use async_nats::jetstream::Context;
     use bytes::{Bytes, BytesMut};
     use prost::Message;
+
+    use super::*;
 
     async fn setup_nats() -> Context {
         let client = async_nats::connect("localhost:4222").await.unwrap();
