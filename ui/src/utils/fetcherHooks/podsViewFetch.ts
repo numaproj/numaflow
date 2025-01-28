@@ -61,7 +61,7 @@ export const usePodsViewFetch = (
               JSON.stringify(pod?.spec?.containers)
             );
             pod?.spec?.initContainers
-              ?.filter((initContainer: any) => initContainer?.name !== "init")
+              ?.filter((initContainer: any) => initContainer?.restartPolicy === "Always")
               ?.forEach((container: any) => containersList.push(container));
 
             containersList?.forEach((container: any) => {
