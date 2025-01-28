@@ -89,7 +89,7 @@ const FiltersDropdown = ({
                 .map((pod: any) => ({
                   containerNames: [
                     ...pod?.spec?.containers?.map((ele: any) => ele.name) || [],
-                    ...pod?.spec?.initContainers?.filter((initContainer: any) => initContainer?.name !== "init")?.map((ele: any) => ele.name) || []
+                    ...pod?.spec?.initContainers?.filter((initContainer: any) => initContainer?.restartPolicy === "Always")?.map((ele: any) => ele.name) || []
                   ],
                   name: pod?.metadata?.name,
                 }))
