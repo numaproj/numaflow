@@ -56,9 +56,6 @@ impl OffsetTimeline {
             }
             (Ordering::Greater, Ordering::Greater) => {
                 watermarks.push_front(node);
-                if watermarks.len() > self.capacity {
-                    watermarks.pop_back();
-                }
             }
             (Ordering::Greater, Ordering::Less) => {
                 error!("The new input offset should never be smaller than the existing offset");

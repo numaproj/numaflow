@@ -19,7 +19,7 @@ spec:
       # A self data generating source
       source:
         generator:
-          rpu: 1000
+          rpu: 3000
           duration: 1s
     - name: input-two
       containerTemplate:
@@ -35,7 +35,7 @@ spec:
       # A self data generating source
       source:
         generator:
-          rpu: 1000
+          rpu: 3000
           duration: 1s
     - name: cat-one
       containerTemplate:

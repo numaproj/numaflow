@@ -174,7 +174,6 @@ mod tests {
     use crate::config::pipeline::isb::Stream;
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::message::{IntOffset, Message};
-    use crate::watermark::wmb::WMB;
 
     #[tokio::test]
     async fn test_publish_source_watermark() {
