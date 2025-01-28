@@ -413,13 +413,15 @@ mod tests {
     #[tokio::test]
     async fn test_processor_manager_tracks_multiple_processors() {
         let js_context = setup_nats().await;
-        let ot_bucket = create_kv_bucket(&js_context, "ot_bucket").await;
-        let hb_bucket = create_kv_bucket(&js_context, "hb_bucket").await;
+        let ot_bucket =
+            create_kv_bucket(&js_context, "test_processor_manager_multi_ot_bucket").await;
+        let hb_bucket =
+            create_kv_bucket(&js_context, "test_processor_manager_multi_hb_bucket").await;
 
         let bucket_config = BucketConfig {
             vertex: "test",
-            ot_bucket: "ot_bucket",
-            hb_bucket: "hb_bucket",
+            ot_bucket: "test_processor_manager_multi_ot_bucket",
+            hb_bucket: "test_processor_manager_multi_hb_bucket",
             partitions: 1,
         };
 
@@ -532,7 +534,13 @@ mod tests {
         }
 
         // delete the kv store
-        js_context.delete_key_value("ot_bucket").await.unwrap();
-        js_context.delete_key_value("hb_bucket").await.unwrap();
+        js_context
+            .delete_key_value("test_processor_manager_multi_ot_bucket")
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value("test_processor_manager_multi_hb_bucket")
+            .await
+            .unwrap();
     }
 }

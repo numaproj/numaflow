@@ -101,7 +101,6 @@ impl ISBWatermarkPublisher {
         let duration = tokio::time::Duration::from_secs(DEFAULT_POD_HEARTBEAT_INTERVAL as u64);
         info!("Starting heartbeat publishing");
         loop {
-            sleep(duration).await;
             let heartbeat = numaflow_pb::objects::watermark::Heartbeat {
                 heartbeat: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -124,6 +123,7 @@ impl ISBWatermarkPublisher {
                     .await
                     .expect("Failed to publish heartbeat");
             }
+            sleep(duration).await;
         }
     }
 

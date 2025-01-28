@@ -167,26 +167,27 @@ impl SourceWatermarkHandle {
 
 #[cfg(test)]
 mod tests {
-    use async_nats::jetstream;
-    use async_nats::jetstream::kv::Config;
-
     use super::*;
     use crate::config::pipeline::isb::Stream;
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::message::{IntOffset, Message};
+    use crate::watermark::wmb::WMB;
+    use async_nats::jetstream;
+    use async_nats::jetstream::kv::Config;
+    use chrono::DateTime;
 
     #[tokio::test]
     async fn test_publish_source_watermark() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
 
-        let ot_bucket_name = "source_watermark_OT";
-        let hb_bucket_name = "source_watermark_PROCESSORS";
+        let ot_bucket_name = "test_publish_source_watermark_OT";
+        let hb_bucket_name = "test_publish_source_watermark_PROCESSORS";
 
         let source_config = SourceWatermarkConfig {
             source_bucket_config: BucketConfig {
                 vertex: "source_vertex",
-                partitions: 2,
+                partitions: 1, // partitions is always one for source
                 ot_bucket: ot_bucket_name,
                 hb_bucket: hb_bucket_name,
             },
@@ -222,6 +223,7 @@ mod tests {
                     offset: 1,
                     partition_idx: 0,
                 }),
+                event_time: DateTime::from_timestamp_millis(60000).unwrap(),
                 ..Default::default()
             },
             Message {
@@ -229,6 +231,7 @@ mod tests {
                     offset: 2,
                     partition_idx: 0,
                 }),
+                event_time: DateTime::from_timestamp_millis(70000).unwrap(),
                 ..Default::default()
             },
         ];
@@ -237,6 +240,34 @@ mod tests {
             .publish_source_watermark(&messages)
             .await
             .expect("Failed to publish source watermark");
+
+        // try getting the value for the processor from the ot bucket to make sure
+        // the watermark is getting published(min event time in the batch), wait until
+        // one second if it's not there, fail the test
+        let ot_bucket = js_context
+            .get_key_value(ot_bucket_name)
+            .await
+            .expect("Failed to get ot bucket");
+
+        let mut wmb_found = false;
+        for _ in 0..10 {
+            let wmb = ot_bucket
+                .get("source_vertex-0")
+                .await
+                .expect("Failed to get wmb");
+            if wmb.is_some() {
+                let wmb: WMB = wmb.unwrap().try_into().unwrap();
+                assert_eq!(wmb.watermark, 60000);
+                wmb_found = true;
+                break;
+            } else {
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+        }
+
+        if !wmb_found {
+            panic!("Failed to get watermark");
+        }
 
         // delete the stores
         js_context
@@ -314,21 +345,71 @@ mod tests {
             .await
             .expect("Failed to create source watermark handle");
 
+        let ot_bucket = js_context
+            .get_key_value(edge_ot_bucket_name)
+            .await
+            .expect("Failed to get ot bucket");
+
         let stream = Stream {
             name: "edge_stream",
             vertex: "edge_vertex",
             partition: 0,
         };
 
-        let offset = Offset::Int(IntOffset {
-            offset: 1,
-            partition_idx: 0,
-        });
+        let mut wmb_found = false;
+        for i in 1..11 {
+            // publish source watermarks before publishing edge watermarks
+            let messages = vec![
+                Message {
+                    offset: Offset::Int(IntOffset {
+                        offset: 1,
+                        partition_idx: 0,
+                    }),
+                    event_time: DateTime::from_timestamp_millis(10000 * i).unwrap(),
+                    ..Default::default()
+                },
+                Message {
+                    offset: Offset::Int(IntOffset {
+                        offset: 2,
+                        partition_idx: 0,
+                    }),
+                    event_time: DateTime::from_timestamp_millis(20000 * i).unwrap(),
+                    ..Default::default()
+                },
+            ];
 
-        handle
-            .publish_source_edge_watermark(stream.clone(), offset, 0)
-            .await
-            .expect("Failed to publish edge watermark");
+            handle
+                .publish_source_watermark(&messages)
+                .await
+                .expect("Failed to publish source watermark");
+
+            let offset = Offset::Int(IntOffset {
+                offset: i,
+                partition_idx: 0,
+            });
+            handle
+                .publish_source_edge_watermark(stream.clone(), offset, 0)
+                .await
+                .expect("Failed to publish edge watermark");
+
+            // check if the watermark is published
+            let wmb = ot_bucket
+                .get("source_vertex-edge_vertex-0")
+                .await
+                .expect("Failed to get wmb");
+            if wmb.is_some() {
+                let wmb: WMB = wmb.unwrap().try_into().unwrap();
+                assert_ne!(wmb.watermark, -1);
+                wmb_found = true;
+                break;
+            } else {
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+        }
+
+        if !wmb_found {
+            panic!("Failed to get watermark");
+        }
 
         // delete the stores
         js_context
