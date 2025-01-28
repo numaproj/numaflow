@@ -1643,8 +1643,16 @@ func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
 }
 
 func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetails {
-	var containerDetailsMap = make(map[string]ContainerDetails)
-	for _, status := range pod.Status.ContainerStatuses {
+	totalContainers := len(pod.Spec.Containers) + len(pod.Spec.InitContainers)
+	containerDetailsMap := make(map[string]ContainerDetails, totalContainers)
+
+	// Helper function to process container statuses
+	processContainerStatus := func(status corev1.ContainerStatus) {
+		// Skip the "init" container
+		if status.Name == "init" {
+			return
+		}
+
 		containerName := status.Name
 		details := ContainerDetails{
 			Name:         status.Name,
@@ -1666,13 +1674,28 @@ func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetail
 		containerDetailsMap[containerName] = details
 	}
 
-	// Get CPU/Memory requests and limits from Pod spec
-	for _, container := range pod.Spec.Containers {
+	// Process init containers
+	for _, status := range pod.Status.InitContainerStatuses {
+		processContainerStatus(status)
+	}
+
+	// Process regular containers
+	for _, status := range pod.Status.ContainerStatuses {
+		processContainerStatus(status)
+	}
+
+	// Helper function to process container resources
+	processContainerResources := func(container corev1.Container) {
+		// Skip the "init" container
+		if container.Name == "init" {
+			return
+		}
+
 		cpuRequest := container.Resources.Requests.Cpu().MilliValue()
 		memRequest := container.Resources.Requests.Memory().Value() / (1024 * 1024)
 		cpuLimit := container.Resources.Limits.Cpu().MilliValue()
 		memLimit := container.Resources.Limits.Memory().Value() / (1024 * 1024)
-		// Get the existing ContainerDetails or create a new one
+
 		details, ok := containerDetailsMap[container.Name]
 		if !ok {
 			details = ContainerDetails{Name: container.Name} // Initialize if not found
@@ -1691,6 +1714,17 @@ func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetail
 		}
 		containerDetailsMap[container.Name] = details
 	}
+
+	// Process init containers
+	for _, container := range pod.Spec.InitContainers {
+		processContainerResources(container)
+	}
+
+	// Process regular containers
+	for _, container := range pod.Spec.Containers {
+		processContainerResources(container)
+	}
+
 	return containerDetailsMap
 }
 
