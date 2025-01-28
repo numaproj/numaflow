@@ -193,8 +193,6 @@ func (v Vertex) commonEnvs() []corev1.EnvVar {
 		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
 		{Name: EnvVertexName, Value: v.Spec.Name},
-		{Name: EnvCallbackEnabled, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + CallbackEnabledKey + "']"}}},
-		{Name: EnvCallbackURL, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + CallbackURLKey + "']"}}},
 	}
 }
 
@@ -228,7 +226,18 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	envVars := []corev1.EnvVar{
 		{Name: EnvVertexObject, Value: encodedVertexSpec},
 	}
-	envVars = append(envVars, v.commonEnvs()...)
+
+	commonEnvVars := v.commonEnvs()
+	for _, vtx := range req.PipelineSpec.Vertices {
+		if vtx.IsASource() && vtx.Source.Serving != nil {
+			commonEnvVars = append(commonEnvVars,
+				corev1.EnvVar{Name: EnvCallbackEnabled, Value: "true"},
+				corev1.EnvVar{Name: EnvCallbackURL, Value: KeyMetaCallbackURL},
+			)
+		}
+	}
+
+	envVars = append(envVars, commonEnvVars...)
 	envVars = append(envVars, req.Env...)
 
 	varVolumeName := "var-run-numaflow"
