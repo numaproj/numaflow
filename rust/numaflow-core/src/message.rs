@@ -39,6 +39,22 @@ pub(crate) struct Message {
     pub(crate) metadata: Option<Metadata>,
 }
 
+impl Default for Message {
+    fn default() -> Self {
+        Self {
+            keys: Arc::new([]),
+            tags: None,
+            value: Bytes::new(),
+            offset: Default::default(),
+            event_time: Utc::now(),
+            watermark: None,
+            id: Default::default(),
+            headers: HashMap::new(),
+            metadata: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct Metadata {
     /// name of the previous vertex.
@@ -62,6 +78,12 @@ impl fmt::Display for Offset {
     }
 }
 
+impl Default for Offset {
+    fn default() -> Self {
+        Offset::Int(Default::default())
+    }
+}
+
 impl Message {
     // Check if the message should be dropped.
     pub(crate) fn dropped(&self) -> bool {
@@ -72,7 +94,7 @@ impl Message {
 }
 
 /// IntOffset is integer based offset enum type.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
 pub(crate) struct IntOffset {
     pub(crate) offset: i64,
     pub(crate) partition_idx: u16,
@@ -135,6 +157,16 @@ pub(crate) struct MessageID {
     pub(crate) vertex_name: Bytes,
     pub(crate) offset: Bytes,
     pub(crate) index: i32,
+}
+
+impl Default for MessageID {
+    fn default() -> Self {
+        Self {
+            vertex_name: Bytes::new(),
+            offset: Bytes::new(),
+            index: 0,
+        }
+    }
 }
 
 impl From<numaflow_pb::objects::isb::MessageId> for MessageID {

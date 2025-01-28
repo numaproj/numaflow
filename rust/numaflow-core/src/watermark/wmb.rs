@@ -7,11 +7,11 @@ use crate::error::Error;
 /// WMB is the watermark message that is sent by the processor to the downstream.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[allow(clippy::upper_case_acronyms)]
-pub(in crate::watermark) struct WMB {
-    pub idle: bool,
-    pub offset: i64,
-    pub watermark: i64,
-    pub partition: u16,
+pub(crate) struct WMB {
+    pub(crate) idle: bool,
+    pub(crate) offset: i64,
+    pub(crate) watermark: i64,
+    pub(crate) partition: u16,
 }
 
 impl Default for WMB {
@@ -26,7 +26,7 @@ impl Default for WMB {
 }
 
 /// Watermark is a monotonically increasing time.
-pub(in crate::watermark) type Watermark = DateTime<Utc>;
+pub(crate) type Watermark = DateTime<Utc>;
 
 /// Converts a protobuf bytes to WMB.
 impl TryFrom<Bytes> for WMB {

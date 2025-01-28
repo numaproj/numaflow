@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -7,7 +8,7 @@ use bytes::Bytes;
 use prost::Message as ProtoMessage;
 use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::{Error, Result};
@@ -26,7 +27,7 @@ pub(crate) enum Status {
 
 /// Processor is the smallest unit of entity (from which we fetch data) that does inorder processing
 /// or contains inorder data. It tracks OT for all the partitions of the from-buffer.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct Processor {
     /// Name of the processor.
     pub(crate) name: Bytes,
@@ -34,6 +35,20 @@ pub(crate) struct Processor {
     pub(crate) status: Status,
     /// OffsetTimeline for each partition.
     pub(crate) timelines: Vec<OffsetTimeline>,
+}
+
+impl Debug for Processor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "Processor: {:?}, Status: {:?}, Timelines: ",
+            self.name, self.status
+        )?;
+        for timeline in &self.timelines {
+            writeln!(f, "{:?}", timeline)?;
+        }
+        Ok(())
+    }
 }
 
 impl Processor {
@@ -68,12 +83,17 @@ impl Processor {
 /// processorManager manages the point of view of Vn-1 from Vn vertex processors (or source processor).
 /// The code is running on Vn vertex. It has the mapping of all the processors which in turn has all the
 /// information about each processor timelines.
-#[derive(Debug)]
 pub(crate) struct ProcessorManager {
     /// Mapping of processor name to processor
     pub(crate) processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
     /// Handles of ot listener, hb listener and processor refresher tasks
     pub(crate) handles: Vec<tokio::task::JoinHandle<()>>,
+}
+
+impl Debug for ProcessorManager {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ProcessorManager: {:?}", self.processors)
+    }
 }
 
 impl Drop for ProcessorManager {
@@ -211,6 +231,7 @@ impl ProcessorManager {
                 }
             }
         }
+        warn!("OT watcher stopped");
     }
 
     /// Starts the hb watcher, to listen to the HB bucket, will also create the processor if it
@@ -233,7 +254,6 @@ impl ProcessorManager {
                         .expect("Failed to decode heartbeat")
                         .heartbeat;
                     heartbeats.write().await.insert(processor_name.clone(), hb);
-
                     info!("Got heartbeat {} for processor {:?}", hb, processor_name);
 
                     // if the processor is not in the processors map, add it
@@ -272,6 +292,7 @@ impl ProcessorManager {
                 }
             }
         }
+        warn!("HB watcher stopped");
     }
 
     /// Delete a processor from the processors map

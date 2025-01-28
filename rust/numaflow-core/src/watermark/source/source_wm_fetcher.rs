@@ -1,3 +1,6 @@
+use chrono::{DateTime, Utc};
+use log::info;
+
 use crate::error::Result;
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::Watermark;
@@ -5,17 +8,21 @@ use crate::watermark::wmb::Watermark;
 /// SourceWatermarkFetcher is the watermark fetcher for the source.
 pub struct SourceWatermarkFetcher {
     processor_manager: ProcessorManager,
+    last_logged_time: DateTime<Utc>,
 }
 
 impl SourceWatermarkFetcher {
     /// Creates a new [SourceWatermarkFetcher].
     pub(crate) async fn new(processor_manager: ProcessorManager) -> Result<Self> {
-        Ok(SourceWatermarkFetcher { processor_manager })
+        Ok(SourceWatermarkFetcher {
+            processor_manager,
+            last_logged_time: Utc::now(),
+        })
     }
 
     /// Fetches the watermark for the source, which is the minimum watermark of all the active
     /// processors.
-    pub(crate) async fn fetch_source_watermark(&self) -> Result<Watermark> {
+    pub(crate) async fn fetch_source_watermark(&mut self) -> Result<Watermark> {
         let mut min_wm = i64::MAX;
 
         for (_, processor) in self.processor_manager.processors.read().await.iter() {
@@ -38,9 +45,20 @@ impl SourceWatermarkFetcher {
         }
 
         if min_wm == i64::MAX {
-            return Ok(Watermark::from_timestamp_millis(-1).unwrap());
+            min_wm = -1;
         }
 
+        if Utc::now()
+            .signed_duration_since(self.last_logged_time)
+            .num_seconds()
+            > 1
+        {
+            info!(
+                "Fetched source watermark: {:?} from: {:?}",
+                min_wm, self.processor_manager
+            );
+            self.last_logged_time = Utc::now();
+        }
         Ok(Watermark::from_timestamp_millis(min_wm).unwrap())
     }
 }
@@ -99,7 +117,7 @@ mod tests {
             handles: vec![],
         };
 
-        let fetcher = SourceWatermarkFetcher::new(processor_manager)
+        let mut fetcher = SourceWatermarkFetcher::new(processor_manager)
             .await
             .unwrap();
 
@@ -180,7 +198,7 @@ mod tests {
             handles: vec![],
         };
 
-        let fetcher = SourceWatermarkFetcher::new(processor_manager)
+        let mut fetcher = SourceWatermarkFetcher::new(processor_manager)
             .await
             .unwrap();
 

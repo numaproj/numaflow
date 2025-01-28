@@ -164,3 +164,189 @@ impl SourceWatermarkHandle {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use async_nats::jetstream;
+    use async_nats::jetstream::kv::Config;
+
+    use super::*;
+    use crate::config::pipeline::isb::Stream;
+    use crate::config::pipeline::watermark::BucketConfig;
+    use crate::message::{IntOffset, Message};
+    use crate::watermark::wmb::WMB;
+
+    #[tokio::test]
+    async fn test_publish_source_watermark() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let ot_bucket_name = "source_watermark_OT";
+        let hb_bucket_name = "source_watermark_PROCESSORS";
+
+        let source_config = SourceWatermarkConfig {
+            source_bucket_config: BucketConfig {
+                vertex: "source_vertex",
+                partitions: 2,
+                ot_bucket: ot_bucket_name,
+                hb_bucket: hb_bucket_name,
+            },
+            to_vertex_bucket_config: vec![],
+        };
+
+        // create key value stores
+        js_context
+            .create_key_value(Config {
+                bucket: ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        js_context
+            .create_key_value(Config {
+                bucket: hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let handle = SourceWatermarkHandle::new(js_context.clone(), &source_config)
+            .await
+            .expect("Failed to create source watermark handle");
+
+        let messages = vec![
+            Message {
+                offset: Offset::Int(IntOffset {
+                    offset: 1,
+                    partition_idx: 0,
+                }),
+                ..Default::default()
+            },
+            Message {
+                offset: Offset::Int(IntOffset {
+                    offset: 2,
+                    partition_idx: 0,
+                }),
+                ..Default::default()
+            },
+        ];
+
+        handle
+            .publish_source_watermark(&messages)
+            .await
+            .expect("Failed to publish source watermark");
+
+        // delete the stores
+        js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_publish_source_edge_watermark() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let source_ot_bucket_name = "source_edge_watermark_source_OT";
+        let source_hb_bucket_name = "source_edge_watermark_source_PROCESSORS";
+        let edge_ot_bucket_name = "source_edge_watermark_edge_OT";
+        let edge_hb_bucket_name = "source_edge_watermark_edge_PROCESSORS";
+
+        let source_config = SourceWatermarkConfig {
+            source_bucket_config: BucketConfig {
+                vertex: "source_vertex",
+                partitions: 2,
+                ot_bucket: source_ot_bucket_name,
+                hb_bucket: source_hb_bucket_name,
+            },
+            to_vertex_bucket_config: vec![BucketConfig {
+                vertex: "edge_vertex",
+                partitions: 2,
+                ot_bucket: edge_ot_bucket_name,
+                hb_bucket: edge_hb_bucket_name,
+            }],
+        };
+
+        // create key value stores for source
+        js_context
+            .create_key_value(Config {
+                bucket: source_ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        js_context
+            .create_key_value(Config {
+                bucket: source_hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // create key value stores for edge
+        js_context
+            .create_key_value(Config {
+                bucket: edge_ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        js_context
+            .create_key_value(Config {
+                bucket: edge_hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let handle = SourceWatermarkHandle::new(js_context.clone(), &source_config)
+            .await
+            .expect("Failed to create source watermark handle");
+
+        let stream = Stream {
+            name: "edge_stream",
+            vertex: "edge_vertex",
+            partition: 0,
+        };
+
+        let offset = Offset::Int(IntOffset {
+            offset: 1,
+            partition_idx: 0,
+        });
+
+        handle
+            .publish_source_edge_watermark(stream.clone(), offset, 0)
+            .await
+            .expect("Failed to publish edge watermark");
+
+        // delete the stores
+        js_context
+            .delete_key_value(source_hb_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(source_ot_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(edge_hb_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(edge_ot_bucket_name.to_string())
+            .await
+            .unwrap();
+    }
+}

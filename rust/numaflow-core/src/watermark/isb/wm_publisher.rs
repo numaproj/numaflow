@@ -22,7 +22,6 @@ const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;
 struct LastPublishedState {
     offset: i64,
     watermark: i64,
-    publish_time: DateTime<Utc>,
 }
 
 /// ISBWatermarkPublisher is the watermark publisher for the outgoing edges.
@@ -35,6 +34,7 @@ pub(crate) struct ISBWatermarkPublisher {
     last_published_wm: HashMap<&'static str, Vec<LastPublishedState>>,
     /// map of vertex to its ot bucket.
     ot_buckets: HashMap<&'static str, async_nats::jetstream::kv::Store>,
+    last_logged_time: DateTime<Utc>,
 }
 
 impl Drop for ISBWatermarkPublisher {
@@ -75,7 +75,6 @@ impl ISBWatermarkPublisher {
                     LastPublishedState {
                         offset: -1,
                         watermark: -1,
-                        publish_time: DateTime::from_timestamp_millis(-1).expect("Invalid time"),
                     };
                     config.partitions as usize
                 ],
@@ -90,6 +89,7 @@ impl ISBWatermarkPublisher {
             hb_handle,
             last_published_wm,
             ot_buckets,
+            last_logged_time: Utc::now(),
         })
     }
 
@@ -142,13 +142,7 @@ impl ISBWatermarkPublisher {
         // we can avoid publishing the watermark if it is smaller than the last published watermark
         // or if the last watermark was published in the last 100ms
         let last_state = &last_published_wm_state[stream.partition as usize];
-        if offset <= last_state.offset
-            || watermark <= last_state.watermark
-            || Utc::now()
-                .signed_duration_since(last_state.publish_time)
-                .num_milliseconds()
-                <= 100
-        {
+        if offset <= last_state.offset || watermark <= last_state.watermark {
             return Ok(());
         }
 
@@ -170,16 +164,289 @@ impl ISBWatermarkPublisher {
             .map_err(|e| Error::Watermark(e.to_string()))?;
 
         // update the last published watermark state
-        last_published_wm_state[stream.partition as usize] = LastPublishedState {
-            offset,
-            watermark,
-            publish_time: Utc::now(),
+        last_published_wm_state[stream.partition as usize] =
+            LastPublishedState { offset, watermark };
+
+        if Utc::now()
+            .signed_duration_since(self.last_logged_time)
+            .num_seconds()
+            > 1
+        {
+            info!(
+                "Published watermark for vertex: {}, partition: {}, offset: {}, watermark: {}",
+                stream.vertex, stream.partition, offset, watermark
+            );
+            self.last_logged_time = Utc::now();
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use async_nats::jetstream;
+    use async_nats::jetstream::kv::Config;
+
+    use crate::config::pipeline::isb::Stream;
+    use crate::config::pipeline::watermark::BucketConfig;
+    use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
+    use crate::watermark::wmb::WMB;
+
+    #[tokio::test]
+    async fn test_isb_publisher_one_edge() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let ot_bucket_name = "isb_publisher_one_edge_OT";
+        let hb_bucket_name = "isb_publisher_one_edge_PROCESSORS";
+
+        let bucket_configs = vec![BucketConfig {
+            vertex: "v1",
+            partitions: 2,
+            ot_bucket: ot_bucket_name,
+            hb_bucket: hb_bucket_name,
+        }];
+
+        // create key value stores
+        js_context
+            .create_key_value(Config {
+                bucket: ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        js_context
+            .create_key_value(Config {
+                bucket: hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut publisher = ISBWatermarkPublisher::new(
+            "processor1".to_string(),
+            js_context.clone(),
+            &bucket_configs,
+        )
+        .await
+        .expect("Failed to create publisher");
+
+        let stream_partition_0 = Stream {
+            name: "v1-0",
+            vertex: "v1",
+            partition: 0,
         };
 
-        info!(
-            "Published watermark: offset={}, stream={:?}, watermark={}",
-            offset, stream, watermark
-        );
-        Ok(())
+        let stream_partition_1 = Stream {
+            name: "v1-1",
+            vertex: "v1",
+            partition: 1,
+        };
+
+        // Publish watermark for partition 0
+        publisher
+            .publish_watermark(stream_partition_0.clone(), 1, 100)
+            .await
+            .expect("Failed to publish watermark");
+
+        let ot_bucket = js_context
+            .get_key_value("isb_publisher_one_edge_OT")
+            .await
+            .expect("Failed to get ot bucket");
+
+        let wmb = ot_bucket
+            .get("processor1")
+            .await
+            .expect("Failed to get wmb");
+        assert!(wmb.is_some());
+
+        let wmb: WMB = wmb.unwrap().try_into().unwrap();
+        assert_eq!(wmb.offset, 1);
+        assert_eq!(wmb.watermark, 100);
+
+        // Try publishing a smaller watermark for the same partition, it should not be published
+        publisher
+            .publish_watermark(stream_partition_0.clone(), 0, 50)
+            .await
+            .expect("Failed to publish watermark");
+
+        let wmb = ot_bucket
+            .get("processor1")
+            .await
+            .expect("Failed to get wmb");
+        assert!(wmb.is_some());
+
+        let wmb: WMB = wmb.unwrap().try_into().unwrap();
+        assert_eq!(wmb.offset, 1);
+        assert_eq!(wmb.watermark, 100);
+
+        // Publish a smaller watermark for a different partition, it should be published
+        publisher
+            .publish_watermark(stream_partition_1.clone(), 0, 50)
+            .await
+            .expect("Failed to publish watermark");
+
+        let wmb = ot_bucket
+            .get("processor1")
+            .await
+            .expect("Failed to get wmb");
+        assert!(wmb.is_some());
+
+        let wmb: WMB = wmb.unwrap().try_into().unwrap();
+        assert_eq!(wmb.offset, 0);
+        assert_eq!(wmb.watermark, 50);
+
+        // delete the stores
+        js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_isb_publisher_multi_edges() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let ot_bucket_name_v1 = "isb_publisher_multi_edges_v1_OT";
+        let hb_bucket_name_v1 = "isb_publisher_multi_edges_v1_PROCESSORS";
+        let ot_bucket_name_v2 = "isb_publisher_multi_edges_v2_OT";
+        let hb_bucket_name_v2 = "isb_publisher_multi_edges_v2_PROCESSORS";
+
+        let bucket_configs = vec![
+            BucketConfig {
+                vertex: "v1",
+                partitions: 1,
+                ot_bucket: ot_bucket_name_v1,
+                hb_bucket: hb_bucket_name_v1,
+            },
+            BucketConfig {
+                vertex: "v2",
+                partitions: 1,
+                ot_bucket: ot_bucket_name_v2,
+                hb_bucket: hb_bucket_name_v2,
+            },
+        ];
+
+        // create key value stores for v1
+        js_context
+            .create_key_value(Config {
+                bucket: ot_bucket_name_v1.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        js_context
+            .create_key_value(Config {
+                bucket: hb_bucket_name_v1.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // create key value stores for v2
+        js_context
+            .create_key_value(Config {
+                bucket: ot_bucket_name_v2.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        js_context
+            .create_key_value(Config {
+                bucket: hb_bucket_name_v2.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut publisher = ISBWatermarkPublisher::new(
+            "processor1".to_string(),
+            js_context.clone(),
+            &bucket_configs,
+        )
+        .await
+        .expect("Failed to create publisher");
+
+        let stream1 = Stream {
+            name: "v1-0",
+            vertex: "v1",
+            partition: 0,
+        };
+
+        let stream2 = Stream {
+            name: "v2-0",
+            vertex: "v2",
+            partition: 0,
+        };
+
+        publisher
+            .publish_watermark(stream1.clone(), 1, 100)
+            .await
+            .expect("Failed to publish watermark");
+
+        publisher
+            .publish_watermark(stream2.clone(), 1, 200)
+            .await
+            .expect("Failed to publish watermark");
+
+        let ot_bucket_v1 = js_context
+            .get_key_value(ot_bucket_name_v1)
+            .await
+            .expect("Failed to get ot bucket for v1");
+
+        let ot_bucket_v2 = js_context
+            .get_key_value(ot_bucket_name_v2)
+            .await
+            .expect("Failed to get ot bucket for v2");
+
+        let wmb_v1 = ot_bucket_v1
+            .get("processor1")
+            .await
+            .expect("Failed to get wmb for v1");
+        assert!(wmb_v1.is_some());
+
+        let wmb_v1: WMB = wmb_v1.unwrap().try_into().unwrap();
+        assert_eq!(wmb_v1.offset, 1);
+        assert_eq!(wmb_v1.watermark, 100);
+
+        let wmb_v2 = ot_bucket_v2
+            .get("processor1")
+            .await
+            .expect("Failed to get wmb for v2");
+        assert!(wmb_v2.is_some());
+
+        let wmb_v2: WMB = wmb_v2.unwrap().try_into().unwrap();
+        assert_eq!(wmb_v2.offset, 1);
+        assert_eq!(wmb_v2.watermark, 200);
+
+        // delete the stores
+        js_context
+            .delete_key_value(hb_bucket_name_v1.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(ot_bucket_name_v1.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(hb_bucket_name_v2.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(ot_bucket_name_v2.to_string())
+            .await
+            .unwrap();
     }
 }

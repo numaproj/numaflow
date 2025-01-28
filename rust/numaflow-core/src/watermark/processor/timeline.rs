@@ -11,7 +11,7 @@ use crate::watermark::wmb::WMB;
 /// OffsetTimeline is to store the event time to the offset records.
 /// Our list is sorted by event time from highest to lowest.
 #[derive(Clone)]
-pub struct OffsetTimeline {
+pub(crate) struct OffsetTimeline {
     watermarks: Arc<RwLock<VecDeque<WMB>>>,
     capacity: usize,
 }
@@ -60,10 +60,13 @@ impl OffsetTimeline {
                     watermarks.pop_back();
                 }
             }
-            (Ordering::Greater, _) => {
+            (Ordering::Greater, Ordering::Less) => {
                 error!("The new input offset should never be smaller than the existing offset");
             }
             (Ordering::Less, _) => {}
+            (Ordering::Greater, Ordering::Equal) => {
+                element_node.watermark = node.watermark;
+            }
         }
         if watermarks.len() > self.capacity {
             watermarks.pop_back();

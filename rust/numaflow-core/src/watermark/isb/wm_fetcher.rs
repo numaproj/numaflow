@@ -15,8 +15,8 @@ pub(crate) struct ISBWatermarkFetcher {
     processor_managers: HashMap<&'static str, ProcessorManager>,
     /// A map of vertex to its last processed watermark for each partition.
     last_processed_wm: HashMap<&'static str, Vec<i64>>,
-    /// Vector of (last fetched watermark, last fetched time) for each partition.
-    last_fetched_wm: Vec<(Watermark, DateTime<Utc>)>,
+    /// last logged time
+    last_logged_time: DateTime<Utc>,
 }
 
 impl ISBWatermarkFetcher {
@@ -26,16 +26,6 @@ impl ISBWatermarkFetcher {
         bucket_configs: &[BucketConfig],
     ) -> Result<Self> {
         let mut last_processed_wm = HashMap::new();
-        let last_fetched_wm = vec![
-            (
-                Watermark::from_timestamp_millis(-1).expect("failed to parse time"),
-                DateTime::from_timestamp_millis(-1).expect("failed to parse time"),
-            );
-            bucket_configs
-                .first()
-                .expect("one edge should be present")
-                .partitions as usize
-        ];
 
         // Create a ProcessorManager for each edge.
         for config in bucket_configs {
@@ -46,7 +36,7 @@ impl ISBWatermarkFetcher {
         Ok(ISBWatermarkFetcher {
             processor_managers,
             last_processed_wm,
-            last_fetched_wm,
+            last_logged_time: Utc::now(),
         })
     }
 
@@ -56,15 +46,6 @@ impl ISBWatermarkFetcher {
         offset: i64,
         partition_idx: u16,
     ) -> Result<Watermark> {
-        // We fetch the watermark only if we haven't fetched it in the last 100ms.
-        if Utc::now()
-            .signed_duration_since(self.last_fetched_wm[partition_idx as usize].1)
-            .num_milliseconds()
-            < 100
-        {
-            return Ok(self.last_fetched_wm[partition_idx as usize].0);
-        }
-
         // Iterate over all the processor managers and get the smallest watermark. (join case)
         for (edge, processor_manager) in self.processor_managers.iter() {
             let mut epoch = i64::MAX;
@@ -74,8 +55,8 @@ impl ISBWatermarkFetcher {
             for (name, processor) in processor_manager.processors.read().await.iter() {
                 // headOffset is used to check whether this pod can be deleted.
                 let mut head_offset = -1;
-
                 for (index, timeline) in processor.timelines.iter().enumerate() {
+                    // info!("Checking timeline {:?}", timeline);
                     // we only need to check the timelines of the partition we are reading from
                     if index == partition_idx as usize {
                         let t = timeline.get_event_time(offset).await;
@@ -93,7 +74,6 @@ impl ISBWatermarkFetcher {
                 // if the pod is not active and the head offset of all the timelines is less than the input offset, delete
                 // the processor (this means we are processing data later than what the stale processor has processed)
                 if processor.is_deleted() && offset > head_offset {
-                    info!("Processor {:?} inactive, deleting", name);
                     processors_to_delete.push(name.clone());
                 }
             }
@@ -116,15 +96,18 @@ impl ISBWatermarkFetcher {
         // return the smallest among all the last processed watermarks
         let watermark = self.get_watermark().await?;
 
-        // update the last fetched watermark for this partition
-        self.last_fetched_wm[partition_idx as usize] = (watermark, Utc::now());
+        if Utc::now()
+            .signed_duration_since(self.last_logged_time)
+            .num_seconds()
+            > 1
+        {
+            self.last_logged_time = Utc::now();
+            info!(
+                "Watermark fetched: {:?}, from {:?}",
+                watermark, self.processor_managers
+            );
+        }
 
-        info!(
-            "Fetched watermark: offset={}, watermark={} partition={}",
-            offset,
-            watermark.timestamp_millis(),
-            partition_idx
-        );
         Ok(watermark)
     }
 
