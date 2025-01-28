@@ -125,3 +125,77 @@ func calculatePodDelta(tc1, tc2 *TimestampedCounts) float64 {
 	}
 	return delta
 }
+
+// CalculateMaxLookback computes the maximum duration (in seconds) for which the count of messages processed by any pod
+// remained unchanged within a specified range of indices in a queue of TimestampedCounts. It does this by analyzing each
+// data point between the startIndex and endIndex, checking the count changes for each pod, and noting the durations
+// during which these counts stay consistent. The metric is updated is when data is read by the pod
+// This would encapsulate the lookback for two scenarios
+// 1. Slow processing vertex
+// 2. Slow data source - data arrives after long intervals
+func CalculateMaxLookback(counts []*TimestampedCounts, startIndex, endIndex int) int64 {
+	// Map to keep track of the last seen count and timestamp of each pod.
+	lastSeen := make(map[string]struct {
+		count    float64
+		seenTime int64
+	})
+
+	// Map to store the maximum duration for which the value of any pod was unchanged.
+	maxDuration := make(map[string]int64)
+
+	for i := startIndex; i < endIndex; i++ {
+		// Get a snapshot of pod counts and the timestamp for the current index.
+		item := counts[i].PodCountSnapshot()
+		curTime := counts[i].PodTimestamp()
+
+		// Iterate through each pod in the snapshot.
+		for key, count := range item {
+			if lastSeenData, found := lastSeen[key]; found {
+				// If the read count data has updated
+				if lastSeenData.count != count {
+					// Calculate the duration for which the count was unchanged.
+					duration := curTime - lastSeenData.seenTime
+					// Update maxDuration for the pod if this duration is the longest seen so far.
+					// TODO: Can check if average or EWMA works better than max
+					if currentMax, ok := maxDuration[key]; !ok || duration > currentMax {
+						maxDuration[key] = duration
+					}
+					// Update the last seen count and timestamp for the pod.
+					lastSeen[key] = struct {
+						count    float64
+						seenTime int64
+					}{count, curTime}
+				}
+			} else {
+				// First time seeing this pod, initialize its last seen data.
+				lastSeen[key] = struct {
+					count    float64
+					seenTime int64
+				}{count, curTime}
+			}
+		}
+	}
+
+	// Fetch the last timestamp used in the analysis to check unmodified runs.
+	endVals := counts[endIndex].PodCountSnapshot()
+	lastTime := counts[endIndex].PodTimestamp()
+
+	// Check for pods that did not change at all during the iteration,
+	// and update their maxDuration to the full period from first seen to lastTime.
+	for key, data := range lastSeen {
+		if _, ok := maxDuration[key]; !ok {
+			if _, found := endVals[key]; found {
+				maxDuration[key] = lastTime - data.seenTime
+			}
+		}
+	}
+
+	// Calculate the maximum duration found across all pods.
+	globalMaxSecs := int64(0)
+	for _, duration := range maxDuration {
+		if duration > globalMaxSecs {
+			globalMaxSecs = duration
+		}
+	}
+	return globalMaxSecs
+}

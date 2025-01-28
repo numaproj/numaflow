@@ -19,21 +19,25 @@ package rater
 import (
 	"crypto/tls"
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 
 	"github.com/prometheus/common/expfmt"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"golang.org/x/net/context"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
 const CountWindow = time.Second * 10
 const monoVtxReadMetricName = "monovtx_read_total"
+const MaxLookback = time.Minute * 10
 
 // MonoVtxRatable is the interface for the Rater struct.
 type MonoVtxRatable interface {
@@ -63,8 +67,9 @@ type Rater struct {
 	podTracker *PodTracker
 	// timestampedPodCounts is a queue of timestamped counts for the MonoVertex
 	timestampedPodCounts *sharedqueue.OverflowQueue[*TimestampedCounts]
-	// userSpecifiedLookBackSeconds is the user-specified lookback seconds for that MonoVertex
-	userSpecifiedLookBackSeconds int64
+	// userSpecifiedLookBackSeconds the current lookback seconds for the monovertex
+	// this can be updated dynamically, defaults to user-specified value in the spec
+	userSpecifiedLookBackSeconds *atomic.Float64
 	options                      *options
 }
 
@@ -95,20 +100,22 @@ func NewRater(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...Option) *Rat
 			},
 			Timeout: time.Second * 1,
 		},
-		log:     logging.FromContext(ctx).Named("Rater"),
-		options: defaultOptions(),
+		log:                          logging.FromContext(ctx).Named("Rater"),
+		options:                      defaultOptions(),
+		userSpecifiedLookBackSeconds: atomic.NewFloat64(float64(mv.Spec.Scale.GetLookbackSeconds())),
 	}
 
 	rater.podTracker = NewPodTracker(ctx, mv)
 	// maintain the total counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
 	rater.timestampedPodCounts = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
-	rater.userSpecifiedLookBackSeconds = int64(mv.Spec.Scale.GetLookbackSeconds())
 
 	for _, opt := range opts {
 		if opt != nil {
 			opt(rater.options)
 		}
 	}
+	// initialise the metric value for the lookback window
+	metrics.MonoVertexLookBack.WithLabelValues(mv.Name).Set(rater.userSpecifiedLookBackSeconds.Load())
 	return &rater
 }
 
@@ -203,7 +210,10 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 }
 
 func (r *Rater) buildLookbackSecondsMap() map[string]int64 {
-	lookbackSecondsMap := map[string]int64{"default": r.userSpecifiedLookBackSeconds}
+	// as the lookback value can be changing dynamically,
+	// load the current value for the lookback seconds
+	lbValue := r.userSpecifiedLookBackSeconds.Load()
+	lookbackSecondsMap := map[string]int64{"default": int64(lbValue)}
 	for k, v := range fixedLookbackSeconds {
 		lookbackSecondsMap[k] = v
 	}
@@ -222,6 +232,10 @@ func (r *Rater) Start(ctx context.Context) error {
 			r.log.Errorw("Failed to start pod tracker", zap.Error(err))
 		}
 	}()
+
+	// start the dynamic lookback check which will be
+	// updating the lookback period based on the data read time.
+	go r.startDynamicLookBack(ctx)
 
 	// Worker group
 	for i := 1; i <= r.options.workers; i++ {
@@ -267,5 +281,69 @@ func sleep(ctx context.Context, duration time.Duration) {
 	select {
 	case <-ctx.Done():
 	case <-time.After(duration):
+	}
+}
+
+func (r *Rater) startDynamicLookBack(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	// Ensure the ticker is stopped to prevent a resource leak.
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			r.updateDynamicLookbackSecs()
+		case <-ctx.Done():
+			// If the context is canceled or expires exit
+			return
+		}
+	}
+}
+
+// updateDynamicLookbackSecs continuously adjusts ths lookback duration based on the current
+// processing time of the MonoVertex system.
+func (r *Rater) updateDynamicLookbackSecs() {
+	counts := r.timestampedPodCounts.Items()
+	currentLookback := r.userSpecifiedLookBackSeconds.Load()
+	vertexName := r.monoVertex.Name
+	if len(counts) <= 1 {
+		return
+	}
+
+	// We will calculate the processing time for a time window = 3 * currentLookback
+	// This ensures that we have enough data to capture one complete processing
+	startIndex := findStartIndex(3*int64(currentLookback), counts)
+	// we consider the last but one element as the end index because the last element might be incomplete
+	// we can be sure that the last but one element in the queue is complete.
+	endIndex := len(counts) - 2
+	if startIndex == indexNotFound {
+		return
+	}
+
+	// time diff in seconds.
+	timeDiff := counts[endIndex].timestamp - counts[startIndex].timestamp
+	if timeDiff == 0 {
+		// no action required here
+		return
+	}
+	maxProcessingTime := CalculateMaxLookback(counts, startIndex, endIndex)
+	// round up to the nearest minute, also ensure that while going up and down we have the consistent value for
+	// a given processingTimeSeconds, then convert back to seconds
+	roundedProcessingTime := 60.0 * (math.Ceil(float64(maxProcessingTime) / 60.0))
+	// Based on the value recieved we can have two cases
+	// 1. Step up case (value is > than current):
+	// 	  Do not allow the value to be increased more than the MaxLookback allowed (10mins)
+	// 2. Step Down (value is <= than current)
+	//    Do not allow the value to be lower the lookback value specified in the spec
+	if roundedProcessingTime > currentLookback {
+		roundedProcessingTime = math.Min(roundedProcessingTime, MaxLookback.Seconds())
+	} else {
+		roundedProcessingTime = math.Max(roundedProcessingTime, float64(r.monoVertex.Spec.Scale.GetLookbackSeconds()))
+	}
+	// If the value has changed, update it
+	if roundedProcessingTime != currentLookback {
+		r.userSpecifiedLookBackSeconds.Store(roundedProcessingTime)
+		r.log.Infof("Lookback updated for mvtx %s, Current: %f Updated %f", vertexName, currentLookback, roundedProcessingTime)
+		// update the metric value for the lookback window
+		metrics.MonoVertexLookBack.WithLabelValues(r.monoVertex.Name).Set(roundedProcessingTime)
 	}
 }

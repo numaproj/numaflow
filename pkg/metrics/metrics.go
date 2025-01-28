@@ -370,3 +370,14 @@ var (
 		Help:      "Total number of Write Errors while writing to a fallback sink",
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 )
+
+// Daemon server metrics
+var (
+	// MonoVertexLookBack is a gauge used to indicate what is the current lookback window value being used
+	// by a given monovertex
+	MonoVertexLookBack = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "monovtx",
+		Name:      "lookback_window",
+		Help:      "A metric to show what is the lookback window value being used by a given monovertex",
+	}, []string{LabelMonoVertexName})
+)

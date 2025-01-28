@@ -17,6 +17,7 @@ limitations under the License.
 package rater
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -285,4 +286,137 @@ func TestCalculateRate(t *testing.T) {
 		assert.Equal(t, 23.0, CalculateRate(q, 35))
 		assert.Equal(t, 23.0, CalculateRate(q, 100))
 	})
+}
+
+// Helper function to create a TimestampedCounts instance
+func newTimestampedCounts(timestamp int64, counts map[string]float64) *TimestampedCounts {
+	return &TimestampedCounts{
+		timestamp:     timestamp,
+		podReadCounts: counts,
+		lock:          new(sync.RWMutex),
+	}
+}
+
+// TestCalculateMaxLookback tests various scenarios on the CalculateMaxLookback function
+func TestCalculateMaxLookback(t *testing.T) {
+	tests := []struct {
+		name        string
+		counts      []*TimestampedCounts
+		startIndex  int
+		endIndex    int
+		expectedMax int64
+	}{
+		{
+			name: "Uniform data across the range",
+			counts: []*TimestampedCounts{
+				newTimestampedCounts(100, map[string]float64{"pod1": 100, "pod2": 200}),
+				newTimestampedCounts(200, map[string]float64{"pod1": 100, "pod2": 200}),
+				newTimestampedCounts(400, map[string]float64{"pod1": 100, "pod2": 200}),
+			},
+			startIndex:  0,
+			endIndex:    2,
+			expectedMax: 300,
+		},
+		{
+			name: "Values change midway",
+			counts: []*TimestampedCounts{
+				newTimestampedCounts(100, map[string]float64{"pod1": 100, "pod2": 150}),
+				newTimestampedCounts(240, map[string]float64{"pod1": 100, "pod2": 200}),
+				newTimestampedCounts(360, map[string]float64{"pod1": 150, "pod2": 200}),
+			},
+			startIndex:  0,
+			endIndex:    2,
+			expectedMax: 260,
+		},
+		{
+			name: "No data change across any pods",
+			counts: []*TimestampedCounts{
+				newTimestampedCounts(100, map[string]float64{"pod1": 500}),
+				newTimestampedCounts(600, map[string]float64{"pod1": 500}),
+			},
+			startIndex:  0,
+			endIndex:    1,
+			expectedMax: 500, // Entire duration
+		},
+		{
+			name: "Edge Case: One entry only",
+			counts: []*TimestampedCounts{
+				newTimestampedCounts(100, map[string]float64{"pod1": 100}),
+			},
+			startIndex:  0,
+			endIndex:    0,
+			expectedMax: 0, // No duration difference
+		},
+		{
+			name: "Multiple pods with different activity patterns",
+			counts: []*TimestampedCounts{
+				newTimestampedCounts(100, map[string]float64{"pod1": 100, "pod2": 200}),
+				newTimestampedCounts(300, map[string]float64{"pod1": 100, "pod2": 250}),
+				newTimestampedCounts(500, map[string]float64{"pod1": 150, "pod2": 250}),
+			},
+			startIndex:  0,
+			endIndex:    2,
+			expectedMax: 400, // for pod1
+		},
+		{
+			name: "Rapid changes in sequential entries",
+			counts: []*TimestampedCounts{
+				newTimestampedCounts(100, map[string]float64{"pod1": 300, "pod2": 400}),
+				newTimestampedCounts(130, map[string]float64{"pod1": 500, "pod2": 400}),
+				newTimestampedCounts(160, map[string]float64{"pod1": 500, "pod2": 600}),
+			},
+			startIndex:  0,
+			endIndex:    2,
+			expectedMax: 60, // for pod2 between 1,3
+		},
+		{
+			name: "Gaps in timestamps",
+			counts: []*TimestampedCounts{
+				newTimestampedCounts(100, map[string]float64{"pod1": 100}),
+				newTimestampedCounts(1000, map[string]float64{"pod1": 100}), // Large gap with no change
+				newTimestampedCounts(1100, map[string]float64{"pod1": 200}),
+			},
+			startIndex:  0,
+			endIndex:    2,
+			expectedMax: 1000,
+		},
+		{
+			name: "Large number of pods",
+			counts: []*TimestampedCounts{
+				newTimestampedCounts(10, map[string]float64{
+					"pod1": 100, "pod2": 100, "pod3": 100, "pod4": 100, "pod5": 100,
+					"pod6": 100, "pod7": 100, "pod8": 100, "pod9": 100, "pod10": 100}),
+				newTimestampedCounts(20, map[string]float64{
+					"pod1": 100, "pod2": 100, "pod3": 100, "pod4": 200, "pod5": 100,
+					"pod6": 100, "pod7": 200, "pod8": 100, "pod9": 100, "pod10": 100}),
+			},
+			startIndex:  0,
+			endIndex:    1,
+			expectedMax: 10, // unchanged duration for pods that didn't change, smallest non-zero
+		},
+		{
+			name: "Large number of pods - No change",
+			counts: []*TimestampedCounts{
+				newTimestampedCounts(10, map[string]float64{
+					"pod1": 100, "pod2": 100, "pod3": 100, "pod4": 100, "pod5": 100,
+					"pod6": 100, "pod7": 100, "pod8": 100, "pod9": 100, "pod10": 100}),
+				newTimestampedCounts(20, map[string]float64{
+					"pod1": 100, "pod2": 100, "pod3": 100, "pod4": 100, "pod5": 100,
+					"pod6": 100, "pod7": 100, "pod8": 100, "pod9": 100, "pod10": 100}),
+				newTimestampedCounts(60, map[string]float64{
+					"pod1": 100, "pod2": 100, "pod3": 100, "pod4": 100, "pod5": 100,
+					"pod6": 100, "pod7": 100, "pod8": 100, "pod9": 100, "pod10": 100}),
+			},
+			startIndex:  0,
+			endIndex:    2,
+			expectedMax: 50, // unchanged duration for pods that didn't change, will take the max difference
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			maxDuration := CalculateMaxLookback(tt.counts, tt.startIndex, tt.endIndex)
+			assert.Equal(t, tt.expectedMax, maxDuration)
+		})
+	}
 }
