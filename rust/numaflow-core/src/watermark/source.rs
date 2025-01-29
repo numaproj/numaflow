@@ -176,6 +176,7 @@ mod tests {
     use async_nats::jetstream::kv::Config;
     use chrono::DateTime;
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_publish_source_watermark() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
@@ -280,15 +281,16 @@ mod tests {
             .unwrap();
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_publish_source_edge_watermark() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
 
-        let source_ot_bucket_name = "source_edge_watermark_source_OT";
-        let source_hb_bucket_name = "source_edge_watermark_source_PROCESSORS";
-        let edge_ot_bucket_name = "source_edge_watermark_edge_OT";
-        let edge_hb_bucket_name = "source_edge_watermark_edge_PROCESSORS";
+        let source_ot_bucket_name = "test_publish_source_edge_watermark_source_OT";
+        let source_hb_bucket_name = "test_publish_source_edge_watermark_source_PROCESSORS";
+        let edge_ot_bucket_name = "test_publish_source_edge_watermark_edge_OT";
+        let edge_hb_bucket_name = "test_publish_source_edge_watermark_edge_PROCESSORS";
 
         let source_config = SourceWatermarkConfig {
             source_bucket_config: BucketConfig {

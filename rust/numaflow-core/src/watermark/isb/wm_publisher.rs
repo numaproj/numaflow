@@ -193,6 +193,7 @@ mod tests {
     use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
     use crate::watermark::wmb::WMB;
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_isb_publisher_one_edge() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
@@ -310,6 +311,7 @@ mod tests {
             .unwrap();
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_isb_publisher_multi_edges() {
         let client = async_nats::connect("localhost:4222").await.unwrap();

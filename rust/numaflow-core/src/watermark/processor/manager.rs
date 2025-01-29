@@ -1,19 +1,20 @@
+use crate::config::pipeline::watermark::BucketConfig;
+use crate::error::{Error, Result};
+use crate::watermark::processor::timeline::OffsetTimeline;
+use crate::watermark::wmb::WMB;
+use async_nats::jetstream::kv::Watch;
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
+use bytes::Bytes;
+use futures::StreamExt;
+use prost::Message as ProtoMessage;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
-
-use bytes::Bytes;
-use prost::Message as ProtoMessage;
 use tokio::sync::RwLock;
-use tokio_stream::StreamExt;
-use tracing::{debug, info, warn};
-
-use crate::config::pipeline::watermark::BucketConfig;
-use crate::error::{Error, Result};
-use crate::watermark::processor::timeline::OffsetTimeline;
-use crate::watermark::wmb::WMB;
+use tracing::{debug, error, info, warn};
 
 const DEFAULT_PROCESSOR_REFRESH_RATE: u16 = 5;
 
@@ -130,26 +131,17 @@ impl ProcessorManager {
                 ))
             })?;
 
-        let ot_watcher = ot_bucket
-            .watch_all()
-            .await
-            .map_err(|e| Error::Watermark(format!("Failed to watch ot bucket: {}", e)))?;
-        let hb_watcher = hb_bucket
-            .watch_all()
-            .await
-            .map_err(|e| Error::Watermark(format!("Failed to watch hb bucket: {}", e)))?;
-
         let processors = Arc::new(RwLock::new(HashMap::new()));
         let heartbeats = Arc::new(RwLock::new(HashMap::new()));
 
         // start the ot watcher, to listen to the OT bucket and update the timelines
-        let ot_handle = tokio::spawn(Self::start_ot_watcher(ot_watcher, Arc::clone(&processors)));
+        let ot_handle = tokio::spawn(Self::start_ot_watcher(ot_bucket, Arc::clone(&processors)));
 
         // start the hb watcher, to listen to the HB bucket and update the list of
         // active processors
         let hb_handle = tokio::spawn(Self::start_hb_watcher(
             bucket_config.partitions,
-            hb_watcher,
+            hb_bucket,
             Arc::clone(&heartbeats),
             Arc::clone(&processors),
         ));
@@ -204,20 +196,33 @@ impl ProcessorManager {
     /// Starts the ot watcher, to listen to the OT bucket and update the timelines for the
     /// processors.
     async fn start_ot_watcher(
-        mut ot_watcher: async_nats::jetstream::kv::Watch,
+        ot_bucket: async_nats::jetstream::kv::Store,
         processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
     ) {
-        while let Ok(kv) = ot_watcher
-            .next()
-            .await
-            .expect("Failed to get next kv entry")
-        {
+        let mut ot_watcher = Self::create_watcher(ot_bucket.clone()).await;
+
+        loop {
+            let Some(val) = ot_watcher.next().await else {
+                warn!("OT watcher stopped, recreating watcher");
+                ot_watcher = Self::create_watcher(ot_bucket.clone()).await;
+                continue;
+            };
+
+            let kv = match val {
+                Ok(kv) => kv,
+                Err(e) => {
+                    warn!(?e, "Failed to get next kv entry, recreating watcher");
+                    ot_watcher = Self::create_watcher(ot_bucket.clone()).await;
+                    continue;
+                }
+            };
+
             match kv.operation {
                 async_nats::jetstream::kv::Operation::Put => {
                     let processor_name = Bytes::from(kv.key);
                     let wmb: WMB = kv.value.try_into().expect("Failed to decode WMB");
 
-                    info!("Got WMB {:?} for processor {:?}", wmb, processor_name);
+                    info!("Got {:?} for processor {:?}", wmb, processor_name);
                     if let Some(processor) = processors.write().await.get_mut(&processor_name) {
                         let timeline = &mut processor.timelines[wmb.partition as usize];
                         timeline.put(wmb).await;
@@ -231,22 +236,34 @@ impl ProcessorManager {
                 }
             }
         }
-        warn!("OT watcher stopped");
     }
 
     /// Starts the hb watcher, to listen to the HB bucket, will also create the processor if it
     /// doesn't exist.
     async fn start_hb_watcher(
         partition_count: u16,
-        mut hb_watcher: async_nats::jetstream::kv::Watch,
+        hb_bucket: async_nats::jetstream::kv::Store,
         heartbeats: Arc<RwLock<HashMap<Bytes, i64>>>,
         processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
     ) {
-        while let Ok(kv) = hb_watcher
-            .next()
-            .await
-            .expect("Failed to get next kv entry")
-        {
+        let mut hb_watcher = Self::create_watcher(hb_bucket.clone()).await;
+
+        loop {
+            let Some(val) = hb_watcher.next().await else {
+                warn!("HB watcher stopped, recreating watcher");
+                hb_watcher = Self::create_watcher(hb_bucket.clone()).await;
+                continue;
+            };
+
+            let kv = match val {
+                Ok(kv) => kv,
+                Err(e) => {
+                    warn!(?e, "Failed to get next kv entry, recreating watcher");
+                    hb_watcher = Self::create_watcher(hb_bucket.clone()).await;
+                    continue;
+                }
+            };
+
             match kv.operation {
                 async_nats::jetstream::kv::Operation::Put => {
                     let processor_name = Bytes::from(kv.key);
@@ -254,8 +271,8 @@ impl ProcessorManager {
                         .expect("Failed to decode heartbeat")
                         .heartbeat;
                     heartbeats.write().await.insert(processor_name.clone(), hb);
-                    info!("Got heartbeat {} for processor {:?}", hb, processor_name);
 
+                    info!("Got heartbeat {} for processor {:?}", hb, processor_name);
                     // if the processor is not in the processors map, add it
                     // or if processor status is not active, set it to active
                     let mut processors = processors.write().await;
@@ -292,7 +309,31 @@ impl ProcessorManager {
                 }
             }
         }
-        warn!("HB watcher stopped");
+    }
+
+    /// creates a watcher for the given bucket, will retry infinitely until it succeeds
+    async fn create_watcher(bucket: async_nats::jetstream::kv::Store) -> Watch {
+        const RECONNECT_INTERVAL: u64 = 1000;
+        const MAX_RECONNECT_ATTEMPTS: usize = usize::MAX;
+
+        let interval =
+            fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
+
+        Retry::retry(
+            interval,
+            || async {
+                match bucket.watch_all().await {
+                    Ok(w) => Ok(w),
+                    Err(e) => {
+                        error!(?e, "Failed to create watcher");
+                        Err(Error::Watermark(format!("Failed to create watcher: {}", e)))
+                    }
+                }
+            },
+            |_: &Error| true,
+        )
+        .await
+        .expect("Failed to create ot watcher")
     }
 
     /// Delete a processor from the processors map
@@ -328,6 +369,7 @@ mod tests {
         .unwrap()
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_processor_manager_tracks_heartbeats_and_wmbs() {
         let js_context = setup_nats().await;
@@ -410,6 +452,7 @@ mod tests {
         js_context.delete_key_value("hb_bucket").await.unwrap();
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_processor_manager_tracks_multiple_processors() {
         let js_context = setup_nats().await;

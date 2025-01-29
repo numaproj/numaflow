@@ -42,8 +42,8 @@ pub(crate) mod watermark;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PipelineConfig {
-    pub(crate) pipeline_name: String,
-    pub(crate) vertex_name: String,
+    pub(crate) pipeline_name: &'static str,
+    pub(crate) vertex_name: &'static str,
     pub(crate) replica: u16,
     pub(crate) batch_size: usize,
     // FIXME(cr): we cannot leak this as a paf, we need to use a different terminology.
@@ -66,8 +66,8 @@ pub(crate) struct ServingCallbackConfig {
 impl Default for PipelineConfig {
     fn default() -> Self {
         PipelineConfig {
-            pipeline_name: "default-pl".to_string(),
-            vertex_name: "default-vtx".to_string(),
+            pipeline_name: "default-pl",
+            vertex_name: "default-vtx",
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
             paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
@@ -448,8 +448,8 @@ impl PipelineConfig {
                 .parse()
                 .unwrap(),
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
-            pipeline_name,
-            vertex_name,
+            pipeline_name: Box::leak(pipeline_name.into_boxed_str()),
+            vertex_name: Box::leak(vertex_name.into_boxed_str()),
             replica: *replica,
             js_client_config,
             from_vertex_config,
@@ -570,8 +570,8 @@ mod tests {
     #[test]
     fn test_default_pipeline_config() {
         let expected = PipelineConfig {
-            pipeline_name: "default-pl".to_string(),
-            vertex_name: "default-vtx".to_string(),
+            pipeline_name: "default-pl",
+            vertex_name: "default-vtx",
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
             paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
@@ -618,8 +618,8 @@ mod tests {
         let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
 
         let expected = PipelineConfig {
-            pipeline_name: "simple-pipeline".to_string(),
-            vertex_name: "out".to_string(),
+            pipeline_name: "simple-pipeline",
+            vertex_name: "out",
             replica: 0,
             batch_size: 500,
             paf_concurrency: 1000,
@@ -674,8 +674,8 @@ mod tests {
             PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
 
         let expected = PipelineConfig {
-            pipeline_name: "simple-pipeline".to_string(),
-            vertex_name: "in".to_string(),
+            pipeline_name: "simple-pipeline",
+            vertex_name: "in",
             replica: 0,
             batch_size: 1000,
             paf_concurrency: 1000,
@@ -742,8 +742,8 @@ mod tests {
             PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
 
         let expected = PipelineConfig {
-            pipeline_name: "simple-pipeline".to_string(),
-            vertex_name: "in".to_string(),
+            pipeline_name: "simple-pipeline",
+            vertex_name: "in",
             replica: 0,
             batch_size: 50,
             paf_concurrency: 1000,
@@ -880,8 +880,8 @@ mod tests {
             PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
 
         let expected = PipelineConfig {
-            pipeline_name: "simple-pipeline".to_string(),
-            vertex_name: "map".to_string(),
+            pipeline_name: "simple-pipeline",
+            vertex_name: "map",
             replica: 0,
             batch_size: 500,
             paf_concurrency: 1000,

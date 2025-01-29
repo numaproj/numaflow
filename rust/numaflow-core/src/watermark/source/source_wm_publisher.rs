@@ -117,6 +117,7 @@ mod tests {
     use crate::watermark::source::source_wm_publisher::{BucketConfig, SourceWatermarkPublisher};
     use crate::watermark::wmb::WMB;
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_publish_source_watermark() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
@@ -184,6 +185,7 @@ mod tests {
             .unwrap();
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_publish_edge_watermark() {
         let client = async_nats::connect("localhost:4222").await.unwrap();

@@ -67,7 +67,15 @@ pub(crate) async fn start_forwarder(
             let edge_watermark_handle = match &config.watermark_config {
                 Some(wm_config) => {
                     if let WatermarkConfig::Edge(edge_config) = wm_config {
-                        Some(ISBWatermarkHandle::new(js_context.clone(), edge_config).await?)
+                        Some(
+                            ISBWatermarkHandle::new(
+                                config.vertex_name,
+                                config.replica,
+                                js_context.clone(),
+                                edge_config,
+                            )
+                            .await?,
+                        )
                     } else {
                         None
                     }
@@ -89,7 +97,15 @@ pub(crate) async fn start_forwarder(
             let edge_watermark_handle = match &config.watermark_config {
                 Some(wm_config) => {
                     if let WatermarkConfig::Edge(edge_config) = wm_config {
-                        Some(ISBWatermarkHandle::new(js_context.clone(), edge_config).await?)
+                        Some(
+                            ISBWatermarkHandle::new(
+                                config.vertex_name,
+                                config.replica,
+                                js_context.clone(),
+                                edge_config,
+                            )
+                            .await?,
+                        )
                     } else {
                         None
                     }
@@ -117,7 +133,7 @@ async fn start_source_forwarder(
     source_watermark_handle: Option<SourceWatermarkHandle>,
 ) -> Result<()> {
     let callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
-        CallbackHandler::new(config.vertex_name.clone(), cb_cfg.callback_concurrency)
+        CallbackHandler::new(config.vertex_name.to_string(), cb_cfg.callback_concurrency)
     });
     let tracker_handle = TrackerHandle::new(None, callback_handler);
 
@@ -193,7 +209,7 @@ async fn start_map_forwarder(
     let mut isb_lag_readers = vec![];
 
     let callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
-        CallbackHandler::new(config.vertex_name.clone(), cb_cfg.callback_concurrency)
+        CallbackHandler::new(config.vertex_name.to_string(), cb_cfg.callback_concurrency)
     });
 
     for stream in reader_config.streams.clone() {
@@ -291,7 +307,7 @@ async fn start_sink_forwarder(
         .reader_config;
 
     let callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
-        CallbackHandler::new(config.vertex_name.clone(), cb_cfg.callback_concurrency)
+        CallbackHandler::new(config.vertex_name.to_string(), cb_cfg.callback_concurrency)
     });
 
     // Create sink writers and buffer readers for each stream
@@ -506,8 +522,8 @@ mod tests {
         }
 
         let pipeline_config = PipelineConfig {
-            pipeline_name: "simple-pipeline".to_string(),
-            vertex_name: "in".to_string(),
+            pipeline_name: "simple-pipeline",
+            vertex_name: "in",
             replica: 0,
             batch_size: 1000,
             paf_concurrency: 30000,
@@ -672,8 +688,8 @@ mod tests {
         }
 
         let pipeline_config = PipelineConfig {
-            pipeline_name: "simple-pipeline".to_string(),
-            vertex_name: "in".to_string(),
+            pipeline_name: "simple-pipeline",
+            vertex_name: "in",
             replica: 0,
             batch_size: 1000,
             paf_concurrency: 1000,
@@ -896,8 +912,8 @@ mod tests {
         }
 
         let pipeline_config = PipelineConfig {
-            pipeline_name: "simple-map-pipeline".to_string(),
-            vertex_name: "in".to_string(),
+            pipeline_name: "simple-map-pipeline",
+            vertex_name: "in",
             replica: 0,
             batch_size: 1000,
             paf_concurrency: 1000,

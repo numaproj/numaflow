@@ -104,7 +104,8 @@ impl ISBWatermarkFetcher {
             self.last_logged_time = Utc::now();
             info!(
                 "Watermark fetched: {:?}, from {:?}",
-                watermark, self.processor_managers
+                watermark.timestamp_millis(),
+                self.processor_managers
             );
         }
 

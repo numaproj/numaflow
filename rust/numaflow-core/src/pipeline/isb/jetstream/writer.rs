@@ -403,6 +403,10 @@ impl JetstreamWriter {
                                         stream.partition,
                                     )),
                                 ));
+                                tracker_handle
+                                    .delete(message.offset.clone())
+                                    .await
+                                    .expect("Failed to delete offset from tracker");
                             }
                             Err(e) => {
                                 error!(?e, "Blocking write failed for stream {}", stream);
