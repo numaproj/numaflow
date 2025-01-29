@@ -1028,3 +1028,66 @@ func TestHandler_GetContainerStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestHandler_IsNotSidecarContainer(t *testing.T) {
+	handler := &handler{}
+
+	tests := []struct {
+		name          string
+		containerName string
+		pod           corev1.Pod
+		expected      bool
+	}{
+		{
+			name:          "Init container with Always restart policy",
+			containerName: "init-container-1",
+			pod: corev1.Pod{
+				Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{
+						{
+							Name:          "init-container-1",
+							RestartPolicy: func() *corev1.ContainerRestartPolicy { p := corev1.ContainerRestartPolicyAlways; return &p }(),
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name:          "Container not in init containers",
+			containerName: "app-container",
+			pod: corev1.Pod{
+				Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{
+						{
+							Name: "init-container-1",
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name:          "Init container with nil RestartPolicy",
+			containerName: "init-container-3",
+			pod: corev1.Pod{
+				Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{
+						{
+							Name:          "init-container-3",
+							RestartPolicy: nil,
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := handler.isNotSidecarContainer(tt.containerName, tt.pod)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
