@@ -7,11 +7,11 @@ use crate::metrics::{
     pipeline_isb_metric_labels, pipeline_metrics,
 };
 use crate::tracker::TrackerHandle;
-use crate::Result;
 use crate::{
     message::{Message, Offset},
     reader::LagReader,
 };
+use crate::{Error, Result};
 use numaflow_pulsar::source::PulsarSource;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
@@ -337,10 +337,9 @@ impl Source {
 
                 // write the messages to downstream.
                 for message in messages {
-                    messages_tx
-                        .send(message)
-                        .await
-                        .expect("send should not fail");
+                    messages_tx.send(message).await.map_err(|e| {
+                        Error::Source(format!("failed to send message to downstream {:?}", e))
+                    })?;
                 }
             }
         });
