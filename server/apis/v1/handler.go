@@ -1643,8 +1643,16 @@ func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
 }
 
 func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetails {
-	var containerDetailsMap = make(map[string]ContainerDetails)
-	for _, status := range pod.Status.ContainerStatuses {
+	totalContainers := len(pod.Spec.Containers) + len(pod.Spec.InitContainers)
+	containerDetailsMap := make(map[string]ContainerDetails, totalContainers)
+
+	// Helper function to process container statuses
+	processContainerStatus := func(status corev1.ContainerStatus, isInitContainer bool) {
+		// Skip init containers without Always restart policy
+		if isInitContainer && h.isNotSidecarContainer(status.Name, pod) {
+			return
+		}
+
 		containerName := status.Name
 		details := ContainerDetails{
 			Name:         status.Name,
@@ -1666,13 +1674,25 @@ func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetail
 		containerDetailsMap[containerName] = details
 	}
 
-	// Get CPU/Memory requests and limits from Pod spec
-	for _, container := range pod.Spec.Containers {
+	for _, status := range pod.Status.InitContainerStatuses {
+		processContainerStatus(status, true)
+	}
+	for _, status := range pod.Status.ContainerStatuses {
+		processContainerStatus(status, false)
+	}
+
+	// Helper function to process container resources
+	processContainerResources := func(container corev1.Container, isInitContainer bool) {
+		// Skip init containers without Always restart policy
+		if isInitContainer && h.isNotSidecarContainer(container.Name, pod) {
+			return
+		}
+
 		cpuRequest := container.Resources.Requests.Cpu().MilliValue()
 		memRequest := container.Resources.Requests.Memory().Value() / (1024 * 1024)
 		cpuLimit := container.Resources.Limits.Cpu().MilliValue()
 		memLimit := container.Resources.Limits.Memory().Value() / (1024 * 1024)
-		// Get the existing ContainerDetails or create a new one
+
 		details, ok := containerDetailsMap[container.Name]
 		if !ok {
 			details = ContainerDetails{Name: container.Name} // Initialize if not found
@@ -1691,7 +1711,26 @@ func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetail
 		}
 		containerDetailsMap[container.Name] = details
 	}
+
+	for _, container := range pod.Spec.InitContainers {
+		processContainerResources(container, true)
+	}
+	for _, container := range pod.Spec.Containers {
+		processContainerResources(container, false)
+	}
+
 	return containerDetailsMap
+}
+
+// Helper function to check if container is an init container without "Always" restart policy
+// for sidecar containers (eg: ud containers), we set "Always" restart policy in k8s >= 1.29
+func (h *handler) isNotSidecarContainer(containerName string, pod corev1.Pod) bool {
+	for _, initContainer := range pod.Spec.InitContainers {
+		if initContainer.Name == containerName {
+			return initContainer.RestartPolicy == nil || *initContainer.RestartPolicy != corev1.ContainerRestartPolicyAlways
+		}
+	}
+	return true
 }
 
 func (h *handler) getContainerStatus(state corev1.ContainerState) string {

@@ -306,6 +306,7 @@ impl SinkWriter {
                                 // Discard the message from the tracker
                                 this.tracker_handle.discard(offset).await?;
                             }
+                            return Err(e);
                         }
                     }
 
