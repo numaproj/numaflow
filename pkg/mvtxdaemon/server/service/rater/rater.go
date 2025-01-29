@@ -67,10 +67,10 @@ type Rater struct {
 	podTracker *PodTracker
 	// timestampedPodCounts is a queue of timestamped counts for the MonoVertex
 	timestampedPodCounts *sharedqueue.OverflowQueue[*TimestampedCounts]
-	// userSpecifiedLookBackSeconds the current lookback seconds for the monovertex
+	// lookBackSeconds is the lookback time window used for scaling calculations
 	// this can be updated dynamically, defaults to user-specified value in the spec
-	userSpecifiedLookBackSeconds *atomic.Float64
-	options                      *options
+	lookBackSeconds *atomic.Float64
+	options         *options
 }
 
 // PodReadCount is a struct to maintain count of messages read by a pod of MonoVertex
@@ -100,9 +100,9 @@ func NewRater(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...Option) *Rat
 			},
 			Timeout: time.Second * 1,
 		},
-		log:                          logging.FromContext(ctx).Named("Rater"),
-		options:                      defaultOptions(),
-		userSpecifiedLookBackSeconds: atomic.NewFloat64(float64(mv.Spec.Scale.GetLookbackSeconds())),
+		log:             logging.FromContext(ctx).Named("Rater"),
+		options:         defaultOptions(),
+		lookBackSeconds: atomic.NewFloat64(float64(mv.Spec.Scale.GetLookbackSeconds())),
 	}
 
 	rater.podTracker = NewPodTracker(ctx, mv)
@@ -115,7 +115,7 @@ func NewRater(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...Option) *Rat
 		}
 	}
 	// initialise the metric value for the lookback window
-	metrics.MonoVertexLookBack.WithLabelValues(mv.Name).Set(rater.userSpecifiedLookBackSeconds.Load())
+	metrics.MonoVertexLookBack.WithLabelValues(mv.Name).Set(rater.lookBackSeconds.Load())
 	return &rater
 }
 
@@ -212,7 +212,7 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 func (r *Rater) buildLookbackSecondsMap() map[string]int64 {
 	// as the lookback value can be changing dynamically,
 	// load the current value for the lookback seconds
-	lbValue := r.userSpecifiedLookBackSeconds.Load()
+	lbValue := r.lookBackSeconds.Load()
 	lookbackSecondsMap := map[string]int64{"default": int64(lbValue)}
 	for k, v := range fixedLookbackSeconds {
 		lookbackSecondsMap[k] = v
@@ -303,7 +303,7 @@ func (r *Rater) startDynamicLookBack(ctx context.Context) {
 // processing time of the MonoVertex system.
 func (r *Rater) updateDynamicLookbackSecs() {
 	counts := r.timestampedPodCounts.Items()
-	currentLookback := r.userSpecifiedLookBackSeconds.Load()
+	currentLookback := r.lookBackSeconds.Load()
 	vertexName := r.monoVertex.Name
 	if len(counts) <= 1 {
 		return
@@ -328,22 +328,22 @@ func (r *Rater) updateDynamicLookbackSecs() {
 	maxProcessingTime := CalculateMaxLookback(counts, startIndex, endIndex)
 	// round up to the nearest minute, also ensure that while going up and down we have the consistent value for
 	// a given processingTimeSeconds, then convert back to seconds
-	roundedProcessingTime := 60.0 * (math.Ceil(float64(maxProcessingTime) / 60.0))
-	// Based on the value recieved we can have two cases
+	roundedMaxLookback := 60.0 * (math.Ceil(float64(maxProcessingTime) / 60.0))
+	// Based on the value received we can have two cases
 	// 1. Step up case (value is > than current):
 	// 	  Do not allow the value to be increased more than the MaxLookback allowed (10mins)
 	// 2. Step Down (value is <= than current)
 	//    Do not allow the value to be lower the lookback value specified in the spec
-	if roundedProcessingTime > currentLookback {
-		roundedProcessingTime = math.Min(roundedProcessingTime, MaxLookback.Seconds())
+	if roundedMaxLookback > currentLookback {
+		roundedMaxLookback = math.Min(roundedMaxLookback, MaxLookback.Seconds())
 	} else {
-		roundedProcessingTime = math.Max(roundedProcessingTime, float64(r.monoVertex.Spec.Scale.GetLookbackSeconds()))
+		roundedMaxLookback = math.Max(roundedMaxLookback, float64(r.monoVertex.Spec.Scale.GetLookbackSeconds()))
 	}
 	// If the value has changed, update it
-	if roundedProcessingTime != currentLookback {
-		r.userSpecifiedLookBackSeconds.Store(roundedProcessingTime)
-		r.log.Infof("Lookback updated for mvtx %s, Current: %f Updated %f", vertexName, currentLookback, roundedProcessingTime)
+	if roundedMaxLookback != currentLookback {
+		r.lookBackSeconds.Store(roundedMaxLookback)
+		r.log.Infof("Lookback updated for mvtx %s, Current: %f Updated %f", vertexName, currentLookback, roundedMaxLookback)
 		// update the metric value for the lookback window
-		metrics.MonoVertexLookBack.WithLabelValues(r.monoVertex.Name).Set(roundedProcessingTime)
+		metrics.MonoVertexLookBack.WithLabelValues(r.monoVertex.Name).Set(roundedMaxLookback)
 	}
 }
