@@ -338,7 +338,7 @@ impl Source {
                 // write the messages to downstream.
                 for message in messages {
                     messages_tx.send(message).await.map_err(|e| {
-                        Error::Source(format!("failed to send message downstream {:?}", e))
+                        Error::Source(format!("failed to send message to downstream {:?}", e))
                     })?;
                 }
             }
