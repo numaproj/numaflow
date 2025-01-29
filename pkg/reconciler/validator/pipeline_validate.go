@@ -88,6 +88,21 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return fmt.Errorf("pipeline has no sink, at least one vertex with 'sink' defined is required")
 	}
 
+	var servingSource *dfv1.AbstractVertex
+	for _, srcVtx := range sources {
+		if srcVtx.Source.Serving != nil {
+			servingSource = &srcVtx
+			break
+		}
+	}
+	if servingSource != nil {
+		for _, v := range pl.Spec.Vertices {
+			if v.UDF != nil && v.UDF.GroupBy != nil {
+				return fmt.Errorf("pipeline has a Serving source %q and a reduce vertex %q. Reduce is not supported with Serving source", servingSource.Name, v.Name)
+			}
+		}
+	}
+
 	namesInEdges := make(map[string]bool)
 	toFromEdge := make(map[string]bool)
 	for _, e := range pl.Spec.Edges {
