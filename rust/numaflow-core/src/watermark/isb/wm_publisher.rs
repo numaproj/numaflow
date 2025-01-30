@@ -34,7 +34,6 @@ pub(crate) struct ISBWatermarkPublisher {
     last_published_wm: HashMap<&'static str, Vec<LastPublishedState>>,
     /// map of vertex to its ot bucket.
     ot_buckets: HashMap<&'static str, async_nats::jetstream::kv::Store>,
-    last_logged_time: DateTime<Utc>,
 }
 
 impl Drop for ISBWatermarkPublisher {
@@ -89,7 +88,6 @@ impl ISBWatermarkPublisher {
             hb_handle,
             last_published_wm,
             ot_buckets,
-            last_logged_time: Utc::now(),
         })
     }
 
@@ -166,18 +164,6 @@ impl ISBWatermarkPublisher {
         // update the last published watermark state
         last_published_wm_state[stream.partition as usize] =
             LastPublishedState { offset, watermark };
-
-        if Utc::now()
-            .signed_duration_since(self.last_logged_time)
-            .num_seconds()
-            > 1
-        {
-            info!(
-                "Published watermark for vertex: {}, partition: {}, offset: {}, watermark: {}",
-                stream.vertex, stream.partition, offset, watermark
-            );
-            self.last_logged_time = Utc::now();
-        }
 
         Ok(())
     }

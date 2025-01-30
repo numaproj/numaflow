@@ -1,6 +1,3 @@
-use chrono::{DateTime, Utc};
-use log::info;
-
 use crate::error::Result;
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::Watermark;
@@ -8,16 +5,12 @@ use crate::watermark::wmb::Watermark;
 /// SourceWatermarkFetcher is the watermark fetcher for the source.
 pub struct SourceWatermarkFetcher {
     processor_manager: ProcessorManager,
-    last_logged_time: DateTime<Utc>,
 }
 
 impl SourceWatermarkFetcher {
     /// Creates a new [SourceWatermarkFetcher].
     pub(crate) async fn new(processor_manager: ProcessorManager) -> Result<Self> {
-        Ok(SourceWatermarkFetcher {
-            processor_manager,
-            last_logged_time: Utc::now(),
-        })
+        Ok(SourceWatermarkFetcher { processor_manager })
     }
 
     /// Fetches the watermark for the source, which is the minimum watermark of all the active
@@ -48,18 +41,7 @@ impl SourceWatermarkFetcher {
             min_wm = -1;
         }
 
-        if Utc::now()
-            .signed_duration_since(self.last_logged_time)
-            .num_seconds()
-            > 1
-        {
-            info!(
-                "Fetched source watermark: {:?} from: {:?}",
-                min_wm, self.processor_manager
-            );
-            self.last_logged_time = Utc::now();
-        }
-        Ok(Watermark::from_timestamp_millis(min_wm).unwrap())
+        Ok(Watermark::from_timestamp_millis(min_wm).expect("Invalid watermark"))
     }
 }
 

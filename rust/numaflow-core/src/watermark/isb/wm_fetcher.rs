@@ -1,8 +1,5 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
-use tracing::info;
-
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::{Error, Result};
 use crate::watermark::processor::manager::ProcessorManager;
@@ -15,8 +12,6 @@ pub(crate) struct ISBWatermarkFetcher {
     processor_managers: HashMap<&'static str, ProcessorManager>,
     /// A map of vertex to its last processed watermark for each partition.
     last_processed_wm: HashMap<&'static str, Vec<i64>>,
-    /// last logged time
-    last_logged_time: DateTime<Utc>,
 }
 
 impl ISBWatermarkFetcher {
@@ -36,7 +31,6 @@ impl ISBWatermarkFetcher {
         Ok(ISBWatermarkFetcher {
             processor_managers,
             last_processed_wm,
-            last_logged_time: Utc::now(),
         })
     }
 
@@ -93,23 +87,7 @@ impl ISBWatermarkFetcher {
             }
         }
 
-        // return the smallest among all the last processed watermarks
-        let watermark = self.get_watermark().await?;
-
-        if Utc::now()
-            .signed_duration_since(self.last_logged_time)
-            .num_seconds()
-            > 1
-        {
-            self.last_logged_time = Utc::now();
-            info!(
-                "Watermark fetched: {:?}, from {:?}",
-                watermark.timestamp_millis(),
-                self.processor_managers
-            );
-        }
-
-        Ok(watermark)
+        self.get_watermark()
     }
 
     /// Fetches the latest idle WMB with the smallest watermark for the given partition
@@ -165,7 +143,7 @@ impl ISBWatermarkFetcher {
     }
 
     // returns the smallest last processed watermark among all the partitions
-    async fn get_watermark(&self) -> Result<Watermark> {
+    fn get_watermark(&self) -> Result<Watermark> {
         let mut min_wm = i64::MAX;
         for wm in self.last_processed_wm.values() {
             for &w in wm {
