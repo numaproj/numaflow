@@ -39,6 +39,8 @@ const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
 pub(crate) struct JetstreamWriter {
     config: Arc<Vec<ToVertexConfig>>,
     js_ctx: Context,
+    /// HashMap of streams (a vertex can write to any immediate downstream) and a bool to represent
+    /// whether the corresponding stream is full.
     is_full: HashMap<&'static str, Arc<AtomicBool>>,
     cancel_token: CancellationToken,
     tracker_handle: TrackerHandle,
@@ -357,6 +359,7 @@ impl JetstreamWriter {
             let _permit = permit;
             let mut offsets = Vec::new();
 
+            // resolve the pafs
             for (stream, paf) in pafs {
                 match paf.await {
                     Ok(ack) => {
@@ -421,6 +424,8 @@ impl JetstreamWriter {
                     }
                 }
             }
+
+            // now the pafs have resolved, lets use the offsets to send watermark
             for (stream, offset) in offsets {
                 if let Some(watermark_handle) = watermark_handle.as_ref() {
                     match watermark_handle {
@@ -449,12 +454,14 @@ impl JetstreamWriter {
                     }
                 }
             }
+
             pipeline_metrics()
                 .isb
                 .paf_resolution_time
                 .get_or_create(pipeline_isb_metric_labels())
                 .observe(start_time.elapsed().as_micros() as f64);
         });
+
         Ok(())
     }
 

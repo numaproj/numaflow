@@ -15,17 +15,18 @@
 //!   * - optional
 //!  ```
 //!
-//! Most of the data move forward except for the `ack` which can happen only after the that the tracker
-//! has guaranteed that the processing complete. Ack is spawned during the reading.
+//! Most of the data move forward except for the `ack`, `watermark` which can happen only after the
+//! that the tracker has guaranteed that the processing complete. Ack is spawned during the reading.
 //! ```text
 //! (Read) +-------> (UDF) -------> (Write) +
 //!        |                                |
 //!        |                                |
 //!        +-------> {tracker} <------------
-//!                     |
-//!                     |
-//!                     v
-//!                   {ack}
+//!                      |
+//!          +-----------+-----------+
+//!          |           |           |
+//!          v           v           v
+//!     (watermark)  (callbacks)   {ack}
 //!
 //! {} -> Listens on a OneShot
 //! () -> Streaming Interface

@@ -51,8 +51,15 @@ mod pipeline;
 /// Tracker to track the completeness of message processing.
 mod tracker;
 
-/// Map is a feature that allows users to execute custom code to transform their data.
+/// [Map] is a feature that allows users to execute custom code to transform their data.
+///
+/// [Map]: https://numaflow.numaproj.io/user-guide/user-defined-functions/map/map/
 mod mapper;
+
+/// [Watermark] _is a monotonically increasing timestamp of the oldest work/event not yet completed_
+///
+///
+/// [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 mod watermark;
 
 pub async fn run() -> Result<()> {

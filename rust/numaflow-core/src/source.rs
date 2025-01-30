@@ -1,3 +1,9 @@
+//! [Source] vertex is responsible for reliable reading data from an unbounded source into Numaflow
+//! and also assigning [Watermark].
+//!
+//! [Source]: https://numaflow.numaproj.io/user-guide/sources/overview/
+//! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
+
 use std::sync::Arc;
 
 use numaflow_pulsar::source::PulsarSource;

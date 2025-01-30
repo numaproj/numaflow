@@ -1,23 +1,22 @@
-//! Exposes methods to fetch the watermark for the messages read from [ISB], and publish the watermark for the messages
-//! written to [ISB]. Manages the timelines of the watermark published by the previous vertices for each partition and
-//! fetches the lowest watermark among them. It tracks the watermarks of all the inflight messages for each partition,
-//! and publishes the lowest watermark. The watermark published to the ISB will always be monotonically increasing.
-//! Fetch and publish will be two different flows, but we will have natural ordering because we use actor model. Since
-//! we do streaming within the vertex we have to track the messages so that even if any messages get stuck we consider
-//! them while publishing watermarks.
+//! Exposes methods to fetch the watermark for the messages read from [crate::pipeline::isb], and
+//! publish the watermark for the messages written to [crate::pipeline::isb]. Manages the timelines
+//! of the watermark published by the previous vertices for each partition and fetches the lowest
+//! watermark among them. It tracks the watermarks of all the inflight messages for each partition,
+//! and publishes the lowest watermark. The watermark published to the ISB will always be monotonically
+//! increasing. Fetch and publish will be two different flows, but we will have natural ordering
+//! because we use actor model. Since we do streaming within the vertex we have to track the
+//! messages so that even if any messages get stuck we consider them while publishing watermarks.
 //!
 //!
 //! ##### Fetch Flow
 //! ```text
-//! (Read from ISB) +-------> (Fetch Watermark) +-------> (Track Offset and WM)
+//! (Read from ISB) -------> (Fetch Watermark) -------> (Track Offset and WM)
 //! ```
 //!
 //! ##### Publish Flow
 //! ```text
-//! (Write to ISB) +-------> (Publish Watermark) +-----> (Remove tracked Offset)
+//! (Write to ISB) -------> (Publish Watermark) ------> (Remove tracked Offset)
 //! ```
-//!
-//! [ISB]: https://numaflow.numaproj.io/core-concepts/inter-step-buffer/
 
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap};

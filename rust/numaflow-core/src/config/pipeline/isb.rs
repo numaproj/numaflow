@@ -29,6 +29,7 @@ pub(crate) mod jetstream {
     }
 }
 
+/// Stream is a one of the partition of the ISB between two vertices.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Stream {
     pub(crate) name: &'static str,

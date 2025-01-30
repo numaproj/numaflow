@@ -1,3 +1,8 @@
+//! The [Sink] serves as the endpoint for processed data that has been outputted from the platform,
+//! which is then sent to an external system or application.
+//!
+//! [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
+
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -27,7 +32,7 @@ use crate::metrics::{
 use crate::tracker::TrackerHandle;
 use crate::Result;
 
-/// A [blackhole] sink which reads but never writes to anywhere, semantic equivalent of `/dev/null`.
+/// A [Blackhole] sink which reads but never writes to anywhere, semantic equivalent of `/dev/null`.
 ///
 /// [Blackhole]: https://numaflow.numaproj.io/user-guide/sinks/blackhole/
 mod blackhole;

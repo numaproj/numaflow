@@ -460,6 +460,7 @@ impl PipelineConfig {
             callback_config,
         })
     }
+
     fn create_watermark_config(
         namespace: &str,
         pipeline_name: &str,
