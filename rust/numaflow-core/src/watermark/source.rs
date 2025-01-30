@@ -1,3 +1,20 @@
+//! Exposes methods to fetch and publish the watermark for the messages read from [Source], also
+//! exposes methods to publish the watermark for the messages written to [ISB]. Since the watermark
+//! starts at source we publish and fetch inside the source to get the minimum event time across the
+//! partitions. Since we write the messages to ISB, we publish the watermark for the messages written
+//! to ISB. Hence, source publisher internally uses ISB publisher to publish the watermarks. Since source
+//! is not streaming in nature we don't have to track the inflight offsets and their watermarks.
+//!
+//!
+//! ##### Watermark flow
+//!
+//! ```text
+//! (Read) +---> (Publish WM For Source) +---> (Fetch WM For Source) +---> (Write to ISB) +---> (Publish WM to ISB)
+//! ```
+//!
+//! [Source]: https://numaflow.numaproj.io/user-guide/sources/overview/
+//! [ISB]: https://numaflow.numaproj.io/core-concepts/inter-step-buffer/
+
 use std::collections::HashMap;
 
 use tokio::sync::mpsc::Receiver;
@@ -65,7 +82,7 @@ impl SourceWatermarkActor {
                 stream,
                 input_partition,
             } => {
-                let watermark = self.fetcher.fetch_source_watermark().await?;
+                let watermark = self.fetcher.fetch_source_watermark()?;
                 self.publisher
                     .publish_edge_watermark(
                         input_partition,
@@ -98,10 +115,7 @@ impl SourceWatermarkHandle {
         let processor_manager =
             ProcessorManager::new(js_context.clone(), &config.source_bucket_config).await?;
 
-        let fetcher = SourceWatermarkFetcher::new(processor_manager)
-            .await
-            .map_err(|e| Error::Watermark(e.to_string()))?;
-
+        let fetcher = SourceWatermarkFetcher::new(processor_manager);
         let publisher = SourceWatermarkPublisher::new(
             js_context.clone(),
             config.source_bucket_config.clone(),

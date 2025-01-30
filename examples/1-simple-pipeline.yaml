@@ -3,104 +3,28 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
-  interStepBufferServiceName: "default"
   vertices:
-    - name: input-one
-      containerTemplate:
-        resources:
-          requests:
-            memory: "1Gi"
-            cpu: "1"
-          limits:
-            memory: "1Gi"
-            cpu: "1"
+    - name: in
       scale:
         min: 1
       # A self data generating source
       source:
         generator:
-          rpu: 3000
+          rpu: 5
           duration: 1s
-    - name: input-two
-      containerTemplate:
-        resources:
-          requests:
-            memory: "1Gi"
-            cpu: "1"
-          limits:
-            memory: "1Gi"
-            cpu: "1"
-      scale:
-        min: 1
-      # A self data generating source
-      source:
-        generator:
-          rpu: 3000
-          duration: 1s
-    - name: cat-one
-      containerTemplate:
-        resources:
-          requests:
-            memory: "1Gi"
-            cpu: "1"
-          limits:
-            memory: "1Gi"
-            cpu: "1"
-      partitions: 2
+    - name: cat
       scale:
         min: 1
       udf:
-        container:
-          image: quay.io/numaio/numaflow-go/map-forward-message:stable
-    - name: cat-two
-      containerTemplate:
-        resources:
-          requests:
-            memory: "1Gi"
-            cpu: "1"
-          limits:
-            memory: "1Gi"
-            cpu: "1"
-      partitions: 2
-      scale:
-        min: 1
-      udf:
-        container:
-          image: quay.io/numaio/numaflow-go/map-forward-message:stable
-    - name: counter
-      scale:
-        min: 1
-      udf:
-        groupBy:
-          window:
-            fixed:
-              length: 10s
-          keyed: true
-          storage:
-            emptyDir: { }
-        container:
-          image: quay.io/numaio/numaflow-go/reduce-counter:stable
+        builtin:
+          name: cat # A built-in UDF which simply cats the message
     - name: out
-      containerTemplate:
-        resources:
-          requests:
-            memory: "1Gi"
-            cpu: "1"
-          limits:
-            memory: "1Gi"
-            cpu: "1"
       scale:
         min: 1
       sink:
         log: {}
   edges:
-    - from: input-one
-      to: cat-one
-    - from: input-two
-      to: cat-one
-    - from: cat-one
-      to: cat-two
-    - from: cat-two
-      to: counter
-    - from: counter
+    - from: in
+      to: cat
+    - from: cat
       to: out

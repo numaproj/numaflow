@@ -1,3 +1,24 @@
+//! Exposes methods to fetch the watermark for the messages read from [ISB], and publish the watermark for the messages
+//! written to [ISB]. Manages the timelines of the watermark published by the previous vertices for each partition and
+//! fetches the lowest watermark among them. It tracks the watermarks of all the inflight messages for each partition,
+//! and publishes the lowest watermark. The watermark published to the ISB will always be monotonically increasing.
+//! Fetch and publish will be two different flows, but we will have natural ordering because we use actor model. Since
+//! we do streaming within the vertex we have to track the messages so that even if any messages get stuck we consider
+//! them while publishing watermarks.
+//!
+//!
+//! ##### Fetch Flow
+//! ```text
+//! (Read from ISB) +-------> (Fetch Watermark) +-------> (Track Offset and WM)
+//! ```
+//!
+//! ##### Publish Flow
+//! ```text
+//! (Write to ISB) +-------> (Publish Watermark) +-----> (Remove tracked Offset)
+//! ```
+//!
+//! [ISB]: https://numaflow.numaproj.io/core-concepts/inter-step-buffer/
+
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap};
 
@@ -33,7 +54,7 @@ enum ISBWaterMarkActorMessage {
     },
 }
 
-/// OffsetWatermark is a tuple of offset and watermark.
+/// Tuple of offset and watermark. We will use this to track the inflight messages.
 #[derive(Eq, PartialEq)]
 struct OffsetWatermark {
     /// offset can be -1 if watermark cannot be derived.
@@ -60,7 +81,13 @@ impl PartialOrd for OffsetWatermark {
 struct ISBWatermarkActor {
     fetcher: ISBWatermarkFetcher,
     publisher: ISBWatermarkPublisher,
-    offset_set: HashMap<u16, BTreeSet<OffsetWatermark>>, // partition_id -> BTreeSet of OffsetWatermark
+    /// BTreeSet is used to track the watermarks of the inflight messages because we frequently
+    /// need to get the lowest watermark among the inflight messages and BTreeSet provides O(1)
+    /// time complexity for getting the lowest watermark, even though insertion and deletion are
+    /// O(log n). If we use map or hashset, our lowest watermark fetch call would be O(n) even
+    /// though insertion and deletion are O(1). We do almost same amount insertion, deletion and
+    /// getting the lowest watermark so BTreeSet is the best choice.
+    offset_set: HashMap<u16, BTreeSet<OffsetWatermark>>,
 }
 
 impl ISBWatermarkActor {

@@ -1,3 +1,7 @@
+//! Manages the processors and their lifecycle. It will keep track of all the active processor by listening
+//! to the heartbeat bucket and update their offset timelines by listening to the ot bucket. It will also
+//! refresh the active processors if they are not active for a certain time.
+
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -10,7 +14,7 @@ use backoff::strategy::fixed;
 use bytes::Bytes;
 use futures::StreamExt;
 use prost::Message as ProtoMessage;
-use tokio::sync::RwLock;
+use std::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 use crate::config::pipeline::watermark::BucketConfig;
@@ -178,20 +182,19 @@ impl ProcessorManager {
                 .unwrap()
                 .as_secs() as i64;
 
-            let heartbeats = heartbeats.read().await;
-            let mut processors = processors.write().await;
+            let heartbeats = heartbeats.read().expect("failed to acquire lock");
+            let mut processors = processors.write().expect("failed to acquire lock");
 
-            for (p_name, &p_time) in heartbeats.iter() {
+            heartbeats.iter().for_each(|(p_name, &p_time)| {
                 if let Some(p) = processors.get_mut(p_name) {
-                    if current_time - p_time > 10 * refreshing_processors_rate as i64 {
-                        p.set_status(Status::Deleted);
-                    } else if current_time - p_time > refreshing_processors_rate as i64 {
-                        p.set_status(Status::InActive);
-                    } else {
-                        p.set_status(Status::Active);
-                    }
+                    let status = match current_time - p_time {
+                        diff if diff > 10 * refreshing_processors_rate as i64 => Status::Deleted,
+                        diff if diff > refreshing_processors_rate as i64 => Status::InActive,
+                        _ => Status::Active,
+                    };
+                    p.set_status(status);
                 }
-            }
+            });
         }
     }
 
@@ -224,10 +227,14 @@ impl ProcessorManager {
                     let processor_name = Bytes::from(kv.key);
                     let wmb: WMB = kv.value.try_into().expect("Failed to decode WMB");
 
-                    info!("Got {:?} for processor {:?}", wmb, processor_name);
-                    if let Some(processor) = processors.write().await.get_mut(&processor_name) {
+                    info!(wmb = ?wmb, processor = ?processor_name, "Received wmb from watcher");
+                    if let Some(processor) = processors
+                        .write()
+                        .expect("failed to acquire lock")
+                        .get_mut(&processor_name)
+                    {
                         let timeline = &mut processor.timelines[wmb.partition as usize];
-                        timeline.put(wmb).await;
+                        timeline.put(wmb);
                     } else {
                         debug!(?processor_name, "Processor not found");
                     }
@@ -272,18 +279,21 @@ impl ProcessorManager {
                     let hb = numaflow_pb::objects::watermark::Heartbeat::decode(kv.value)
                         .expect("Failed to decode heartbeat")
                         .heartbeat;
-                    heartbeats.write().await.insert(processor_name.clone(), hb);
+                    heartbeats
+                        .write()
+                        .expect("failed to acquire lock")
+                        .insert(processor_name.clone(), hb);
 
-                    info!("Got heartbeat {} for processor {:?}", hb, processor_name);
+                    info!(hb = ?hb, processor = ?processor_name, "Received heartbeat from watcher");
                     // if the processor is not in the processors map, add it
                     // or if processor status is not active, set it to active
-                    let mut processors = processors.write().await;
+                    let mut processors = processors.write().expect("failed to acquire lock");
                     if let Some(processor) = processors.get_mut(&processor_name) {
                         if !processor.is_active() {
                             processor.set_status(Status::Active);
                         }
                     } else {
-                        info!("Processor {:?} not found, adding it", processor_name);
+                        info!(processor = ?processor_name, "Processor not found, adding it");
                         let processor = Processor::new(
                             processor_name,
                             Status::Active,
@@ -294,18 +304,29 @@ impl ProcessorManager {
                 }
                 async_nats::jetstream::kv::Operation::Delete => {
                     let processor_name = Bytes::from(kv.key);
-                    heartbeats.write().await.remove(&processor_name);
+                    heartbeats
+                        .write()
+                        .expect("failed to acquire lock")
+                        .remove(&processor_name);
 
                     // update the processor status to deleted
-                    if let Some(processor) = processors.write().await.get_mut(&processor_name) {
+                    if let Some(processor) = processors
+                        .write()
+                        .expect("failed to acquire lock")
+                        .get_mut(&processor_name)
+                    {
                         processor.set_status(Status::Deleted);
                     }
                 }
                 async_nats::jetstream::kv::Operation::Purge => {
-                    heartbeats.write().await.clear();
+                    heartbeats.write().expect("failed to acquire lock").clear();
 
                     // update the processor status to deleted
-                    for (_, processor) in processors.write().await.iter_mut() {
+                    for (_, processor) in processors
+                        .write()
+                        .expect("failed to acquire lock")
+                        .iter_mut()
+                    {
                         processor.set_status(Status::Deleted);
                     }
                 }
@@ -339,8 +360,8 @@ impl ProcessorManager {
     }
 
     /// Delete a processor from the processors map
-    pub(crate) async fn delete_processor(&self, processor_name: &Bytes) {
-        let mut processors = self.processors.write().await;
+    pub(crate) fn delete_processor(&self, processor_name: &Bytes) {
+        let mut processors = self.processors.write().expect("failed to acquire lock");
         processors.remove(processor_name);
     }
 }
@@ -427,11 +448,14 @@ mod tests {
         let start_time = tokio::time::Instant::now();
         loop {
             tokio::time::sleep(Duration::from_millis(10)).await;
-            let processors = processor_manager.processors.read().await;
+            let processors = processor_manager
+                .processors
+                .read()
+                .expect("failed to acquire lock");
             if let Some(processor) = processors.get(&processor_name) {
                 if processor.status == Status::Active {
                     let timeline = &processor.timelines[0];
-                    if let Some(head_wmb) = timeline.get_head_wmb().await {
+                    if let Some(head_wmb) = timeline.get_head_wmb() {
                         if head_wmb.watermark == 200 && head_wmb.offset == 1 {
                             break;
                         }
@@ -539,7 +563,10 @@ mod tests {
         let start_time = tokio::time::Instant::now();
         loop {
             tokio::time::sleep(Duration::from_millis(10)).await;
-            let processors = processor_manager.processors.read().await;
+            let processors = processor_manager
+                .processors
+                .read()
+                .expect("failed to acquire lock");
 
             let futures: Vec<_> = processor_names
                 .iter()
@@ -548,8 +575,7 @@ mod tests {
                     async move {
                         if let Some(processor) = processor {
                             if processor.status == Status::Active {
-                                if let Some(head_wmb) = processor.timelines[0].get_head_wmb().await
-                                {
+                                if let Some(head_wmb) = processor.timelines[0].get_head_wmb() {
                                     return head_wmb.watermark == 200 && head_wmb.offset == 1;
                                 }
                             }

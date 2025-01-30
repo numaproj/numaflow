@@ -1,14 +1,18 @@
+//! OffsetTimeline is to store the watermark and offset records. It will always be sorted by watermark
+//! from highest to lowest. The timeline will be used to determine the event time for the input offset.
+//! Each processor will use this timeline to store the watermark and offset records per input partition.
+
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::fmt;
 use std::sync::Arc;
 
-use tokio::sync::RwLock;
+use std::sync::RwLock;
 use tracing::{error, warn};
 
 use crate::watermark::wmb::WMB;
 
-/// OffsetTimeline is to store the event time to the offset records.
+/// OffsetTimeline is to store the watermark to the offset records.
 /// Our list is sorted by event time from highest to lowest.
 #[derive(Clone)]
 pub(crate) struct OffsetTimeline {
@@ -30,20 +34,20 @@ impl OffsetTimeline {
     }
 
     /// Put inserts the WMB into list. It ensures that the list will remain sorted after the insert.
-    pub(crate) async fn put(&self, node: WMB) {
-        let mut watermarks = self.watermarks.write().await;
+    pub(crate) fn put(&self, node: WMB) {
+        let mut watermarks = self.watermarks.write().expect("failed to acquire lock");
 
         let element_node = watermarks
             .front_mut()
             .expect("timeline should never be empty");
 
         // Different cases:
-        // 1. Watermark is the same but the offset is larger - we should store the larger offset
-        // 2. Watermark is the same but the offset is smaller - we should skip
-        // 3. Watermark is larger and the offset is larger - we should store the larger offset and the watermark
-        // 4. Watermark is larger but the offset is smaller - should not happen (offset should be increasing)
-        // 5. Watermark is smaller - should not happen (watermark should be increasing)
-
+        // 1. Watermark is the same but the offset is larger - valid case, since data is moving forward we should store the larger offset
+        // 2. Watermark is the same but the offset is smaller - valid case, because of race conditions in the previous processor, we can ignore
+        // 3. Watermark is larger and the offset is larger - valid case, data is moving forward we should store the larger offset and watermark
+        // 4. Watermark is larger but the offset is smaller - invalid case, watermark is monotonically increasing for offset
+        // 5. Watermark is smaller - invalid case, watermark is monotonically increasing per partition and per processor
+        // 6. Watermark is greater but the offset is the same - valid case, we use same ctrl message to update the watermark, store the new watermark
         match (
             node.watermark.cmp(&element_node.watermark),
             node.offset.cmp(&element_node.offset),
@@ -71,32 +75,30 @@ impl OffsetTimeline {
     }
 
     /// GetHeadOffset returns the offset of the head WMB.
-    pub(crate) async fn get_head_offset(&self) -> i64 {
-        let watermarks = self.watermarks.read().await;
+    pub(crate) fn get_head_offset(&self) -> i64 {
+        let watermarks = self.watermarks.read().expect("failed to acquire lock");
         watermarks.front().map_or(-1, |w| w.offset)
     }
 
     /// GetHeadWatermark returns the watermark of the head WMB.
-    pub(crate) async fn get_head_watermark(&self) -> i64 {
-        let watermarks = self.watermarks.read().await;
+    pub(crate) fn get_head_watermark(&self) -> i64 {
+        let watermarks = self.watermarks.read().expect("failed to acquire lock");
         watermarks.front().map_or(-1, |w| w.watermark)
     }
 
     /// GetHeadWMB returns the head WMB.
-    pub(crate) async fn get_head_wmb(&self) -> Option<WMB> {
-        let watermarks = self.watermarks.read().await;
+    pub(crate) fn get_head_wmb(&self) -> Option<WMB> {
+        let watermarks = self.watermarks.read().expect("failed to acquire lock");
         watermarks.front().copied()
     }
 
     /// GetEventTime returns the event time of the nearest WMB that has an offset less than the input offset.
-    pub(crate) async fn get_event_time(&self, input_offset: i64) -> i64 {
-        let watermarks = self.watermarks.read().await;
-        for w in watermarks.iter() {
-            if w.offset < input_offset {
-                return w.watermark;
-            }
-        }
-        -1
+    pub(crate) fn get_event_time(&self, input_offset: i64) -> i64 {
+        let watermarks = self.watermarks.read().expect("failed to acquire lock");
+        watermarks
+            .iter()
+            .find(|w| w.offset < input_offset)
+            .map_or(-1, |w| w.watermark)
     }
 }
 
@@ -149,23 +151,23 @@ mod tests {
             partition: 0,
         };
 
-        timeline.put(wmb1).await;
-        timeline.put(wmb2).await;
-        timeline.put(wmb3).await;
-        timeline.put(wmb4).await;
-        timeline.put(wmb5).await;
+        timeline.put(wmb1);
+        timeline.put(wmb2);
+        timeline.put(wmb3);
+        timeline.put(wmb4);
+        timeline.put(wmb5);
 
-        let head_offset = timeline.get_head_offset().await;
+        let head_offset = timeline.get_head_offset();
         assert_eq!(head_offset, 5);
 
-        let head_watermark = timeline.get_head_watermark().await;
+        let head_watermark = timeline.get_head_watermark();
         assert_eq!(head_watermark, 300);
 
-        let head_wmb = timeline.get_head_wmb().await;
+        let head_wmb = timeline.get_head_wmb();
         assert!(head_wmb.is_some());
-        assert_eq!(head_wmb.unwrap().watermark, 300);
+        assert_eq!(head_wmb.expect("failed to acquire lock").watermark, 300);
 
-        let event_time = timeline.get_event_time(3).await;
+        let event_time = timeline.get_event_time(3);
         assert_eq!(event_time, 200);
     }
 
@@ -209,24 +211,24 @@ mod tests {
             partition: 0,
         };
 
-        timeline.put(wmb1).await;
-        timeline.put(wmb2).await;
-        timeline.put(wmb3).await;
-        timeline.put(wmb4).await;
-        timeline.put(wmb5).await;
-        timeline.put(wmb6).await;
+        timeline.put(wmb1);
+        timeline.put(wmb2);
+        timeline.put(wmb3);
+        timeline.put(wmb4);
+        timeline.put(wmb5);
+        timeline.put(wmb6);
 
-        let head_offset = timeline.get_head_offset().await;
+        let head_offset = timeline.get_head_offset();
         assert_eq!(head_offset, 86);
 
-        let head_watermark = timeline.get_head_watermark().await;
+        let head_watermark = timeline.get_head_watermark();
         assert_eq!(head_watermark, 300);
 
-        let head_wmb = timeline.get_head_wmb().await;
+        let head_wmb = timeline.get_head_wmb();
         assert!(head_wmb.is_some());
-        assert_eq!(head_wmb.unwrap().watermark, 300);
+        assert_eq!(head_wmb.expect("failed to acquire lock").watermark, 300);
 
-        let event_time = timeline.get_event_time(65).await;
+        let event_time = timeline.get_event_time(65);
         assert_eq!(event_time, 50);
     }
 
@@ -264,25 +266,25 @@ mod tests {
             partition: 0,
         };
 
-        timeline.put(wmb1).await;
-        timeline.put(wmb2).await;
-        timeline.put(wmb3).await;
-        timeline.put(wmb4).await;
-        timeline.put(wmb5).await;
+        timeline.put(wmb1);
+        timeline.put(wmb2);
+        timeline.put(wmb3);
+        timeline.put(wmb4);
+        timeline.put(wmb5);
 
         // should only consider the largest offset
-        let head_offset = timeline.get_head_offset().await;
+        let head_offset = timeline.get_head_offset();
         assert_eq!(head_offset, 5);
 
-        let head_watermark = timeline.get_head_watermark().await;
+        let head_watermark = timeline.get_head_watermark();
         assert_eq!(head_watermark, 100);
 
-        let head_wmb = timeline.get_head_wmb().await;
+        let head_wmb = timeline.get_head_wmb();
         assert!(head_wmb.is_some());
-        assert_eq!(head_wmb.unwrap().watermark, 100);
+        assert_eq!(head_wmb.expect("failed to acquire lock").watermark, 100);
 
         // only one entry, so should return -1
-        let event_time = timeline.get_event_time(5).await;
+        let event_time = timeline.get_event_time(5);
         assert_eq!(event_time, -1);
     }
 
@@ -308,14 +310,14 @@ mod tests {
             partition: 0,
         };
 
-        timeline.put(wmb1).await;
-        timeline.put(wmb2).await;
-        timeline.put(wmb3).await; // should be ignored since the watermark is smaller than the head
+        timeline.put(wmb1);
+        timeline.put(wmb2);
+        timeline.put(wmb3); // should be ignored since the watermark is smaller than the head
 
-        let head_offset = timeline.get_head_offset().await;
+        let head_offset = timeline.get_head_offset();
         assert_eq!(head_offset, 2);
 
-        let head_watermark = timeline.get_head_watermark().await;
+        let head_watermark = timeline.get_head_watermark();
         assert_eq!(head_watermark, 200);
 
         // valid idle watermark
@@ -326,11 +328,11 @@ mod tests {
             partition: 0,
         };
 
-        timeline.put(idle_wmb).await;
-        let head_offset = timeline.get_head_offset().await;
+        timeline.put(idle_wmb);
+        let head_offset = timeline.get_head_offset();
         assert_eq!(head_offset, 4);
 
-        let head_watermark = timeline.get_head_watermark().await;
+        let head_watermark = timeline.get_head_watermark();
         assert_eq!(head_watermark, 250);
 
         // same watermark but different offset (larger should be stored)
@@ -341,11 +343,11 @@ mod tests {
             partition: 0,
         };
 
-        timeline.put(idle_wmb).await;
-        let head_offset = timeline.get_head_offset().await;
+        timeline.put(idle_wmb);
+        let head_offset = timeline.get_head_offset();
         assert_eq!(head_offset, 5);
 
-        let head_watermark = timeline.get_head_watermark().await;
+        let head_watermark = timeline.get_head_watermark();
         assert_eq!(head_watermark, 250);
     }
 }

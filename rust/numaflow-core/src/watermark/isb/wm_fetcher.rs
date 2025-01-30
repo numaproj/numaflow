@@ -1,3 +1,11 @@
+//! Fetches watermark for the messages read from the ISB. It keeps track of the previous vertices
+//! (could be more than one in case of join vertex) processors and their published watermarks
+//! for each partition and fetches the watermark for the given offset and partition by iterating over
+//! all the processor managers and getting the smallest watermark. It also deletes the processors that
+//! are inactive. Since the vertex could be reading from multiple partitions, it keeps track of the
+//! last fetched watermark per partition and returns the smallest watermark among all the last fetched
+//! watermarks across the partitions this is to make sure the watermark is min across all the incoming
+//! partitions.
 use std::collections::HashMap;
 
 use crate::config::pipeline::watermark::BucketConfig;
@@ -45,36 +53,39 @@ impl ISBWatermarkFetcher {
             let mut epoch = i64::MAX;
             let mut processors_to_delete = Vec::new();
 
-            // iterate over all the timelines of the processor and get the smallest watermark
-            for (name, processor) in processor_manager.processors.read().await.iter() {
-                // headOffset is used to check whether this pod can be deleted.
-                let mut head_offset = -1;
-                for (index, timeline) in processor.timelines.iter().enumerate() {
-                    // info!("Checking timeline {:?}", timeline);
-                    // we only need to check the timelines of the partition we are reading from
-                    if index == partition_idx as usize {
-                        let t = timeline.get_event_time(offset).await;
+            // iterate over all the processors and get the smallest watermark
+            processor_manager
+                .processors
+                .read()
+                .expect("failed to acquire lock")
+                .iter()
+                .for_each(|(name, processor)| {
+                    // headOffset is used to check whether this pod can be deleted.
+                    let head_offset = processor
+                        .timelines
+                        .iter()
+                        .map(|timeline| timeline.get_head_offset())
+                        .max()
+                        .unwrap_or(-1);
+
+                    // we only need to consider the timeline for the requested partition
+                    if let Some(timeline) = processor.timelines.get(partition_idx as usize) {
+                        let t = timeline.get_event_time(offset);
                         if t < epoch {
                             epoch = t;
                         }
                     }
-                    // get the highest head offset among all the partitions of the processor so we can
-                    // check later on whether the processor in question is stale (its head is far behind)
-                    if timeline.get_head_offset().await > head_offset {
-                        head_offset = timeline.get_head_offset().await;
-                    }
-                }
 
-                // if the pod is not active and the head offset of all the timelines is less than the input offset, delete
-                // the processor (this means we are processing data later than what the stale processor has processed)
-                if processor.is_deleted() && offset > head_offset {
-                    processors_to_delete.push(name.clone());
-                }
-            }
+                    // if the pod is not active and the head offset of all the timelines is less than the input offset, delete
+                    // the processor (this means we are processing data later than what the stale processor has processed)
+                    if processor.is_deleted() && offset > head_offset {
+                        processors_to_delete.push(name.clone());
+                    }
+                });
 
             // delete the processors that are inactive
             for name in processors_to_delete {
-                processor_manager.delete_processor(&name).await;
+                processor_manager.delete_processor(&name);
             }
 
             // if the epoch is not i64::MAX, update the last processed watermark for this particular edge and the partition
@@ -97,7 +108,12 @@ impl ISBWatermarkFetcher {
         let mut min_wm = i64::MAX;
         for (edge, processor_manager) in self.processor_managers.iter() {
             let mut epoch = i64::MAX;
-            for processor in processor_manager.processors.read().await.values() {
+            for processor in processor_manager
+                .processors
+                .read()
+                .expect("failed to acquire lock")
+                .values()
+            {
                 // if the processor is not active, skip
                 if !processor.is_active() {
                     continue;
@@ -109,8 +125,7 @@ impl ISBWatermarkFetcher {
                     .timelines
                     .get(partition_idx as usize)
                     .ok_or(Error::Watermark("Partition not found".to_string()))?
-                    .get_head_wmb()
-                    .await;
+                    .get_head_wmb();
 
                 if let Some(wmb) = head_wmb {
                     // if the processor is not idle, return early
@@ -166,7 +181,7 @@ mod tests {
     use std::sync::Arc;
 
     use bytes::Bytes;
-    use tokio::sync::RwLock;
+    use std::sync::RwLock;
 
     use super::*;
     use crate::watermark::processor::manager::{Processor, Status};
@@ -200,9 +215,9 @@ mod tests {
             partition: 0,
         };
 
-        timeline.put(wmb1).await;
-        timeline.put(wmb2).await;
-        timeline.put(wmb3).await;
+        timeline.put(wmb1);
+        timeline.put(wmb2);
+        timeline.put(wmb3);
 
         processor.timelines[0] = timeline;
 
@@ -329,13 +344,13 @@ mod tests {
         ];
 
         for wmb in wmbs1 {
-            timeline1.put(wmb).await;
+            timeline1.put(wmb);
         }
         for wmb in wmbs2 {
-            timeline2.put(wmb).await;
+            timeline2.put(wmb);
         }
         for wmb in wmbs3 {
-            timeline3.put(wmb).await;
+            timeline3.put(wmb);
         }
 
         processor1.timelines[0] = timeline1;
@@ -548,22 +563,22 @@ mod tests {
         ];
 
         for wmb in wmbs1_p0 {
-            timeline1_p0.put(wmb).await;
+            timeline1_p0.put(wmb);
         }
         for wmb in wmbs1_p1 {
-            timeline1_p1.put(wmb).await;
+            timeline1_p1.put(wmb);
         }
         for wmb in wmbs2_p0 {
-            timeline2_p0.put(wmb).await;
+            timeline2_p0.put(wmb);
         }
         for wmb in wmbs2_p1 {
-            timeline2_p1.put(wmb).await;
+            timeline2_p1.put(wmb);
         }
         for wmb in wmbs3_p0 {
-            timeline3_p0.put(wmb).await;
+            timeline3_p0.put(wmb);
         }
         for wmb in wmbs3_p1 {
-            timeline3_p1.put(wmb).await;
+            timeline3_p1.put(wmb);
         }
 
         processor1.timelines[0] = timeline1_p0;
@@ -680,16 +695,16 @@ mod tests {
         ];
 
         for wmb in wmbs1_p0_edge1 {
-            timeline1_p0_edge1.put(wmb).await;
+            timeline1_p0_edge1.put(wmb);
         }
         for wmb in wmbs1_p1_edge1 {
-            timeline1_p1_edge1.put(wmb).await;
+            timeline1_p1_edge1.put(wmb);
         }
         for wmb in wmbs2_p0_edge1 {
-            timeline2_p0_edge1.put(wmb).await;
+            timeline2_p0_edge1.put(wmb);
         }
         for wmb in wmbs2_p1_edge1 {
-            timeline2_p1_edge1.put(wmb).await;
+            timeline2_p1_edge1.put(wmb);
         }
 
         processor1_edge1.timelines[0] = timeline1_p0_edge1;
@@ -777,16 +792,16 @@ mod tests {
         ];
 
         for wmb in wmbs1_p0_edge2 {
-            timeline1_p0_edge2.put(wmb).await;
+            timeline1_p0_edge2.put(wmb);
         }
         for wmb in wmbs1_p1_edge2 {
-            timeline1_p1_edge2.put(wmb).await;
+            timeline1_p1_edge2.put(wmb);
         }
         for wmb in wmbs2_p0_edge2 {
-            timeline2_p0_edge2.put(wmb).await;
+            timeline2_p0_edge2.put(wmb);
         }
         for wmb in wmbs2_p1_edge2 {
-            timeline2_p1_edge2.put(wmb).await;
+            timeline2_p1_edge2.put(wmb);
         }
 
         processor1_edge2.timelines[0] = timeline1_p0_edge2;

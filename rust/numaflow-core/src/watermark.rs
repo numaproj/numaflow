@@ -9,12 +9,12 @@ use crate::watermark::source::SourceWatermarkHandle;
 /// Responsible for fetch/publish cycle of watermark per offset for each stream in the ISB.
 pub(crate) mod isb;
 
-/// Manages the processors for watermark.
+/// Manages the processors for watermark. Processor is specific to watermark.
 mod processor;
 
 /// Responsible for fetching and publishing watermarks for the Source. A Source could have multiple
 /// partitions, similar partitions in the ISB. The main difference between Source and [isb] is that
-/// the watermark starts at source, so we will have to do a publish followed by a fetch and publish.
+/// the watermark starts at source, so we will have to do a publishing followed by a fetch and publish.
 pub(crate) mod source;
 
 /// Stores WMB related data.

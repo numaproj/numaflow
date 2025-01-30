@@ -1,3 +1,8 @@
+//! Fetches watermark for the source, source fetcher will only have one processor manager which tracks
+//! all the partition based processors. The fetcher will look at all the active processors and their
+//! timelines to determine the watermark. We don't care about offsets here since the watermark starts
+//! at source, we only consider the head watermark and consider the minimum watermark of all the active
+//! processors.
 use crate::error::Result;
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::Watermark;
@@ -9,28 +14,29 @@ pub struct SourceWatermarkFetcher {
 
 impl SourceWatermarkFetcher {
     /// Creates a new [SourceWatermarkFetcher].
-    pub(crate) async fn new(processor_manager: ProcessorManager) -> Result<Self> {
-        Ok(SourceWatermarkFetcher { processor_manager })
+    pub(crate) fn new(processor_manager: ProcessorManager) -> Self {
+        SourceWatermarkFetcher { processor_manager }
     }
 
     /// Fetches the watermark for the source, which is the minimum watermark of all the active
     /// processors.
-    pub(crate) async fn fetch_source_watermark(&mut self) -> Result<Watermark> {
+    pub(crate) fn fetch_source_watermark(&mut self) -> Result<Watermark> {
         let mut min_wm = i64::MAX;
 
-        for (_, processor) in self.processor_manager.processors.read().await.iter() {
+        for (_, processor) in self
+            .processor_manager
+            .processors
+            .read()
+            .expect("failed to acquire lock")
+            .iter()
+        {
             // We only consider active processors.
             if !processor.is_active() {
                 continue;
             }
 
             // only consider the head watermark of the processor
-            let head_wm = processor
-                .timelines
-                .first()
-                .unwrap()
-                .get_head_watermark()
-                .await;
+            let head_wm = processor.timelines.first().unwrap().get_head_watermark();
 
             if head_wm < min_wm {
                 min_wm = head_wm;
@@ -51,7 +57,7 @@ mod tests {
     use std::sync::Arc;
 
     use bytes::Bytes;
-    use tokio::sync::RwLock;
+    use std::sync::RwLock;
 
     use super::*;
     use crate::watermark::processor::manager::{Processor, Status};
@@ -85,9 +91,9 @@ mod tests {
             partition: 0,
         };
 
-        timeline.put(wmb1).await;
-        timeline.put(wmb2).await;
-        timeline.put(wmb3).await;
+        timeline.put(wmb1);
+        timeline.put(wmb2);
+        timeline.put(wmb3);
 
         processor.timelines[0] = timeline;
 
@@ -99,12 +105,10 @@ mod tests {
             handles: vec![],
         };
 
-        let mut fetcher = SourceWatermarkFetcher::new(processor_manager)
-            .await
-            .unwrap();
+        let mut fetcher = SourceWatermarkFetcher::new(processor_manager);
 
         // Invoke fetch_watermark and verify the result
-        let watermark = fetcher.fetch_source_watermark().await.unwrap();
+        let watermark = fetcher.fetch_source_watermark().unwrap();
         assert_eq!(watermark.timestamp_millis(), 300);
     }
 
@@ -135,9 +139,9 @@ mod tests {
             partition: 0,
         };
 
-        timeline1.put(wmb1).await;
-        timeline1.put(wmb2).await;
-        timeline1.put(wmb3).await;
+        timeline1.put(wmb1);
+        timeline1.put(wmb2);
+        timeline1.put(wmb3);
 
         processor1.timelines[0] = timeline1;
 
@@ -165,9 +169,9 @@ mod tests {
             partition: 0,
         };
 
-        timeline2.put(wmb4).await;
-        timeline2.put(wmb5).await;
-        timeline2.put(wmb6).await;
+        timeline2.put(wmb4);
+        timeline2.put(wmb5);
+        timeline2.put(wmb6);
 
         processor2.timelines[0] = timeline2;
 
@@ -180,12 +184,10 @@ mod tests {
             handles: vec![],
         };
 
-        let mut fetcher = SourceWatermarkFetcher::new(processor_manager)
-            .await
-            .unwrap();
+        let mut fetcher = SourceWatermarkFetcher::new(processor_manager);
 
         // Invoke fetch_watermark and verify the result
-        let watermark = fetcher.fetch_source_watermark().await.unwrap();
+        let watermark = fetcher.fetch_source_watermark().unwrap();
         assert_eq!(watermark.timestamp_millis(), 323);
     }
 }

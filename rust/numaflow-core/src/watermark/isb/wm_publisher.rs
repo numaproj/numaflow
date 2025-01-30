@@ -1,3 +1,8 @@
+//! Publishes watermark of the messages written to ISB. Each publisher is mapped to a processing entity
+//! which could be a pod or a partition, it also creates a background task to publish heartbeats for the
+//! downstream vertices, to indicate the liveliness of the processor. It publishes watermark to the
+//! appropriate OT bucket based on stream information provided. It makes sure we always publish m
+//! increasing watermark.
 use std::collections::HashMap;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -96,7 +101,7 @@ impl ISBWatermarkPublisher {
         hb_buckets: Vec<async_nats::jetstream::kv::Store>,
     ) {
         let duration = tokio::time::Duration::from_secs(DEFAULT_POD_HEARTBEAT_INTERVAL as u64);
-        info!("Starting heartbeat publishing");
+        info!(processor = ?processor_name, "Started publishing heartbeat");
         loop {
             let heartbeat = numaflow_pb::objects::watermark::Heartbeat {
                 heartbeat: SystemTime::now()
@@ -111,9 +116,8 @@ impl ISBWatermarkPublisher {
                 .expect("Failed to encode heartbeat");
 
             for hb_bucket in hb_buckets.iter() {
-                info!(
-                    "Publishing heartbeat {} for processor {}",
-                    heartbeat.heartbeat, processor_name
+                info!(heartbeat = ?heartbeat.heartbeat, processor = ?processor_name,
+                    "Publishing heartbeat",
                 );
                 hb_bucket
                     .put(processor_name.clone(), bytes.clone().freeze())

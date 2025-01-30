@@ -1,3 +1,7 @@
+//! Publishes the watermark for source, since watermark originates at source, we publish and fetch to determine
+//! the watermark across the source partitions. Since we write the messages to the ISB, we will also publish
+//! the watermark to the ISB. Unlike other vertices we don't use pod as the processing entity for publishing
+//! watermark we use the partition(watermark originates here).
 use std::collections::HashMap;
 
 use chrono::Utc;
@@ -46,9 +50,8 @@ impl SourceWatermarkPublisher {
             )
             .await
             .expect("Failed to create publisher");
-            info!(
-                "Creating new publisher at source publish for processor {} and partition{}",
-                processor_name, partition
+            info!(processor = ?processor_name, partittion = ?partition,
+                "Creating new publisher for source"
             );
             self.publishers.insert(processor_name.clone(), publisher);
         }
@@ -85,9 +88,8 @@ impl SourceWatermarkPublisher {
         // In source, since we do partition-based watermark publishing rather than pod-based, we
         // create a publisher for each partition and publish the watermark to it.
         if !self.publishers.contains_key(&processor_name) {
-            info!(
-                "Creating new publisher for processor at edge publish {} and input partition {}",
-                processor_name, input_partition
+            info!(processor = ?processor_name, partition = ?input_partition,
+                "Creating new publisher for ISB"
             );
             let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),
