@@ -16,12 +16,16 @@
 //!  ```
 //!
 //! Most of the data move forward except for the `ack` which can happen only after the that the tracker
-//! has guaranteed that the processing complete.
+//! has guaranteed that the processing complete. Ack is spawned during the reading.
 //! ```text
 //! (Read) +-------> (UDF) -------> (Write) +
 //!        |                                |
 //!        |                                |
-//!        +-------> {Ack} <----------------+
+//!        +-------> {tracker} <------------
+//!                     |
+//!                     |
+//!                     v
+//!                   {ack}
 //!
 //! {} -> Listens on a OneShot
 //! () -> Streaming Interface

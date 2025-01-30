@@ -24,6 +24,7 @@ mod wmb;
 /// This is used to fetch and publish watermarks
 #[derive(Clone)]
 pub(crate) enum WatermarkHandle {
+    #[allow(clippy::upper_case_acronyms)]
     ISB(ISBWatermarkHandle),
     Source(SourceWatermarkHandle),
 }
