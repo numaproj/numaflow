@@ -149,30 +149,30 @@ func CalculateMaxLookback(counts []*TimestampedCounts, startIndex, endIndex int)
 		curTime := counts[i].PodTimestamp()
 
 		// Iterate through each pod in the snapshot.
-		for key, count := range item {
-			if lastSeenData, found := lastSeen[key]; found {
-				// If the read count data has updated
-				if lastSeenData.count != count {
-					// Calculate the duration for which the count was unchanged.
-					duration := curTime - lastSeenData.seenTime
-					// Update maxDuration for the pod if this duration is the longest seen so far.
-					// TODO: Can check if average or EWMA works better than max
-					if currentMax, ok := maxDuration[key]; !ok || duration > currentMax {
-						maxDuration[key] = duration
-					}
-					// Update the last seen count and timestamp for the pod.
-					lastSeen[key] = struct {
-						count    float64
-						seenTime int64
-					}{count, curTime}
-				}
-			} else {
-				// First time seeing this pod, initialize its last seen data.
-				lastSeen[key] = struct {
-					count    float64
-					seenTime int64
-				}{count, curTime}
+		for key, curCount := range item {
+			lastSeenData, found := lastSeen[key]
+			if found && lastSeenData.count == curCount {
+				continue
 			}
+			// If the read count data has updated
+			if found && curCount > lastSeenData.count {
+				// Calculate the duration for which the count was unchanged.
+				duration := curTime - lastSeenData.seenTime
+				// Update maxDuration for the pod if this duration is the longest seen so far.
+				// TODO: Can check if average or EWMA works better than max
+				if currentMax, ok := maxDuration[key]; !ok || duration > currentMax {
+					maxDuration[key] = duration
+				}
+			}
+			// The value is updated in the lastSeen for 3 cases
+			// 1. If this is the first time seeing the pod entry or
+			// 2. in case of a value increase,
+			// 3. In case of a value decrease which is treated as a new entry for pod
+			lastSeen[key] = struct {
+				count    float64
+				seenTime int64
+			}{curCount, curTime}
+
 		}
 	}
 

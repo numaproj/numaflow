@@ -303,14 +303,12 @@ func (r *Rater) startDynamicLookBack(ctx context.Context) {
 // processing time of the MonoVertex system.
 func (r *Rater) updateDynamicLookbackSecs() {
 	counts := r.timestampedPodCounts.Items()
-	currentLookback := r.lookBackSeconds.Load()
-	vertexName := r.monoVertex.Name
 	if len(counts) <= 1 {
 		return
 	}
-
 	// We will calculate the processing time for a time window = 3 * currentLookback
 	// This ensures that we have enough data to capture one complete processing
+	currentLookback := r.lookBackSeconds.Load()
 	startIndex := findStartIndex(3*int64(currentLookback), counts)
 	// we consider the last but one element as the end index because the last element might be incomplete
 	// we can be sure that the last but one element in the queue is complete.
@@ -342,7 +340,7 @@ func (r *Rater) updateDynamicLookbackSecs() {
 	// If the value has changed, update it
 	if roundedMaxLookback != currentLookback {
 		r.lookBackSeconds.Store(roundedMaxLookback)
-		r.log.Infof("Lookback updated for mvtx %s, Current: %f Updated %f", vertexName, currentLookback, roundedMaxLookback)
+		r.log.Infof("Lookback updated for mvtx %s, Current: %f Updated %f", r.monoVertex.Name, currentLookback, roundedMaxLookback)
 		// update the metric value for the lookback window
 		metrics.MonoVertexLookBack.WithLabelValues(r.monoVertex.Name).Set(roundedMaxLookback)
 	}

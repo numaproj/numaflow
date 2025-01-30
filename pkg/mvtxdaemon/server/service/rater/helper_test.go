@@ -411,6 +411,19 @@ func TestCalculateMaxLookback(t *testing.T) {
 			endIndex:    2,
 			expectedMax: 50, // unchanged duration for pods that didn't change, will take the max difference
 		},
+		{
+			name: "Pod goes to zero",
+			counts: []*TimestampedCounts{
+				newTimestampedCounts(0, map[string]float64{"pod1": 50}),   // Initial count
+				newTimestampedCounts(60, map[string]float64{"pod1": 0}),   // Count falls to zero
+				newTimestampedCounts(120, map[string]float64{"pod1": 0}),  // Continues to be zero
+				newTimestampedCounts(180, map[string]float64{"pod1": 25}), // Count returns but differs
+				newTimestampedCounts(240, map[string]float64{"pod1": 25}), // Count stays stable again
+			},
+			startIndex:  0,
+			endIndex:    4,
+			expectedMax: 120,
+		},
 	}
 
 	for _, tt := range tests {
