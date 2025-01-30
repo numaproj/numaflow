@@ -161,7 +161,7 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 			object: "pipeline",
 			configPatterns: []Pattern{
 				{
-					Object: "vertex",
+					Objects: []string{"vertex"},
 					Metrics: []Metric{
 						{
 							Name:    "test_metric",
@@ -177,7 +177,7 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 			object: "pipeline",
 			configPatterns: []Pattern{
 				{
-					Object: "pipeline",
+					Objects: []string{"pipeline"},
 					Params: []Params{
 						{
 							Name:     "quantile",

@@ -1322,7 +1322,7 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 	var discoveredMetrics MetricsDiscoveryResponse
 
 	for _, pattern := range configData.Patterns {
-		if pattern.Object == object || isObjectInList(pattern.Objects, object) {
+		if isObjectInList(pattern.Objects, object) {
 			for _, metric := range pattern.Metrics {
 				var requiredFilters []Filter
 				// Populate the required filters
