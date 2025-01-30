@@ -188,7 +188,6 @@ export function Pods(props: PodsProps) {
   }, [selectedPod, selectedContainer]);
 
   const podDetail = useMemo(() => {
-    const selectedPodDetails = podsDetails?.get(selectedPod?.name);
     return (
       <Box
         data-testid={"pods-poddetails"}
@@ -204,7 +203,7 @@ export function Pods(props: PodsProps) {
         />
       </Box>
     );
-  }, [namespaceId, selectedPod, selectedContainer, podsDetails]);
+  }, [namespaceId, pipelineId, type, selectedContainer, selectedPod, vertexId]);
 
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>, newValue: string | null) => {
