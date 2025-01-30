@@ -356,20 +356,17 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[0].ImagePullPolicy)
+
 		var envNames []string
 		for _, e := range s.Containers[0].Env {
 			envNames = append(envNames, e.Name)
 		}
-		assert.Contains(t, envNames, "test-env")
-		assert.Contains(t, envNames, EnvNamespace)
-		assert.Contains(t, envNames, EnvPod)
-		assert.Contains(t, envNames, EnvPipelineName)
-		assert.Contains(t, envNames, EnvVertexName)
-		assert.Contains(t, envNames, EnvVertexObject)
-		assert.Contains(t, envNames, EnvReplica)
-		assert.Contains(t, envNames, EnvCallbackEnabled)
-		assert.Contains(t, envNames, EnvCallbackURL)
-		assert.Contains(t, envNames, EnvServingAuthToken)
+		assert.ElementsMatch(t, envNames, []string{
+			"test-env", EnvNamespace, EnvPod, EnvPipelineName, EnvVertexName, EnvVertexObject, EnvReplica,
+			EnvCallbackEnabled, EnvCallbackURL, EnvServingAuthToken, EnvServingObject, EnvServingMinPipelineSpec,
+			EnvServingHostIP, EnvServingPort, EnvServingStoreTTL, EnvServingJetstreamStream,
+		})
+
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSource))
 		assert.Equal(t, 1, len(s.InitContainers))
