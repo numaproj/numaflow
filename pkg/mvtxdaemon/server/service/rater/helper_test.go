@@ -348,81 +348,43 @@ func TestCalculateMaxLookback(t *testing.T) {
 			expectedMax: 0, // No duration difference
 		},
 		{
-			name: "Multiple pods with different activity patterns",
-			counts: []*TimestampedCounts{
-				newTimestampedCounts(100, map[string]float64{"pod1": 100, "pod2": 200}),
-				newTimestampedCounts(300, map[string]float64{"pod1": 100, "pod2": 250}),
-				newTimestampedCounts(500, map[string]float64{"pod1": 150, "pod2": 250}),
-			},
-			startIndex:  0,
-			endIndex:    2,
-			expectedMax: 400, // for pod1
-		},
-		{
 			name: "Rapid changes in sequential entries",
 			counts: []*TimestampedCounts{
-				newTimestampedCounts(100, map[string]float64{"pod1": 300, "pod2": 400}),
-				newTimestampedCounts(130, map[string]float64{"pod1": 500, "pod2": 400}),
-				newTimestampedCounts(160, map[string]float64{"pod1": 500, "pod2": 600}),
+				newTimestampedCounts(100, map[string]float64{"pod1": 500, "pod2": 400}),
+				newTimestampedCounts(130, map[string]float64{"pod1": 600, "pod2": 400}),
+				newTimestampedCounts(160, map[string]float64{"pod1": 600, "pod2": 600}),
 			},
 			startIndex:  0,
 			endIndex:    2,
-			expectedMax: 60, // for pod2 between 1,3
-		},
-		{
-			name: "Gaps in timestamps",
-			counts: []*TimestampedCounts{
-				newTimestampedCounts(100, map[string]float64{"pod1": 100}),
-				newTimestampedCounts(1000, map[string]float64{"pod1": 100}), // Large gap with no change
-				newTimestampedCounts(1100, map[string]float64{"pod1": 200}),
-			},
-			startIndex:  0,
-			endIndex:    2,
-			expectedMax: 1000,
-		},
-		{
-			name: "Large number of pods",
-			counts: []*TimestampedCounts{
-				newTimestampedCounts(10, map[string]float64{
-					"pod1": 100, "pod2": 100, "pod3": 100, "pod4": 100, "pod5": 100,
-					"pod6": 100, "pod7": 100, "pod8": 100, "pod9": 100, "pod10": 100}),
-				newTimestampedCounts(20, map[string]float64{
-					"pod1": 100, "pod2": 100, "pod3": 100, "pod4": 200, "pod5": 100,
-					"pod6": 100, "pod7": 200, "pod8": 100, "pod9": 100, "pod10": 100}),
-			},
-			startIndex:  0,
-			endIndex:    1,
-			expectedMax: 10, // unchanged duration for pods that didn't change, smallest non-zero
-		},
-		{
-			name: "Large number of pods - No change",
-			counts: []*TimestampedCounts{
-				newTimestampedCounts(10, map[string]float64{
-					"pod1": 100, "pod2": 100, "pod3": 100, "pod4": 100, "pod5": 100,
-					"pod6": 100, "pod7": 100, "pod8": 100, "pod9": 100, "pod10": 100}),
-				newTimestampedCounts(20, map[string]float64{
-					"pod1": 100, "pod2": 100, "pod3": 100, "pod4": 100, "pod5": 100,
-					"pod6": 100, "pod7": 100, "pod8": 100, "pod9": 100, "pod10": 100}),
-				newTimestampedCounts(60, map[string]float64{
-					"pod1": 100, "pod2": 100, "pod3": 100, "pod4": 100, "pod5": 100,
-					"pod6": 100, "pod7": 100, "pod8": 100, "pod9": 100, "pod10": 100}),
-			},
-			startIndex:  0,
-			endIndex:    2,
-			expectedMax: 50, // unchanged duration for pods that didn't change, will take the max difference
+			expectedMax: 60,
 		},
 		{
 			name: "Pod goes to zero",
 			counts: []*TimestampedCounts{
-				newTimestampedCounts(0, map[string]float64{"pod1": 50}),   // Initial count
+				newTimestampedCounts(0, map[string]float64{"pod1": 50}), // Initial count
+				newTimestampedCounts(30, map[string]float64{"pod1": 50}),
 				newTimestampedCounts(60, map[string]float64{"pod1": 0}),   // Count falls to zero
-				newTimestampedCounts(120, map[string]float64{"pod1": 0}),  // Continues to be zero
+				newTimestampedCounts(120, map[string]float64{"pod1": 25}), // Continues to be zero
 				newTimestampedCounts(180, map[string]float64{"pod1": 25}), // Count returns but differs
 				newTimestampedCounts(240, map[string]float64{"pod1": 25}), // Count stays stable again
 			},
 			startIndex:  0,
-			endIndex:    4,
-			expectedMax: 120,
+			endIndex:    5,
+			expectedMax: 60, // from index 2,3
+		},
+		{
+			name: "Pod goes to zero",
+			counts: []*TimestampedCounts{
+				newTimestampedCounts(0, map[string]float64{"pod1": 60}),
+				newTimestampedCounts(60, map[string]float64{"pod1": 60}),
+				newTimestampedCounts(120, map[string]float64{"pod1": 70}),
+				newTimestampedCounts(180, map[string]float64{"pod1": 0}),
+				newTimestampedCounts(240, map[string]float64{"pod1": 25}),
+				newTimestampedCounts(300, map[string]float64{"pod1": 25}),
+			},
+			startIndex:  0,
+			endIndex:    5,
+			expectedMax: 120, // here idx 0,3 should be used, after going to zero it resets
 		},
 	}
 

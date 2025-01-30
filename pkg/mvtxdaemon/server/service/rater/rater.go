@@ -37,6 +37,11 @@ import (
 
 const CountWindow = time.Second * 10
 const monoVtxReadMetricName = "monovtx_read_total"
+
+// MaxLookback is the upper limit beyond which lookback value is not increased
+// by the dynamic algorithm. This is chosen as a conservative limit
+// where vertices taking beyond this time for processing might not be the
+// best candidate for auto-scaling. Might be prudent to keep fixed pods at that time.
 const MaxLookback = time.Minute * 10
 
 // MonoVtxRatable is the interface for the Rater struct.
@@ -100,10 +105,12 @@ func NewRater(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...Option) *Rat
 			},
 			Timeout: time.Second * 1,
 		},
-		log:             logging.FromContext(ctx).Named("Rater"),
-		options:         defaultOptions(),
-		lookBackSeconds: atomic.NewFloat64(float64(mv.Spec.Scale.GetLookbackSeconds())),
+		log:     logging.FromContext(ctx).Named("Rater"),
+		options: defaultOptions(),
+		// load the default lookback value from the spec, gate it to the MaxLookback
+		lookBackSeconds: atomic.NewFloat64(min(float64(mv.Spec.Scale.GetLookbackSeconds()), MaxLookback.Seconds())),
 	}
+	rater.log.Infof("MYDEBUG lookBackSeconds %f", rater.lookBackSeconds.Load())
 
 	rater.podTracker = NewPodTracker(ctx, mv)
 	// maintain the total counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
@@ -115,7 +122,7 @@ func NewRater(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...Option) *Rat
 		}
 	}
 	// initialise the metric value for the lookback window
-	metrics.MonoVertexLookBack.WithLabelValues(mv.Name).Set(rater.lookBackSeconds.Load())
+	metrics.MonoVertexLookBackSecs.WithLabelValues(mv.Name).Set(rater.lookBackSeconds.Load())
 	return &rater
 }
 
@@ -210,7 +217,7 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 }
 
 func (r *Rater) buildLookbackSecondsMap() map[string]int64 {
-	// as the lookback value can be changing dynamically,
+	// as the default lookback value can be changing dynamically,
 	// load the current value for the lookback seconds
 	lbValue := r.lookBackSeconds.Load()
 	lookbackSecondsMap := map[string]int64{"default": int64(lbValue)}
@@ -332,6 +339,7 @@ func (r *Rater) updateDynamicLookbackSecs() {
 	// 	  Do not allow the value to be increased more than the MaxLookback allowed (10mins)
 	// 2. Step Down (value is <= than current)
 	//    Do not allow the value to be lower the lookback value specified in the spec
+	r.log.Infof("MYDEBUG: %d %f %f", maxProcessingTime, roundedMaxLookback, currentLookback)
 	if roundedMaxLookback > currentLookback {
 		roundedMaxLookback = math.Min(roundedMaxLookback, MaxLookback.Seconds())
 	} else {
@@ -342,6 +350,6 @@ func (r *Rater) updateDynamicLookbackSecs() {
 		r.lookBackSeconds.Store(roundedMaxLookback)
 		r.log.Infof("Lookback updated for mvtx %s, Current: %f Updated %f", r.monoVertex.Name, currentLookback, roundedMaxLookback)
 		// update the metric value for the lookback window
-		metrics.MonoVertexLookBack.WithLabelValues(r.monoVertex.Name).Set(roundedMaxLookback)
+		metrics.MonoVertexLookBackSecs.WithLabelValues(r.monoVertex.Name).Set(roundedMaxLookback)
 	}
 }

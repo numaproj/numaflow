@@ -373,11 +373,14 @@ var (
 
 // Daemon server metrics
 var (
-	// MonoVertexLookBack is a gauge used to indicate what is the current lookback window value being used
-	// by a given monovertex
-	MonoVertexLookBack = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	// MonoVertexLookBackSecs is a gauge used to indicate what is the current lookback window value being used
+	// by a given monovertex. It is used as how many seconds to lookback for vertex average processing rate
+	// (tps) and pending messages calculation, defaults to 120. Rate and pending messages metrics are
+	// critical for autoscaling,
+	MonoVertexLookBackSecs = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "monovtx",
-		Name:      "lookback_window",
-		Help:      "A metric to show what is the lookback window value being used by a given monovertex",
+		Name:      "lookback_window_seconds",
+		Help: "A metric to show what is the lookback window value being used by a given monovertex. " +
+			"Look back Seconds is critical in autoscaling calculations",
 	}, []string{LabelMonoVertexName})
 )
