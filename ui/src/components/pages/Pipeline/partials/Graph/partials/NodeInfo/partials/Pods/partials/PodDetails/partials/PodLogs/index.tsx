@@ -47,6 +47,7 @@ const parsePodLogs = (
 ): string[] => {
   const rawLogs = value.split("\n").filter((s) => s.length);
   return rawLogs.map((raw: string) => {
+    // 30 characters for RFC 3339 timestamp
     const timestamp = raw.substring(0, 30);
     const logWithoutTimestamp = raw.substring(31);
 
