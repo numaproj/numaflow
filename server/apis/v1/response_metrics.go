@@ -50,7 +50,7 @@ type Params struct {
 
 type Pattern struct {
 	Name        string   `yaml:"name" json:"name"`
-	Objects     []string `yaml:"objects,omitempty" json:"objects,omitempty"`
+	Objects     []string `yaml:"objects" json:"objects"`
 	Title       string   `yaml:"title"`
 	Description string   `yaml:"description"`
 	Expression  string   `yaml:"expr"`
