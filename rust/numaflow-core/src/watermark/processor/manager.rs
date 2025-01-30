@@ -1,20 +1,22 @@
-use crate::config::pipeline::watermark::BucketConfig;
-use crate::error::{Error, Result};
-use crate::watermark::processor::timeline::OffsetTimeline;
-use crate::watermark::wmb::WMB;
+use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::SystemTime;
+
 use async_nats::jetstream::kv::Watch;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use futures::StreamExt;
 use prost::Message as ProtoMessage;
-use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
-use std::sync::Arc;
-use std::time::Duration;
-use std::time::SystemTime;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
+
+use crate::config::pipeline::watermark::BucketConfig;
+use crate::error::{Error, Result};
+use crate::watermark::processor::timeline::OffsetTimeline;
+use crate::watermark::wmb::WMB;
 
 const DEFAULT_PROCESSOR_REFRESH_RATE: u16 = 5;
 

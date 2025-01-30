@@ -257,14 +257,15 @@ impl ISBWatermarkHandle {
 
 #[cfg(test)]
 mod tests {
+    use async_nats::jetstream;
+    use async_nats::jetstream::kv::Config;
+    use tokio::time::sleep;
+
     use super::*;
     use crate::config::pipeline::isb::Stream;
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::message::IntOffset;
     use crate::watermark::wmb::WMB;
-    use async_nats::jetstream;
-    use async_nats::jetstream::kv::Config;
-    use tokio::time::sleep;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]

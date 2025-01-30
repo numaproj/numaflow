@@ -1,0 +1,31 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: all-containers-mono-vertex
+spec:
+  scale:
+    min: 1
+  source:
+    udsource:
+      container:
+        image: quay.io/numaio/numaflow-go/source-simple-source:stable
+        imagePullPolicy: Always
+    transformer:
+      container:
+          image: quay.io/numaio/numaflow-go/mapt-assign-event-time:stable
+          imagePullPolicy: Always
+  sink:
+    udsink:
+      container:
+         # Sink which returns a fallback response, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker
+        image: quay.io/numaio/numaflow-go/fb-sink-log:stable
+        imagePullPolicy: Always
+    fallback:
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/fallback
+            image: quay.io/numaio/numaflow-go/redis-sink:stable
+            imagePullPolicy: Always
+            env:
+              - name: SINK_HASH_KEY
+                value: "fallback-sink-key"

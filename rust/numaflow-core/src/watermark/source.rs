@@ -167,14 +167,15 @@ impl SourceWatermarkHandle {
 
 #[cfg(test)]
 mod tests {
+    use async_nats::jetstream;
+    use async_nats::jetstream::kv::Config;
+    use chrono::DateTime;
+
     use super::*;
     use crate::config::pipeline::isb::Stream;
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::message::{IntOffset, Message};
     use crate::watermark::wmb::WMB;
-    use async_nats::jetstream;
-    use async_nats::jetstream::kv::Config;
-    use chrono::DateTime;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]

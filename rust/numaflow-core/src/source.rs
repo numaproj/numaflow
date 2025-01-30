@@ -11,13 +11,13 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 use crate::config::{get_vertex_name, is_mono_vertex};
+use crate::error::{Error, Result};
 use crate::message::ReadAck;
 use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_isb_metric_labels, pipeline_metrics,
 };
 use crate::tracker::TrackerHandle;
-use crate::Result;
 use crate::{
     message::{Message, Offset},
     reader::LagReader,
@@ -223,7 +223,7 @@ impl Source {
         let _ = source_handle.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// ack the offsets by communicating with the ack actor.
@@ -238,7 +238,7 @@ impl Source {
         let _ = source_handle.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// get the pending messages count by communicating with the pending actor.
@@ -250,7 +250,7 @@ impl Source {
         let _ = self.sender.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// Starts streaming messages from the source. It returns a stream of messages and
@@ -347,10 +347,9 @@ impl Source {
 
                 // write the messages to downstream.
                 for message in messages {
-                    messages_tx
-                        .send(message)
-                        .await
-                        .expect("send should not fail");
+                    messages_tx.send(message).await.map_err(|e| {
+                        Error::Source(format!("failed to send message to downstream {:?}", e))
+                    })?;
                 }
             }
         });
