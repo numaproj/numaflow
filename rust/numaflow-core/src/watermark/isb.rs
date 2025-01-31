@@ -8,12 +8,12 @@
 //! messages so that even if any messages get stuck we consider them while publishing watermarks.
 //!
 //!
-//! ##### Fetch Flow
+//! **Fetch Flow**
 //! ```text
 //! (Read from ISB) -------> (Fetch Watermark) -------> (Track Offset and WM)
 //! ```
 //!
-//! ##### Publish Flow
+//! **Publish Flow**
 //! ```text
 //! (Write to ISB) -------> (Publish Watermark) ------> (Remove tracked Offset)
 //! ```
@@ -107,7 +107,7 @@ impl ISBWatermarkActor {
         }
     }
 
-    /// handle_message handles the incoming actor message
+    /// handle_message handles the incoming actor message.
     async fn handle_message(&mut self, message: ISBWaterMarkActorMessage) -> Result<()> {
         match message {
             // fetches the watermark for the given offset

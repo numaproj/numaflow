@@ -6,7 +6,10 @@
 //! NAck otherwise if ISB is failing to accept, and we are in shutdown path.
 //! There will be a tracker per input stream reader.
 //!
-//! In the future Watermark will also be propagated based on this.
+//! Items tracked by the tracker and uses [Offset] as the key.
+//!   - Ack or NAck after processing of a message
+//!   - The oldest Watermark is tracked
+//!   - Callbacks for Serving is triggered in the tracker.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -244,7 +247,7 @@ impl Tracker {
         // receiving all the messages.
         if entry.count == 0 {
             let entry = self.entries.remove(&offset).unwrap();
-            self.ack_message(offset, entry).await;
+            self.completed_successfully(offset, entry).await;
         }
     }
 
@@ -262,7 +265,7 @@ impl Tracker {
         // In map-streaming this won't happen because eof is not tied to the message, rather it is
         // tied to channel-close.
         if entry.count == 0 && entry.eof {
-            self.ack_message(offset, entry).await;
+            self.completed_successfully(offset, entry).await;
         } else {
             // add it back because we removed it
             self.entries.insert(offset, entry);
@@ -301,7 +304,7 @@ impl Tracker {
     /// - ack back
     /// - call serving callbacks
     /// - watermark progression
-    async fn ack_message(&self, offset: Offset, entry: TrackerEntry) {
+    async fn completed_successfully(&self, offset: Offset, entry: TrackerEntry) {
         let TrackerEntry {
             ack_send,
             serving_callback_info: callback_info,

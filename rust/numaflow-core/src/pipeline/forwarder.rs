@@ -26,7 +26,7 @@
 //!          +-----------+-----------+
 //!          |           |           |
 //!          v           v           v
-//!     (watermark)  (callbacks)   {ack}
+//!  (track watermark)  (callbacks)   {ack}
 //!
 //! {} -> Listens on a OneShot
 //! () -> Streaming Interface

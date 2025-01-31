@@ -8,7 +8,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use std::sync::RwLock;
-use tracing::{error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::watermark::wmb::WMB;
 
@@ -56,7 +56,7 @@ impl OffsetTimeline {
                 element_node.offset = node.offset;
             }
             (Ordering::Equal, _) => {
-                warn!("Watermark the same but input offset smaller than the existing offset - skipping");
+                debug!("Watermark the same but input offset smaller than the existing offset - skipping");
             }
             (Ordering::Greater, Ordering::Greater) => {
                 watermarks.push_front(node);
@@ -64,11 +64,16 @@ impl OffsetTimeline {
             (Ordering::Greater, Ordering::Less) => {
                 error!("The new input offset should never be smaller than the existing offset");
             }
-            (Ordering::Less, _) => {}
+            (Ordering::Less, _) => {
+                error!("Watermark should not regress");
+            }
             (Ordering::Greater, Ordering::Equal) => {
+                info!(?node, "Idle Watermark detected");
                 element_node.watermark = node.watermark;
             }
         }
+
+        // trim the timeline
         if watermarks.len() > self.capacity {
             watermarks.pop_back();
         }

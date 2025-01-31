@@ -444,7 +444,7 @@ impl JetstreamWriter {
                                 Offset::String(offset) => offset.partition_idx,
                             };
                             handle
-                                .publish_source_edge_watermark(stream, offset, input_partition)
+                                .publish_source_isb_watermark(stream, offset, input_partition)
                                 .await
                                 .map_err(|e| {
                                     Error::ISB(format!("Failed to update watermark: {:?}", e))

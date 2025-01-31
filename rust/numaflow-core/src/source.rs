@@ -348,7 +348,9 @@ impl Source {
                 };
 
                 if let Some(watermark_handle) = watermark_handle.as_mut() {
-                    watermark_handle.publish_source_watermark(&messages).await?;
+                    watermark_handle
+                        .generate_and_publish_source_watermark(&messages)
+                        .await?;
                 }
 
                 // write the messages to downstream.

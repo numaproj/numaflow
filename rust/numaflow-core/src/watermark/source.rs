@@ -9,7 +9,7 @@
 //! ##### Watermark flow
 //!
 //! ```text
-//! (Read) +---> (Publish WM For Source) +---> (Fetch WM For Source) +---> (Write to ISB) +---> (Publish WM to ISB)
+//! (Read) ---> (Publish WM For Source) ---> (Fetch WM For Source) ---> (Write to ISB) ---> (Publish WM to ISB)
 //! ```
 //!
 //! [Source]: https://numaflow.numaproj.io/user-guide/sources/overview/
@@ -39,7 +39,7 @@ enum SourceActorMessage {
     PublishSourceWatermark {
         map: HashMap<u16, i64>,
     },
-    PublishEdgeWatermark {
+    PublishISBWatermark {
         offset: IntOffset,
         stream: Stream,
         input_partition: u16,
@@ -67,7 +67,7 @@ impl SourceWatermarkActor {
         }
     }
 
-    /// Handles the SourceActorMessage
+    /// Handles the SourceActorMessage.
     async fn handle_message(&mut self, message: SourceActorMessage) -> Result<()> {
         match message {
             SourceActorMessage::PublishSourceWatermark { map } => {
@@ -77,7 +77,7 @@ impl SourceWatermarkActor {
                         .await;
                 }
             }
-            SourceActorMessage::PublishEdgeWatermark {
+            SourceActorMessage::PublishISBWatermark {
                 offset,
                 stream,
                 input_partition,
@@ -129,9 +129,12 @@ impl SourceWatermarkHandle {
         Ok(Self { sender })
     }
 
-    /// Publishes the source watermark for the given messages.
-    pub(crate) async fn publish_source_watermark(&self, messages: &[Message]) -> Result<()> {
-        // we need to find the lowest event time for each partition
+    /// Generates and Publishes the source watermark for the given messages.
+    pub(crate) async fn generate_and_publish_source_watermark(
+        &self,
+        messages: &[Message],
+    ) -> Result<()> {
+        // we need to build a hash-map of the lowest event time for each partition
         let partition_to_lowest_event_time =
             messages.iter().fold(HashMap::new(), |mut acc, message| {
                 let partition_id = match &message.offset {
@@ -140,6 +143,7 @@ impl SourceWatermarkHandle {
                 };
 
                 let event_time = message.event_time.timestamp_millis();
+
                 let lowest_event_time = acc.entry(partition_id).or_insert(event_time);
                 if event_time < *lowest_event_time {
                     *lowest_event_time = event_time;
@@ -153,25 +157,28 @@ impl SourceWatermarkHandle {
             })
             .await
             .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
+
         Ok(())
     }
 
-    /// Publishes the edge watermark for the given input partition.
-    pub(crate) async fn publish_source_edge_watermark(
+    /// Publishes the watermark for the given input partition on to the ISB of the next vertex.
+    pub(crate) async fn publish_source_isb_watermark(
         &self,
         stream: Stream,
         offset: Offset,
         input_partition: u16,
     ) -> Result<()> {
+        // the fetching happens in the handler
         if let Offset::Int(offset) = offset {
             self.sender
-                .send(SourceActorMessage::PublishEdgeWatermark {
+                .send(SourceActorMessage::PublishISBWatermark {
                     offset,
                     stream,
                     input_partition,
                 })
                 .await
                 .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
+
             Ok(())
         } else {
             Err(Error::Watermark("invalid offset type".to_string()))
@@ -253,7 +260,7 @@ mod tests {
         ];
 
         handle
-            .publish_source_watermark(&messages)
+            .generate_and_publish_source_watermark(&messages)
             .await
             .expect("Failed to publish source watermark");
 
@@ -396,7 +403,7 @@ mod tests {
             ];
 
             handle
-                .publish_source_watermark(&messages)
+                .generate_and_publish_source_watermark(&messages)
                 .await
                 .expect("Failed to publish source watermark");
 
@@ -405,7 +412,7 @@ mod tests {
                 partition_idx: 0,
             });
             handle
-                .publish_source_edge_watermark(stream.clone(), offset, 0)
+                .publish_source_isb_watermark(stream.clone(), offset, 0)
                 .await
                 .expect("Failed to publish edge watermark");
 
