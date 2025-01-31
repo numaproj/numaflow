@@ -78,6 +78,7 @@ impl TryFrom<JSWrappedMessage> for Message {
         ));
 
         Ok(Message {
+            kind: header.kind.into(),
             keys: Arc::from(header.keys.into_boxed_slice()),
             tags: None,
             value: body.payload.into(),
@@ -403,6 +404,7 @@ mod tests {
 
         for i in 0..10 {
             let message = Message {
+                kind: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
@@ -503,6 +505,7 @@ mod tests {
         // write 5 messages
         for i in 0..5 {
             let message = Message {
+                kind: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),

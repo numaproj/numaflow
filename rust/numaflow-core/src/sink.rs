@@ -765,6 +765,7 @@ mod tests {
 
         let messages: Vec<Message> = (0..5)
             .map(|i| Message {
+                kind: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
@@ -802,6 +803,7 @@ mod tests {
 
         let messages: Vec<Message> = (0..10)
             .map(|i| Message {
+                kind: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
@@ -879,6 +881,7 @@ mod tests {
 
         let messages: Vec<Message> = (0..10)
             .map(|i| Message {
+                kind: Default::default(),
                 keys: Arc::from(vec!["error".to_string()]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
@@ -965,6 +968,7 @@ mod tests {
 
         let messages: Vec<Message> = (0..20)
             .map(|i| Message {
+                kind: Default::default(),
                 keys: Arc::from(vec!["fallback".to_string()]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
@@ -1008,6 +1012,7 @@ mod tests {
     #[test]
     fn test_message_to_sink_request() {
         let message = Message {
+            kind: Default::default(),
             keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),

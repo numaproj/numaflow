@@ -15,6 +15,7 @@ impl TryFrom<PulsarMessage> for Message {
         let offset = Offset::Int(IntOffset::new(message.offset as i64, *get_vertex_replica()));
 
         Ok(Message {
+            kind: Default::default(),
             keys: Arc::from(vec![message.key]),
             tags: None,
             value: message.payload,

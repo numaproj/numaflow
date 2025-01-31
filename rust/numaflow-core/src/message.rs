@@ -3,13 +3,12 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
+use crate::shared::grpc::prost_timestamp_from_utc;
+use crate::Error;
 use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
-
-use crate::shared::grpc::prost_timestamp_from_utc;
-use crate::Error;
 
 const DROP: &str = "U+005C__DROP__";
 
@@ -17,6 +16,7 @@ const DROP: &str = "U+005C__DROP__";
 /// It is cheap to clone.
 #[derive(Debug, Clone)]
 pub(crate) struct Message {
+    pub(crate) kind: MessageKind,
     /// keys of the message
     pub(crate) keys: Arc<[String]>,
     /// tags of the message
@@ -39,6 +39,41 @@ pub(crate) struct Message {
     pub(crate) metadata: Option<Metadata>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub(crate) enum MessageKind {
+    #[default]
+    Data,
+    #[allow(clippy::upper_case_acronyms)]
+    WMB,
+}
+
+impl fmt::Display for MessageKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MessageKind::Data => write!(f, "Data"),
+            MessageKind::WMB => write!(f, "WMB"),
+        }
+    }
+}
+
+impl From<i32> for MessageKind {
+    fn from(kind: i32) -> Self {
+        match kind {
+            0 => MessageKind::Data,
+            _ => MessageKind::WMB,
+        }
+    }
+}
+
+impl From<MessageKind> for i32 {
+    fn from(kind: MessageKind) -> Self {
+        match kind {
+            MessageKind::Data => 0,
+            MessageKind::WMB => 1,
+        }
+    }
+}
+
 impl Default for Message {
     fn default() -> Self {
         Self {
@@ -51,6 +86,7 @@ impl Default for Message {
             id: Default::default(),
             headers: HashMap::new(),
             metadata: None,
+            kind: Default::default(),
         }
     }
 }
@@ -210,7 +246,7 @@ impl TryFrom<Message> for BytesMut {
                     event_time: Some(prost_timestamp_from_utc(message.event_time)),
                     is_late: false, // Set this according to your logic
                 }),
-                kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
+                kind: message.kind.into(),
                 id: Some(message.id.into()),
                 keys: message.keys.to_vec(),
                 headers: message.headers,
@@ -262,6 +298,7 @@ mod tests {
     #[test]
     fn test_message_to_vec_u8() {
         let message = Message {
+            kind: Default::default(),
             keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),

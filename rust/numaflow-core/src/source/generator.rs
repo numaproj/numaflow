@@ -164,6 +164,7 @@ mod stream_generator {
             }
 
             Message {
+                kind: Default::default(),
                 keys: Arc::from(self.next_key_to_be_fetched()),
                 tags: None,
                 value: data.into(),

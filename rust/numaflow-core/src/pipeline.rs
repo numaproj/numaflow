@@ -655,6 +655,7 @@ mod tests {
 
             use crate::message::{Message, MessageID, Offset, StringOffset};
             let message = Message {
+                kind: Default::default(),
                 keys: Arc::from(vec!["key1".to_string()]),
                 tags: None,
                 value: vec![1, 2, 3].into(),
@@ -849,6 +850,7 @@ mod tests {
 
             use crate::message::{Message, MessageID, Offset, StringOffset};
             let message = Message {
+                kind: Default::default(),
                 keys: Arc::from(vec!["key1".to_string()]),
                 tags: None,
                 value: vec![1, 2, 3].into(),

@@ -8,6 +8,7 @@ use std::time::UNIX_EPOCH;
 use std::time::{Duration, SystemTime};
 
 use bytes::BytesMut;
+use chrono::Utc;
 use prost::Message;
 use tracing::info;
 
@@ -23,7 +24,10 @@ const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;
 pub(crate) async fn publish_idle_watermarks(watermark: i64) {
     * iterate over all the downstream streams and check if the watermark is published for that stream in last 'x' duration
     * if not published (that means its inactive):
-         *
+         * check if the ctrl msg offset is present
+         * if present publish watermark
+         * else write a ctrl message and get a ctrl message offset
+         * and then publish idle watermark
 }
  */
 
@@ -33,6 +37,19 @@ pub(crate) async fn publish_idle_watermarks(watermark: i64) {
 struct LastPublishedState {
     offset: i64,
     watermark: i64,
+    publish_time: i64,
+    ctrl_msg_offset: Option<i64>,
+}
+
+impl Default for LastPublishedState {
+    fn default() -> Self {
+        LastPublishedState {
+            offset: -1,
+            watermark: -1,
+            publish_time: -1,
+            ctrl_msg_offset: None,
+        }
+    }
 }
 
 /// ISBWatermarkPublisher is the watermark publisher for the outgoing edges.
@@ -81,13 +98,7 @@ impl ISBWatermarkPublisher {
             hb_buckets.push(hb_bucket);
             last_published_wm.insert(
                 config.vertex,
-                vec![
-                    LastPublishedState {
-                        offset: -1,
-                        watermark: -1,
-                    };
-                    config.partitions as usize
-                ],
+                vec![LastPublishedState::default(); config.partitions as usize],
             );
         }
 
@@ -172,9 +183,46 @@ impl ISBWatermarkPublisher {
             .map_err(|e| Error::Watermark(e.to_string()))?;
 
         // update the last published watermark state
-        last_published_wm_state[stream.partition as usize] =
-            LastPublishedState { offset, watermark };
+        last_published_wm_state[stream.partition as usize] = LastPublishedState {
+            offset,
+            watermark,
+            publish_time: Utc::now().timestamp_millis(),
+            ctrl_msg_offset: None,
+        };
 
+        Ok(())
+    }
+
+    pub(crate) async fn publish_idle_watermarks(&mut self, watermark: i64) -> Result<()> {
+        for (vertex, state) in self.last_published_wm.iter_mut() {
+            for (partition, last_state) in state.iter_mut().enumerate() {
+                if watermark <= last_state.watermark {
+                    continue;
+                }
+
+                let ot_bucket = self.ot_buckets.get(vertex).ok_or(Error::Watermark(
+                    "Invalid vertex, no ot bucket found".to_string(),
+                ))?;
+
+                // if ctrl message offset is not there then write a ctrl message and get a ctrl message offset
+                // and then publish idle watermark
+
+                let wmb_bytes: BytesMut = WMB {
+                    idle: true,
+                    offset: last_state.offset,
+                    watermark,
+                    partition: partition as u16,
+                }
+                .try_into()
+                .map_err(|e| Error::Watermark(format!("{}", e)))?;
+                ot_bucket
+                    .put(self.processor_name.clone(), wmb_bytes.freeze())
+                    .await
+                    .map_err(|e| Error::Watermark(e.to_string()))?;
+
+                last_state.watermark = watermark;
+            }
+        }
         Ok(())
     }
 }
