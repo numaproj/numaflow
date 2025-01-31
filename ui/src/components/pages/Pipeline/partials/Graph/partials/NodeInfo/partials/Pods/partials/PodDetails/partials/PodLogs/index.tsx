@@ -45,11 +45,11 @@ const parsePodLogs = (
   levelFilter: string,
   type: string
 ): string[] => {
-  const rawLogs = value.split("\n").filter((s) => s.length);
+  const rawLogs = value.split("\n").filter((s) => s.trim().length);
   return rawLogs.map((raw: string) => {
     // 30 characters for RFC 3339 timestamp
-    const timestamp = raw.substring(0, 30);
-    const logWithoutTimestamp = raw.substring(31);
+    const timestamp = raw.length >= 31 ? raw.substring(0, 30) : "";
+    const logWithoutTimestamp = raw.length >= 31 ? raw.substring(31) : raw;
 
     let msg = enableTimestamp ? `${timestamp} ` : "";
 
@@ -65,7 +65,7 @@ const parsePodLogs = (
       let obj;
       try {
         obj = JSON.parse(logWithoutTimestamp);
-      } catch (e) {
+      } catch {
         obj = logWithoutTimestamp;
       }
       // println log, it is not an object
