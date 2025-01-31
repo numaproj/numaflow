@@ -2,12 +2,13 @@ use std::env;
 use std::error::Error;
 use std::time::Duration;
 
-use tracing::error;
+use tracing::{error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    info!("Starting numaflow");
     // Set up the tracing subscriber. RUST_LOG can be used to set the log level.
     // The default log level is `info`. The `axum::rejection=trace` enables showing
     // rejections from built-in extractors at `TRACE` level.
