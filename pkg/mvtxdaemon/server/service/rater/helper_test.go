@@ -373,7 +373,7 @@ func TestCalculateMaxLookback(t *testing.T) {
 			expectedMax: 60, // from index 2,3
 		},
 		{
-			name: "Pod goes to zero",
+			name: "Pod goes to zero - 2",
 			counts: []*TimestampedCounts{
 				newTimestampedCounts(0, map[string]float64{"pod1": 60}),
 				newTimestampedCounts(60, map[string]float64{"pod1": 60}),
@@ -385,6 +385,36 @@ func TestCalculateMaxLookback(t *testing.T) {
 			startIndex:  0,
 			endIndex:    5,
 			expectedMax: 120, // here idx 0,3 should be used, after going to zero it resets
+		},
+		{
+			name: "No data ",
+			counts: []*TimestampedCounts{
+				newTimestampedCounts(0, map[string]float64{"pod1": 0}),
+				newTimestampedCounts(60, map[string]float64{"pod1": 0}),
+				newTimestampedCounts(120, map[string]float64{"pod1": 0}),
+				newTimestampedCounts(180, map[string]float64{"pod1": 0}),
+				newTimestampedCounts(240, map[string]float64{"pod1": 0}),
+				newTimestampedCounts(300, map[string]float64{"pod1": 0}),
+			},
+			startIndex:  0,
+			endIndex:    5,
+			expectedMax: 0, // here idx 0,3 should be used, after going to zero it resets
+		},
+		{
+			// this is a case where one pod never got any data which we consider as read count = 0 always
+			// in such a case we should not use this pod for calculation
+			name: "One pod no data, other >0 ",
+			counts: []*TimestampedCounts{
+				newTimestampedCounts(0, map[string]float64{"pod1": 0, "pod2": 5}),
+				newTimestampedCounts(60, map[string]float64{"pod1": 0, "pod2": 5}),
+				newTimestampedCounts(120, map[string]float64{"pod1": 0, "pod2": 5}),
+				newTimestampedCounts(180, map[string]float64{"pod1": 0, "pod2": 5}),
+				newTimestampedCounts(240, map[string]float64{"pod1": 0, "pod2": 6}),
+				newTimestampedCounts(300, map[string]float64{"pod1": 0, "pod2": 6}),
+			},
+			startIndex:  0,
+			endIndex:    5,
+			expectedMax: 240, // here idx 0,3 should be used, after going to zero it resets
 		},
 	}
 

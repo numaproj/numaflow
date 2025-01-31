@@ -42,7 +42,6 @@ const monoVtxReadMetricName = "monovtx_read_total"
 // by the dynamic algorithm. This is chosen as a conservative limit
 // where vertices taking beyond this time for processing might not be the
 // best candidate for auto-scaling. Might be prudent to keep fixed pods at that time.
-const MaxLookback = time.Minute * 10
 
 // MonoVtxRatable is the interface for the Rater struct.
 type MonoVtxRatable interface {
@@ -107,11 +106,9 @@ func NewRater(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...Option) *Rat
 		},
 		log:     logging.FromContext(ctx).Named("Rater"),
 		options: defaultOptions(),
-		// load the default lookback value from the spec, gate it to the MaxLookback
-		lookBackSeconds: atomic.NewFloat64(min(float64(mv.Spec.Scale.GetLookbackSeconds()), MaxLookback.Seconds())),
+		// load the default lookback value from the spec
+		lookBackSeconds: atomic.NewFloat64(float64(mv.Spec.Scale.GetLookbackSeconds())),
 	}
-	rater.log.Infof("MYDEBUG lookBackSeconds %f", rater.lookBackSeconds.Load())
-
 	rater.podTracker = NewPodTracker(ctx, mv)
 	// maintain the total counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
 	rater.timestampedPodCounts = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
@@ -339,9 +336,8 @@ func (r *Rater) updateDynamicLookbackSecs() {
 	// 	  Do not allow the value to be increased more than the MaxLookback allowed (10mins)
 	// 2. Step Down (value is <= than current)
 	//    Do not allow the value to be lower the lookback value specified in the spec
-	r.log.Infof("MYDEBUG: %d %f %f", maxProcessingTime, roundedMaxLookback, currentLookback)
 	if roundedMaxLookback > currentLookback {
-		roundedMaxLookback = math.Min(roundedMaxLookback, MaxLookback.Seconds())
+		roundedMaxLookback = math.Min(roundedMaxLookback, float64(v1alpha1.MaxLookbackSeconds))
 	} else {
 		roundedMaxLookback = math.Max(roundedMaxLookback, float64(r.monoVertex.Spec.Scale.GetLookbackSeconds()))
 	}

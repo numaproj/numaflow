@@ -182,9 +182,14 @@ func CalculateMaxLookback(counts []*TimestampedCounts, startIndex, endIndex int)
 
 	// Check for pods that did not change at all during the iteration,
 	// and update their maxUnchangedDuration to the full period from first seen to lastTime.
+	// Note: There is a case where one pod was getting data earlier, but then stopped altogether.
+	// For example, one partition in Kafka not getting data after a while. This case will not be covered
+	// by our logic, and we would keep increasing the look back in such a scenario.
 	for key, data := range lastSeen {
 		if _, ok := maxUnchangedDuration[key]; !ok {
-			if _, found := endVals[key]; found {
+			// this is a case where one pod never got any data which we consider
+			// as read count = 0, in such a case we should not use this pod for calculation
+			if _, found := endVals[key]; found && (data.count != 0) {
 				maxUnchangedDuration[key] = lastTime - data.seenTime
 			}
 		}
