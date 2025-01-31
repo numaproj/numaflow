@@ -4,12 +4,11 @@
 //! appropriate OT bucket based on stream information provided. It makes sure we always publish m
 //! increasing watermark.
 use std::collections::HashMap;
-use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+use std::time::{Duration, SystemTime};
 
 use bytes::BytesMut;
 use prost::Message;
-use tokio::time::sleep;
 use tracing::info;
 
 use crate::config::pipeline::isb::Stream;
@@ -100,9 +99,11 @@ impl ISBWatermarkPublisher {
         processor_name: String,
         hb_buckets: Vec<async_nats::jetstream::kv::Store>,
     ) {
-        let duration = tokio::time::Duration::from_secs(DEFAULT_POD_HEARTBEAT_INTERVAL as u64);
+        let mut interval =
+            tokio::time::interval(Duration::from_secs(DEFAULT_POD_HEARTBEAT_INTERVAL as u64));
         info!(processor = ?processor_name, "Started publishing heartbeat");
         loop {
+            interval.tick().await;
             let heartbeat = numaflow_pb::objects::watermark::Heartbeat {
                 heartbeat: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -124,9 +125,6 @@ impl ISBWatermarkPublisher {
                     .await
                     .expect("Failed to publish heartbeat");
             }
-
-            // TODO: use ticker
-            sleep(duration).await;
         }
     }
 

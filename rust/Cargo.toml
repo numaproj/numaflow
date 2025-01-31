@@ -40,8 +40,8 @@ verbose_file_reads = "warn"
 # This profile optimizes for runtime performance and small binary size at the expense of longer build times.
 # Compared to default release profile, this profile reduced binary size from 29MB to 21MB
 # and increased build time (with only one line change in code) from 12 seconds to 133 seconds (tested on Mac M2 Max).
-#[profile.release]
-#lto = "fat"
+[profile.release]
+lto = "fat"
 
 # This profile optimizes for short build times at the expense of larger binary size and slower runtime performance.
 # If you have to rebuild image often, in Dockerfile you may replace `--release` passed to cargo command with `--profile quick-release`

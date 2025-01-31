@@ -8,7 +8,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use std::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::watermark::wmb::WMB;
 

@@ -66,8 +66,8 @@ pub(crate) struct ServingCallbackConfig {
 impl Default for PipelineConfig {
     fn default() -> Self {
         PipelineConfig {
-            pipeline_name: "default-pl",
-            vertex_name: "default-vtx",
+            pipeline_name: Default::default(),
+            vertex_name: Default::default(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
             paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
@@ -571,8 +571,8 @@ mod tests {
     #[test]
     fn test_default_pipeline_config() {
         let expected = PipelineConfig {
-            pipeline_name: "default-pl",
-            vertex_name: "default-vtx",
+            pipeline_name: Default::default(),
+            vertex_name: Default::default(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
             paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
