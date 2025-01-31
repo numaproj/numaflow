@@ -43,14 +43,11 @@ impl From<Message> for SourceTransformRequest {
     fn from(message: Message) -> Self {
         Self {
             request: Some(sourcetransformer::source_transform_request::Request {
-                id: message
-                    .offset
-                    .expect("offset should be present")
-                    .to_string(),
+                id: message.offset.to_string(),
                 keys: message.keys.to_vec(),
                 value: message.value.to_vec(),
-                event_time: prost_timestamp_from_utc(message.event_time),
-                watermark: None,
+                event_time: Some(prost_timestamp_from_utc(message.event_time)),
+                watermark: message.watermark.map(prost_timestamp_from_utc),
                 headers: message.headers,
             }),
             handshake: None,
@@ -140,9 +137,10 @@ impl UserDefinedTransformer {
                         keys: Arc::from(result.keys),
                         tags: Some(Arc::from(result.tags)),
                         value: result.value.into(),
-                        offset: Some(msg_info.offset.clone()),
+                        offset: msg_info.offset.clone(),
                         event_time: utc_from_timestamp(result.event_time),
                         headers: msg_info.headers.clone(),
+                        watermark: None,
                         metadata: None,
                     };
                     response_messages.push(message);
@@ -160,14 +158,10 @@ impl UserDefinedTransformer {
         message: Message,
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
     ) {
-        let key = message
-            .offset
-            .clone()
-            .expect("offset should be present")
-            .to_string();
+        let key = message.offset.clone().to_string();
 
         let msg_info = ParentMessageInfo {
-            offset: message.offset.clone().expect("offset can never be none"),
+            offset: message.offset.clone(),
             headers: message.headers.clone(),
         };
 
@@ -205,7 +199,7 @@ mod tests {
             &self,
             input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
-            let message = sourcetransform::Message::new(input.value, chrono::offset::Utc::now())
+            let message = sourcetransform::Message::new(input.value, Utc::now())
                 .keys(input.keys)
                 .tags(vec![]);
             vec![message]
@@ -214,7 +208,7 @@ mod tests {
 
     #[tokio::test]
     async fn transformer_operations() -> Result<(), Box<dyn Error>> {
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new()?;
         let sock_file = tmp_dir.path().join("sourcetransform.sock");
         let server_info_file = tmp_dir.path().join("sourcetransformer-server-info");
@@ -239,15 +233,13 @@ mod tests {
         )
         .await?;
 
-        let message = crate::message::Message {
+        let message = Message {
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Some(crate::message::Offset::String(StringOffset::new(
-                "0".to_string(),
-                0,
-            ))),
-            event_time: chrono::Utc::now(),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+            event_time: Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
@@ -257,7 +249,7 @@ mod tests {
             metadata: None,
         };
 
-        let (tx, rx) = tokio::sync::oneshot::channel();
+        let (tx, rx) = oneshot::channel();
 
         tokio::time::timeout(Duration::from_secs(2), client.transform(message, tx))
             .await
@@ -288,11 +280,12 @@ mod tests {
             keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),
-            offset: Some(Offset::String(StringOffset {
+            offset: Offset::String(StringOffset {
                 offset: "123".to_string().into(),
                 partition_idx: 0,
-            })),
+            }),
             event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex".to_string().into(),
                 offset: "123".to_string().into(),

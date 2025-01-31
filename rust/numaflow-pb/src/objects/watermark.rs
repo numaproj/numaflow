@@ -21,3 +21,10 @@ pub struct Wmb {
     #[prost(int32, tag = "4")]
     pub partition: i32,
 }
+/// Heartbeat is used to track the active processors
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct Heartbeat {
+    /// Heartbeat(current time in millis) published by the active processors.
+    #[prost(int64, tag = "1")]
+    pub heartbeat: i64,
+}

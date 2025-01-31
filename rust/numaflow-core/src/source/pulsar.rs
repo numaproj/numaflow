@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig};
 
-use crate::config::get_vertex_name;
+use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, Offset};
 use crate::source;
@@ -12,14 +12,15 @@ impl TryFrom<PulsarMessage> for Message {
     type Error = Error;
 
     fn try_from(message: PulsarMessage) -> crate::Result<Self> {
-        let offset = Offset::Int(IntOffset::new(message.offset, 1)); // FIXME: partition id
+        let offset = Offset::Int(IntOffset::new(message.offset as i64, *get_vertex_replica()));
 
         Ok(Message {
             keys: Arc::from(vec![message.key]),
             tags: None,
             value: message.payload,
-            offset: Some(offset.clone()),
+            offset: offset.clone(),
             event_time: message.event_time,
+            watermark: None,
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: offset.to_string().into(),
@@ -82,7 +83,7 @@ impl source::SourceAcker for PulsarSource {
                     "Expected Offset::Int type for Pulsar. offset={offset:?}"
                 )));
             };
-            pulsar_offsets.push(int_offset.offset);
+            pulsar_offsets.push(int_offset.offset as u64);
         }
         self.ack_offsets(pulsar_offsets).await.map_err(Into::into)
     }
@@ -154,7 +155,7 @@ mod tests {
         let messages = pulsar.read().await?;
         assert_eq!(messages.len(), 10);
 
-        let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset.unwrap()).collect();
+        let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset).collect();
 
         pulsar.ack(offsets).await?;
 

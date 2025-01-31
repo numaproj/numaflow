@@ -26,6 +26,7 @@ use crate::source::user_defined::new_source;
 use crate::source::Source;
 use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
+use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
 
 /// Creates a sink writer based on the configuration
@@ -272,6 +273,7 @@ pub async fn create_source(
     source_config: &SourceConfig,
     tracker_handle: TrackerHandle,
     transformer: Option<Transformer>,
+    watermark_handle: Option<SourceWatermarkHandle>,
     cln_token: CancellationToken,
 ) -> error::Result<(Source, Option<SourceClient<Channel>>)> {
     match &source_config.source_type {
@@ -285,6 +287,7 @@ pub async fn create_source(
                     tracker_handle,
                     source_config.read_ahead,
                     transformer,
+                    watermark_handle,
                 ),
                 None,
             ))
@@ -324,6 +327,7 @@ pub async fn create_source(
                     tracker_handle,
                     source_config.read_ahead,
                     transformer,
+                    None,
                 ),
                 Some(source_grpc_client),
             ))
@@ -337,6 +341,7 @@ pub async fn create_source(
                     tracker_handle,
                     source_config.read_ahead,
                     transformer,
+                    None,
                 ),
                 None,
             ))
@@ -356,6 +361,7 @@ pub async fn create_source(
                     tracker_handle,
                     source_config.read_ahead,
                     transformer,
+                    None,
                 ),
                 None,
             ))

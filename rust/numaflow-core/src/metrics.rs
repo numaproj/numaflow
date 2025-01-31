@@ -29,7 +29,7 @@ use tonic::Request;
 use tracing::{debug, error, info};
 
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
-use crate::pipeline::isb::jetstream::reader::JetstreamReader;
+use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::source::Source;
 use crate::Error;
 
@@ -722,7 +722,7 @@ struct TimestampedPending {
 pub(crate) enum LagReader {
     Source(Source),
     #[allow(clippy::upper_case_acronyms)]
-    ISB(Vec<JetstreamReader>), // multiple partitions
+    ISB(Vec<JetStreamReader>), // multiple partitions
 }
 
 /// PendingReader is responsible for periodically checking the lag of the reader
@@ -925,7 +925,7 @@ async fn fetch_source_pending(lag_reader: &Source) -> crate::error::Result<i64> 
     Ok(response)
 }
 
-async fn fetch_isb_pending(reader: &mut JetstreamReader) -> crate::error::Result<i64> {
+async fn fetch_isb_pending(reader: &mut JetStreamReader) -> crate::error::Result<i64> {
     let response: i64 = reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
     Ok(response)
 }

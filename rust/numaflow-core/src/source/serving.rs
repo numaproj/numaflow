@@ -19,8 +19,9 @@ impl TryFrom<serving::Message> for Message {
             keys: Arc::from(vec![]),
             tags: None,
             value: message.value,
-            offset: Some(offset.clone()),
+            offset: offset.clone(),
             event_time: Default::default(),
+            watermark: None,
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: offset.to_string().into(),
@@ -91,10 +92,8 @@ mod tests {
     use serving::{ServingSource, Settings};
 
     use super::get_vertex_replica;
-    use crate::{
-        message::{Message, MessageID, Offset, StringOffset},
-        source::{SourceAcker, SourceReader},
-    };
+    use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::source::{SourceAcker, SourceReader};
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -114,7 +113,7 @@ mod tests {
         assert_eq!(message.value, Bytes::from_static(b"test"));
         assert_eq!(
             message.offset,
-            Some(Offset::String(StringOffset::new(MSG_ID.into(), 0)))
+            Offset::String(StringOffset::new(MSG_ID.into(), 0))
         );
         assert_eq!(
             message.id,
@@ -192,7 +191,7 @@ mod tests {
                 }
                 assert_eq!(messages.len(), 1);
                 let msg = messages.remove(0);
-                serving_source.ack(vec![msg.offset.unwrap()]).await.unwrap();
+                serving_source.ack(vec![msg.offset]).await.unwrap();
                 break;
             }
         });
