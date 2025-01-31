@@ -349,13 +349,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	}
 
 	if v.IsASource() && v.Spec.Source.Serving != nil {
-		servingSource := v.Spec.Source.Serving
-		servingSourceBytes, err := json.Marshal(servingSource)
-		if err != nil {
-			return nil, errors.New("failed to marshal serving source spec")
-		}
-		encodedServingSourceSpec := base64.StdEncoding.EncodeToString(servingSourceBytes)
-
 		// Create a SimplifiedPipelineSpec and populate it with the vertex names and edges
 		simplifiedPipelineSpec := PipelineSpec{
 			Vertices: req.PipelineSpec.Vertices,
@@ -372,7 +365,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 			containers[0].Env,
 			// set the serving source stream name in the environment because the numa container will be reading from it
 			corev1.EnvVar{Name: EnvServingJetstreamStream, Value: req.ServingSourceStreamName},
-			corev1.EnvVar{Name: EnvServingObject, Value: encodedServingSourceSpec},
 			corev1.EnvVar{Name: EnvServingMinPipelineSpec, Value: encodedPipelineSpec},
 			corev1.EnvVar{Name: EnvServingPort, Value: strconv.Itoa(VertexHTTPSPort)},
 			corev1.EnvVar{
@@ -383,12 +375,9 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 					},
 				},
 			},
-			corev1.EnvVar{
-				Name:  EnvServingStoreTTL,
-				Value: strconv.Itoa(int(servingSource.Store.GetTTL().Seconds())),
-			},
 		)
 
+		servingSource := v.Spec.Source.Serving
 		// if auth is configured, set the auth token in the environment
 		if servingSource.Auth != nil && servingSource.Auth.Token != nil {
 			containers[0].Env = append(containers[0].Env,

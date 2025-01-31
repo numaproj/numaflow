@@ -362,8 +362,8 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		assert.ElementsMatch(t, envNames, []string{
 			"test-env", EnvNamespace, EnvPod, EnvPipelineName, EnvVertexName, EnvVertexObject, EnvReplica,
-			EnvCallbackEnabled, EnvServingAuthToken, EnvServingObject, EnvServingMinPipelineSpec,
-			EnvServingHostIP, EnvServingPort, EnvServingStoreTTL, EnvServingJetstreamStream,
+			EnvCallbackEnabled, EnvServingAuthToken, EnvServingMinPipelineSpec,
+			EnvServingHostIP, EnvServingPort, EnvServingJetstreamStream,
 		})
 
 		assert.Contains(t, s.Containers[0].Args, "processor")
