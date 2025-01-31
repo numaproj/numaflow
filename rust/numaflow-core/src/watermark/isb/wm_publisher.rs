@@ -19,6 +19,14 @@ use crate::watermark::wmb::WMB;
 /// Interval at which the pod sends heartbeats.
 const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;
 
+/*
+pub(crate) async fn publish_idle_watermarks(watermark: i64) {
+    * iterate over all the downstream streams and check if the watermark is published for that stream in last 'x' duration
+    * if not published (that means its inactive):
+         *
+}
+ */
+
 /// LastPublishedState is the state of the last published watermark and offset
 /// for a partition.
 #[derive(Clone, Debug)]
