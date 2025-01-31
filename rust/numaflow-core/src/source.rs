@@ -1,6 +1,23 @@
+//! [Source] vertex is responsible for reliable reading data from an unbounded source into Numaflow
+//! and also assigning [Watermark].
+//!
+//! [Source]: https://numaflow.numaproj.io/user-guide/sources/overview/
+//! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
+
 use std::sync::Arc;
 
+use numaflow_pulsar::source::PulsarSource;
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
+use tokio::time::Instant;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info, warn};
+
 use crate::config::{get_vertex_name, is_mono_vertex};
+use crate::error::{Error, Result};
 use crate::message::ReadAck;
 use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
@@ -11,17 +28,6 @@ use crate::{
     message::{Message, Offset},
     reader::LagReader,
 };
-use crate::{Error, Result};
-use numaflow_pulsar::source::PulsarSource;
-use tokio::sync::OwnedSemaphorePermit;
-use tokio::sync::Semaphore;
-use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinHandle;
-use tokio::time;
-use tokio::time::Instant;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -39,8 +45,10 @@ pub(crate) mod generator;
 pub(crate) mod pulsar;
 
 pub(crate) mod serving;
-use crate::transformer::Transformer;
 use serving::ServingSource;
+
+use crate::transformer::Transformer;
+use crate::watermark::source::SourceWatermarkHandle;
 
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
@@ -156,6 +164,7 @@ pub(crate) struct Source {
     read_ahead: bool,
     /// Transformer handler for transforming messages from Source.
     transformer: Option<Transformer>,
+    watermark_handle: Option<SourceWatermarkHandle>,
 }
 
 impl Source {
@@ -166,6 +175,7 @@ impl Source {
         tracker_handle: TrackerHandle,
         read_ahead: bool,
         transformer: Option<Transformer>,
+        watermark_handle: Option<SourceWatermarkHandle>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
         match src_type {
@@ -206,6 +216,7 @@ impl Source {
             tracker_handle,
             read_ahead,
             transformer,
+            watermark_handle,
         }
     }
 
@@ -218,7 +229,7 @@ impl Source {
         let _ = source_handle.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// ack the offsets by communicating with the ack actor.
@@ -233,7 +244,7 @@ impl Source {
         let _ = source_handle.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// get the pending messages count by communicating with the pending actor.
@@ -245,7 +256,7 @@ impl Source {
         let _ = self.sender.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// Starts streaming messages from the source. It returns a stream of messages and
@@ -260,6 +271,7 @@ impl Source {
         let tracker_handle = self.tracker_handle.clone();
         let read_ahead_enabled = self.read_ahead;
         let mut transformer = self.transformer.clone();
+        let mut watermark_handle = self.watermark_handle.clone();
 
         let pipeline_labels = pipeline_forward_metric_labels("Source", Some(get_vertex_name()));
         let mvtx_labels = mvtx_forward_metric_labels();
@@ -285,7 +297,7 @@ impl Source {
                         .expect("acquiring permit should not fail");
                 }
 
-                let read_start_time = time::Instant::now();
+                let read_start_time = Instant::now();
                 let messages = match Self::read(source_handle.clone()).await {
                     Ok(messages) => messages,
                     Err(e) => {
@@ -305,7 +317,7 @@ impl Source {
                 let mut ack_batch = Vec::with_capacity(msgs_len);
                 for message in messages.iter() {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
-                    let offset = message.offset.clone().expect("offset can never be none");
+                    let offset = message.offset.clone();
 
                     // insert the offset and the ack one shot in the tracker.
                     tracker_handle.insert(message, resp_ack_tx).await?;
@@ -334,6 +346,12 @@ impl Source {
                     None => messages,
                     Some(transformer) => transformer.transform_batch(messages).await?,
                 };
+
+                if let Some(watermark_handle) = watermark_handle.as_mut() {
+                    watermark_handle
+                        .generate_and_publish_source_watermark(&messages)
+                        .await?;
+                }
 
                 // write the messages to downstream.
                 for message in messages {
@@ -567,8 +585,9 @@ mod tests {
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
-            TrackerHandle::new(None),
+            TrackerHandle::new(None, None),
             true,
+            None,
             None,
         );
 
@@ -580,7 +599,7 @@ mod tests {
         for _ in 0..100 {
             let message = stream.next().await.unwrap();
             assert_eq!(message.value, "hello".as_bytes());
-            offsets.push(message.offset.clone().unwrap());
+            offsets.push(message.offset.clone());
         }
 
         // ack all the messages
