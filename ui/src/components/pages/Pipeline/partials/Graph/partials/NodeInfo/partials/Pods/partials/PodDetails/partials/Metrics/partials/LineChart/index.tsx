@@ -415,6 +415,7 @@ const LineChartComponent = ({
             vertexId={vertexId}
             setFilters={setFilters}
             selectedPodName={selectedPodName}
+            metric={metric}
           />
         </Box>
       )}
