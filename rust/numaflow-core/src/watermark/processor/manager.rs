@@ -87,7 +87,7 @@ impl Processor {
     }
 }
 
-/// processorManager manages the point of view of Vn-1 from Vn vertex processors (or source processor).
+/// processorManager manages the point of view of Vn-1 from the Vn vertex processor (or source processor).
 /// The code is running on Vn vertex. It has the mapping of all the processors which in turn has all the
 /// information about each processor timelines.
 pub(crate) struct ProcessorManager {
@@ -337,10 +337,9 @@ impl ProcessorManager {
     /// creates a watcher for the given bucket, will retry infinitely until it succeeds
     async fn create_watcher(bucket: async_nats::jetstream::kv::Store) -> Watch {
         const RECONNECT_INTERVAL: u64 = 1000;
-        const MAX_RECONNECT_ATTEMPTS: usize = usize::MAX;
 
-        let interval =
-            fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
+        // infinite retry
+        let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(usize::MAX);
 
         Retry::retry(
             interval,

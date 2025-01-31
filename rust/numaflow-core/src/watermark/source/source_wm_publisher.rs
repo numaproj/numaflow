@@ -42,6 +42,7 @@ impl SourceWatermarkPublisher {
         // the processing entity is the partition itself. We create a publisher for each partition
         // and publish the watermark to it.
         let processor_name = format!("{}-{}", self.source_config.vertex, partition);
+        // create a publisher if not exists
         if !self.publishers.contains_key(&processor_name) {
             let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),
@@ -72,9 +73,9 @@ impl SourceWatermarkPublisher {
             .expect("Failed to publish watermark");
     }
 
-    /// Publishes the edge watermark for the input partition. It internally uses edge publisher with
-    /// processor set to the input partition and edge OTs.
-    pub(crate) async fn publish_edge_watermark(
+    /// Publishes the ISB watermark for the input partition. It internally uses ISB publisher with
+    /// processor set to the input partition and ISB OTs.
+    pub(crate) async fn publish_isb_watermark(
         &mut self,
         input_partition: u16,
         stream: Stream,
@@ -264,7 +265,7 @@ mod tests {
 
         // Publish edge watermark for partition 0
         source_publisher
-            .publish_edge_watermark(0, stream.clone(), 1, 200)
+            .publish_isb_watermark(0, stream.clone(), 1, 200)
             .await;
 
         let ot_bucket = js_context

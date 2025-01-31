@@ -15,10 +15,11 @@ use crate::watermark::wmb::Watermark;
 
 /// ISBWatermarkFetcher is the watermark fetcher for the incoming edges.
 pub(crate) struct ISBWatermarkFetcher {
-    /// A map of vertex to its ProcessorManager. Each key represents the incoming vertex, it will be
-    /// > 1 only during JOIN.
+    /// A map of vertex to its ProcessorManager. Each key represents the incoming vertex, it will
+    /// be > 1 only during JOIN.
     processor_managers: HashMap<&'static str, ProcessorManager>,
-    /// A map of vertex to its last processed watermark for each partition.
+    /// A map of vertex to its last processed watermark for each partition. Index[0] will be 0th
+    /// partition, and so forth.
     last_processed_wm: HashMap<&'static str, Vec<i64>>,
 }
 
@@ -60,14 +61,6 @@ impl ISBWatermarkFetcher {
                 .expect("failed to acquire lock")
                 .iter()
                 .for_each(|(name, processor)| {
-                    // headOffset is used to check whether this pod can be deleted.
-                    let head_offset = processor
-                        .timelines
-                        .iter()
-                        .map(|timeline| timeline.get_head_offset())
-                        .max()
-                        .unwrap_or(-1);
-
                     // we only need to consider the timeline for the requested partition
                     if let Some(timeline) = processor.timelines.get(partition_idx as usize) {
                         let t = timeline.get_event_time(offset);
@@ -78,8 +71,18 @@ impl ISBWatermarkFetcher {
 
                     // if the pod is not active and the head offset of all the timelines is less than the input offset, delete
                     // the processor (this means we are processing data later than what the stale processor has processed)
-                    if processor.is_deleted() && offset > head_offset {
-                        processors_to_delete.push(name.clone());
+                    if processor.is_deleted() {
+                        // headOffset is used to check whether this pod can be deleted (e.g., dead pod)
+                        let head_offset = processor
+                            .timelines
+                            .iter()
+                            .map(|timeline| timeline.get_head_offset())
+                            .max()
+                            .unwrap_or(-1);
+
+                        if offset > head_offset {
+                            processors_to_delete.push(name.clone());
+                        }
                     }
                 });
 
@@ -98,6 +101,7 @@ impl ISBWatermarkFetcher {
             }
         }
 
+        // now we computed and updated for this partition, we just need to compare across partitions.
         self.get_watermark()
     }
 
@@ -157,7 +161,7 @@ impl ISBWatermarkFetcher {
         Ok(min_wm)
     }
 
-    // returns the smallest last processed watermark among all the partitions
+    /// returns the smallest last processed watermark among all the partitions
     fn get_watermark(&self) -> Result<Watermark> {
         let mut min_wm = i64::MAX;
         for wm in self.last_processed_wm.values() {

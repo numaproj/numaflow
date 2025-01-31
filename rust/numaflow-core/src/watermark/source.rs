@@ -84,7 +84,7 @@ impl SourceWatermarkActor {
             } => {
                 let watermark = self.fetcher.fetch_source_watermark()?;
                 self.publisher
-                    .publish_edge_watermark(
+                    .publish_isb_watermark(
                         input_partition,
                         stream,
                         offset.offset,

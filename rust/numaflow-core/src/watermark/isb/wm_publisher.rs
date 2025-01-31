@@ -124,6 +124,8 @@ impl ISBWatermarkPublisher {
                     .await
                     .expect("Failed to publish heartbeat");
             }
+
+            // TODO: use ticker
             sleep(duration).await;
         }
     }
@@ -140,8 +142,7 @@ impl ISBWatermarkPublisher {
             None => return Err(Error::Watermark("Invalid vertex".to_string())),
         };
 
-        // we can avoid publishing the watermark if it is smaller than the last published watermark
-        // or if the last watermark was published in the last 100ms
+        // we can avoid publishing the watermark if it is <= the last published watermark (optimization)
         let last_state = &last_published_wm_state[stream.partition as usize];
         if offset <= last_state.offset || watermark <= last_state.watermark {
             return Ok(());
