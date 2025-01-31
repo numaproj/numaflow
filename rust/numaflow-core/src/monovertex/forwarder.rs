@@ -13,12 +13,16 @@
 //!  ```
 //!
 //! Most of the data move forward except for the `ack` which can happen only after the that the tracker
-//! has guaranteed that the processing complete.
+//! has guaranteed that the processing complete. Ack is spawned during the reading.
 //! ```text
 //! (Read) +-------> (UDF) -------> (Write) +
 //!        |                                |
 //!        |                                |
-//!        +-------> {Ack} <----------------+
+//!        +-------> {tracker} <------------
+//!                     |
+//!                     |
+//!                     v
+//!                   {ack}
 //!
 //! {} -> Listens on a OneShot
 //! () -> Streaming Interface
@@ -188,7 +192,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_forwarder() {
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
 
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
@@ -245,13 +249,14 @@ mod tests {
             .await
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
             tracker_handle.clone(),
             true,
             Some(transformer),
+            None,
         );
 
         let sink_writer = SinkWriterBuilder::new(
@@ -318,7 +323,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_flatmap_operation() {
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
 
@@ -381,6 +386,7 @@ mod tests {
             tracker_handle.clone(),
             true,
             Some(transformer),
+            None,
         );
 
         let sink_writer = SinkWriterBuilder::new(

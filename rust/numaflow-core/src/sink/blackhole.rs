@@ -36,7 +36,7 @@ mod tests {
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
-                offset: Some(Offset::Int(IntOffset::new(1, 0))),
+                offset: Offset::Int(IntOffset::new(1, 0)),
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
@@ -44,13 +44,14 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 0,
                 },
+                watermark: None,
                 metadata: None,
             },
             Message {
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
-                offset: Some(Offset::Int(IntOffset::new(1, 0))),
+                offset: Offset::Int(IntOffset::new(1, 0)),
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
@@ -58,6 +59,7 @@ mod tests {
                     offset: "2".to_string().into(),
                     index: 1,
                 },
+                watermark: None,
                 metadata: None,
             },
         ];

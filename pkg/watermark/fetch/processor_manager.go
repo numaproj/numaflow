@@ -25,13 +25,14 @@ package fetch
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 
+	wmbpb "github.com/numaproj/numaflow/pkg/apis/proto/watermark"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	entity2 "github.com/numaproj/numaflow/pkg/watermark/entity"
@@ -214,12 +215,13 @@ func (v *processorManager) startHeartBeatWatcher() {
 					p.setStatus(_active)
 				}
 				// value is epoch
-				intValue, convErr := strconv.Atoi(string(value.Value()))
+				var hb wmbpb.Heartbeat
+				convErr := proto.Unmarshal(value.Value(), &hb)
 				if convErr != nil {
 					v.log.Errorw("Unable to convert intValue.WMB() to int64", zap.Error(convErr))
 				} else {
 					// insert the last seen timestamp. we use this to figure whether this processor entity is inactive.
-					v.heartbeat.put(value.Key(), int64(intValue))
+					v.heartbeat.put(value.Key(), hb.Heartbeat)
 				}
 			case kvs.KVDelete:
 				p := v.getProcessor(value.Key())

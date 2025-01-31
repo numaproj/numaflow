@@ -17,7 +17,7 @@ limitations under the License.
 syntax = "proto3";
 option go_package = "github.com/numaproj/numaflow/pkg/apis/proto/isb";
 
-package wmb;
+package watermark;
 
 // WMB is used in the KV offset timeline bucket as the value for the given processor entity key.
 message WMB {
@@ -38,4 +38,10 @@ message WMB {
 
   // Partition to identify the partition to which the watermark belongs.
   int32 partition = 4;
+}
+
+// Heartbeat is used to track the active processors
+message Heartbeat {
+  // Heartbeat(current time in millis) published by the active processors.
+  int64 heartbeat = 1;
 }

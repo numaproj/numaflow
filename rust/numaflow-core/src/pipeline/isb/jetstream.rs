@@ -6,6 +6,3 @@
 pub(crate) mod writer;
 
 pub(crate) mod reader;
-
-/// Stream is a combination of stream name and partition id.
-type Stream = (String, u16);

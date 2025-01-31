@@ -28,7 +28,8 @@ pub(crate) async fn start_forwarder(
         .callback_config
         .as_ref()
         .map(|cb_cfg| CallbackHandler::new(config.name.clone(), cb_cfg.callback_concurrency));
-    let tracker_handle = TrackerHandle::new(callback_handler);
+    let tracker_handle = TrackerHandle::new(None, callback_handler);
+
     let (transformer, transformer_grpc_client) = create_components::create_transformer(
         config.batch_size,
         config.transformer_config.clone(),
@@ -43,6 +44,7 @@ pub(crate) async fn start_forwarder(
         &config.source_config,
         tracker_handle.clone(),
         transformer,
+        None,
         cln_token.clone(),
     )
     .await?;

@@ -102,11 +102,11 @@ pub(crate) async fn wait_until_mapper_ready(
     Ok(())
 }
 
-pub(crate) fn prost_timestamp_from_utc(t: DateTime<Utc>) -> Option<Timestamp> {
-    Some(Timestamp {
+pub(crate) fn prost_timestamp_from_utc(t: DateTime<Utc>) -> Timestamp {
+    Timestamp {
         seconds: t.timestamp(),
         nanos: t.nanosecond() as i32,
-    })
+    }
 }
 
 pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> error::Result<Channel> {
