@@ -270,7 +270,6 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, EnvVertexObject)
 		assert.Contains(t, envNames, EnvReplica)
 		assert.NotContains(t, envNames, EnvCallbackEnabled)
-		assert.NotContains(t, envNames, EnvCallbackURL)
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSource))
 		assert.Equal(t, 1, len(s.InitContainers))
@@ -285,8 +284,8 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, "0", s.InitContainers[0].Resources.Limits.Memory().String())
 	})
 
-	// When the pipeline has a Serving source vertex, the Numaflow container of all vertices should get
-	// the environment variables `EnvCallbackEnabled` and `EnvCallbackURL`
+	// When the pipeline has a Serving source vertex, the Numaflow container of all vertices
+	// should have the environment variable `EnvCallbackEnabled` set to true
 	t.Run("test Serving source", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Source = &Source{
@@ -363,7 +362,7 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		assert.ElementsMatch(t, envNames, []string{
 			"test-env", EnvNamespace, EnvPod, EnvPipelineName, EnvVertexName, EnvVertexObject, EnvReplica,
-			EnvCallbackEnabled, EnvCallbackURL, EnvServingAuthToken, EnvServingObject, EnvServingMinPipelineSpec,
+			EnvCallbackEnabled, EnvServingAuthToken, EnvServingObject, EnvServingMinPipelineSpec,
 			EnvServingHostIP, EnvServingPort, EnvServingStoreTTL, EnvServingJetstreamStream,
 		})
 

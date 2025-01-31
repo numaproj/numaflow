@@ -105,7 +105,7 @@ test-coverage:
 
 .PHONY: test-coverage-with-isb
 test-coverage-with-isb:
-	go test -timeout 7m -covermode=atomic -coverprofile=test/profile.cov -tags=isb_redis $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
+	go test -v -timeout 7m -covermode=atomic -coverprofile=test/profile.cov -tags=isb_redis $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
 	go tool cover -func=test/profile.cov
 
 .PHONY: test-code
@@ -135,7 +135,7 @@ endif
 	$(MAKE) restart-control-plane-components
 	cat test/manifests/e2e-api-pod.yaml | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./test/$* -name '*.go')
-	go test -timeout 15m -count 1 --tags test -p 1 ./test/$*
+	go test -v -timeout 15m -count 1 --tags test -p 1 ./test/$*
 	$(MAKE) cleanup-e2e
 
 image-restart:
@@ -164,7 +164,7 @@ Test%:
 	kubectl -n numaflow-system delete po e2e-api-pod  --ignore-not-found=true
 	go generate $(shell find $(shell grep -rl $(*) ./test/*-e2e/*.go))
 	cat test/manifests/e2e-api-pod.yaml |  sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
-	-go test -timeout 15m -count 1 --tags test -p 1 ./test/$(shell grep $(*) -R ./test | head -1 | awk -F\/ '{print $$3}' ) -run='.*/$*'
+	-go test -v -timeout 15m -count 1 --tags test -p 1 ./test/$(shell grep $(*) -R ./test | head -1 | awk -F\/ '{print $$3}' ) -run='.*/$*'
 	$(MAKE) cleanup-e2e
 
 .PHONY: ui-build
