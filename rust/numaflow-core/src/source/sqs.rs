@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use numaflow_sqs::source::{SQSMessage, SQSSource, SQSSourceBuilder, SQSSourceConfig};
 
-use crate::config::get_vertex_name;
+use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::source;
@@ -12,13 +12,14 @@ impl TryFrom<SQSMessage> for Message {
     type Error = Error;
 
     fn try_from(message: SQSMessage) -> crate::Result<Self> {
-        let offset = Offset::String(StringOffset::new(message.offset, 0));
+        let offset = Offset::String(StringOffset::new(message.offset, *get_vertex_replica()));
         Ok(Message {
             keys: Arc::from(vec![message.key]),
             tags: None,
             value: message.payload,
-            offset: Some(offset.clone()),
+            offset: offset.clone(),
             event_time: message.event_time,
+            watermark: None,
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: offset.to_string().into(),
@@ -134,7 +135,7 @@ pub mod tests {
         assert_eq!(message.value, "value");
         assert_eq!(
             message.offset,
-            Some(Offset::String(StringOffset::new("offset".to_string(), 0)))
+            Offset::String(StringOffset::new("offset".to_string(), 0)),
         );
         assert_eq!(message.event_time, ts);
         assert_eq!(message.headers, headers);
@@ -174,12 +175,13 @@ pub mod tests {
 
         // create SQS source with test client
         use crate::tracker::TrackerHandle;
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let source = Source::new(
             1,
             SourceType::SQS(sqs_source),
             tracker_handle.clone(),
             true,
+            None,
             None,
         );
 
