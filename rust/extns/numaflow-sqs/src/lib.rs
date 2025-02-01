@@ -1,10 +1,10 @@
-/// Library for robust SQS message handling using an actor-based architecture.
-///
-/// This module provides a fault-tolerant interface for interacting with Amazon SQS,
-/// with a focus on:
-/// - Error propagation and handling for AWS SDK errors
-/// - Actor-based concurrency model for thread safety
-/// - Clean abstraction of SQS operations
+//! Library for robust SQS message handling using an actor-based architecture.
+//!
+//! This module provides a fault-tolerant interface for interacting with Amazon SQS,
+//! with a focus on:
+//! - Error propagation and handling for AWS SDK errors
+//! - Actor-based concurrency model for thread safety
+//! - Clean abstraction of SQS operations
 use aws_sdk_sqs::error::SdkError;
 use tokio::sync::oneshot;
 pub mod source;

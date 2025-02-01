@@ -2371,7 +2371,6 @@ dependencies = [
  "aws-smithy-types",
  "bytes",
  "chrono",
- "http 1.2.0",
  "prost 0.11.9",
  "serde",
  "thiserror 1.0.69",

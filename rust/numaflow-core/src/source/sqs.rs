@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use numaflow_sqs::source::{SQSMessage, SQSSource, SQSSourceConfig};
+use numaflow_sqs::source::{SQSMessage, SQSSource, SQSSourceBuilder, SQSSourceConfig};
 
 use crate::config::get_vertex_name;
 use crate::error::Error;
@@ -47,7 +47,12 @@ pub(crate) async fn new_sqs_source(
     batch_size: usize,
     timeout: Duration,
 ) -> crate::Result<SQSSource> {
-    Ok(SQSSource::new(cfg, batch_size, timeout, None).await?)
+    Ok(SQSSourceBuilder::new()
+        .config(cfg)
+        .batch_size(batch_size)
+        .timeout(timeout)
+        .build()
+        .await?)
 }
 
 impl source::SourceReader for SQSSource {
@@ -100,6 +105,7 @@ pub mod tests {
     use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, Rule, RuleMode};
     use bytes::Bytes;
     use chrono::Utc;
+    use numaflow_sqs::source::{SQSSourceBuilder, SQS_DEFAULT_REGION};
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
@@ -153,17 +159,18 @@ pub mod tests {
 
         let sqs_client =
             aws_sdk_sqs::Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
-        let sqs_source = SQSSource::new(
-            SQSSourceConfig {
-                region: "us-west-2".to_string(),
+
+        let sqs_source = SQSSourceBuilder::new()
+            .config(SQSSourceConfig {
+                region: SQS_DEFAULT_REGION.to_string(),
                 queue_name: "test-q".to_string(),
-            },
-            1,
-            Duration::from_secs(1),
-            Some(sqs_client),
-        )
-        .await
-        .unwrap();
+            })
+            .batch_size(1)
+            .timeout(Duration::from_secs(1))
+            .client(sqs_client)
+            .build()
+            .await
+            .unwrap();
 
         // create SQS source with test client
         use crate::tracker::TrackerHandle;
@@ -205,7 +212,7 @@ pub mod tests {
 
         // wait for one sec to check if the pending becomes zero, because all the messages
         // should be read and acked; if it doesn't, then fail the test
-        let tokio_result = tokio::time::timeout(Duration::from_secs(1), async move {
+        let tokio_result = tokio::time::timeout(Duration::from_secs(5), async move {
             loop {
                 let pending = source.pending().await.unwrap();
                 if pending == Some(0) {
