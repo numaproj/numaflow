@@ -359,18 +359,20 @@ func TestCalculateMaxLookback(t *testing.T) {
 			expectedMax: 60,
 		},
 		{
+			// Here the pod has an initial read count, and then would we see a pod count as 0.
+			// This is equated as a refresh in counts, and thus
 			name: "Pod goes to zero",
 			counts: []*TimestampedCounts{
 				newTimestampedCounts(0, map[string]float64{"pod1": 50}), // Initial count
 				newTimestampedCounts(30, map[string]float64{"pod1": 50}),
 				newTimestampedCounts(60, map[string]float64{"pod1": 0}),   // Count falls to zero
-				newTimestampedCounts(120, map[string]float64{"pod1": 25}), // Continues to be zero
-				newTimestampedCounts(180, map[string]float64{"pod1": 25}), // Count returns but differs
+				newTimestampedCounts(120, map[string]float64{"pod1": 25}), // Count returns
+				newTimestampedCounts(180, map[string]float64{"pod1": 25}), // Count stays stable
 				newTimestampedCounts(240, map[string]float64{"pod1": 25}), // Count stays stable again
 			},
 			startIndex:  0,
 			endIndex:    5,
-			expectedMax: 60, // from index 2,3
+			expectedMax: 120, // from index 3,5
 		},
 		{
 			name: "Pod goes to zero - 2",
@@ -384,7 +386,7 @@ func TestCalculateMaxLookback(t *testing.T) {
 			},
 			startIndex:  0,
 			endIndex:    5,
-			expectedMax: 120, // here idx 0,3 should be used, after going to zero it resets
+			expectedMax: 120, // here idx 0,2 should be used, after going to zero it resets
 		},
 		{
 			name: "No data ",
@@ -398,7 +400,7 @@ func TestCalculateMaxLookback(t *testing.T) {
 			},
 			startIndex:  0,
 			endIndex:    5,
-			expectedMax: 0, // here idx 0,3 should be used, after going to zero it resets
+			expectedMax: 0,
 		},
 		{
 			// this is a case where one pod never got any data which we consider as read count = 0 always
@@ -414,7 +416,7 @@ func TestCalculateMaxLookback(t *testing.T) {
 			},
 			startIndex:  0,
 			endIndex:    5,
-			expectedMax: 240, // here idx 0,3 should be used, after going to zero it resets
+			expectedMax: 240,
 		},
 	}
 

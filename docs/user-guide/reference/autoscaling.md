@@ -49,7 +49,7 @@ spec:
   don't want the vertices to be scaled down to `0`. In this case, you need to increase `lookbackSeconds` to overlap
   5 minutes, so that the calculated average rate and pending messages won't be `0` during the silent period, in order to prevent from
   scaling down to 0.
-  The max value allowed is  `10mins ~ 600s`.
+  The max value allowed to be configured is `600`.
   On top of this, we have dynamic lookback adjustment which tunes this parameter based on the realtime processing data.
 - `scaleUpCooldownSeconds` - After a scaling operation, how many seconds to wait for the same vertex, if the follow-up
   operation is a scaling up, defaults to `90`. Please make sure that the time is greater than the pod to be `Running` and
