@@ -2449,7 +2449,9 @@ the <a href="../../sources/overview/"><code>Source</code></a> vertices (please c
   a bit to see better results. For example, your data source only have 1 minute data input in every 5 minutes, and you
   don't want the vertices to be scaled down to <code>0</code>. In this case, you need to increase <code>lookbackSeconds</code> to overlap
   5 minutes, so that the calculated average rate and pending messages won't be <code>0</code> during the silent period, in order to prevent from
-  scaling down to 0.</li>
+  scaling down to 0.
+  The max value allowed to be configured is <code>600</code>.
+  On top of this, we have dynamic lookback adjustment which tunes this parameter based on the realtime processing data.</li>
 <li><code>scaleUpCooldownSeconds</code> - After a scaling operation, how many seconds to wait for the same vertex, if the follow-up
   operation is a scaling up, defaults to <code>90</code>. Please make sure that the time is greater than the pod to be <code>Running</code> and
   start processing, because the autoscaling algorithm will divide the TPS by the number of pods even if the pod is not <code>Running</code>.</li>
