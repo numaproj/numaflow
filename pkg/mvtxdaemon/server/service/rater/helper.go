@@ -156,6 +156,7 @@ func CalculateMaxLookback(counts []*TimestampedCounts, startIndex, endIndex int)
 	return findGlobalMaxDuration(lookBackData.maxUnchangedDuration)
 }
 
+// processTimeline processes the timeline of counts and updates the maxUnchangedDuration for each pod.
 func processTimeline(counts []*TimestampedCounts, startIndex, endIndex int, data *podMaxDuration) {
 	for i := startIndex; i <= endIndex; i++ {
 		item := counts[i].PodCountSnapshot()
