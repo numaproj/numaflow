@@ -121,7 +121,7 @@ impl TryFrom<read_response::Result> for Message {
             keys: Arc::from(result.keys),
             tags: None,
             value: result.payload.into(),
-            offset: Some(source_offset.clone()),
+            offset: source_offset.clone(),
             event_time: utc_from_timestamp(result.event_time),
             id: MessageID {
                 vertex_name: config::get_vertex_name().to_string().into(),
@@ -129,6 +129,7 @@ impl TryFrom<read_response::Result> for Message {
                 index: 0,
             },
             headers: result.headers,
+            watermark: None,
             metadata: None,
         })
     }
@@ -139,13 +140,16 @@ impl TryFrom<Offset> for source::Offset {
 
     fn try_from(offset: Offset) -> std::result::Result<Self, Self::Error> {
         match offset {
-            Offset::Int(_) => Err(Error::Source("IntOffset not supported".to_string())),
-            Offset::String(o) => Ok(numaflow_pb::clients::source::Offset {
+            Offset::String(StringOffset {
+                offset,
+                partition_idx,
+            }) => Ok(source::Offset {
                 offset: BASE64_STANDARD
-                    .decode(o.offset)
+                    .decode(offset)
                     .expect("we control the encoding, so this should never fail"),
-                partition_id: o.partition_idx as i32,
+                partition_id: partition_idx as i32,
             }),
+            Offset::Int(_) => Err(Error::Source("IntOffset not supported".to_string())),
         }
     }
 }
@@ -172,7 +176,7 @@ impl SourceReader for UserDefinedSourceRead {
         let mut messages = Vec::with_capacity(self.num_records);
 
         while let Some(response) = self.resp_stream.message().await? {
-            if response.status.map_or(false, |status| status.eot) {
+            if response.status.is_some_and(|status| status.eot) {
                 break;
             }
 
@@ -387,7 +391,7 @@ mod tests {
         assert_eq!(messages.len(), 5);
 
         let response = src_ack
-            .ack(messages.iter().map(|m| m.offset.clone().unwrap()).collect())
+            .ack(messages.iter().map(|m| m.offset.clone()).collect())
             .await;
         assert!(response.is_ok());
 
@@ -413,9 +417,9 @@ mod tests {
                 offset: BASE64_STANDARD.encode("123").into_bytes(),
                 partition_id: 0,
             }),
-            event_time: Some(
-                prost_timestamp_from_utc(Utc.timestamp_opt(1627846261, 0).unwrap()).unwrap(),
-            ),
+            event_time: Some(prost_timestamp_from_utc(
+                Utc.timestamp_opt(1627846261, 0).unwrap(),
+            )),
             keys: vec!["key1".to_string()],
             headers: HashMap::new(),
         };

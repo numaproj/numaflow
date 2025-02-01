@@ -61,5 +61,5 @@ gen-protoc pkg/apis/proto/mvtxdaemon/mvtxdaemon.proto
 
 gen-protoc pkg/apis/proto/isb/message.proto
 
-gen-protoc pkg/apis/proto/wmb/wmb.proto
+gen-protoc pkg/apis/proto/watermark/watermark.proto
 
