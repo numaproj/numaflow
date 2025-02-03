@@ -97,7 +97,7 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 	}
 	if servingSource != nil {
 		for _, v := range pl.Spec.Vertices {
-			if v.UDF != nil && v.UDF.GroupBy != nil {
+			if v.IsReduceUDF() {
 				return fmt.Errorf("pipeline has a Serving source %q and a reduce vertex %q. Reduce is not supported with Serving source", servingSource.Name, v.Name)
 			}
 		}

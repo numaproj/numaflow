@@ -362,7 +362,7 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		assert.ElementsMatch(t, envNames, []string{
 			"test-env", EnvNamespace, EnvPod, EnvPipelineName, EnvVertexName, EnvVertexObject, EnvReplica,
-			EnvCallbackEnabled, EnvServingAuthToken, EnvServingMinPipelineSpec,
+			EnvCallbackEnabled, EnvServingMinPipelineSpec,
 			EnvServingHostIP, EnvServingPort, EnvServingJetstreamStream,
 		})
 
