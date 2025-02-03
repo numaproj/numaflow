@@ -924,10 +924,11 @@ func (h *handler) PodLogs(c *gin.Context) {
 	// parse the query parameters
 	tailLines := h.parseTailLines(c.Query("tailLines"))
 	logOptions := &corev1.PodLogOptions{
-		Container: c.Query("container"),
-		Follow:    c.Query("follow") == "true",
-		TailLines: tailLines,
-		Previous:  c.Query("previous") == "true",
+		Container:  c.Query("container"),
+		Follow:     c.Query("follow") == "true",
+		TailLines:  tailLines,
+		Timestamps: true,
+		Previous:   c.Query("previous") == "true",
 	}
 
 	stream, err := h.kubeClient.CoreV1().Pods(ns).GetLogs(pod, logOptions).Stream(c)
