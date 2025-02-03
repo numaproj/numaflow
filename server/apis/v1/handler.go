@@ -25,6 +25,7 @@ import (
 	"math"
 	"net/http"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1297,16 +1298,6 @@ func (h *handler) GetMetricData(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, result))
 }
 
-// Helper function to check if an object is in the list
-func isObjectInList(objects []string, object string) bool {
-	for _, o := range objects {
-		if o == object {
-			return true
-		}
-	}
-	return false
-}
-
 // DiscoverMetrics is used to provide a metrics list for each
 // dimension along with necessary params and filters for a given object
 func (h *handler) DiscoverMetrics(c *gin.Context) {
@@ -1323,7 +1314,7 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 	var discoveredMetrics MetricsDiscoveryResponse
 
 	for _, pattern := range configData.Patterns {
-		if isObjectInList(pattern.Objects, object) {
+		if slices.Contains(pattern.Objects, object) {
 			for _, metric := range pattern.Metrics {
 				var requiredFilters []Filter
 				// Populate the required filters
