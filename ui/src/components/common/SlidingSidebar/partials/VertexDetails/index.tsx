@@ -334,6 +334,7 @@ export function VertexDetails({
           {tabValue === PROCESSING_RATES_TAB_INDEX && (
             <ProcessingRates
               vertexId={vertexId}
+              namespaceId={namespaceId}
               pipelineId={pipelineId}
               type={type}
               vertexMetrics={vertexMetrics}

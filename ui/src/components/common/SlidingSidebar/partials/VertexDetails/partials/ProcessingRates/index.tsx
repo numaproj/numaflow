@@ -6,12 +6,14 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import { MetricsModalWrapper } from "../../../../../MetricsModalWrapper";
 import { PipelineVertexMetric } from "../../../../../../../types/declarations/pipeline";
 
 import "./style.css";
 
 export interface ProcessingRatesProps {
   vertexId: string;
+  namespaceId: string;
   pipelineId: string;
   type: string;
   vertexMetrics: any;
@@ -19,6 +21,7 @@ export interface ProcessingRatesProps {
 
 export function ProcessingRates({
   vertexMetrics,
+  namespaceId,
   pipelineId,
   type,
   vertexId,
@@ -92,7 +95,20 @@ export function ProcessingRates({
                   {type !== "monoVertex" && (
                     <TableCell>{metric.partition}</TableCell>
                   )}
-                  <TableCell>{formatRate(metric.oneM)}</TableCell>
+                  <TableCell>
+                    <MetricsModalWrapper
+                      namespaceId={namespaceId}
+                      pipelineId={pipelineId}
+                      vertexId={vertexId}
+                      type={type}
+                      metricName={
+                        type === "monoVertex"
+                          ? "monovtx_read_total"
+                          : "forwarder_data_read_total"
+                      }
+                      value={formatRate(metric.oneM)}
+                    />
+                  </TableCell>
                   <TableCell>{formatRate(metric.fiveM)}</TableCell>
                   <TableCell>{formatRate(metric.fifteenM)}</TableCell>
                 </TableRow>
