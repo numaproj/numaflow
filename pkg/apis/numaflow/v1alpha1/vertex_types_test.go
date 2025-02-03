@@ -362,8 +362,7 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		assert.ElementsMatch(t, envNames, []string{
 			"test-env", EnvNamespace, EnvPod, EnvPipelineName, EnvVertexName, EnvVertexObject, EnvReplica,
-			EnvCallbackEnabled, EnvServingMinPipelineSpec,
-			EnvServingHostIP, EnvServingPort, EnvServingJetstreamStream,
+			EnvCallbackEnabled, EnvServingMinPipelineSpec, EnvServingHostIP, EnvServingPort,
 		})
 
 		assert.Contains(t, s.Containers[0].Args, "processor")
@@ -620,7 +619,6 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, EnvPipelineName)
 		assert.Contains(t, envNames, EnvVertexName)
 		assert.Contains(t, envNames, EnvReplica)
-		assert.Contains(t, envNames, EnvServingJetstreamStream)
 		assert.Contains(t, envNames, EnvServingHostIP)
 		assert.Contains(t, envNames, EnvServingMinPipelineSpec)
 	})

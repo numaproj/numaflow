@@ -364,7 +364,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		containers[0].Env = append(
 			containers[0].Env,
 			// set the serving source stream name in the environment because the numa container will be reading from it
-			corev1.EnvVar{Name: EnvServingJetstreamStream, Value: req.ServingSourceStreamName},
 			corev1.EnvVar{Name: EnvServingMinPipelineSpec, Value: encodedPipelineSpec},
 			corev1.EnvVar{Name: EnvServingPort, Value: strconv.Itoa(VertexHTTPSPort)},
 			corev1.EnvVar{
