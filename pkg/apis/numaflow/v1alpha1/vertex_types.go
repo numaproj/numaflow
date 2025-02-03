@@ -376,23 +376,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 				},
 			},
 		)
-
-		servingSource := v.Spec.Source.Serving
-		// if auth is configured, set the auth token in the environment
-		if servingSource.Auth != nil && servingSource.Auth.Token != nil {
-			containers[0].Env = append(containers[0].Env,
-				corev1.EnvVar{
-					Name: EnvServingAuthToken, ValueFrom: &corev1.EnvVarSource{
-						SecretKeyRef: &corev1.SecretKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: servingSource.Auth.Token.Name,
-							},
-							Key: servingSource.Auth.Token.Key,
-						},
-					},
-				},
-			)
-		}
 	}
 
 	spec := &corev1.PodSpec{

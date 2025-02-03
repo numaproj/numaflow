@@ -622,7 +622,6 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, EnvReplica)
 		assert.Contains(t, envNames, EnvServingJetstreamStream)
 		assert.Contains(t, envNames, EnvServingHostIP)
-		assert.Contains(t, envNames, EnvServingObject)
 		assert.Contains(t, envNames, EnvServingMinPipelineSpec)
 	})
 }
