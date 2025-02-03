@@ -28875,7 +28875,7 @@ data:
   config.yaml: "# url is a required field, it should be the url of the service to
     which the metrics proxy will connect\n# url: service_name + \".\" + service_namespace
     + \".svc.cluster.local\" + \":\" + port\n# example for local prometheus service\n#
-    url: http://prometheus-operated.monitoring.svc.cluster.local:9090 \npatterns:\n-
+    url: http://prometheus-operated.monitoring.svc.cluster.local:9090\npatterns:\n-
     name: vertex_gauge\n  objects: \n    - vertex\n  title: Vertex Pending Messages\n
     \ description: This query is the total number of pending messages for the vertex\n
     \ expr: |\n    sum($metric_name{$filters}) by ($dimension, period)\n  params:\n

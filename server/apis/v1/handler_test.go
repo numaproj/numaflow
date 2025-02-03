@@ -152,13 +152,13 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 	}{
 		{
 			name:           "empty patterns",
-			object:         "pipeline",
+			object:         "vertex",
 			configPatterns: []Pattern{},
 			want:           MetricsDiscoveryResponse{},
 		},
 		{
 			name:   "no matching object",
-			object: "pipeline",
+			object: "pipeline", // case where request has a different object than pattern's list of objects
 			configPatterns: []Pattern{
 				{
 					Objects: []string{"vertex"},
@@ -174,10 +174,10 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 		},
 		{
 			name:   "single metric with required filters",
-			object: "pipeline",
+			object: "vertex",
 			configPatterns: []Pattern{
 				{
-					Objects: []string{"pipeline"},
+					Objects: []string{"vertex"},
 					Params: []Params{
 						{
 							Name:     "quantile",
@@ -187,7 +187,7 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 					Metrics: []Metric{
 						{
 							Name:    "processing_rate",
-							Filters: []string{"namespace", "pipeline"},
+							Filters: []string{"namespace"},
 							Dimensions: []Dimension{
 								{
 									Name: "vertex",
@@ -208,7 +208,6 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 							Name: "vertex",
 							Filters: []Filter{
 								{Name: "namespace", Required: true},
-								{Name: "pipeline", Required: true},
 								{Name: "vertex", Required: true},
 							},
 							Params: []Params{{
