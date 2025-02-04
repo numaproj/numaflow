@@ -97,7 +97,6 @@ export interface PodDetailProps {
   type: string;
   containerName: string;
   pod: Pod;
-  podDetails: PodDetail;
   vertexId: string;
 }
 export interface ContainerInfoProps {
