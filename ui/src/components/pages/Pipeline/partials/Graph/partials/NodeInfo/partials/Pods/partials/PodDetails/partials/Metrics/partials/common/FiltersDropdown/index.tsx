@@ -27,6 +27,8 @@ export interface FiltersDropdownProps {
   type: string;
   vertexId?: string;
   setFilters: any;
+  selectedPodName?: string;
+  metric: any;
 }
 
 const periodData = [
@@ -43,6 +45,8 @@ const FiltersDropdown = ({
   type,
   vertexId,
   setFilters,
+  selectedPodName,
+  metric
 }: FiltersDropdownProps) => {
   const { host } = useContext<AppContextProps>(AppContext);
   const [anchorEl, setAnchorEl] = useState(null);
@@ -81,11 +85,17 @@ const FiltersDropdown = ({
             return;
           }
           const data = await response.json();
-          const formattedData = data?.data
-            ?.filter((pod: any) => !pod?.metadata?.name.includes("daemon"))
-            .map((pod: any) => ({
-              name: pod?.metadata?.name,
-            }));
+          const formattedData = data && data.data
+            ? data.data
+                .filter((pod: any) => !pod?.metadata?.name.includes("daemon"))
+                .map((pod: any) => ({
+                  containerNames: [
+                    ...pod?.spec?.containers?.map((ele: any) => ele.name) || [],
+                    ...pod?.spec?.initContainers?.filter((initContainer: any) => initContainer?.restartPolicy === "Always")?.map((ele: any) => ele.name) || []
+                  ],
+                  name: pod?.metadata?.name,
+                }))
+            : [];
           callback(formattedData);
         } catch (error) {
           callback(null);
@@ -108,6 +118,9 @@ const FiltersDropdown = ({
   const getFilterValues = useCallback(
     (filterName: string) => {
       switch (filterName) {
+        case "container":
+          // get containers of selected pod
+          return podsData.find((pod: any) => pod.name === selectedPodName)?.containerNames?.map((containerName: any) => ({name: containerName}));
         case "pod":
           return podsData;
         case "period":
@@ -153,14 +166,21 @@ const FiltersDropdown = ({
   };
 
   // Remove selected filter
-  const handleRemoveFilter = (filterName: string) => {
+  const handleRemoveFilter = (filterName: string, metric: any) => {
+    const key = filterName.split(":")[0];
     setSelectedFilters((prev) =>
       prev.filter((filter) => filter !== filterName)
     );
-    const key = filterName.split(":")[0];
     setFilters((prev: any) => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { [key]: _, ...rest } = prev;
+      // Check if the key is "pod" and the pattern name is "pod_cpu_memory_utilization"
+      if (key === "pod" && metric?.pattern_name === "pod_cpu_memory_utilization") {
+        const newValue = type === "monoVertex" 
+          ? `${pipelineId}-.*` 
+          : `${pipelineId}-${vertexId}-.*`;
+        return { ...rest, [key]: newValue };
+      }
       return rest;
     });
   };
@@ -220,7 +240,7 @@ const FiltersDropdown = ({
           <Typography variant="body1">{filter}</Typography>
           <IconButton
             size="small"
-            onClick={() => handleRemoveFilter(filter)}
+            onClick={() => handleRemoveFilter(filter, metric)}
             sx={{ marginLeft: "0.5rem" }}
           >
             <CloseIcon fontSize="small" />

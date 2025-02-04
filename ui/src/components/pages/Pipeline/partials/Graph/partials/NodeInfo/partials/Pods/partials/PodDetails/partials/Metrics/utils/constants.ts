@@ -20,6 +20,7 @@ export const dimensionMap: { [p: string]: string } = {
   pod: "Pod",
   pipeline: "Pipeline",
   vertex: "Vertex",
+  container: "Container"
 };
 
 export const dimensionReverseMap: { [p: string]: string } = {
@@ -29,6 +30,7 @@ export const dimensionReverseMap: { [p: string]: string } = {
   sink: "vertex",
   pipeline: "pipeline",
   pod: "pod",
+  container: "container"
 };
 
 export const metricNameMap: { [p: string]: string } = {
