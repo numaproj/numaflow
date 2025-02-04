@@ -24,7 +24,6 @@ use std::collections::{BTreeSet, HashMap};
 use tokio::sync::mpsc::Receiver;
 use tracing::error;
 
-use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
@@ -44,13 +43,15 @@ enum ISBWaterMarkActorMessage {
     },
     PublishWatermark {
         offset: IntOffset,
-        stream: Stream,
+        vertex: &'static str,
+        partition: u16,
     },
     RemoveOffset(IntOffset),
     InsertOffset {
         offset: IntOffset,
         watermark: Watermark,
     },
+    PublishIdleWatermark,
 }
 
 /// Tuple of offset and watermark. We will use this to track the inflight messages.
@@ -124,13 +125,17 @@ impl ISBWatermarkActor {
 
             // gets the lowest watermark among the inflight requests and publishes the watermark
             // for the offset and stream
-            ISBWaterMarkActorMessage::PublishWatermark { offset, stream } => {
+            ISBWaterMarkActorMessage::PublishWatermark {
+                offset,
+                vertex,
+                partition,
+            } => {
                 let min_wm = self
                     .get_lowest_watermark()
                     .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap());
 
                 self.publisher
-                    .publish_watermark(stream, offset.offset, min_wm.timestamp_millis())
+                    .publish_watermark(vertex, partition, offset.offset, min_wm.timestamp_millis())
                     .await?;
             }
 
@@ -142,6 +147,20 @@ impl ISBWatermarkActor {
             // inserts the offset to the tracked offsets
             ISBWaterMarkActorMessage::InsertOffset { offset, watermark } => {
                 self.insert_offset(offset.partition_idx, offset.offset, watermark);
+            }
+
+            ISBWaterMarkActorMessage::PublishIdleWatermark => {
+                let mut min_wm = self
+                    .get_lowest_watermark()
+                    .unwrap_or(Watermark::from_timestamp_millis(-1).expect("failed to parse time"));
+
+                if min_wm.timestamp_millis() == -1 {
+                    min_wm = self.fetcher.fetch_head_idle_watermark().await?;
+                }
+
+                self.publisher
+                    .publish_idle_watermarks(min_wm.timestamp_millis())
+                    .await?;
             }
         }
 
@@ -207,12 +226,31 @@ impl ISBWatermarkHandle {
             processor_name,
             js_context.clone(),
             &config.to_vertex_config,
+            None,
         )
         .await?;
 
         let actor = ISBWatermarkActor::new(fetcher, publisher);
         tokio::spawn(async move { actor.run(receiver).await });
-        Ok(Self { sender })
+
+        let isb_watermark_handle = Self { sender };
+
+        // start a task to keep publishing idle watermarks every 100ms
+        tokio::spawn({
+            let isb_watermark_handle = isb_watermark_handle.clone();
+            let mut interval_ticker = tokio::time::interval(std::time::Duration::from_millis(100));
+            async move {
+                loop {
+                    interval_ticker.tick().await;
+                    isb_watermark_handle
+                        .publish_idle_watermark()
+                        .await
+                        .expect("failed to publish idle watermark");
+                }
+            }
+        });
+
+        Ok(isb_watermark_handle)
     }
 
     /// Fetches the watermark for the given offset.
@@ -233,10 +271,19 @@ impl ISBWatermarkHandle {
     }
 
     /// publish_watermark publishes the watermark for the given stream and offset.
-    pub(crate) async fn publish_watermark(&self, stream: Stream, offset: Offset) -> Result<()> {
+    pub(crate) async fn publish_watermark(
+        &self,
+        vertex: &'static str,
+        partition: u16,
+        offset: Offset,
+    ) -> Result<()> {
         if let Offset::Int(offset) = offset {
             self.sender
-                .send(ISBWaterMarkActorMessage::PublishWatermark { offset, stream })
+                .send(ISBWaterMarkActorMessage::PublishWatermark {
+                    offset,
+                    vertex,
+                    partition,
+                })
                 .await
                 .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
             Ok(())
@@ -279,6 +326,14 @@ impl ISBWatermarkHandle {
             Err(Error::Watermark("invalid offset type".to_string()))
         }
     }
+
+    pub(crate) async fn publish_idle_watermark(&self) -> Result<()> {
+        self.sender
+            .send(ISBWaterMarkActorMessage::PublishIdleWatermark)
+            .await
+            .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -288,7 +343,6 @@ mod tests {
     use tokio::time::sleep;
 
     use super::*;
-    use crate::config::pipeline::isb::Stream;
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::message::IntOffset;
     use crate::watermark::wmb::WMB;
@@ -390,11 +444,8 @@ mod tests {
 
         handle
             .publish_watermark(
-                Stream {
-                    name: "test_stream",
-                    vertex: "from_vertex",
-                    partition: 0,
-                },
+                "from_vertex",
+                0,
                 Offset::Int(IntOffset {
                     offset: 1,
                     partition_idx: 0,
@@ -438,11 +489,8 @@ mod tests {
 
         handle
             .publish_watermark(
-                Stream {
-                    name: "test_stream",
-                    vertex: "from_vertex",
-                    partition: 0,
-                },
+                "test_stream",
+                0,
                 Offset::Int(IntOffset {
                     offset: 2,
                     partition_idx: 0,
@@ -553,11 +601,8 @@ mod tests {
 
             handle
                 .publish_watermark(
-                    Stream {
-                        name: "test_stream",
-                        vertex: "from_vertex",
-                        partition: 0,
-                    },
+                    "test_stream",
+                    0,
                     Offset::Int(IntOffset {
                         offset: i,
                         partition_idx: 0,

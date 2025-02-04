@@ -7,10 +7,9 @@ use std::collections::HashMap;
 use chrono::Utc;
 use tracing::info;
 
-use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error;
-use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
+use crate::watermark::isb::wm_publisher::{ISBIdleManager, ISBWatermarkPublisher};
 
 /// SourcePublisher is the watermark publisher for the source vertex.
 pub(crate) struct SourceWatermarkPublisher {
@@ -18,6 +17,7 @@ pub(crate) struct SourceWatermarkPublisher {
     source_config: BucketConfig,
     to_vertex_configs: Vec<BucketConfig>,
     publishers: HashMap<String, ISBWatermarkPublisher>,
+    isb_idle_manager: Option<ISBIdleManager>,
 }
 
 impl SourceWatermarkPublisher {
@@ -26,12 +26,14 @@ impl SourceWatermarkPublisher {
         js_context: async_nats::jetstream::Context,
         source_config: BucketConfig,
         to_vertex_configs: Vec<BucketConfig>,
+        isb_idle_manager: Option<ISBIdleManager>,
     ) -> error::Result<Self> {
         Ok(SourceWatermarkPublisher {
             js_context,
             source_config,
             to_vertex_configs,
             publishers: HashMap::new(),
+            isb_idle_manager,
         })
     }
 
@@ -48,6 +50,7 @@ impl SourceWatermarkPublisher {
                 processor_name.clone(),
                 self.js_context.clone(),
                 &[self.source_config.clone()],
+                self.isb_idle_manager.clone(),
             )
             .await
             .expect("Failed to create publisher");
@@ -61,11 +64,8 @@ impl SourceWatermarkPublisher {
             .get_mut(&processor_name)
             .expect("Publisher not found")
             .publish_watermark(
-                Stream {
-                    name: "source",
-                    vertex: self.source_config.vertex,
-                    partition,
-                },
+                self.source_config.vertex,
+                partition,
                 Utc::now().timestamp_micros(), // we don't care about the offsets
                 watermark,
             )
@@ -78,13 +78,14 @@ impl SourceWatermarkPublisher {
     pub(crate) async fn publish_isb_watermark(
         &mut self,
         input_partition: u16,
-        stream: Stream,
+        vertex: &'static str,
+        partition: u16,
         offset: i64,
         watermark: i64,
     ) {
         let processor_name = format!(
             "{}-{}-{}",
-            self.source_config.vertex, stream.vertex, input_partition
+            self.source_config.vertex, vertex, input_partition
         );
         // In source, since we do partition-based watermark publishing rather than pod-based, we
         // create a publisher for each partition and publish the watermark to it.
@@ -96,6 +97,7 @@ impl SourceWatermarkPublisher {
                 processor_name.clone(),
                 self.js_context.clone(),
                 &self.to_vertex_configs,
+                self.isb_idle_manager.clone(),
             )
             .await
             .expect("Failed to create publisher");
@@ -105,7 +107,7 @@ impl SourceWatermarkPublisher {
         self.publishers
             .get_mut(&processor_name)
             .expect("Publisher not found")
-            .publish_watermark(stream, offset, watermark)
+            .publish_watermark(vertex, partition, offset, watermark)
             .await
             .expect("Failed to publish watermark");
     }
@@ -156,7 +158,7 @@ mod tests {
             .unwrap();
 
         let mut source_publisher =
-            SourceWatermarkPublisher::new(js_context.clone(), source_config.clone(), vec![])
+            SourceWatermarkPublisher::new(js_context.clone(), source_config.clone(), vec![], None)
                 .await
                 .expect("Failed to create source publisher");
 
@@ -253,6 +255,7 @@ mod tests {
             js_context.clone(),
             source_config.clone(),
             vec![edge_config.clone()],
+            None,
         )
         .await
         .expect("Failed to create source publisher");
@@ -265,7 +268,7 @@ mod tests {
 
         // Publish edge watermark for partition 0
         source_publisher
-            .publish_isb_watermark(0, stream.clone(), 1, 200)
+            .publish_isb_watermark(0, stream.vertex, stream.partition, 1, 200)
             .await;
 
         let ot_bucket = js_context

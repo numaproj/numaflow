@@ -46,6 +46,7 @@ pub(crate) struct JetstreamWriter {
     tracker_handle: TrackerHandle,
     sem: Arc<Semaphore>,
     watermark_handle: Option<WatermarkHandle>,
+    to_vertex_streams: HashMap<&'static str, Vec<Stream>>,
 }
 
 impl JetstreamWriter {
@@ -59,15 +60,16 @@ impl JetstreamWriter {
         cancel_token: CancellationToken,
         watermark_handle: Option<WatermarkHandle>,
     ) -> Self {
-        let streams = config
+        let to_vertex_streams = config
             .iter()
-            .flat_map(|c| c.writer_config.streams.clone())
-            .collect::<Vec<Stream>>();
-
-        let is_full = streams
-            .iter()
-            .map(|stream| (stream.name, Arc::new(AtomicBool::new(false))))
+            .map(|c| (c.name, c.writer_config.streams.clone()))
             .collect::<HashMap<_, _>>();
+
+        let is_full = to_vertex_streams
+            .values()
+            .flatten()
+            .map(|stream| (stream.name, Arc::new(AtomicBool::new(false))))
+            .collect();
 
         let this = Self {
             config: Arc::new(config),
@@ -77,6 +79,7 @@ impl JetstreamWriter {
             tracker_handle,
             sem: Arc::new(Semaphore::new(paf_concurrency)),
             watermark_handle,
+            to_vertex_streams,
         };
 
         // spawn a task for checking whether buffer is_full
@@ -217,22 +220,16 @@ impl JetstreamWriter {
                         &mut hash,
                     );
 
-                    // write the message to the corresponding stream
-                    let stream = vertex
-                        .writer_config
-                        .streams
-                        .get(partition as usize)
-                        .expect("stream should be present")
-                        .clone();
                     if let Some(paf) = this
                         .write(
-                            stream.clone(),
+                            vertex.name,
+                            partition,
                             message.clone(),
                             vertex.writer_config.buffer_full_strategy.clone(),
                         )
                         .await
                     {
-                        pafs.push((stream.clone(), paf));
+                        pafs.push((vertex.name, partition, paf));
                     }
                 }
 
@@ -270,7 +267,8 @@ impl JetstreamWriter {
     /// gets published successfully. If it returns an error it means it is fatal error
     pub(super) async fn write(
         &self,
-        stream: Stream,
+        vertex_name: &'static str,
+        partition_idx: u16,
         message: Message,
         on_full: BufferFullStrategy,
     ) -> Option<PublishAckFuture> {
@@ -279,6 +277,12 @@ impl JetstreamWriter {
         let payload: BytesMut = message
             .try_into()
             .expect("message serialization should not fail");
+
+        let stream = self
+            .to_vertex_streams
+            .get(vertex_name)
+            .and_then(|streams| streams.get(partition_idx as usize))
+            .expect("stream should be present");
 
         // loop till we get a PAF, there could be other reasons why PAFs cannot be created.
         let paf = loop {
@@ -336,7 +340,7 @@ impl JetstreamWriter {
     /// natural backpressure.
     pub(super) async fn resolve_pafs(
         &self,
-        pafs: Vec<(Stream, PublishAckFuture)>,
+        pafs: Vec<(&'static str, u16, PublishAckFuture)>,
         message: Message,
     ) -> Result<()> {
         let start_time = Instant::now();
@@ -352,16 +356,15 @@ impl JetstreamWriter {
             let mut offsets = Vec::new();
 
             // resolve the pafs
-            for (stream, paf) in pafs {
+            for (vertex, partition, paf) in pafs {
                 let ack = match paf.await {
                     Ok(ack) => Ok(ack),
                     Err(e) => {
                         error!(
-                            ?e,
-                            "Failed to resolve the future for stream {}, trying blocking write",
-                            stream
+                            ?e, vertex = ?vertex, partition = ?partition,
+                            "Failed to resolve the future trying blocking write",
                         );
-                        this.blocking_write(stream.clone(), message.value.clone())
+                        this.blocking_write(vertex, partition, message.value.clone())
                             .await
                     }
                 };
@@ -370,17 +373,20 @@ impl JetstreamWriter {
                     Ok(ack) => {
                         if ack.duplicate {
                             warn!(
-                                "Duplicate message detected for stream {}, ignoring {:?}",
-                                stream, ack
+                                vertex = ?vertex,
+                                partition = ?partition,
+                                ack = ?ack,
+                                "Duplicate message detected"
                             );
                         }
                         offsets.push((
-                            stream.clone(),
-                            Offset::Int(IntOffset::new(ack.sequence as i64, stream.partition)),
+                            vertex,
+                            partition,
+                            Offset::Int(IntOffset::new(ack.sequence as i64, partition)),
                         ));
                     }
                     Err(e) => {
-                        error!(?e, "Blocking write failed for stream {}", stream);
+                        error!(?e, vertex = ?vertex, partition = ?partition, "Blocking write failed");
                         // Since we failed to write to the stream, we need to send a NAK to the reader
                         this.tracker_handle
                             .discard(message.offset.clone())
@@ -397,10 +403,16 @@ impl JetstreamWriter {
             }
 
             // now the pafs have resolved, lets use the offsets to send watermark
-            for (stream, offset) in offsets {
+            for (vertex, partition, offset) in offsets {
                 if let Some(watermark_handle) = this.watermark_handle.as_ref() {
-                    JetstreamWriter::publish_watermark(watermark_handle, stream, offset, &message)
-                        .await;
+                    JetstreamWriter::publish_watermark(
+                        watermark_handle,
+                        vertex,
+                        partition,
+                        offset,
+                        &message,
+                    )
+                    .await;
                 }
             }
 
@@ -416,8 +428,19 @@ impl JetstreamWriter {
     /// Writes the message to the JetStream ISB and returns the PublishAck. It will do
     /// infinite retries until the message gets published successfully. If it returns
     /// an error it means it is fatal non-retryable error.
-    async fn blocking_write(&self, stream: Stream, payload: Bytes) -> Result<PublishAck> {
+    pub(crate) async fn blocking_write(
+        &self,
+        vertex: &'static str,
+        partition_idx: u16,
+        payload: Bytes,
+    ) -> Result<PublishAck> {
         let start_time = Instant::now();
+        let stream = self
+            .to_vertex_streams
+            .get(vertex)
+            .and_then(|streams| streams.get(partition_idx as usize))
+            .expect("stream should be present");
+
         loop {
             match self.js_ctx.publish(stream.name, payload.clone()).await {
                 Ok(paf) => match paf.await {
@@ -451,14 +474,15 @@ impl JetstreamWriter {
     /// publishes the watermark for the given stream and offset
     async fn publish_watermark(
         watermark_handle: &WatermarkHandle,
-        stream: Stream,
+        vertex: &'static str,
+        partition: u16,
         offset: Offset,
         message: &Message,
     ) {
         match watermark_handle {
             WatermarkHandle::ISB(handle) => {
                 handle
-                    .publish_watermark(stream, offset)
+                    .publish_watermark(vertex, partition, offset)
                     .await
                     .map_err(|e| Error::ISB(format!("Failed to update watermark: {:?}", e)))
                     .expect("Failed to publish watermark");
@@ -469,7 +493,7 @@ impl JetstreamWriter {
                     Offset::String(offset) => offset.partition_idx,
                 };
                 handle
-                    .publish_source_isb_watermark(stream, offset, input_partition)
+                    .publish_source_isb_watermark(vertex, partition, offset, input_partition)
                     .await
                     .map_err(|e| Error::ISB(format!("Failed to update watermark: {:?}", e)))
                     .expect("Failed to publish watermark");
@@ -530,7 +554,7 @@ mod tests {
 
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
-                name: "test-vertex".to_string(),
+                name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
@@ -564,7 +588,8 @@ mod tests {
 
         let paf = writer
             .write(
-                stream.clone(),
+                stream.vertex,
+                stream.partition,
                 message,
                 BufferFullStrategy::RetryUntilSuccess,
             )
@@ -627,7 +652,7 @@ mod tests {
         let message_bytes: BytesMut = message.try_into().unwrap();
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
-                name: "test-vertex".to_string(),
+                name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
@@ -643,7 +668,7 @@ mod tests {
         );
 
         let result = writer
-            .blocking_write(stream.clone(), message_bytes.into())
+            .blocking_write(stream.vertex, stream.partition, message_bytes.into())
             .await;
         assert!(result.is_ok());
 
@@ -691,7 +716,7 @@ mod tests {
 
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
-                name: "test-vertex".to_string(),
+                name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
@@ -727,7 +752,8 @@ mod tests {
             };
             let paf = writer
                 .write(
-                    stream.clone(),
+                    stream.vertex,
+                    stream.partition,
                     message,
                     BufferFullStrategy::RetryUntilSuccess,
                 )
@@ -755,7 +781,8 @@ mod tests {
         };
         let paf = writer
             .write(
-                stream.clone(),
+                stream.vertex,
+                stream.partition,
                 message,
                 BufferFullStrategy::RetryUntilSuccess,
             )
@@ -899,7 +926,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
-                name: "test-vertex".to_string(),
+                name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
@@ -991,7 +1018,7 @@ mod tests {
 
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
-                name: "test-vertex".to_string(),
+                name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
@@ -1082,7 +1109,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
-                name: "test-vertex".to_string(),
+                name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
@@ -1196,7 +1223,7 @@ mod tests {
         let writer = JetstreamWriter::new(
             vec![
                 ToVertexConfig {
-                    name: "vertex1".to_string(),
+                    name: "vertex1",
                     partitions: 2,
                     writer_config: BufferWriterConfig {
                         streams: vertex1_streams.clone(),
@@ -1208,7 +1235,7 @@ mod tests {
                     }))),
                 },
                 ToVertexConfig {
-                    name: "vertex2".to_string(),
+                    name: "vertex2",
                     partitions: 2,
                     writer_config: BufferWriterConfig {
                         streams: vertex2_streams.clone(),
@@ -1220,7 +1247,7 @@ mod tests {
                     }))),
                 },
                 ToVertexConfig {
-                    name: "vertex3".to_string(),
+                    name: "vertex3",
                     partitions: 2,
                     writer_config: BufferWriterConfig {
                         streams: vertex3_streams.clone(),

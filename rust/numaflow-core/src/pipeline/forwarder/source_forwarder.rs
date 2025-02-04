@@ -268,7 +268,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                name: "test-vertex".to_string(),
+                name: "test-vertex",
             }],
             context.clone(),
             100,

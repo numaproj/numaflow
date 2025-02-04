@@ -20,7 +20,6 @@ use std::collections::HashMap;
 use tokio::sync::mpsc::Receiver;
 use tracing::error;
 
-use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Message, Offset};
@@ -41,7 +40,8 @@ enum SourceActorMessage {
     },
     PublishISBWatermark {
         offset: IntOffset,
-        stream: Stream,
+        vertex: &'static str,
+        partition: u16,
         input_partition: u16,
     },
 }
@@ -79,14 +79,16 @@ impl SourceWatermarkActor {
             }
             SourceActorMessage::PublishISBWatermark {
                 offset,
-                stream,
+                vertex,
+                partition,
                 input_partition,
             } => {
                 let watermark = self.fetcher.fetch_source_watermark()?;
                 self.publisher
                     .publish_isb_watermark(
                         input_partition,
-                        stream,
+                        vertex,
+                        partition,
                         offset.offset,
                         watermark.timestamp_millis(),
                     )
@@ -120,6 +122,7 @@ impl SourceWatermarkHandle {
             js_context.clone(),
             config.source_bucket_config.clone(),
             config.to_vertex_bucket_config.clone(),
+            None,
         )
         .await
         .map_err(|e| Error::Watermark(e.to_string()))?;
@@ -164,7 +167,8 @@ impl SourceWatermarkHandle {
     /// Publishes the watermark for the given input partition on to the ISB of the next vertex.
     pub(crate) async fn publish_source_isb_watermark(
         &self,
-        stream: Stream,
+        vertex: &'static str,
+        partition: u16,
         offset: Offset,
         input_partition: u16,
     ) -> Result<()> {
@@ -173,7 +177,8 @@ impl SourceWatermarkHandle {
             self.sender
                 .send(SourceActorMessage::PublishISBWatermark {
                     offset,
-                    stream,
+                    vertex,
+                    partition,
                     input_partition,
                 })
                 .await
@@ -193,7 +198,6 @@ mod tests {
     use chrono::DateTime;
 
     use super::*;
-    use crate::config::pipeline::isb::Stream;
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::message::{IntOffset, Message};
     use crate::watermark::wmb::WMB;
@@ -374,11 +378,8 @@ mod tests {
             .await
             .expect("Failed to get ot bucket");
 
-        let stream = Stream {
-            name: "edge_stream",
-            vertex: "edge_vertex",
-            partition: 0,
-        };
+        let vertex = "edge-vertex";
+        let partition = 0;
 
         let mut wmb_found = false;
         for i in 1..11 {
@@ -412,7 +413,7 @@ mod tests {
                 partition_idx: 0,
             });
             handle
-                .publish_source_isb_watermark(stream.clone(), offset, 0)
+                .publish_source_isb_watermark(vertex, partition, offset, 0)
                 .await
                 .expect("Failed to publish edge watermark");
 

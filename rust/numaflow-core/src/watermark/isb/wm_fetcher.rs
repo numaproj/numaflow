@@ -108,7 +108,7 @@ impl ISBWatermarkFetcher {
     /// Fetches the latest idle WMB with the smallest watermark for the given partition
     /// Only returns one if all Publishers are idle and if it's the smallest one of any partitions
     #[allow(dead_code)]
-    pub(crate) async fn fetch_head_idle_watermark(&mut self, partition_idx: u16) -> Result<i64> {
+    pub(crate) async fn fetch_head_idle_watermark(&mut self) -> Result<Watermark> {
         let mut min_wm = i64::MAX;
         for (edge, processor_manager) in self.processor_managers.iter() {
             let mut epoch = i64::MAX;
@@ -125,40 +125,47 @@ impl ISBWatermarkFetcher {
 
                 // retrieve the head watermark of the partition, we only care about the head watermark
                 // because by looking at the head wmb we will know whether the processor is idle or not
-                let head_wmb = processor
-                    .timelines
-                    .get(partition_idx as usize)
-                    .ok_or(Error::Watermark("Partition not found".to_string()))?
-                    .get_head_wmb();
+                for timeline in processor.timelines.iter() {
+                    let Some(head_wmb) = timeline.get_head_wmb() else {
+                        continue;
+                    };
 
-                if let Some(wmb) = head_wmb {
                     // if the processor is not idle, return early
-                    if !wmb.idle {
-                        return Ok(-1);
+                    if !head_wmb.idle {
+                        return Ok(
+                            Watermark::from_timestamp_millis(-1).expect("failed to parse time")
+                        );
                     }
                     // consider the smallest watermark among all the partitions
-                    if wmb.watermark < epoch {
-                        epoch = wmb.watermark;
+                    if head_wmb.watermark < epoch {
+                        epoch = head_wmb.watermark;
                     }
                 }
+            }
+
+            if min_wm == i64::MAX {
+                continue;
             }
 
             if epoch < min_wm {
                 min_wm = epoch;
             }
 
-            if epoch != i64::MAX {
-                // update the last processed watermark for this particular edge and the partition
-                self.last_processed_wm.get_mut(edge).expect("invalid edge")
-                    [partition_idx as usize] = epoch;
+            // update the last processed watermark for this particular edge and all the partitions
+            if let Some(partitions) = self.last_processed_wm.get_mut(edge) {
+                partitions
+                    .iter_mut()
+                    .for_each(|partition| *partition = epoch);
+            } else {
+                panic!("invalid vertex {}", edge);
             }
         }
 
         if min_wm == i64::MAX {
-            return Ok(-1);
+            min_wm = -1;
         }
 
-        Ok(min_wm)
+        Ok(Watermark::from_timestamp_millis(min_wm).expect("failed to parse time"))
     }
 
     /// returns the smallest last processed watermark among all the partitions

@@ -23,8 +23,10 @@
 //!
 //! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
+use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
+use tokio::task::JoinHandle;
 
 /// Responsible for fetch/publish cycle of watermark per offset for each stream in the ISB.
 pub(crate) mod isb;
@@ -47,4 +49,13 @@ pub(crate) enum WatermarkHandle {
     #[allow(clippy::upper_case_acronyms)]
     ISB(ISBWatermarkHandle),
     Source(SourceWatermarkHandle),
+}
+
+impl WatermarkHandle {
+    // pub(crate) async fn start_idle_watermark(&self, js_writer: JetstreamWriter) -> JoinHandle<()> {
+    //     match self {
+    //         WatermarkHandle::ISB(isb) => isb.start_idle_watermark(js_writer),
+    //         WatermarkHandle::Source(source) => unimplemented!("Source watermark not implemented"),
+    //     }
+    // }
 }

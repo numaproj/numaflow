@@ -195,14 +195,14 @@ impl std::fmt::Display for VertexType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct FromVertexConfig {
-    pub(crate) name: String,
+    pub(crate) name: &'static str,
     pub(crate) reader_config: BufferReaderConfig,
     pub(crate) partitions: u16,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ToVertexConfig {
-    pub(crate) name: String,
+    pub(crate) name: &'static str,
     pub(crate) partitions: u16,
     pub(crate) writer_config: BufferWriterConfig,
     pub(crate) conditions: Option<Box<ForwardConditions>>,
@@ -347,7 +347,7 @@ impl PipelineConfig {
                 .collect();
 
             from_vertex_config.push(FromVertexConfig {
-                name: edge.from.clone(),
+                name: Box::leak(edge.from.clone().into_boxed_str()),
                 reader_config: BufferReaderConfig {
                     streams,
                     ..Default::default()
@@ -373,7 +373,7 @@ impl PipelineConfig {
 
             let default_writer_config = BufferWriterConfig::default();
             to_vertex_config.push(ToVertexConfig {
-                name: edge.to.clone(),
+                name: Box::leak(edge.to.clone().into_boxed_str()),
                 partitions: partition_count,
                 writer_config: BufferWriterConfig {
                     streams,
@@ -489,7 +489,7 @@ impl PipelineConfig {
                 to_vertex_bucket_config: to_vertex_config
                     .iter()
                     .map(|to| BucketConfig {
-                        vertex: Box::leak(to.name.clone().into_boxed_str()),
+                        vertex: to.name,
                         partitions: to.partitions,
                         ot_bucket: Box::leak(
                             format!(
@@ -513,7 +513,7 @@ impl PipelineConfig {
                     from_vertex_config: from_vertex_config
                         .iter()
                         .map(|from| BucketConfig {
-                            vertex: Box::leak(from.name.clone().into_boxed_str()),
+                            vertex: from.name,
                             partitions: from.partitions,
                             ot_bucket: Box::leak(
                                 format!(
@@ -534,7 +534,7 @@ impl PipelineConfig {
                     to_vertex_config: to_vertex_config
                         .iter()
                         .map(|to| BucketConfig {
-                            vertex: Box::leak(to.name.clone().into_boxed_str()),
+                            vertex: to.name,
                             partitions: to.partitions,
                             ot_bucket: Box::leak(
                                 format!(
@@ -631,7 +631,7 @@ mod tests {
                 password: None,
             },
             from_vertex_config: vec![FromVertexConfig {
-                name: "in".to_string(),
+                name: "in",
                 reader_config: BufferReaderConfig {
                     streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
                     wip_ack_interval: Duration::from_secs(1),
@@ -688,7 +688,7 @@ mod tests {
             },
             from_vertex_config: vec![],
             to_vertex_config: vec![ToVertexConfig {
-                name: "out".to_string(),
+                name: "out",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
@@ -756,7 +756,7 @@ mod tests {
             },
             from_vertex_config: vec![],
             to_vertex_config: vec![ToVertexConfig {
-                name: "out".to_string(),
+                name: "out",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
@@ -893,7 +893,7 @@ mod tests {
                 password: None,
             },
             from_vertex_config: vec![FromVertexConfig {
-                name: "in".to_string(),
+                name: "in",
                 reader_config: BufferReaderConfig {
                     streams: vec![Stream::new("default-simple-pipeline-map-0", "map", 0)],
                     wip_ack_interval: Duration::from_secs(1),

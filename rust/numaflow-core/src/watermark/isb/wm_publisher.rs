@@ -4,32 +4,24 @@
 //! appropriate OT bucket based on stream information provided. It makes sure we always publish m
 //! increasing watermark.
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 use std::time::UNIX_EPOCH;
 use std::time::{Duration, SystemTime};
 
+use crate::config::pipeline::watermark::BucketConfig;
+use crate::config::pipeline::ToVertexConfig;
+use crate::error::{Error, Result};
+use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+use crate::watermark::wmb::WMB;
 use bytes::BytesMut;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use prost::Message;
 use tracing::info;
-
-use crate::config::pipeline::isb::Stream;
-use crate::config::pipeline::watermark::BucketConfig;
-use crate::error::{Error, Result};
-use crate::watermark::wmb::WMB;
 
 /// Interval at which the pod sends heartbeats.
 const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;
 
-/*
-pub(crate) async fn publish_idle_watermarks(watermark: i64) {
-    * iterate over all the downstream streams and check if the watermark is published for that stream in last 'x' duration
-    * if not published (that means its inactive):
-         * check if the ctrl msg offset is present
-         * if present publish watermark
-         * else write a ctrl message and get a ctrl message offset
-         * and then publish idle watermark
-}
- */
+const DEFAULT_IDLE_TIMEOUT_IN_MILLS: i64 = 100;
 
 /// LastPublishedState is the state of the last published watermark and offset
 /// for a partition.
@@ -37,8 +29,6 @@ pub(crate) async fn publish_idle_watermarks(watermark: i64) {
 struct LastPublishedState {
     offset: i64,
     watermark: i64,
-    publish_time: i64,
-    ctrl_msg_offset: Option<i64>,
 }
 
 impl Default for LastPublishedState {
@@ -46,9 +36,104 @@ impl Default for LastPublishedState {
         LastPublishedState {
             offset: -1,
             watermark: -1,
-            publish_time: -1,
-            ctrl_msg_offset: None,
         }
+    }
+}
+
+type IdleState = Arc<RwLock<HashMap<&'static str, Vec<(DateTime<Utc>, Option<i64>)>>>>;
+
+/// ISBIdleManager manages the idle partitions in the ISB, also tracks the wmb offsets for the idle partitions.
+#[derive(Clone)]
+pub(crate) struct ISBIdleManager {
+    last_published_wm: IdleState,
+    js_writer: JetstreamWriter,
+}
+
+impl ISBIdleManager {
+    /// Creates a new ISBIdleManager.
+    pub(crate) async fn new(
+        to_vertex_configs: &[ToVertexConfig],
+        js_writer: JetstreamWriter,
+    ) -> Self {
+        let mut last_published_wm = HashMap::new();
+        for config in to_vertex_configs {
+            last_published_wm.insert(
+                config.name,
+                vec![(Utc::now(), None); config.partitions as usize],
+            );
+        }
+        ISBIdleManager {
+            last_published_wm: Arc::new(RwLock::new(last_published_wm)),
+            js_writer,
+        }
+    }
+
+    /// mark_active marks the partition as active.
+    pub(crate) async fn mark_active(&mut self, vertex: &'static str, partition: u16) {
+        let mut write_guard = self
+            .last_published_wm
+            .write()
+            .expect("Failed to get write lock");
+        let last_published_wm = write_guard.get_mut(vertex).expect("Invalid vertex");
+        last_published_wm[partition as usize] = (Utc::now(), None);
+    }
+
+    /// checks if the partition is idle.
+    pub(crate) async fn is_idle(&self, vertex: &'static str, partition: u16) -> bool {
+        let read_guard = self
+            .last_published_wm
+            .read()
+            .expect("Failed to get read lock");
+        let last_published_wm = read_guard.get(vertex).expect("Invalid vertex");
+
+        let (last_publish_time, _) = last_published_wm[partition as usize];
+        Utc::now().timestamp_millis() - last_publish_time.timestamp_millis()
+            > DEFAULT_IDLE_TIMEOUT_IN_MILLS
+    }
+
+    /// fetch_idle_offset fetches the offset to be used for publishing the idle watermark.
+    pub(crate) async fn fetch_idle_offset(
+        &self,
+        vertex: &'static str,
+        partition: u16,
+    ) -> Result<i64> {
+        let ctrl_msg_offset = {
+            let read_guard = self
+                .last_published_wm
+                .read()
+                .expect("Failed to get read lock");
+            let last_published_wm = read_guard.get(vertex).expect("Invalid vertex");
+
+            let (_, ctrl_msg_offset) = last_published_wm[partition as usize];
+            ctrl_msg_offset
+        };
+
+        if let Some(offset) = ctrl_msg_offset {
+            return Ok(offset);
+        }
+
+        let ctrl_msg_bytes: BytesMut = crate::message::Message {
+            kind: crate::message::MessageKind::WMB,
+            ..Default::default()
+        }
+        .try_into()?;
+
+        let offset = self
+            .js_writer
+            .blocking_write(vertex, partition, ctrl_msg_bytes.freeze())
+            .await?;
+
+        Ok(offset.sequence as i64)
+    }
+
+    /// updates the last published time and the offset for the idle partition.
+    pub(crate) async fn mark_idle(&mut self, vertex: &'static str, partition: u16, offset: i64) {
+        let mut write_guard = self
+            .last_published_wm
+            .write()
+            .expect("Failed to get write lock");
+        let last_published_wm = write_guard.get_mut(vertex).expect("Invalid vertex");
+        last_published_wm[partition as usize] = (Utc::now(), Some(offset));
     }
 }
 
@@ -62,6 +147,8 @@ pub(crate) struct ISBWatermarkPublisher {
     last_published_wm: HashMap<&'static str, Vec<LastPublishedState>>,
     /// map of vertex to its ot bucket.
     ot_buckets: HashMap<&'static str, async_nats::jetstream::kv::Store>,
+    /// idle manager to manage idle isb partitions.
+    idle_manager: Option<ISBIdleManager>,
 }
 
 impl Drop for ISBWatermarkPublisher {
@@ -76,6 +163,7 @@ impl ISBWatermarkPublisher {
         processor_name: String,
         js_context: async_nats::jetstream::Context,
         bucket_configs: &[BucketConfig],
+        idle_manager: Option<ISBIdleManager>,
     ) -> Result<Self> {
         let mut ot_buckets = HashMap::new();
         let mut hb_buckets = Vec::with_capacity(bucket_configs.len());
@@ -110,6 +198,7 @@ impl ISBWatermarkPublisher {
             hb_handle,
             last_published_wm,
             ot_buckets,
+            idle_manager,
         })
     }
 
@@ -150,22 +239,23 @@ impl ISBWatermarkPublisher {
     /// publish_watermark publishes the watermark for the given offset and the stream.
     pub(crate) async fn publish_watermark(
         &mut self,
-        stream: Stream,
+        vertex: &'static str,
+        partition: u16,
         offset: i64,
         watermark: i64,
     ) -> Result<()> {
-        let last_published_wm_state = match self.last_published_wm.get_mut(stream.vertex) {
+        let last_published_wm_state = match self.last_published_wm.get_mut(vertex) {
             Some(wm) => wm,
             None => return Err(Error::Watermark("Invalid vertex".to_string())),
         };
 
         // we can avoid publishing the watermark if it is <= the last published watermark (optimization)
-        let last_state = &last_published_wm_state[stream.partition as usize];
+        let last_state = &last_published_wm_state[partition as usize];
         if offset <= last_state.offset || watermark <= last_state.watermark {
             return Ok(());
         }
 
-        let ot_bucket = self.ot_buckets.get(stream.vertex).ok_or(Error::Watermark(
+        let ot_bucket = self.ot_buckets.get(vertex).ok_or(Error::Watermark(
             "Invalid vertex, no ot bucket found".to_string(),
         ))?;
 
@@ -173,7 +263,7 @@ impl ISBWatermarkPublisher {
             idle: false,
             offset,
             watermark,
-            partition: stream.partition,
+            partition,
         }
         .try_into()
         .map_err(|e| Error::Watermark(format!("{}", e)))?;
@@ -183,44 +273,57 @@ impl ISBWatermarkPublisher {
             .map_err(|e| Error::Watermark(e.to_string()))?;
 
         // update the last published watermark state
-        last_published_wm_state[stream.partition as usize] = LastPublishedState {
-            offset,
-            watermark,
-            publish_time: Utc::now().timestamp_millis(),
-            ctrl_msg_offset: None,
-        };
+        last_published_wm_state[partition as usize] = LastPublishedState { offset, watermark };
+
+        // mark the partition as active if the idle manager is configured
+        if let Some(idle_manager) = self.idle_manager.as_mut() {
+            idle_manager.mark_active(vertex, partition).await;
+        }
 
         Ok(())
     }
 
+    /// publish_idle_watermarks publishes the idle watermarks for the idle partitions.
     pub(crate) async fn publish_idle_watermarks(&mut self, watermark: i64) -> Result<()> {
+        let idle_manager = self
+            .idle_manager
+            .as_mut()
+            .ok_or(Error::Watermark("Idle manager not initialized".to_string()))?;
+
         for (vertex, state) in self.last_published_wm.iter_mut() {
             for (partition, last_state) in state.iter_mut().enumerate() {
-                if watermark <= last_state.watermark {
+                if !idle_manager.is_idle(vertex, partition as u16).await {
                     continue;
                 }
 
-                let ot_bucket = self.ot_buckets.get(vertex).ok_or(Error::Watermark(
-                    "Invalid vertex, no ot bucket found".to_string(),
-                ))?;
-
-                // if ctrl message offset is not there then write a ctrl message and get a ctrl message offset
-                // and then publish idle watermark
+                let offset = idle_manager
+                    .fetch_idle_offset(vertex, partition as u16)
+                    .await?;
 
                 let wmb_bytes: BytesMut = WMB {
                     idle: true,
-                    offset: last_state.offset,
+                    offset,
                     watermark,
                     partition: partition as u16,
                 }
                 .try_into()
                 .map_err(|e| Error::Watermark(format!("{}", e)))?;
+
+                let ot_bucket = self.ot_buckets.get(vertex).ok_or(Error::Watermark(
+                    "Invalid vertex, no ot bucket found".to_string(),
+                ))?;
+
                 ot_bucket
                     .put(self.processor_name.clone(), wmb_bytes.freeze())
                     .await
                     .map_err(|e| Error::Watermark(e.to_string()))?;
 
                 last_state.watermark = watermark;
+                last_state.offset = offset;
+
+                idle_manager
+                    .mark_idle(vertex, partition as u16, offset)
+                    .await;
             }
         }
         Ok(())
@@ -275,6 +378,7 @@ mod tests {
             "processor1".to_string(),
             js_context.clone(),
             &bucket_configs,
+            None,
         )
         .await
         .expect("Failed to create publisher");
@@ -293,7 +397,12 @@ mod tests {
 
         // Publish watermark for partition 0
         publisher
-            .publish_watermark(stream_partition_0.clone(), 1, 100)
+            .publish_watermark(
+                stream_partition_0.vertex,
+                stream_partition_0.partition,
+                1,
+                100,
+            )
             .await
             .expect("Failed to publish watermark");
 
@@ -314,7 +423,12 @@ mod tests {
 
         // Try publishing a smaller watermark for the same partition, it should not be published
         publisher
-            .publish_watermark(stream_partition_0.clone(), 0, 50)
+            .publish_watermark(
+                stream_partition_0.vertex,
+                stream_partition_0.partition,
+                0,
+                50,
+            )
             .await
             .expect("Failed to publish watermark");
 
@@ -330,7 +444,12 @@ mod tests {
 
         // Publish a smaller watermark for a different partition, it should be published
         publisher
-            .publish_watermark(stream_partition_1.clone(), 0, 50)
+            .publish_watermark(
+                stream_partition_1.vertex,
+                stream_partition_1.partition,
+                0,
+                50,
+            )
             .await
             .expect("Failed to publish watermark");
 
@@ -421,6 +540,7 @@ mod tests {
             "processor1".to_string(),
             js_context.clone(),
             &bucket_configs,
+            None,
         )
         .await
         .expect("Failed to create publisher");
@@ -438,12 +558,12 @@ mod tests {
         };
 
         publisher
-            .publish_watermark(stream1.clone(), 1, 100)
+            .publish_watermark(stream1.vertex, stream1.partition, 1, 100)
             .await
             .expect("Failed to publish watermark");
 
         publisher
-            .publish_watermark(stream2.clone(), 1, 200)
+            .publish_watermark(stream2.vertex, stream2.partition, 1, 200)
             .await
             .expect("Failed to publish watermark");
 

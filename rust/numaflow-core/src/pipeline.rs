@@ -542,7 +542,7 @@ mod tests {
             },
             from_vertex_config: vec![],
             to_vertex_config: vec![ToVertexConfig {
-                name: "out".to_string(),
+                name: "out",
                 partitions: 5,
                 writer_config: BufferWriterConfig {
                     streams: streams.clone(),
@@ -709,7 +709,7 @@ mod tests {
             },
             to_vertex_config: vec![],
             from_vertex_config: vec![FromVertexConfig {
-                name: "in".to_string(),
+                name: "in",
                 reader_config: BufferReaderConfig {
                     streams: streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
@@ -933,7 +933,7 @@ mod tests {
                 password: None,
             },
             to_vertex_config: vec![ToVertexConfig {
-                name: "map-out".to_string(),
+                name: "map-out",
                 partitions: 5,
                 writer_config: BufferWriterConfig {
                     streams: output_streams.clone(),
@@ -944,7 +944,7 @@ mod tests {
                 conditions: None,
             }],
             from_vertex_config: vec![FromVertexConfig {
-                name: "map-in".to_string(),
+                name: "map-in",
                 reader_config: BufferReaderConfig {
                     streams: input_streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
