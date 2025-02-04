@@ -11,7 +11,6 @@ import {
   VertexDetailsContextProps,
 } from "../../../../../../../../../../../../common/SlidingSidebar/partials/VertexDetails";
 import { dimensionReverseMap, metricNameMap } from "./utils/constants";
-
 import "./style.css";
 
 export interface MetricsProps {
@@ -19,6 +18,7 @@ export interface MetricsProps {
   pipelineId: string;
   type: string;
   vertexId?: string;
+  selectedPodName?: string;
   metricName?: string;
   setMetricsFound?: Dispatch<SetStateAction<boolean>>;
 }
@@ -27,7 +27,8 @@ export function Metrics({
   namespaceId,
   pipelineId,
   type,
-  vertexId,
+  vertexId, 
+  selectedPodName,
   metricName,
   setMetricsFound,
 }: MetricsProps) {
@@ -103,7 +104,7 @@ export function Metrics({
       {discoveredMetrics?.data?.map((metric: any) => {
         if (
           type === "source" &&
-          metric?.metric_name === "vertex_pending_messages"
+          metric?.pattern_name === "vertex_gauge"
         )
           return null;
         const panelId = `${metric?.metric_name}-panel`;
@@ -147,6 +148,7 @@ export function Metrics({
                   type={type}
                   metric={metric}
                   vertexId={vertexId}
+                  selectedPodName={selectedPodName}
                 />
               )}
             </AccordionDetails>
