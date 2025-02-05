@@ -1,17 +1,26 @@
-import React from "react";
+import React, { useContext } from "react";
 import Box from "@mui/material/Box";
+import { MetricsModalWrapper } from "../../../../../../../../../../../../common/MetricsModalWrapper";
 import { getPodContainerUsePercentages } from "../../../../../../../../../../../../../utils";
 import { PodInfoProps } from "../../../../../../../../../../../../../types/declarations/pods";
+import { AppContextProps } from "../../../../../../../../../../../../../types/declarations/app";
+import { AppContext } from "../../../../../../../../../../../../../App";
 
 import "./style.css";
 
 export function ContainerInfo({
+  namespaceId,
+  pipelineId,
+  vertexId,
+  type,
   pod,
   podDetails,
   containerName,
   containerInfo,
   podSpecificInfo,
 }: PodInfoProps) {
+  const { disableMetricsCharts } = useContext<AppContextProps>(AppContext);
+
   const resourceUsage = getPodContainerUsePercentages(
     pod,
     podDetails,
@@ -111,14 +120,30 @@ export function ContainerInfo({
           <Box className={"outer-box"}>
             <Box className={"inner-box-title"}>CPU</Box>
             <Box className={"inner-box-value"}>
-              {`${usedCPU} / ${specCPU}`} {` (${cpuPercent})`}
+              <MetricsModalWrapper
+                disableMetricsCharts={disableMetricsCharts}
+                namespaceId={namespaceId}
+                pipelineId={pipelineId}
+                vertexId={vertexId}
+                type={type}
+                metricName={"namespace_app_container_cpu_utilization"}
+                value={`${usedCPU} / ${specCPU} (${cpuPercent})`}
+              />
             </Box>
           </Box>
 
           <Box className={"outer-box"}>
             <Box className={"inner-box-title"}>Memory</Box>
             <Box className={"inner-box-value"}>
-              {`${usedMem} / ${specMem}`} {` (${memPercent})`}
+              <MetricsModalWrapper
+                disableMetricsCharts={disableMetricsCharts}
+                namespaceId={namespaceId}
+                pipelineId={pipelineId}
+                vertexId={vertexId}
+                type={type}
+                metricName={"namespace_app_container_memory_utilization"}
+                value={`${usedMem} / ${specMem} (${memPercent})`}
+              />
             </Box>
           </Box>
 
@@ -195,7 +220,15 @@ export function ContainerInfo({
             <Box className={"outer-box"}>
               <Box className={"inner-box-title"}>CPU</Box>
               <Box className={"inner-box-value"}>
-                {podSpecificInfo?.totalCPU}
+                <MetricsModalWrapper
+                  disableMetricsCharts={disableMetricsCharts}
+                  namespaceId={namespaceId}
+                  pipelineId={pipelineId}
+                  vertexId={vertexId}
+                  type={type}
+                  metricName={"namespace_pod_cpu_utilization"}
+                  value={podSpecificInfo?.totalCPU}
+                />
               </Box>
             </Box>
           )}
@@ -204,7 +237,15 @@ export function ContainerInfo({
             <Box className={"outer-box"}>
               <Box className={"inner-box-title"}>Memory</Box>
               <Box className={"inner-box-value"}>
-                {podSpecificInfo?.totalMemory}
+                <MetricsModalWrapper
+                  disableMetricsCharts={disableMetricsCharts}
+                  namespaceId={namespaceId}
+                  pipelineId={pipelineId}
+                  vertexId={vertexId}
+                  type={type}
+                  metricName={"namespace_pod_memory_utilization"}
+                  value={podSpecificInfo?.totalMemory}
+                />
               </Box>
             </Box>
           )}

@@ -73,7 +73,9 @@ export function MetricsModal({
             justifyContent: "space-between",
           }}
         >
-          <Box sx={{ fontSize: "1.6rem" }}>{metricNameMap[metricName]}</Box>
+          <Box sx={{ fontSize: "1.6rem", textTransform: "capitalize" }}>
+            {metricNameMap[metricName] ?? metricName}
+          </Box>
           <IconButton onClick={handleClose}>
             <CloseIcon fontSize="large" />
           </IconButton>

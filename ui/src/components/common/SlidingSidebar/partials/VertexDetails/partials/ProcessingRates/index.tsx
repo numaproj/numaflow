@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import TableContainer from "@mui/material/TableContainer";
 import Table from "@mui/material/Table";
@@ -8,6 +8,8 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import { MetricsModalWrapper } from "../../../../../MetricsModalWrapper";
 import { PipelineVertexMetric } from "../../../../../../../types/declarations/pipeline";
+import { AppContextProps } from "../../../../../../../types/declarations/app";
+import { AppContext } from "../../../../../../../App";
 
 import "./style.css";
 
@@ -26,6 +28,7 @@ export function ProcessingRates({
   type,
   vertexId,
 }: ProcessingRatesProps) {
+  const { disableMetricsCharts } = useContext<AppContextProps>(AppContext);
   const [foundRates, setFoundRates] = useState<PipelineVertexMetric[]>([]);
 
   useEffect(() => {
@@ -97,6 +100,7 @@ export function ProcessingRates({
                   )}
                   <TableCell>
                     <MetricsModalWrapper
+                      disableMetricsCharts={disableMetricsCharts}
                       namespaceId={namespaceId}
                       pipelineId={pipelineId}
                       vertexId={vertexId}
