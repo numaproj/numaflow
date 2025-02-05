@@ -89,10 +89,8 @@ const getDefaultFormatter = (value: number, patternName: string) => {
       } else {
         return formatValue(value / 1000000, " s");
       }
-    case "pipeline_vertex_container_cpu_memory_utilization":
-    case "mono_vertex_container_cpu_memory_utilization":
-    case "pipeline_vertex_pod_cpu_memory_utilization":
-    case "mono_vertex_pod_cpu_memory_utilization":
+    case "container_cpu_memory_utilization":
+    case "pod_cpu_memory_utilization":
       if (value === 0){
         return "0";
       } else if (value < 1000) {
@@ -140,6 +138,7 @@ interface LineChartComponentProps {
   type: string;
   metric: any;
   vertexId?: string;
+  selectedPodName?: string;
   fromModal?: boolean;
 }
 
@@ -150,6 +149,7 @@ const LineChartComponent = ({
   type,
   metric,
   vertexId,
+  selectedPodName,
   fromModal,
 }: LineChartComponentProps) => {
   const { addError } = useContext<AppContextProps>(AppContext);
@@ -172,6 +172,7 @@ const LineChartComponent = ({
     return `hsl(${hue}, 50%, 50%)`;
   }, []);
 
+  // required filters
   const getFilterValue = useCallback(
     (filterName: string) => {
       switch (filterName) {
@@ -182,6 +183,19 @@ const LineChartComponent = ({
           return pipelineId;
         case "vertex":
           return vertexId;
+        case "pod":
+          // based on pattern names, update filter based on pod value or multiple pods based on regex
+          if (metric?.pattern_name === "pod_cpu_memory_utilization"){
+            switch(type){
+              case "monoVertex":
+                return `${pipelineId}-.*`;
+              default:
+                return `${pipelineId}-${vertexId}-.*`;
+            }
+          }
+          else {
+            return selectedPodName;
+          }
         default:
           return "";
       }
@@ -253,13 +267,16 @@ const LineChartComponent = ({
     }
   }, [error, addError]);
 
-  const groupByLabel = useCallback((dimension: string, metricName: string) => {
-    switch (metricName) {
-      case "monovtx_pending":
-      case "vertex_pending_messages":
+  const groupByLabel = useCallback((dimension: string, patternName: string) => {
+    switch(patternName){
+      case "pod_cpu_memory_utilization":
+        return ["pod"];
+      case "container_cpu_memory_utilization":
+        return ["container"];
+      case "mono_vertex_gauge":
+      case "vertex_gauge":
         return dimension === "pod" ? ["pod", "period"] : ["period"];
     }
-
     switch (dimension) {
       case "mono-vertex":
         return ["mvtx_name"];
@@ -274,7 +291,7 @@ const LineChartComponent = ({
       const transformedData: any[] = [];
       const label = groupByLabel(
         metricsReq?.dimension,
-        metricsReq?.metric_name
+        metricsReq?.pattern_name
       );
       chartData?.forEach((item) => {
         let labelVal = "";
@@ -397,6 +414,8 @@ const LineChartComponent = ({
             type={type}
             vertexId={vertexId}
             setFilters={setFilters}
+            selectedPodName={selectedPodName}
+            metric={metric}
           />
         </Box>
       )}

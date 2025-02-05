@@ -51,12 +51,3 @@ pub(crate) enum WatermarkHandle {
     ISB(ISBWatermarkHandle),
     Source(SourceWatermarkHandle),
 }
-
-impl WatermarkHandle {
-    // pub(crate) async fn start_idle_watermark(&self, js_writer: JetstreamWriter) -> JoinHandle<()> {
-    //     match self {
-    //         WatermarkHandle::ISB(isb) => isb.start_idle_watermark(js_writer),
-    //         WatermarkHandle::Source(source) => unimplemented!("Source watermark not implemented"),
-    //     }
-    // }
-}

@@ -25,6 +25,7 @@ import (
 	"math"
 	"net/http"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -924,10 +925,11 @@ func (h *handler) PodLogs(c *gin.Context) {
 	// parse the query parameters
 	tailLines := h.parseTailLines(c.Query("tailLines"))
 	logOptions := &corev1.PodLogOptions{
-		Container: c.Query("container"),
-		Follow:    c.Query("follow") == "true",
-		TailLines: tailLines,
-		Previous:  c.Query("previous") == "true",
+		Container:  c.Query("container"),
+		Follow:     c.Query("follow") == "true",
+		TailLines:  tailLines,
+		Timestamps: true,
+		Previous:   c.Query("previous") == "true",
 	}
 
 	stream, err := h.kubeClient.CoreV1().Pods(ns).GetLogs(pod, logOptions).Stream(c)
@@ -1312,7 +1314,7 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 	var discoveredMetrics MetricsDiscoveryResponse
 
 	for _, pattern := range configData.Patterns {
-		if pattern.Object == object {
+		if slices.Contains(pattern.Objects, object) {
 			for _, metric := range pattern.Metrics {
 				var requiredFilters []Filter
 				// Populate the required filters
@@ -1325,6 +1327,14 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 				// Computing dimension data for each metric
 				var dimensionData []Dimensions
 				for _, dimension := range metric.Dimensions {
+					// Check if the object is "mono-vertex", skip the "vertex"(pipeline) dimension
+					if object == "mono-vertex" && dimension.Name == "vertex" {
+						continue
+					}
+					// Check if the object is "vertex"(pipeline), skip the "mono-vertex" dimension
+					if object == "vertex" && dimension.Name == "mono-vertex" {
+						continue
+					}
 					var combinedFilters = requiredFilters
 					// Add the dimension filters
 					for _, filter := range dimension.Filters {

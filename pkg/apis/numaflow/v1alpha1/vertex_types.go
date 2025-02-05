@@ -193,8 +193,6 @@ func (v Vertex) commonEnvs() []corev1.EnvVar {
 		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
 		{Name: EnvVertexName, Value: v.Spec.Name},
-		{Name: EnvCallbackEnabled, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + CallbackEnabledKey + "']"}}},
-		{Name: EnvCallbackURL, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + CallbackURLKey + "']"}}},
 	}
 }
 
@@ -228,7 +226,15 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	envVars := []corev1.EnvVar{
 		{Name: EnvVertexObject, Value: encodedVertexSpec},
 	}
-	envVars = append(envVars, v.commonEnvs()...)
+
+	commonEnvVars := v.commonEnvs()
+	for _, vtx := range req.PipelineSpec.Vertices {
+		if vtx.IsASource() && vtx.Source.Serving != nil {
+			commonEnvVars = append(commonEnvVars, corev1.EnvVar{Name: EnvCallbackEnabled, Value: "true"})
+		}
+	}
+
+	envVars = append(envVars, commonEnvVars...)
 	envVars = append(envVars, req.Env...)
 
 	varVolumeName := "var-run-numaflow"
@@ -343,13 +349,32 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	}
 
 	if v.IsASource() && v.Spec.Source.Serving != nil {
-		servingContainer, err := v.getServingContainer(req)
-		if err != nil {
-			return nil, err
+		// Create a SimplifiedPipelineSpec and populate it with the vertex names and edges
+		simplifiedPipelineSpec := PipelineSpec{
+			Vertices: req.PipelineSpec.Vertices,
+			Edges:    req.PipelineSpec.Edges,
 		}
-		containers = append(containers, servingContainer)
-		// set the serving source stream name in the environment because the numa container will be reading from it
-		containers[0].Env = append(containers[0].Env, corev1.EnvVar{Name: EnvServingJetstreamStream, Value: req.ServingSourceStreamName})
+
+		pipelineSpecBytes, err := json.Marshal(simplifiedPipelineSpec)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal pipeline spec, error: %w", err)
+		}
+		encodedPipelineSpec := base64.StdEncoding.EncodeToString(pipelineSpecBytes)
+
+		containers[0].Env = append(
+			containers[0].Env,
+			// set the serving source stream name in the environment because the numa container will be reading from it
+			corev1.EnvVar{Name: EnvServingMinPipelineSpec, Value: encodedPipelineSpec},
+			corev1.EnvVar{Name: EnvServingPort, Value: strconv.Itoa(VertexHTTPSPort)},
+			corev1.EnvVar{
+				Name: EnvServingHostIP,
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "status.podIP",
+					},
+				},
+			},
+		)
 	}
 
 	spec := &corev1.PodSpec{
@@ -363,112 +388,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		v.Spec.ContainerTemplate.ApplyToNumaflowContainers(spec.Containers)
 	}
 	return spec, nil
-}
-
-func (v Vertex) getServingContainer(req GetVertexPodSpecReq) (corev1.Container, error) {
-	servingSource := v.Spec.Source.Serving
-	servingContainer := corev1.Container{
-		Name:            ServingSourceContainer,
-		Env:             req.Env,
-		Image:           req.Image,
-		ImagePullPolicy: req.PullPolicy,
-		Command:         []string{NumaflowRustBinary}, // we use the same image, but we execute the extension binary
-		Resources:       req.DefaultResources,
-		Args:            []string{"--serving"},
-	}
-
-	// set the common envs
-	servingContainer.Env = append(servingContainer.Env, v.commonEnvs()...)
-
-	// set the serving source stream name in the environment
-	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingJetstreamStream, Value: req.ServingSourceStreamName})
-	// set the serving source spec in the environment
-	servingSourceCopy := servingSource.DeepCopy()
-	servingSourceBytes, err := json.Marshal(servingSourceCopy)
-	if err != nil {
-		return corev1.Container{}, errors.New("failed to marshal serving source spec")
-	}
-	encodedServingSourceSpec := base64.StdEncoding.EncodeToString(servingSourceBytes)
-	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingObject, Value: encodedServingSourceSpec})
-
-	// set the serving source port in the environment
-	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{Name: EnvServingPort, Value: strconv.Itoa(VertexHTTPSPort)})
-
-	// Create a SimplifiedPipelineSpec and populate it with the vertex names and edges
-	simplifiedPipelineSpec := PipelineSpec{
-		Vertices: req.PipelineSpec.Vertices,
-		Edges:    req.PipelineSpec.Edges,
-	}
-
-	pipelineSpecBytes, err := json.Marshal(simplifiedPipelineSpec)
-	if err != nil {
-		return corev1.Container{}, fmt.Errorf("failed to marshal pipeline spec, error: %w", err)
-	}
-	encodedPipelineSpec := base64.StdEncoding.EncodeToString(pipelineSpecBytes)
-	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{
-		Name:  EnvServingMinPipelineSpec,
-		Value: encodedPipelineSpec,
-	})
-
-	// set the pod IP in the environment, which will be used for receiving callbacks.
-	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{
-		Name: EnvServingHostIP,
-		ValueFrom: &corev1.EnvVarSource{
-			FieldRef: &corev1.ObjectFieldSelector{
-				FieldPath: "status.podIP",
-			},
-		},
-	})
-
-	// set the serving store TTL in the environment
-	servingContainer.Env = append(servingContainer.Env, corev1.EnvVar{
-		Name:  EnvServingStoreTTL,
-		Value: strconv.Itoa(int(servingSource.Store.GetTTL().Seconds())),
-	})
-
-	// if auth is configured, set the auth token in the environment
-	if servingSource.Auth != nil && servingSource.Auth.Token != nil {
-		servingContainer.Env = append(servingContainer.Env,
-			corev1.EnvVar{
-				Name: EnvServingAuthToken, ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &corev1.SecretKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: servingSource.Auth.Token.Name,
-						},
-						Key: servingSource.Auth.Token.Key,
-					},
-				},
-			},
-		)
-	}
-
-	servingContainer.LivenessProbe = &corev1.Probe{
-		ProbeHandler: corev1.ProbeHandler{
-			HTTPGet: &corev1.HTTPGetAction{
-				Path:   "/readyz",
-				Port:   intstr.FromInt32(VertexHTTPSPort),
-				Scheme: corev1.URISchemeHTTPS,
-			},
-		},
-		InitialDelaySeconds: 3,
-		PeriodSeconds:       3,
-		TimeoutSeconds:      1,
-	}
-
-	servingContainer.ReadinessProbe = &corev1.Probe{
-		ProbeHandler: corev1.ProbeHandler{
-			HTTPGet: &corev1.HTTPGetAction{
-				Path:   "/livez",
-				Port:   intstr.FromInt32(VertexHTTPSPort),
-				Scheme: corev1.URISchemeHTTPS,
-			},
-		},
-		InitialDelaySeconds: 20,
-		PeriodSeconds:       60,
-		TimeoutSeconds:      30,
-	}
-
-	return servingContainer, nil
 }
 
 func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
