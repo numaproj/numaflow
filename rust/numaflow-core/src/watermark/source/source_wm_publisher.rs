@@ -9,7 +9,7 @@ use tracing::info;
 
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error;
-use crate::watermark::isb::wm_publisher::{ISBIdleManager, ISBWatermarkPublisher};
+use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 
 /// SourcePublisher is the watermark publisher for the source vertex.
 pub(crate) struct SourceWatermarkPublisher {
@@ -17,7 +17,6 @@ pub(crate) struct SourceWatermarkPublisher {
     source_config: BucketConfig,
     to_vertex_configs: Vec<BucketConfig>,
     publishers: HashMap<String, ISBWatermarkPublisher>,
-    isb_idle_manager: Option<ISBIdleManager>,
 }
 
 impl SourceWatermarkPublisher {
@@ -26,14 +25,12 @@ impl SourceWatermarkPublisher {
         js_context: async_nats::jetstream::Context,
         source_config: BucketConfig,
         to_vertex_configs: Vec<BucketConfig>,
-        isb_idle_manager: Option<ISBIdleManager>,
     ) -> error::Result<Self> {
         Ok(SourceWatermarkPublisher {
             js_context,
             source_config,
             to_vertex_configs,
             publishers: HashMap::new(),
-            isb_idle_manager,
         })
     }
 
@@ -50,7 +47,6 @@ impl SourceWatermarkPublisher {
                 processor_name.clone(),
                 self.js_context.clone(),
                 &[self.source_config.clone()],
-                self.isb_idle_manager.clone(),
             )
             .await
             .expect("Failed to create publisher");
@@ -68,6 +64,7 @@ impl SourceWatermarkPublisher {
                 partition,
                 Utc::now().timestamp_micros(), // we don't care about the offsets
                 watermark,
+                false,
             )
             .await
             .expect("Failed to publish watermark");
@@ -97,7 +94,6 @@ impl SourceWatermarkPublisher {
                 processor_name.clone(),
                 self.js_context.clone(),
                 &self.to_vertex_configs,
-                self.isb_idle_manager.clone(),
             )
             .await
             .expect("Failed to create publisher");
@@ -107,7 +103,7 @@ impl SourceWatermarkPublisher {
         self.publishers
             .get_mut(&processor_name)
             .expect("Publisher not found")
-            .publish_watermark(vertex, partition, offset, watermark)
+            .publish_watermark(vertex, partition, offset, watermark, false)
             .await
             .expect("Failed to publish watermark");
     }
@@ -158,7 +154,7 @@ mod tests {
             .unwrap();
 
         let mut source_publisher =
-            SourceWatermarkPublisher::new(js_context.clone(), source_config.clone(), vec![], None)
+            SourceWatermarkPublisher::new(js_context.clone(), source_config.clone(), vec![])
                 .await
                 .expect("Failed to create source publisher");
 
@@ -255,7 +251,6 @@ mod tests {
             js_context.clone(),
             source_config.clone(),
             vec![edge_config.clone()],
-            None,
         )
         .await
         .expect("Failed to create source publisher");

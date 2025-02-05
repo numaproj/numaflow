@@ -122,7 +122,6 @@ impl SourceWatermarkHandle {
             js_context.clone(),
             config.source_bucket_config.clone(),
             config.to_vertex_bucket_config.clone(),
-            None,
         )
         .await
         .map_err(|e| Error::Watermark(e.to_string()))?;

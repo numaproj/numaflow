@@ -39,6 +39,7 @@ mod processor;
 /// the watermark starts at source, so we will have to do a publishing followed by a fetch and publish.
 pub(crate) mod source;
 
+mod idle;
 /// Stores WMB related data.
 mod wmb;
 

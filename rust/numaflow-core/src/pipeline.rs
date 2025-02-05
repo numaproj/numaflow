@@ -75,6 +75,7 @@ pub(crate) async fn start_forwarder(
                                 config.replica,
                                 js_context.clone(),
                                 edge_config,
+                                &config.to_vertex_config,
                             )
                             .await?,
                         )
@@ -107,6 +108,7 @@ pub(crate) async fn start_forwarder(
                                 config.replica,
                                 js_context.clone(),
                                 edge_config,
+                                &config.to_vertex_config,
                             )
                             .await?,
                         )

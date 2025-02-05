@@ -21,16 +21,17 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap};
 
-use tokio::sync::mpsc::Receiver;
-use tracing::error;
-
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
+use crate::config::pipeline::ToVertexConfig;
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
+use crate::watermark::idle::isb::ISBIdleManager;
 use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::Watermark;
+use tokio::sync::mpsc::Receiver;
+use tracing::error;
 
 pub(crate) mod wm_fetcher;
 pub(crate) mod wm_publisher;
@@ -88,14 +89,20 @@ struct ISBWatermarkActor {
     /// though insertion and deletion are O(1). We do almost same amount insertion, deletion and
     /// getting the lowest watermark so BTreeSet is the best choice.
     offset_set: HashMap<u16, BTreeSet<OffsetWatermark>>,
+    idle_manager: ISBIdleManager,
 }
 
 impl ISBWatermarkActor {
-    fn new(fetcher: ISBWatermarkFetcher, publisher: ISBWatermarkPublisher) -> Self {
+    fn new(
+        fetcher: ISBWatermarkFetcher,
+        publisher: ISBWatermarkPublisher,
+        idle_manager: ISBIdleManager,
+    ) -> Self {
         Self {
             fetcher,
             publisher,
             offset_set: HashMap::new(),
+            idle_manager,
         }
     }
 
@@ -135,8 +142,16 @@ impl ISBWatermarkActor {
                     .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap());
 
                 self.publisher
-                    .publish_watermark(vertex, partition, offset.offset, min_wm.timestamp_millis())
+                    .publish_watermark(
+                        vertex,
+                        partition,
+                        offset.offset,
+                        min_wm.timestamp_millis(),
+                        false,
+                    )
                     .await?;
+
+                self.idle_manager.mark_active(vertex, partition).await;
             }
 
             // removes the offset from the tracked offsets
@@ -149,6 +164,7 @@ impl ISBWatermarkActor {
                 self.insert_offset(offset.partition_idx, offset.offset, watermark);
             }
 
+            // publishes the idle watermark for the downstream idle partitions
             ISBWaterMarkActorMessage::PublishIdleWatermark => {
                 let mut min_wm = self
                     .get_lowest_watermark()
@@ -158,9 +174,30 @@ impl ISBWatermarkActor {
                     min_wm = self.fetcher.fetch_head_idle_watermark().await?;
                 }
 
-                self.publisher
-                    .publish_idle_watermarks(min_wm.timestamp_millis())
-                    .await?;
+                let idle_partitions = self.idle_manager.fetch_idle_partitions().await;
+                for (vertex, partitions) in idle_partitions {
+                    for partition in partitions {
+                        let offset =
+                            match self.idle_manager.fetch_idle_offset(vertex, partition).await {
+                                Ok(offset) => offset,
+                                Err(e) => {
+                                    error!("failed to fetch idle offset: {:?}", e);
+                                    continue;
+                                }
+                            };
+
+                        self.publisher
+                            .publish_watermark(
+                                vertex,
+                                partition,
+                                offset,
+                                min_wm.timestamp_millis(),
+                                true,
+                            )
+                            .await?;
+                        self.idle_manager.mark_idle(vertex, partition, offset).await;
+                    }
+                }
             }
         }
 
@@ -208,6 +245,7 @@ impl ISBWatermarkHandle {
         vertex_replica: u16,
         js_context: async_nats::jetstream::Context,
         config: &EdgeWatermarkConfig,
+        to_vertex_configs: &[ToVertexConfig],
     ) -> Result<Self> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
@@ -226,11 +264,12 @@ impl ISBWatermarkHandle {
             processor_name,
             js_context.clone(),
             &config.to_vertex_config,
-            None,
         )
         .await?;
 
-        let actor = ISBWatermarkActor::new(fetcher, publisher);
+        let idle_manager = ISBIdleManager::new(to_vertex_configs, js_context.clone()).await;
+
+        let actor = ISBWatermarkActor::new(fetcher, publisher, idle_manager);
         tokio::spawn(async move { actor.run(receiver).await });
 
         let isb_watermark_handle = Self { sender };
@@ -416,9 +455,15 @@ mod tests {
             to_vertex_config: vec![to_bucket_config.clone()],
         };
 
-        let handle = ISBWatermarkHandle::new(vertex_name, 0, js_context.clone(), &edge_config)
-            .await
-            .expect("Failed to create ISBWatermarkHandle");
+        let handle = ISBWatermarkHandle::new(
+            vertex_name,
+            0,
+            js_context.clone(),
+            &edge_config,
+            Default::default(),
+        )
+        .await
+        .expect("Failed to create ISBWatermarkHandle");
 
         handle
             .insert_offset(
@@ -579,9 +624,15 @@ mod tests {
             to_vertex_config: vec![from_bucket_config.clone()],
         };
 
-        let handle = ISBWatermarkHandle::new(vertex_name, 0, js_context.clone(), &edge_config)
-            .await
-            .expect("Failed to create ISBWatermarkHandle");
+        let handle = ISBWatermarkHandle::new(
+            vertex_name,
+            0,
+            js_context.clone(),
+            &edge_config,
+            Default::default(),
+        )
+        .await
+        .expect("Failed to create ISBWatermarkHandle");
 
         let mut fetched_watermark = -1;
         // publish watermark and try fetching to see if something is getting published
