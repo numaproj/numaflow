@@ -125,7 +125,8 @@ where
                             // if the sub graph is not generated, then we can continue
                             continue;
                         }
-                        _ => {
+                        err => {
+                            tracing::error!(?err, "Failed to generate subgraph");
                             // if there is an error, deregister with the error
                             self.deregister(&id).await?
                         }
@@ -221,6 +222,10 @@ where
     // Check if the store is ready
     pub(crate) async fn ready(&mut self) -> bool {
         self.store.ready().await
+    }
+
+    pub(crate) fn is_monovertex(&self) -> bool {
+        self.msg_graph_generator.is_monovertex()
     }
 }
 

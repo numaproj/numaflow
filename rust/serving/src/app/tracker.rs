@@ -60,6 +60,10 @@ impl MessageGraph {
         id: String,
         callbacks: Vec<Arc<Callback>>,
     ) -> Result<Option<String>, Error> {
+        if self.is_monovertex() && callbacks.len() == 1 {
+            return Ok(Some(id));
+        }
+
         // Create a HashMap to map each vertex to its corresponding callbacks
         let mut callback_map: HashMap<String, Vec<CallbackRequestWrapper>> = HashMap::new();
         let mut source_vertex = None;
@@ -238,12 +242,18 @@ impl MessageGraph {
 
     // from_env reads the pipeline stored in the environment variable and creates a MessageGraph from it.
     pub(crate) fn from_pipeline(pipeline_spec: &PipelineDCG) -> Result<Self, Error> {
+        tracing::info!("Creating Messagegraph: {:#?}", pipeline_spec);
         let mut dag = Graph::with_capacity(pipeline_spec.edges.len());
         for edge in &pipeline_spec.edges {
             dag.entry(edge.from.clone()).or_default().push(edge.clone());
         }
+        tracing::info!("Constructed message graph: {:#?}", dag);
 
         Ok(MessageGraph { dag })
+    }
+
+    pub(crate) fn is_monovertex(&self) -> bool {
+        self.dag.is_empty()
     }
 }
 

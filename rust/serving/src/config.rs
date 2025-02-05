@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use std::fmt::Debug;
+use std::{collections::HashMap, env};
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use numaflow_models::models::Vertex;
+use numaflow_models::models::{MonoVertex, Vertex};
 use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +16,7 @@ const ENV_NUMAFLOW_SERVING_HOST_IP: &str = "NUMAFLOW_SERVING_HOST_IP";
 const ENV_NUMAFLOW_SERVING_APP_PORT: &str = "NUMAFLOW_SERVING_APP_LISTEN_PORT";
 const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 const ENV_VERTEX_OBJ: &str = "NUMAFLOW_VERTEX_OBJECT";
+const ENV_MONOVERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 
 pub const DEFAULT_ID_HEADER: &str = "X-Numaflow-Id";
 pub const DEFAULT_CALLBACK_URL_HEADER_KEY: &str = "X-Numaflow-Callback-Url";
@@ -109,34 +110,36 @@ pub struct CallbackStorageConfig {
 impl TryFrom<HashMap<String, String>> for Settings {
     type Error = Error;
     fn try_from(env_vars: HashMap<String, String>) -> std::result::Result<Self, Self::Error> {
-        let host_ip = env_vars
-            .get(ENV_NUMAFLOW_SERVING_HOST_IP)
-            .ok_or_else(|| {
-                ParseConfig(format!(
-                    "Environment variable {ENV_NUMAFLOW_SERVING_HOST_IP} is not set"
-                ))
-            })?
-            .to_owned();
-
-        let pipeline_spec: PipelineDCG = env_vars
-            .get(ENV_MIN_PIPELINE_SPEC)
-            .ok_or_else(|| {
-                Error::ParseConfig(format!(
-                    "Pipeline spec is not set using environment variable {ENV_MIN_PIPELINE_SPEC}"
-                ))
-            })?
-            .parse()
-            .map_err(|e| {
-                Error::ParseConfig(format!(
-                    "Parsing pipeline spec: {}: error={e:?}",
-                    env_vars.get(ENV_MIN_PIPELINE_SPEC).unwrap()
-                ))
-            })?;
-
-        let mut settings = Settings {
-            host_ip,
-            pipeline_spec,
-            ..Default::default()
+        let mut settings = match env::var("NUMAFLOW_MONO_VERTEX_OBJECT").is_ok() {
+            true => Settings {
+                host_ip: "localhost".to_string(),
+                pipeline_spec: PipelineDCG::monovertex(),
+                ..Default::default()
+            },
+            false => {
+                let host_ip = env_vars
+                    .get(ENV_NUMAFLOW_SERVING_HOST_IP)
+                    .ok_or_else(|| {
+                        ParseConfig(format!(
+                            "Environment variable {ENV_NUMAFLOW_SERVING_HOST_IP} is not set"
+                        ))
+                    })?
+                    .to_owned();
+                let pipeline_spec: PipelineDCG = env_vars
+                    .get(ENV_MIN_PIPELINE_SPEC)
+                    .ok_or_else(|| {
+                        Error::ParseConfig(format!("Pipeline spec is not set using environment variable {ENV_MIN_PIPELINE_SPEC}"))})?.parse().map_err(|e| {
+                            Error::ParseConfig(format!(
+                                "Parsing pipeline spec: {}: error={e:?}",
+                                env_vars.get(ENV_MIN_PIPELINE_SPEC).unwrap()
+                            ))
+                        })?;
+                Settings {
+                    host_ip,
+                    pipeline_spec: pipeline_spec,
+                    ..Default::default()
+                }
+            }
         };
 
         if let Some(app_port) = env_vars.get(ENV_NUMAFLOW_SERVING_APP_PORT) {
@@ -148,31 +151,59 @@ impl TryFrom<HashMap<String, String>> for Settings {
         }
 
         // TODO: When we add support for Serving with monovertex, we should check for NUMAFLOW_MONO_VERTEX_OBJECT variable too.
-        let Some(source_spec_encoded) = env_vars.get(ENV_VERTEX_OBJ) else {
-            return Err(ParseConfig(format!(
-                "Environment variable {ENV_VERTEX_OBJ} is not set"
+        let source_spec_encoded = match env_vars.get(ENV_VERTEX_OBJ) {
+            Some(source_spec_encoded) => source_spec_encoded,
+            None => {
+                let Some(source_spec_encoded) = env_vars.get(ENV_MONOVERTEX_OBJ) else {
+                    return Err(ParseConfig(format!(
+                "Either of the environment variables {ENV_VERTEX_OBJ} or {ENV_MONOVERTEX_OBJ} is not set"
             )));
+                };
+                source_spec_encoded
+            }
         };
 
         let source_spec_decoded = BASE64_STANDARD
             .decode(source_spec_encoded.as_bytes())
             .map_err(|e| ParseConfig(format!("decoding {ENV_VERTEX_OBJ}: {e:?}")))?;
 
-        let vertex_obj = serde_json::from_slice::<Vertex>(&source_spec_decoded)
-            .map_err(|e| ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: {e:?}")))?;
+        let serving_spec = match env_vars.get(ENV_VERTEX_OBJ).is_some() {
+            true => {
+                let vertex_obj = serde_json::from_slice::<Vertex>(&source_spec_decoded)
+                    .map_err(|e| ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: {e:?}")))?;
 
-        let serving_spec = vertex_obj
-            .spec
-            .source
-            .ok_or_else(|| {
-                ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: source can not be empty"))
-            })?
-            .serving
-            .ok_or_else(|| {
-                ParseConfig(format!(
-                    "parsing {ENV_VERTEX_OBJ}: Serving source spec is not found"
-                ))
-            })?;
+                let serving_spec = vertex_obj
+                    .spec
+                    .source
+                    .ok_or_else(|| {
+                        ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: source can not be empty"))
+                    })?
+                    .serving
+                    .ok_or_else(|| {
+                        ParseConfig(format!(
+                            "parsing {ENV_VERTEX_OBJ}: Serving source spec is not found"
+                        ))
+                    })?;
+                serving_spec
+            }
+            false => {
+                let vertex_obj = serde_json::from_slice::<MonoVertex>(&source_spec_decoded)
+                    .map_err(|e| ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: {e:?}")))?;
+                let serving_spec = vertex_obj
+                    .spec
+                    .source
+                    .ok_or_else(|| {
+                        ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: source can not be empty"))
+                    })?
+                    .serving
+                    .ok_or_else(|| {
+                        ParseConfig(format!(
+                            "parsing {ENV_VERTEX_OBJ}: Serving source spec is not found"
+                        ))
+                    })?;
+                serving_spec
+            }
+        };
         // Update tid_header from source_spec
         settings.tid_header = serving_spec.msg_id_header_key;
 

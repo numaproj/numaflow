@@ -47,7 +47,7 @@ struct ServingSourceActor {
     /// Channel for the actor handle to communicate with this actor
     handler_rx: mpsc::Receiver<ActorMessage>,
     /// Mapping from request's ID header (usually `X-Numaflow-Id` header) to a channel.
-    /// This sending a message on this channel notifies the HTTP handler function that the message
+    /// Sending a message on this channel notifies the HTTP handler function that the message
     /// has been successfully processed.
     tracker: HashMap<String, oneshot::Sender<()>>,
     vertex_replica_id: u16,
