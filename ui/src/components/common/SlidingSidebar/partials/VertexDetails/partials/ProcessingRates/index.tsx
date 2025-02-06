@@ -21,6 +21,13 @@ export interface ProcessingRatesProps {
   vertexMetrics: any;
 }
 
+const RATE_LABELS: string[] = ["1m", "5m", "15m"];
+const RATE_LABELS_MAP: { [k: string]: string } = {
+  "1m": "oneM",
+  "5m": "fiveM",
+  "15m": "fifteenM",
+};
+
 export function ProcessingRates({
   vertexMetrics,
   namespaceId,
@@ -37,9 +44,8 @@ export function ProcessingRates({
     }
     const vertexData =
       type === "monoVertex" ? [vertexMetrics] : vertexMetrics[vertexId];
-    if (!vertexData) {
-      return;
-    }
+    if (!vertexData) return;
+
     const rates: PipelineVertexMetric[] = [];
     vertexData.forEach((item: any, index: number) => {
       const key = type === "monoVertex" ? "monoVertex" : "pipeline";
@@ -48,15 +54,9 @@ export function ProcessingRates({
       }
       rates.push({
         partition: index,
-        oneM: item.processingRates["1m"]
-          ? item.processingRates["1m"].toFixed(2)
-          : 0,
-        fiveM: item.processingRates["5m"]
-          ? item.processingRates["5m"].toFixed(2)
-          : 0,
-        fifteenM: item.processingRates["15m"]
-          ? item.processingRates["15m"].toFixed(2)
-          : 0,
+        oneM: item.processingRates["1m"]?.toFixed(2) || 0,
+        fiveM: item.processingRates["5m"]?.toFixed(2) || 0,
+        fifteenM: item.processingRates["15m"]?.toFixed(2) || 0,
       });
     });
     setFoundRates(rates);
@@ -79,9 +79,9 @@ export function ProcessingRates({
           <TableHead>
             <TableRow>
               {type !== "monoVertex" && <TableCell>Partition</TableCell>}
-              <TableCell>1m</TableCell>
-              <TableCell>5m</TableCell>
-              <TableCell>15m</TableCell>
+              {RATE_LABELS.map((label: string) => (
+                <TableCell key={label}>{label}</TableCell>
+              ))}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -93,28 +93,29 @@ export function ProcessingRates({
               </TableRow>
             )}
             {!!foundRates.length &&
-              foundRates.map((metric) => (
+              foundRates.map((metric: any) => (
                 <TableRow key={metric.partition}>
                   {type !== "monoVertex" && (
                     <TableCell>{metric.partition}</TableCell>
                   )}
-                  <TableCell>
-                    <MetricsModalWrapper
-                      disableMetricsCharts={disableMetricsCharts}
-                      namespaceId={namespaceId}
-                      pipelineId={pipelineId}
-                      vertexId={vertexId}
-                      type={type}
-                      metricName={
-                        type === "monoVertex"
-                          ? "monovtx_read_total"
-                          : "forwarder_data_read_total"
-                      }
-                      value={formatRate(metric.oneM)}
-                    />
-                  </TableCell>
-                  <TableCell>{formatRate(metric.fiveM)}</TableCell>
-                  <TableCell>{formatRate(metric.fifteenM)}</TableCell>
+                  {RATE_LABELS?.map((label: string) => (
+                    <TableCell key={label}>
+                      <MetricsModalWrapper
+                        disableMetricsCharts={disableMetricsCharts}
+                        namespaceId={namespaceId}
+                        pipelineId={pipelineId}
+                        vertexId={vertexId}
+                        type={type}
+                        metricName={
+                          type === "monoVertex"
+                            ? "monovtx_read_total"
+                            : "forwarder_data_read_total"
+                        }
+                        value={formatRate(metric?.[RATE_LABELS_MAP[label]])}
+                        presets={{ duration: label }}
+                      />
+                    </TableCell>
+                  ))}
                 </TableRow>
               ))}
           </TableBody>

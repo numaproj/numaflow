@@ -30,6 +30,7 @@ interface MetricsModalProps {
   pipelineId: string;
   vertexId: string;
   type: string;
+  presets?: any;
 }
 
 export function MetricsModal({
@@ -40,15 +41,18 @@ export function MetricsModal({
   pipelineId,
   vertexId,
   type,
+  presets,
 }: MetricsModalProps) {
   const vertexDetailsContext =
     useContext<VertexDetailsContextProps>(VertexDetailsContext);
-  const { setVertexTab, setPodsViewTab, setExpanded } = vertexDetailsContext;
+  const { setVertexTab, setPodsViewTab, setExpanded, setPresets } =
+    vertexDetailsContext;
 
   const [metricsFound, setMetricsFound] = useState<boolean>(false);
 
   const handleRedirect = useCallback(() => {
     handleClose();
+    if (presets) setPresets(presets);
     setVertexTab(0);
     setPodsViewTab(1);
     const panelId = `${metricName}-panel`;
@@ -57,7 +61,15 @@ export function MetricsModal({
       newExpanded.add(panelId);
       return newExpanded;
     });
-  }, [handleClose, setVertexTab, setPodsViewTab, metricName, setExpanded]);
+  }, [
+    handleClose,
+    presets,
+    setPresets,
+    setVertexTab,
+    setPodsViewTab,
+    metricName,
+    setExpanded,
+  ]);
 
   return (
     <Modal
@@ -88,6 +100,7 @@ export function MetricsModal({
             type={type}
             metricName={metricName}
             setMetricsFound={setMetricsFound}
+            presets={presets}
           />
         </Box>
         {metricsFound && (

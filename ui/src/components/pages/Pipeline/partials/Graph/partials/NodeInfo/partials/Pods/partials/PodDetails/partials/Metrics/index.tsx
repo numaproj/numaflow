@@ -1,9 +1,15 @@
 import React, { Dispatch, SetStateAction, useContext } from "react";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
-import { Accordion, AccordionDetails, AccordionSummary, Tooltip, Typography } from "@mui/material";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import LineChartComponent from "./partials/LineChart";
 import { useMetricsDiscoveryDataFetch } from "../../../../../../../../../../../../../utils/fetchWrappers/metricsDiscoveryDataFetch";
 import {
@@ -21,16 +27,18 @@ export interface MetricsProps {
   selectedPodName?: string;
   metricName?: string;
   setMetricsFound?: Dispatch<SetStateAction<boolean>>;
+  presets?: any;
 }
 
 export function Metrics({
   namespaceId,
   pipelineId,
   type,
-  vertexId, 
+  vertexId,
   selectedPodName,
   metricName,
   setMetricsFound,
+  presets,
 }: MetricsProps) {
   const {
     metricsDiscoveryData: discoveredMetrics,
@@ -40,11 +48,16 @@ export function Metrics({
     objectType: dimensionReverseMap[type],
   });
 
-  const { expanded, setExpanded } =
-    useContext<VertexDetailsContextProps>(VertexDetailsContext);
+  const {
+    expanded,
+    setExpanded,
+    presets: presetsFromContext,
+    setPresets,
+  } = useContext<VertexDetailsContextProps>(VertexDetailsContext);
 
   const handleAccordionChange =
     (panel: string) => (_: any, isExpanded: boolean) => {
+      setPresets(undefined);
       setExpanded((prevExpanded) => {
         const newExpanded = new Set(prevExpanded);
         isExpanded ? newExpanded.add(panel) : newExpanded.delete(panel);
@@ -82,7 +95,10 @@ export function Metrics({
       (m: any) => m?.metric_name === metricName
     );
     if (discoveredMetric) {
-      if (setMetricsFound) setMetricsFound(true);
+      if (setMetricsFound)
+        setTimeout(() => {
+          setMetricsFound(true);
+        }, 100);
       return (
         <LineChartComponent
           namespaceId={namespaceId}
@@ -90,6 +106,7 @@ export function Metrics({
           type={type}
           metric={discoveredMetric}
           vertexId={vertexId}
+          presets={presets}
           fromModal
         />
       );
@@ -102,10 +119,7 @@ export function Metrics({
   return (
     <Box sx={{ height: "100%" }}>
       {discoveredMetrics?.data?.map((metric: any) => {
-        if (
-          type === "source" &&
-          metric?.pattern_name === "vertex_gauge"
-        )
+        if (type === "source" && metric?.pattern_name === "vertex_gauge")
           return null;
         const panelId = `${metric?.metric_name}-panel`;
         return (
@@ -119,23 +133,23 @@ export function Metrics({
               aria-controls={`${metric?.metric_name}-content`}
               id={`${metric?.metric_name}-header`}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                {metric?.display_name || 
-                 metricNameMap[metric?.metric_name] || 
-                 metric?.metric_name}
-                <Tooltip 
+              <Box sx={{ display: "flex", alignItems: "center" }}>
+                {metric?.display_name ||
+                  metricNameMap[metric?.metric_name] ||
+                  metric?.metric_name}
+                <Tooltip
                   title={
-                    <Typography sx={{ fontSize: '1rem' }}>
-                      {metric?.metric_description || 
-                       metric?.display_name || 
-                       metricNameMap[metric?.metric_name] || 
-                       metric?.metric_name }
+                    <Typography sx={{ fontSize: "1rem" }}>
+                      {metric?.metric_description ||
+                        metric?.display_name ||
+                        metricNameMap[metric?.metric_name] ||
+                        metric?.metric_name}
                     </Typography>
-                  } 
+                  }
                   arrow
                 >
                   <Box sx={{ marginLeft: 1 }}>
-                    <InfoOutlinedIcon sx={{ cursor: 'pointer'}} />
+                    <InfoOutlinedIcon sx={{ cursor: "pointer" }} />
                   </Box>
                 </Tooltip>
               </Box>
@@ -148,6 +162,7 @@ export function Metrics({
                   type={type}
                   metric={metric}
                   vertexId={vertexId}
+                  presets={presetsFromContext}
                   selectedPodName={selectedPodName}
                 />
               )}

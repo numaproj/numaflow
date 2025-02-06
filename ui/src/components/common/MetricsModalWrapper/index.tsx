@@ -13,6 +13,7 @@ interface MetricsModalWrapperProps {
   type: string;
   metricName: string;
   value: any;
+  presets?: any;
 }
 
 export function MetricsModalWrapper({
@@ -23,6 +24,7 @@ export function MetricsModalWrapper({
   type,
   metricName,
   value,
+  presets,
 }: MetricsModalWrapperProps) {
   const [open, setOpen] = useState<boolean>(false);
 
@@ -59,6 +61,7 @@ export function MetricsModalWrapper({
         pipelineId={pipelineId}
         vertexId={vertexId}
         type={type}
+        presets={presets}
       />
     </Box>
   );

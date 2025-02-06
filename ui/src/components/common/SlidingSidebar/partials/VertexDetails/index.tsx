@@ -57,6 +57,8 @@ export interface VertexDetailsContextProps {
   setPodsViewTab: Dispatch<SetStateAction<number>>;
   expanded: Set<string>;
   setExpanded: Dispatch<SetStateAction<Set<string>>>;
+  presets: any;
+  setPresets: Dispatch<SetStateAction<any>>;
 }
 
 export const VertexDetailsContext = createContext<VertexDetailsContextProps>({
@@ -68,6 +70,9 @@ export const VertexDetailsContext = createContext<VertexDetailsContextProps>({
   expanded: new Set(),
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   setExpanded: () => {},
+  presets: undefined,
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  setPresets: () => {},
 });
 
 export function VertexDetails({
@@ -89,6 +94,7 @@ export function VertexDetails({
   const [updateModalOnClose, setUpdateModalOnClose] = useState<
     SpecEditorModalProps | undefined
   >();
+  const [presets, setPresets] = useState<any>(undefined);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [targetTab, setTargetTab] = useState<number | undefined>();
 
@@ -226,6 +232,8 @@ export function VertexDetails({
         setPodsViewTab,
         expanded,
         setExpanded,
+        presets,
+        setPresets,
       }}
     >
       <Box
