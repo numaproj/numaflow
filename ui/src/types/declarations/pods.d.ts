@@ -125,6 +125,10 @@ export interface PodSpecificInfoProps {
   totalMemory: string;
 }
 export interface PodInfoProps {
+  namespaceId: string;
+  pipelineId: string;
+  vertexId: string;
+  type: string;
   pod: Pod;
   podDetails: PodDetail;
   containerName: string;

@@ -17,6 +17,7 @@ export interface MetricDropDownProps {
   type: string;
   field: string;
   setMetricReq: any;
+  presets?: any;
 }
 
 const Dropdown = ({
@@ -24,39 +25,36 @@ const Dropdown = ({
   type,
   field,
   setMetricReq,
+  presets,
 }: MetricDropDownProps) => {
-
   // to handle cases there is no "mono-vertex" as dimension at top level (for eg: container level cpu/memory)
-  let initialDimensionVal = "";
-  if (metric?.dimensions.length > 0) {
-    metric?.dimensions?.map((val: any)=>{
-      if (val.name === dimensionReverseMap[type]){
-        initialDimensionVal = val.name;
-        return;
-      }
-    })
-    if (initialDimensionVal === ""){
-      initialDimensionVal = metric?.dimensions[0]?.name
-    }
-  }
+  const initialDimensionValue = useMemo(() => {
+    if (!metric?.dimensions?.length) return metric?.dimensions[0]?.name;
+
+    return metric?.dimensions?.find(
+      (val: any) => val?.name === dimensionReverseMap[type]
+    )?.name;
+  }, [metric, type]);
+
   const getInitialValue = useMemo(() => {
     switch (field) {
       case "dimension":
-        return initialDimensionVal;
+        return initialDimensionValue;
       case "quantile":
-        return quantileOptions[quantileOptions.length-1];
+        return presets?.quantile ?? quantileOptions[quantileOptions.length - 1];
       case "duration":
-        return durationOptions[0];
+        return presets?.duration ?? durationOptions[0];
       default:
         return "";
     }
-  }, [field, dimensionReverseMap, type, quantileOptions, durationOptions]);
+  }, [field, initialDimensionValue, quantileOptions, durationOptions, presets]);
 
   const [value, setValue] = useState<string>(getInitialValue);
-  let fieldName = field.charAt(0).toUpperCase() + field.slice(1);
-  if (fieldName == "Duration"){
-    fieldName = "Query Window"
-  }
+
+  const fieldName = useMemo(() => {
+    const capitalizedField = field.charAt(0).toUpperCase() + field.slice(1);
+    return capitalizedField === "Duration" ? "Query Window" : capitalizedField;
+  }, [field]);
 
   // Update metricsReq with the initial value
   useEffect(() => {
@@ -122,7 +120,7 @@ const Dropdown = ({
           setValue(e.target.value);
           setMetricReq((prev: any) => ({ ...prev, [field]: e.target.value }));
         }}
-        sx={{ fontSize: "1.6rem",  height: '50px' }}
+        sx={{ fontSize: "1.6rem", height: "50px" }}
       >
         {getDropDownEntries}
       </Select>

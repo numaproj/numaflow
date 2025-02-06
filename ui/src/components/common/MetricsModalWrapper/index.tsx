@@ -6,21 +6,25 @@ import { MetricsModal } from "./partials/MetricsModal";
 import "./style.css";
 
 interface MetricsModalWrapperProps {
+  disableMetricsCharts: boolean;
   namespaceId: string;
   pipelineId: string;
   vertexId: string;
   type: string;
   metricName: string;
   value: any;
+  presets?: any;
 }
 
 export function MetricsModalWrapper({
+  disableMetricsCharts,
   namespaceId,
   pipelineId,
   vertexId,
   type,
   metricName,
   value,
+  presets,
 }: MetricsModalWrapperProps) {
   const [open, setOpen] = useState<boolean>(false);
 
@@ -42,7 +46,10 @@ export function MetricsModalWrapper({
         placement={"top-start"}
         arrow
       >
-        <Box className="metrics-hyperlink" onClick={() => handleOpen()}>
+        <Box
+          className={!disableMetricsCharts ? "metrics-hyperlink" : undefined}
+          onClick={!disableMetricsCharts ? handleOpen : undefined}
+        >
           {value}
         </Box>
       </Tooltip>
@@ -54,6 +61,7 @@ export function MetricsModalWrapper({
         pipelineId={pipelineId}
         vertexId={vertexId}
         type={type}
+        presets={presets}
       />
     </Box>
   );

@@ -12,8 +12,8 @@ data:
     - name: vertex_gauge
       objects: 
         - vertex
-      title: Vertex Pending Messages
-      description: This query is the total number of pending messages for the vertex
+      title: Vertex Gauge Metrics
+      description: This pattern represents the gauge metrics for a vertex across different dimensions
       expr: |
         sum($metric_name{$filters}) by ($dimension, period)
       params:
@@ -46,12 +46,12 @@ data:
               filters:
                 - name: period
                   required: false
-    
+
     - name: mono_vertex_gauge
       objects: 
         - mono-vertex
-      title: Pending Messages Lag
-      description: This query is the total number of pending messages for the mono vertex
+      title: MonoVertex Gauge Metrics
+      description: This pattern represents the gauge metrics for a mono-vertex across different dimensions
       expr: |
         sum($metric_name{$filters}) by ($dimension, period)
       params:
@@ -87,8 +87,8 @@ data:
     - name: mono_vertex_histogram
       objects: 
         - mono-vertex
-      title: Processing Time Latency
-      description: This query pattern is for P99,P90 and P50 quantiles for a mono-vertex across different dimensions
+      title: MonoVertex Histogram Metrics
+      description: This pattern is for P99, P95, P90 and P50 quantiles for a mono-vertex across different dimensions
       expr: |
         histogram_quantile($quantile, sum by($dimension,le) (rate($metric_name{$filters}[$duration])))
       params:
@@ -190,12 +190,13 @@ data:
               filters:
                 - name: pod
                   required: false
+
     - name: pod_cpu_memory_utilization
       objects: 
         - mono-vertex
         - vertex
-      title: cpu-memory utilization by pod
-      description: cpu and memory utilization by pod for mono-vertex
+      title: CPU and Memory Utilisation by Pod
+      description: This pattern represents the CPU and Memory utilisation by pod for mono-vertex and vertex
       expr: avg_over_time($metric_name{$filters}[$duration])
       params:
         - name: duration
@@ -247,12 +248,13 @@ data:
                   # expr: optional expression for prometheus query
                   # overrides the default expression 
                   required: false
+
     - name: container_cpu_memory_utilization
       objects: 
         - mono-vertex
         - vertex
-      title: cpu-memory utilization by container for mono-vertex
-      description: cpu and memory utilization by container for mono-vertex
+      title: CPU and Memory Utilisation by Container
+      description: This pattern represents the CPU and Memory utilisation by container for mono-vertex and vertex
       expr: avg_over_time($metric_name{$filters}[$duration])
       params:
         - name: duration
@@ -302,4 +304,3 @@ data:
                   # expr: optional expression for prometheus query
                   # overrides the default expression 
                   required: false
-

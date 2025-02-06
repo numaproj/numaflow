@@ -26,7 +26,12 @@ interface TooltipProps {
   active?: boolean;
 }
 
-function CustomTooltip({ payload, label, active, patternName }: TooltipProps & { patternName: string }) {
+function CustomTooltip({
+  payload,
+  label,
+  active,
+  patternName,
+}: TooltipProps & { patternName: string }) {
   if (active && payload && payload.length) {
     const maxWidth =
       Math.max(...payload.map((entry) => entry?.name?.length)) * 9.5;
@@ -42,20 +47,20 @@ function CustomTooltip({ payload, label, active, patternName }: TooltipProps & {
         <Box>{label}</Box>
         {payload.map((entry: any, index: any) => {
           const formattedValue = getDefaultFormatter(entry?.value, patternName);
-          return(
-          <Box key={`item-${index}`} sx={{ display: "flex" }}>
-            <Box
-              sx={{
-                width: `${maxWidth / 9}rem`,
-                display: "inline-block",
-                paddingRight: "1rem",
-                color: entry?.color,
-              }}
-            >
-              {entry?.name}:
+          return (
+            <Box key={`item-${index}`} sx={{ display: "flex" }}>
+              <Box
+                sx={{
+                  width: `${maxWidth / 9}rem`,
+                  display: "inline-block",
+                  paddingRight: "1rem",
+                  color: entry?.color,
+                }}
+              >
+                {entry?.name}:
+              </Box>
+              <Box sx={{ color: entry?.color }}>{formattedValue}</Box>
             </Box>
-            <Box sx={{ color: entry?.color }}>{formattedValue}</Box>
-          </Box>
           );
         })}
       </Box>
@@ -78,12 +83,12 @@ const getDefaultFormatter = (value: number, patternName: string) => {
       ? `${Math.floor(formattedValue)}${suffix}`
       : `${formattedValue}${suffix}`;
   };
-  switch(patternName){
+  switch (patternName) {
     case "mono_vertex_histogram":
-      if (value === 0){
+      if (value === 0) {
         return "0";
       } else if (value < 1000) {
-        return formatValue(value," μs");
+        return formatValue(value, " μs");
       } else if (value < 1000000) {
         return formatValue(value / 1000, " ms");
       } else {
@@ -91,10 +96,10 @@ const getDefaultFormatter = (value: number, patternName: string) => {
       }
     case "container_cpu_memory_utilization":
     case "pod_cpu_memory_utilization":
-      if (value === 0){
+      if (value === 0) {
         return "0";
       } else if (value < 1000) {
-        return formatValue(value," %");
+        return formatValue(value, " %");
       } else if (value < 1000000) {
         return formatValue(value / 1000, "k %");
       } else {
@@ -104,7 +109,7 @@ const getDefaultFormatter = (value: number, patternName: string) => {
       if (value === 0) {
         return "0";
       } else if (value < 1000) {
-        return formatValue(value,"");
+        return formatValue(value, "");
       } else if (value < 1000000) {
         return formatValue(value / 1000, " k");
       } else {
@@ -139,6 +144,7 @@ interface LineChartComponentProps {
   metric: any;
   vertexId?: string;
   selectedPodName?: string;
+  presets?: any;
   fromModal?: boolean;
 }
 
@@ -150,6 +156,7 @@ const LineChartComponent = ({
   metric,
   vertexId,
   selectedPodName,
+  presets,
   fromModal,
 }: LineChartComponentProps) => {
   const { addError } = useContext<AppContextProps>(AppContext);
@@ -185,15 +192,14 @@ const LineChartComponent = ({
           return vertexId;
         case "pod":
           // based on pattern names, update filter based on pod value or multiple pods based on regex
-          if (metric?.pattern_name === "pod_cpu_memory_utilization"){
-            switch(type){
+          if (metric?.pattern_name === "pod_cpu_memory_utilization") {
+            switch (type) {
               case "monoVertex":
                 return `${pipelineId}-.*`;
               default:
                 return `${pipelineId}-${vertexId}-.*`;
             }
-          }
-          else {
+          } else {
             return selectedPodName;
           }
         default:
@@ -268,7 +274,7 @@ const LineChartComponent = ({
   }, [error, addError]);
 
   const groupByLabel = useCallback((dimension: string, patternName: string) => {
-    switch(patternName){
+    switch (patternName) {
       case "pod_cpu_memory_utilization":
         return ["pod"];
       case "container_cpu_memory_utilization":
@@ -374,6 +380,7 @@ const LineChartComponent = ({
                   type={type}
                   field={param?.name}
                   setMetricReq={setMetricsReq}
+                  presets={presets}
                 />
               </Box>
             );
@@ -478,7 +485,9 @@ const LineChartComponent = ({
               />
             ))}
 
-            <Tooltip content={<CustomTooltip patternName={metric?.pattern_name} />}/>
+            <Tooltip
+              content={<CustomTooltip patternName={metric?.pattern_name} />}
+            />
             <Legend />
           </LineChart>
         </ResponsiveContainer>
