@@ -110,22 +110,23 @@ pub struct CallbackStorageConfig {
 impl TryFrom<HashMap<String, String>> for Settings {
     type Error = Error;
     fn try_from(env_vars: HashMap<String, String>) -> std::result::Result<Self, Self::Error> {
-        let mut settings = match env::var("NUMAFLOW_MONO_VERTEX_OBJECT").is_ok() {
-            true => Settings {
-                host_ip: "localhost".to_string(),
-                pipeline_spec: PipelineDCG::monovertex(),
-                ..Default::default()
-            },
-            false => {
-                let host_ip = env_vars
-                    .get(ENV_NUMAFLOW_SERVING_HOST_IP)
-                    .ok_or_else(|| {
-                        ParseConfig(format!(
-                            "Environment variable {ENV_NUMAFLOW_SERVING_HOST_IP} is not set"
-                        ))
-                    })?
-                    .to_owned();
-                let pipeline_spec: PipelineDCG = env_vars
+        let is_monovertex = env::var("NUMAFLOW_MONO_VERTEX_OBJECT").is_ok();
+        let mut settings = Settings {
+            host_ip: "localhost".to_string(),
+            pipeline_spec: PipelineDCG::monovertex(),
+            ..Default::default()
+        };
+
+        if !is_monovertex {
+            let host_ip = env_vars
+                .get(ENV_NUMAFLOW_SERVING_HOST_IP)
+                .ok_or_else(|| {
+                    ParseConfig(format!(
+                        "Environment variable {ENV_NUMAFLOW_SERVING_HOST_IP} is not set"
+                    ))
+                })?
+                .to_owned();
+            let pipeline_spec: PipelineDCG = env_vars
                     .get(ENV_MIN_PIPELINE_SPEC)
                     .ok_or_else(|| {
                         Error::ParseConfig(format!("Pipeline spec is not set using environment variable {ENV_MIN_PIPELINE_SPEC}"))})?.parse().map_err(|e| {
@@ -134,13 +135,12 @@ impl TryFrom<HashMap<String, String>> for Settings {
                                 env_vars.get(ENV_MIN_PIPELINE_SPEC).unwrap()
                             ))
                         })?;
-                Settings {
-                    host_ip,
-                    pipeline_spec: pipeline_spec,
-                    ..Default::default()
-                }
-            }
-        };
+            settings = Settings {
+                host_ip,
+                pipeline_spec,
+                ..Default::default()
+            };
+        }
 
         if let Some(app_port) = env_vars.get(ENV_NUMAFLOW_SERVING_APP_PORT) {
             settings.app_listen_port = app_port.parse().map_err(|e| {
@@ -167,11 +167,10 @@ impl TryFrom<HashMap<String, String>> for Settings {
             .decode(source_spec_encoded.as_bytes())
             .map_err(|e| ParseConfig(format!("decoding {ENV_VERTEX_OBJ}: {e:?}")))?;
 
-        let serving_spec = match env_vars.get(ENV_VERTEX_OBJ).is_some() {
+        let serving_spec = match is_monovertex {
             true => {
-                let vertex_obj = serde_json::from_slice::<Vertex>(&source_spec_decoded)
+                let vertex_obj = serde_json::from_slice::<MonoVertex>(&source_spec_decoded)
                     .map_err(|e| ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: {e:?}")))?;
-
                 let serving_spec = vertex_obj
                     .spec
                     .source
@@ -187,8 +186,9 @@ impl TryFrom<HashMap<String, String>> for Settings {
                 serving_spec
             }
             false => {
-                let vertex_obj = serde_json::from_slice::<MonoVertex>(&source_spec_decoded)
+                let vertex_obj = serde_json::from_slice::<Vertex>(&source_spec_decoded)
                     .map_err(|e| ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: {e:?}")))?;
+
                 let serving_spec = vertex_obj
                     .spec
                     .source

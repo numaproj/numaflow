@@ -242,13 +242,10 @@ impl MessageGraph {
 
     // from_env reads the pipeline stored in the environment variable and creates a MessageGraph from it.
     pub(crate) fn from_pipeline(pipeline_spec: &PipelineDCG) -> Result<Self, Error> {
-        tracing::info!("Creating Messagegraph: {:#?}", pipeline_spec);
         let mut dag = Graph::with_capacity(pipeline_spec.edges.len());
         for edge in &pipeline_spec.edges {
             dag.entry(edge.from.clone()).or_default().push(edge.clone());
         }
-        tracing::info!("Constructed message graph: {:#?}", dag);
-
         Ok(MessageGraph { dag })
     }
 

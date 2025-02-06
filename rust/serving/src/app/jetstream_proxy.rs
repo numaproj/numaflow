@@ -209,6 +209,10 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
     let id = extract_id_from_headers(&proxy_state.tid_header, &headers);
     let mut msg_headers: HashMap<String, String> = HashMap::new();
     for (key, value) in headers.iter() {
+        // Exclude request ID
+        if key.as_str() == &proxy_state.tid_header {
+            continue;
+        }
         msg_headers.insert(
             key.to_string(),
             String::from_utf8_lossy(value.as_bytes()).to_string(),
