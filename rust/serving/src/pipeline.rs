@@ -70,6 +70,17 @@ pub struct PipelineDCG {
     pub(crate) edges: Vec<Edge>,
 }
 
+impl PipelineDCG {
+    pub fn monovertex() -> Self {
+        Self {
+            vertices: vec![Vertex {
+                name: "source".into(),
+            }],
+            edges: vec![],
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub(crate) struct Vertex {
     pub(crate) name: String,

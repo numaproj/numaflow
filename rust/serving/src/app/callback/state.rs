@@ -104,13 +104,11 @@ where
             let id = cbr.id.clone();
             {
                 let mut guard = self.callbacks.lock().expect("Getting lock on State");
-                guard
-                    .get_mut(&cbr.id)
-                    .ok_or(Error::IDNotFound(
-                        "Connection for the received callback is not present in the in-memory store",
-                    ))?
-                    .vtx_visited
-                    .push(cbr);
+                let Some(req_state) = guard.get_mut(&id) else {
+                    tracing::debug!(id, "Request is not found in in-memory store");
+                    continue;
+                };
+                req_state.vtx_visited.push(cbr);
             }
 
             // check if the sub graph can be generated
@@ -125,7 +123,8 @@ where
                             // if the sub graph is not generated, then we can continue
                             continue;
                         }
-                        _ => {
+                        err => {
+                            tracing::error!(?err, "Failed to generate subgraph");
                             // if there is an error, deregister with the error
                             self.deregister(&id).await?
                         }

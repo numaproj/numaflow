@@ -41,7 +41,7 @@ struct ProxyState<T> {
     callback: state::State<T>,
 }
 
-pub(crate) async fn jetstream_proxy<T: Clone + Send + Sync + Store + 'static>(
+pub(crate) async fn serving_public_routes<T: Clone + Send + Sync + Store + 'static>(
     state: AppState<T>,
 ) -> crate::Result<Router> {
     let proxy_state = Arc::new(ProxyState {
@@ -209,6 +209,10 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
     let id = extract_id_from_headers(&proxy_state.tid_header, &headers);
     let mut msg_headers: HashMap<String, String> = HashMap::new();
     for (key, value) in headers.iter() {
+        // Exclude request ID
+        if key.as_str() == &proxy_state.tid_header {
+            continue;
+        }
         msg_headers.insert(
             key.to_string(),
             String::from_utf8_lossy(value.as_bytes()).to_string(),
@@ -320,7 +324,7 @@ mod tests {
             callback_state,
         };
 
-        let app = jetstream_proxy(app_state).await?;
+        let app = serving_public_routes(app_state).await?;
         let res = Request::builder()
             .method("POST")
             .uri("/async")
@@ -412,7 +416,7 @@ mod tests {
             callback_state: callback_state.clone(),
         };
 
-        let app = jetstream_proxy(app_state).await.unwrap();
+        let app = serving_public_routes(app_state).await.unwrap();
 
         tokio::spawn(async move {
             let mut retries = 0;
@@ -484,7 +488,7 @@ mod tests {
             callback_state: callback_state.clone(),
         };
 
-        let app = jetstream_proxy(app_state).await.unwrap();
+        let app = serving_public_routes(app_state).await.unwrap();
 
         // pipeline is in -> cat -> out, so we will have 3 callback requests
 
