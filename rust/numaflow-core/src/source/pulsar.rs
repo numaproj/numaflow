@@ -53,8 +53,9 @@ pub(crate) async fn new_pulsar_source(
     cfg: PulsarSourceConfig,
     batch_size: usize,
     timeout: Duration,
+    vertex_replica: u16,
 ) -> crate::Result<PulsarSource> {
-    Ok(PulsarSource::new(cfg, batch_size, timeout).await?)
+    Ok(PulsarSource::new(cfg, batch_size, timeout, vertex_replica).await?)
 }
 
 impl source::SourceReader for PulsarSource {
@@ -70,8 +71,8 @@ impl source::SourceReader for PulsarSource {
             .collect()
     }
 
-    fn partitions(&self) -> Vec<u16> {
-        Self::partitions(self)
+    async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
+        Ok(vec![*get_vertex_replica()])
     }
 }
 
@@ -116,7 +117,7 @@ mod tests {
             max_unack: 100,
             auth: None,
         };
-        let mut pulsar = new_pulsar_source(cfg, 10, Duration::from_millis(200)).await?;
+        let mut pulsar = new_pulsar_source(cfg, 10, Duration::from_millis(200), 0).await?;
         assert_eq!(pulsar.name(), "Pulsar");
 
         // Read should return before the timeout

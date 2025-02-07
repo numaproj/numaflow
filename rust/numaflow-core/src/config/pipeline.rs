@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use numaflow_models::models::{ForwardConditions, Vertex};
+use numaflow_models::models::{ForwardConditions, Vertex, Watermark};
 use serde_json::from_slice;
 use tracing::info;
 
@@ -18,9 +18,9 @@ use crate::config::get_vertex_replica;
 use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig, Stream};
 use crate::config::pipeline::map::MapMode;
 use crate::config::pipeline::map::MapVtxConfig;
-use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::watermark::{BucketConfig, EdgeWatermarkConfig};
+use crate::config::pipeline::watermark::{IdleConfig, SourceWatermarkConfig};
 use crate::error::Error;
 use crate::Result;
 
@@ -402,9 +402,11 @@ impl PipelineConfig {
         let watermark_config = if vertex_obj
             .spec
             .watermark
+            .clone()
             .map_or(true, |w| w.disabled.unwrap_or(true))
         {
             Self::create_watermark_config(
+                vertex_obj.spec.watermark.clone(),
                 &namespace,
                 &pipeline_name,
                 &vertex_name,
@@ -462,6 +464,7 @@ impl PipelineConfig {
     }
 
     fn create_watermark_config(
+        watermark_spec: Option<Box<Watermark>>,
         namespace: &str,
         pipeline_name: &str,
         vertex_name: &str,
@@ -469,8 +472,23 @@ impl PipelineConfig {
         from_vertex_config: &[FromVertexConfig],
         to_vertex_config: &[ToVertexConfig],
     ) -> Option<WatermarkConfig> {
+        let max_delay = watermark_spec
+            .as_ref()
+            .and_then(|w| w.max_delay.map(|x| Duration::from(x).as_millis() as u64))
+            .unwrap_or(0);
+
+        let idle_config = watermark_spec
+            .as_ref()
+            .and_then(|w| w.idle_source.as_ref())
+            .map(|idle| IdleConfig {
+                increment_by: idle.increment_by.map(Duration::from).unwrap_or_default(),
+                step_interval: idle.step_interval.map(Duration::from).unwrap_or_default(),
+                threshold: idle.threshold.map(Duration::from).unwrap_or_default(),
+            });
+
         match vertex {
             VertexType::Source(_) => Some(WatermarkConfig::Source(SourceWatermarkConfig {
+                max_delay: Duration::from_millis(max_delay),
                 source_bucket_config: BucketConfig {
                     vertex: Box::leak(vertex_name.to_string().into_boxed_str()),
                     partitions: 1, // source will have only one partition
@@ -507,6 +525,7 @@ impl PipelineConfig {
                         ),
                     })
                     .collect(),
+                idle_config,
             })),
             VertexType::Sink(_) | VertexType::Map(_) => {
                 Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
@@ -715,6 +734,7 @@ mod tests {
             }),
             metrics_config: Default::default(),
             watermark_config: Some(WatermarkConfig::Source(SourceWatermarkConfig {
+                max_delay: Default::default(),
                 source_bucket_config: BucketConfig {
                     vertex: "in",
                     partitions: 1,
@@ -727,6 +747,7 @@ mod tests {
                     ot_bucket: "default-simple-pipeline-in-out_OT",
                     hb_bucket: "default-simple-pipeline-in-out_PROCESSORS",
                 }],
+                idle_config: None,
             })),
             ..Default::default()
         };
@@ -782,6 +803,7 @@ mod tests {
             }),
             metrics_config: Default::default(),
             watermark_config: Some(WatermarkConfig::Source(SourceWatermarkConfig {
+                max_delay: Default::default(),
                 source_bucket_config: BucketConfig {
                     vertex: "in",
                     partitions: 1,
@@ -794,6 +816,7 @@ mod tests {
                     ot_bucket: "default-simple-pipeline-in-out_OT",
                     hb_bucket: "default-simple-pipeline-in-out_PROCESSORS",
                 }],
+                idle_config: None,
             })),
             ..Default::default()
         };

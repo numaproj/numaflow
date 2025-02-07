@@ -26,6 +26,7 @@ pub(crate) struct UserDefinedSourceRead {
     resp_stream: Streaming<ReadResponse>,
     num_records: usize,
     timeout: Duration,
+    source_client: SourceClient<Channel>,
 }
 
 /// User-Defined Source to operative on custom sources.
@@ -54,17 +55,18 @@ pub(crate) async fn new_source(
 
 impl UserDefinedSourceRead {
     async fn new(
-        mut client: SourceClient<Channel>,
+        client: SourceClient<Channel>,
         batch_size: usize,
         timeout: Duration,
     ) -> Result<Self> {
-        let (read_tx, resp_stream) = Self::create_reader(batch_size, &mut client).await?;
+        let (read_tx, resp_stream) = Self::create_reader(batch_size, &mut client.clone()).await?;
 
         Ok(Self {
             read_tx,
             resp_stream,
             num_records: batch_size,
             timeout,
+            source_client: client,
         })
     }
 
@@ -190,8 +192,18 @@ impl SourceReader for UserDefinedSourceRead {
         Ok(messages)
     }
 
-    fn partitions(&self) -> Vec<u16> {
-        unimplemented!()
+    async fn partitions(&mut self) -> Result<Vec<u16>> {
+        let partitions = self
+            .source_client
+            .partitions_fn(Request::new(()))
+            .await
+            .map_err(|e| Error::Source(e.to_string()))?
+            .into_inner()
+            .result
+            .expect("partitions not found")
+            .partitions;
+
+        Ok(partitions.iter().map(|p| *p as u16).collect())
     }
 }
 

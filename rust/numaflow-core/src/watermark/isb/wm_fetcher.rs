@@ -6,12 +6,11 @@
 //! last fetched watermark per partition and returns the smallest watermark among all the last fetched
 //! watermarks across the partitions this is to make sure the watermark is min across all the incoming
 //! partitions.
-use std::collections::HashMap;
-
 use crate::config::pipeline::watermark::BucketConfig;
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::Watermark;
+use std::collections::HashMap;
 
 /// ISBWatermarkFetcher is the watermark fetcher for the incoming edges.
 pub(crate) struct ISBWatermarkFetcher {
@@ -107,7 +106,6 @@ impl ISBWatermarkFetcher {
 
     /// Fetches the latest idle WMB with the smallest watermark for the given partition
     /// Only returns one if all Publishers are idle and if it's the smallest one of any partitions
-    #[allow(dead_code)]
     pub(crate) async fn fetch_head_idle_watermark(&mut self) -> Result<Watermark> {
         let mut min_wm = i64::MAX;
         for (edge, processor_manager) in self.processor_managers.iter() {
@@ -143,7 +141,7 @@ impl ISBWatermarkFetcher {
                 }
             }
 
-            if min_wm == i64::MAX {
+            if epoch == i64::MAX {
                 continue;
             }
 

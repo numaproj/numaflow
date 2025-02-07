@@ -36,11 +36,16 @@ impl SourceWatermarkPublisher {
 
     /// Publishes the source watermark for the input partition. It internally uses edge publisher
     /// with processor set to the input partition and source OT.
-    pub(crate) async fn publish_source_watermark(&mut self, partition: u16, watermark: i64) {
+    pub(crate) async fn publish_source_watermark(
+        &mut self,
+        partition: u16,
+        watermark: i64,
+        idle: bool,
+    ) {
         // for source, we do partition-based watermark publishing rather than pod-based, hence
         // the processing entity is the partition itself. We create a publisher for each partition
         // and publish the watermark to it.
-        let processor_name = format!("{}-{}", self.source_config.vertex, partition);
+        let processor_name = format!("source-{}-{}", self.source_config.vertex, partition);
         // create a publisher if not exists
         if !self.publishers.contains_key(&processor_name) {
             let publisher = ISBWatermarkPublisher::new(
@@ -64,7 +69,7 @@ impl SourceWatermarkPublisher {
                 partition,
                 Utc::now().timestamp_micros(), // we don't care about the offsets
                 watermark,
-                false,
+                idle,
             )
             .await
             .expect("Failed to publish watermark");
@@ -79,11 +84,9 @@ impl SourceWatermarkPublisher {
         partition: u16,
         offset: i64,
         watermark: i64,
+        idle: bool,
     ) {
-        let processor_name = format!(
-            "{}-{}-{}",
-            self.source_config.vertex, vertex, input_partition
-        );
+        let processor_name = format!("{}-{}", self.source_config.vertex, input_partition);
         // In source, since we do partition-based watermark publishing rather than pod-based, we
         // create a publisher for each partition and publish the watermark to it.
         if !self.publishers.contains_key(&processor_name) {
@@ -103,7 +106,7 @@ impl SourceWatermarkPublisher {
         self.publishers
             .get_mut(&processor_name)
             .expect("Publisher not found")
-            .publish_watermark(vertex, partition, offset, watermark, false)
+            .publish_watermark(vertex, partition, offset, watermark, idle)
             .await
             .expect("Failed to publish watermark");
     }
@@ -159,7 +162,9 @@ mod tests {
                 .expect("Failed to create source publisher");
 
         // Publish source watermark for partition 0
-        source_publisher.publish_source_watermark(0, 100).await;
+        source_publisher
+            .publish_source_watermark(0, 100, false)
+            .await;
 
         let ot_bucket = js_context
             .get_key_value(ot_bucket_name)
@@ -263,7 +268,7 @@ mod tests {
 
         // Publish edge watermark for partition 0
         source_publisher
-            .publish_isb_watermark(0, stream.vertex, stream.partition, 1, 200)
+            .publish_isb_watermark(0, stream.vertex, stream.partition, 1, 200, false)
             .await;
 
         let ot_bucket = js_context

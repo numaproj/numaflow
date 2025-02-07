@@ -145,7 +145,7 @@ impl ISBWatermarkPublisher {
 
         // we can avoid publishing the watermark if it is <= the last published watermark (optimization)
         let last_state = &last_published_wm_state[partition as usize];
-        if offset <= last_state.offset || watermark <= last_state.watermark {
+        if offset < last_state.offset || watermark <= last_state.watermark {
             return Ok(());
         }
 

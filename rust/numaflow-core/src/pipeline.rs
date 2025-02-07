@@ -45,7 +45,15 @@ pub(crate) async fn start_forwarder(
             let source_watermark_handle = match &config.watermark_config {
                 Some(wm_config) => {
                     if let WatermarkConfig::Source(source_config) = wm_config {
-                        Some(SourceWatermarkHandle::new(js_context.clone(), source_config).await?)
+                        Some(
+                            SourceWatermarkHandle::new(
+                                config.read_timeout,
+                                js_context.clone(),
+                                &config.to_vertex_config,
+                                source_config,
+                            )
+                            .await?,
+                        )
                     } else {
                         None
                     }
@@ -73,6 +81,7 @@ pub(crate) async fn start_forwarder(
                             ISBWatermarkHandle::new(
                                 config.vertex_name,
                                 config.replica,
+                                config.read_timeout,
                                 js_context.clone(),
                                 edge_config,
                                 &config.to_vertex_config,
@@ -106,6 +115,7 @@ pub(crate) async fn start_forwarder(
                             ISBWatermarkHandle::new(
                                 config.vertex_name,
                                 config.replica,
+                                config.read_timeout,
                                 js_context.clone(),
                                 edge_config,
                                 &config.to_vertex_config,

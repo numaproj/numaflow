@@ -1,6 +1,7 @@
 use tokio_stream::StreamExt;
 
 use crate::config::components::source::GeneratorConfig;
+use crate::config::get_vertex_replica;
 use crate::message::{Message, Offset};
 use crate::reader;
 use crate::source;
@@ -351,8 +352,8 @@ impl source::SourceReader for GeneratorRead {
         Ok(messages)
     }
 
-    fn partitions(&self) -> Vec<u16> {
-        unimplemented!()
+    async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
+        Ok(vec![*get_vertex_replica()])
     }
 }
 

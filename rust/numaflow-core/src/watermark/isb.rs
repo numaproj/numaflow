@@ -17,10 +17,6 @@
 //! ```text
 //! (Write to ISB) -------> (Publish Watermark) ------> (Remove tracked Offset)
 //! ```
-
-use std::cmp::Ordering;
-use std::collections::{BTreeSet, HashMap};
-
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
 use crate::config::pipeline::ToVertexConfig;
 use crate::error::{Error, Result};
@@ -30,6 +26,9 @@ use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::Watermark;
+use std::cmp::Ordering;
+use std::collections::{BTreeSet, HashMap};
+use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tracing::error;
 
@@ -56,7 +55,7 @@ enum ISBWaterMarkActorMessage {
 }
 
 /// Tuple of offset and watermark. We will use this to track the inflight messages.
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Debug)]
 struct OffsetWatermark {
     /// offset can be -1 if watermark cannot be derived.
     offset: i64,
@@ -174,6 +173,10 @@ impl ISBWatermarkActor {
                     min_wm = self.fetcher.fetch_head_idle_watermark().await?;
                 }
 
+                if min_wm.timestamp_millis() == -1 {
+                    return Ok(());
+                }
+
                 let idle_partitions = self.idle_manager.fetch_idle_partitions().await;
                 for (vertex, partitions) in idle_partitions {
                     for partition in partitions {
@@ -243,6 +246,7 @@ impl ISBWatermarkHandle {
     pub(crate) async fn new(
         vertex_name: &'static str,
         vertex_replica: u16,
+        idle_timeout: Duration,
         js_context: async_nats::jetstream::Context,
         config: &EdgeWatermarkConfig,
         to_vertex_configs: &[ToVertexConfig],
@@ -267,7 +271,8 @@ impl ISBWatermarkHandle {
         )
         .await?;
 
-        let idle_manager = ISBIdleManager::new(to_vertex_configs, js_context.clone()).await;
+        let idle_manager =
+            ISBIdleManager::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
 
         let actor = ISBWatermarkActor::new(fetcher, publisher, idle_manager);
         tokio::spawn(async move { actor.run(receiver).await });
@@ -277,7 +282,7 @@ impl ISBWatermarkHandle {
         // start a task to keep publishing idle watermarks every 100ms
         tokio::spawn({
             let isb_watermark_handle = isb_watermark_handle.clone();
-            let mut interval_ticker = tokio::time::interval(std::time::Duration::from_millis(100));
+            let mut interval_ticker = tokio::time::interval(idle_timeout);
             async move {
                 loop {
                     interval_ticker.tick().await;
@@ -458,6 +463,7 @@ mod tests {
         let handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
+            Duration::from_millis(100),
             js_context.clone(),
             &edge_config,
             Default::default(),
@@ -516,7 +522,7 @@ mod tests {
                 assert_eq!(wmb.watermark, 100);
                 wmb_found = true;
             }
-            sleep(std::time::Duration::from_millis(10)).await;
+            sleep(Duration::from_millis(10)).await;
         }
 
         if !wmb_found {
@@ -556,7 +562,7 @@ mod tests {
                 assert_eq!(wmb.watermark, 200);
                 wmb_found = true;
             }
-            sleep(std::time::Duration::from_millis(10)).await;
+            sleep(Duration::from_millis(10)).await;
         }
 
         if !wmb_found {
@@ -627,6 +633,7 @@ mod tests {
         let handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
+            Duration::from_millis(100),
             js_context.clone(),
             &edge_config,
             Default::default(),
@@ -674,7 +681,7 @@ mod tests {
                 fetched_watermark = watermark.timestamp_millis();
                 break;
             }
-            sleep(std::time::Duration::from_millis(10)).await;
+            sleep(Duration::from_millis(10)).await;
             handle
                 .remove_offset(offset.clone())
                 .await

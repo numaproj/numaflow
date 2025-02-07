@@ -23,10 +23,8 @@
 //!
 //! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
-use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
-use tokio::task::JoinHandle;
 
 /// Responsible for fetch/publish cycle of watermark per offset for each stream in the ISB.
 pub(crate) mod isb;

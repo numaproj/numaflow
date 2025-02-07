@@ -65,7 +65,10 @@ impl OffsetTimeline {
                 error!("The new input offset should never be smaller than the existing offset");
             }
             (Ordering::Less, _) => {
-                error!("Watermark should not regress");
+                error!(
+                    "Watermark should not regress, current: {:?}, new: {:?}",
+                    element_node, node
+                );
             }
             (Ordering::Greater, Ordering::Equal) => {
                 info!(?node, "Idle Watermark detected");

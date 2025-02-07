@@ -395,11 +395,6 @@ impl JetstreamWriter {
                         return;
                     }
                 }
-
-                this.tracker_handle
-                    .delete(message.offset.clone())
-                    .await
-                    .expect("Failed to delete offset from tracker");
             }
 
             // now the pafs have resolved, lets use the offsets to send watermark
@@ -415,6 +410,11 @@ impl JetstreamWriter {
                     .await;
                 }
             }
+
+            this.tracker_handle
+                .delete(message.offset.clone())
+                .await
+                .expect("Failed to delete offset from tracker");
 
             pipeline_metrics()
                 .isb
