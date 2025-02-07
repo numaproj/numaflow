@@ -85,7 +85,6 @@ impl ISBIdleManager {
                 .read()
                 .expect("Failed to get read lock");
             let last_published_wm = read_guard.get(vertex).expect("Invalid vertex");
-
             last_published_wm[partition as usize].clone()
         };
 
@@ -103,9 +102,7 @@ impl ISBIdleManager {
             .js_context
             .publish(idle_state.stream.name, ctrl_msg_bytes.freeze())
             .await
-            .map_err(|e| crate::error::Error::Watermark(e.to_string()))?;
-
-        let offset = offset
+            .map_err(|e| crate::error::Error::Watermark(e.to_string()))?
             .await
             .map_err(|e| crate::error::Error::Watermark(e.to_string()))?
             .sequence;
@@ -132,19 +129,21 @@ impl ISBIdleManager {
             .read()
             .expect("Failed to get read lock");
 
-        let mut idle_partitions = HashMap::new();
-        for (vertex, partitions) in read_guard.iter() {
-            let mut idle_partition = vec![];
-            for (partition, idle_state) in partitions.iter().enumerate() {
-                if Utc::now().timestamp_millis() - idle_state.last_published_time.timestamp_millis()
-                    > self.idle_timeout.as_millis() as i64
-                {
-                    idle_partition.push(partition as u16);
-                }
-            }
-            idle_partitions.insert(*vertex, idle_partition);
-        }
-        idle_partitions
+        read_guard
+            .iter()
+            .map(|(vertex, partitions)| {
+                let idle_partition = partitions
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, state)| {
+                        Utc::now().timestamp_millis() - state.last_published_time.timestamp_millis()
+                            > self.idle_timeout.as_millis() as i64
+                    })
+                    .map(|(partition, _)| partition as u16)
+                    .collect();
+                (*vertex, idle_partition)
+            })
+            .collect()
     }
 
     /// fetch all the partitions for the vertices.
@@ -153,14 +152,17 @@ impl ISBIdleManager {
             .last_published_wm
             .read()
             .expect("Failed to get read lock");
-        let mut all_partitions = HashMap::new();
-        for (vertex, partitions) in read_guard.iter() {
-            let mut all_partition = vec![];
-            for (partition, _) in partitions.iter().enumerate() {
-                all_partition.push(partition as u16);
-            }
-            all_partitions.insert(*vertex, all_partition);
-        }
-        all_partitions
+
+        read_guard
+            .iter()
+            .map(|(vertex, partitions)| {
+                let all_partition = partitions
+                    .iter()
+                    .enumerate()
+                    .map(|(partition, _)| partition as u16)
+                    .collect();
+                (*vertex, all_partition)
+            })
+            .collect()
     }
 }

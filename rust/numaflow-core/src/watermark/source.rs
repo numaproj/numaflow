@@ -90,6 +90,8 @@ impl SourceWatermarkActor {
     /// Handles the SourceActorMessage.
     async fn handle_message(&mut self, message: SourceActorMessage) -> Result<()> {
         match message {
+            // publish the watermark for the messages read from the source to the source bucket
+            // we consider the min event time that we have seen in the batch for each partition
             SourceActorMessage::PublishSourceWatermark { map } => {
                 if map.is_empty() {
                     return Ok(());
@@ -98,6 +100,7 @@ impl SourceWatermarkActor {
                     self.publisher
                         .publish_source_watermark(partition, event_time, false)
                         .await;
+                    // cache the active input partitions, we need it for publishing isb idle watermark
                     self.active_input_partitions.insert(partition, true);
                 }
                 if let Some(source_idle_manager) = &mut self.source_idle_manager {
@@ -105,6 +108,7 @@ impl SourceWatermarkActor {
                 }
             }
 
+            // publish the watermark for the messages written to ISB
             SourceActorMessage::PublishISBWatermark {
                 offset,
                 vertex,
@@ -122,34 +126,43 @@ impl SourceWatermarkActor {
                         false,
                     )
                     .await;
+                // mark the vertex and partition as active since we published the watermark
                 self.isb_idle_manager.mark_active(vertex, partition).await;
             }
 
+            // publish the idle watermark for the given partitions(when source is not reading any
+            // messages)
             SourceActorMessage::PublishSourceIdleWatermark { partitions } => {
                 let Some(source_idle_manager) = &mut self.source_idle_manager else {
                     return Ok(());
                 };
 
+                // check if idling is enabled on source and all conditions are met
                 if !source_idle_manager.is_source_idling() {
                     return Ok(());
                 }
 
+                // update and fetch the idle watermark that should be published
                 let compute_wm = self.fetcher.fetch_source_watermark()?;
                 let idle_wm =
                     source_idle_manager.update_and_fetch_idle_wm(compute_wm.timestamp_millis());
 
+                // publish the idle watermark for the given partitions
                 for partition in partitions.iter() {
                     self.publisher
                         .publish_source_watermark(*partition, idle_wm, true)
                         .await;
                 }
 
-                // we need to propagate the idle watermark to isb also
+                // since isb will also be idling since we are not reading any data
+                // we need to propagate idle watermarks to ISB
                 let compute_wm = self.fetcher.fetch_source_watermark()?;
                 if compute_wm.timestamp_millis() == -1 {
                     return Ok(());
                 }
 
+                // all the isb partitions will be idling because the source is idling, fetch the idle offset
+                // for each vertex and partition and publish the idle watermark
                 let vertex_partitions = self.isb_idle_manager.fetch_all_partitions().await;
                 for (vertex, isb_partitions) in vertex_partitions {
                     for isb_partition in isb_partitions {
@@ -171,6 +184,7 @@ impl SourceWatermarkActor {
                                 .await;
                         }
 
+                        // mark the vertex and partition as idle, since we published the idle watermark
                         self.isb_idle_manager
                             .mark_idle(vertex, isb_partition, offset)
                             .await;
@@ -178,19 +192,26 @@ impl SourceWatermarkActor {
                 }
             }
 
+            // publish the idle watermark for the ISB partitions, this will be invoked by the periodic
+            // task which keeps check every idle_timeout duration to see if there are any idle partitions
+            // branch idling case(cf)
             SourceActorMessage::PublishISBIdleWatermark => {
-                // if source is idling ignore
+                // if source is idling, we can avoid publishing the idle watermark since we publish
+                // the idle watermark for all the downstream partitions in the source idling control flow
                 if let Some(source_idle_manager) = &self.source_idle_manager {
                     if source_idle_manager.is_source_idling() {
                         return Ok(());
                     }
                 }
 
+                // fetch the source watermark, identify the idle partitions and publish the idle watermark
                 let compute_wm = self.fetcher.fetch_source_watermark()?;
                 if compute_wm.timestamp_millis() == -1 {
                     return Ok(());
                 }
 
+                // we should only publish to active input partitions, because we consider input-partitions as
+                // the processing entity while publishing watermark inside source
                 let idle_vertices = self.isb_idle_manager.fetch_idle_partitions().await;
                 for (vertex, idle_partitions) in idle_vertices {
                     for idle_partition in idle_partitions {
@@ -216,6 +237,7 @@ impl SourceWatermarkActor {
                             .await;
                     }
                 }
+                // clear the cache since we published the idle watermarks
                 self.active_input_partitions.clear();
             }
         }

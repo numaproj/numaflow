@@ -121,8 +121,7 @@ impl ISBWatermarkActor {
             ISBWaterMarkActorMessage::FetchWatermark { offset, oneshot_tx } => {
                 let watermark = self
                     .fetcher
-                    .fetch_watermark(offset.offset, offset.partition_idx)
-                    .await?;
+                    .fetch_watermark(offset.offset, offset.partition_idx)?;
 
                 oneshot_tx
                     .send(Ok(watermark))
@@ -165,18 +164,22 @@ impl ISBWatermarkActor {
 
             // publishes the idle watermark for the downstream idle partitions
             ISBWaterMarkActorMessage::PublishIdleWatermark => {
+                // if there are any inflight messages, consider the lowest watermark among them
                 let mut min_wm = self
                     .get_lowest_watermark()
                     .unwrap_or(Watermark::from_timestamp_millis(-1).expect("failed to parse time"));
 
+                // if there are no inflight messages, use the head idle watermark
                 if min_wm.timestamp_millis() == -1 {
-                    min_wm = self.fetcher.fetch_head_idle_watermark().await?;
+                    min_wm = self.fetcher.fetch_head_idle_watermark()?;
                 }
 
                 if min_wm.timestamp_millis() == -1 {
                     return Ok(());
                 }
 
+                // publish the idle watermark for the idle partitions, we identify the partition as idle
+                // if we have not published any watermark for that partition for a certain time(idle timeout)
                 let idle_partitions = self.idle_manager.fetch_idle_partitions().await;
                 for (vertex, partitions) in idle_partitions {
                     for partition in partitions {
@@ -279,7 +282,7 @@ impl ISBWatermarkHandle {
 
         let isb_watermark_handle = Self { sender };
 
-        // start a task to keep publishing idle watermarks every 100ms
+        // start a task to keep publishing idle watermarks every idle_timeout
         tokio::spawn({
             let isb_watermark_handle = isb_watermark_handle.clone();
             let mut interval_ticker = tokio::time::interval(idle_timeout);
