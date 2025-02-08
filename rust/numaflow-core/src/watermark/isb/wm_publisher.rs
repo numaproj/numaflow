@@ -442,4 +442,85 @@ mod tests {
             .await
             .unwrap();
     }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_isb_publisher_idle_flag() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let ot_bucket_name = "isb_publisher_idle_flag_OT";
+        let hb_bucket_name = "isb_publisher_idle_flag_PROCESSORS";
+
+        let bucket_configs = vec![BucketConfig {
+            vertex: "v1",
+            partitions: 1,
+            ot_bucket: ot_bucket_name,
+            hb_bucket: hb_bucket_name,
+        }];
+
+        // create key value stores
+        js_context
+            .create_key_value(Config {
+                bucket: ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        js_context
+            .create_key_value(Config {
+                bucket: hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut publisher = ISBWatermarkPublisher::new(
+            "processor1".to_string(),
+            js_context.clone(),
+            &bucket_configs,
+        )
+        .await
+        .expect("Failed to create publisher");
+
+        let stream = Stream {
+            name: "v1-0",
+            vertex: "v1",
+            partition: 0,
+        };
+
+        // Publish watermark with idle flag set to true
+        publisher
+            .publish_watermark(&stream, 1, 100, true)
+            .await
+            .expect("Failed to publish watermark");
+
+        let ot_bucket = js_context
+            .get_key_value(ot_bucket_name)
+            .await
+            .expect("Failed to get ot bucket");
+
+        let wmb = ot_bucket
+            .get("processor1")
+            .await
+            .expect("Failed to get wmb");
+        assert!(wmb.is_some());
+
+        let wmb: WMB = wmb.unwrap().try_into().unwrap();
+        assert_eq!(wmb.offset, 1);
+        assert_eq!(wmb.watermark, 100);
+        assert!(wmb.idle);
+
+        // delete the stores
+        js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await
+            .unwrap();
+    }
 }

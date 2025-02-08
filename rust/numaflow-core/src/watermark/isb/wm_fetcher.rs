@@ -841,4 +841,531 @@ mod tests {
         let watermark_p1 = fetcher.fetch_watermark(32, 1).unwrap();
         assert_eq!(watermark_p1.timestamp_millis(), 150);
     }
+
+    #[tokio::test]
+    async fn test_fetch_head_idle_watermark_single_edge_single_processor_single_partition() {
+        // Create a ProcessorManager with a single Processor and a single OffsetTimeline
+        let processor_name = Bytes::from("processor1");
+        let mut processor = Processor::new(processor_name.clone(), Status::Active, 1);
+        let timeline = OffsetTimeline::new(10);
+
+        // Populate the OffsetTimeline with sorted WMB entries
+        let wmb1 = WMB {
+            watermark: 100,
+            offset: 1,
+            idle: true,
+            partition: 0,
+        };
+        let wmb2 = WMB {
+            watermark: 200,
+            offset: 2,
+            idle: true,
+            partition: 0,
+        };
+
+        timeline.put(wmb1);
+        timeline.put(wmb2);
+
+        processor.timelines[0] = timeline;
+
+        let mut processors = HashMap::new();
+        processors.insert(processor_name.clone(), processor);
+
+        let processor_manager = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors)),
+            handles: vec![],
+        };
+
+        let mut processor_managers = HashMap::new();
+        processor_managers.insert("from_vtx", processor_manager);
+
+        let bucket_config = BucketConfig {
+            vertex: "from_vtx",
+            ot_bucket: "ot_bucket",
+            hb_bucket: "hb_bucket",
+            partitions: 1,
+        };
+
+        let mut fetcher = ISBWatermarkFetcher::new(processor_managers, &[bucket_config])
+            .await
+            .unwrap();
+
+        // Invoke fetch_head_idle_watermark and verify the result
+        let watermark = fetcher.fetch_head_idle_watermark().unwrap();
+        assert_eq!(watermark.timestamp_millis(), 200);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_head_idle_watermark_single_edge_multi_processor_single_partition() {
+        // Create ProcessorManager with multiple Processors and different OffsetTimelines
+        let processor_name1 = Bytes::from("processor1");
+        let processor_name2 = Bytes::from("processor2");
+
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, 1);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, 1);
+
+        let timeline1 = OffsetTimeline::new(10);
+        let timeline2 = OffsetTimeline::new(10);
+
+        // Populate the OffsetTimelines with sorted WMB entries
+        let wmbs1 = vec![
+            WMB {
+                watermark: 100,
+                offset: 5,
+                idle: true,
+                partition: 0,
+            },
+            WMB {
+                watermark: 150,
+                offset: 10,
+                idle: true,
+                partition: 0,
+            },
+        ];
+        let wmbs2 = vec![
+            WMB {
+                watermark: 110,
+                offset: 3,
+                idle: true,
+                partition: 0,
+            },
+            WMB {
+                watermark: 160,
+                offset: 8,
+                idle: true,
+                partition: 0,
+            },
+        ];
+
+        for wmb in wmbs1 {
+            timeline1.put(wmb);
+        }
+        for wmb in wmbs2 {
+            timeline2.put(wmb);
+        }
+
+        processor1.timelines[0] = timeline1;
+        processor2.timelines[0] = timeline2;
+
+        let mut processors = HashMap::new();
+        processors.insert(processor_name1.clone(), processor1);
+        processors.insert(processor_name2.clone(), processor2);
+
+        let processor_manager = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors)),
+            handles: vec![],
+        };
+
+        let mut processor_managers = HashMap::new();
+        processor_managers.insert("from_vtx", processor_manager);
+
+        let bucket_config = BucketConfig {
+            vertex: "from_vtx",
+            ot_bucket: "ot_bucket",
+            hb_bucket: "hb_bucket",
+            partitions: 1,
+        };
+
+        let mut fetcher = ISBWatermarkFetcher::new(processor_managers, &[bucket_config])
+            .await
+            .unwrap();
+
+        // Invoke fetch_head_idle_watermark and verify the result
+        let watermark = fetcher.fetch_head_idle_watermark().unwrap();
+        assert_eq!(watermark.timestamp_millis(), 150);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_head_idle_watermark_single_edge_multi_processor_multi_partition() {
+        // Create ProcessorManager with multiple Processors and different OffsetTimelines
+        let processor_name1 = Bytes::from("processor1");
+        let processor_name2 = Bytes::from("processor2");
+
+        let mut processor1 = Processor::new(processor_name1.clone(), Status::Active, 2);
+        let mut processor2 = Processor::new(processor_name2.clone(), Status::Active, 2);
+
+        let timeline1_p0 = OffsetTimeline::new(10);
+        let timeline1_p1 = OffsetTimeline::new(10);
+        let timeline2_p0 = OffsetTimeline::new(10);
+        let timeline2_p1 = OffsetTimeline::new(10);
+
+        // Populate the OffsetTimelines with sorted WMB entries
+        let wmbs1_p0 = vec![
+            WMB {
+                watermark: 100,
+                offset: 6,
+                idle: true,
+                partition: 0,
+            },
+            WMB {
+                watermark: 150,
+                offset: 10,
+                idle: true,
+                partition: 0,
+            },
+        ];
+        let wmbs1_p1 = vec![
+            WMB {
+                watermark: 110,
+                offset: 25,
+                idle: true,
+                partition: 1,
+            },
+            WMB {
+                watermark: 160,
+                offset: 30,
+                idle: true,
+                partition: 1,
+            },
+        ];
+        let wmbs2_p0 = vec![
+            WMB {
+                watermark: 120,
+                offset: 3,
+                idle: true,
+                partition: 0,
+            },
+            WMB {
+                watermark: 170,
+                offset: 8,
+                idle: true,
+                partition: 0,
+            },
+        ];
+        let wmbs2_p1 = vec![
+            WMB {
+                watermark: 130,
+                offset: 23,
+                idle: true,
+                partition: 1,
+            },
+            WMB {
+                watermark: 180,
+                offset: 28,
+                idle: true,
+                partition: 1,
+            },
+        ];
+
+        for wmb in wmbs1_p0 {
+            timeline1_p0.put(wmb);
+        }
+        for wmb in wmbs1_p1 {
+            timeline1_p1.put(wmb);
+        }
+        for wmb in wmbs2_p0 {
+            timeline2_p0.put(wmb);
+        }
+        for wmb in wmbs2_p1 {
+            timeline2_p1.put(wmb);
+        }
+
+        processor1.timelines[0] = timeline1_p0;
+        processor1.timelines[1] = timeline1_p1;
+        processor2.timelines[0] = timeline2_p0;
+        processor2.timelines[1] = timeline2_p1;
+
+        let mut processors = HashMap::new();
+        processors.insert(processor_name1.clone(), processor1);
+        processors.insert(processor_name2.clone(), processor2);
+
+        let processor_manager = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors)),
+            handles: vec![],
+        };
+
+        let mut processor_managers = HashMap::new();
+        processor_managers.insert("from_vtx", processor_manager);
+
+        let bucket_config = BucketConfig {
+            vertex: "from_vtx",
+            ot_bucket: "ot_bucket",
+            hb_bucket: "hb_bucket",
+            partitions: 2,
+        };
+
+        let mut fetcher = ISBWatermarkFetcher::new(processor_managers, &[bucket_config])
+            .await
+            .unwrap();
+
+        // Invoke fetch_head_idle_watermark and verify the result
+        let watermark = fetcher.fetch_head_idle_watermark().unwrap();
+        assert_eq!(watermark.timestamp_millis(), 150);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_head_idle_watermark_two_edges_multi_processor_multi_partition() {
+        // Create ProcessorManagers with multiple Processors and different OffsetTimelines for edge1
+        let processor_name1_edge1 = Bytes::from("processor1_edge1");
+        let processor_name2_edge1 = Bytes::from("processor2_edge1");
+
+        let mut processor1_edge1 = Processor::new(processor_name1_edge1.clone(), Status::Active, 2);
+        let mut processor2_edge1 = Processor::new(processor_name2_edge1.clone(), Status::Active, 2);
+
+        let timeline1_p0_edge1 = OffsetTimeline::new(10);
+        let timeline1_p1_edge1 = OffsetTimeline::new(10);
+        let timeline2_p0_edge1 = OffsetTimeline::new(10);
+        let timeline2_p1_edge1 = OffsetTimeline::new(10);
+
+        // Populate the OffsetTimelines with sorted WMB entries
+        let wmbs1_p0_edge1 = vec![
+            WMB {
+                watermark: 100,
+                offset: 6,
+                idle: true,
+                partition: 0,
+            },
+            WMB {
+                watermark: 150,
+                offset: 10,
+                idle: true,
+                partition: 0,
+            },
+        ];
+        let wmbs1_p1_edge1 = vec![
+            WMB {
+                watermark: 110,
+                offset: 25,
+                idle: true,
+                partition: 1,
+            },
+            WMB {
+                watermark: 160,
+                offset: 30,
+                idle: true,
+                partition: 1,
+            },
+        ];
+        let wmbs2_p0_edge1 = vec![
+            WMB {
+                watermark: 120,
+                offset: 3,
+                idle: true,
+                partition: 0,
+            },
+            WMB {
+                watermark: 170,
+                offset: 8,
+                idle: true,
+                partition: 0,
+            },
+        ];
+        let wmbs2_p1_edge1 = vec![
+            WMB {
+                watermark: 130,
+                offset: 23,
+                idle: true,
+                partition: 1,
+            },
+            WMB {
+                watermark: 180,
+                offset: 28,
+                idle: true,
+                partition: 1,
+            },
+        ];
+
+        for wmb in wmbs1_p0_edge1 {
+            timeline1_p0_edge1.put(wmb);
+        }
+        for wmb in wmbs1_p1_edge1 {
+            timeline1_p1_edge1.put(wmb);
+        }
+        for wmb in wmbs2_p0_edge1 {
+            timeline2_p0_edge1.put(wmb);
+        }
+        for wmb in wmbs2_p1_edge1 {
+            timeline2_p1_edge1.put(wmb);
+        }
+
+        processor1_edge1.timelines[0] = timeline1_p0_edge1;
+        processor1_edge1.timelines[1] = timeline1_p1_edge1;
+        processor2_edge1.timelines[0] = timeline2_p0_edge1;
+        processor2_edge1.timelines[1] = timeline2_p1_edge1;
+
+        let mut processors_edge1 = HashMap::new();
+        processors_edge1.insert(processor_name1_edge1.clone(), processor1_edge1);
+        processors_edge1.insert(processor_name2_edge1.clone(), processor2_edge1);
+
+        let processor_manager_edge1 = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors_edge1)),
+            handles: vec![],
+        };
+
+        // Create ProcessorManagers with multiple Processors and different OffsetTimelines for edge2
+        let processor_name1_edge2 = Bytes::from("processor1_edge2");
+        let processor_name2_edge2 = Bytes::from("processor2_edge2");
+
+        let mut processor1_edge2 = Processor::new(processor_name1_edge2.clone(), Status::Active, 2);
+        let mut processor2_edge2 = Processor::new(processor_name2_edge2.clone(), Status::Active, 2);
+
+        let timeline1_p0_edge2 = OffsetTimeline::new(10);
+        let timeline1_p1_edge2 = OffsetTimeline::new(10);
+        let timeline2_p0_edge2 = OffsetTimeline::new(10);
+        let timeline2_p1_edge2 = OffsetTimeline::new(10);
+
+        // Populate the OffsetTimelines with sorted WMB entries
+        let wmbs1_p0_edge2 = vec![
+            WMB {
+                watermark: 140,
+                offset: 2,
+                idle: true,
+                partition: 0,
+            },
+            WMB {
+                watermark: 190,
+                offset: 7,
+                idle: true,
+                partition: 0,
+            },
+        ];
+        let wmbs1_p1_edge2 = vec![
+            WMB {
+                watermark: 150,
+                offset: 22,
+                idle: true,
+                partition: 1,
+            },
+            WMB {
+                watermark: 200,
+                offset: 27,
+                idle: true,
+                partition: 1,
+            },
+        ];
+        let wmbs2_p0_edge2 = vec![
+            WMB {
+                watermark: 160,
+                offset: 4,
+                idle: true,
+                partition: 0,
+            },
+            WMB {
+                watermark: 210,
+                offset: 9,
+                idle: true,
+                partition: 0,
+            },
+        ];
+        let wmbs2_p1_edge2 = vec![
+            WMB {
+                watermark: 170,
+                offset: 24,
+                idle: true,
+                partition: 1,
+            },
+            WMB {
+                watermark: 220,
+                offset: 29,
+                idle: true,
+                partition: 1,
+            },
+        ];
+
+        for wmb in wmbs1_p0_edge2 {
+            timeline1_p0_edge2.put(wmb);
+        }
+        for wmb in wmbs1_p1_edge2 {
+            timeline1_p1_edge2.put(wmb);
+        }
+        for wmb in wmbs2_p0_edge2 {
+            timeline2_p0_edge2.put(wmb);
+        }
+        for wmb in wmbs2_p1_edge2 {
+            timeline2_p1_edge2.put(wmb);
+        }
+
+        processor1_edge2.timelines[0] = timeline1_p0_edge2;
+        processor1_edge2.timelines[1] = timeline1_p1_edge2;
+        processor2_edge2.timelines[0] = timeline2_p0_edge2;
+        processor2_edge2.timelines[1] = timeline2_p1_edge2;
+
+        let mut processors_edge2 = HashMap::new();
+        processors_edge2.insert(processor_name1_edge2.clone(), processor1_edge2);
+        processors_edge2.insert(processor_name2_edge2.clone(), processor2_edge2);
+
+        let processor_manager_edge2 = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors_edge2)),
+            handles: vec![],
+        };
+
+        let mut processor_managers = HashMap::new();
+        processor_managers.insert("edge1", processor_manager_edge1);
+        processor_managers.insert("edge2", processor_manager_edge2);
+
+        let bucket_config1 = BucketConfig {
+            vertex: "edge1",
+            ot_bucket: "ot_bucket1",
+            hb_bucket: "hb_bucket1",
+            partitions: 2,
+        };
+        let bucket_config2 = BucketConfig {
+            vertex: "edge2",
+            ot_bucket: "ot_bucket2",
+            hb_bucket: "hb_bucket2",
+            partitions: 2,
+        };
+
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config1, bucket_config2])
+                .await
+                .unwrap();
+
+        // Invoke fetch_head_idle_watermark and verify the result
+        let watermark = fetcher.fetch_head_idle_watermark().unwrap();
+        assert_eq!(watermark.timestamp_millis(), 150);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_head_idle_watermark_not_idle() {
+        // Create a ProcessorManager with a single Processor and a single OffsetTimeline
+        let processor_name = Bytes::from("processor1");
+        let mut processor = Processor::new(processor_name.clone(), Status::Active, 1);
+        let timeline = OffsetTimeline::new(10);
+
+        // Populate the OffsetTimeline with sorted WMB entries
+        let wmb1 = WMB {
+            watermark: 100,
+            offset: 1,
+            idle: true,
+            partition: 0,
+        };
+        let wmb2 = WMB {
+            watermark: 200,
+            offset: 2,
+            idle: false, // Not idle
+            partition: 0,
+        };
+
+        timeline.put(wmb1);
+        timeline.put(wmb2);
+
+        processor.timelines[0] = timeline;
+
+        let mut processors = HashMap::new();
+        processors.insert(processor_name.clone(), processor);
+
+        let processor_manager = ProcessorManager {
+            processors: Arc::new(RwLock::new(processors)),
+            handles: vec![],
+        };
+
+        let mut processor_managers = HashMap::new();
+        processor_managers.insert("from_vtx", processor_manager);
+
+        let bucket_config = BucketConfig {
+            vertex: "from_vtx",
+            ot_bucket: "ot_bucket",
+            hb_bucket: "hb_bucket",
+            partitions: 1,
+        };
+
+        let mut fetcher = ISBWatermarkFetcher::new(processor_managers, &[bucket_config])
+            .await
+            .unwrap();
+
+        // Invoke fetch_head_idle_watermark and verify the result
+        let watermark = fetcher.fetch_head_idle_watermark().unwrap();
+        assert_eq!(watermark.timestamp_millis(), -1);
+    }
 }
