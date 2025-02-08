@@ -155,3 +155,156 @@ impl ISBIdleManager {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::pipeline::isb::BufferWriterConfig;
+    use crate::config::pipeline::isb::Stream;
+    use crate::config::pipeline::ToVertexConfig;
+    use async_nats::jetstream;
+    use async_nats::jetstream::stream;
+    use std::time::Duration;
+    use tokio::time::sleep;
+
+    #[tokio::test]
+    async fn test_mark_active() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let stream = Stream::new("test_stream", "test_vertex", 0);
+        let to_vertex_config = ToVertexConfig {
+            name: "test_vertex",
+            partitions: 1,
+            writer_config: BufferWriterConfig {
+                streams: vec![stream.clone()],
+                ..Default::default()
+            },
+            conditions: None,
+        };
+
+        let mut manager =
+            ISBIdleManager::new(Duration::from_millis(100), &[to_vertex_config], js_context).await;
+
+        manager.mark_active(&stream).await;
+
+        let read_guard = manager
+            .last_published_wm
+            .read()
+            .expect("Failed to get read lock");
+        let idle_state = &read_guard["test_vertex"][0];
+        assert_eq!(idle_state.stream, stream);
+        assert!(idle_state.ctrl_msg_offset.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_fetch_idle_offset() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+        let stream = Stream::new("test_stream", "test_vertex", 0);
+
+        // Delete stream if it exists
+        let _ = js_context.delete_stream(stream.name).await;
+        let _stream = js_context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let to_vertex_config = ToVertexConfig {
+            name: "test_vertex",
+            partitions: 1,
+            writer_config: BufferWriterConfig {
+                streams: vec![stream.clone()],
+                ..Default::default()
+            },
+            conditions: None,
+        };
+
+        let manager =
+            ISBIdleManager::new(Duration::from_millis(100), &[to_vertex_config], js_context).await;
+
+        let offset = manager
+            .fetch_idle_offset(&stream)
+            .await
+            .expect("Failed to fetch idle offset");
+        assert!(offset > 0);
+    }
+
+    #[tokio::test]
+    async fn test_mark_idle() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let stream = Stream::new("test_stream", "test_vertex", 0);
+        // Delete stream if it exists
+        let _ = js_context.delete_stream(stream.name).await;
+        let _stream = js_context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let to_vertex_config = ToVertexConfig {
+            name: "test_vertex",
+            partitions: 1,
+            writer_config: BufferWriterConfig {
+                streams: vec![stream.clone()],
+                ..Default::default()
+            },
+            conditions: None,
+        };
+
+        let mut manager =
+            ISBIdleManager::new(Duration::from_millis(100), &[to_vertex_config], js_context).await;
+
+        let offset = manager
+            .fetch_idle_offset(&stream)
+            .await
+            .expect("Failed to fetch idle offset");
+        manager.mark_idle(&stream, offset).await;
+
+        let read_guard = manager
+            .last_published_wm
+            .read()
+            .expect("Failed to get read lock");
+        let idle_state = &read_guard["test_vertex"][0];
+        assert_eq!(idle_state.ctrl_msg_offset, Some(offset));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_idle_streams() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let stream = Stream::new("test_stream", "test_vertex", 0);
+        let to_vertex_config = ToVertexConfig {
+            name: "test_vertex",
+            partitions: 1,
+            writer_config: BufferWriterConfig {
+                streams: vec![stream.clone()],
+                ..Default::default()
+            },
+            conditions: None,
+        };
+
+        let mut manager =
+            ISBIdleManager::new(Duration::from_millis(10), &[to_vertex_config], js_context).await;
+
+        // Mark the stream as active first
+        manager.mark_active(&stream).await;
+
+        // Simulate idle timeout
+        sleep(Duration::from_millis(20)).await;
+
+        let idle_streams = manager.fetch_idle_streams().await;
+        assert_eq!(idle_streams.len(), 1);
+        assert_eq!(idle_streams[0], stream);
+    }
+}

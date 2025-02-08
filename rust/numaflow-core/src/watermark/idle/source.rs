@@ -67,3 +67,63 @@ impl SourceIdleManager {
         idle_wm
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::pipeline::watermark::IdleConfig;
+    use std::time::Duration;
+
+    #[test]
+    fn test_is_source_idling() {
+        let config = IdleConfig {
+            threshold: Duration::from_millis(100),
+            step_interval: Duration::from_millis(50),
+            increment_by: Duration::from_millis(10),
+        };
+        let mut manager = SourceIdleManager::new(config);
+
+        // Initially, the source should not be idling
+        assert!(!manager.is_source_idling());
+
+        // Simulate the source idling by advancing the updated timestamp
+        manager.updated_ts = Utc::now() - chrono::Duration::milliseconds(200);
+        assert!(manager.is_source_idling());
+    }
+
+    #[test]
+    fn test_reset() {
+        let config = IdleConfig {
+            threshold: Duration::from_millis(100),
+            step_interval: Duration::from_millis(50),
+            increment_by: Duration::from_millis(10),
+        };
+        let mut manager = SourceIdleManager::new(config);
+
+        // Simulate the source idling by advancing the updated timestamp
+        manager.updated_ts = Utc::now() - chrono::Duration::milliseconds(200);
+        assert!(manager.is_source_idling());
+
+        // Reset the manager and check if the source is no longer idling
+        manager.reset();
+        assert!(!manager.is_source_idling());
+    }
+
+    #[test]
+    fn test_update_and_fetch_idle_wm() {
+        let config = IdleConfig {
+            threshold: Duration::from_millis(100),
+            step_interval: Duration::from_millis(50),
+            increment_by: Duration::from_millis(10),
+        };
+        let mut manager = SourceIdleManager::new(config);
+
+        // Update and fetch idle watermark with computed_wm = -1
+        let idle_wm = manager.update_and_fetch_idle_wm(-1);
+        assert!(idle_wm > 0);
+
+        // Update and fetch idle watermark with a valid computed_wm
+        let idle_wm = manager.update_and_fetch_idle_wm(1000);
+        assert_eq!(idle_wm, 1010);
+    }
+}
