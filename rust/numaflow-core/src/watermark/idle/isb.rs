@@ -63,29 +63,27 @@ impl ISBIdleManager {
     }
 
     /// marks the partition as active, updates the last published time and resets the ctrl message offset.
-    pub(crate) async fn mark_active(&mut self, vertex: &'static str, partition: u16) {
+    pub(crate) async fn mark_active(&mut self, stream: &Stream) {
         let mut write_guard = self
             .last_published_wm
             .write()
             .expect("Failed to get write lock");
-        let last_published_wm = write_guard.get_mut(vertex).expect("Invalid vertex");
-        last_published_wm[partition as usize].last_published_time = Utc::now();
-        last_published_wm[partition as usize].ctrl_msg_offset = None;
+        let last_published_wm = write_guard
+            .get_mut(stream.vertex)
+            .expect(format!("Invalid vertex: {}", stream.vertex).as_str());
+        last_published_wm[stream.partition as usize].last_published_time = Utc::now();
+        last_published_wm[stream.partition as usize].ctrl_msg_offset = None;
     }
 
     /// fetches the offset to be used for publishing the idle watermark.
-    pub(crate) async fn fetch_idle_offset(
-        &self,
-        vertex: &'static str,
-        partition: u16,
-    ) -> crate::error::Result<i64> {
+    pub(crate) async fn fetch_idle_offset(&self, stream: &Stream) -> crate::error::Result<i64> {
         let idle_state = {
             let read_guard = self
                 .last_published_wm
                 .read()
                 .expect("Failed to get read lock");
-            let last_published_wm = read_guard.get(vertex).expect("Invalid vertex");
-            last_published_wm[partition as usize].clone()
+            let last_published_wm = read_guard.get(stream.vertex).expect("Invalid vertex");
+            last_published_wm[stream.partition as usize].clone()
         };
 
         if let Some(offset) = idle_state.ctrl_msg_offset {
@@ -111,19 +109,19 @@ impl ISBIdleManager {
     }
 
     /// marks the partition as idle, by setting the ctrl message offset and updates the last published time.
-    pub(crate) async fn mark_idle(&mut self, vertex: &'static str, partition: u16, offset: i64) {
+    pub(crate) async fn mark_idle(&mut self, stream: &Stream, offset: i64) {
         let mut write_guard = self
             .last_published_wm
             .write()
             .expect("Failed to get write lock");
-        let last_published_wm = write_guard.get_mut(vertex).expect("Invalid vertex");
-        last_published_wm[partition as usize].ctrl_msg_offset = Some(offset);
-        last_published_wm[partition as usize].last_published_time = Utc::now();
+        let last_published_wm = write_guard.get_mut(stream.vertex).expect("Invalid vertex");
+        last_published_wm[stream.partition as usize].ctrl_msg_offset = Some(offset);
+        last_published_wm[stream.partition as usize].last_published_time = Utc::now();
     }
 
-    /// fetches the idle partitions for the vertices, we consider a partition as idle if the last published
+    /// fetches the idle streams, we consider a stream as idle if the last published
     /// time is greater than the idle timeout.
-    pub(crate) async fn fetch_idle_partitions(&self) -> HashMap<&'static str, Vec<u16>> {
+    pub(crate) async fn fetch_idle_streams(&self) -> Vec<Stream> {
         let read_guard = self
             .last_published_wm
             .read()
@@ -131,23 +129,21 @@ impl ISBIdleManager {
 
         read_guard
             .iter()
-            .map(|(vertex, partitions)| {
-                let idle_partition = partitions
+            .flat_map(|(_, partitions)| {
+                partitions
                     .iter()
-                    .enumerate()
-                    .filter(|(_, state)| {
-                        Utc::now().timestamp_millis() - state.last_published_time.timestamp_millis()
+                    .filter(|partition| {
+                        Utc::now().timestamp_millis()
+                            - partition.last_published_time.timestamp_millis()
                             > self.idle_timeout.as_millis() as i64
                     })
-                    .map(|(partition, _)| partition as u16)
-                    .collect();
-                (*vertex, idle_partition)
+                    .map(move |partition| partition.stream.clone())
             })
             .collect()
     }
 
     /// fetch all the partitions for the vertices.
-    pub(crate) async fn fetch_all_partitions(&self) -> HashMap<&'static str, Vec<u16>> {
+    pub(crate) async fn fetch_all_streams(&self) -> Vec<Stream> {
         let read_guard = self
             .last_published_wm
             .read()
@@ -155,14 +151,7 @@ impl ISBIdleManager {
 
         read_guard
             .iter()
-            .map(|(vertex, partitions)| {
-                let all_partition = partitions
-                    .iter()
-                    .enumerate()
-                    .map(|(partition, _)| partition as u16)
-                    .collect();
-                (*vertex, all_partition)
-            })
+            .flat_map(|(_, partitions)| partitions.iter().map(|partition| partition.stream.clone()))
             .collect()
     }
 }

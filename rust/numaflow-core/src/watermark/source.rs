@@ -15,6 +15,7 @@
 //! [Source]: https://numaflow.numaproj.io/user-guide/sources/overview/
 //! [ISB]: https://numaflow.numaproj.io/core-concepts/inter-step-buffer/
 
+use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::config::pipeline::ToVertexConfig;
 use crate::error::{Error, Result};
@@ -42,8 +43,7 @@ enum SourceActorMessage {
     },
     PublishISBWatermark {
         offset: IntOffset,
-        vertex: &'static str,
-        partition: u16,
+        stream: Stream,
         input_partition: u16,
     },
     PublishSourceIdleWatermark {
@@ -111,23 +111,21 @@ impl SourceWatermarkActor {
             // publish the watermark for the messages written to ISB
             SourceActorMessage::PublishISBWatermark {
                 offset,
-                vertex,
-                partition,
+                stream,
                 input_partition,
             } => {
                 let watermark = self.fetcher.fetch_source_watermark()?;
                 self.publisher
                     .publish_isb_watermark(
                         input_partition,
-                        vertex,
-                        partition,
+                        &stream,
                         offset.offset,
                         watermark.timestamp_millis(),
                         false,
                     )
                     .await;
                 // mark the vertex and partition as active since we published the watermark
-                self.isb_idle_manager.mark_active(vertex, partition).await;
+                self.isb_idle_manager.mark_active(&stream).await;
             }
 
             // publish the idle watermark for the given partitions(when source is not reading any
@@ -163,32 +161,24 @@ impl SourceWatermarkActor {
 
                 // all the isb partitions will be idling because the source is idling, fetch the idle offset
                 // for each vertex and partition and publish the idle watermark
-                let vertex_partitions = self.isb_idle_manager.fetch_all_partitions().await;
-                for (vertex, isb_partitions) in vertex_partitions {
-                    for isb_partition in isb_partitions {
-                        let offset = self
-                            .isb_idle_manager
-                            .fetch_idle_offset(vertex, isb_partition)
-                            .await?;
+                let vertex_streams = self.isb_idle_manager.fetch_all_streams().await;
+                for stream in vertex_streams.iter() {
+                    let offset = self.isb_idle_manager.fetch_idle_offset(stream).await?;
 
-                        for idle_partition in partitions.iter() {
-                            self.publisher
-                                .publish_isb_watermark(
-                                    *idle_partition,
-                                    vertex,
-                                    isb_partition,
-                                    offset,
-                                    compute_wm.timestamp_millis(),
-                                    true,
-                                )
-                                .await;
-                        }
-
-                        // mark the vertex and partition as idle, since we published the idle watermark
-                        self.isb_idle_manager
-                            .mark_idle(vertex, isb_partition, offset)
+                    for idle_partition in partitions.iter() {
+                        self.publisher
+                            .publish_isb_watermark(
+                                *idle_partition,
+                                stream,
+                                offset,
+                                compute_wm.timestamp_millis(),
+                                true,
+                            )
                             .await;
                     }
+
+                    // mark the vertex and partition as idle, since we published the idle watermark
+                    self.isb_idle_manager.mark_idle(&stream, offset).await;
                 }
             }
 
@@ -212,30 +202,21 @@ impl SourceWatermarkActor {
 
                 // we should only publish to active input partitions, because we consider input-partitions as
                 // the processing entity while publishing watermark inside source
-                let idle_vertices = self.isb_idle_manager.fetch_idle_partitions().await;
-                for (vertex, idle_partitions) in idle_vertices {
-                    for idle_partition in idle_partitions {
-                        let offset = self
-                            .isb_idle_manager
-                            .fetch_idle_offset(vertex, idle_partition)
-                            .await?;
-                        for partition in self.active_input_partitions.keys() {
-                            self.publisher
-                                .publish_isb_watermark(
-                                    *partition,
-                                    vertex,
-                                    idle_partition,
-                                    offset,
-                                    compute_wm.timestamp_millis(),
-                                    true,
-                                )
-                                .await;
-                        }
-
-                        self.isb_idle_manager
-                            .mark_idle(vertex, idle_partition, offset)
+                let idle_streams = self.isb_idle_manager.fetch_idle_streams().await;
+                for stream in idle_streams.iter() {
+                    let offset = self.isb_idle_manager.fetch_idle_offset(stream).await?;
+                    for partition in self.active_input_partitions.keys() {
+                        self.publisher
+                            .publish_isb_watermark(
+                                *partition,
+                                stream,
+                                offset,
+                                compute_wm.timestamp_millis(),
+                                true,
+                            )
                             .await;
                     }
+                    self.isb_idle_manager.mark_idle(stream, offset).await;
                 }
                 // clear the cache since we published the idle watermarks
                 self.active_input_partitions.clear();
@@ -338,8 +319,7 @@ impl SourceWatermarkHandle {
     /// Publishes the watermark for the given input partition on to the ISB of the next vertex.
     pub(crate) async fn publish_source_isb_watermark(
         &self,
-        vertex: &'static str,
-        partition: u16,
+        stream: Stream,
         offset: Offset,
         input_partition: u16,
     ) -> Result<()> {
@@ -348,8 +328,7 @@ impl SourceWatermarkHandle {
             self.sender
                 .send(SourceActorMessage::PublishISBWatermark {
                     offset,
-                    vertex,
-                    partition,
+                    stream,
                     input_partition,
                 })
                 .await
@@ -380,14 +359,14 @@ impl SourceWatermarkHandle {
 
 #[cfg(test)]
 mod tests {
-    use async_nats::jetstream;
-    use async_nats::jetstream::kv::Config;
-    use chrono::DateTime;
-
     use super::*;
+    use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::message::{IntOffset, Message};
     use crate::watermark::wmb::WMB;
+    use async_nats::jetstream;
+    use async_nats::jetstream::kv::Config;
+    use chrono::DateTime;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -473,7 +452,7 @@ mod tests {
         let mut wmb_found = false;
         for _ in 0..10 {
             let wmb = ot_bucket
-                .get("source_vertex-0")
+                .get("source-source_vertex-0")
                 .await
                 .expect("Failed to get wmb");
             if wmb.is_some() {
@@ -482,7 +461,7 @@ mod tests {
                 wmb_found = true;
                 break;
             } else {
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
 
@@ -568,7 +547,19 @@ mod tests {
         let handle = SourceWatermarkHandle::new(
             Duration::from_millis(100),
             js_context.clone(),
-            Default::default(),
+            &vec![ToVertexConfig {
+                name: "edge_vertex",
+                writer_config: BufferWriterConfig {
+                    streams: vec![Stream {
+                        name: "edge_stream",
+                        vertex: "edge_vertex",
+                        partition: 0,
+                    }],
+                    ..Default::default()
+                },
+                conditions: None,
+                partitions: 1,
+            }],
             &source_config,
         )
         .await
@@ -579,8 +570,11 @@ mod tests {
             .await
             .expect("Failed to get ot bucket");
 
-        let vertex = "edge-vertex";
-        let partition = 0;
+        let stream = Stream {
+            name: "edge_stream",
+            vertex: "edge_vertex",
+            partition: 0,
+        };
 
         let mut wmb_found = false;
         for i in 1..11 {
@@ -614,13 +608,13 @@ mod tests {
                 partition_idx: 0,
             });
             handle
-                .publish_source_isb_watermark(vertex, partition, offset, 0)
+                .publish_source_isb_watermark(stream.clone(), offset, 0)
                 .await
                 .expect("Failed to publish edge watermark");
 
             // check if the watermark is published
             let wmb = ot_bucket
-                .get("source_vertex-edge_vertex-0")
+                .get("source_vertex-0")
                 .await
                 .expect("Failed to get wmb");
             if wmb.is_some() {
@@ -629,7 +623,7 @@ mod tests {
                 wmb_found = true;
                 break;
             } else {
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
 

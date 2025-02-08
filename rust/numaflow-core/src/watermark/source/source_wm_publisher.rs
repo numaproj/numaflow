@@ -4,12 +4,12 @@
 //! watermark we use the partition(watermark originates here).
 use std::collections::HashMap;
 
-use chrono::Utc;
-use tracing::info;
-
+use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
+use chrono::Utc;
+use tracing::info;
 
 /// SourcePublisher is the watermark publisher for the source vertex.
 pub(crate) struct SourceWatermarkPublisher {
@@ -65,8 +65,11 @@ impl SourceWatermarkPublisher {
             .get_mut(&processor_name)
             .expect("Publisher not found")
             .publish_watermark(
-                self.source_config.vertex,
-                partition,
+                &Stream {
+                    name: "source",
+                    vertex: self.source_config.vertex,
+                    partition,
+                },
                 Utc::now().timestamp_micros(), // we don't care about the offsets
                 watermark,
                 idle,
@@ -80,8 +83,7 @@ impl SourceWatermarkPublisher {
     pub(crate) async fn publish_isb_watermark(
         &mut self,
         input_partition: u16,
-        vertex: &'static str,
-        partition: u16,
+        stream: &Stream,
         offset: i64,
         watermark: i64,
         idle: bool,
@@ -106,7 +108,7 @@ impl SourceWatermarkPublisher {
         self.publishers
             .get_mut(&processor_name)
             .expect("Publisher not found")
-            .publish_watermark(vertex, partition, offset, watermark, idle)
+            .publish_watermark(stream, offset, watermark, idle)
             .await
             .expect("Failed to publish watermark");
     }
@@ -172,7 +174,7 @@ mod tests {
             .expect("Failed to get ot bucket");
 
         let wmb = ot_bucket
-            .get("source_vertex-0")
+            .get("source-source_vertex-0")
             .await
             .expect("Failed to get wmb");
         assert!(wmb.is_some());
@@ -268,7 +270,7 @@ mod tests {
 
         // Publish edge watermark for partition 0
         source_publisher
-            .publish_isb_watermark(0, stream.vertex, stream.partition, 1, 200, false)
+            .publish_isb_watermark(0, &stream, 1, 200, false)
             .await;
 
         let ot_bucket = js_context
@@ -277,7 +279,7 @@ mod tests {
             .expect("Failed to get ot bucket");
 
         let wmb = ot_bucket
-            .get("source_vertex-edge_vertex-0")
+            .get("source_vertex-0")
             .await
             .expect("Failed to get wmb");
         assert!(wmb.is_some());

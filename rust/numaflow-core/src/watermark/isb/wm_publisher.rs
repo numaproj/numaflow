@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::time::UNIX_EPOCH;
 use std::time::{Duration, SystemTime};
 
+use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::{Error, Result};
 use crate::watermark::wmb::WMB;
@@ -132,24 +133,23 @@ impl ISBWatermarkPublisher {
     /// publish_watermark publishes the watermark for the given offset and the stream.
     pub(crate) async fn publish_watermark(
         &mut self,
-        vertex: &'static str,
-        partition: u16,
+        stream: &Stream,
         offset: i64,
         watermark: i64,
         idle: bool,
     ) -> Result<()> {
-        let last_published_wm_state = match self.last_published_wm.get_mut(vertex) {
+        let last_published_wm_state = match self.last_published_wm.get_mut(stream.vertex) {
             Some(wm) => wm,
             None => return Err(Error::Watermark("Invalid vertex".to_string())),
         };
 
         // we can avoid publishing the watermark if it is <= the last published watermark (optimization)
-        let last_state = &last_published_wm_state[partition as usize];
+        let last_state = &last_published_wm_state[stream.partition as usize];
         if offset < last_state.offset || watermark <= last_state.watermark {
             return Ok(());
         }
 
-        let ot_bucket = self.ot_buckets.get(vertex).ok_or(Error::Watermark(
+        let ot_bucket = self.ot_buckets.get(stream.vertex).ok_or(Error::Watermark(
             "Invalid vertex, no ot bucket found".to_string(),
         ))?;
 
@@ -157,7 +157,7 @@ impl ISBWatermarkPublisher {
             idle,
             offset,
             watermark,
-            partition,
+            partition: stream.partition,
         }
         .try_into()
         .map_err(|e| Error::Watermark(format!("{}", e)))?;
@@ -167,7 +167,8 @@ impl ISBWatermarkPublisher {
             .map_err(|e| Error::Watermark(e.to_string()))?;
 
         // update the last published watermark state
-        last_published_wm_state[partition as usize] = LastPublishedState { offset, watermark };
+        last_published_wm_state[stream.partition as usize] =
+            LastPublishedState { offset, watermark };
 
         Ok(())
     }
@@ -239,13 +240,7 @@ mod tests {
 
         // Publish watermark for partition 0
         publisher
-            .publish_watermark(
-                stream_partition_0.vertex,
-                stream_partition_0.partition,
-                1,
-                100,
-                false,
-            )
+            .publish_watermark(&stream_partition_0, 1, 100, false)
             .await
             .expect("Failed to publish watermark");
 
@@ -266,13 +261,7 @@ mod tests {
 
         // Try publishing a smaller watermark for the same partition, it should not be published
         publisher
-            .publish_watermark(
-                stream_partition_0.vertex,
-                stream_partition_0.partition,
-                0,
-                50,
-                false,
-            )
+            .publish_watermark(&stream_partition_0, 0, 50, false)
             .await
             .expect("Failed to publish watermark");
 
@@ -288,13 +277,7 @@ mod tests {
 
         // Publish a smaller watermark for a different partition, it should be published
         publisher
-            .publish_watermark(
-                stream_partition_1.vertex,
-                stream_partition_1.partition,
-                0,
-                50,
-                false,
-            )
+            .publish_watermark(&stream_partition_1, 0, 50, false)
             .await
             .expect("Failed to publish watermark");
 
@@ -402,12 +385,12 @@ mod tests {
         };
 
         publisher
-            .publish_watermark(stream1.vertex, stream1.partition, 1, 100, false)
+            .publish_watermark(&stream1, 1, 100, false)
             .await
             .expect("Failed to publish watermark");
 
         publisher
-            .publish_watermark(stream2.vertex, stream2.partition, 1, 200, false)
+            .publish_watermark(&stream2, 1, 200, false)
             .await
             .expect("Failed to publish watermark");
 

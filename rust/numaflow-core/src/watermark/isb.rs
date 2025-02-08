@@ -17,6 +17,7 @@
 //! ```text
 //! (Write to ISB) -------> (Publish Watermark) ------> (Remove tracked Offset)
 //! ```
+use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
 use crate::config::pipeline::ToVertexConfig;
 use crate::error::{Error, Result};
@@ -43,8 +44,7 @@ enum ISBWaterMarkActorMessage {
     },
     PublishWatermark {
         offset: IntOffset,
-        vertex: &'static str,
-        partition: u16,
+        stream: Stream,
     },
     RemoveOffset(IntOffset),
     InsertOffset {
@@ -130,26 +130,16 @@ impl ISBWatermarkActor {
 
             // gets the lowest watermark among the inflight requests and publishes the watermark
             // for the offset and stream
-            ISBWaterMarkActorMessage::PublishWatermark {
-                offset,
-                vertex,
-                partition,
-            } => {
+            ISBWaterMarkActorMessage::PublishWatermark { offset, stream } => {
                 let min_wm = self
                     .get_lowest_watermark()
                     .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap());
 
                 self.publisher
-                    .publish_watermark(
-                        vertex,
-                        partition,
-                        offset.offset,
-                        min_wm.timestamp_millis(),
-                        false,
-                    )
+                    .publish_watermark(&stream, offset.offset, min_wm.timestamp_millis(), false)
                     .await?;
 
-                self.idle_manager.mark_active(vertex, partition).await;
+                self.idle_manager.mark_active(&stream).await;
             }
 
             // removes the offset from the tracked offsets
@@ -180,29 +170,20 @@ impl ISBWatermarkActor {
 
                 // publish the idle watermark for the idle partitions, we identify the partition as idle
                 // if we have not published any watermark for that partition for a certain time(idle timeout)
-                let idle_partitions = self.idle_manager.fetch_idle_partitions().await;
-                for (vertex, partitions) in idle_partitions {
-                    for partition in partitions {
-                        let offset =
-                            match self.idle_manager.fetch_idle_offset(vertex, partition).await {
-                                Ok(offset) => offset,
-                                Err(e) => {
-                                    error!("failed to fetch idle offset: {:?}", e);
-                                    continue;
-                                }
-                            };
+                let idle_streams = self.idle_manager.fetch_idle_streams().await;
+                for stream in idle_streams.iter() {
+                    let offset = match self.idle_manager.fetch_idle_offset(stream).await {
+                        Ok(offset) => offset,
+                        Err(e) => {
+                            error!("failed to fetch idle offset: {:?}", e);
+                            continue;
+                        }
+                    };
 
-                        self.publisher
-                            .publish_watermark(
-                                vertex,
-                                partition,
-                                offset,
-                                min_wm.timestamp_millis(),
-                                true,
-                            )
-                            .await?;
-                        self.idle_manager.mark_idle(vertex, partition, offset).await;
-                    }
+                    self.publisher
+                        .publish_watermark(stream, offset, min_wm.timestamp_millis(), true)
+                        .await?;
+                    self.idle_manager.mark_idle(&stream, offset).await;
                 }
             }
         }
@@ -318,19 +299,10 @@ impl ISBWatermarkHandle {
     }
 
     /// publish_watermark publishes the watermark for the given stream and offset.
-    pub(crate) async fn publish_watermark(
-        &self,
-        vertex: &'static str,
-        partition: u16,
-        offset: Offset,
-    ) -> Result<()> {
+    pub(crate) async fn publish_watermark(&self, stream: Stream, offset: Offset) -> Result<()> {
         if let Offset::Int(offset) = offset {
             self.sender
-                .send(ISBWaterMarkActorMessage::PublishWatermark {
-                    offset,
-                    vertex,
-                    partition,
-                })
+                .send(ISBWaterMarkActorMessage::PublishWatermark { offset, stream })
                 .await
                 .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
             Ok(())
@@ -390,6 +362,7 @@ mod tests {
     use tokio::time::sleep;
 
     use super::*;
+    use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::message::IntOffset;
     use crate::watermark::wmb::WMB;
@@ -469,7 +442,15 @@ mod tests {
             Duration::from_millis(100),
             js_context.clone(),
             &edge_config,
-            Default::default(),
+            &vec![ToVertexConfig {
+                name: "to_vertex",
+                partitions: 0,
+                writer_config: BufferWriterConfig {
+                    streams: vec![Stream::new("test_stream", "to_vertex", 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
@@ -498,8 +479,11 @@ mod tests {
 
         handle
             .publish_watermark(
-                "from_vertex",
-                0,
+                Stream {
+                    name: "test_stream",
+                    vertex: "test_vertex",
+                    partition: 0,
+                },
                 Offset::Int(IntOffset {
                     offset: 1,
                     partition_idx: 0,
@@ -543,8 +527,11 @@ mod tests {
 
         handle
             .publish_watermark(
-                "test_stream",
-                0,
+                Stream {
+                    name: "test_stream",
+                    vertex: "from_vertex",
+                    partition: 0,
+                },
                 Offset::Int(IntOffset {
                     offset: 2,
                     partition_idx: 0,
@@ -639,7 +626,15 @@ mod tests {
             Duration::from_millis(100),
             js_context.clone(),
             &edge_config,
-            Default::default(),
+            &vec![ToVertexConfig {
+                name: "from_vertex",
+                partitions: 0,
+                writer_config: BufferWriterConfig {
+                    streams: vec![Stream::new("test_stream", "from_vertex", 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
@@ -662,8 +657,11 @@ mod tests {
 
             handle
                 .publish_watermark(
-                    "test_stream",
-                    0,
+                    Stream {
+                        name: "test_stream",
+                        vertex: "from_vertex",
+                        partition: 0,
+                    },
                     Offset::Int(IntOffset {
                         offset: i,
                         partition_idx: 0,
