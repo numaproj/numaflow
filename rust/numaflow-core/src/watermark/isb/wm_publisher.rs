@@ -140,7 +140,12 @@ impl ISBWatermarkPublisher {
     ) -> Result<()> {
         let last_published_wm_state = match self.last_published_wm.get_mut(stream.vertex) {
             Some(wm) => wm,
-            None => return Err(Error::Watermark("Invalid vertex".to_string())),
+            None => {
+                return Err(Error::Watermark(format!(
+                    "Invalid vertex {}",
+                    stream.vertex
+                )))
+            }
         };
 
         // we can avoid publishing the watermark if it is <= the last published watermark (optimization)
@@ -161,6 +166,7 @@ impl ISBWatermarkPublisher {
         }
         .try_into()
         .map_err(|e| Error::Watermark(format!("{}", e)))?;
+
         ot_bucket
             .put(self.processor_name.clone(), wmb_bytes.freeze())
             .await

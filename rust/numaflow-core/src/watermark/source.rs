@@ -164,7 +164,6 @@ impl SourceWatermarkActor {
                 let vertex_streams = self.isb_idle_manager.fetch_all_streams().await;
                 for stream in vertex_streams.iter() {
                     let offset = self.isb_idle_manager.fetch_idle_offset(stream).await?;
-
                     for idle_partition in partitions.iter() {
                         self.publisher
                             .publish_isb_watermark(
@@ -361,12 +360,17 @@ impl SourceWatermarkHandle {
 mod tests {
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
-    use crate::config::pipeline::watermark::BucketConfig;
+    use crate::config::pipeline::watermark::{BucketConfig, IdleConfig};
     use crate::message::{IntOffset, Message};
     use crate::watermark::wmb::WMB;
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
-    use chrono::DateTime;
+    use async_nats::jetstream::stream;
+    use bytes::BytesMut;
+    use chrono::{DateTime, Utc};
+    use numaflow_pb::objects::watermark::Heartbeat;
+    use prost::Message as _;
+    use tokio::time::sleep;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -646,6 +650,395 @@ mod tests {
             .unwrap();
         js_context
             .delete_key_value(edge_ot_bucket_name.to_string())
+            .await
+            .unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_invoke_publish_source_idle_watermark() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let ot_bucket_name = "test_invoke_publish_source_idle_watermark_OT";
+        let hb_bucket_name = "test_invoke_publish_source_idle_watermark_PROCESSORS";
+        let to_vertex_ot_bucket_name = "test_invoke_publish_source_idle_watermark_TO_VERTEX_OT";
+        let to_vertex_hb_bucket_name =
+            "test_invoke_publish_source_idle_watermark_TO_VERTEX_PROCESSORS";
+
+        let to_vertex_configs = vec![ToVertexConfig {
+            name: "edge_vertex",
+            writer_config: BufferWriterConfig {
+                streams: vec![Stream {
+                    name: "edge_stream",
+                    vertex: "edge_vertex",
+                    partition: 0,
+                }],
+                ..Default::default()
+            },
+            conditions: None,
+            partitions: 1,
+        }];
+
+        // create to vertex stream since we will be writing ctrl message to it
+        js_context
+            .get_or_create_stream(stream::Config {
+                name: "edge_stream".to_string(),
+                subjects: vec!["edge_stream".to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let source_bucket_config = BucketConfig {
+            vertex: "v1",
+            partitions: 1,
+            ot_bucket: ot_bucket_name,
+            hb_bucket: hb_bucket_name,
+        };
+
+        let to_vertex_bucket_config = BucketConfig {
+            vertex: "edge_vertex",
+            partitions: 1,
+            ot_bucket: to_vertex_ot_bucket_name,
+            hb_bucket: to_vertex_hb_bucket_name,
+        };
+
+        // create key value stores
+        js_context
+            .create_key_value(Config {
+                bucket: ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        js_context
+            .create_key_value(Config {
+                bucket: hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        js_context
+            .create_key_value(Config {
+                bucket: to_vertex_ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        js_context
+            .create_key_value(Config {
+                bucket: to_vertex_hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let source_idle_config = IdleConfig {
+            threshold: Duration::from_millis(10),
+            step_interval: Duration::from_millis(5),
+            increment_by: Duration::from_millis(1),
+        };
+
+        let handle = SourceWatermarkHandle::new(
+            Duration::from_millis(10),
+            js_context.clone(),
+            &to_vertex_configs,
+            &SourceWatermarkConfig {
+                max_delay: Default::default(),
+                source_bucket_config,
+                to_vertex_bucket_config: vec![to_vertex_bucket_config],
+                idle_config: Some(source_idle_config),
+            },
+        )
+        .await
+        .expect("Failed to create SourceWatermarkHandle");
+
+        // get ot and hb buckets for source and publish some wmb and heartbeats
+        let ot_bucket = js_context
+            .get_key_value(ot_bucket_name)
+            .await
+            .expect("Failed to get ot bucket");
+        let hb_bucket = js_context
+            .get_key_value(hb_bucket_name)
+            .await
+            .expect("Failed to get hb bucket");
+
+        for i in 1..11 {
+            let wmb: BytesMut = WMB {
+                watermark: 1000 * i,
+                offset: i,
+                idle: false,
+                partition: 0,
+            }
+            .try_into()
+            .unwrap();
+            ot_bucket
+                .put("source-v1-0", wmb.freeze())
+                .await
+                .expect("Failed to put wmb");
+
+            let heartbeat = Heartbeat {
+                heartbeat: Utc::now().timestamp_millis(),
+            };
+            let mut bytes = BytesMut::new();
+            heartbeat
+                .encode(&mut bytes)
+                .expect("Failed to encode heartbeat");
+
+            hb_bucket
+                .put("source-v1-0", bytes.freeze())
+                .await
+                .expect("Failed to put hb");
+            sleep(Duration::from_millis(3)).await;
+        }
+
+        // sleep so that the idle condition is met
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Invoke publish_source_idle_watermark
+        handle.publish_source_idle_watermark(vec![0]).await;
+
+        // Check if the idle watermark is published
+        let ot_bucket = js_context
+            .get_key_value(to_vertex_ot_bucket_name)
+            .await
+            .expect("Failed to get ot bucket");
+
+        let mut wmb_found = false;
+        for _ in 0..10 {
+            if let Some(wmb) = ot_bucket.get("v1-0").await.expect("Failed to get wmb") {
+                let wmb: WMB = wmb.try_into().unwrap();
+                // idle watermark should be published
+                if wmb.idle {
+                    wmb_found = true;
+                    break;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        assert!(wmb_found, "Idle watermark not found");
+
+        // delete the stores
+        js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(to_vertex_ot_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(to_vertex_hb_bucket_name.to_string())
+            .await
+            .unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_publish_source_isb_idle_watermark() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let ot_bucket_name = "test_publish_source_isb_idle_watermark_OT";
+        let hb_bucket_name = "test_publish_source_isb_idle_watermark_PROCESSORS";
+        let to_vertex_ot_bucket_name = "test_publish_source_isb_idle_watermark_TO_VERTEX_OT";
+        let to_vertex_hb_bucket_name =
+            "test_publish_source_isb_idle_watermark_TO_VERTEX_PROCESSORS";
+
+        let to_vertex_configs = vec![ToVertexConfig {
+            name: "edge_vertex",
+            writer_config: BufferWriterConfig {
+                streams: vec![Stream {
+                    name: "edge_stream",
+                    vertex: "edge_vertex",
+                    partition: 0,
+                }],
+                ..Default::default()
+            },
+            conditions: None,
+            partitions: 1,
+        }];
+
+        // create to vertex stream since we will be writing ctrl message to it
+        js_context
+            .get_or_create_stream(stream::Config {
+                name: "edge_stream".to_string(),
+                subjects: vec!["edge_stream".to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let source_bucket_config = BucketConfig {
+            vertex: "v1",
+            partitions: 1,
+            ot_bucket: ot_bucket_name,
+            hb_bucket: hb_bucket_name,
+        };
+
+        let to_vertex_bucket_config = BucketConfig {
+            vertex: "edge_vertex",
+            partitions: 1,
+            ot_bucket: to_vertex_ot_bucket_name,
+            hb_bucket: to_vertex_hb_bucket_name,
+        };
+
+        // create key value stores
+        js_context
+            .create_key_value(Config {
+                bucket: ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        js_context
+            .create_key_value(Config {
+                bucket: hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        js_context
+            .create_key_value(Config {
+                bucket: to_vertex_ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        js_context
+            .create_key_value(Config {
+                bucket: to_vertex_hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let source_idle_config = IdleConfig {
+            threshold: Duration::from_millis(2000), // set higher value so that the source won't be idling
+            step_interval: Duration::from_millis(5),
+            increment_by: Duration::from_millis(1),
+        };
+
+        let handle = SourceWatermarkHandle::new(
+            Duration::from_millis(5),
+            js_context.clone(),
+            &to_vertex_configs,
+            &SourceWatermarkConfig {
+                max_delay: Default::default(),
+                source_bucket_config,
+                to_vertex_bucket_config: vec![to_vertex_bucket_config],
+                idle_config: Some(source_idle_config),
+            },
+        )
+        .await
+        .expect("Failed to create SourceWatermarkHandle");
+
+        let messages = vec![Message {
+            offset: Offset::Int(IntOffset {
+                offset: 1,
+                partition_idx: 0,
+            }),
+            event_time: DateTime::from_timestamp_millis(100).unwrap(),
+            ..Default::default()
+        }];
+
+        // generate some watermarks to make partition active
+        handle
+            .generate_and_publish_source_watermark(&messages)
+            .await
+            .expect("Failed to publish source watermark");
+
+        // get ot and hb buckets for source and publish some wmb and heartbeats
+        let ot_bucket = js_context
+            .get_key_value(ot_bucket_name)
+            .await
+            .expect("Failed to get ot bucket");
+        let hb_bucket = js_context
+            .get_key_value(hb_bucket_name)
+            .await
+            .expect("Failed to get hb bucket");
+
+        for i in 1..10 {
+            let wmb: BytesMut = WMB {
+                watermark: 1000 * i,
+                offset: i,
+                idle: false,
+                partition: 0,
+            }
+            .try_into()
+            .unwrap();
+            ot_bucket
+                .put("source-v1-0", wmb.freeze())
+                .await
+                .expect("Failed to put wmb");
+
+            let heartbeat = Heartbeat {
+                heartbeat: Utc::now().timestamp_millis(),
+            };
+            let mut bytes = BytesMut::new();
+            heartbeat
+                .encode(&mut bytes)
+                .expect("Failed to encode heartbeat");
+
+            hb_bucket
+                .put("source-v1-0", bytes.freeze())
+                .await
+                .expect("Failed to put hb");
+            sleep(Duration::from_millis(3)).await;
+        }
+
+        // Check if the idle watermark is published
+        let ot_bucket = js_context
+            .get_key_value(to_vertex_ot_bucket_name)
+            .await
+            .expect("Failed to get ot bucket");
+
+        let mut wmb_found = false;
+        for _ in 0..10 {
+            if let Some(wmb) = ot_bucket.get("v1-0").await.expect("Failed to get wmb") {
+                let wmb: WMB = wmb.try_into().expect("Failed to convert to WMB");
+                // idle watermark should be published
+                if wmb.idle {
+                    wmb_found = true;
+                    break;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        assert!(wmb_found, "Idle watermark not found");
+
+        // delete the stores
+        js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(to_vertex_ot_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(to_vertex_hb_bucket_name.to_string())
             .await
             .unwrap();
     }

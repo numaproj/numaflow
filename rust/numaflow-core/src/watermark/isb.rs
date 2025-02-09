@@ -179,7 +179,6 @@ impl ISBWatermarkActor {
                             continue;
                         }
                     };
-
                     self.publisher
                         .publish_watermark(stream, offset, min_wm.timestamp_millis(), true)
                         .await?;
@@ -698,6 +697,154 @@ mod tests {
             .unwrap();
         js_context
             .delete_key_value(hb_bucket_name.to_string())
+            .await
+            .unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_publish_idle_watermark() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let ot_bucket_name = "test_publish_idle_watermark_OT";
+        let hb_bucket_name = "test_publish_idle_watermark_PROCESSORS";
+        let to_ot_bucket_name = "test_publish_idle_watermark_to_OT";
+        let to_hb_bucket_name = "test_publish_idle_watermark_to_PROCESSORS";
+
+        let vertex_name = "test-vertex";
+
+        let from_bucket_config = BucketConfig {
+            vertex: "from_vertex",
+            partitions: 1,
+            ot_bucket: ot_bucket_name,
+            hb_bucket: hb_bucket_name,
+        };
+
+        let to_bucket_config = BucketConfig {
+            vertex: "to_vertex",
+            partitions: 1,
+            ot_bucket: to_ot_bucket_name,
+            hb_bucket: to_hb_bucket_name,
+        };
+
+        // create key value stores
+        js_context
+            .create_key_value(Config {
+                bucket: ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        js_context
+            .create_key_value(Config {
+                bucket: hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        js_context
+            .create_key_value(Config {
+                bucket: to_ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        js_context
+            .create_key_value(Config {
+                bucket: to_hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let edge_config = EdgeWatermarkConfig {
+            from_vertex_config: vec![from_bucket_config.clone()],
+            to_vertex_config: vec![to_bucket_config.clone()],
+        };
+
+        let handle = ISBWatermarkHandle::new(
+            vertex_name,
+            0,
+            Duration::from_millis(10), // Set idle timeout to a very short duration
+            js_context.clone(),
+            &edge_config,
+            &vec![ToVertexConfig {
+                name: "to_vertex",
+                partitions: 0,
+                writer_config: BufferWriterConfig {
+                    streams: vec![Stream::new("test_stream", "to_vertex", 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
+        )
+        .await
+        .expect("Failed to create ISBWatermarkHandle");
+
+        // Insert multiple offsets
+        for i in 1..=3 {
+            handle
+                .insert_offset(
+                    Offset::Int(IntOffset {
+                        offset: i,
+                        partition_idx: 0,
+                    }),
+                    Some(Watermark::from_timestamp_millis(i * 100).unwrap()),
+                )
+                .await
+                .expect("Failed to insert offset");
+        }
+
+        // Wait for the idle timeout to trigger
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Check if the idle watermark is published
+        let ot_bucket = js_context
+            .get_key_value(to_ot_bucket_name)
+            .await
+            .expect("Failed to get ot bucket");
+
+        let mut wmb_found = false;
+        for _ in 0..10 {
+            if let Some(wmb) = ot_bucket
+                .get("test-vertex-0")
+                .await
+                .expect("Failed to get wmb")
+            {
+                let wmb: WMB = wmb.try_into().unwrap();
+                if wmb.idle {
+                    wmb_found = true;
+                    break;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        assert!(wmb_found, "Idle watermark not found");
+
+        // delete the stores
+        js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(to_ot_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(to_hb_bucket_name.to_string())
             .await
             .unwrap();
     }

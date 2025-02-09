@@ -632,6 +632,9 @@ mod tests {
         let pending = source.pending().await.unwrap();
         assert_eq!(pending, Some(0));
 
+        let partitions = Source::partitions(source.sender.clone()).await.unwrap();
+        assert_eq!(partitions, vec![1, 2]);
+
         cln_token.cancel();
         let _ = handle.await.unwrap();
         drop(source);

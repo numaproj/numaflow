@@ -411,6 +411,9 @@ mod tests {
         let pending = lag_reader.pending().await.unwrap();
         assert_eq!(pending, Some(0));
 
+        let partitions = src_read.partitions().await.unwrap();
+        assert_eq!(partitions, vec![2]);
+
         // we need to drop the client, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
         drop(src_read);
