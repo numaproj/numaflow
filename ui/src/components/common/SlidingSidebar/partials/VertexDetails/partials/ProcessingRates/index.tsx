@@ -8,6 +8,10 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import { MetricsModalWrapper } from "../../../../../MetricsModalWrapper";
 import { PipelineVertexMetric } from "../../../../../../../types/declarations/pipeline";
+import {
+  MONO_VERTEX_PROCESSING_RATE,
+  VERTEX_PROCESSING_RATE,
+} from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics/utils/constants";
 import { AppContextProps } from "../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../App";
 
@@ -106,10 +110,10 @@ export function ProcessingRates({
                         pipelineId={pipelineId}
                         vertexId={vertexId}
                         type={type}
-                        metricName={
+                        metricDisplayName={
                           type === "monoVertex"
-                            ? "monovtx_read_total"
-                            : "forwarder_data_read_total"
+                            ? MONO_VERTEX_PROCESSING_RATE
+                            : VERTEX_PROCESSING_RATE
                         }
                         value={formatRate(metric?.[RATE_LABELS_MAP[label]])}
                         presets={{ duration: label }}

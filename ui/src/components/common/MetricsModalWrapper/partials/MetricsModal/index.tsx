@@ -8,9 +8,8 @@ import {
   VertexDetailsContext,
   VertexDetailsContextProps,
 } from "../../../SlidingSidebar/partials/VertexDetails";
-import { metricNameMap } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics/utils/constants";
 
-const style = {
+const modalStyle = {
   position: "absolute",
   top: "50%",
   left: "50%",
@@ -23,9 +22,10 @@ const style = {
 };
 
 interface MetricsModalProps {
-  open: boolean;
-  handleClose: () => void;
-  metricName: string;
+  isModalOpen: boolean;
+  handleCloseModal: () => void;
+  metricDisplayName: string;
+  discoveredMetrics: any;
   namespaceId: string;
   pipelineId: string;
   vertexId: string;
@@ -34,61 +34,62 @@ interface MetricsModalProps {
 }
 
 export function MetricsModal({
-  open,
-  handleClose,
-  metricName,
+  isModalOpen,
+  handleCloseModal,
+  metricDisplayName,
+  discoveredMetrics,
   namespaceId,
   pipelineId,
   vertexId,
   type,
   presets,
 }: MetricsModalProps) {
-  const vertexDetailsContext =
-    useContext<VertexDetailsContextProps>(VertexDetailsContext);
   const { setVertexTab, setPodsViewTab, setExpanded, setPresets } =
-    vertexDetailsContext;
+    useContext<VertexDetailsContextProps>(VertexDetailsContext);
 
   const [metricsFound, setMetricsFound] = useState<boolean>(false);
 
   const handleRedirect = useCallback(() => {
-    handleClose();
+    handleCloseModal();
     if (presets) setPresets(presets);
     setVertexTab(0);
     setPodsViewTab(1);
-    const panelId = `${metricName}-panel`;
-    setExpanded((prevExpanded) => {
-      const newExpanded = new Set(prevExpanded);
-      newExpanded.add(panelId);
-      return newExpanded;
-    });
+    // expand the respective metrics accordion
+    const discoveredMetric = discoveredMetrics?.data?.find(
+      (m: any) => m?.display_name === metricDisplayName
+    );
+    const panelId = `${discoveredMetric?.metric_name}-panel`;
+    setExpanded((prevExpanded) => new Set(prevExpanded).add(panelId));
   }, [
-    handleClose,
+    handleCloseModal,
     presets,
     setPresets,
     setVertexTab,
     setPodsViewTab,
-    metricName,
+    discoveredMetrics,
+    metricDisplayName,
     setExpanded,
   ]);
 
   return (
     <Modal
-      open={open}
-      onClose={handleClose}
+      open={isModalOpen}
+      onClose={handleCloseModal}
       aria-labelledby="buffer-details-title"
       aria-describedby="buffer-details-description"
     >
-      <Box sx={style}>
+      <Box sx={modalStyle}>
         <Box
           sx={{
             display: "flex",
             justifyContent: "space-between",
+            alignItems: "center",
           }}
         >
           <Box sx={{ fontSize: "1.6rem", textTransform: "capitalize" }}>
-            {metricNameMap[metricName] ?? metricName}
+            {metricDisplayName}
           </Box>
-          <IconButton onClick={handleClose}>
+          <IconButton onClick={handleCloseModal} aria-label="close">
             <CloseIcon fontSize="large" />
           </IconButton>
         </Box>
@@ -98,7 +99,7 @@ export function MetricsModal({
             pipelineId={pipelineId}
             vertexId={vertexId}
             type={type}
-            metricName={metricName}
+            metricDisplayName={metricDisplayName}
             setMetricsFound={setMetricsFound}
             presets={presets}
           />

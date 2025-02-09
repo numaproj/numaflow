@@ -208,8 +208,7 @@ data:
       metrics: 
         # set your cpu metric name here
         - metric_name: namespace_pod_cpu_utilization
-          # set display name as per metric name
-          display_name: CPU Utilization per Pod
+          display_name: Pod CPU Utilization
           metric_description: This metric represents the percentage utilization of cpu usage over cpu resource limits for a pod.
           required_filters:
             - namespace
@@ -229,8 +228,7 @@ data:
                   required: false
         # set your memory metric name here
         - metric_name: namespace_pod_memory_utilization
-          # set display name as per metric name
-          display_name: Memory Utilization per Pod
+          display_name: Pod Memory Utilization
           metric_description: This metric represents the percentage utilization of memory usage in bytes over memory resource limits for a pod.
           required_filters:
             - namespace
@@ -266,8 +264,7 @@ data:
       metrics:
         # set your cpu metric name here
         - metric_name: namespace_app_container_cpu_utilization
-          # set display name as per metric name
-          display_name: CPU Utilization per Container
+          display_name: Container CPU Utilization
           metric_description: This metric represents the percentage utilization of cpu usage over cpu resource limits for a container.
           required_filters:
             - namespace
@@ -286,8 +283,7 @@ data:
                   required: false
         # set your memory metric name here
         - metric_name: namespace_app_container_memory_utilization
-          # set display name as per metric name
-          display_name: Memory Utilization per Container
+          display_name: Container Memory Utilization
           metric_description: This metric represents the percentage utilization of memory usage in bytes over memory resource limits for a container.
           required_filters:
             - namespace

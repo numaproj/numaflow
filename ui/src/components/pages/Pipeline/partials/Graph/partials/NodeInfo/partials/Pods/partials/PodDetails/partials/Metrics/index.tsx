@@ -13,10 +13,14 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import LineChartComponent from "./partials/LineChart";
 import { useMetricsDiscoveryDataFetch } from "../../../../../../../../../../../../../utils/fetchWrappers/metricsDiscoveryDataFetch";
 import {
+  dimensionReverseMap,
+  VERTEX_PENDING_MESSAGES,
+} from "./utils/constants";
+import {
   VertexDetailsContext,
   VertexDetailsContextProps,
 } from "../../../../../../../../../../../../common/SlidingSidebar/partials/VertexDetails";
-import { dimensionReverseMap, metricNameMap } from "./utils/constants";
+
 import "./style.css";
 
 export interface MetricsProps {
@@ -25,7 +29,7 @@ export interface MetricsProps {
   type: string;
   vertexId?: string;
   selectedPodName?: string;
-  metricName?: string;
+  metricDisplayName?: string;
   setMetricsFound?: Dispatch<SetStateAction<boolean>>;
   presets?: any;
 }
@@ -36,7 +40,7 @@ export function Metrics({
   type,
   vertexId,
   selectedPodName,
-  metricName,
+  metricDisplayName,
   setMetricsFound,
   presets,
 }: MetricsProps) {
@@ -90,9 +94,9 @@ export function Metrics({
 
   if (discoveredMetrics == undefined) return <Box>No metrics found</Box>;
 
-  if (metricName) {
+  if (metricDisplayName) {
     const discoveredMetric = discoveredMetrics?.data?.find(
-      (m: any) => m?.metric_name === metricName
+      (m: any) => m?.display_name === metricDisplayName
     );
     if (discoveredMetric) {
       if (setMetricsFound)
@@ -119,7 +123,10 @@ export function Metrics({
   return (
     <Box sx={{ height: "100%" }}>
       {discoveredMetrics?.data?.map((metric: any) => {
-        if (type === "source" && metric?.pattern_name === "vertex_gauge")
+        if (
+          type === "source" &&
+          metric?.display_name === VERTEX_PENDING_MESSAGES
+        )
           return null;
         const panelId = `${metric?.metric_name}-panel`;
         return (
@@ -134,19 +141,17 @@ export function Metrics({
               id={`${metric?.metric_name}-header`}
             >
               <Box sx={{ display: "flex", alignItems: "center" }}>
-                {metric?.display_name ||
-                  metricNameMap[metric?.metric_name] ||
-                  metric?.metric_name}
+                {metric?.display_name || metric?.metric_name}
                 <Tooltip
                   title={
-                    <Typography sx={{ fontSize: "1rem" }}>
+                    <Typography sx={{ fontSize: "1.4rem" }}>
                       {metric?.metric_description ||
                         metric?.display_name ||
-                        metricNameMap[metric?.metric_name] ||
                         metric?.metric_name}
                     </Typography>
                   }
                   arrow
+                  placement={"top-start"}
                 >
                   <Box sx={{ marginLeft: 1 }}>
                     <InfoOutlinedIcon sx={{ cursor: "pointer" }} />

@@ -17,6 +17,16 @@ import FiltersDropdown from "../common/FiltersDropdown";
 import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
 import TimeSelector from "../common/TimeRange";
+import {
+  CONTAINER_CPU_UTILIZATION,
+  CONTAINER_MEMORY_UTILIZATION,
+  MONO_VERTEX_PENDING_MESSAGES,
+  MONO_VERTEX_PROCESSING_TIME_LATENCY,
+  MONO_VERTEX_SINK_WRITE_TIME_LATENCY,
+  POD_CPU_UTILIZATION,
+  POD_MEMORY_UTILIZATION,
+  VERTEX_PENDING_MESSAGES,
+} from "../../utils/constants";
 import { AppContext } from "../../../../../../../../../../../../../../../App";
 import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
 
@@ -30,8 +40,8 @@ function CustomTooltip({
   payload,
   label,
   active,
-  patternName,
-}: TooltipProps & { patternName: string }) {
+  displayName,
+}: TooltipProps & { displayName: string }) {
   if (active && payload && payload.length) {
     const maxWidth =
       Math.max(...payload.map((entry) => entry?.name?.length)) * 9.5;
@@ -46,7 +56,7 @@ function CustomTooltip({
       >
         <Box>{label}</Box>
         {payload.map((entry: any, index: any) => {
-          const formattedValue = getDefaultFormatter(entry?.value, patternName);
+          const formattedValue = getDefaultFormatter(entry?.value, displayName);
           return (
             <Box key={`item-${index}`} sx={{ display: "flex" }}>
               <Box
@@ -76,15 +86,16 @@ const getYAxisLabel = (unit: string) => {
   return "";
 };
 
-const getDefaultFormatter = (value: number, patternName: string) => {
+const getDefaultFormatter = (value: number, displayName: string) => {
   const formatValue = (value: number, suffix: string) => {
     const formattedValue = parseFloat(value?.toFixed(2));
     return formattedValue % 1 === 0
       ? `${Math.floor(formattedValue)}${suffix}`
       : `${formattedValue}${suffix}`;
   };
-  switch (patternName) {
-    case "mono_vertex_histogram":
+  switch (displayName) {
+    case MONO_VERTEX_PROCESSING_TIME_LATENCY:
+    case MONO_VERTEX_SINK_WRITE_TIME_LATENCY:
       if (value === 0) {
         return "0";
       } else if (value < 1000) {
@@ -94,8 +105,10 @@ const getDefaultFormatter = (value: number, patternName: string) => {
       } else {
         return formatValue(value / 1000000, " s");
       }
-    case "container_cpu_memory_utilization":
-    case "pod_cpu_memory_utilization":
+    case POD_CPU_UTILIZATION:
+    case POD_MEMORY_UTILIZATION:
+    case CONTAINER_CPU_UTILIZATION:
+    case CONTAINER_MEMORY_UTILIZATION:
       if (value === 0) {
         return "0";
       } else if (value < 1000) {
@@ -118,7 +131,7 @@ const getDefaultFormatter = (value: number, patternName: string) => {
   }
 };
 
-const getTickFormatter = (unit: string, patternName: string) => {
+const getTickFormatter = (unit: string, displayName: string) => {
   const formatValue = (value: number) => {
     const formattedValue = parseFloat(value?.toFixed(2)); // Format to 2 decimal places
     return formattedValue % 1 === 0
@@ -132,7 +145,7 @@ const getTickFormatter = (unit: string, patternName: string) => {
       case "ms":
         return `${formatValue(value / 1000)}`;
       default:
-        return getDefaultFormatter(value, patternName);
+        return getDefaultFormatter(value, displayName);
     }
   };
 };
@@ -165,6 +178,7 @@ const LineChartComponent = ({
   const [metricsReq, setMetricsReq] = useState<any>({
     metric_name: metric?.metric_name,
     pattern_name: metric?.pattern_name,
+    display_name: metric?.display_name,
   });
   const [paramsList, setParamsList] = useState<any[]>([]);
   // store all filters for each selected dimension
@@ -191,8 +205,11 @@ const LineChartComponent = ({
         case "vertex":
           return vertexId;
         case "pod":
-          // based on pattern names, update filter based on pod value or multiple pods based on regex
-          if (metric?.pattern_name === "pod_cpu_memory_utilization") {
+          if (
+            [POD_CPU_UTILIZATION, POD_MEMORY_UTILIZATION].includes(
+              metric?.display_name
+            )
+          ) {
             switch (type) {
               case "monoVertex":
                 return `${pipelineId}-.*`;
@@ -273,14 +290,16 @@ const LineChartComponent = ({
     }
   }, [error, addError]);
 
-  const groupByLabel = useCallback((dimension: string, patternName: string) => {
-    switch (patternName) {
-      case "pod_cpu_memory_utilization":
+  const groupByLabel = useCallback((dimension: string, displayName: string) => {
+    switch (displayName) {
+      case POD_CPU_UTILIZATION:
+      case POD_MEMORY_UTILIZATION:
         return ["pod"];
-      case "container_cpu_memory_utilization":
+      case CONTAINER_CPU_UTILIZATION:
+      case CONTAINER_MEMORY_UTILIZATION:
         return ["container"];
-      case "mono_vertex_gauge":
-      case "vertex_gauge":
+      case VERTEX_PENDING_MESSAGES:
+      case MONO_VERTEX_PENDING_MESSAGES:
         return dimension === "pod" ? ["pod", "period"] : ["period"];
     }
     switch (dimension) {
@@ -297,7 +316,7 @@ const LineChartComponent = ({
       const transformedData: any[] = [];
       const label = groupByLabel(
         metricsReq?.dimension,
-        metricsReq?.pattern_name
+        metricsReq?.display_name
       );
       chartData?.forEach((item) => {
         let labelVal = "";
@@ -470,7 +489,7 @@ const LineChartComponent = ({
               }
               tickFormatter={getTickFormatter(
                 metric?.unit,
-                metric?.pattern_name
+                metric?.display_name
               )}
             />
             <CartesianGrid stroke="#f5f5f5"></CartesianGrid>
@@ -486,7 +505,7 @@ const LineChartComponent = ({
             ))}
 
             <Tooltip
-              content={<CustomTooltip patternName={metric?.pattern_name} />}
+              content={<CustomTooltip displayName={metric?.display_name} />}
             />
             <Legend />
           </LineChart>

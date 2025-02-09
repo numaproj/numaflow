@@ -33,17 +33,15 @@ export const dimensionReverseMap: { [p: string]: string } = {
   container: "container",
 };
 
-export const metricNameMap: { [p: string]: string } = {
-  monovtx_ack_time_bucket: "Mono Vertex Ack Time Latency",
-  monovtx_read_time_bucket: "Mono Vertex Read Time Latency",
-  monovtx_processing_time_bucket: "Mono Vertex Processing Time Latency",
-  monovtx_sink_time_bucket: "Mono Vertex Sink Write Time Latency",
-  forwarder_data_read_total: "Vertex Read Processing Rate",
-  monovtx_read_total: "Mono Vertex Read Processing Rate",
-  monovtx_pending: "Mono Vertex Pending Messages",
-  vertex_pending_messages: "Vertex Pending Messages",
-  namespace_pod_cpu_utilization: "Pod CPU Utilization",
-  namespace_pod_memory_utilization: "Pod Memory Utilization",
-  namespace_app_container_cpu_utilization: "Container CPU Utilization",
-  namespace_app_container_memory_utilization: "Container Memory Utilization",
-};
+export const VERTEX_PENDING_MESSAGES = "Vertex Pending Messages";
+export const VERTEX_PROCESSING_RATE = "Vertex Read Processing Rate";
+export const MONO_VERTEX_PENDING_MESSAGES = "MonoVertex Pending Messages";
+export const MONO_VERTEX_PROCESSING_RATE = "MonoVertex Read Processing Rate";
+export const MONO_VERTEX_PROCESSING_TIME_LATENCY =
+  "MonoVertex Processing Time Latency";
+export const MONO_VERTEX_SINK_WRITE_TIME_LATENCY =
+  "MonoVertex Sink Write Time Latency";
+export const POD_CPU_UTILIZATION = "Pod CPU Utilization";
+export const POD_MEMORY_UTILIZATION = "Pod Memory Utilization";
+export const CONTAINER_CPU_UTILIZATION = "Container CPU Utilization";
+export const CONTAINER_MEMORY_UTILIZATION = "Container Memory Utilization";

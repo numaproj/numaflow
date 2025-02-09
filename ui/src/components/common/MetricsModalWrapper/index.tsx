@@ -1,7 +1,9 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import Tooltip from "@mui/material/Tooltip";
 import Box from "@mui/material/Box";
 import { MetricsModal } from "./partials/MetricsModal";
+import { useMetricsDiscoveryDataFetch } from "../../../utils/fetchWrappers/metricsDiscoveryDataFetch";
+import { dimensionReverseMap } from "../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics/utils/constants";
 
 import "./style.css";
 
@@ -11,7 +13,7 @@ interface MetricsModalWrapperProps {
   pipelineId: string;
   vertexId: string;
   type: string;
-  metricName: string;
+  metricDisplayName: string;
   value: any;
   presets?: any;
 }
@@ -22,41 +24,59 @@ export function MetricsModalWrapper({
   pipelineId,
   vertexId,
   type,
-  metricName,
+  metricDisplayName,
   value,
   presets,
 }: MetricsModalWrapperProps) {
-  const [open, setOpen] = useState<boolean>(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const handleOpen = useCallback(() => {
-    setOpen(true);
+  const handleOpenModal = useCallback(() => {
+    setIsModalOpen(true);
   }, []);
-  const handleClose = useCallback(() => {
-    setOpen(false);
+  const handleCloseModal = useCallback(() => {
+    setIsModalOpen(false);
   }, []);
+
+  const {
+    metricsDiscoveryData: discoveredMetrics,
+    error: discoveredMetricsError,
+    loading: discoveredMetricsLoading,
+  } = useMetricsDiscoveryDataFetch({
+    objectType: dimensionReverseMap[type],
+  });
+
+  const isClickable = useMemo(() => {
+    return (
+      !discoveredMetricsError &&
+      !discoveredMetricsLoading &&
+      !disableMetricsCharts
+    );
+  }, [discoveredMetricsError, discoveredMetricsLoading, disableMetricsCharts]);
 
   return (
     <Box>
-      <Tooltip
-        title={
-          <Box sx={{ fontSize: "1rem" }}>
-            Click to get more information about the trend
-          </Box>
-        }
-        placement={"top-start"}
-        arrow
-      >
-        <Box
-          className={!disableMetricsCharts ? "metrics-hyperlink" : undefined}
-          onClick={!disableMetricsCharts ? handleOpen : undefined}
+      {isClickable ? (
+        <Tooltip
+          title={
+            <Box sx={{ fontSize: "1rem" }}>
+              Click to get more information about the trend
+            </Box>
+          }
+          placement="top-start"
+          arrow
         >
-          {value}
-        </Box>
-      </Tooltip>
+          <Box className={"metrics-hyperlink"} onClick={handleOpenModal}>
+            {value}
+          </Box>
+        </Tooltip>
+      ) : (
+        <Box style={{ width: "fit-content" }}>{value}</Box>
+      )}
       <MetricsModal
-        open={open}
-        handleClose={handleClose}
-        metricName={metricName}
+        isModalOpen={isModalOpen}
+        handleCloseModal={handleCloseModal}
+        metricDisplayName={metricDisplayName}
+        discoveredMetrics={discoveredMetrics}
         namespaceId={namespaceId}
         pipelineId={pipelineId}
         vertexId={vertexId}

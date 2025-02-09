@@ -3,6 +3,12 @@ import Box from "@mui/material/Box";
 import { MetricsModalWrapper } from "../../../../../../../../../../../../common/MetricsModalWrapper";
 import { getPodContainerUsePercentages } from "../../../../../../../../../../../../../utils";
 import { PodInfoProps } from "../../../../../../../../../../../../../types/declarations/pods";
+import {
+  CONTAINER_CPU_UTILIZATION,
+  CONTAINER_MEMORY_UTILIZATION,
+  POD_CPU_UTILIZATION,
+  POD_MEMORY_UTILIZATION,
+} from "../Metrics/utils/constants";
 import { AppContextProps } from "../../../../../../../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../../../../../../../App";
 
@@ -126,7 +132,7 @@ export function ContainerInfo({
                 pipelineId={pipelineId}
                 vertexId={vertexId}
                 type={type}
-                metricName={"namespace_app_container_cpu_utilization"}
+                metricDisplayName={CONTAINER_CPU_UTILIZATION}
                 value={`${usedCPU} / ${specCPU} (${cpuPercent})`}
               />
             </Box>
@@ -141,7 +147,7 @@ export function ContainerInfo({
                 pipelineId={pipelineId}
                 vertexId={vertexId}
                 type={type}
-                metricName={"namespace_app_container_memory_utilization"}
+                metricDisplayName={CONTAINER_MEMORY_UTILIZATION}
                 value={`${usedMem} / ${specMem} (${memPercent})`}
               />
             </Box>
@@ -226,7 +232,7 @@ export function ContainerInfo({
                   pipelineId={pipelineId}
                   vertexId={vertexId}
                   type={type}
-                  metricName={"namespace_pod_cpu_utilization"}
+                  metricDisplayName={POD_CPU_UTILIZATION}
                   value={podSpecificInfo?.totalCPU}
                 />
               </Box>
@@ -243,7 +249,7 @@ export function ContainerInfo({
                   pipelineId={pipelineId}
                   vertexId={vertexId}
                   type={type}
-                  metricName={"namespace_pod_memory_utilization"}
+                  metricDisplayName={POD_MEMORY_UTILIZATION}
                   value={podSpecificInfo?.totalMemory}
                 />
               </Box>

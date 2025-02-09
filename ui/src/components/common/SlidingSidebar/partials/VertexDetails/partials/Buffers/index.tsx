@@ -7,6 +7,7 @@ import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import { MetricsModalWrapper } from "../../../../../MetricsModalWrapper";
+import { VERTEX_PENDING_MESSAGES } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics/utils/constants";
 import { AppContextProps } from "../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../App";
 
@@ -92,7 +93,7 @@ export function Buffers({
                         pipelineId={pipelineId}
                         vertexId={vertexId}
                         type={type}
-                        metricName={"vertex_pending_messages"}
+                        metricDisplayName={VERTEX_PENDING_MESSAGES}
                         value={buffer?.totalMessages}
                       />
                     </TableCell>
