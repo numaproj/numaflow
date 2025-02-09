@@ -29,11 +29,13 @@ const Dropdown = ({
 }: MetricDropDownProps) => {
   // to handle cases there is no "mono-vertex" as dimension at top level (for eg: container level cpu/memory)
   const initialDimensionValue = useMemo(() => {
-    if (!metric?.dimensions?.length) return metric?.dimensions[0]?.name;
+    if (!metric?.dimensions?.length) return dimensionReverseMap[type];
 
-    return metric?.dimensions?.find(
-      (val: any) => val?.name === dimensionReverseMap[type]
-    )?.name;
+    return (
+      metric?.dimensions?.find(
+        (val: any) => val?.name === dimensionReverseMap[type]
+      )?.name || metric?.dimensions[0]?.name
+    );
   }, [metric, type]);
 
   const getInitialValue = useMemo(() => {
