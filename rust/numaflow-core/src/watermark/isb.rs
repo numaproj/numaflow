@@ -6,6 +6,8 @@
 //! increasing. Fetch and publish will be two different flows, but we will have natural ordering
 //! because we use actor model. Since we do streaming within the vertex we have to track the
 //! messages so that even if any messages get stuck we consider them while publishing watermarks.
+//! Starts a background task to publish idle watermarks for the downstream idle partitions, idle
+//! partitions are those partitions where we have not published any watermark for a certain time.
 //!
 //!
 //! **Fetch Flow**

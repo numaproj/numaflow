@@ -2,18 +2,19 @@
 //! the watermark across the source partitions. Since we write the messages to the ISB, we will also publish
 //! the watermark to the ISB. Unlike other vertices we don't use pod as the processing entity for publishing
 //! watermark we use the partition(watermark originates here).
-use std::collections::HashMap;
-
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 use chrono::Utc;
+use std::collections::HashMap;
+use std::time::Duration;
 use tracing::info;
 
 /// SourcePublisher is the watermark publisher for the source vertex.
 pub(crate) struct SourceWatermarkPublisher {
     js_context: async_nats::jetstream::Context,
+    max_delay: Duration,
     source_config: BucketConfig,
     to_vertex_configs: Vec<BucketConfig>,
     publishers: HashMap<String, ISBWatermarkPublisher>,
@@ -23,11 +24,13 @@ impl SourceWatermarkPublisher {
     /// Creates a new [SourceWatermarkPublisher].
     pub(crate) async fn new(
         js_context: async_nats::jetstream::Context,
+        max_delay: Duration,
         source_config: BucketConfig,
         to_vertex_configs: Vec<BucketConfig>,
     ) -> error::Result<Self> {
         Ok(SourceWatermarkPublisher {
             js_context,
+            max_delay,
             source_config,
             to_vertex_configs,
             publishers: HashMap::new(),
@@ -71,7 +74,7 @@ impl SourceWatermarkPublisher {
                     partition,
                 },
                 Utc::now().timestamp_micros(), // we don't care about the offsets
-                watermark,
+                watermark - self.max_delay.as_millis() as i64, // consider the max delay configured by the user while publishing source watermark
                 idle,
             )
             .await
@@ -118,6 +121,7 @@ impl SourceWatermarkPublisher {
 mod tests {
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
+    use std::time::Duration;
 
     use crate::config::pipeline::isb::Stream;
     use crate::watermark::source::source_wm_publisher::{BucketConfig, SourceWatermarkPublisher};
@@ -158,10 +162,14 @@ mod tests {
             .await
             .unwrap();
 
-        let mut source_publisher =
-            SourceWatermarkPublisher::new(js_context.clone(), source_config.clone(), vec![])
-                .await
-                .expect("Failed to create source publisher");
+        let mut source_publisher = SourceWatermarkPublisher::new(
+            js_context.clone(),
+            Duration::from_secs(0),
+            source_config.clone(),
+            vec![],
+        )
+        .await
+        .expect("Failed to create source publisher");
 
         // Publish source watermark for partition 0
         source_publisher
@@ -256,6 +264,7 @@ mod tests {
 
         let mut source_publisher = SourceWatermarkPublisher::new(
             js_context.clone(),
+            Duration::from_secs(0),
             source_config.clone(),
             vec![edge_config.clone()],
         )
@@ -342,10 +351,14 @@ mod tests {
             .await
             .unwrap();
 
-        let mut source_publisher =
-            SourceWatermarkPublisher::new(js_context.clone(), source_config.clone(), vec![])
-                .await
-                .expect("Failed to create source publisher");
+        let mut source_publisher = SourceWatermarkPublisher::new(
+            js_context.clone(),
+            Duration::from_secs(0),
+            source_config.clone(),
+            vec![],
+        )
+        .await
+        .expect("Failed to create source publisher");
 
         // Publish source watermark for partition 0 with idle flag set to true
         source_publisher
@@ -441,6 +454,7 @@ mod tests {
 
         let mut source_publisher = SourceWatermarkPublisher::new(
             js_context.clone(),
+            Duration::from_secs(0),
             source_config.clone(),
             vec![edge_config.clone()],
         )

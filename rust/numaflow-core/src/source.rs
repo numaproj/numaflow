@@ -325,13 +325,10 @@ impl Source {
                 };
 
                 let msgs_len = messages.len();
-                info!("Read {} messages from source", msgs_len);
                 Self::send_read_metrics(pipeline_labels, mvtx_labels, read_start_time, msgs_len);
 
                 if msgs_len == 0 {
-                    info!("No messages read from source");
                     if let Some(watermark_handle) = watermark_handle.as_mut() {
-                        info!("Publishing source idle watermark");
                         watermark_handle
                             .publish_source_idle_watermark(
                                 Self::partitions(source_handle.clone()).await?,

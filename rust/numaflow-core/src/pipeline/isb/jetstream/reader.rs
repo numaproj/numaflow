@@ -17,7 +17,7 @@ use tracing::{error, info};
 use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, Metadata, Offset, ReadAck};
+use crate::message::{IntOffset, Message, MessageID, MessageKind, Metadata, Offset, ReadAck};
 use crate::metrics::{
     pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
 };
@@ -207,6 +207,15 @@ impl JetStreamReader {
                                     continue;
                                 }
                             };
+
+                            // we can ignore the wmb messages
+                            if let MessageKind::WMB = message.kind {
+                                // ack the message and continue
+                                jetstream_message.ack().await.map_err(|e| {
+                                    Error::ISB(format!("Failed to ack the wmb message: {:?}", e))
+                                })?;
+                                continue;
+                            }
 
                             if let Some(watermark_handle) = watermark_handle.as_ref() {
                                 let watermark = watermark_handle.fetch_watermark(message.offset.clone()).await?;

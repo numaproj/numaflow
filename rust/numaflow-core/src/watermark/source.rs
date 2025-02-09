@@ -248,6 +248,7 @@ impl SourceWatermarkHandle {
         let fetcher = SourceWatermarkFetcher::new(processor_manager);
         let publisher = SourceWatermarkPublisher::new(
             js_context.clone(),
+            config.max_delay,
             config.source_bucket_config.clone(),
             config.to_vertex_bucket_config.clone(),
         )

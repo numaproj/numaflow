@@ -1,7 +1,23 @@
 use crate::config::pipeline::watermark::IdleConfig;
 use chrono::{DateTime, Utc};
 
-/// Used to determine if the source is idling if idle configuration is provided.
+/// Source Idle Manager resolves the following conundrums:
+///
+/// **How to decide if the source is idling?**
+///
+/// If the source is not reading any messages for threshold (provided by the user)
+/// time, then it is considered idling.
+///
+/// **When to publish the idle watermark?**
+///
+/// If the source is idling and the step interval has passed (also provided by the user).
+///
+/// **What to publish as the idle watermark?**
+///
+/// The current watermark + increment_by (provided by the user). We will ensure that the
+/// increment will never cross `(time.now() - max_delay)`.
+///
+/// Responsible for managing the idle state of the source and publishing idle watermarks.
 pub(crate) struct SourceIdleManager {
     config: IdleConfig,
     last_published_idle_wm: DateTime<Utc>,
@@ -49,7 +65,11 @@ impl SourceIdleManager {
     /// Updates and gets the idle watermark to be published.
     pub(crate) fn update_and_fetch_idle_wm(&mut self, computed_wm: i64) -> i64 {
         let increment_by = self.config.increment_by.as_millis() as i64;
+        // check if the computed watermark is -1
+        // last computed watermark can be -1, when the pod is restarted or when the processor entity is not created yet.
         let mut idle_wm = if computed_wm == -1 {
+            // if the computed watermark is -1, it means that the source is not able to compute the watermark.
+            // in this case, we can publish the idle watermark as the last published idle watermark + the increment by value.
             self.last_published_idle_wm.timestamp_millis() + increment_by
         } else {
             computed_wm + increment_by

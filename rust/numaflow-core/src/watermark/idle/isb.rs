@@ -24,7 +24,9 @@ impl Default for IdleState {
     }
 }
 
-/// ISBIdleManager manages the idle partitions in the ISB, also tracks the wmb offsets for the idle partitions.
+/// ISBIdleManager manages the idle partitions in the ISB, keeps track the last published watermark state
+/// to detect the idle partitions, also keeps track of the ctrl message offset that should be used for publishing
+/// the idle watermark.
 #[derive(Clone)]
 pub(crate) struct ISBIdleManager {
     last_published_wm: Arc<RwLock<HashMap<&'static str, Vec<IdleState>>>>,
