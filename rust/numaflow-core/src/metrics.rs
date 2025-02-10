@@ -72,6 +72,7 @@ const READ_BYTES_TOTAL: &str = "read_bytes";
 const ACK_TOTAL: &str = "ack";
 const SINK_WRITE_TOTAL: &str = "write";
 const DROPPED_TOTAL: &str = "dropped";
+const TRANSFORMER_DROPPED_TOTAL: &str = "dropped";
 const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
 
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
@@ -225,6 +226,7 @@ pub(crate) struct FallbackSinkMetrics {
 pub(crate) struct TransformerMetrics {
     /// Transformer latency
     pub(crate) time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
 }
 
 pub(crate) struct PipelineForwarderMetrics {
@@ -290,6 +292,7 @@ impl MonoVtxMetrics {
                 time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                 }),
+                dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
             },
 
             sink: SinkMetrics {
@@ -358,6 +361,11 @@ impl MonoVtxMetrics {
             TRANSFORM_TIME,
             "A Histogram to keep track of the total time taken to Transform, in microseconds",
             metrics.transformer.time.clone(),
+        );
+        transformer_registry.register(
+            TRANSFORMER_DROPPED_TOTAL,
+            "A Counter to keep track of the total number of messages dropped by the transformer",
+            metrics.transformer.dropped_total.clone(),
         );
 
         // Sink metrics
@@ -1418,6 +1426,12 @@ mod tests {
             .get_or_create(&common_labels)
             .observe(5.0);
 
+        metrics
+            .transformer
+            .dropped_total
+            .get_or_create(&common_labels)
+            .inc();
+
         metrics.sink.write_total.get_or_create(&common_labels).inc();
         metrics.sink.time.get_or_create(&common_labels).observe(4.0);
 
@@ -1451,6 +1465,7 @@ mod tests {
             r#"monovtx_transformer_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0"#,
             r#"monovtx_transformer_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_transformer_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_transformer_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 4.0"#,
             r#"monovtx_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
