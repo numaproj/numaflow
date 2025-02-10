@@ -36,6 +36,44 @@ interface TooltipProps {
   active?: boolean;
 }
 
+const formattedDate = (timestamp: number): string => {
+  if (timestamp) {
+    try {
+      const date = new Date(timestamp * 1000);
+      const dayFormatter = new Intl.DateTimeFormat("en-US", {
+        weekday: "short",
+      });
+      const monthFormatter = new Intl.DateTimeFormat("en-US", {
+        month: "short",
+      });
+
+      const day = dayFormatter.format(date);
+      const month = monthFormatter.format(date);
+      const year = date.getFullYear();
+      let hours = date.getHours();
+      const minutes = date.getMinutes().toString().padStart(2, "0");
+      const seconds = date.getSeconds().toString().padStart(2, "0");
+      const amOrPm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12 || 12;
+
+      const offsetMinutes = date.getTimezoneOffset();
+      const offsetSign = offsetMinutes > 0 ? "-" : "+";
+      const absOffsetMinutes = Math.abs(offsetMinutes);
+      const offsetHours = Math.floor(absOffsetMinutes / 60)
+        .toString()
+        .padStart(2, "0"); // Integer division
+      const offsetRemainingMinutes = (absOffsetMinutes % 60)
+        .toString()
+        .padStart(2, "0");
+
+      return `${day} ${month} ${date.getDate()} ${year} ${hours}:${minutes}:${seconds} ${amOrPm} ${offsetSign}${offsetHours}${offsetRemainingMinutes}`;
+    } catch {
+      return "Invalid Date";
+    }
+  }
+  return "Invalid Date";
+};
+
 const CustomTooltip = ({
   payload,
   active,
@@ -47,54 +85,6 @@ const CustomTooltip = ({
     Math.max(...payload.map((entry) => entry?.name?.length)) * 9.5;
   const timestamp = payload[0]?.payload?.timestamp;
 
-  const formattedDate = () => {
-    if (timestamp) {
-      try {
-        const date = new Date(timestamp * 1000);
-
-        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        const months = [
-          "Jan",
-          "Feb",
-          "Mar",
-          "Apr",
-          "May",
-          "Jun",
-          "Jul",
-          "Aug",
-          "Sep",
-          "Oct",
-          "Nov",
-          "Dec",
-        ];
-
-        const day = days[date.getDay()];
-        const month = months[date.getMonth()];
-        const year = date.getFullYear();
-        let hours = date.getHours();
-        const minutes = date.getMinutes().toString().padStart(2, "0");
-        const seconds = date.getSeconds().toString().padStart(2, "0");
-        const amOrPm = hours >= 12 ? "PM" : "AM";
-        hours = hours % 12 || 12; // Convert to 12-hour format
-
-        const offsetMinutes = date.getTimezoneOffset();
-        const offsetSign = offsetMinutes > 0 ? "-" : "+";
-        const absOffsetMinutes = Math.abs(offsetMinutes);
-        const offsetHours = Math.floor(absOffsetMinutes / 60)
-          .toString()
-          .padStart(2, "0"); // Integer division
-        const offsetRemainingMinutes = (absOffsetMinutes % 60)
-          .toString()
-          .padStart(2, "0");
-
-        return `${day} ${month} ${date.getDate()} ${year} ${hours}:${minutes}:${seconds} ${amOrPm} ${offsetSign}${offsetHours}${offsetRemainingMinutes}`;
-      } catch {
-        return "Invalid Date";
-      }
-    }
-    return "Invalid Date";
-  };
-
   return (
     <Box
       sx={{
@@ -104,7 +94,7 @@ const CustomTooltip = ({
         borderRadius: "1rem",
       }}
     >
-      <Box>{formattedDate()}</Box>
+      <Box>{formattedDate(timestamp)}</Box>
       {payload.map((entry: any, index: any) => {
         const formattedValue = getDefaultFormatter(entry?.value, displayName);
         return (
@@ -358,6 +348,26 @@ const LineChartComponent = ({
     }
   }, []);
 
+  const formatTime = (timestamp: number): string => {
+    const date = new Date(timestamp * 1000);
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, "0");
+    const amOrPm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12;
+    return `${hours.toString().padStart(2, "0")}:${minutes} ${amOrPm}`;
+  };
+
+  const createDataObject = (
+    formattedTime: string,
+    timestamp: number,
+    labelVal: string,
+    value: string
+  ): Record<string, any> => ({
+    time: formattedTime,
+    timestamp,
+    [labelVal]: parseFloat(value),
+  });
+
   const updateChartData = useCallback(() => {
     if (!chartData) return;
 
@@ -381,25 +391,15 @@ const LineChartComponent = ({
       labels.push(labelVal);
 
       item?.values?.forEach(([timestamp, value]: [number, string]) => {
-        const date = new Date(timestamp * 1000);
-        let hours = date.getHours();
-        const minutes = date.getMinutes().toString().padStart(2, "0");
-        const amOrPm = hours >= 12 ? "PM" : "AM";
-        hours = hours % 12 || 12;
-        const formattedTime = `${hours
-          .toString()
-          .padStart(2, "0")}:${minutes} ${amOrPm}`;
+        const formattedTime = formatTime(timestamp);
 
         const existingElement = transformedData?.find(
           (data) => data?.time === formattedTime
         );
         if (!existingElement) {
-          const dataObject: Record<string, any> = {
-            time: formattedTime,
-            timestamp,
-            [labelVal]: parseFloat(value),
-          };
-          transformedData.push(dataObject);
+          transformedData.push(
+            createDataObject(formattedTime, timestamp, labelVal, value)
+          );
         } else {
           existingElement[labelVal] = parseFloat(value);
         }
