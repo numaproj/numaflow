@@ -72,7 +72,7 @@ impl source::SourceReader for PulsarSource {
     }
 
     async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
-        Ok(vec![*get_vertex_replica()])
+        Ok(self.partitions_vec())
     }
 }
 
