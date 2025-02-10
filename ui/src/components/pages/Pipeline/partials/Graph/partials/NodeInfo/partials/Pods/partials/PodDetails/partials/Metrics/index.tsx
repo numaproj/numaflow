@@ -1,16 +1,26 @@
 import React, { Dispatch, SetStateAction, useContext } from "react";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
-import { Accordion, AccordionDetails, AccordionSummary, Tooltip, Typography } from "@mui/material";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import LineChartComponent from "./partials/LineChart";
 import { useMetricsDiscoveryDataFetch } from "../../../../../../../../../../../../../utils/fetchWrappers/metricsDiscoveryDataFetch";
+import {
+  dimensionReverseMap,
+  VERTEX_PENDING_MESSAGES,
+} from "./utils/constants";
 import {
   VertexDetailsContext,
   VertexDetailsContextProps,
 } from "../../../../../../../../../../../../common/SlidingSidebar/partials/VertexDetails";
-import { dimensionReverseMap, metricNameMap } from "./utils/constants";
+
 import "./style.css";
 
 export interface MetricsProps {
@@ -19,18 +29,20 @@ export interface MetricsProps {
   type: string;
   vertexId?: string;
   selectedPodName?: string;
-  metricName?: string;
+  metricDisplayName?: string;
   setMetricsFound?: Dispatch<SetStateAction<boolean>>;
+  presets?: any;
 }
 
 export function Metrics({
   namespaceId,
   pipelineId,
   type,
-  vertexId, 
+  vertexId,
   selectedPodName,
-  metricName,
+  metricDisplayName,
   setMetricsFound,
+  presets,
 }: MetricsProps) {
   const {
     metricsDiscoveryData: discoveredMetrics,
@@ -40,11 +52,16 @@ export function Metrics({
     objectType: dimensionReverseMap[type],
   });
 
-  const { expanded, setExpanded } =
-    useContext<VertexDetailsContextProps>(VertexDetailsContext);
+  const {
+    expanded,
+    setExpanded,
+    presets: presetsFromContext,
+    setPresets,
+  } = useContext<VertexDetailsContextProps>(VertexDetailsContext);
 
   const handleAccordionChange =
     (panel: string) => (_: any, isExpanded: boolean) => {
+      setPresets(undefined);
       setExpanded((prevExpanded) => {
         const newExpanded = new Set(prevExpanded);
         isExpanded ? newExpanded.add(panel) : newExpanded.delete(panel);
@@ -77,12 +94,15 @@ export function Metrics({
 
   if (discoveredMetrics == undefined) return <Box>No metrics found</Box>;
 
-  if (metricName) {
+  if (metricDisplayName) {
     const discoveredMetric = discoveredMetrics?.data?.find(
-      (m: any) => m?.metric_name === metricName
+      (m: any) => m?.display_name === metricDisplayName
     );
     if (discoveredMetric) {
-      if (setMetricsFound) setMetricsFound(true);
+      if (setMetricsFound)
+        setTimeout(() => {
+          setMetricsFound(true);
+        }, 100);
       return (
         <LineChartComponent
           namespaceId={namespaceId}
@@ -90,6 +110,7 @@ export function Metrics({
           type={type}
           metric={discoveredMetric}
           vertexId={vertexId}
+          presets={presets}
           fromModal
         />
       );
@@ -104,7 +125,7 @@ export function Metrics({
       {discoveredMetrics?.data?.map((metric: any) => {
         if (
           type === "source" &&
-          metric?.pattern_name === "vertex_gauge"
+          metric?.display_name === VERTEX_PENDING_MESSAGES
         )
           return null;
         const panelId = `${metric?.metric_name}-panel`;
@@ -119,23 +140,21 @@ export function Metrics({
               aria-controls={`${metric?.metric_name}-content`}
               id={`${metric?.metric_name}-header`}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                {metric?.display_name || 
-                 metricNameMap[metric?.metric_name] || 
-                 metric?.metric_name}
-                <Tooltip 
+              <Box sx={{ display: "flex", alignItems: "center" }}>
+                {metric?.display_name || metric?.metric_name}
+                <Tooltip
                   title={
-                    <Typography sx={{ fontSize: '1rem' }}>
-                      {metric?.metric_description || 
-                       metric?.display_name || 
-                       metricNameMap[metric?.metric_name] || 
-                       metric?.metric_name }
+                    <Typography sx={{ fontSize: "1.4rem" }}>
+                      {metric?.metric_description ||
+                        metric?.display_name ||
+                        metric?.metric_name}
                     </Typography>
-                  } 
+                  }
                   arrow
+                  placement={"top-start"}
                 >
                   <Box sx={{ marginLeft: 1 }}>
-                    <InfoOutlinedIcon sx={{ cursor: 'pointer'}} />
+                    <InfoOutlinedIcon sx={{ cursor: "pointer" }} />
                   </Box>
                 </Tooltip>
               </Box>
@@ -148,6 +167,7 @@ export function Metrics({
                   type={type}
                   metric={metric}
                   vertexId={vertexId}
+                  presets={presetsFromContext}
                   selectedPodName={selectedPodName}
                 />
               )}
