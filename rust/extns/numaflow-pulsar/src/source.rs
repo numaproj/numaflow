@@ -295,7 +295,7 @@ impl PulsarSource {
         None
     }
 
-    pub fn partitions(&self) -> Vec<u16> {
+    pub fn partitions_vec(&self) -> Vec<u16> {
         vec![self.vertex_replica]
     }
 }
