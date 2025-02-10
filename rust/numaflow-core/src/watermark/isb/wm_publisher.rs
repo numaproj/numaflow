@@ -13,7 +13,7 @@ use crate::error::{Error, Result};
 use crate::watermark::wmb::WMB;
 use bytes::BytesMut;
 use prost::Message;
-use tracing::info;
+use tracing::{debug, error, info};
 
 /// Interval at which the pod sends heartbeats.
 const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;
@@ -119,7 +119,7 @@ impl ISBWatermarkPublisher {
                 .expect("Failed to encode heartbeat");
 
             for hb_bucket in hb_buckets.iter() {
-                info!(heartbeat = ?heartbeat.heartbeat, processor = ?processor_name,
+                debug!(heartbeat = ?heartbeat.heartbeat, processor = ?processor_name,
                     "Publishing heartbeat",
                 );
                 hb_bucket
@@ -137,26 +137,19 @@ impl ISBWatermarkPublisher {
         offset: i64,
         watermark: i64,
         idle: bool,
-    ) -> Result<()> {
-        let last_published_wm_state = match self.last_published_wm.get_mut(stream.vertex) {
-            Some(wm) => wm,
-            None => {
-                return Err(Error::Watermark(format!(
-                    "Invalid vertex {}",
-                    stream.vertex
-                )))
-            }
-        };
+    ) {
+        let last_published_wm_state = self
+            .last_published_wm
+            .get_mut(stream.vertex)
+            .expect("Invalid vertex, no last published watermark state found");
 
         // we can avoid publishing the watermark if it is <= the last published watermark (optimization)
         let last_state = &last_published_wm_state[stream.partition as usize];
         if offset < last_state.offset || watermark <= last_state.watermark {
-            return Ok(());
+            return;
         }
 
-        let ot_bucket = self.ot_buckets.get(stream.vertex).ok_or(Error::Watermark(
-            "Invalid vertex, no ot bucket found".to_string(),
-        ))?;
+        let ot_bucket = self.ot_buckets.get(stream.vertex).expect("Invalid vertex");
 
         let wmb_bytes: BytesMut = WMB {
             idle,
@@ -165,18 +158,19 @@ impl ISBWatermarkPublisher {
             partition: stream.partition,
         }
         .try_into()
-        .map_err(|e| Error::Watermark(format!("{}", e)))?;
+        .expect("Failed to convert WMB to bytes");
 
+        // ot writes can fail when isb is not healthy, we can ignore since subsequent writes will
+        // go through
         ot_bucket
             .put(self.processor_name.clone(), wmb_bytes.freeze())
             .await
-            .map_err(|e| Error::Watermark(e.to_string()))?;
+            .map_err(|e| error!("Failed to write wmb to ot bucket: {}", e))
+            .ok();
 
         // update the last published watermark state
         last_published_wm_state[stream.partition as usize] =
             LastPublishedState { offset, watermark };
-
-        Ok(())
     }
 }
 
@@ -247,8 +241,7 @@ mod tests {
         // Publish watermark for partition 0
         publisher
             .publish_watermark(&stream_partition_0, 1, 100, false)
-            .await
-            .expect("Failed to publish watermark");
+            .await;
 
         let ot_bucket = js_context
             .get_key_value("isb_publisher_one_edge_OT")
@@ -268,8 +261,7 @@ mod tests {
         // Try publishing a smaller watermark for the same partition, it should not be published
         publisher
             .publish_watermark(&stream_partition_0, 0, 50, false)
-            .await
-            .expect("Failed to publish watermark");
+            .await;
 
         let wmb = ot_bucket
             .get("processor1")
@@ -284,8 +276,7 @@ mod tests {
         // Publish a smaller watermark for a different partition, it should be published
         publisher
             .publish_watermark(&stream_partition_1, 0, 50, false)
-            .await
-            .expect("Failed to publish watermark");
+            .await;
 
         let wmb = ot_bucket
             .get("processor1")
@@ -390,15 +381,9 @@ mod tests {
             partition: 0,
         };
 
-        publisher
-            .publish_watermark(&stream1, 1, 100, false)
-            .await
-            .expect("Failed to publish watermark");
+        publisher.publish_watermark(&stream1, 1, 100, false).await;
 
-        publisher
-            .publish_watermark(&stream2, 1, 200, false)
-            .await
-            .expect("Failed to publish watermark");
+        publisher.publish_watermark(&stream2, 1, 200, false).await;
 
         let ot_bucket_v1 = js_context
             .get_key_value(ot_bucket_name_v1)
@@ -498,10 +483,7 @@ mod tests {
         };
 
         // Publish watermark with idle flag set to true
-        publisher
-            .publish_watermark(&stream, 1, 100, true)
-            .await
-            .expect("Failed to publish watermark");
+        publisher.publish_watermark(&stream, 1, 100, true).await;
 
         let ot_bucket = js_context
             .get_key_value(ot_bucket_name)

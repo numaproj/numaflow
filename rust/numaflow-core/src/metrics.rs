@@ -49,7 +49,7 @@ const PENDING_PERIOD_LABEL: &str = "period";
 
 const PIPELINE_NAME_LABEL: &str = "pipeline";
 const PIPELINE_REPLICA_LABEL: &str = "replica";
-const PIPELINE_PARTITION_NAME_LABEL: &str = "partition_name";
+pub(crate) const PIPELINE_PARTITION_NAME_LABEL: &str = "partition_name";
 const PIPELINE_VERTEX_LABEL: &str = "vertex";
 const PIPELINE_VERTEX_TYPE_LABEL: &str = "vertex_type";
 
@@ -528,12 +528,9 @@ pub(crate) fn mvtx_forward_metric_labels() -> &'static Vec<(String, String)> {
 
 static PIPELINE_READ_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
 
-pub(crate) fn pipeline_forward_metric_labels(
-    vertex_type: &str,
-    partition_name: Option<&str>,
-) -> &'static Vec<(String, String)> {
+pub(crate) fn pipeline_forward_metric_labels(vertex_type: &str) -> &'static Vec<(String, String)> {
     PIPELINE_READ_METRICS_LABELS.get_or_init(|| {
-        let mut labels = vec![
+        vec![
             (
                 PIPELINE_NAME_LABEL.to_string(),
                 get_pipeline_name().to_string(),
@@ -550,16 +547,7 @@ pub(crate) fn pipeline_forward_metric_labels(
                 PIPELINE_VERTEX_LABEL.to_string(),
                 get_vertex_name().to_string(),
             ),
-        ];
-
-        if let Some(partition) = partition_name {
-            labels.push((
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                partition.to_string(),
-            ));
-        }
-
-        labels
+        ]
     })
 }
 
@@ -965,9 +953,10 @@ async fn expose_pending_metrics(
                             .get_or_create(&metric_labels)
                             .set(pending);
                     } else {
-                        let mut metric_labels =
-                            pipeline_forward_metric_labels(name, Some(name)).clone();
+                        let mut metric_labels = pipeline_forward_metric_labels(name).clone();
                         metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
+                        metric_labels
+                            .push((PIPELINE_PARTITION_NAME_LABEL.to_string(), name.to_string()));
                         pipeline_metrics()
                             .pending
                             .get_or_create(&metric_labels)
@@ -1308,8 +1297,7 @@ mod tests {
 
         {
             for (i, (label, _)) in lookback_seconds_map.iter().enumerate() {
-                let mut metric_labels =
-                    pipeline_forward_metric_labels("stream1", Some("stream1")).clone();
+                let mut metric_labels = pipeline_forward_metric_labels("stream1").clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
                 let guage = pipeline_metrics()
                     .pending
@@ -1317,8 +1305,7 @@ mod tests {
                     .get();
                 stored_values_stream_one[i] = guage;
 
-                let mut metric_labels =
-                    pipeline_forward_metric_labels("stream2", Some("stream2")).clone();
+                let mut metric_labels = pipeline_forward_metric_labels("stream2").clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
                 let guage = pipeline_metrics()
                     .pending

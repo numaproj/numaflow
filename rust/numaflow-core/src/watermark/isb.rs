@@ -123,7 +123,7 @@ impl ISBWatermarkActor {
             ISBWaterMarkActorMessage::FetchWatermark { offset, oneshot_tx } => {
                 let watermark = self
                     .fetcher
-                    .fetch_watermark(offset.offset, offset.partition_idx)?;
+                    .fetch_watermark(offset.offset, offset.partition_idx);
 
                 oneshot_tx
                     .send(Ok(watermark))
@@ -139,7 +139,7 @@ impl ISBWatermarkActor {
 
                 self.publisher
                     .publish_watermark(&stream, offset.offset, min_wm.timestamp_millis(), false)
-                    .await?;
+                    .await;
 
                 self.idle_manager.mark_active(&stream).await;
             }
@@ -163,7 +163,7 @@ impl ISBWatermarkActor {
 
                 // if there are no inflight messages, use the head idle watermark
                 if min_wm.timestamp_millis() == -1 {
-                    min_wm = self.fetcher.fetch_head_idle_watermark()?;
+                    min_wm = self.fetcher.fetch_head_idle_watermark();
                 }
 
                 if min_wm.timestamp_millis() == -1 {
@@ -183,7 +183,7 @@ impl ISBWatermarkActor {
                     };
                     self.publisher
                         .publish_watermark(stream, offset, min_wm.timestamp_millis(), true)
-                        .await?;
+                        .await;
                     self.idle_manager.mark_idle(&stream, offset).await;
                 }
             }

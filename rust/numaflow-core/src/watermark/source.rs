@@ -114,7 +114,7 @@ impl SourceWatermarkActor {
                 stream,
                 input_partition,
             } => {
-                let watermark = self.fetcher.fetch_source_watermark()?;
+                let watermark = self.fetcher.fetch_source_watermark();
                 self.publisher
                     .publish_isb_watermark(
                         input_partition,
@@ -141,7 +141,7 @@ impl SourceWatermarkActor {
                 }
 
                 // update and fetch the idle watermark that should be published
-                let compute_wm = self.fetcher.fetch_source_watermark()?;
+                let compute_wm = self.fetcher.fetch_source_watermark();
                 let idle_wm =
                     source_idle_manager.update_and_fetch_idle_wm(compute_wm.timestamp_millis());
 
@@ -154,7 +154,7 @@ impl SourceWatermarkActor {
 
                 // since isb will also be idling since we are not reading any data
                 // we need to propagate idle watermarks to ISB
-                let compute_wm = self.fetcher.fetch_source_watermark()?;
+                let compute_wm = self.fetcher.fetch_source_watermark();
                 if compute_wm.timestamp_millis() == -1 {
                     return Ok(());
                 }
@@ -194,7 +194,7 @@ impl SourceWatermarkActor {
                 }
 
                 // fetch the source watermark, identify the idle partitions and publish the idle watermark
-                let compute_wm = self.fetcher.fetch_source_watermark()?;
+                let compute_wm = self.fetcher.fetch_source_watermark();
                 if compute_wm.timestamp_millis() == -1 {
                     return Ok(());
                 }
@@ -322,7 +322,7 @@ impl SourceWatermarkHandle {
         stream: Stream,
         offset: Offset,
         input_partition: u16,
-    ) -> Result<()> {
+    ) {
         // the fetching happens in the handler
         if let Offset::Int(offset) = offset {
             self.sender
@@ -332,11 +332,7 @@ impl SourceWatermarkHandle {
                     input_partition,
                 })
                 .await
-                .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
-
-            Ok(())
-        } else {
-            Err(Error::Watermark("invalid offset type".to_string()))
+                .expect("failed to send message");
         }
     }
 
@@ -614,8 +610,7 @@ mod tests {
             });
             handle
                 .publish_source_isb_watermark(stream.clone(), offset, 0)
-                .await
-                .expect("Failed to publish edge watermark");
+                .await;
 
             // check if the watermark is published
             let wmb = ot_bucket

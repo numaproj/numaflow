@@ -37,7 +37,7 @@ pub(crate) async fn start_forwarder(
 ) -> Result<()> {
     let js_context = create_js_context(config.js_client_config.clone()).await?;
 
-    match &config.vertex_config {
+    match &config.vertex_type_config {
         pipeline::VertexType::Source(source) => {
             info!("Starting source forwarder");
 
@@ -233,7 +233,9 @@ async fn start_map_forwarder(
         let tracker_handle =
             TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
 
+        info!("Creating buffer reader for stream {:?}", stream);
         let buffer_reader = create_buffer_reader(
+            config.vertex_type_config.to_string(),
             stream,
             reader_config.clone(),
             js_context.clone(),
@@ -336,6 +338,7 @@ async fn start_sink_forwarder(
             TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
 
         let buffer_reader = create_buffer_reader(
+            config.vertex_type_config.to_string(),
             stream,
             reader_config.clone(),
             js_context.clone(),
@@ -423,6 +426,7 @@ async fn create_buffer_writer(
 }
 
 async fn create_buffer_reader(
+    vertex_type: String,
     stream: Stream,
     reader_config: BufferReaderConfig,
     js_context: Context,
@@ -431,6 +435,7 @@ async fn create_buffer_reader(
     watermark_handle: Option<ISBWatermarkHandle>,
 ) -> Result<JetStreamReader> {
     JetStreamReader::new(
+        vertex_type,
         stream,
         js_context,
         reader_config,
@@ -564,7 +569,7 @@ mod tests {
                 },
                 conditions: None,
             }],
-            vertex_config: VertexType::Source(SourceVtxConfig {
+            vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Generator(GeneratorConfig {
@@ -728,7 +733,7 @@ mod tests {
                 },
                 partitions: 0,
             }],
-            vertex_config: VertexType::Sink(SinkVtxConfig {
+            vertex_type_config: VertexType::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::Blackhole(BlackholeConfig::default()),
                     retry_config: None,
@@ -963,7 +968,7 @@ mod tests {
                 },
                 partitions: 0,
             }],
-            vertex_config: VertexType::Map(MapVtxConfig {
+            vertex_type_config: VertexType::Map(MapVtxConfig {
                 concurrency: 10,
                 map_type: MapType::UserDefined(UserDefinedConfig {
                     grpc_max_message_size: 4 * 1024 * 1024,

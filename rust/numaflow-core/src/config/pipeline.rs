@@ -52,7 +52,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) js_client_config: isb::jetstream::ClientConfig, // TODO: make it enum, since we can have different ISB implementations
     pub(crate) from_vertex_config: Vec<FromVertexConfig>,
     pub(crate) to_vertex_config: Vec<ToVertexConfig>,
-    pub(crate) vertex_config: VertexType,
+    pub(crate) vertex_type_config: VertexType,
     pub(crate) metrics_config: MetricsConfig,
     pub(crate) watermark_config: Option<WatermarkConfig>,
     pub(crate) callback_config: Option<ServingCallbackConfig>,
@@ -75,7 +75,7 @@ impl Default for PipelineConfig {
             js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
             to_vertex_config: vec![],
-            vertex_config: VertexType::Source(SourceVtxConfig {
+            vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: Default::default(),
                 transformer_config: None,
             }),
@@ -456,7 +456,7 @@ impl PipelineConfig {
             js_client_config,
             from_vertex_config,
             to_vertex_config,
-            vertex_config: vertex,
+            vertex_type_config: vertex,
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
             watermark_config,
             callback_config,
@@ -599,7 +599,7 @@ mod tests {
             js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
             to_vertex_config: vec![],
-            vertex_config: VertexType::Source(SourceVtxConfig {
+            vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: Default::default(),
                 transformer_config: None,
             }),
@@ -658,7 +658,7 @@ mod tests {
                 partitions: 1,
             }],
             to_vertex_config: vec![],
-            vertex_config: VertexType::Sink(SinkVtxConfig {
+            vertex_type_config: VertexType::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::Blackhole(BlackholeConfig {}),
                     retry_config: None,
@@ -717,7 +717,7 @@ mod tests {
                 },
                 conditions: None,
             }],
-            vertex_config: VertexType::Source(SourceVtxConfig {
+            vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Generator(GeneratorConfig {
@@ -787,7 +787,7 @@ mod tests {
                 },
                 conditions: None,
             }],
-            vertex_config: VertexType::Source(SourceVtxConfig {
+            vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Pulsar(PulsarSourceConfig {
@@ -924,7 +924,7 @@ mod tests {
                 partitions: 1,
             }],
             to_vertex_config: vec![],
-            vertex_config: VertexType::Map(MapVtxConfig {
+            vertex_type_config: VertexType::Map(MapVtxConfig {
                 concurrency: 500,
                 map_type: MapType::UserDefined(UserDefinedConfig {
                     grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,

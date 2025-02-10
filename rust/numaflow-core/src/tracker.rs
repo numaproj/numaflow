@@ -358,7 +358,7 @@ impl TrackerHandle {
         callback_handler: Option<CallbackHandler>,
     ) -> Self {
         let enable_callbacks = callback_handler.is_some();
-        let (sender, receiver) = mpsc::channel(100);
+        let (sender, receiver) = mpsc::channel(1000);
         let tracker = Tracker::new(receiver, watermark_handle, callback_handler);
         tokio::spawn(tracker.run());
         Self {

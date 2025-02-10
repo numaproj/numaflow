@@ -24,7 +24,7 @@ use crate::metrics::{
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
 use crate::watermark::isb::ISBWatermarkHandle;
-use crate::Result;
+use crate::{metrics, Result};
 
 /// The JetStreamReader is a handle to the background actor that continuously fetches messages from JetStream.
 /// It can be used to cancel the background task and stop reading from JetStream.
@@ -38,6 +38,7 @@ pub(crate) struct JetStreamReader {
     tracker_handle: TrackerHandle,
     batch_size: usize,
     watermark_handle: Option<ISBWatermarkHandle>,
+    vertex_type: String,
 }
 
 /// JSWrappedMessage is a wrapper around the JetStream message that includes the
@@ -103,6 +104,7 @@ impl TryFrom<JSWrappedMessage> for Message {
 
 impl JetStreamReader {
     pub(crate) async fn new(
+        vertex_type: String,
         stream: Stream,
         js_ctx: Context,
         config: BufferReaderConfig,
@@ -131,6 +133,7 @@ impl JetStreamReader {
         config.wip_ack_interval = wip_ack_interval;
 
         Ok(Self {
+            vertex_type,
             stream,
             config: config.clone(),
             consumer,
@@ -159,9 +162,14 @@ impl JetStreamReader {
             let tracker_handle = self.tracker_handle.clone();
             let cancel_token = cancel_token.clone();
             let watermark_handle = self.watermark_handle.clone();
+            let vertex_type = self.vertex_type.clone();
 
             async move {
-                let labels = pipeline_forward_metric_labels("Sink", Some(stream.name));
+                let mut labels = pipeline_forward_metric_labels(&vertex_type).clone();
+                labels.push((
+                    metrics::PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                    stream.name.to_string(),
+                ));
 
                 let mut message_stream = consumer.messages().await.map_err(|e| {
                     Error::ISB(format!(
@@ -245,7 +253,7 @@ impl JetStreamReader {
                             pipeline_metrics()
                                 .forwarder
                                 .read_total
-                                .get_or_create(labels)
+                                .get_or_create(&labels)
                                 .inc();
                         }
                     }
@@ -273,7 +281,7 @@ impl JetStreamReader {
                 let ack_result = msg.ack_with(AckKind::Progress).await;
                 if let Err(e) = ack_result {
                     // We expect that the ack in the next iteration will be successful.
-                    // If its some unrecoverable Jetstream error, the fetching messages in the JestreamReader implementation should also fail and cause the system to shut down.
+                    // If its some unrecoverable Jetstream error, the fetching messages in the JetstreamReader implementation should also fail and cause the system to shut down.
                     error!(?e, "Failed to send InProgress Ack to Jetstream for message");
                 }
             };
@@ -395,6 +403,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let js_reader = JetStreamReader::new(
+            "Map".to_string(),
             stream.clone(),
             context.clone(),
             buf_reader_config,
@@ -494,6 +503,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let js_reader = JetStreamReader::new(
+            "Map".to_string(),
             js_stream.clone(),
             context.clone(),
             buf_reader_config,

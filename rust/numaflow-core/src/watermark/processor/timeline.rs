@@ -8,7 +8,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use std::sync::RwLock;
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 use crate::watermark::wmb::WMB;
 
@@ -71,7 +71,7 @@ impl OffsetTimeline {
                 );
             }
             (Ordering::Greater, Ordering::Equal) => {
-                info!(?node, "Idle Watermark detected");
+                debug!(?node, "Idle Watermark detected");
                 element_node.watermark = node.watermark;
             }
         }

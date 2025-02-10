@@ -3,7 +3,6 @@
 //! timelines to determine the watermark. We don't care about offsets here since the watermark starts
 //! at source, we only consider the head watermark and consider the minimum watermark of all the active
 //! processors.
-use crate::error::Result;
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::Watermark;
 
@@ -20,7 +19,7 @@ impl SourceWatermarkFetcher {
 
     /// Fetches the watermark for the source, which is the minimum watermark of all the active
     /// processors.
-    pub(crate) fn fetch_source_watermark(&mut self) -> Result<Watermark> {
+    pub(crate) fn fetch_source_watermark(&mut self) -> Watermark {
         let mut min_wm = i64::MAX;
 
         for (_, processor) in self
@@ -47,7 +46,7 @@ impl SourceWatermarkFetcher {
             min_wm = -1;
         }
 
-        Ok(Watermark::from_timestamp_millis(min_wm).expect("Invalid watermark"))
+        Watermark::from_timestamp_millis(min_wm).expect("Failed to parse watermark")
     }
 }
 
@@ -108,7 +107,7 @@ mod tests {
         let mut fetcher = SourceWatermarkFetcher::new(processor_manager);
 
         // Invoke fetch_watermark and verify the result
-        let watermark = fetcher.fetch_source_watermark().unwrap();
+        let watermark = fetcher.fetch_source_watermark();
         assert_eq!(watermark.timestamp_millis(), 300);
     }
 
@@ -187,7 +186,7 @@ mod tests {
         let mut fetcher = SourceWatermarkFetcher::new(processor_manager);
 
         // Invoke fetch_watermark and verify the result
-        let watermark = fetcher.fetch_source_watermark().unwrap();
+        let watermark = fetcher.fetch_source_watermark();
         assert_eq!(watermark.timestamp_millis(), 323);
     }
 }

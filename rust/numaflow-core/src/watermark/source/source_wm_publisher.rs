@@ -77,8 +77,7 @@ impl SourceWatermarkPublisher {
                 watermark - self.max_delay.as_millis() as i64, // consider the max delay configured by the user while publishing source watermark
                 idle,
             )
-            .await
-            .expect("Failed to publish watermark");
+            .await;
     }
 
     /// Publishes the ISB watermark for the input partition. It internally uses ISB publisher with
@@ -112,8 +111,7 @@ impl SourceWatermarkPublisher {
             .get_mut(&processor_name)
             .expect("Publisher not found")
             .publish_watermark(stream, offset, watermark, idle)
-            .await
-            .expect("Failed to publish watermark");
+            .await;
     }
 }
 

@@ -43,7 +43,7 @@ impl ISBWatermarkFetcher {
     }
 
     /// Fetches the watermark for the given offset and partition.
-    pub(crate) fn fetch_watermark(&mut self, offset: i64, partition_idx: u16) -> Result<Watermark> {
+    pub(crate) fn fetch_watermark(&mut self, offset: i64, partition_idx: u16) -> Watermark {
         // Iterate over all the processor managers and get the smallest watermark. (join case)
         for (edge, processor_manager) in self.processor_managers.iter() {
             let mut epoch = i64::MAX;
@@ -102,7 +102,7 @@ impl ISBWatermarkFetcher {
 
     /// Fetches the latest idle WMB with the smallest watermark for the given partition
     /// Only returns one if all Publishers are idle and if it's the smallest one of any partitions
-    pub(crate) fn fetch_head_idle_watermark(&mut self) -> Result<Watermark> {
+    pub(crate) fn fetch_head_idle_watermark(&mut self) -> Watermark {
         let mut min_wm = i64::MAX;
 
         for (edge, processor_manager) in &self.processor_managers {
@@ -122,9 +122,8 @@ impl ISBWatermarkFetcher {
                     if let Some(head_wmb) = timeline.get_head_wmb() {
                         // if the processor is not idle, return early
                         if !head_wmb.idle {
-                            return Ok(
-                                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
-                            );
+                            return Watermark::from_timestamp_millis(-1)
+                                .expect("failed to parse time");
                         }
                         // consider the smallest watermark among all the partitions
                         epoch = epoch.min(head_wmb.watermark);
@@ -147,11 +146,11 @@ impl ISBWatermarkFetcher {
             min_wm = -1;
         }
 
-        Ok(Watermark::from_timestamp_millis(min_wm).expect("failed to parse time"))
+        Watermark::from_timestamp_millis(min_wm).expect("failed to parse time")
     }
 
     /// returns the smallest last processed watermark among all the partitions
-    fn get_watermark(&self) -> Result<Watermark> {
+    fn get_watermark(&self) -> Watermark {
         let mut min_wm = i64::MAX;
         for wm in self.last_processed_wm.values() {
             for &w in wm {
@@ -162,9 +161,9 @@ impl ISBWatermarkFetcher {
         }
 
         if min_wm == i64::MAX {
-            return Ok(Watermark::from_timestamp_millis(-1).expect("failed to parse time"));
+            return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
         }
-        Ok(Watermark::from_timestamp_millis(min_wm).expect("failed to parse time"))
+        Watermark::from_timestamp_millis(min_wm).expect("failed to parse time")
     }
 }
 
@@ -237,7 +236,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_watermark and verify the result
-        let watermark = fetcher.fetch_watermark(2, 0).unwrap();
+        let watermark = fetcher.fetch_watermark(2, 0);
         assert_eq!(watermark.timestamp_millis(), 100);
     }
 
@@ -375,7 +374,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_watermark and verify the result
-        let watermark = fetcher.fetch_watermark(12, 0).unwrap();
+        let watermark = fetcher.fetch_watermark(12, 0);
         assert_eq!(watermark.timestamp_millis(), 150);
     }
 
@@ -607,11 +606,11 @@ mod tests {
 
         // Invoke fetch_watermark and verify the result for partition 0, first fetch will be -1 because we have not fetched for other
         // partition (we consider min across the last fetched watermark)
-        let watermark_p0 = fetcher.fetch_watermark(12, 0).unwrap();
+        let watermark_p0 = fetcher.fetch_watermark(12, 0);
         assert_eq!(watermark_p0.timestamp_millis(), -1);
 
         // Invoke fetch_watermark and verify the result for partition 1 (we consider min across the last fetch wm for all partitions)
-        let watermark_p1 = fetcher.fetch_watermark(32, 1).unwrap();
+        let watermark_p1 = fetcher.fetch_watermark(32, 1);
         assert_eq!(watermark_p1.timestamp_millis(), 150);
     }
 
@@ -834,11 +833,11 @@ mod tests {
                 .unwrap();
 
         // Invoke fetch_watermark and verify the result for partition 0
-        let watermark_p0 = fetcher.fetch_watermark(12, 0).unwrap();
+        let watermark_p0 = fetcher.fetch_watermark(12, 0);
         assert_eq!(watermark_p0.timestamp_millis(), -1);
 
         // Invoke fetch_watermark and verify the result for partition 1
-        let watermark_p1 = fetcher.fetch_watermark(32, 1).unwrap();
+        let watermark_p1 = fetcher.fetch_watermark(32, 1);
         assert_eq!(watermark_p1.timestamp_millis(), 150);
     }
 
@@ -891,7 +890,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_head_idle_watermark and verify the result
-        let watermark = fetcher.fetch_head_idle_watermark().unwrap();
+        let watermark = fetcher.fetch_head_idle_watermark();
         assert_eq!(watermark.timestamp_millis(), 200);
     }
 
@@ -971,7 +970,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_head_idle_watermark and verify the result
-        let watermark = fetcher.fetch_head_idle_watermark().unwrap();
+        let watermark = fetcher.fetch_head_idle_watermark();
         assert_eq!(watermark.timestamp_millis(), 150);
     }
 
@@ -1089,7 +1088,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_head_idle_watermark and verify the result
-        let watermark = fetcher.fetch_head_idle_watermark().unwrap();
+        let watermark = fetcher.fetch_head_idle_watermark();
         assert_eq!(watermark.timestamp_millis(), 150);
     }
 
@@ -1312,7 +1311,7 @@ mod tests {
                 .unwrap();
 
         // Invoke fetch_head_idle_watermark and verify the result
-        let watermark = fetcher.fetch_head_idle_watermark().unwrap();
+        let watermark = fetcher.fetch_head_idle_watermark();
         assert_eq!(watermark.timestamp_millis(), 150);
     }
 
@@ -1365,7 +1364,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_head_idle_watermark and verify the result
-        let watermark = fetcher.fetch_head_idle_watermark().unwrap();
+        let watermark = fetcher.fetch_head_idle_watermark();
         assert_eq!(watermark.timestamp_millis(), -1);
     }
 }

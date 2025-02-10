@@ -26,6 +26,7 @@ use crate::metrics::{
 use crate::tracker::TrackerHandle;
 use crate::{
     message::{Message, Offset},
+    metrics,
     reader::LagReader,
 };
 
@@ -291,7 +292,12 @@ impl Source {
         let mut transformer = self.transformer.clone();
         let mut watermark_handle = self.watermark_handle.clone();
 
-        let pipeline_labels = pipeline_forward_metric_labels("Source", Some(get_vertex_name()));
+        let mut pipeline_labels = pipeline_forward_metric_labels("Source").clone();
+        pipeline_labels.push((
+            metrics::PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            get_vertex_name().to_string(),
+        ));
+
         let mvtx_labels = mvtx_forward_metric_labels();
 
         info!(?batch_size, "Started streaming source with batch size");
@@ -325,7 +331,7 @@ impl Source {
                 };
 
                 let msgs_len = messages.len();
-                Self::send_read_metrics(pipeline_labels, mvtx_labels, read_start_time, msgs_len);
+                Self::send_read_metrics(&pipeline_labels, mvtx_labels, read_start_time, msgs_len);
 
                 if msgs_len == 0 {
                     if let Some(watermark_handle) = watermark_handle.as_mut() {

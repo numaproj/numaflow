@@ -476,9 +476,7 @@ impl JetstreamWriter {
                 };
                 handle
                     .publish_source_isb_watermark(stream, offset, input_partition)
-                    .await
-                    .map_err(|e| Error::ISB(format!("Failed to update watermark: {:?}", e)))
-                    .expect("Failed to publish watermark");
+                    .await;
             }
         }
     }

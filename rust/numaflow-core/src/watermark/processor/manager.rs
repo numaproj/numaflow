@@ -227,7 +227,7 @@ impl ProcessorManager {
                     let processor_name = Bytes::from(kv.key);
                     let wmb: WMB = kv.value.try_into().expect("Failed to decode WMB");
 
-                    info!(wmb = ?wmb, processor = ?processor_name, "Received wmb from watcher");
+                    debug!(wmb = ?wmb, processor = ?processor_name, "Received wmb from watcher");
                     if let Some(processor) = processors
                         .write()
                         .expect("failed to acquire lock")
@@ -284,7 +284,7 @@ impl ProcessorManager {
                         .expect("failed to acquire lock")
                         .insert(processor_name.clone(), hb);
 
-                    info!(hb = ?hb, processor = ?processor_name, "Received heartbeat from watcher");
+                    debug!(hb = ?hb, processor = ?processor_name, "Received heartbeat from watcher");
                     // if the processor is not in the processors map, add it
                     // or if processor status is not active, set it to active
                     let mut processors = processors.write().expect("failed to acquire lock");
