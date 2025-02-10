@@ -26,23 +26,78 @@ interface TooltipProps {
   active?: boolean;
 }
 
-function CustomTooltip({ payload, label, active, patternName }: TooltipProps & { patternName: string }) {
-  if (active && payload && payload.length) {
-    const maxWidth =
-      Math.max(...payload.map((entry) => entry?.name?.length)) * 9.5;
-    return (
-      <Box
-        sx={{
-          backgroundColor: "#fff",
-          padding: "1rem",
-          border: "0.1rem solid #ccc",
-          borderRadius: "1rem",
-        }}
-      >
-        <Box>{label}</Box>
-        {payload.map((entry: any, index: any) => {
-          const formattedValue = getDefaultFormatter(entry?.value, patternName);
-          return(
+const CustomTooltip = ({
+  payload,
+  active,
+  patternName,
+}: TooltipProps & { patternName: string }) => {
+  if (!active || !payload || !payload.length) return null;
+
+  const maxWidth =
+    Math.max(...payload.map((entry) => entry?.name?.length)) * 9.5;
+  const timestamp = payload[0]?.payload?.timestamp;
+
+  const formattedDate = () => {
+    if (timestamp) {
+      try {
+        const date = new Date(timestamp * 1000);
+
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const months = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
+
+        const day = days[date.getDay()];
+        const month = months[date.getMonth()];
+        const year = date.getFullYear();
+        let hours = date.getHours();
+        const minutes = date.getMinutes().toString().padStart(2, "0");
+        const seconds = date.getSeconds().toString().padStart(2, "0");
+        const amOrPm = hours >= 12 ? "PM" : "AM";
+        hours = hours % 12 || 12; // Convert to 12-hour format
+
+        const offsetMinutes = date.getTimezoneOffset();
+        const offsetSign = offsetMinutes > 0 ? "-" : "+";
+        const absOffsetMinutes = Math.abs(offsetMinutes);
+        const offsetHours = Math.floor(absOffsetMinutes / 60)
+          .toString()
+          .padStart(2, "0"); // Integer division
+        const offsetRemainingMinutes = (absOffsetMinutes % 60)
+          .toString()
+          .padStart(2, "0");
+
+        return `${day} ${month} ${date.getDate()} ${year} ${hours}:${minutes}:${seconds} ${amOrPm} ${offsetSign}${offsetHours}${offsetRemainingMinutes}`;
+      } catch {
+        return "Invalid Date";
+      }
+    }
+    return "Invalid Date";
+  };
+
+  return (
+    <Box
+      sx={{
+        backgroundColor: "#fff",
+        padding: "1rem",
+        border: "0.1rem solid #ccc",
+        borderRadius: "1rem",
+      }}
+    >
+      <Box>{formattedDate()}</Box>
+      {payload.map((entry: any, index: any) => {
+        const formattedValue = getDefaultFormatter(entry?.value, patternName);
+        return (
           <Box key={`item-${index}`} sx={{ display: "flex" }}>
             <Box
               sx={{
@@ -56,13 +111,11 @@ function CustomTooltip({ payload, label, active, patternName }: TooltipProps & {
             </Box>
             <Box sx={{ color: entry?.color }}>{formattedValue}</Box>
           </Box>
-          );
-        })}
-      </Box>
-    );
-  }
-  return null;
-}
+        );
+      })}
+    </Box>
+  );
+};
 
 const getYAxisLabel = (unit: string) => {
   if (unit !== "") {
@@ -78,12 +131,12 @@ const getDefaultFormatter = (value: number, patternName: string) => {
       ? `${Math.floor(formattedValue)}${suffix}`
       : `${formattedValue}${suffix}`;
   };
-  switch(patternName){
+  switch (patternName) {
     case "mono_vertex_histogram":
-      if (value === 0){
+      if (value === 0) {
         return "0";
       } else if (value < 1000) {
-        return formatValue(value," μs");
+        return formatValue(value, " μs");
       } else if (value < 1000000) {
         return formatValue(value / 1000, " ms");
       } else {
@@ -91,10 +144,10 @@ const getDefaultFormatter = (value: number, patternName: string) => {
       }
     case "container_cpu_memory_utilization":
     case "pod_cpu_memory_utilization":
-      if (value === 0){
+      if (value === 0) {
         return "0";
       } else if (value < 1000) {
-        return formatValue(value," %");
+        return formatValue(value, " %");
       } else if (value < 1000000) {
         return formatValue(value / 1000, "k %");
       } else {
@@ -104,7 +157,7 @@ const getDefaultFormatter = (value: number, patternName: string) => {
       if (value === 0) {
         return "0";
       } else if (value < 1000) {
-        return formatValue(value,"");
+        return formatValue(value, "");
       } else if (value < 1000000) {
         return formatValue(value / 1000, " k");
       } else {
@@ -185,15 +238,14 @@ const LineChartComponent = ({
           return vertexId;
         case "pod":
           // based on pattern names, update filter based on pod value or multiple pods based on regex
-          if (metric?.pattern_name === "pod_cpu_memory_utilization"){
-            switch(type){
+          if (metric?.pattern_name === "pod_cpu_memory_utilization") {
+            switch (type) {
               case "monoVertex":
                 return `${pipelineId}-.*`;
               default:
                 return `${pipelineId}-${vertexId}-.*`;
             }
-          }
-          else {
+          } else {
             return selectedPodName;
           }
         default:
@@ -267,71 +319,79 @@ const LineChartComponent = ({
     }
   }, [error, addError]);
 
-  const groupByLabel = useCallback((dimension: string, patternName: string) => {
-    switch(patternName){
-      case "pod_cpu_memory_utilization":
-        return ["pod"];
-      case "container_cpu_memory_utilization":
-        return ["container"];
-      case "mono_vertex_gauge":
-      case "vertex_gauge":
-        return dimension === "pod" ? ["pod", "period"] : ["period"];
-    }
-    switch (dimension) {
-      case "mono-vertex":
-        return ["mvtx_name"];
-      default:
-        return [dimension];
-    }
-  }, []);
+  const groupByLabel = useCallback(
+    (dimension: string, patternName: string): string[] => {
+      switch (patternName) {
+        case "pod_cpu_memory_utilization":
+          return ["pod"];
+        case "container_cpu_memory_utilization":
+          return ["container"];
+        case "mono_vertex_gauge":
+        case "vertex_gauge":
+          return dimension === "pod" ? ["pod", "period"] : ["period"];
+      }
+      switch (dimension) {
+        case "mono-vertex":
+          return ["mvtx_name"];
+        default:
+          return [dimension];
+      }
+    },
+    []
+  );
 
   const updateChartData = useCallback(() => {
-    if (chartData) {
-      const labels: any[] = [];
-      const transformedData: any[] = [];
-      const label = groupByLabel(
-        metricsReq?.dimension,
-        metricsReq?.pattern_name
-      );
-      chartData?.forEach((item) => {
-        let labelVal = "";
-        label?.forEach((eachLabel: string) => {
-          if (item?.metric?.[eachLabel] !== undefined) {
-            labelVal += (labelVal ? "-" : "") + item.metric[eachLabel];
-          }
-        });
+    if (!chartData) return;
 
-        // Remove initial hyphen if labelVal is not empty
-        if (labelVal.startsWith("-") && labelVal.length > 1) {
-          labelVal = labelVal.substring(1);
+    const labels: string[] = [];
+    const transformedData: Record<string, any>[] = [];
+    const label = groupByLabel(metricsReq?.dimension, metricsReq?.pattern_name);
+
+    chartData?.forEach((item) => {
+      let labelVal = "";
+      label?.forEach((eachLabel: string) => {
+        if (item?.metric?.[eachLabel] !== undefined) {
+          labelVal += (labelVal ? "-" : "") + item.metric[eachLabel];
         }
+      });
 
-        labels.push(labelVal);
-        item?.values?.forEach(([timestamp, value]: [number, string]) => {
-          const date = new Date(timestamp * 1000);
-          const hours = date.getHours().toString().padStart(2, "0");
-          const minutes = date.getMinutes().toString().padStart(2, "0");
-          const formattedTime = `${hours}:${minutes}`;
-          const ele = transformedData?.find(
-            (data) => data?.time === formattedTime
-          );
-          if (!ele) {
-            const dataObject: Record<string, any> = { time: formattedTime };
-            dataObject[labelVal] = parseFloat(value);
-            transformedData.push(dataObject);
-          } else {
-            ele[labelVal] = parseFloat(value);
-          }
-        });
+      // Remove initial hyphen if labelVal is not empty
+      if (labelVal.startsWith("-") && labelVal.length > 1) {
+        labelVal = labelVal.substring(1);
+      }
+
+      labels.push(labelVal);
+
+      item?.values?.forEach(([timestamp, value]: [number, string]) => {
+        const date = new Date(timestamp * 1000);
+        let hours = date.getHours();
+        const minutes = date.getMinutes().toString().padStart(2, "0");
+        const amOrPm = hours >= 12 ? "PM" : "AM";
+        hours = hours % 12 || 12;
+        const formattedTime = `${hours
+          .toString()
+          .padStart(2, "0")}:${minutes} ${amOrPm}`;
+
+        const existingElement = transformedData?.find(
+          (data) => data?.time === formattedTime
+        );
+        if (!existingElement) {
+          const dataObject: Record<string, any> = {
+            time: formattedTime,
+            timestamp,
+            [labelVal]: parseFloat(value),
+          };
+          transformedData.push(dataObject);
+        } else {
+          existingElement[labelVal] = parseFloat(value);
+        }
       });
-      transformedData.sort((a, b) => {
-        const [hoursA, minutesA] = a.time.split(":").map(Number);
-        const [hoursB, minutesB] = b.time.split(":").map(Number);
-        return hoursA * 60 + minutesA - (hoursB * 60 + minutesB);
-      });
-      setChartLabels(labels);
-      setTransformedData(transformedData);
-    }
+    });
+    transformedData.sort((a, b) => {
+      return a?.timestamp - b?.timestamp;
+    });
+    setChartLabels(labels);
+    setTransformedData(transformedData);
   }, [chartData, metricsReq, groupByLabel]);
 
   useEffect(() => {
@@ -478,7 +538,9 @@ const LineChartComponent = ({
               />
             ))}
 
-            <Tooltip content={<CustomTooltip patternName={metric?.pattern_name} />}/>
+            <Tooltip
+              content={<CustomTooltip patternName={metric?.pattern_name} />}
+            />
             <Legend />
           </LineChart>
         </ResponsiveContainer>
