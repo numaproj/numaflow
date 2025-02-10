@@ -226,7 +226,7 @@ mod tests {
         let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
 
         let message = Message {
-            kind: Default::default(),
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
@@ -293,7 +293,7 @@ mod tests {
         let mut messages = vec![];
         for i in 0..5 {
             let message = Message {
-                kind: Default::default(),
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("value_{}", i).into(),
@@ -369,7 +369,7 @@ mod tests {
         let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
 
         let message = Message {
-            kind: Default::default(),
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),

@@ -17,7 +17,7 @@ use tracing::{error, info};
 use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, MessageKind, Metadata, Offset, ReadAck};
+use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
 use crate::metrics::{
     pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
 };
@@ -78,7 +78,7 @@ impl TryFrom<JSWrappedMessage> for Message {
         ));
 
         Ok(Message {
-            kind: header.kind.into(),
+            typ: header.kind.into(),
             keys: Arc::from(header.keys.into_boxed_slice()),
             tags: None,
             value: body.payload.into(),
@@ -209,7 +209,7 @@ impl JetStreamReader {
                             };
 
                             // we can ignore the wmb messages
-                            if let MessageKind::WMB = message.kind {
+                            if let MessageType::WMB = message.typ {
                                 // ack the message and continue
                                 jetstream_message.ack().await.map_err(|e| {
                                     Error::ISB(format!("Failed to ack the wmb message: {:?}", e))
@@ -413,7 +413,7 @@ mod tests {
 
         for i in 0..10 {
             let message = Message {
-                kind: Default::default(),
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
@@ -514,7 +514,7 @@ mod tests {
         // write 5 messages
         for i in 0..5 {
             let message = Message {
-                kind: Default::default(),
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),

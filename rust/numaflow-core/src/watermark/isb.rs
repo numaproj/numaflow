@@ -24,7 +24,7 @@ use crate::config::pipeline::watermark::EdgeWatermarkConfig;
 use crate::config::pipeline::ToVertexConfig;
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
-use crate::watermark::idle::isb::ISBIdleManager;
+use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 use crate::watermark::processor::manager::ProcessorManager;
@@ -90,14 +90,14 @@ struct ISBWatermarkActor {
     /// though insertion and deletion are O(1). We do almost same amount insertion, deletion and
     /// getting the lowest watermark so BTreeSet is the best choice.
     offset_set: HashMap<u16, BTreeSet<OffsetWatermark>>,
-    idle_manager: ISBIdleManager,
+    idle_manager: ISBIdleDetector,
 }
 
 impl ISBWatermarkActor {
     fn new(
         fetcher: ISBWatermarkFetcher,
         publisher: ISBWatermarkPublisher,
-        idle_manager: ISBIdleManager,
+        idle_manager: ISBIdleDetector,
     ) -> Self {
         Self {
             fetcher,
@@ -257,7 +257,7 @@ impl ISBWatermarkHandle {
         .await?;
 
         let idle_manager =
-            ISBIdleManager::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
+            ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
 
         let actor = ISBWatermarkActor::new(fetcher, publisher, idle_manager);
         tokio::spawn(async move { actor.run(receiver).await });

@@ -16,7 +16,7 @@ impl TryFrom<serving::Message> for Message {
 
         Ok(Message {
             // we do not support keys from HTTP client
-            kind: Default::default(),
+            typ: Default::default(),
             keys: Arc::from(vec![]),
             tags: None,
             value: message.value,

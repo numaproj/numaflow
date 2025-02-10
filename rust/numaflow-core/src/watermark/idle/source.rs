@@ -1,35 +1,38 @@
+//! Source Idle Manager resolves the following conundrums:
+//!
+//! > How to decide if the source is idling?
+//!
+//! If the source is not reading any messages for threshold (provided by the user)
+//! time, then it is considered idling.
+//!
+//! > When to publish the idle watermark?
+//!
+//! If the source is idling and the step interval has passed (also provided by the user).
+//!
+//! > What to publish as the idle watermark?
+//!
+//! The current watermark + increment_by (provided by the user). We will ensure that the
+//! increment will never cross `(time.now() - max_delay)`.
+
 use crate::config::pipeline::watermark::IdleConfig;
 use chrono::{DateTime, Utc};
+use tracing::warn;
 
-/// Source Idle Manager resolves the following conundrums:
-///
-/// **How to decide if the source is idling?**
-///
-/// If the source is not reading any messages for threshold (provided by the user)
-/// time, then it is considered idling.
-///
-/// **When to publish the idle watermark?**
-///
-/// If the source is idling and the step interval has passed (also provided by the user).
-///
-/// **What to publish as the idle watermark?**
-///
-/// The current watermark + increment_by (provided by the user). We will ensure that the
-/// increment will never cross `(time.now() - max_delay)`.
-///
-/// Responsible for managing the idle state of the source and publishing idle watermarks.
-pub(crate) struct SourceIdleManager {
+/// Responsible for detecting the idle state of the source and publishing idle watermarks.
+pub(crate) struct SourceIdleDetector {
     config: IdleConfig,
+    /// last_published_idle_wm it to incr-by
     last_published_idle_wm: DateTime<Utc>,
+    /// last_idle_wm_published_time is for comparing with the step interval
     last_idle_wm_published_time: DateTime<Utc>,
     updated_ts: DateTime<Utc>,
 }
 
-impl SourceIdleManager {
+impl SourceIdleDetector {
     /// Creates a new instance of SourceIdleManager.
     pub fn new(config: IdleConfig) -> Self {
         let default_time = DateTime::from_timestamp_millis(-1).expect("Invalid timestamp");
-        SourceIdleManager {
+        SourceIdleDetector {
             config,
             updated_ts: Utc::now(),
             last_idle_wm_published_time: default_time,
@@ -69,14 +72,17 @@ impl SourceIdleManager {
         // last computed watermark can be -1, when the pod is restarted or when the processor entity is not created yet.
         let mut idle_wm = if computed_wm == -1 {
             // if the computed watermark is -1, it means that the source is not able to compute the watermark.
-            // in this case, we can publish the idle watermark as the last published idle watermark + the increment by value.
+            // in this case, we can publish the idle watermark as the last published (idle watermark + increment by value).
             self.last_published_idle_wm.timestamp_millis() + increment_by
         } else {
             computed_wm + increment_by
         };
 
+        // do not assign future timestamps for WM.
+        // this could happen if step interval and increment-by are set aggressively
         let now = Utc::now().timestamp_millis();
         if idle_wm > now {
+            warn!(?idle_wm, "idle config is aggressive (reduce step/increment-by), wm > now(), resetting to now");
             idle_wm = now;
         }
 
@@ -101,7 +107,7 @@ mod tests {
             step_interval: Duration::from_millis(50),
             increment_by: Duration::from_millis(10),
         };
-        let mut manager = SourceIdleManager::new(config);
+        let mut manager = SourceIdleDetector::new(config);
 
         // Initially, the source should not be idling
         assert!(!manager.is_source_idling());
@@ -118,7 +124,7 @@ mod tests {
             step_interval: Duration::from_millis(50),
             increment_by: Duration::from_millis(10),
         };
-        let mut manager = SourceIdleManager::new(config);
+        let mut manager = SourceIdleDetector::new(config);
 
         // Simulate the source idling by advancing the updated timestamp
         manager.updated_ts = Utc::now() - chrono::Duration::milliseconds(200);
@@ -136,7 +142,7 @@ mod tests {
             step_interval: Duration::from_millis(50),
             increment_by: Duration::from_millis(10),
         };
-        let mut manager = SourceIdleManager::new(config);
+        let mut manager = SourceIdleDetector::new(config);
 
         // Update and fetch idle watermark with computed_wm = -1
         let idle_wm = manager.update_and_fetch_idle_wm(-1);

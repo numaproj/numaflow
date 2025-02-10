@@ -120,7 +120,7 @@ impl TryFrom<read_response::Result> for Message {
         };
 
         Ok(Message {
-            kind: Default::default(),
+            typ: Default::default(),
             keys: Arc::from(result.keys),
             tags: None,
             value: result.payload.into(),

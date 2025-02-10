@@ -552,7 +552,7 @@ mod tests {
         );
 
         let message = Message {
-            kind: Default::default(),
+            typ: Default::default(),
             keys: Arc::from(vec!["key_0".to_string()]),
             tags: None,
             value: "message 0".as_bytes().to_vec().into(),
@@ -614,7 +614,7 @@ mod tests {
             .unwrap();
 
         let message = Message {
-            kind: Default::default(),
+            typ: Default::default(),
             keys: Arc::from(vec!["key_0".to_string()]),
             tags: None,
             value: "message 0".as_bytes().to_vec().into(),
@@ -716,7 +716,7 @@ mod tests {
         // Publish 10 messages successfully
         for i in 0..10 {
             let message = Message {
-                kind: Default::default(),
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
@@ -744,7 +744,7 @@ mod tests {
         // Attempt to publish a message which has a payload size greater than the max_message_size
         // so that it fails and sync write will be attempted and it will be blocked
         let message = Message {
-            kind: Default::default(),
+            typ: Default::default(),
             keys: Arc::from(vec!["key_11".to_string()]),
             tags: None,
             value: vec![0; 1025].into(),
@@ -1018,7 +1018,7 @@ mod tests {
         // Publish 500 messages
         for i in 0..500 {
             let message = Message {
-                kind: Default::default(),
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
@@ -1108,7 +1108,7 @@ mod tests {
         // Publish 100 messages successfully
         for i in 0..100 {
             let message = Message {
-                kind: Default::default(),
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
@@ -1135,7 +1135,7 @@ mod tests {
         // Attempt to publish the 101st message, which should get stuck in the retry loop
         // because the max message size is set to 1024
         let message = Message {
-            kind: Default::default(),
+            typ: Default::default(),
             keys: Arc::from(vec!["key_101".to_string()]),
             tags: None,
             value: vec![0; 1025].into(),
@@ -1249,7 +1249,7 @@ mod tests {
         let mut ack_rxs = vec![];
         for i in 0..10 {
             let message = Message {
-                kind: Default::default(),
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: Some(Arc::from(vec!["tag1".to_string(), "tag2".to_string()])),
                 value: format!("message {}", i).as_bytes().to_vec().into(),

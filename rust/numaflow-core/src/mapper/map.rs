@@ -560,7 +560,7 @@ mod tests {
         .await?;
 
         let message = Message {
-            kind: Default::default(),
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
@@ -655,7 +655,7 @@ mod tests {
 
         for i in 0..5 {
             let message = Message {
-                kind: Default::default(),
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("value_{}", i).into(),
@@ -747,7 +747,7 @@ mod tests {
         let input_stream = ReceiverStream::new(input_rx);
 
         let message = Message {
-            kind: Default::default(),
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
@@ -844,7 +844,7 @@ mod tests {
 
         let messages = vec![
             Message {
-                kind: Default::default(),
+                typ: Default::default(),
                 keys: Arc::from(vec!["first".into()]),
                 tags: None,
                 value: "hello".into(),
@@ -860,7 +860,7 @@ mod tests {
                 metadata: None,
             },
             Message {
-                kind: Default::default(),
+                typ: Default::default(),
                 keys: Arc::from(vec!["second".into()]),
                 tags: None,
                 value: "world".into(),
@@ -960,7 +960,7 @@ mod tests {
 
         let messages = vec![
             Message {
-                kind: Default::default(),
+                typ: Default::default(),
                 keys: Arc::from(vec!["first".into()]),
                 tags: None,
                 value: "hello".into(),
@@ -976,7 +976,7 @@ mod tests {
                 metadata: None,
             },
             Message {
-                kind: Default::default(),
+                typ: Default::default(),
                 keys: Arc::from(vec!["second".into()]),
                 tags: None,
                 value: "world".into(),
@@ -1076,7 +1076,7 @@ mod tests {
         .await?;
 
         let message = Message {
-            kind: Default::default(),
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "test,map,stream".into(),
@@ -1175,7 +1175,7 @@ mod tests {
         .await?;
 
         let message = Message {
-            kind: Default::default(),
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "panic".into(),

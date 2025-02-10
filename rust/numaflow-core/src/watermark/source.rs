@@ -20,8 +20,8 @@ use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::config::pipeline::ToVertexConfig;
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Message, Offset};
-use crate::watermark::idle::isb::ISBIdleManager;
-use crate::watermark::idle::source::SourceIdleManager;
+use crate::watermark::idle::isb::ISBIdleDetector;
+use crate::watermark::idle::source::SourceIdleDetector;
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::source::source_wm_fetcher::SourceWatermarkFetcher;
 use crate::watermark::source::source_wm_publisher::SourceWatermarkPublisher;
@@ -56,8 +56,8 @@ enum SourceActorMessage {
 struct SourceWatermarkActor {
     publisher: SourceWatermarkPublisher,
     fetcher: SourceWatermarkFetcher,
-    isb_idle_manager: ISBIdleManager,
-    source_idle_manager: Option<SourceIdleManager>,
+    isb_idle_manager: ISBIdleDetector,
+    source_idle_manager: Option<SourceIdleDetector>,
     active_input_partitions: HashMap<u16, bool>,
 }
 
@@ -66,8 +66,8 @@ impl SourceWatermarkActor {
     fn new(
         publisher: SourceWatermarkPublisher,
         fetcher: SourceWatermarkFetcher,
-        isb_idle_manager: ISBIdleManager,
-        source_idle_manager: Option<SourceIdleManager>,
+        isb_idle_manager: ISBIdleDetector,
+        source_idle_manager: Option<SourceIdleDetector>,
     ) -> Self {
         Self {
             publisher,
@@ -258,10 +258,10 @@ impl SourceWatermarkHandle {
         let source_idle_manager = config
             .idle_config
             .as_ref()
-            .map(|idle_config| SourceIdleManager::new(idle_config.clone()));
+            .map(|idle_config| SourceIdleDetector::new(idle_config.clone()));
 
         let isb_idle_manager =
-            ISBIdleManager::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
+            ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
 
         let actor =
             SourceWatermarkActor::new(publisher, fetcher, isb_idle_manager, source_idle_manager);
