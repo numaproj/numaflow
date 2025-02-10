@@ -482,7 +482,7 @@ mod tests {
             .publish_watermark(
                 Stream {
                     name: "test_stream",
-                    vertex: "test_vertex",
+                    vertex: "to_vertex",
                     partition: 0,
                 },
                 Offset::Int(IntOffset {
@@ -530,7 +530,7 @@ mod tests {
             .publish_watermark(
                 Stream {
                     name: "test_stream",
-                    vertex: "from_vertex",
+                    vertex: "to_vertex",
                     partition: 0,
                 },
                 Offset::Int(IntOffset {

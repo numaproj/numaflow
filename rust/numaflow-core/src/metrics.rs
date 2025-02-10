@@ -1299,6 +1299,10 @@ mod tests {
             for (i, (label, _)) in lookback_seconds_map.iter().enumerate() {
                 let mut metric_labels = pipeline_forward_metric_labels("stream1").clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
+                metric_labels.push((
+                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                    "stream1".to_string(),
+                ));
                 let guage = pipeline_metrics()
                     .pending
                     .get_or_create(&metric_labels)
@@ -1307,6 +1311,10 @@ mod tests {
 
                 let mut metric_labels = pipeline_forward_metric_labels("stream2").clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
+                metric_labels.push((
+                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                    "stream2".to_string(),
+                ));
                 let guage = pipeline_metrics()
                     .pending
                     .get_or_create(&metric_labels)

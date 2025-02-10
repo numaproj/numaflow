@@ -1,7 +1,6 @@
 use numaflow_models::models::ForwardConditions;
 use std::hash::{DefaultHasher, Hasher};
 use std::sync::Arc;
-use tracing::info;
 
 /// Checks if the message should to written to downstream vertex based the conditions
 /// and message tags. If not tags are provided by there are edge conditions present, we will
@@ -27,10 +26,6 @@ pub(crate) fn determine_partition(
 ) -> u16 {
     hash.write(message_id.as_bytes());
     let hash_value = hash.finish();
-    info!(
-        "Message id used for determining partition: {} and hash value: {}",
-        message_id, hash_value
-    );
     (hash_value % partitions_count as u64) as u16
 }
 
