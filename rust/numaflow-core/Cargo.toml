@@ -7,7 +7,8 @@ edition = "2021"
 nats-tests = []
 pulsar-tests = []
 redis-tests = []
-all-tests = ["nats-tests", "pulsar-tests", "redis-tests"]
+sqs-tests = []
+all-tests = ["nats-tests", "pulsar-tests", "redis-tests", "sqs-tests"]
 
 [lints]
 workspace = true
@@ -16,6 +17,7 @@ workspace = true
 tokio.workspace = true
 tracing.workspace = true
 numaflow-pulsar.workspace = true
+numaflow-sqs.workspace = true
 numaflow-models.workspace = true
 numaflow-pb.workspace = true
 serving.workspace = true
@@ -54,6 +56,12 @@ numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "9ca9362
 pulsar = { version = "6.3.0", default-features = false, features = [
     "tokio-rustls-runtime",
 ] }
+aws-smithy-runtime = { version = "1.7.6", features = ["test-util"] }
+aws-smithy-types = "1.2.11"
+http = "1.2.0"
+aws-config = "1.5.11"
+aws-sdk-sqs = "1.51.0"
 reqwest = { workspace = true, features = ["json"] }
+aws-smithy-mocks-experimental = "0.2.1"
 
 [build-dependencies]
