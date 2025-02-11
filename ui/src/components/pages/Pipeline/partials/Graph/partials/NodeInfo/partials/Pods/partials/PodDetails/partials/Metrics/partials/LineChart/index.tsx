@@ -17,6 +17,16 @@ import FiltersDropdown from "../common/FiltersDropdown";
 import EmptyChart from "../EmptyChart";
 import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
 import TimeSelector from "../common/TimeRange";
+import {
+  CONTAINER_CPU_UTILIZATION,
+  CONTAINER_MEMORY_UTILIZATION,
+  MONO_VERTEX_PENDING_MESSAGES,
+  MONO_VERTEX_PROCESSING_TIME_LATENCY,
+  MONO_VERTEX_SINK_WRITE_TIME_LATENCY,
+  POD_CPU_UTILIZATION,
+  POD_MEMORY_UTILIZATION,
+  VERTEX_PENDING_MESSAGES,
+} from "../../utils/constants";
 import { AppContext } from "../../../../../../../../../../../../../../../App";
 import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
 
@@ -26,7 +36,12 @@ interface TooltipProps {
   active?: boolean;
 }
 
-function CustomTooltip({ payload, label, active, patternName }: TooltipProps & { patternName: string }) {
+function CustomTooltip({
+  payload,
+  label,
+  active,
+  displayName,
+}: TooltipProps & { displayName: string }) {
   if (active && payload && payload.length) {
     const maxWidth =
       Math.max(...payload.map((entry) => entry?.name?.length)) * 9.5;
@@ -41,21 +56,21 @@ function CustomTooltip({ payload, label, active, patternName }: TooltipProps & {
       >
         <Box>{label}</Box>
         {payload.map((entry: any, index: any) => {
-          const formattedValue = getDefaultFormatter(entry?.value, patternName);
-          return(
-          <Box key={`item-${index}`} sx={{ display: "flex" }}>
-            <Box
-              sx={{
-                width: `${maxWidth / 9}rem`,
-                display: "inline-block",
-                paddingRight: "1rem",
-                color: entry?.color,
-              }}
-            >
-              {entry?.name}:
+          const formattedValue = getDefaultFormatter(entry?.value, displayName);
+          return (
+            <Box key={`item-${index}`} sx={{ display: "flex" }}>
+              <Box
+                sx={{
+                  width: `${maxWidth / 9}rem`,
+                  display: "inline-block",
+                  paddingRight: "1rem",
+                  color: entry?.color,
+                }}
+              >
+                {entry?.name}:
+              </Box>
+              <Box sx={{ color: entry?.color }}>{formattedValue}</Box>
             </Box>
-            <Box sx={{ color: entry?.color }}>{formattedValue}</Box>
-          </Box>
           );
         })}
       </Box>
@@ -71,32 +86,33 @@ const getYAxisLabel = (unit: string) => {
   return "";
 };
 
-const getDefaultFormatter = (value: number, patternName: string) => {
+const getDefaultFormatter = (value: number, displayName: string) => {
   const formatValue = (value: number, suffix: string) => {
     const formattedValue = parseFloat(value?.toFixed(2));
     return formattedValue % 1 === 0
       ? `${Math.floor(formattedValue)}${suffix}`
       : `${formattedValue}${suffix}`;
   };
-  switch(patternName){
-    case "mono_vertex_histogram":
-      if (value === 0){
+  switch (displayName) {
+    case MONO_VERTEX_PROCESSING_TIME_LATENCY:
+    case MONO_VERTEX_SINK_WRITE_TIME_LATENCY:
+      if (value === 0) {
         return "0";
       } else if (value < 1000) {
-        return formatValue(value," μs");
+        return formatValue(value, " μs");
       } else if (value < 1000000) {
         return formatValue(value / 1000, " ms");
       } else {
         return formatValue(value / 1000000, " s");
       }
-    case "pipeline_vertex_container_cpu_memory_utilization":
-    case "mono_vertex_container_cpu_memory_utilization":
-    case "pipeline_vertex_pod_cpu_memory_utilization":
-    case "mono_vertex_pod_cpu_memory_utilization":
-      if (value === 0){
+    case POD_CPU_UTILIZATION:
+    case POD_MEMORY_UTILIZATION:
+    case CONTAINER_CPU_UTILIZATION:
+    case CONTAINER_MEMORY_UTILIZATION:
+      if (value === 0) {
         return "0";
       } else if (value < 1000) {
-        return formatValue(value," %");
+        return formatValue(value, " %");
       } else if (value < 1000000) {
         return formatValue(value / 1000, "k %");
       } else {
@@ -106,7 +122,7 @@ const getDefaultFormatter = (value: number, patternName: string) => {
       if (value === 0) {
         return "0";
       } else if (value < 1000) {
-        return formatValue(value,"");
+        return formatValue(value, "");
       } else if (value < 1000000) {
         return formatValue(value / 1000, " k");
       } else {
@@ -115,7 +131,7 @@ const getDefaultFormatter = (value: number, patternName: string) => {
   }
 };
 
-const getTickFormatter = (unit: string, patternName: string) => {
+const getTickFormatter = (unit: string, displayName: string) => {
   const formatValue = (value: number) => {
     const formattedValue = parseFloat(value?.toFixed(2)); // Format to 2 decimal places
     return formattedValue % 1 === 0
@@ -129,7 +145,7 @@ const getTickFormatter = (unit: string, patternName: string) => {
       case "ms":
         return `${formatValue(value / 1000)}`;
       default:
-        return getDefaultFormatter(value, patternName);
+        return getDefaultFormatter(value, displayName);
     }
   };
 };
@@ -140,6 +156,8 @@ interface LineChartComponentProps {
   type: string;
   metric: any;
   vertexId?: string;
+  selectedPodName?: string;
+  presets?: any;
   fromModal?: boolean;
 }
 
@@ -150,6 +168,8 @@ const LineChartComponent = ({
   type,
   metric,
   vertexId,
+  selectedPodName,
+  presets,
   fromModal,
 }: LineChartComponentProps) => {
   const { addError } = useContext<AppContextProps>(AppContext);
@@ -158,6 +178,7 @@ const LineChartComponent = ({
   const [metricsReq, setMetricsReq] = useState<any>({
     metric_name: metric?.metric_name,
     pattern_name: metric?.pattern_name,
+    display_name: metric?.display_name,
   });
   const [paramsList, setParamsList] = useState<any[]>([]);
   // store all filters for each selected dimension
@@ -172,6 +193,7 @@ const LineChartComponent = ({
     return `hsl(${hue}, 50%, 50%)`;
   }, []);
 
+  // required filters
   const getFilterValue = useCallback(
     (filterName: string) => {
       switch (filterName) {
@@ -182,6 +204,21 @@ const LineChartComponent = ({
           return pipelineId;
         case "vertex":
           return vertexId;
+        case "pod":
+          if (
+            [POD_CPU_UTILIZATION, POD_MEMORY_UTILIZATION].includes(
+              metric?.display_name
+            )
+          ) {
+            switch (type) {
+              case "monoVertex":
+                return `${pipelineId}-.*`;
+              default:
+                return `${pipelineId}-${vertexId}-.*`;
+            }
+          } else {
+            return selectedPodName;
+          }
         default:
           return "";
       }
@@ -253,13 +290,18 @@ const LineChartComponent = ({
     }
   }, [error, addError]);
 
-  const groupByLabel = useCallback((dimension: string, metricName: string) => {
-    switch (metricName) {
-      case "monovtx_pending":
-      case "vertex_pending_messages":
+  const groupByLabel = useCallback((dimension: string, displayName: string) => {
+    switch (displayName) {
+      case POD_CPU_UTILIZATION:
+      case POD_MEMORY_UTILIZATION:
+        return ["pod"];
+      case CONTAINER_CPU_UTILIZATION:
+      case CONTAINER_MEMORY_UTILIZATION:
+        return ["container"];
+      case VERTEX_PENDING_MESSAGES:
+      case MONO_VERTEX_PENDING_MESSAGES:
         return dimension === "pod" ? ["pod", "period"] : ["period"];
     }
-
     switch (dimension) {
       case "mono-vertex":
         return ["mvtx_name"];
@@ -274,7 +316,7 @@ const LineChartComponent = ({
       const transformedData: any[] = [];
       const label = groupByLabel(
         metricsReq?.dimension,
-        metricsReq?.metric_name
+        metricsReq?.display_name
       );
       chartData?.forEach((item) => {
         let labelVal = "";
@@ -357,6 +399,7 @@ const LineChartComponent = ({
                   type={type}
                   field={param?.name}
                   setMetricReq={setMetricsReq}
+                  presets={presets}
                 />
               </Box>
             );
@@ -397,6 +440,8 @@ const LineChartComponent = ({
             type={type}
             vertexId={vertexId}
             setFilters={setFilters}
+            selectedPodName={selectedPodName}
+            metric={metric}
           />
         </Box>
       )}
@@ -444,7 +489,7 @@ const LineChartComponent = ({
               }
               tickFormatter={getTickFormatter(
                 metric?.unit,
-                metric?.pattern_name
+                metric?.display_name
               )}
             />
             <CartesianGrid stroke="#f5f5f5"></CartesianGrid>
@@ -459,7 +504,9 @@ const LineChartComponent = ({
               />
             ))}
 
-            <Tooltip content={<CustomTooltip patternName={metric?.pattern_name} />}/>
+            <Tooltip
+              content={<CustomTooltip displayName={metric?.display_name} />}
+            />
             <Legend />
           </LineChart>
         </ResponsiveContainer>

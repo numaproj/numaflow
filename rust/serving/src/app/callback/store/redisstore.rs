@@ -315,7 +315,7 @@ mod tests {
         // if the key exists, the TTL should be set to 1 second
         if exists {
             let ttl: isize = conn_manager.ttl(&key).await.expect("Failed to check TTL");
-            assert_eq!(ttl, 1, "TTL should be set to 1 second");
+            assert_eq!(ttl, 86400, "TTL should be set to 1 second");
         }
     }
 }

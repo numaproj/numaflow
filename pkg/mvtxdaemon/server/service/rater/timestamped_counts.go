@@ -71,3 +71,9 @@ func (tc *TimestampedCounts) String() string {
 	defer tc.lock.RUnlock()
 	return fmt.Sprintf("{timestamp: %d, podReadCounts: %v}", tc.timestamp, tc.podReadCounts)
 }
+
+func (tc *TimestampedCounts) PodTimestamp() int64 {
+	tc.lock.RLock()
+	defer tc.lock.RUnlock()
+	return tc.timestamp
+}

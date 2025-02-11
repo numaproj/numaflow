@@ -524,6 +524,48 @@ func TestValidatePipeline(t *testing.T) {
 		err := ValidatePipeline(testObj)
 		assert.NoError(t, err)
 	})
+
+	t.Run("valid pipeline - Serving source", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices = append(
+			testObj.Spec.Vertices,
+			dfv1.AbstractVertex{
+				Name:   "serving-in",
+				Source: &dfv1.Source{Serving: &dfv1.ServingSource{}},
+			},
+		)
+		testObj.Spec.Edges = append(
+			testObj.Spec.Edges,
+			dfv1.Edge{From: "serving-in", To: "p1"},
+		)
+
+		err := ValidatePipeline(testObj)
+		assert.NoError(t, err)
+	})
+
+	t.Run("invalid pipeline - Reduce with Serving source", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices = append(
+			testObj.Spec.Vertices,
+			dfv1.AbstractVertex{
+				Name:   "serving-in",
+				Source: &dfv1.Source{Serving: &dfv1.ServingSource{}},
+			}, dfv1.AbstractVertex{
+				Name: "reduce-vtx",
+				UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{}},
+			},
+		)
+		testObj.Spec.Edges = append(
+			testObj.Spec.Edges,
+			dfv1.Edge{From: "serving-in", To: "reduce-vtx"},
+			dfv1.Edge{From: "reduce-vtx", To: "output"},
+		)
+
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `pipeline has a Serving source "serving-in" and a reduce vertex "reduce-vtx". Reduce is not supported with Serving source`)
+	})
+
 }
 
 func TestValidateReducePipeline(t *testing.T) {

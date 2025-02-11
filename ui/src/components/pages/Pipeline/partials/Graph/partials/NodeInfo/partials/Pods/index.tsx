@@ -188,7 +188,6 @@ export function Pods(props: PodsProps) {
   }, [selectedPod, selectedContainer]);
 
   const podDetail = useMemo(() => {
-    const selectedPodDetails = podsDetails?.get(selectedPod?.name);
     return (
       <Box
         data-testid={"pods-poddetails"}
@@ -200,12 +199,11 @@ export function Pods(props: PodsProps) {
           type={type}
           containerName={selectedContainer}
           pod={selectedPod}
-          podDetails={selectedPodDetails}
           vertexId={vertexId}
         />
       </Box>
     );
-  }, [namespaceId, selectedPod, selectedContainer, podsDetails]);
+  }, [namespaceId, pipelineId, type, selectedContainer, selectedPod, vertexId]);
 
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>, newValue: string | null) => {
@@ -361,6 +359,10 @@ export function Pods(props: PodsProps) {
               }}
             >
               <ContainerInfo
+                namespaceId={namespaceId}
+                pipelineId={pipelineId}
+                vertexId={vertexId}
+                type={type}
                 pod={selectedPod}
                 podDetails={selectedPodDetails}
                 containerName={selectedContainer}

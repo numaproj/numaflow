@@ -69,7 +69,8 @@ type Scale struct {
 
 func (s Scale) GetLookbackSeconds() int {
 	if s.LookbackSeconds != nil {
-		return int(*s.LookbackSeconds)
+		// do not allow the value to be larger than the MaxLookbackSeconds in our config
+		return min(MaxLookbackSeconds, int(*s.LookbackSeconds))
 	}
 	return DefaultLookbackSeconds
 }
