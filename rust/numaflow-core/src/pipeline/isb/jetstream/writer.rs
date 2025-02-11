@@ -9,7 +9,7 @@ use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
 use async_nats::jetstream::Context;
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, Instant};
@@ -310,7 +310,7 @@ impl JetstreamWriter {
                 }
                 Some(false) => match self
                     .js_ctx
-                    .publish(stream.name, Bytes::from(payload.clone()))
+                    .publish(stream.name, payload.clone().freeze())
                     .await
                 {
                     Ok(paf) => break paf,
@@ -361,8 +361,7 @@ impl JetstreamWriter {
                             ?e, stream = ?stream,
                             "Failed to resolve the future trying blocking write",
                         );
-                        this.blocking_write(stream.clone(), message.value.clone())
-                            .await
+                        this.blocking_write(stream.clone(), message.clone()).await
                     }
                 };
 
@@ -420,12 +419,19 @@ impl JetstreamWriter {
     pub(crate) async fn blocking_write(
         &self,
         stream: Stream,
-        payload: Bytes,
+        message: Message,
     ) -> Result<PublishAck> {
         let start_time = Instant::now();
+        let payload: BytesMut = message
+            .try_into()
+            .expect("message serialization should not fail");
 
         loop {
-            match self.js_ctx.publish(stream.name, payload.clone()).await {
+            match self
+                .js_ctx
+                .publish(stream.name, payload.clone().freeze())
+                .await
+            {
                 Ok(paf) => match paf.await {
                     Ok(ack) => {
                         if ack.duplicate {
@@ -490,6 +496,7 @@ mod tests {
     use async_nats::jetstream;
     use async_nats::jetstream::consumer::{Config, Consumer};
     use async_nats::jetstream::{consumer, stream};
+    use bytes::Bytes;
     use chrono::Utc;
     use numaflow_models::models::ForwardConditions;
     use numaflow_models::models::TagConditions;
@@ -628,7 +635,6 @@ mod tests {
             metadata: None,
         };
 
-        let message_bytes: BytesMut = message.try_into().unwrap();
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
                 name: "test-vertex",
@@ -646,9 +652,7 @@ mod tests {
             None,
         );
 
-        let result = writer
-            .blocking_write(stream.clone(), message_bytes.into())
-            .await;
+        let result = writer.blocking_write(stream.clone(), message).await;
         assert!(result.is_ok());
 
         let publish_ack = result.unwrap();

@@ -125,7 +125,8 @@ impl ISBWatermarkPublisher {
                 hb_bucket
                     .put(processor_name.clone(), bytes.clone().freeze())
                     .await
-                    .expect("Failed to publish heartbeat");
+                    .map_err(|e| error!(?e, "Failed to write heartbeat to hb bucket"))
+                    .ok();
             }
         }
     }

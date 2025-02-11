@@ -21,8 +21,6 @@ use tracing::warn;
 /// Responsible for detecting the idle state of the source and publishing idle watermarks.
 pub(crate) struct SourceIdleDetector {
     config: IdleConfig,
-    /// last_published_idle_wm it to incr-by
-    last_published_idle_wm: DateTime<Utc>,
     /// last_idle_wm_published_time is for comparing with the step interval
     last_idle_wm_published_time: DateTime<Utc>,
     updated_ts: DateTime<Utc>,
@@ -36,7 +34,6 @@ impl SourceIdleDetector {
             config,
             updated_ts: Utc::now(),
             last_idle_wm_published_time: default_time,
-            last_published_idle_wm: default_time,
         }
     }
 
@@ -70,14 +67,11 @@ impl SourceIdleDetector {
         let increment_by = self.config.increment_by.as_millis() as i64;
         // check if the computed watermark is -1
         // last computed watermark can be -1, when the pod is restarted or when the processor entity is not created yet.
-        let mut idle_wm = if computed_wm == -1 {
-            // if the computed watermark is -1, it means that the source is not able to compute the watermark.
-            // in this case, we can publish the idle watermark as the last published (idle watermark + increment by value).
-            self.last_published_idle_wm.timestamp_millis() + increment_by
-        } else {
-            computed_wm + increment_by
-        };
+        if computed_wm == -1 {
+            return -1;
+        }
 
+        let mut idle_wm = computed_wm + increment_by;
         // do not assign future timestamps for WM.
         // this could happen if step interval and increment-by are set aggressively
         let now = Utc::now().timestamp_millis();
@@ -86,10 +80,7 @@ impl SourceIdleDetector {
             idle_wm = now;
         }
 
-        self.last_published_idle_wm =
-            DateTime::from_timestamp_millis(idle_wm).expect("Invalid timestamp");
         self.last_idle_wm_published_time = Utc::now();
-
         idle_wm
     }
 }

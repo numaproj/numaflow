@@ -43,6 +43,7 @@ pub(crate) struct JetStreamReader {
 
 /// JSWrappedMessage is a wrapper around the JetStream message that includes the
 /// partition index and the vertex name.
+#[derive(Debug)]
 struct JSWrappedMessage {
     partition_idx: u16,
     message: async_nats::jetstream::Message,
@@ -205,16 +206,9 @@ impl JetStreamReader {
                                 vertex_name: get_vertex_name().to_string(),
                             };
 
-                            let mut message: Message = match js_message.try_into() {
-                                Ok(message) => message,
-                                Err(e) => {
-                                    error!(
-                                        ?e, ?stream, ?jetstream_message,
-                                        "Failed to parse message payload received from Jetstream",
-                                    );
-                                    continue;
-                                }
-                            };
+                            let mut message: Message = js_message.try_into().map_err(|e| {
+                                Error::ISB(format!("Failed to convert JetStream message to Message: {:?}", e))
+                            })?;
 
                             // we can ignore the wmb messages
                             if let MessageType::WMB = message.typ {
