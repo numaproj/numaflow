@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import Box from "@mui/material/Box";
 import TableContainer from "@mui/material/TableContainer";
 import Table from "@mui/material/Table";
@@ -7,6 +7,9 @@ import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import { MetricsModalWrapper } from "../../../../../MetricsModalWrapper";
+import { VERTEX_PENDING_MESSAGES } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics/utils/constants";
+import { AppContextProps } from "../../../../../../../types/declarations/app";
+import { AppContext } from "../../../../../../../App";
 
 export interface BuffersProps {
   buffers: any[];
@@ -26,6 +29,7 @@ export function Buffers({
   if (!buffers) {
     return <div>{`No resources found.`}</div>;
   }
+  const { disableMetricsCharts } = useContext<AppContextProps>(AppContext);
 
   return (
     <Box
@@ -84,11 +88,12 @@ export function Buffers({
                     <TableCell data-testid="usage">{bufferUsage}%</TableCell>
                     <TableCell data-testid="totalMessages">
                       <MetricsModalWrapper
+                        disableMetricsCharts={disableMetricsCharts}
                         namespaceId={namespaceId}
                         pipelineId={pipelineId}
                         vertexId={vertexId}
                         type={type}
-                        metricName={"vertex_pending_messages"}
+                        metricDisplayName={VERTEX_PENDING_MESSAGES}
                         value={buffer?.totalMessages}
                       />
                     </TableCell>

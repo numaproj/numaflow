@@ -98,7 +98,7 @@ impl ISBIdleDetector {
 
         let last_published_wm = write_guard
             .get_mut(stream.vertex)
-            .expect(format!("Invalid vertex: {}", stream.vertex).as_str());
+            .unwrap_or_else(|| panic!("Invalid vertex: {}", stream.vertex));
 
         last_published_wm[stream.partition as usize].last_wm_published_time = Utc::now();
         // setting None for wmb-offset means it is active

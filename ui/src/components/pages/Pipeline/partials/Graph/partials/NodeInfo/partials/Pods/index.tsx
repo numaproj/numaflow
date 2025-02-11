@@ -359,6 +359,10 @@ export function Pods(props: PodsProps) {
               }}
             >
               <ContainerInfo
+                namespaceId={namespaceId}
+                pipelineId={pipelineId}
+                vertexId={vertexId}
+                type={type}
                 pod={selectedPod}
                 podDetails={selectedPodDetails}
                 containerName={selectedContainer}

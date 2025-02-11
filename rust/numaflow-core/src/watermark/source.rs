@@ -37,6 +37,7 @@ pub(crate) mod source_wm_fetcher;
 pub(crate) mod source_wm_publisher;
 
 /// Messages that can be sent to the SourceWatermarkActor
+#[allow(clippy::enum_variant_names)]
 enum SourceActorMessage {
     PublishSourceWatermark {
         map: HashMap<u16, i64>,
@@ -180,7 +181,7 @@ impl SourceWatermarkActor {
 
                     // mark the vertex and partition as idle, since we published the idle watermark
                     self.isb_idle_manager
-                        .update_idle_metadata(&stream, offset)
+                        .update_idle_metadata(stream, offset)
                         .await;
                 }
             }
