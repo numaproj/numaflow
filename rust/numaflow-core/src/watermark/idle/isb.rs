@@ -88,7 +88,7 @@ impl ISBIdleDetector {
         }
     }
 
-    /// resets the stream's idle metadata by updating the last published time and resets the ctrl 
+    /// resets the stream's idle metadata by updating the last published time and resets the ctrl
     /// message offset. It implicitly marks that stream as active.
     pub(crate) async fn reset_idle(&mut self, stream: &Stream) {
         let mut write_guard = self
@@ -106,8 +106,8 @@ impl ISBIdleDetector {
     }
 
     /// fetches the offset to be used for publishing the idle watermark. Only a WMB can be used
-    /// to send idle watermark, hence if not WMB's are published, we publish an WMB and return its 
-    /// offset, or return the current "active" WMB's offset. 
+    /// to send idle watermark, hence if not WMB's are published, we publish an WMB and return its
+    /// offset, or return the current "active" WMB's offset.
     pub(crate) async fn fetch_idle_offset(&self, stream: &Stream) -> crate::error::Result<i64> {
         let idle_state = {
             let read_guard = self

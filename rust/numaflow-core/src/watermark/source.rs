@@ -179,7 +179,9 @@ impl SourceWatermarkActor {
                     }
 
                     // mark the vertex and partition as idle, since we published the idle watermark
-                    self.isb_idle_manager.update_idle_metadata(&stream, offset).await;
+                    self.isb_idle_manager
+                        .update_idle_metadata(&stream, offset)
+                        .await;
                 }
             }
 
@@ -217,7 +219,9 @@ impl SourceWatermarkActor {
                             )
                             .await;
                     }
-                    self.isb_idle_manager.update_idle_metadata(stream, offset).await;
+                    self.isb_idle_manager
+                        .update_idle_metadata(stream, offset)
+                        .await;
                 }
                 // clear the cache since we published the idle watermarks
                 self.active_input_partitions.clear();
@@ -340,7 +344,9 @@ impl SourceWatermarkHandle {
 
     pub(crate) async fn publish_source_idle_watermark(&self, partitions: Vec<u16>) {
         self.sender
-            .send(SourceActorMessage::CheckAndPublishSourceIdleWatermark { source_partitions: partitions })
+            .send(SourceActorMessage::CheckAndPublishSourceIdleWatermark {
+                source_partitions: partitions,
+            })
             .await
             .map_err(|_| Error::Watermark("failed to send message".to_string()))
             .expect("failed to send message");

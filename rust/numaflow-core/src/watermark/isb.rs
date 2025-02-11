@@ -186,7 +186,9 @@ impl ISBWatermarkActor {
                     self.publisher
                         .publish_watermark(stream, offset, min_wm.timestamp_millis(), true)
                         .await;
-                    self.idle_manager.update_idle_metadata(&stream, offset).await;
+                    self.idle_manager
+                        .update_idle_metadata(&stream, offset)
+                        .await;
                 }
             }
         }
