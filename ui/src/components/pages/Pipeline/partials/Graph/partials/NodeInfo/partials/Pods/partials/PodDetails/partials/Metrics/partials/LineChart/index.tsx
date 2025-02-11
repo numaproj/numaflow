@@ -36,48 +36,86 @@ interface TooltipProps {
   active?: boolean;
 }
 
-function CustomTooltip({
+const formattedDate = (timestamp: number): string => {
+  if (timestamp) {
+    try {
+      const date = new Date(timestamp * 1000);
+      const dayFormatter = new Intl.DateTimeFormat("en-US", {
+        weekday: "short",
+      });
+      const monthFormatter = new Intl.DateTimeFormat("en-US", {
+        month: "short",
+      });
+
+      const day = dayFormatter.format(date);
+      const month = monthFormatter.format(date);
+      const year = date.getFullYear();
+      let hours = date.getHours();
+      const minutes = date.getMinutes().toString().padStart(2, "0");
+      const seconds = date.getSeconds().toString().padStart(2, "0");
+      const amOrPm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12 || 12;
+
+      const offsetMinutes = date.getTimezoneOffset();
+      const offsetSign = offsetMinutes > 0 ? "-" : "+";
+      const absOffsetMinutes = Math.abs(offsetMinutes);
+      const offsetHours = Math.floor(absOffsetMinutes / 60)
+        .toString()
+        .padStart(2, "0"); // Integer division
+      const offsetRemainingMinutes = (absOffsetMinutes % 60)
+        .toString()
+        .padStart(2, "0");
+
+      return `${day} ${month} ${date.getDate()} ${year} ${hours}:${minutes}:${seconds} ${amOrPm} ${offsetSign}${offsetHours}${offsetRemainingMinutes}`;
+    } catch {
+      return "Invalid Date";
+    }
+  }
+  return "Invalid Date";
+};
+
+const CustomTooltip = ({
   payload,
-  label,
   active,
   displayName,
-}: TooltipProps & { displayName: string }) {
-  if (active && payload && payload.length) {
-    const maxWidth =
-      Math.max(...payload.map((entry) => entry?.name?.length)) * 9.5;
-    return (
-      <Box
-        sx={{
-          backgroundColor: "#fff",
-          padding: "1rem",
-          border: "0.1rem solid #ccc",
-          borderRadius: "1rem",
-        }}
-      >
-        <Box>{label}</Box>
-        {payload.map((entry: any, index: any) => {
-          const formattedValue = getDefaultFormatter(entry?.value, displayName);
-          return (
-            <Box key={`item-${index}`} sx={{ display: "flex" }}>
-              <Box
-                sx={{
-                  width: `${maxWidth / 9}rem`,
-                  display: "inline-block",
-                  paddingRight: "1rem",
-                  color: entry?.color,
-                }}
-              >
-                {entry?.name}:
-              </Box>
-              <Box sx={{ color: entry?.color }}>{formattedValue}</Box>
+}: TooltipProps & { displayName: string }) => {
+  if (!active || !payload || !payload.length) return null;
+
+  const maxWidth =
+    Math.max(...payload.map((entry) => entry?.name?.length)) * 9.5;
+  const timestamp = payload[0]?.payload?.timestamp;
+
+  return (
+    <Box
+      sx={{
+        backgroundColor: "#fff",
+        padding: "1rem",
+        border: "0.1rem solid #ccc",
+        borderRadius: "1rem",
+      }}
+    >
+      <Box>{formattedDate(timestamp)}</Box>
+      {payload.map((entry: any, index: any) => {
+        const formattedValue = getDefaultFormatter(entry?.value, displayName);
+        return (
+          <Box key={`item-${index}`} sx={{ display: "flex" }}>
+            <Box
+              sx={{
+                width: `${maxWidth / 9}rem`,
+                display: "inline-block",
+                paddingRight: "1rem",
+                color: entry?.color,
+              }}
+            >
+              {entry?.name}:
             </Box>
-          );
-        })}
-      </Box>
-    );
-  }
-  return null;
-}
+            <Box sx={{ color: entry?.color }}>{formattedValue}</Box>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+};
 
 const getYAxisLabel = (unit: string) => {
   if (unit !== "") {
@@ -310,53 +348,68 @@ const LineChartComponent = ({
     }
   }, []);
 
+  const formatTime = (timestamp: number): string => {
+    const date = new Date(timestamp * 1000);
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, "0");
+    const amOrPm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12;
+    return `${hours.toString().padStart(2, "0")}:${minutes} ${amOrPm}`;
+  };
+
+  const createDataObject = (
+    formattedTime: string,
+    timestamp: number,
+    labelVal: string,
+    value: string
+  ): Record<string, any> => ({
+    time: formattedTime,
+    timestamp,
+    [labelVal]: parseFloat(value),
+  });
+
   const updateChartData = useCallback(() => {
-    if (chartData) {
-      const labels: any[] = [];
-      const transformedData: any[] = [];
-      const label = groupByLabel(
-        metricsReq?.dimension,
-        metricsReq?.display_name
-      );
-      chartData?.forEach((item) => {
-        let labelVal = "";
-        label?.forEach((eachLabel: string) => {
-          if (item?.metric?.[eachLabel] !== undefined) {
-            labelVal += (labelVal ? "-" : "") + item.metric[eachLabel];
-          }
-        });
+    if (!chartData) return;
 
-        // Remove initial hyphen if labelVal is not empty
-        if (labelVal.startsWith("-") && labelVal.length > 1) {
-          labelVal = labelVal.substring(1);
+    const labels: string[] = [];
+    const transformedData: Record<string, any>[] = [];
+    const label = groupByLabel(metricsReq?.dimension, metricsReq?.display_name);
+
+    chartData?.forEach((item) => {
+      let labelVal = "";
+      label?.forEach((eachLabel: string) => {
+        if (item?.metric?.[eachLabel] !== undefined) {
+          labelVal += (labelVal ? "-" : "") + item.metric[eachLabel];
         }
+      });
 
-        labels.push(labelVal);
-        item?.values?.forEach(([timestamp, value]: [number, string]) => {
-          const date = new Date(timestamp * 1000);
-          const hours = date.getHours().toString().padStart(2, "0");
-          const minutes = date.getMinutes().toString().padStart(2, "0");
-          const formattedTime = `${hours}:${minutes}`;
-          const ele = transformedData?.find(
-            (data) => data?.time === formattedTime
+      // Remove initial hyphen if labelVal is not empty
+      if (labelVal.startsWith("-") && labelVal.length > 1) {
+        labelVal = labelVal.substring(1);
+      }
+
+      labels.push(labelVal);
+
+      item?.values?.forEach(([timestamp, value]: [number, string]) => {
+        const formattedTime = formatTime(timestamp);
+
+        const existingElement = transformedData?.find(
+          (data) => data?.time === formattedTime
+        );
+        if (!existingElement) {
+          transformedData.push(
+            createDataObject(formattedTime, timestamp, labelVal, value)
           );
-          if (!ele) {
-            const dataObject: Record<string, any> = { time: formattedTime };
-            dataObject[labelVal] = parseFloat(value);
-            transformedData.push(dataObject);
-          } else {
-            ele[labelVal] = parseFloat(value);
-          }
-        });
+        } else {
+          existingElement[labelVal] = parseFloat(value);
+        }
       });
-      transformedData.sort((a, b) => {
-        const [hoursA, minutesA] = a.time.split(":").map(Number);
-        const [hoursB, minutesB] = b.time.split(":").map(Number);
-        return hoursA * 60 + minutesA - (hoursB * 60 + minutesB);
-      });
-      setChartLabels(labels);
-      setTransformedData(transformedData);
-    }
+    });
+    transformedData.sort((a, b) => {
+      return a?.timestamp - b?.timestamp;
+    });
+    setChartLabels(labels);
+    setTransformedData(transformedData);
   }, [chartData, metricsReq, groupByLabel]);
 
   useEffect(() => {
