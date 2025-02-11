@@ -53,7 +53,7 @@ enum ISBWaterMarkActorMessage {
         offset: IntOffset,
         watermark: Watermark,
     },
-    PublishIdleWatermark,
+    CheckAndPublishIdleWatermark,
 }
 
 /// Tuple of offset and watermark. We will use this to track the inflight messages.
@@ -141,7 +141,7 @@ impl ISBWatermarkActor {
                     .publish_watermark(&stream, offset.offset, min_wm.timestamp_millis(), false)
                     .await;
 
-                self.idle_manager.mark_active(&stream).await;
+                self.idle_manager.reset_idle(&stream).await;
             }
 
             // removes the offset from the tracked offsets
@@ -154,8 +154,8 @@ impl ISBWatermarkActor {
                 self.insert_offset(offset.partition_idx, offset.offset, watermark);
             }
 
-            // publishes the idle watermark for the downstream idle partitions
-            ISBWaterMarkActorMessage::PublishIdleWatermark => {
+            // check for idleness and publish idle watermark for those downstream idle partitions
+            ISBWaterMarkActorMessage::CheckAndPublishIdleWatermark => {
                 // if there are any inflight messages, consider the lowest watermark among them
                 let mut min_wm = self
                     .get_lowest_watermark()
@@ -166,13 +166,15 @@ impl ISBWatermarkActor {
                     min_wm = self.fetcher.fetch_head_idle_watermark();
                 }
 
+                // we are not able to compute WM, pod restarts, etc.
                 if min_wm.timestamp_millis() == -1 {
                     return Ok(());
                 }
 
-                // publish the idle watermark for the idle partitions, we identify the partition as idle
-                // if we have not published any watermark for that partition for a certain time(idle timeout)
+                // identify the streams that are idle.
                 let idle_streams = self.idle_manager.fetch_idle_streams().await;
+
+                // publish the idle watermark for the idle partitions
                 for stream in idle_streams.iter() {
                     let offset = match self.idle_manager.fetch_idle_offset(stream).await {
                         Ok(offset) => offset,
@@ -184,7 +186,7 @@ impl ISBWatermarkActor {
                     self.publisher
                         .publish_watermark(stream, offset, min_wm.timestamp_millis(), true)
                         .await;
-                    self.idle_manager.mark_idle(&stream, offset).await;
+                    self.idle_manager.update_idle_metadata(&stream, offset).await;
                 }
             }
         }
@@ -227,7 +229,7 @@ pub(crate) struct ISBWatermarkHandle {
 }
 
 impl ISBWatermarkHandle {
-    /// new creates a new [ISBWatermarkHandle].
+    /// new creates a new [ISBWatermarkHandle]. We also start a background task to detect WM idleness.
     pub(crate) async fn new(
         vertex_name: &'static str,
         vertex_replica: u16,
@@ -270,6 +272,7 @@ impl ISBWatermarkHandle {
             let mut interval_ticker = tokio::time::interval(idle_timeout);
             async move {
                 loop {
+                    // TODO(idle): add cancellation token.
                     interval_ticker.tick().await;
                     isb_watermark_handle
                         .publish_idle_watermark()
@@ -349,7 +352,7 @@ impl ISBWatermarkHandle {
 
     pub(crate) async fn publish_idle_watermark(&self) -> Result<()> {
         self.sender
-            .send(ISBWaterMarkActorMessage::PublishIdleWatermark)
+            .send(ISBWaterMarkActorMessage::CheckAndPublishIdleWatermark)
             .await
             .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
         Ok(())

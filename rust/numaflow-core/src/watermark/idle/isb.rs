@@ -88,8 +88,9 @@ impl ISBIdleDetector {
         }
     }
 
-    /// marks the partition as active, updates the last published time and resets the ctrl message offset.
-    pub(crate) async fn mark_active(&mut self, stream: &Stream) {
+    /// resets the stream's idle metadata by updating the last published time and resets the ctrl 
+    /// message offset. It implicitly marks that stream as active.
+    pub(crate) async fn reset_idle(&mut self, stream: &Stream) {
         let mut write_guard = self
             .last_published_wm_state
             .write()
@@ -100,10 +101,13 @@ impl ISBIdleDetector {
             .expect(format!("Invalid vertex: {}", stream.vertex).as_str());
 
         last_published_wm[stream.partition as usize].last_wm_published_time = Utc::now();
+        // setting None for wmb-offset means it is active
         last_published_wm[stream.partition as usize].wmb_msg_offset = None;
     }
 
-    /// fetches the offset to be used for publishing the idle watermark.
+    /// fetches the offset to be used for publishing the idle watermark. Only a WMB can be used
+    /// to send idle watermark, hence if not WMB's are published, we publish an WMB and return its 
+    /// offset, or return the current "active" WMB's offset. 
     pub(crate) async fn fetch_idle_offset(&self, stream: &Stream) -> crate::error::Result<i64> {
         let idle_state = {
             let read_guard = self
@@ -136,13 +140,14 @@ impl ISBIdleDetector {
         Ok(offset as i64)
     }
 
-    /// marks the partition as idle, by setting the ctrl message offset and updates the last published time.
-    pub(crate) async fn mark_idle(&mut self, stream: &Stream, offset: i64) {
+    /// updates the idle stream's metadata, by setting the ctrl message offset and updates the last published time.
+    pub(crate) async fn update_idle_metadata(&mut self, stream: &Stream, offset: i64) {
         let mut write_guard = self
             .last_published_wm_state
             .write()
             .expect("Failed to get write lock");
         let last_published_wm = write_guard.get_mut(stream.vertex).expect("Invalid vertex");
+        // setting an offset for wmb-offset means it is idle and we will do inplace incr of WM for that offset.
         last_published_wm[stream.partition as usize].wmb_msg_offset = Some(offset);
         last_published_wm[stream.partition as usize].last_wm_published_time = Utc::now();
     }
@@ -214,7 +219,7 @@ mod tests {
         let mut manager =
             ISBIdleDetector::new(Duration::from_millis(100), &[to_vertex_config], js_context).await;
 
-        manager.mark_active(&stream).await;
+        manager.reset_idle(&stream).await;
 
         let read_guard = manager
             .last_published_wm_state
@@ -296,7 +301,7 @@ mod tests {
             .fetch_idle_offset(&stream)
             .await
             .expect("Failed to fetch idle offset");
-        manager.mark_idle(&stream, offset).await;
+        manager.update_idle_metadata(&stream, offset).await;
 
         let read_guard = manager
             .last_published_wm_state
@@ -326,7 +331,7 @@ mod tests {
             ISBIdleDetector::new(Duration::from_millis(10), &[to_vertex_config], js_context).await;
 
         // Mark the stream as active first
-        manager.mark_active(&stream).await;
+        manager.reset_idle(&stream).await;
 
         // Simulate idle timeout
         sleep(Duration::from_millis(20)).await;

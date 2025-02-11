@@ -333,6 +333,8 @@ impl Source {
                 let msgs_len = messages.len();
                 Self::send_read_metrics(&pipeline_labels, mvtx_labels, read_start_time, msgs_len);
 
+                // attempt to publish idle watermark since we are not able to read any message from
+                // the source.
                 if msgs_len == 0 {
                     if let Some(watermark_handle) = watermark_handle.as_mut() {
                         watermark_handle
