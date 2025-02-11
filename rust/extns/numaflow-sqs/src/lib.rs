@@ -5,7 +5,6 @@
 //! - Error propagation and handling for AWS SDK errors
 //! - Actor-based concurrency model for thread safety
 //! - Clean abstraction of SQS operations
-use aws_sdk_sqs::error::SdkError;
 use tokio::sync::oneshot;
 pub mod source;
 
@@ -18,7 +17,7 @@ pub mod source;
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Failed with SQS error - {0}")]
-    SQS(aws_sdk_sqs::Error),
+    Sqs(#[from] aws_sdk_sqs::Error),
 
     #[error("Failed to receive message from channel. Actor task is terminated: {0:?}")]
     ActorTaskTerminated(oneshot::error::RecvError),
@@ -28,15 +27,6 @@ pub enum Error {
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
-
-impl<T> From<SdkError<T>> for Error
-where
-    aws_sdk_sqs::Error: From<SdkError<T>>,
-{
-    fn from(err: SdkError<T>) -> Self {
-        Error::SQS(err.into())
-    }
-}
 
 impl From<String> for Error {
     fn from(value: String) -> Self {
@@ -74,8 +64,8 @@ mod tests {
         );
         let err = sqs.get_queue_url().send().await.unwrap_err();
 
-        let converted_error = Error::from(err);
-        assert!(matches!(converted_error, Error::SQS(_)));
+        let converted_error = Error::Sqs(err.into());
+        assert!(matches!(converted_error, Error::Sqs(_)));
         assert!(converted_error
             .to_string()
             .contains("Failed with SQS error"));

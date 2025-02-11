@@ -22,12 +22,22 @@ use crate::{Error, Result};
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 
+/// Returns the name of the SQS message system attribute for the sent timestamp.
+///
+/// This method is needed to retrieve the `SentTimestamp` attribute from SQS messages,
+/// which is used to set the watermark for message processing. The watermark helps
+/// in tracking the event time of messages and ensuring that messages are processed
+/// in the correct order.
+pub fn sent_timestamp_message_system_attribute_name() -> &'static str {
+    MessageSystemAttributeName::SentTimestamp.as_str()
+}
+
 /// Configuration for an SQS message source.
 ///
 /// Used to initialize the SQS client with region and queue settings.
 /// Implements serde::Deserialize to support loading from configuration files.
 #[derive(serde::Deserialize, Clone, PartialEq)]
-pub struct SQSSourceConfig {
+pub struct SqsSourceConfig {
     pub region: String,
     pub queue_name: String,
 }
@@ -38,9 +48,9 @@ pub struct SQSSourceConfig {
 /// - Ensure thread-safe access to the SQS client
 /// - Manage connection state and retries
 /// - Handle concurrent requests without locks
-enum SQSActorMessage {
+enum SqsActorMessage {
     Receive {
-        respond_to: oneshot::Sender<Result<Vec<SQSMessage>>>,
+        respond_to: oneshot::Sender<Result<Vec<SqsMessage>>>,
         count: i32,
         timeout_at: Instant,
     },
@@ -60,7 +70,7 @@ enum SQSActorMessage {
 /// - Includes full message metadata for debugging
 /// - Maintains original SQS attributes and headers
 #[derive(Debug)]
-pub struct SQSMessage {
+pub struct SqsMessage {
     pub key: String,
     pub payload: Bytes,
     pub offset: String,
@@ -75,14 +85,14 @@ pub struct SQSMessage {
 /// - Single SQS client instance
 /// - Queue URL caching
 /// - Message channel for handling concurrent requests
-struct SQSActor {
-    handler_rx: mpsc::Receiver<SQSActorMessage>,
+struct SqsActor {
+    handler_rx: mpsc::Receiver<SqsActorMessage>,
     client: Client,
     queue_url: String,
 }
 
-impl SQSActor {
-    fn new(handler_rx: mpsc::Receiver<SQSActorMessage>, client: Client, queue_url: String) -> Self {
+impl SqsActor {
+    fn new(handler_rx: mpsc::Receiver<SqsActorMessage>, client: Client, queue_url: String) -> Self {
         Self {
             handler_rx,
             client,
@@ -90,7 +100,7 @@ impl SQSActor {
         }
     }
 
-    async fn create_sqs_client(config: Option<SQSSourceConfig>) -> Client {
+    async fn create_sqs_client(config: Option<SqsSourceConfig>) -> Client {
         let region = match config {
             Some(config) => config.region.clone(),
             None => SQS_DEFAULT_REGION.to_string(),
@@ -118,26 +128,32 @@ impl SQSActor {
         }
     }
 
-    async fn handle_message(&mut self, msg: SQSActorMessage) {
+    async fn handle_message(&mut self, msg: SqsActorMessage) {
         match msg {
-            SQSActorMessage::Receive {
+            SqsActorMessage::Receive {
                 respond_to,
                 count,
                 timeout_at,
             } => {
                 let messages = self.get_messages(count, timeout_at).await;
-                let _ = respond_to.send(messages);
+                respond_to
+                    .send(messages)
+                    .expect("failed to send response from SqsActorMessage::Receive");
             }
-            SQSActorMessage::Delete {
+            SqsActorMessage::Delete {
                 respond_to,
                 offsets,
             } => {
                 let status = self.delete_messages(offsets).await;
-                let _ = respond_to.send(status);
+                respond_to
+                    .send(status)
+                    .expect("failed to send response from SqsActorMessage::Delete");
             }
-            SQSActorMessage::GetPending { respond_to } => {
+            SqsActorMessage::GetPending { respond_to } => {
                 let status = self.get_pending_messages().await;
-                let _ = respond_to.send(status);
+                respond_to
+                    .send(status)
+                    .expect("failed to send response from SqsActorMessage::GetPending");
             }
         }
     }
@@ -149,7 +165,7 @@ impl SQSActor {
     /// - Respects timeout for long polling
     /// - Processes message attributes and system metadata
     /// - Returns messages in a normalized format
-    async fn get_messages(&mut self, count: i32, timeout_at: Instant) -> Result<Vec<SQSMessage>> {
+    async fn get_messages(&mut self, count: i32, timeout_at: Instant) -> Result<Vec<SqsMessage>> {
         let remaining_time = timeout_at - Instant::now();
 
         let sdk_response = self
@@ -158,6 +174,7 @@ impl SQSActor {
             .queue_url(self.queue_url.clone())
             .max_number_of_messages(count)
             .message_attribute_names("All")
+            .message_system_attribute_names(MessageSystemAttributeName::All)
             .wait_time_seconds(remaining_time.as_secs() as i32)
             .send()
             .await;
@@ -170,7 +187,7 @@ impl SQSActor {
                     queue_url = self.queue_url,
                     "Failed to receive messages from SQS"
                 );
-                return Err(Error::SQS(err.into()));
+                return Err(Error::Sqs(err.into()));
             }
         };
 
@@ -205,7 +222,7 @@ impl SQSActor {
                             .collect()
                     })
                     .unwrap_or_default();
-                SQSMessage {
+                SqsMessage {
                     key,
                     payload,
                     offset,
@@ -242,7 +259,7 @@ impl SQSActor {
                     self.queue_url.clone(),
                     "Error while deleting message from SQS"
                 );
-                return Err(Error::SQS(err.into()));
+                return Err(Error::Sqs(err.into()));
             }
         }
         Ok(())
@@ -265,7 +282,7 @@ impl SQSActor {
                     queue_url = self.queue_url,
                     "Failed to get queue attributes from SQS"
                 );
-                return Err(Error::SQS(err.into()));
+                return Err(Error::Sqs(err.into()));
             }
         };
 
@@ -300,31 +317,35 @@ impl SQSActor {
 /// - Clean abstraction of SQS complexity
 /// - Efficient message processing
 #[derive(Clone)]
-pub struct SQSSource {
+pub struct SqsSource {
     batch_size: usize,
     /// timeout for each batch read request
     timeout: Duration,
-    actor_tx: mpsc::Sender<SQSActorMessage>,
+    actor_tx: mpsc::Sender<SqsActorMessage>,
 }
 
+/// Builder for creating an `SqsSource`.
+///
+/// This builder allows for configuring the SQS source with various parameters
+/// such as region, queue name, batch size, timeout, and an optional SQS client.
 #[derive(Clone)]
-pub struct SQSSourceBuilder {
-    config: SQSSourceConfig,
+pub struct SqsSourceBuilder {
+    config: SqsSourceConfig,
     batch_size: usize,
     timeout: Duration,
     client: Option<Client>,
 }
 
-impl Default for SQSSourceBuilder {
+impl Default for SqsSourceBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SQSSourceBuilder {
+impl SqsSourceBuilder {
     pub fn new() -> Self {
         Self {
-            config: SQSSourceConfig {
+            config: SqsSourceConfig {
                 region: SQS_DEFAULT_REGION.to_string(),
                 queue_name: "".to_string(),
             },
@@ -333,7 +354,7 @@ impl SQSSourceBuilder {
             client: None,
         }
     }
-    pub fn config(mut self, config: SQSSourceConfig) -> Self {
+    pub fn config(mut self, config: SqsSourceConfig) -> Self {
         self.config = config;
         self
     }
@@ -352,10 +373,20 @@ impl SQSSourceBuilder {
         self.client = Some(client);
         self
     }
-    pub async fn build(self) -> Result<SQSSource> {
+
+    /// Builds an `SqsSource` instance with the provided configuration.
+    ///
+    /// This method consumes `self` and initializes the SQS client, retrieves the queue URL,
+    /// and spawns an actor to handle SQS interactions. It returns a `Result` containing
+    /// the constructed `SqsSource` or an error if the initialization fails.
+    ///
+    /// # Returns
+    /// - `Ok(SqsSource)` if the source is successfully built.
+    /// - `Err(Error)` if there is an error during the initialization process.
+    pub async fn build(self) -> Result<SqsSource> {
         let sqs_client = match self.client {
             Some(client) => client,
-            None => SQSActor::create_sqs_client(Some(self.config.clone())).await,
+            None => SqsActor::create_sqs_client(Some(self.config.clone())).await,
         };
 
         let queue_name = self.config.queue_name.clone();
@@ -365,7 +396,7 @@ impl SQSSourceBuilder {
             .queue_name(queue_name)
             .send()
             .await
-            .map_err(|err| Error::SQS(err.into()))?;
+            .map_err(|err| Error::Sqs(err.into()))?;
 
         let queue_url = get_queue_url_output
             .queue_url
@@ -375,11 +406,11 @@ impl SQSSourceBuilder {
 
         let (handler_tx, handler_rx) = mpsc::channel(10);
         tokio::spawn(async move {
-            let mut actor = SQSActor::new(handler_rx, sqs_client, queue_url);
+            let mut actor = SqsActor::new(handler_rx, sqs_client, queue_url);
             actor.run().await;
         });
 
-        Ok(SQSSource {
+        Ok(SqsSource {
             batch_size: self.batch_size,
             timeout: self.timeout,
             actor_tx: handler_tx,
@@ -387,13 +418,25 @@ impl SQSSourceBuilder {
     }
 }
 
-impl SQSSource {
-    pub async fn read_messages(&self) -> Result<Vec<SQSMessage>> {
+impl SqsSource {
+    /// Reads messages from the SQS queue.
+    ///
+    /// This method sends a request to the SQS actor to receive messages from the queue.
+    /// It waits for the actor to respond with the messages or an error.
+    ///
+    /// # Returns
+    /// - `Ok(Vec<SqsMessage>)` containing the received messages if successful.
+    /// - `Err(Error)` if there is an error during the message retrieval process.
+    ///
+    /// # Errors
+    /// - Returns `Error::ActorTaskTerminated` if the actor task is terminated unexpectedly.
+    /// - Returns other `Error` variants if there are issues with receiving messages from SQS.
+    pub async fn read_messages(&self) -> Result<Vec<SqsMessage>> {
         tracing::debug!("Reading messages from SQS");
         let start = Instant::now();
         let (tx, rx) = oneshot::channel();
 
-        let msg = SQSActorMessage::Receive {
+        let msg = SqsActorMessage::Receive {
             respond_to: tx,
             count: self.batch_size as i32,
             timeout_at: start + self.timeout,
@@ -410,10 +453,26 @@ impl SQSSource {
         Ok(messages)
     }
 
+    /// Acknowledges the given offsets by sending a delete request to the SQS actor.
+    ///
+    /// This method sends a request to the SQS actor to delete messages from the queue
+    /// based on the provided offsets. It waits for the actor to respond with the result
+    /// of the delete operation.
+    ///
+    /// # Arguments
+    /// * `offsets` - A vector of `Bytes` representing the offsets of the messages to be acknowledged.
+    ///
+    /// # Returns
+    /// * `Ok(())` if the messages are successfully acknowledged.
+    /// * `Err(Error)` if there is an error during the acknowledgment process.
+    ///
+    /// # Errors
+    /// * Returns `Error::ActorTaskTerminated` if the actor task is terminated unexpectedly.
+    /// * Returns other `Error` variants if there are issues with deleting messages from SQS.
     pub async fn ack_offsets(&self, offsets: Vec<Bytes>) -> Result<()> {
         tracing::debug!(offsets = ?offsets, "Acknowledging offsets");
         let (tx, rx) = oneshot::channel();
-        let msg = SQSActorMessage::Delete {
+        let msg = SqsActorMessage::Delete {
             offsets,
             respond_to: tx,
         };
@@ -421,9 +480,21 @@ impl SQSSource {
         rx.await.map_err(Error::ActorTaskTerminated)?
     }
 
+    /// Retrieves the approximate number of pending messages in the SQS queue.
+    ///
+    /// This method sends a request to the SQS actor to get the approximate number of pending messages
+    /// in the queue. It waits for the actor to respond with the count or an error.
+    ///
+    /// # Returns
+    /// - `Some(usize)` containing the approximate number of pending messages if successful.
+    /// - `None` if there is an error during the retrieval process or if the count is not available.
+    ///
+    /// # Errors
+    /// - Returns `Error::ActorTaskTerminated` if the actor task is terminated unexpectedly.
+    /// - Returns other `Error` variants if there are issues with retrieving the pending message count from SQS.
     pub async fn pending_count(&self) -> Option<usize> {
         let (tx, rx) = oneshot::channel();
-        let msg = SQSActorMessage::GetPending { respond_to: tx };
+        let msg = SqsActorMessage::GetPending { respond_to: tx };
         let _ = self.actor_tx.send(msg).await;
 
         let actor_result = rx.await.map_err(Error::ActorTaskTerminated);
@@ -437,6 +508,11 @@ impl SQSSource {
         }
     }
 
+    /// Returns the partitions for the SQS source.
+    ///
+    /// This method is currently unimplemented in this module.
+    /// Note: It is implemented in the core to return the current vertex replica.
+    /// See `numaflow-core/src/source/sqs.rs` for the implementation.
     pub fn partitions(&self) -> Vec<u16> {
         unimplemented!()
     }
@@ -446,6 +522,7 @@ impl SQSSource {
 mod tests {
     use aws_sdk_sqs::Config;
     use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, Rule, RuleMode};
+    use aws_smithy_types::error::ErrorMetadata;
 
     use super::*;
 
@@ -463,8 +540,8 @@ mod tests {
         let sqs_mock_client =
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let source = SQSSourceBuilder::new()
-            .config(SQSSourceConfig {
+        let source = SqsSourceBuilder::new()
+            .config(SqsSourceConfig {
                 region: SQS_DEFAULT_REGION.to_string(),
                 queue_name: "test-q".to_string(),
             })
@@ -504,8 +581,8 @@ mod tests {
         let sqs_mock_client =
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let source = SQSSourceBuilder::new()
-            .config(SQSSourceConfig {
+        let source = SqsSourceBuilder::new()
+            .config(SqsSourceConfig {
                 region: SQS_DEFAULT_REGION.to_string(),
                 queue_name: "test-q".to_string(),
             })
@@ -535,8 +612,8 @@ mod tests {
         let sqs_mock_client =
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let source = SQSSourceBuilder::new()
-            .config(SQSSourceConfig {
+        let source = SqsSourceBuilder::new()
+            .config(SqsSourceConfig {
                 region: SQS_DEFAULT_REGION.to_string(),
                 queue_name: "test-q".to_string(),
             })
@@ -551,37 +628,33 @@ mod tests {
         assert_eq!(count, Some(0));
     }
 
-    // #[tokio::test]
-    // async fn test_error_cases() {
-    //     // Test invalid region error
-    //     let sqs_operation_mocks = MockResponseInterceptor::new()
-    //         .rule_mode(RuleMode::MatchAny);
-    //     let sqs_mock_client =
-    //         Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
-    //     let source = SQSSourceBuilder::new()
-    //         .config(SQSSourceConfig {
-    //             region: "invalid-region".to_string(),
-    //             queue_name: "test-q".to_string(),
-    //         })
-    //         .batch_size(1)
-    //         .timeout(Duration::from_secs(0))
-    //         .client(sqs_mock_client)
-    //         .build()
-    //         .await;
-    //     assert!(source.is_ok()); // Should still create but fail on operations
-    //
-    //     // Test invalid offset format
-    //     let source = source.unwrap();
-    //     let result = source
-    //         .ack_offsets(vec![Bytes::from(vec![255, 255, 255])])
-    //         .await;
-    //     assert!(result.is_err());
-    // }
+    #[tokio::test]
+    async fn test_error_cases() {
+        // Test invalid region error
+        let sqs_operation_mocks = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::MatchAny)
+            .with_rule(&get_queue_url_output_err());
+
+        let sqs_mock_client =
+            Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
+
+        let source = SqsSourceBuilder::new()
+            .config(SqsSourceConfig {
+                region: "invalid-region".to_string(),
+                queue_name: "test-q".to_string(),
+            })
+            .batch_size(1)
+            .timeout(Duration::from_secs(0))
+            .client(sqs_mock_client)
+            .build()
+            .await;
+        assert!(source.is_err());
+    }
 
     #[tokio::test]
     #[should_panic(expected = "not implemented")]
     async fn test_partitions_unimplemented() {
-        let source = SQSSource {
+        let source = SqsSource {
             batch_size: 1,
             timeout: Duration::from_secs(0),
             actor_tx: mpsc::channel(1).0,
@@ -647,6 +720,14 @@ mod tests {
                     .build()
             });
         queue_url_output
+    }
+
+    fn get_queue_url_output_err() -> Rule {
+        mock!(aws_sdk_sqs::Client::get_queue_url).then_error(|| {
+            aws_sdk_sqs::operation::get_queue_url::GetQueueUrlError::generic(
+                ErrorMetadata::builder().code("InvalidAddress").build(),
+            )
+        })
     }
 
     fn get_test_config_with_interceptor(interceptor: MockResponseInterceptor) -> Config {

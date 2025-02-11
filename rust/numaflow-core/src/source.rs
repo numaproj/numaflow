@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use numaflow_pulsar::source::PulsarSource;
-use numaflow_sqs::source::SQSSource;
+use numaflow_sqs::source::SqsSource;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::sync::{mpsc, oneshot};
@@ -84,7 +84,7 @@ pub(crate) enum SourceType {
         generator::GeneratorLagReader,
     ),
     Pulsar(PulsarSource),
-    SQS(SQSSource),
+    Sqs(SqsSource),
     Serving(ServingSource),
 }
 
@@ -206,7 +206,7 @@ impl Source {
                     actor.run().await;
                 });
             }
-            SourceType::SQS(sqs_source) => {
+            SourceType::Sqs(sqs_source) => {
                 tokio::spawn(async move {
                     let actor = SourceActor::new(
                         receiver,

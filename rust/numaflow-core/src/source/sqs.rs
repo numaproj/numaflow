@@ -1,25 +1,42 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use numaflow_sqs::source::{SQSMessage, SQSSource, SQSSourceBuilder, SQSSourceConfig};
+use chrono::DateTime;
+use numaflow_sqs::source::{
+    sent_timestamp_message_system_attribute_name, SqsMessage, SqsSource, SqsSourceBuilder,
+    SqsSourceConfig,
+};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::source;
 
-impl TryFrom<SQSMessage> for Message {
+impl TryFrom<SqsMessage> for Message {
     type Error = Error;
 
-    fn try_from(message: SQSMessage) -> crate::Result<Self> {
+    fn try_from(message: SqsMessage) -> crate::Result<Self> {
         let offset = Offset::String(StringOffset::new(message.offset, *get_vertex_replica()));
+
+        // find the SentTimestamp header and convert it to a chrono::DateTime<Utc>
+        let sent_timestamp = match message
+            .headers
+            .get(sent_timestamp_message_system_attribute_name())
+        {
+            Some(sent_timestamp_str) => sent_timestamp_str
+                .parse::<i64>()
+                .ok()
+                .and_then(DateTime::from_timestamp_millis),
+            None => None,
+        };
+
         Ok(Message {
             keys: Arc::from(vec![message.key]),
             tags: None,
             value: message.payload,
             offset: offset.clone(),
             event_time: message.event_time,
-            watermark: None,
+            watermark: sent_timestamp,
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: offset.to_string().into(),
@@ -34,7 +51,7 @@ impl TryFrom<SQSMessage> for Message {
 impl From<numaflow_sqs::Error> for Error {
     fn from(value: numaflow_sqs::Error) -> Self {
         match value {
-            numaflow_sqs::Error::SQS(e) => Error::Source(e.to_string()),
+            numaflow_sqs::Error::Sqs(e) => Error::Source(e.to_string()),
             numaflow_sqs::Error::ActorTaskTerminated(_) => {
                 Error::ActorPatternRecv(value.to_string())
             }
@@ -44,11 +61,11 @@ impl From<numaflow_sqs::Error> for Error {
 }
 
 pub(crate) async fn new_sqs_source(
-    cfg: SQSSourceConfig,
+    cfg: SqsSourceConfig,
     batch_size: usize,
     timeout: Duration,
-) -> crate::Result<SQSSource> {
-    Ok(SQSSourceBuilder::new()
+) -> crate::Result<SqsSource> {
+    Ok(SqsSourceBuilder::new()
         .config(cfg)
         .batch_size(batch_size)
         .timeout(timeout)
@@ -56,9 +73,9 @@ pub(crate) async fn new_sqs_source(
         .await?)
 }
 
-impl source::SourceReader for SQSSource {
+impl source::SourceReader for SqsSource {
     fn name(&self) -> &'static str {
-        "SQS"
+        "Sqs"
     }
 
     async fn read(&mut self) -> crate::Result<Vec<Message>> {
@@ -69,12 +86,13 @@ impl source::SourceReader for SQSSource {
             .collect()
     }
 
+    // if source doesn't support partitions, we should return the vec![vertex_replica]
     fn partitions(&self) -> Vec<u16> {
-        Self::partitions(self)
+        vec![*get_vertex_replica()]
     }
 }
 
-impl source::SourceAcker for SQSSource {
+impl source::SourceAcker for SqsSource {
     async fn ack(&mut self, offsets: Vec<Offset>) -> crate::error::Result<()> {
         let mut sqs_offsets = Vec::with_capacity(offsets.len());
         for offset in offsets {
@@ -89,7 +107,7 @@ impl source::SourceAcker for SQSSource {
     }
 }
 
-impl source::LagReader for SQSSource {
+impl source::LagReader for SqsSource {
     async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
         Ok(self.pending_count().await)
     }
@@ -106,7 +124,7 @@ pub mod tests {
     use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, Rule, RuleMode};
     use bytes::Bytes;
     use chrono::Utc;
-    use numaflow_sqs::source::{SQSSourceBuilder, SQS_DEFAULT_REGION};
+    use numaflow_sqs::source::{SqsSourceBuilder, SQS_DEFAULT_REGION};
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
@@ -119,7 +137,7 @@ pub mod tests {
         let mut headers = HashMap::new();
         headers.insert("foo".to_string(), "bar".to_string());
 
-        let sqs_message = SQSMessage {
+        let sqs_message = SqsMessage {
             key: "key".to_string(),
             payload: Bytes::from("value".to_string()),
             offset: "offset".to_string(),
@@ -161,8 +179,8 @@ pub mod tests {
         let sqs_client =
             aws_sdk_sqs::Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let sqs_source = SQSSourceBuilder::new()
-            .config(SQSSourceConfig {
+        let sqs_source = SqsSourceBuilder::new()
+            .config(SqsSourceConfig {
                 region: SQS_DEFAULT_REGION.to_string(),
                 queue_name: "test-q".to_string(),
             })
@@ -178,7 +196,7 @@ pub mod tests {
         let tracker_handle = TrackerHandle::new(None, None);
         let source = Source::new(
             1,
-            SourceType::SQS(sqs_source),
+            SourceType::Sqs(sqs_source),
             tracker_handle.clone(),
             true,
             None,
@@ -205,7 +223,7 @@ pub mod tests {
             cln_token.clone(),
         );
 
-        let forwarder_handle: JoinHandle<crate::error::Result<()>> = tokio::spawn(async move {
+        let _forwarder_handle: JoinHandle<crate::error::Result<()>> = tokio::spawn(async move {
             forwarder.start().await?;
             Ok(())
         });
