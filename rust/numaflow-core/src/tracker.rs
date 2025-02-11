@@ -358,7 +358,7 @@ impl TrackerHandle {
         callback_handler: Option<CallbackHandler>,
     ) -> Self {
         let enable_callbacks = callback_handler.is_some();
-        let (sender, receiver) = mpsc::channel(100);
+        let (sender, receiver) = mpsc::channel(1000);
         let tracker = Tracker::new(receiver, watermark_handle, callback_handler);
         tokio::spawn(tracker.run());
         Self {
@@ -491,6 +491,7 @@ mod tests {
     #[test]
     fn test_message_to_callback_info_conversion() {
         let mut message = Message {
+            typ: Default::default(),
             keys: Arc::from([]),
             tags: None,
             value: Bytes::from_static(b"test"),
@@ -537,6 +538,7 @@ mod tests {
         let (ack_send, ack_recv) = oneshot::channel();
 
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from([]),
             tags: None,
             value: Bytes::from_static(b"test"),
@@ -577,6 +579,7 @@ mod tests {
         let handle = TrackerHandle::new(None, None);
         let (ack_send, ack_recv) = oneshot::channel();
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from([]),
             tags: None,
             value: Bytes::from_static(b"test"),
@@ -622,6 +625,7 @@ mod tests {
         let (ack_send, ack_recv) = oneshot::channel();
 
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from([]),
             tags: None,
             value: Bytes::from_static(b"test"),
@@ -656,6 +660,7 @@ mod tests {
         let (ack_send, ack_recv) = oneshot::channel();
 
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from([]),
             tags: None,
             value: Bytes::from_static(b"test"),
@@ -755,6 +760,7 @@ mod tests {
 
         let offset = Offset::String(StringOffset::new("offset1".to_string(), 0));
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from([]),
             tags: None,
             value: Bytes::from_static(b"test"),

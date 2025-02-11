@@ -1,20 +1,21 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use numaflow_sqs::source::{SqsMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
+use numaflow_sqs::source::{SQSMessage, SQSSource, SQSSourceConfig, SqsSourceBuilder};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::source;
 
-impl TryFrom<SqsMessage> for Message {
+impl TryFrom<SQSMessage> for Message {
     type Error = Error;
 
-    fn try_from(message: SqsMessage) -> crate::Result<Self> {
+    fn try_from(message: SQSMessage) -> crate::Result<Self> {
         let offset = Offset::String(StringOffset::new(message.offset, *get_vertex_replica()));
 
         Ok(Message {
+            typ: Default::default(),
             keys: Arc::from(vec![message.key]),
             tags: None,
             value: message.payload,
@@ -44,11 +45,12 @@ impl From<numaflow_sqs::Error> for Error {
     }
 }
 
+#[allow(dead_code)] // TODO(SQS): remove it when integrated with controller
 pub(crate) async fn new_sqs_source(
-    cfg: SqsSourceConfig,
+    cfg: SQSSourceConfig,
     batch_size: usize,
     timeout: Duration,
-) -> crate::Result<SqsSource> {
+) -> crate::Result<SQSSource> {
     Ok(SqsSourceBuilder::new(cfg)
         .batch_size(batch_size)
         .timeout(timeout)
@@ -56,7 +58,7 @@ pub(crate) async fn new_sqs_source(
         .await?)
 }
 
-impl source::SourceReader for SqsSource {
+impl source::SourceReader for SQSSource {
     fn name(&self) -> &'static str {
         "Sqs"
     }
@@ -70,12 +72,12 @@ impl source::SourceReader for SqsSource {
     }
 
     // if source doesn't support partitions, we should return the vec![vertex_replica]
-    fn partitions(&self) -> Vec<u16> {
-        vec![*get_vertex_replica()]
+    async fn partitions(&mut self) -> crate::Result<Vec<u16>> {
+        Ok(vec![*get_vertex_replica()])
     }
 }
 
-impl source::SourceAcker for SqsSource {
+impl source::SourceAcker for SQSSource {
     async fn ack(&mut self, offsets: Vec<Offset>) -> crate::error::Result<()> {
         let mut sqs_offsets = Vec::with_capacity(offsets.len());
         for offset in offsets {
@@ -90,7 +92,7 @@ impl source::SourceAcker for SqsSource {
     }
 }
 
-impl source::LagReader for SqsSource {
+impl source::LagReader for SQSSource {
     async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
         Ok(self.pending_count().await)
     }
@@ -120,7 +122,7 @@ pub mod tests {
         let mut headers = HashMap::new();
         headers.insert("foo".to_string(), "bar".to_string());
 
-        let sqs_message = SqsMessage {
+        let sqs_message = SQSMessage {
             key: "key".to_string(),
             payload: Bytes::from("value".to_string()),
             offset: "offset".to_string(),
@@ -162,7 +164,7 @@ pub mod tests {
         let sqs_client =
             aws_sdk_sqs::Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let sqs_source = SqsSourceBuilder::new(SqsSourceConfig {
+        let sqs_source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
         })
@@ -178,7 +180,7 @@ pub mod tests {
         let tracker_handle = TrackerHandle::new(None, None);
         let source = Source::new(
             1,
-            SourceType::Sqs(sqs_source),
+            SourceType::SQS(sqs_source),
             tracker_handle.clone(),
             true,
             None,

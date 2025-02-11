@@ -37,7 +37,7 @@ pub(crate) async fn start_forwarder(
 ) -> Result<()> {
     let js_context = create_js_context(config.js_client_config.clone()).await?;
 
-    match &config.vertex_config {
+    match &config.vertex_type_config {
         pipeline::VertexType::Source(source) => {
             info!("Starting source forwarder");
 
@@ -45,7 +45,15 @@ pub(crate) async fn start_forwarder(
             let source_watermark_handle = match &config.watermark_config {
                 Some(wm_config) => {
                     if let WatermarkConfig::Source(source_config) = wm_config {
-                        Some(SourceWatermarkHandle::new(js_context.clone(), source_config).await?)
+                        Some(
+                            SourceWatermarkHandle::new(
+                                config.read_timeout,
+                                js_context.clone(),
+                                &config.to_vertex_config,
+                                source_config,
+                            )
+                            .await?,
+                        )
                     } else {
                         None
                     }
@@ -73,8 +81,10 @@ pub(crate) async fn start_forwarder(
                             ISBWatermarkHandle::new(
                                 config.vertex_name,
                                 config.replica,
+                                config.read_timeout,
                                 js_context.clone(),
                                 edge_config,
+                                &config.to_vertex_config,
                             )
                             .await?,
                         )
@@ -105,8 +115,10 @@ pub(crate) async fn start_forwarder(
                             ISBWatermarkHandle::new(
                                 config.vertex_name,
                                 config.replica,
+                                config.read_timeout,
                                 js_context.clone(),
                                 edge_config,
+                                &config.to_vertex_config,
                             )
                             .await?,
                         )
@@ -221,7 +233,9 @@ async fn start_map_forwarder(
         let tracker_handle =
             TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
 
+        info!("Creating buffer reader for stream {:?}", stream);
         let buffer_reader = create_buffer_reader(
+            config.vertex_type_config.to_string(),
             stream,
             reader_config.clone(),
             js_context.clone(),
@@ -324,6 +338,7 @@ async fn start_sink_forwarder(
             TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
 
         let buffer_reader = create_buffer_reader(
+            config.vertex_type_config.to_string(),
             stream,
             reader_config.clone(),
             js_context.clone(),
@@ -411,6 +426,7 @@ async fn create_buffer_writer(
 }
 
 async fn create_buffer_reader(
+    vertex_type: String,
     stream: Stream,
     reader_config: BufferReaderConfig,
     js_context: Context,
@@ -419,6 +435,7 @@ async fn create_buffer_reader(
     watermark_handle: Option<ISBWatermarkHandle>,
 ) -> Result<JetStreamReader> {
     JetStreamReader::new(
+        vertex_type,
         stream,
         js_context,
         reader_config,
@@ -542,7 +559,7 @@ mod tests {
             },
             from_vertex_config: vec![],
             to_vertex_config: vec![ToVertexConfig {
-                name: "out".to_string(),
+                name: "out",
                 partitions: 5,
                 writer_config: BufferWriterConfig {
                     streams: streams.clone(),
@@ -552,7 +569,7 @@ mod tests {
                 },
                 conditions: None,
             }],
-            vertex_config: VertexType::Source(SourceVtxConfig {
+            vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Generator(GeneratorConfig {
@@ -655,6 +672,7 @@ mod tests {
 
             use crate::message::{Message, MessageID, Offset, StringOffset};
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec!["key1".to_string()]),
                 tags: None,
                 value: vec![1, 2, 3].into(),
@@ -708,14 +726,14 @@ mod tests {
             },
             to_vertex_config: vec![],
             from_vertex_config: vec![FromVertexConfig {
-                name: "in".to_string(),
+                name: "in",
                 reader_config: BufferReaderConfig {
                     streams: streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
             }],
-            vertex_config: VertexType::Sink(SinkVtxConfig {
+            vertex_type_config: VertexType::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::Blackhole(BlackholeConfig::default()),
                     retry_config: None,
@@ -849,6 +867,7 @@ mod tests {
 
             use crate::message::{Message, MessageID, Offset, StringOffset};
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec!["key1".to_string()]),
                 tags: None,
                 value: vec![1, 2, 3].into(),
@@ -931,7 +950,7 @@ mod tests {
                 password: None,
             },
             to_vertex_config: vec![ToVertexConfig {
-                name: "map-out".to_string(),
+                name: "map-out",
                 partitions: 5,
                 writer_config: BufferWriterConfig {
                     streams: output_streams.clone(),
@@ -942,14 +961,14 @@ mod tests {
                 conditions: None,
             }],
             from_vertex_config: vec![FromVertexConfig {
-                name: "map-in".to_string(),
+                name: "map-in",
                 reader_config: BufferReaderConfig {
                     streams: input_streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
             }],
-            vertex_config: VertexType::Map(MapVtxConfig {
+            vertex_type_config: VertexType::Map(MapVtxConfig {
                 concurrency: 10,
                 map_type: MapType::UserDefined(UserDefinedConfig {
                     grpc_max_message_size: 4 * 1024 * 1024,

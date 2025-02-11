@@ -6,6 +6,8 @@
 //! increasing. Fetch and publish will be two different flows, but we will have natural ordering
 //! because we use actor model. Since we do streaming within the vertex we have to track the
 //! messages so that even if any messages get stuck we consider them while publishing watermarks.
+//! Starts a background task to publish idle watermarks for the downstream idle partitions, idle
+//! partitions are those partitions where we have not published any watermark for a certain time.
 //!
 //!
 //! **Fetch Flow**
@@ -17,17 +19,19 @@
 //! ```text
 //! (Write to ISB) -------> (Publish Watermark) ------> (Remove tracked Offset)
 //! ```
-
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap};
+use std::time::Duration;
 
 use tokio::sync::mpsc::Receiver;
 use tracing::error;
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
+use crate::config::pipeline::ToVertexConfig;
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
+use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 use crate::watermark::processor::manager::ProcessorManager;
@@ -51,10 +55,11 @@ enum ISBWaterMarkActorMessage {
         offset: IntOffset,
         watermark: Watermark,
     },
+    CheckAndPublishIdleWatermark,
 }
 
 /// Tuple of offset and watermark. We will use this to track the inflight messages.
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Debug)]
 struct OffsetWatermark {
     /// offset can be -1 if watermark cannot be derived.
     offset: i64,
@@ -87,14 +92,20 @@ struct ISBWatermarkActor {
     /// though insertion and deletion are O(1). We do almost same amount insertion, deletion and
     /// getting the lowest watermark so BTreeSet is the best choice.
     offset_set: HashMap<u16, BTreeSet<OffsetWatermark>>,
+    idle_manager: ISBIdleDetector,
 }
 
 impl ISBWatermarkActor {
-    fn new(fetcher: ISBWatermarkFetcher, publisher: ISBWatermarkPublisher) -> Self {
+    fn new(
+        fetcher: ISBWatermarkFetcher,
+        publisher: ISBWatermarkPublisher,
+        idle_manager: ISBIdleDetector,
+    ) -> Self {
         Self {
             fetcher,
             publisher,
             offset_set: HashMap::new(),
+            idle_manager,
         }
     }
 
@@ -114,8 +125,7 @@ impl ISBWatermarkActor {
             ISBWaterMarkActorMessage::FetchWatermark { offset, oneshot_tx } => {
                 let watermark = self
                     .fetcher
-                    .fetch_watermark(offset.offset, offset.partition_idx)
-                    .await?;
+                    .fetch_watermark(offset.offset, offset.partition_idx);
 
                 oneshot_tx
                     .send(Ok(watermark))
@@ -130,8 +140,10 @@ impl ISBWatermarkActor {
                     .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap());
 
                 self.publisher
-                    .publish_watermark(stream, offset.offset, min_wm.timestamp_millis())
-                    .await?;
+                    .publish_watermark(&stream, offset.offset, min_wm.timestamp_millis(), false)
+                    .await;
+
+                self.idle_manager.reset_idle(&stream).await;
             }
 
             // removes the offset from the tracked offsets
@@ -142,6 +154,42 @@ impl ISBWatermarkActor {
             // inserts the offset to the tracked offsets
             ISBWaterMarkActorMessage::InsertOffset { offset, watermark } => {
                 self.insert_offset(offset.partition_idx, offset.offset, watermark);
+            }
+
+            // check for idleness and publish idle watermark for those downstream idle partitions
+            ISBWaterMarkActorMessage::CheckAndPublishIdleWatermark => {
+                // if there are any inflight messages, consider the lowest watermark among them
+                let mut min_wm = self
+                    .get_lowest_watermark()
+                    .unwrap_or(Watermark::from_timestamp_millis(-1).expect("failed to parse time"));
+
+                // if there are no inflight messages, use the head idle watermark
+                if min_wm.timestamp_millis() == -1 {
+                    min_wm = self.fetcher.fetch_head_idle_watermark();
+                }
+
+                // we are not able to compute WM, pod restarts, etc.
+                if min_wm.timestamp_millis() == -1 {
+                    return Ok(());
+                }
+
+                // identify the streams that are idle.
+                let idle_streams = self.idle_manager.fetch_idle_streams().await;
+
+                // publish the idle watermark for the idle partitions
+                for stream in idle_streams.iter() {
+                    let offset = match self.idle_manager.fetch_idle_offset(stream).await {
+                        Ok(offset) => offset,
+                        Err(e) => {
+                            error!("failed to fetch idle offset: {:?}", e);
+                            continue;
+                        }
+                    };
+                    self.publisher
+                        .publish_watermark(stream, offset, min_wm.timestamp_millis(), true)
+                        .await;
+                    self.idle_manager.update_idle_metadata(stream, offset).await;
+                }
             }
         }
 
@@ -183,12 +231,14 @@ pub(crate) struct ISBWatermarkHandle {
 }
 
 impl ISBWatermarkHandle {
-    /// new creates a new [ISBWatermarkHandle].
+    /// new creates a new [ISBWatermarkHandle]. We also start a background task to detect WM idleness.
     pub(crate) async fn new(
         vertex_name: &'static str,
         vertex_replica: u16,
+        idle_timeout: Duration,
         js_context: async_nats::jetstream::Context,
         config: &EdgeWatermarkConfig,
+        to_vertex_configs: &[ToVertexConfig],
     ) -> Result<Self> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
@@ -210,9 +260,31 @@ impl ISBWatermarkHandle {
         )
         .await?;
 
-        let actor = ISBWatermarkActor::new(fetcher, publisher);
+        let idle_manager =
+            ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
+
+        let actor = ISBWatermarkActor::new(fetcher, publisher, idle_manager);
         tokio::spawn(async move { actor.run(receiver).await });
-        Ok(Self { sender })
+
+        let isb_watermark_handle = Self { sender };
+
+        // start a task to keep publishing idle watermarks every idle_timeout
+        tokio::spawn({
+            let isb_watermark_handle = isb_watermark_handle.clone();
+            let mut interval_ticker = tokio::time::interval(idle_timeout);
+            async move {
+                loop {
+                    // TODO(idle): add cancellation token.
+                    interval_ticker.tick().await;
+                    isb_watermark_handle
+                        .publish_idle_watermark()
+                        .await
+                        .expect("failed to publish idle watermark");
+                }
+            }
+        });
+
+        Ok(isb_watermark_handle)
     }
 
     /// Fetches the watermark for the given offset.
@@ -279,6 +351,14 @@ impl ISBWatermarkHandle {
             Err(Error::Watermark("invalid offset type".to_string()))
         }
     }
+
+    pub(crate) async fn publish_idle_watermark(&self) -> Result<()> {
+        self.sender
+            .send(ISBWaterMarkActorMessage::CheckAndPublishIdleWatermark)
+            .await
+            .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -288,7 +368,7 @@ mod tests {
     use tokio::time::sleep;
 
     use super::*;
-    use crate::config::pipeline::isb::Stream;
+    use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::message::IntOffset;
     use crate::watermark::wmb::WMB;
@@ -362,9 +442,24 @@ mod tests {
             to_vertex_config: vec![to_bucket_config.clone()],
         };
 
-        let handle = ISBWatermarkHandle::new(vertex_name, 0, js_context.clone(), &edge_config)
-            .await
-            .expect("Failed to create ISBWatermarkHandle");
+        let handle = ISBWatermarkHandle::new(
+            vertex_name,
+            0,
+            Duration::from_millis(100),
+            js_context.clone(),
+            &edge_config,
+            &vec![ToVertexConfig {
+                name: "to_vertex",
+                partitions: 0,
+                writer_config: BufferWriterConfig {
+                    streams: vec![Stream::new("test_stream", "to_vertex", 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
+        )
+        .await
+        .expect("Failed to create ISBWatermarkHandle");
 
         handle
             .insert_offset(
@@ -392,7 +487,7 @@ mod tests {
             .publish_watermark(
                 Stream {
                     name: "test_stream",
-                    vertex: "from_vertex",
+                    vertex: "to_vertex",
                     partition: 0,
                 },
                 Offset::Int(IntOffset {
@@ -420,7 +515,7 @@ mod tests {
                 assert_eq!(wmb.watermark, 100);
                 wmb_found = true;
             }
-            sleep(std::time::Duration::from_millis(10)).await;
+            sleep(Duration::from_millis(10)).await;
         }
 
         if !wmb_found {
@@ -440,7 +535,7 @@ mod tests {
             .publish_watermark(
                 Stream {
                     name: "test_stream",
-                    vertex: "from_vertex",
+                    vertex: "to_vertex",
                     partition: 0,
                 },
                 Offset::Int(IntOffset {
@@ -463,7 +558,7 @@ mod tests {
                 assert_eq!(wmb.watermark, 200);
                 wmb_found = true;
             }
-            sleep(std::time::Duration::from_millis(10)).await;
+            sleep(Duration::from_millis(10)).await;
         }
 
         if !wmb_found {
@@ -531,9 +626,24 @@ mod tests {
             to_vertex_config: vec![from_bucket_config.clone()],
         };
 
-        let handle = ISBWatermarkHandle::new(vertex_name, 0, js_context.clone(), &edge_config)
-            .await
-            .expect("Failed to create ISBWatermarkHandle");
+        let handle = ISBWatermarkHandle::new(
+            vertex_name,
+            0,
+            Duration::from_millis(100),
+            js_context.clone(),
+            &edge_config,
+            &vec![ToVertexConfig {
+                name: "from_vertex",
+                partitions: 0,
+                writer_config: BufferWriterConfig {
+                    streams: vec![Stream::new("test_stream", "from_vertex", 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
+        )
+        .await
+        .expect("Failed to create ISBWatermarkHandle");
 
         let mut fetched_watermark = -1;
         // publish watermark and try fetching to see if something is getting published
@@ -578,7 +688,7 @@ mod tests {
                 fetched_watermark = watermark.timestamp_millis();
                 break;
             }
-            sleep(std::time::Duration::from_millis(10)).await;
+            sleep(Duration::from_millis(10)).await;
             handle
                 .remove_offset(offset.clone())
                 .await
@@ -594,6 +704,154 @@ mod tests {
             .unwrap();
         js_context
             .delete_key_value(hb_bucket_name.to_string())
+            .await
+            .unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_publish_idle_watermark() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let ot_bucket_name = "test_publish_idle_watermark_OT";
+        let hb_bucket_name = "test_publish_idle_watermark_PROCESSORS";
+        let to_ot_bucket_name = "test_publish_idle_watermark_to_OT";
+        let to_hb_bucket_name = "test_publish_idle_watermark_to_PROCESSORS";
+
+        let vertex_name = "test-vertex";
+
+        let from_bucket_config = BucketConfig {
+            vertex: "from_vertex",
+            partitions: 1,
+            ot_bucket: ot_bucket_name,
+            hb_bucket: hb_bucket_name,
+        };
+
+        let to_bucket_config = BucketConfig {
+            vertex: "to_vertex",
+            partitions: 1,
+            ot_bucket: to_ot_bucket_name,
+            hb_bucket: to_hb_bucket_name,
+        };
+
+        // create key value stores
+        js_context
+            .create_key_value(Config {
+                bucket: ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        js_context
+            .create_key_value(Config {
+                bucket: hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        js_context
+            .create_key_value(Config {
+                bucket: to_ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        js_context
+            .create_key_value(Config {
+                bucket: to_hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let edge_config = EdgeWatermarkConfig {
+            from_vertex_config: vec![from_bucket_config.clone()],
+            to_vertex_config: vec![to_bucket_config.clone()],
+        };
+
+        let handle = ISBWatermarkHandle::new(
+            vertex_name,
+            0,
+            Duration::from_millis(10), // Set idle timeout to a very short duration
+            js_context.clone(),
+            &edge_config,
+            &vec![ToVertexConfig {
+                name: "to_vertex",
+                partitions: 0,
+                writer_config: BufferWriterConfig {
+                    streams: vec![Stream::new("test_stream", "to_vertex", 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
+        )
+        .await
+        .expect("Failed to create ISBWatermarkHandle");
+
+        // Insert multiple offsets
+        for i in 1..=3 {
+            handle
+                .insert_offset(
+                    Offset::Int(IntOffset {
+                        offset: i,
+                        partition_idx: 0,
+                    }),
+                    Some(Watermark::from_timestamp_millis(i * 100).unwrap()),
+                )
+                .await
+                .expect("Failed to insert offset");
+        }
+
+        // Wait for the idle timeout to trigger
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Check if the idle watermark is published
+        let ot_bucket = js_context
+            .get_key_value(to_ot_bucket_name)
+            .await
+            .expect("Failed to get ot bucket");
+
+        let mut wmb_found = false;
+        for _ in 0..10 {
+            if let Some(wmb) = ot_bucket
+                .get("test-vertex-0")
+                .await
+                .expect("Failed to get wmb")
+            {
+                let wmb: WMB = wmb.try_into().unwrap();
+                if wmb.idle {
+                    wmb_found = true;
+                    break;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        assert!(wmb_found, "Idle watermark not found");
+
+        // delete the stores
+        js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(to_ot_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(to_hb_bucket_name.to_string())
             .await
             .unwrap();
     }

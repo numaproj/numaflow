@@ -327,13 +327,19 @@ pub async fn create_source(
                     tracker_handle,
                     source_config.read_ahead,
                     transformer,
-                    None,
+                    watermark_handle,
                 ),
                 Some(source_grpc_client),
             ))
         }
         SourceType::Pulsar(pulsar_config) => {
-            let pulsar = new_pulsar_source(pulsar_config.clone(), batch_size, read_timeout).await?;
+            let pulsar = new_pulsar_source(
+                pulsar_config.clone(),
+                batch_size,
+                read_timeout,
+                *get_vertex_replica(),
+            )
+            .await?;
             Ok((
                 Source::new(
                     batch_size,
@@ -341,7 +347,7 @@ pub async fn create_source(
                     tracker_handle,
                     source_config.read_ahead,
                     transformer,
-                    None,
+                    watermark_handle,
                 ),
                 None,
             ))
@@ -361,7 +367,7 @@ pub async fn create_source(
                     tracker_handle,
                     source_config.read_ahead,
                     transformer,
-                    None,
+                    watermark_handle,
                 ),
                 None,
             ))
