@@ -1,11 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::DateTime;
-use numaflow_sqs::source::{
-    sent_timestamp_message_system_attribute_name, SqsMessage, SqsSource, SqsSourceBuilder,
-    SqsSourceConfig,
-};
+use numaflow_sqs::source::{SqsMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
@@ -18,25 +14,13 @@ impl TryFrom<SqsMessage> for Message {
     fn try_from(message: SqsMessage) -> crate::Result<Self> {
         let offset = Offset::String(StringOffset::new(message.offset, *get_vertex_replica()));
 
-        // find the SentTimestamp header and convert it to a chrono::DateTime<Utc>
-        let sent_timestamp = match message
-            .headers
-            .get(sent_timestamp_message_system_attribute_name())
-        {
-            Some(sent_timestamp_str) => sent_timestamp_str
-                .parse::<i64>()
-                .ok()
-                .and_then(DateTime::from_timestamp_millis),
-            None => None,
-        };
-
         Ok(Message {
             keys: Arc::from(vec![message.key]),
             tags: None,
             value: message.payload,
             offset: offset.clone(),
             event_time: message.event_time,
-            watermark: sent_timestamp,
+            watermark: Some(message.event_time),
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: offset.to_string().into(),
@@ -65,8 +49,7 @@ pub(crate) async fn new_sqs_source(
     batch_size: usize,
     timeout: Duration,
 ) -> crate::Result<SqsSource> {
-    Ok(SqsSourceBuilder::new()
-        .config(cfg)
+    Ok(SqsSourceBuilder::new(cfg)
         .batch_size(batch_size)
         .timeout(timeout)
         .build()
@@ -179,17 +162,16 @@ pub mod tests {
         let sqs_client =
             aws_sdk_sqs::Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let sqs_source = SqsSourceBuilder::new()
-            .config(SqsSourceConfig {
-                region: SQS_DEFAULT_REGION.to_string(),
-                queue_name: "test-q".to_string(),
-            })
-            .batch_size(1)
-            .timeout(Duration::from_secs(1))
-            .client(sqs_client)
-            .build()
-            .await
-            .unwrap();
+        let sqs_source = SqsSourceBuilder::new(SqsSourceConfig {
+            region: SQS_DEFAULT_REGION.to_string(),
+            queue_name: "test-q".to_string(),
+        })
+        .batch_size(1)
+        .timeout(Duration::from_secs(1))
+        .client(sqs_client)
+        .build()
+        .await
+        .unwrap();
 
         // create SQS source with test client
         use crate::tracker::TrackerHandle;
