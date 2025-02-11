@@ -12,6 +12,7 @@ use aws_config::{meta::region::RegionProviderChain, BehaviorVersion};
 use aws_sdk_sqs::config::Region;
 use aws_sdk_sqs::types::{MessageSystemAttributeName, QueueAttributeName};
 use aws_sdk_sqs::Client;
+use aws_smithy_types::timeout::TimeoutConfig;
 use bytes::Bytes;
 use chrono::{DateTime, TimeZone, Utc};
 use tokio::sync::{mpsc, oneshot};
@@ -26,6 +27,7 @@ pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 ///
 /// Used to initialize the SQS client with region and queue settings.
 /// Implements serde::Deserialize to support loading from configuration files.
+/// TODO: add support for all sqs configs and different ways to authenticate
 #[derive(serde::Deserialize, Clone, PartialEq)]
 pub struct SqsSourceConfig {
     pub region: String,
@@ -73,7 +75,6 @@ pub struct SqsMessage {
 ///
 /// The actor maintains:
 /// - Single SQS client instance
-/// - Queue URL caching
 /// - Message channel for handling concurrent requests
 struct SqsActor {
     handler_rx: mpsc::Receiver<SqsActorMessage>,
@@ -104,6 +105,11 @@ impl SqsActor {
             .or_else(Region::new(SQS_DEFAULT_REGION));
 
         let shared_config = aws_config::defaults(BehaviorVersion::v2024_03_28())
+            .timeout_config(
+                TimeoutConfig::builder()
+                    .operation_attempt_timeout(Duration::from_secs(10))
+                    .build(),
+            )
             .region(region_provider)
             .load()
             .await;
@@ -151,12 +157,22 @@ impl SqsActor {
     /// Retrieves messages from SQS with timeout and batching.
     ///
     /// Implementation details:
-    /// - Handles queue URL caching/refresh
     /// - Respects timeout for long polling
     /// - Processes message attributes and system metadata
     /// - Returns messages in a normalized format
     async fn get_messages(&mut self, count: i32, timeout_at: Instant) -> Result<Vec<SqsMessage>> {
         let remaining_time = timeout_at - Instant::now();
+
+        // default to one second if remaining time is less than one second
+        // as sqs sdk requires wait_time_seconds to be at least 1
+        // https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html#sqs-short-long-polling-differences
+        // TODO: find a better way to handle user input timeout. should allow the users
+        // to choose long/short polling. For now, we default to 1 second (long polling).
+        let remaining_time = if remaining_time.as_millis() < 1000 {
+            Duration::from_secs(1)
+        } else {
+            remaining_time
+        };
 
         let sdk_response = self
             .client
@@ -175,7 +191,7 @@ impl SqsActor {
                 tracing::error!(
                     ?err,
                     queue_url = self.queue_url,
-                    "Failed to receive messages from SQS"
+                    "failed to receive messages from SQS"
                 );
                 return Err(Error::Sqs(err.into()));
             }
@@ -199,12 +215,14 @@ impl SqsActor {
                     .and_then(|timestamp| timestamp.parse::<i64>().ok())
                     .and_then(|timestamp| Utc.timestamp_millis_opt(timestamp).single())
                     .unwrap_or_else(Utc::now);
+
                 let attributes = msg.message_attributes.as_ref().map(|attrs| {
                     attrs
                         .iter()
                         .map(|(k, v)| (k.clone(), v.string_value.clone().unwrap_or_default()))
                         .collect()
                 });
+
                 let headers = msg
                     .attributes
                     .as_ref()
@@ -215,6 +233,7 @@ impl SqsActor {
                             .collect()
                     })
                     .unwrap_or_default();
+
                 SqsMessage {
                     key,
                     payload,
@@ -229,13 +248,14 @@ impl SqsActor {
         Ok(messages)
     }
 
+    // delete message from SQS, serves as Numaflow source ack.
     async fn delete_messages(&mut self, offsets: Vec<Bytes>) -> Result<()> {
         for offset in offsets {
             let offset = match std::str::from_utf8(&offset) {
                 Ok(offset) => offset,
                 Err(err) => {
-                    tracing::error!(?err, "Failed to parse offset");
-                    return Err(Error::Other("Failed to parse offset".to_string()));
+                    tracing::error!(?err, "failed to parse offset");
+                    return Err(Error::Other("failed to parse offset".to_string()));
                 }
             };
             if let Err(err) = self
@@ -258,6 +278,10 @@ impl SqsActor {
         Ok(())
     }
 
+    // get the pending message count from SQS using the ApproximateNumberOfMessages attribute
+    // Note: The ApproximateNumberOfMessages metrics may not achieve consistency until at least
+    // 1 minute after the producers stop sending messages.
+    // This period is required for the queue metadata to reach eventual consistency.
     async fn get_pending_messages(&mut self) -> Result<Option<usize>> {
         let sdk_response = self
             .client
@@ -273,7 +297,7 @@ impl SqsActor {
                 tracing::error!(
                     ?err,
                     queue_url = self.queue_url,
-                    "Failed to get queue attributes from SQS"
+                    "failed to get queue attributes from SQS"
                 );
                 return Err(Error::Sqs(err.into()));
             }
@@ -292,9 +316,9 @@ impl SqsActor {
         let approx_pending_messages_count = match value.parse::<usize>() {
             Ok(count) => count,
             Err(err) => {
-                tracing::error!(?err, "Failed to parse ApproximateNumberOfMessages");
+                tracing::error!(?err, "failed to parse ApproximateNumberOfMessages");
                 return Err(Error::Other(
-                    "Failed to parse ApproximateNumberOfMessages".to_string(),
+                    "failed to parse ApproximateNumberOfMessages".to_string(),
                 ));
             }
         };
@@ -412,18 +436,7 @@ impl SqsSourceBuilder {
 }
 
 impl SqsSource {
-    /// Reads messages from the SQS queue.
-    ///
-    /// This method sends a request to the SQS actor to receive messages from the queue.
-    /// It waits for the actor to respond with the messages or an error.
-    ///
-    /// # Returns
-    /// - `Ok(Vec<SqsMessage>)` containing the received messages if successful.
-    /// - `Err(Error)` if there is an error during the message retrieval process.
-    ///
-    /// # Errors
-    /// - Returns `Error::ActorTaskTerminated` if the actor task is terminated unexpectedly.
-    /// - Returns other `Error` variants if there are issues with receiving messages from SQS.
+    // read messages from SQS, corresponding sqs sdk method is receive_message
     pub async fn read_messages(&self) -> Result<Vec<SqsMessage>> {
         tracing::debug!("Reading messages from SQS");
         let start = Instant::now();
@@ -446,22 +459,8 @@ impl SqsSource {
         Ok(messages)
     }
 
-    /// Acknowledges the given offsets by sending a delete request to the SQS actor.
-    ///
-    /// This method sends a request to the SQS actor to delete messages from the queue
-    /// based on the provided offsets. It waits for the actor to respond with the result
-    /// of the delete operation.
-    ///
-    /// # Arguments
-    /// * `offsets` - A vector of `Bytes` representing the offsets of the messages to be acknowledged.
-    ///
-    /// # Returns
-    /// * `Ok(())` if the messages are successfully acknowledged.
-    /// * `Err(Error)` if there is an error during the acknowledgment process.
-    ///
-    /// # Errors
-    /// * Returns `Error::ActorTaskTerminated` if the actor task is terminated unexpectedly.
-    /// * Returns other `Error` variants if there are issues with deleting messages from SQS.
+    // acknowledge the offsets of the messages read from SQS
+    // corresponding sqs sdk method is delete_message
     pub async fn ack_offsets(&self, offsets: Vec<Bytes>) -> Result<()> {
         tracing::debug!(offsets = ?offsets, "Acknowledging offsets");
         let (tx, rx) = oneshot::channel();
@@ -473,18 +472,9 @@ impl SqsSource {
         rx.await.map_err(Error::ActorTaskTerminated)?
     }
 
-    /// Retrieves the approximate number of pending messages in the SQS queue.
-    ///
-    /// This method sends a request to the SQS actor to get the approximate number of pending messages
-    /// in the queue. It waits for the actor to respond with the count or an error.
-    ///
-    /// # Returns
-    /// - `Some(usize)` containing the approximate number of pending messages if successful.
-    /// - `None` if there is an error during the retrieval process or if the count is not available.
-    ///
-    /// # Errors
-    /// - Returns `Error::ActorTaskTerminated` if the actor task is terminated unexpectedly.
-    /// - Returns other `Error` variants if there are issues with retrieving the pending message count from SQS.
+    // get the pending message count from SQS
+    // corresponding sqs sdk method is get_queue_attributes
+    // with the attribute name ApproximateNumberOfMessages
     pub async fn pending_count(&self) -> Option<usize> {
         let (tx, rx) = oneshot::channel();
         let msg = SqsActorMessage::GetPending { respond_to: tx };
