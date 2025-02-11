@@ -139,7 +139,7 @@ mod tests {
 
         // Update and fetch idle watermark with computed_wm = -1
         let idle_wm = manager.update_and_fetch_idle_wm(-1);
-        assert!(idle_wm > 0);
+        assert_eq!(idle_wm, -1);
 
         // Update and fetch idle watermark with a valid computed_wm
         let idle_wm = manager.update_and_fetch_idle_wm(1000);
