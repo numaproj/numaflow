@@ -7,13 +7,14 @@ use std::collections::HashMap;
 use std::time::UNIX_EPOCH;
 use std::time::{Duration, SystemTime};
 
+use bytes::BytesMut;
+use prost::Message;
+use tracing::{debug, error, info};
+
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::{Error, Result};
 use crate::watermark::wmb::WMB;
-use bytes::BytesMut;
-use prost::Message;
-use tracing::{debug, error, info};
 
 /// Interval at which the pod sends heartbeats.
 const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;

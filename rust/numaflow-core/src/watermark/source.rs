@@ -15,6 +15,12 @@
 //! [Source]: https://numaflow.numaproj.io/user-guide/sources/overview/
 //! [ISB]: https://numaflow.numaproj.io/core-concepts/inter-step-buffer/
 
+use std::collections::HashMap;
+use std::time::Duration;
+
+use tokio::sync::mpsc::Receiver;
+use tracing::error;
+
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::config::pipeline::ToVertexConfig;
@@ -25,10 +31,6 @@ use crate::watermark::idle::source::SourceIdleDetector;
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::source::source_wm_fetcher::SourceWatermarkFetcher;
 use crate::watermark::source::source_wm_publisher::SourceWatermarkPublisher;
-use std::collections::HashMap;
-use std::time::Duration;
-use tokio::sync::mpsc::Receiver;
-use tracing::error;
 
 /// fetcher for fetching the source watermark
 pub(crate) mod source_wm_fetcher;
@@ -364,11 +366,6 @@ impl SourceWatermarkHandle {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::config::pipeline::isb::BufferWriterConfig;
-    use crate::config::pipeline::watermark::{BucketConfig, IdleConfig};
-    use crate::message::{IntOffset, Message};
-    use crate::watermark::wmb::WMB;
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
     use async_nats::jetstream::stream;
@@ -377,6 +374,12 @@ mod tests {
     use numaflow_pb::objects::watermark::Heartbeat;
     use prost::Message as _;
     use tokio::time::sleep;
+
+    use super::*;
+    use crate::config::pipeline::isb::BufferWriterConfig;
+    use crate::config::pipeline::watermark::{BucketConfig, IdleConfig};
+    use crate::message::{IntOffset, Message};
+    use crate::watermark::wmb::WMB;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]

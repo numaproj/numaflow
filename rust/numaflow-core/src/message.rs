@@ -3,12 +3,13 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
-use crate::shared::grpc::prost_timestamp_from_utc;
-use crate::Error;
 use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
+
+use crate::shared::grpc::prost_timestamp_from_utc;
+use crate::Error;
 
 const DROP: &str = "U+005C__DROP__";
 

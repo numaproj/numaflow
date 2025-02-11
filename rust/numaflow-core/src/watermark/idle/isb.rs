@@ -14,13 +14,15 @@
 //! Fetch the `min(wm(Head Idle Offset), wm(smallest offset of inflight messages))` and publish as
 //! idle.
 
-use crate::config::pipeline::isb::Stream;
-use crate::config::pipeline::ToVertexConfig;
-use bytes::BytesMut;
-use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
+
+use bytes::BytesMut;
+use chrono::{DateTime, Utc};
+
+use crate::config::pipeline::isb::Stream;
+use crate::config::pipeline::ToVertexConfig;
 
 /// State of each partition in the ISB. It has the information required to identify whether the
 /// partition is idling or not.
@@ -191,14 +193,16 @@ impl ISBIdleDetector {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use async_nats::jetstream;
+    use async_nats::jetstream::stream;
+    use tokio::time::sleep;
+
     use super::*;
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::config::pipeline::isb::Stream;
     use crate::config::pipeline::ToVertexConfig;
-    use async_nats::jetstream;
-    use async_nats::jetstream::stream;
-    use std::time::Duration;
-    use tokio::time::sleep;
 
     #[tokio::test]
     async fn test_mark_active() {

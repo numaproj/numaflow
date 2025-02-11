@@ -6,8 +6,8 @@ use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::fmt;
 use std::sync::Arc;
-
 use std::sync::RwLock;
+
 use tracing::{debug, error};
 
 use crate::watermark::wmb::WMB;

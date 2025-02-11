@@ -19,6 +19,13 @@
 //! ```text
 //! (Write to ISB) -------> (Publish Watermark) ------> (Remove tracked Offset)
 //! ```
+use std::cmp::Ordering;
+use std::collections::{BTreeSet, HashMap};
+use std::time::Duration;
+
+use tokio::sync::mpsc::Receiver;
+use tracing::error;
+
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
 use crate::config::pipeline::ToVertexConfig;
@@ -29,11 +36,6 @@ use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::Watermark;
-use std::cmp::Ordering;
-use std::collections::{BTreeSet, HashMap};
-use std::time::Duration;
-use tokio::sync::mpsc::Receiver;
-use tracing::error;
 
 pub(crate) mod wm_fetcher;
 pub(crate) mod wm_publisher;

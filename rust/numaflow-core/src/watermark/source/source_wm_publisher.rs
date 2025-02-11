@@ -2,14 +2,16 @@
 //! the watermark across the source partitions. Since we write the messages to the ISB, we will also publish
 //! the watermark to the ISB. Unlike other vertices we don't use pod as the processing entity for publishing
 //! watermark we use the partition(watermark originates here).
+use std::collections::HashMap;
+use std::time::Duration;
+
+use chrono::Utc;
+use tracing::info;
+
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
-use chrono::Utc;
-use std::collections::HashMap;
-use std::time::Duration;
-use tracing::info;
 
 /// SourcePublisher is the watermark publisher for the source vertex.
 pub(crate) struct SourceWatermarkPublisher {
@@ -117,9 +119,10 @@ impl SourceWatermarkPublisher {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
-    use std::time::Duration;
 
     use crate::config::pipeline::isb::Stream;
     use crate::watermark::source::source_wm_publisher::{BucketConfig, SourceWatermarkPublisher};

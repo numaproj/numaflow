@@ -54,9 +54,9 @@ impl SourceWatermarkFetcher {
 mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
+    use std::sync::RwLock;
 
     use bytes::Bytes;
-    use std::sync::RwLock;
 
     use super::*;
     use crate::watermark::processor::manager::{Processor, Status};

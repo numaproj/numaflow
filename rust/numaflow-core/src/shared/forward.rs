@@ -1,6 +1,7 @@
-use numaflow_models::models::ForwardConditions;
 use std::hash::{DefaultHasher, Hasher};
 use std::sync::Arc;
+
+use numaflow_models::models::ForwardConditions;
 
 /// Checks if the message should to written to downstream vertex based the conditions
 /// and message tags. If not tags are provided by there are edge conditions present, we will

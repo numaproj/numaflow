@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::time::Duration;
 use std::time::SystemTime;
 
@@ -14,7 +15,6 @@ use backoff::strategy::fixed;
 use bytes::Bytes;
 use futures::{StreamExt, TryStreamExt};
 use prost::Message as ProtoMessage;
-use std::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 use crate::config::pipeline::watermark::BucketConfig;
@@ -112,7 +112,8 @@ impl Drop for ProcessorManager {
 }
 
 impl ProcessorManager {
-    /// Creates a new ProcessorManager.
+    /// Creates a new ProcessorManager. It prepopulates the processor-map with previous data
+    /// fetched from the OT and HB buckets.
     pub(crate) async fn new(
         js_context: async_nats::jetstream::Context,
         bucket_config: &BucketConfig,
@@ -137,9 +138,10 @@ impl ProcessorManager {
                 ))
             })?;
 
+        // fetch old data
         let (processors_map, heartbeats_map) =
             Self::prepopulate_processors(&hb_bucket, &ot_bucket, bucket_config).await;
-
+        // point to populated data
         let processors = Arc::new(RwLock::new(processors_map));
         let heartbeats = Arc::new(RwLock::new(heartbeats_map));
 

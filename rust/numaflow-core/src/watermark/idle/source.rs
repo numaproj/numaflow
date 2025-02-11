@@ -14,9 +14,10 @@
 //! The current watermark + increment_by (provided by the user). We will ensure that the
 //! increment will never cross `(time.now() - max_delay)`.
 
-use crate::config::pipeline::watermark::IdleConfig;
 use chrono::{DateTime, Utc};
 use tracing::warn;
+
+use crate::config::pipeline::watermark::IdleConfig;
 
 /// Responsible for detecting the idle state of the source and publishing idle watermarks.
 pub(crate) struct SourceIdleDetector {
@@ -76,7 +77,7 @@ impl SourceIdleDetector {
         // this could happen if step interval and increment-by are set aggressively
         let now = Utc::now().timestamp_millis();
         if idle_wm > now {
-            warn!(?idle_wm, "idle config is aggressive (reduce step/increment-by), wm > now(), resetting to now");
+            warn!(?idle_wm, "idle config is aggressive (reduce step/increment-by), wm > now(), resetting to now()");
             idle_wm = now;
         }
 
@@ -87,9 +88,10 @@ impl SourceIdleDetector {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
     use crate::config::pipeline::watermark::IdleConfig;
-    use std::time::Duration;
 
     #[test]
     fn test_is_source_idling() {
