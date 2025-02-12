@@ -469,11 +469,7 @@ impl JetstreamWriter {
     ) {
         match watermark_handle {
             WatermarkHandle::ISB(handle) => {
-                handle
-                    .publish_watermark(stream, offset)
-                    .await
-                    .map_err(|e| Error::ISB(format!("Failed to update watermark: {:?}", e)))
-                    .expect("Failed to publish watermark");
+                handle.publish_watermark(stream, offset).await;
             }
             WatermarkHandle::Source(handle) => {
                 let input_partition = match &message.offset {

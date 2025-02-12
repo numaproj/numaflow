@@ -24,6 +24,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::time::Duration;
 
 use tokio::sync::mpsc::Receiver;
+use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use crate::config::pipeline::isb::Stream;
@@ -239,6 +240,7 @@ impl ISBWatermarkHandle {
         js_context: async_nats::jetstream::Context,
         config: &EdgeWatermarkConfig,
         to_vertex_configs: &[ToVertexConfig],
+        cln_token: CancellationToken,
     ) -> Result<Self> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
@@ -272,14 +274,17 @@ impl ISBWatermarkHandle {
         tokio::spawn({
             let isb_watermark_handle = isb_watermark_handle.clone();
             let mut interval_ticker = tokio::time::interval(idle_timeout);
+            let cln_token = cln_token.clone();
             async move {
                 loop {
-                    // TODO(idle): add cancellation token.
-                    interval_ticker.tick().await;
-                    isb_watermark_handle
-                        .publish_idle_watermark()
-                        .await
-                        .expect("failed to publish idle watermark");
+                    tokio::select! {
+                        _ = interval_ticker.tick() => {
+                            isb_watermark_handle.publish_idle_watermark().await;
+                        }
+                        _ = cln_token.cancelled() => {
+                            break;
+                        }
+                    }
                 }
             }
         });
@@ -287,55 +292,66 @@ impl ISBWatermarkHandle {
         Ok(isb_watermark_handle)
     }
 
-    /// Fetches the watermark for the given offset.
-    pub(crate) async fn fetch_watermark(&self, offset: Offset) -> Result<Watermark> {
+    /// Fetches the watermark for the given offset, if we are not able to compute the watermark we
+    /// return -1.
+    pub(crate) async fn fetch_watermark(&self, offset: Offset) -> Watermark {
         if let Offset::Int(offset) = offset {
             let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-            self.sender
+            if let Err(e) = self
+                .sender
                 .send(ISBWaterMarkActorMessage::FetchWatermark { offset, oneshot_tx })
                 .await
-                .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
+            {
+                error!(?e, "Failed to send message");
+                return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
+            }
 
-            oneshot_rx
-                .await
-                .map_err(|_| Error::Watermark("failed to receive response".to_string()))?
+            match oneshot_rx.await {
+                Ok(watermark) => watermark.unwrap_or_else(|e| {
+                    error!(?e, "Failed to fetch watermark");
+                    Watermark::from_timestamp_millis(-1).expect("failed to parse time")
+                }),
+                Err(e) => {
+                    error!(?e, "Failed to receive response");
+                    Watermark::from_timestamp_millis(-1).expect("failed to parse time")
+                }
+            }
         } else {
-            Err(Error::Watermark("invalid offset type".to_string()))
+            error!(?offset, "Invalid offset type, cannot compute watermark");
+            Watermark::from_timestamp_millis(-1).expect("failed to parse time")
         }
     }
 
     /// publish_watermark publishes the watermark for the given stream and offset.
-    pub(crate) async fn publish_watermark(&self, stream: Stream, offset: Offset) -> Result<()> {
+    pub(crate) async fn publish_watermark(&self, stream: Stream, offset: Offset) {
         if let Offset::Int(offset) = offset {
             self.sender
                 .send(ISBWaterMarkActorMessage::PublishWatermark { offset, stream })
                 .await
-                .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
-            Ok(())
+                .unwrap_or_else(|e| {
+                    error!("Failed to send message: {:?}", e);
+                });
         } else {
-            Err(Error::Watermark("invalid offset type".to_string()))
+            error!(?offset, "Invalid offset type, cannot publish watermark");
         }
     }
 
     /// remove_offset removes the offset from the tracked offsets.
-    pub(crate) async fn remove_offset(&self, offset: Offset) -> Result<()> {
+    pub(crate) async fn remove_offset(&self, offset: Offset) {
         if let Offset::Int(offset) = offset {
             self.sender
                 .send(ISBWaterMarkActorMessage::RemoveOffset(offset))
                 .await
-                .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
-            Ok(())
+                .unwrap_or_else(|e| {
+                    error!("Failed to send message: {:?}", e);
+                });
         } else {
-            Err(Error::Watermark("invalid offset type".to_string()))
+            error!(?offset, "Invalid offset type, cannot remove offset");
         }
     }
 
     /// insert_offset inserts the offset to the tracked offsets.
-    pub(crate) async fn insert_offset(
-        &self,
-        offset: Offset,
-        watermark: Option<Watermark>,
-    ) -> Result<()> {
+    pub(crate) async fn insert_offset(&self, offset: Offset, watermark: Option<Watermark>) {
         if let Offset::Int(offset) = offset {
             self.sender
                 .send(ISBWaterMarkActorMessage::InsertOffset {
@@ -345,19 +361,22 @@ impl ISBWatermarkHandle {
                     ),
                 })
                 .await
-                .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
-            Ok(())
+                .unwrap_or_else(|e| {
+                    error!("Failed to send message: {:?}", e);
+                });
         } else {
-            Err(Error::Watermark("invalid offset type".to_string()))
+            error!(?offset, "Invalid offset type, cannot insert offset");
         }
     }
 
-    pub(crate) async fn publish_idle_watermark(&self) -> Result<()> {
+    /// publishes the idle watermark for the downstream idle partitions.
+    pub(crate) async fn publish_idle_watermark(&self) {
         self.sender
             .send(ISBWaterMarkActorMessage::CheckAndPublishIdleWatermark)
             .await
-            .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
-        Ok(())
+            .unwrap_or_else(|e| {
+                error!("Failed to send message: {:?}", e);
+            });
     }
 }
 
@@ -457,6 +476,7 @@ mod tests {
                 },
                 conditions: None,
             }],
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
@@ -469,8 +489,7 @@ mod tests {
                 }),
                 Some(Watermark::from_timestamp_millis(100).unwrap()),
             )
-            .await
-            .expect("Failed to insert offset");
+            .await;
 
         handle
             .insert_offset(
@@ -480,8 +499,7 @@ mod tests {
                 }),
                 Some(Watermark::from_timestamp_millis(200).unwrap()),
             )
-            .await
-            .expect("Failed to insert offset");
+            .await;
 
         handle
             .publish_watermark(
@@ -495,8 +513,7 @@ mod tests {
                     partition_idx: 0,
                 }),
             )
-            .await
-            .expect("Failed to publish watermark");
+            .await;
 
         let ot_bucket = js_context
             .get_key_value(ot_bucket_name)
@@ -528,8 +545,7 @@ mod tests {
                 offset: 1,
                 partition_idx: 0,
             }))
-            .await
-            .expect("Failed to remove offset");
+            .await;
 
         handle
             .publish_watermark(
@@ -543,8 +559,7 @@ mod tests {
                     partition_idx: 0,
                 }),
             )
-            .await
-            .unwrap();
+            .await;
 
         let mut wmb_found = true;
         for _ in 0..10 {
@@ -641,6 +656,7 @@ mod tests {
                 },
                 conditions: None,
             }],
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
@@ -658,8 +674,7 @@ mod tests {
                     offset.clone(),
                     Some(Watermark::from_timestamp_millis(i * 100).unwrap()),
                 )
-                .await
-                .expect("Failed to insert offset");
+                .await;
 
             handle
                 .publish_watermark(
@@ -673,26 +688,21 @@ mod tests {
                         partition_idx: 0,
                     }),
                 )
-                .await
-                .expect("Failed to publish watermark");
+                .await;
 
             let watermark = handle
                 .fetch_watermark(Offset::Int(IntOffset {
                     offset: 3,
                     partition_idx: 0,
                 }))
-                .await
-                .expect("Failed to fetch watermark");
+                .await;
 
             if watermark.timestamp_millis() != -1 {
                 fetched_watermark = watermark.timestamp_millis();
                 break;
             }
             sleep(Duration::from_millis(10)).await;
-            handle
-                .remove_offset(offset.clone())
-                .await
-                .expect("Failed to insert offset");
+            handle.remove_offset(offset.clone()).await;
         }
 
         assert_ne!(fetched_watermark, -1);
@@ -792,6 +802,7 @@ mod tests {
                 },
                 conditions: None,
             }],
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
@@ -806,8 +817,7 @@ mod tests {
                     }),
                     Some(Watermark::from_timestamp_millis(i * 100).unwrap()),
                 )
-                .await
-                .expect("Failed to insert offset");
+                .await;
         }
 
         // Wait for the idle timeout to trigger

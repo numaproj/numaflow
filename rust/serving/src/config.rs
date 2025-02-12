@@ -9,6 +9,7 @@ use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::time::Duration;
 
 const ENV_NUMAFLOW_SERVING_HOST_IP: &str = "NUMAFLOW_SERVING_HOST_IP";
 const ENV_NUMAFLOW_SERVING_APP_PORT: &str = "NUMAFLOW_SERVING_APP_LISTEN_PORT";
@@ -176,7 +177,10 @@ impl TryFrom<HashMap<String, String>> for Settings {
 
         // Update redis.addr from source_spec, currently we only support redis as callback storage
         settings.redis.addr = serving_spec.store.url;
-        settings.redis.ttl_secs = settings.redis.ttl_secs;
+        settings.redis.ttl_secs = match serving_spec.store.ttl {
+            Some(ttl) => Some(Duration::from(ttl).as_secs() as u32),
+            None => None,
+        };
 
         if let Some(auth) = serving_spec.auth {
             let token = auth.token.unwrap();

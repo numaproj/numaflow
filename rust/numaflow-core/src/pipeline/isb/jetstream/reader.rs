@@ -220,7 +220,7 @@ impl JetStreamReader {
                             }
 
                             if let Some(watermark_handle) = watermark_handle.as_ref() {
-                                let watermark = watermark_handle.fetch_watermark(message.offset.clone()).await?;
+                                let watermark = watermark_handle.fetch_watermark(message.offset.clone()).await;
                                 message.watermark = Some(watermark);
                             }
 

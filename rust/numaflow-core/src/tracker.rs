@@ -217,10 +217,7 @@ impl Tracker {
         );
 
         if let Some(watermark_handle) = &self.watermark_handle {
-            watermark_handle
-                .insert_offset(offset, watermark)
-                .await
-                .expect("Failed to insert offset");
+            watermark_handle.insert_offset(offset, watermark).await;
         }
     }
 
@@ -282,10 +279,7 @@ impl Tracker {
             .send(ReadAck::Nak)
             .expect("Failed to send nak");
         if let Some(watermark_handle) = &self.watermark_handle {
-            watermark_handle
-                .remove_offset(offset)
-                .await
-                .expect("Failed to remove offset");
+            watermark_handle.remove_offset(offset).await;
         }
     }
 
@@ -314,10 +308,7 @@ impl Tracker {
         ack_send.send(ReadAck::Ack).expect("Failed to send ack");
 
         if let Some(watermark_handle) = &self.watermark_handle {
-            watermark_handle
-                .remove_offset(offset)
-                .await
-                .expect("Failed to remove offset");
+            watermark_handle.remove_offset(offset).await;
         }
 
         let Some(ref callback_handler) = self.serving_callback_handler else {

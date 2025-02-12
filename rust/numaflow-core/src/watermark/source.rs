@@ -294,10 +294,7 @@ impl SourceWatermarkHandle {
     }
 
     /// Generates and Publishes the source watermark for the given messages.
-    pub(crate) async fn generate_and_publish_source_watermark(
-        &self,
-        messages: &[Message],
-    ) -> Result<()> {
+    pub(crate) async fn generate_and_publish_source_watermark(&self, messages: &[Message]) {
         // we need to build a hash-map of the lowest event time for each partition
         let partition_to_lowest_event_time =
             messages.iter().fold(HashMap::new(), |mut acc, message| {
@@ -320,9 +317,7 @@ impl SourceWatermarkHandle {
                 map: partition_to_lowest_event_time,
             })
             .await
-            .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
-
-        Ok(())
+            .unwrap_or_else(|e| error!("failed to send message: {:?}", e));
     }
 
     /// Publishes the watermark for the given input partition on to the ISB of the next vertex.
@@ -451,8 +446,7 @@ mod tests {
 
         handle
             .generate_and_publish_source_watermark(&messages)
-            .await
-            .expect("Failed to publish source watermark");
+            .await;
 
         // try getting the value for the processor from the ot bucket to make sure
         // the watermark is getting published(min event time in the batch), wait until
@@ -613,8 +607,7 @@ mod tests {
 
             handle
                 .generate_and_publish_source_watermark(&messages)
-                .await
-                .expect("Failed to publish source watermark");
+                .await;
 
             let offset = Offset::Int(IntOffset {
                 offset: i,
@@ -969,8 +962,7 @@ mod tests {
         // generate some watermarks to make partition active
         handle
             .generate_and_publish_source_watermark(&messages)
-            .await
-            .expect("Failed to publish source watermark");
+            .await;
 
         // get ot and hb buckets for source and publish some wmb and heartbeats
         let ot_bucket = js_context
