@@ -31,6 +31,7 @@ interface MetricsModalProps {
   vertexId: string;
   type: string;
   presets?: any;
+  pod?: any;
 }
 
 export function MetricsModal({
@@ -43,6 +44,7 @@ export function MetricsModal({
   vertexId,
   type,
   presets,
+  pod,
 }: MetricsModalProps) {
   const { setVertexTab, setPodsViewTab, setExpanded, setPresets } =
     useContext<VertexDetailsContextProps>(VertexDetailsContext);
@@ -102,6 +104,7 @@ export function MetricsModal({
             metricDisplayName={metricDisplayName}
             setMetricsFound={setMetricsFound}
             presets={presets}
+            pod={pod}
           />
         </Box>
         {metricsFound && (

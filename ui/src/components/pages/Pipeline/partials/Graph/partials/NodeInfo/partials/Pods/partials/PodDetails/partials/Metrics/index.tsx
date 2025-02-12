@@ -32,7 +32,7 @@ export interface MetricsProps {
   metricDisplayName?: string;
   setMetricsFound?: Dispatch<SetStateAction<boolean>>;
   presets?: any;
-  podDetails?: Pod;
+  pod?: Pod;
 }
 
 export function Metrics({
@@ -41,7 +41,7 @@ export function Metrics({
   type,
   vertexId,
   metricDisplayName,
-  podDetails,
+  pod,
   setMetricsFound,
   presets,
 }: MetricsProps) {
@@ -113,7 +113,7 @@ export function Metrics({
           vertexId={vertexId}
           presets={presets}
           fromModal
-          podDetails={podDetails}
+          pod={pod}
         />
       );
     } else {
@@ -170,7 +170,7 @@ export function Metrics({
                   metric={metric}
                   vertexId={vertexId}
                   presets={presetsFromContext}
-                  podDetails={podDetails}
+                  pod={pod}
                 />
               )}
             </AccordionDetails>

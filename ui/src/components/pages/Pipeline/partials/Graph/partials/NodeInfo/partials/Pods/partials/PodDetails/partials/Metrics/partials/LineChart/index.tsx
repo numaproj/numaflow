@@ -197,7 +197,7 @@ interface LineChartComponentProps {
   vertexId?: string;
   presets?: any;
   fromModal?: boolean;
-  podDetails?: Pod;
+  pod?: Pod;
 }
 
 // TODO have a check for metricReq against metric object to ensure required fields are passed
@@ -209,7 +209,7 @@ const LineChartComponent = ({
   vertexId,
   presets,
   fromModal,
-  podDetails
+  pod,
 }: LineChartComponentProps) => {
   const { addError } = useContext<AppContextProps>(AppContext);
   const [transformedData, setTransformedData] = useState<any[]>([]);
@@ -256,7 +256,7 @@ const LineChartComponent = ({
                 return `${pipelineId}-${vertexId}-.*`;
             }
           } else {
-            return podDetails?.name;
+            return pod?.name;
           }
         default:
           return "";
@@ -379,7 +379,7 @@ const LineChartComponent = ({
 
     if (JSON.stringify(label) === JSON.stringify(["container"])){
       filteredChartData = chartData.filter((item) => {
-        return podDetails?.containers?.includes(item?.metric?.["container"])
+        return pod?.containers?.includes(item?.metric?.["container"])
       })
     }
     if (JSON.stringify(label) === JSON.stringify(["pod"])){
@@ -423,7 +423,7 @@ const LineChartComponent = ({
     });
     setChartLabels(labels);
     setTransformedData(transformedData);
-  }, [chartData, metricsReq, groupByLabel]);
+  }, [chartData, metricsReq, groupByLabel, pod]);
 
   useEffect(() => {
     if (chartData) updateChartData();
@@ -506,7 +506,7 @@ const LineChartComponent = ({
               type={type}
               vertexId={vertexId}
               setFilters={setFilters}
-              selectedPodName={podDetails?.name}
+              selectedPodName={pod?.name}
               metric={metric}
             />
           </Box>

@@ -120,7 +120,7 @@ export function PodDetail({
                 pipelineId={pipelineId}
                 type={type}
                 vertexId={vertexId}
-                podDetails={pod}
+                pod={pod}
               />
             </Box>
           )}
