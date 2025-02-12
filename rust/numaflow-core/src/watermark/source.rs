@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use tokio::sync::mpsc::Receiver;
+use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use crate::config::pipeline::isb::Stream;
@@ -249,6 +250,7 @@ impl SourceWatermarkHandle {
         js_context: async_nats::jetstream::Context,
         to_vertex_configs: &[ToVertexConfig],
         config: &SourceWatermarkConfig,
+        cln_token: CancellationToken,
     ) -> Result<Self> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
         let processor_manager =
@@ -284,8 +286,14 @@ impl SourceWatermarkHandle {
             let mut interval_ticker = tokio::time::interval(idle_timeout);
             async move {
                 loop {
-                    interval_ticker.tick().await;
-                    source_watermark_handle.publish_isb_idle_watermark().await;
+                    tokio::select! {
+                        _ = interval_ticker.tick() => {
+                            source_watermark_handle.publish_isb_idle_watermark().await;
+                        }
+                        _ = cln_token.cancelled() => {
+                            break;
+                        }
+                    }
                 }
             }
         });
@@ -421,6 +429,7 @@ mod tests {
             js_context.clone(),
             Default::default(),
             &source_config,
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to create source watermark handle");
@@ -568,6 +577,7 @@ mod tests {
                 partitions: 1,
             }],
             &source_config,
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to create source watermark handle");
@@ -756,6 +766,7 @@ mod tests {
                 to_vertex_bucket_config: vec![to_vertex_bucket_config],
                 idle_config: Some(source_idle_config),
             },
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to create SourceWatermarkHandle");
@@ -946,6 +957,7 @@ mod tests {
                 to_vertex_bucket_config: vec![to_vertex_bucket_config],
                 idle_config: Some(source_idle_config),
             },
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to create SourceWatermarkHandle");

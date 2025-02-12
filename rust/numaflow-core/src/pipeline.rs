@@ -51,6 +51,7 @@ pub(crate) async fn start_forwarder(
                                 js_context.clone(),
                                 &config.to_vertex_config,
                                 source_config,
+                                cln_token.clone(),
                             )
                             .await?,
                         )
