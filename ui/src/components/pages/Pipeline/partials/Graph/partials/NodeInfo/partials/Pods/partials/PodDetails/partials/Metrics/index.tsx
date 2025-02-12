@@ -22,16 +22,17 @@ import {
 } from "../../../../../../../../../../../../common/SlidingSidebar/partials/VertexDetails";
 
 import "./style.css";
+import { Pod } from "../../../../../../../../../../../../../types/declarations/pods";
 
 export interface MetricsProps {
   namespaceId: string;
   pipelineId: string;
   type: string;
   vertexId?: string;
-  selectedPodName?: string;
   metricDisplayName?: string;
   setMetricsFound?: Dispatch<SetStateAction<boolean>>;
   presets?: any;
+  podDetails?: Pod;
 }
 
 export function Metrics({
@@ -39,8 +40,8 @@ export function Metrics({
   pipelineId,
   type,
   vertexId,
-  selectedPodName,
   metricDisplayName,
+  podDetails,
   setMetricsFound,
   presets,
 }: MetricsProps) {
@@ -112,6 +113,7 @@ export function Metrics({
           vertexId={vertexId}
           presets={presets}
           fromModal
+          podDetails={podDetails}
         />
       );
     } else {
@@ -168,7 +170,7 @@ export function Metrics({
                   metric={metric}
                   vertexId={vertexId}
                   presets={presetsFromContext}
-                  selectedPodName={selectedPodName}
+                  podDetails={podDetails}
                 />
               )}
             </AccordionDetails>
