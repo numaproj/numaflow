@@ -134,6 +134,7 @@ export function ContainerInfo({
                 type={type}
                 metricDisplayName={CONTAINER_CPU_UTILIZATION}
                 value={`${usedCPU} / ${specCPU} (${cpuPercent})`}
+                pod={pod}
               />
             </Box>
           </Box>
@@ -149,6 +150,7 @@ export function ContainerInfo({
                 type={type}
                 metricDisplayName={CONTAINER_MEMORY_UTILIZATION}
                 value={`${usedMem} / ${specMem} (${memPercent})`}
+                pod={pod}
               />
             </Box>
           </Box>
@@ -234,6 +236,7 @@ export function ContainerInfo({
                   type={type}
                   metricDisplayName={POD_CPU_UTILIZATION}
                   value={podSpecificInfo?.totalCPU}
+                  pod={pod}
                 />
               </Box>
             </Box>
@@ -251,6 +254,7 @@ export function ContainerInfo({
                   type={type}
                   metricDisplayName={POD_MEMORY_UTILIZATION}
                   value={podSpecificInfo?.totalMemory}
+                  pod={pod}
                 />
               </Box>
             </Box>
