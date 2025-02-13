@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use tokio::sync::mpsc::Receiver;
+use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use crate::config::pipeline::isb::Stream;
@@ -249,6 +250,7 @@ impl SourceWatermarkHandle {
         js_context: async_nats::jetstream::Context,
         to_vertex_configs: &[ToVertexConfig],
         config: &SourceWatermarkConfig,
+        cln_token: CancellationToken,
     ) -> Result<Self> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
         let processor_manager =
@@ -284,8 +286,14 @@ impl SourceWatermarkHandle {
             let mut interval_ticker = tokio::time::interval(idle_timeout);
             async move {
                 loop {
-                    interval_ticker.tick().await;
-                    source_watermark_handle.publish_isb_idle_watermark().await;
+                    tokio::select! {
+                        _ = interval_ticker.tick() => {
+                            source_watermark_handle.publish_isb_idle_watermark().await;
+                        }
+                        _ = cln_token.cancelled() => {
+                            break;
+                        }
+                    }
                 }
             }
         });
@@ -294,10 +302,7 @@ impl SourceWatermarkHandle {
     }
 
     /// Generates and Publishes the source watermark for the given messages.
-    pub(crate) async fn generate_and_publish_source_watermark(
-        &self,
-        messages: &[Message],
-    ) -> Result<()> {
+    pub(crate) async fn generate_and_publish_source_watermark(&self, messages: &[Message]) {
         // we need to build a hash-map of the lowest event time for each partition
         let partition_to_lowest_event_time =
             messages.iter().fold(HashMap::new(), |mut acc, message| {
@@ -320,9 +325,7 @@ impl SourceWatermarkHandle {
                 map: partition_to_lowest_event_time,
             })
             .await
-            .map_err(|_| Error::Watermark("failed to send message".to_string()))?;
-
-        Ok(())
+            .unwrap_or_else(|e| error!("failed to send message: {:?}", e));
     }
 
     /// Publishes the watermark for the given input partition on to the ISB of the next vertex.
@@ -426,6 +429,7 @@ mod tests {
             js_context.clone(),
             Default::default(),
             &source_config,
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to create source watermark handle");
@@ -451,8 +455,7 @@ mod tests {
 
         handle
             .generate_and_publish_source_watermark(&messages)
-            .await
-            .expect("Failed to publish source watermark");
+            .await;
 
         // try getting the value for the processor from the ot bucket to make sure
         // the watermark is getting published(min event time in the batch), wait until
@@ -574,6 +577,7 @@ mod tests {
                 partitions: 1,
             }],
             &source_config,
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to create source watermark handle");
@@ -613,8 +617,7 @@ mod tests {
 
             handle
                 .generate_and_publish_source_watermark(&messages)
-                .await
-                .expect("Failed to publish source watermark");
+                .await;
 
             let offset = Offset::Int(IntOffset {
                 offset: i,
@@ -763,6 +766,7 @@ mod tests {
                 to_vertex_bucket_config: vec![to_vertex_bucket_config],
                 idle_config: Some(source_idle_config),
             },
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to create SourceWatermarkHandle");
@@ -953,6 +957,7 @@ mod tests {
                 to_vertex_bucket_config: vec![to_vertex_bucket_config],
                 idle_config: Some(source_idle_config),
             },
+            CancellationToken::new(),
         )
         .await
         .expect("Failed to create SourceWatermarkHandle");
@@ -969,8 +974,7 @@ mod tests {
         // generate some watermarks to make partition active
         handle
             .generate_and_publish_source_watermark(&messages)
-            .await
-            .expect("Failed to publish source watermark");
+            .await;
 
         // get ot and hb buckets for source and publish some wmb and heartbeats
         let ot_bucket = js_context
