@@ -250,7 +250,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 		for toVertexName, toVertexBuffers := range df.toBuffers {
 			for index := range toVertexBuffers {
 				// publish idle watermark to all the source partitions owned by this reader.
-				// it is 1:1 for many (HTTP, tickgen, etc.) but for e.g., for Kafka it is 1:N and the list of partitions in the N could keep changing.
+				// it is 1:1 for many (HTTP, tick-gen, etc.) but for e.g., for Kafka it is 1:N and the list of partitions in the N could keep changing.
 				for _, sp := range df.reader.Partitions(df.ctx) {
 					if vertexPublishers, ok := df.toVertexWMPublishers[toVertexName]; ok {
 						var publisher, ok = vertexPublishers[sp]

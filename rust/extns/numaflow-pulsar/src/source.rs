@@ -238,6 +238,7 @@ pub struct PulsarSource {
     /// timeout for each batch read request
     timeout: Duration,
     actor_tx: mpsc::Sender<ConsumerActorMessage>,
+    vertex_replica: u16,
 }
 
 impl PulsarSource {
@@ -245,6 +246,7 @@ impl PulsarSource {
         config: PulsarSourceConfig,
         batch_size: usize,
         timeout: Duration,
+        vertex_replica: u16,
     ) -> Result<Self> {
         let (tx, rx) = mpsc::channel(10);
         ConsumerReaderActor::start(config, rx).await?;
@@ -252,6 +254,7 @@ impl PulsarSource {
             actor_tx: tx,
             batch_size,
             timeout,
+            vertex_replica,
         })
     }
 }
@@ -292,7 +295,7 @@ impl PulsarSource {
         None
     }
 
-    pub fn partitions(&self) -> Vec<u16> {
-        unimplemented!()
+    pub fn partitions_vec(&self) -> Vec<u16> {
+        vec![self.vertex_replica]
     }
 }

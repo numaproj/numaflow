@@ -17,14 +17,14 @@ use tracing::{error, info};
 use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, Metadata, Offset, ReadAck};
+use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
 use crate::metrics::{
     pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
 };
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
 use crate::watermark::isb::ISBWatermarkHandle;
-use crate::Result;
+use crate::{metrics, Result};
 
 /// The JetStreamReader is a handle to the background actor that continuously fetches messages from JetStream.
 /// It can be used to cancel the background task and stop reading from JetStream.
@@ -38,10 +38,12 @@ pub(crate) struct JetStreamReader {
     tracker_handle: TrackerHandle,
     batch_size: usize,
     watermark_handle: Option<ISBWatermarkHandle>,
+    vertex_type: String,
 }
 
 /// JSWrappedMessage is a wrapper around the JetStream message that includes the
 /// partition index and the vertex name.
+#[derive(Debug)]
 struct JSWrappedMessage {
     partition_idx: u16,
     message: async_nats::jetstream::Message,
@@ -78,6 +80,7 @@ impl TryFrom<JSWrappedMessage> for Message {
         ));
 
         Ok(Message {
+            typ: header.kind.into(),
             keys: Arc::from(header.keys.into_boxed_slice()),
             tags: None,
             value: body.payload.into(),
@@ -102,6 +105,7 @@ impl TryFrom<JSWrappedMessage> for Message {
 
 impl JetStreamReader {
     pub(crate) async fn new(
+        vertex_type: String,
         stream: Stream,
         js_ctx: Context,
         config: BufferReaderConfig,
@@ -130,6 +134,7 @@ impl JetStreamReader {
         config.wip_ack_interval = wip_ack_interval;
 
         Ok(Self {
+            vertex_type,
             stream,
             config: config.clone(),
             consumer,
@@ -158,9 +163,14 @@ impl JetStreamReader {
             let tracker_handle = self.tracker_handle.clone();
             let cancel_token = cancel_token.clone();
             let watermark_handle = self.watermark_handle.clone();
+            let vertex_type = self.vertex_type.clone();
 
             async move {
-                let labels = pipeline_forward_metric_labels("Sink", Some(stream.name));
+                let mut labels = pipeline_forward_metric_labels(&vertex_type).clone();
+                labels.push((
+                    metrics::PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                    stream.name.to_string(),
+                ));
 
                 let mut message_stream = consumer.messages().await.map_err(|e| {
                     Error::ISB(format!(
@@ -196,19 +206,21 @@ impl JetStreamReader {
                                 vertex_name: get_vertex_name().to_string(),
                             };
 
-                            let mut message: Message = match js_message.try_into() {
-                                Ok(message) => message,
-                                Err(e) => {
-                                    error!(
-                                        ?e, ?stream, ?jetstream_message,
-                                        "Failed to parse message payload received from Jetstream",
-                                    );
-                                    continue;
-                                }
-                            };
+                            let mut message: Message = js_message.try_into().map_err(|e| {
+                                Error::ISB(format!("Failed to convert JetStream message to Message: {:?}", e))
+                            })?;
+
+                            // we can ignore the wmb messages
+                            if let MessageType::WMB = message.typ {
+                                // ack the message and continue
+                                jetstream_message.ack().await.map_err(|e| {
+                                    Error::ISB(format!("Failed to ack the wmb message: {:?}", e))
+                                })?;
+                                continue;
+                            }
 
                             if let Some(watermark_handle) = watermark_handle.as_ref() {
-                                let watermark = watermark_handle.fetch_watermark(message.offset.clone()).await?;
+                                let watermark = watermark_handle.fetch_watermark(message.offset.clone()).await;
                                 message.watermark = Some(watermark);
                             }
 
@@ -235,7 +247,7 @@ impl JetStreamReader {
                             pipeline_metrics()
                                 .forwarder
                                 .read_total
-                                .get_or_create(labels)
+                                .get_or_create(&labels)
                                 .inc();
                         }
                     }
@@ -263,7 +275,7 @@ impl JetStreamReader {
                 let ack_result = msg.ack_with(AckKind::Progress).await;
                 if let Err(e) = ack_result {
                     // We expect that the ack in the next iteration will be successful.
-                    // If its some unrecoverable Jetstream error, the fetching messages in the JestreamReader implementation should also fail and cause the system to shut down.
+                    // If its some unrecoverable Jetstream error, the fetching messages in the JetstreamReader implementation should also fail and cause the system to shut down.
                     error!(?e, "Failed to send InProgress Ack to Jetstream for message");
                 }
             };
@@ -385,6 +397,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let js_reader = JetStreamReader::new(
+            "Map".to_string(),
             stream.clone(),
             context.clone(),
             buf_reader_config,
@@ -403,6 +416,7 @@ mod tests {
 
         for i in 0..10 {
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
@@ -483,6 +497,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let js_reader = JetStreamReader::new(
+            "Map".to_string(),
             js_stream.clone(),
             context.clone(),
             buf_reader_config,
@@ -503,6 +518,7 @@ mod tests {
         // write 5 messages
         for i in 0..5 {
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),

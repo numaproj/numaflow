@@ -6,9 +6,9 @@ use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::fmt;
 use std::sync::Arc;
-
 use std::sync::RwLock;
-use tracing::{debug, error, info};
+
+use tracing::{debug, error};
 
 use crate::watermark::wmb::WMB;
 
@@ -65,10 +65,13 @@ impl OffsetTimeline {
                 error!("The new input offset should never be smaller than the existing offset");
             }
             (Ordering::Less, _) => {
-                error!("Watermark should not regress");
+                error!(
+                    "Watermark should not regress, current: {:?}, new: {:?}",
+                    element_node, node
+                );
             }
             (Ordering::Greater, Ordering::Equal) => {
-                info!(?node, "Idle Watermark detected");
+                debug!(?node, "Idle Watermark detected");
                 element_node.watermark = node.watermark;
             }
         }
