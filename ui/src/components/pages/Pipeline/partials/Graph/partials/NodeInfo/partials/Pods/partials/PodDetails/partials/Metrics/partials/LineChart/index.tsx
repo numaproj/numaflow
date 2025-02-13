@@ -262,7 +262,7 @@ const LineChartComponent = ({
           return "";
       }
     },
-    [namespaceId, pipelineId]
+    [namespaceId, pipelineId, pod]
   );
 
   const updateFilterList = useCallback(
@@ -377,12 +377,12 @@ const LineChartComponent = ({
     let filteredChartData = chartData;
     const label = groupByLabel(metricsReq?.dimension, metricsReq?.display_name);
 
-    if (JSON.stringify(label) === JSON.stringify(["container"])){
+    if (Array.isArray(label) && label.length === 1 && label[0] === "container"){
       filteredChartData = chartData.filter((item) => {
         return pod?.containers?.includes(item?.metric?.["container"])
       })
     }
-    if (JSON.stringify(label) === JSON.stringify(["pod"])){
+    if (Array.isArray(label) && label.length === 1 && label[0] === "pod"){
       filteredChartData = chartData.filter((item) => {
         return !item?.metric?.["pod"]?.includes("daemon")
       })

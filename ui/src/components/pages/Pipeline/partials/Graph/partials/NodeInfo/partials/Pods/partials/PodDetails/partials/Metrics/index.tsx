@@ -20,9 +20,10 @@ import {
   VertexDetailsContext,
   VertexDetailsContextProps,
 } from "../../../../../../../../../../../../common/SlidingSidebar/partials/VertexDetails";
+import { Pod } from "../../../../../../../../../../../../../types/declarations/pods";
 
 import "./style.css";
-import { Pod } from "../../../../../../../../../../../../../types/declarations/pods";
+
 
 export interface MetricsProps {
   namespaceId: string;
