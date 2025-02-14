@@ -115,6 +115,15 @@ impl Transformer {
             .await
             .map_err(|e| Error::Transformer(format!("failed to receive message: {}", e)))??;
 
+        // Check for dropped messages in the response
+        let dropped_messages_count = response.iter().filter(|msg| msg.dropped()).count();
+        if dropped_messages_count > 0 {
+            monovertex_metrics()
+                .transformer
+                .dropped_total
+                .get_or_create(mvtx_forward_metric_labels())
+                .inc_by(dropped_messages_count as u64);
+        }
         monovertex_metrics()
             .transformer
             .time
@@ -167,7 +176,6 @@ impl Transformer {
                 Err(e) => return Err(Error::Transformer(format!("task join failed: {}", e))),
             }
         }
-
         Ok(transformed_messages)
     }
 }
