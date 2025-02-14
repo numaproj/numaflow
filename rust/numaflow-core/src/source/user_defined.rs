@@ -26,6 +26,7 @@ pub(crate) struct UserDefinedSourceRead {
     resp_stream: Streaming<ReadResponse>,
     num_records: usize,
     timeout: Duration,
+    source_client: SourceClient<Channel>,
 }
 
 /// User-Defined Source to operative on custom sources.
@@ -54,17 +55,18 @@ pub(crate) async fn new_source(
 
 impl UserDefinedSourceRead {
     async fn new(
-        mut client: SourceClient<Channel>,
+        client: SourceClient<Channel>,
         batch_size: usize,
         timeout: Duration,
     ) -> Result<Self> {
-        let (read_tx, resp_stream) = Self::create_reader(batch_size, &mut client).await?;
+        let (read_tx, resp_stream) = Self::create_reader(batch_size, &mut client.clone()).await?;
 
         Ok(Self {
             read_tx,
             resp_stream,
             num_records: batch_size,
             timeout,
+            source_client: client,
         })
     }
 
@@ -118,6 +120,7 @@ impl TryFrom<read_response::Result> for Message {
         };
 
         Ok(Message {
+            typ: Default::default(),
             keys: Arc::from(result.keys),
             tags: None,
             value: result.payload.into(),
@@ -189,8 +192,18 @@ impl SourceReader for UserDefinedSourceRead {
         Ok(messages)
     }
 
-    fn partitions(&self) -> Vec<u16> {
-        unimplemented!()
+    async fn partitions(&mut self) -> Result<Vec<u16>> {
+        let partitions = self
+            .source_client
+            .partitions_fn(Request::new(()))
+            .await
+            .map_err(|e| Error::Source(e.to_string()))?
+            .into_inner()
+            .result
+            .expect("partitions not found")
+            .partitions;
+
+        Ok(partitions.iter().map(|p| *p as u16).collect())
     }
 }
 
@@ -397,6 +410,9 @@ mod tests {
 
         let pending = lag_reader.pending().await.unwrap();
         assert_eq!(pending, Some(0));
+
+        let partitions = src_read.partitions().await.unwrap();
+        assert_eq!(partitions, vec![2]);
 
         // we need to drop the client, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85

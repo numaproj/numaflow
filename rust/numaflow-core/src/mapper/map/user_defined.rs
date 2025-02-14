@@ -250,6 +250,7 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
         let mut response_messages = vec![];
         for (i, result) in resp.results.into_iter().enumerate() {
             let message = Message {
+                typ: Default::default(),
                 id: MessageID {
                     vertex_name: get_vertex_name().to_string().into(),
                     index: i as i32,
@@ -378,6 +379,7 @@ impl UserDefinedStreamMap {
 
             for (i, result) in resp.results.into_iter().enumerate() {
                 let message = Message {
+                    typ: Default::default(),
                     id: MessageID {
                         vertex_name: get_vertex_name().to_string().into(),
                         index: i as i32,
@@ -486,6 +488,7 @@ mod tests {
                 .await?;
 
         let message = crate::message::Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
@@ -575,6 +578,7 @@ mod tests {
 
         let messages = vec![
             crate::message::Message {
+                typ: Default::default(),
                 keys: Arc::from(vec!["first".into()]),
                 tags: None,
                 value: "hello".into(),
@@ -590,6 +594,7 @@ mod tests {
                 metadata: None,
             },
             crate::message::Message {
+                typ: Default::default(),
                 keys: Arc::from(vec!["second".into()]),
                 tags: None,
                 value: "world".into(),
@@ -688,6 +693,7 @@ mod tests {
                 .await?;
 
         let message = crate::message::Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "test,map,stream".into(),

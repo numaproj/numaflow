@@ -37,6 +37,9 @@ mod processor;
 /// the watermark starts at source, so we will have to do a publishing followed by a fetch and publish.
 pub(crate) mod source;
 
+/// Publishes idle watermarks for the source and ISB when they are idling.
+mod idle;
+
 /// Stores WMB related data.
 mod wmb;
 

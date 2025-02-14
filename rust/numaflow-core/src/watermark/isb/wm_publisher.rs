@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime};
 
 use bytes::BytesMut;
 use prost::Message;
-use tracing::info;
+use tracing::{debug, error, info};
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
@@ -25,6 +25,15 @@ const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;
 struct LastPublishedState {
     offset: i64,
     watermark: i64,
+}
+
+impl Default for LastPublishedState {
+    fn default() -> Self {
+        LastPublishedState {
+            offset: -1,
+            watermark: -1,
+        }
+    }
 }
 
 /// ISBWatermarkPublisher is the watermark publisher for the outgoing edges.
@@ -73,13 +82,7 @@ impl ISBWatermarkPublisher {
             hb_buckets.push(hb_bucket);
             last_published_wm.insert(
                 config.vertex,
-                vec![
-                    LastPublishedState {
-                        offset: -1,
-                        watermark: -1,
-                    };
-                    config.partitions as usize
-                ],
+                vec![LastPublishedState::default(); config.partitions as usize],
             );
         }
 
@@ -117,13 +120,14 @@ impl ISBWatermarkPublisher {
                 .expect("Failed to encode heartbeat");
 
             for hb_bucket in hb_buckets.iter() {
-                info!(heartbeat = ?heartbeat.heartbeat, processor = ?processor_name,
+                debug!(heartbeat = ?heartbeat.heartbeat, processor = ?processor_name,
                     "Publishing heartbeat",
                 );
                 hb_bucket
                     .put(processor_name.clone(), bytes.clone().freeze())
                     .await
-                    .expect("Failed to publish heartbeat");
+                    .map_err(|e| error!(?e, "Failed to write heartbeat to hb bucket"))
+                    .ok();
             }
         }
     }
@@ -131,43 +135,44 @@ impl ISBWatermarkPublisher {
     /// publish_watermark publishes the watermark for the given offset and the stream.
     pub(crate) async fn publish_watermark(
         &mut self,
-        stream: Stream,
+        stream: &Stream,
         offset: i64,
         watermark: i64,
-    ) -> Result<()> {
-        let last_published_wm_state = match self.last_published_wm.get_mut(stream.vertex) {
-            Some(wm) => wm,
-            None => return Err(Error::Watermark("Invalid vertex".to_string())),
-        };
+        idle: bool,
+    ) {
+        let last_published_wm_state = self
+            .last_published_wm
+            .get_mut(stream.vertex)
+            .expect("Invalid vertex, no last published watermark state found");
 
         // we can avoid publishing the watermark if it is <= the last published watermark (optimization)
         let last_state = &last_published_wm_state[stream.partition as usize];
-        if offset <= last_state.offset || watermark <= last_state.watermark {
-            return Ok(());
+        if offset < last_state.offset || watermark <= last_state.watermark {
+            return;
         }
 
-        let ot_bucket = self.ot_buckets.get(stream.vertex).ok_or(Error::Watermark(
-            "Invalid vertex, no ot bucket found".to_string(),
-        ))?;
+        let ot_bucket = self.ot_buckets.get(stream.vertex).expect("Invalid vertex");
 
         let wmb_bytes: BytesMut = WMB {
-            idle: false,
+            idle,
             offset,
             watermark,
             partition: stream.partition,
         }
         .try_into()
-        .map_err(|e| Error::Watermark(format!("{}", e)))?;
+        .expect("Failed to convert WMB to bytes");
+
+        // ot writes can fail when isb is not healthy, we can ignore since subsequent writes will
+        // go through
         ot_bucket
             .put(self.processor_name.clone(), wmb_bytes.freeze())
             .await
-            .map_err(|e| Error::Watermark(e.to_string()))?;
+            .map_err(|e| error!("Failed to write wmb to ot bucket: {}", e))
+            .ok();
 
         // update the last published watermark state
         last_published_wm_state[stream.partition as usize] =
             LastPublishedState { offset, watermark };
-
-        Ok(())
     }
 }
 
@@ -237,9 +242,8 @@ mod tests {
 
         // Publish watermark for partition 0
         publisher
-            .publish_watermark(stream_partition_0.clone(), 1, 100)
-            .await
-            .expect("Failed to publish watermark");
+            .publish_watermark(&stream_partition_0, 1, 100, false)
+            .await;
 
         let ot_bucket = js_context
             .get_key_value("isb_publisher_one_edge_OT")
@@ -258,9 +262,8 @@ mod tests {
 
         // Try publishing a smaller watermark for the same partition, it should not be published
         publisher
-            .publish_watermark(stream_partition_0.clone(), 0, 50)
-            .await
-            .expect("Failed to publish watermark");
+            .publish_watermark(&stream_partition_0, 0, 50, false)
+            .await;
 
         let wmb = ot_bucket
             .get("processor1")
@@ -274,9 +277,8 @@ mod tests {
 
         // Publish a smaller watermark for a different partition, it should be published
         publisher
-            .publish_watermark(stream_partition_1.clone(), 0, 50)
-            .await
-            .expect("Failed to publish watermark");
+            .publish_watermark(&stream_partition_1, 0, 50, false)
+            .await;
 
         let wmb = ot_bucket
             .get("processor1")
@@ -381,15 +383,9 @@ mod tests {
             partition: 0,
         };
 
-        publisher
-            .publish_watermark(stream1.clone(), 1, 100)
-            .await
-            .expect("Failed to publish watermark");
+        publisher.publish_watermark(&stream1, 1, 100, false).await;
 
-        publisher
-            .publish_watermark(stream2.clone(), 1, 200)
-            .await
-            .expect("Failed to publish watermark");
+        publisher.publish_watermark(&stream2, 1, 200, false).await;
 
         let ot_bucket_v1 = js_context
             .get_key_value(ot_bucket_name_v1)
@@ -436,6 +432,84 @@ mod tests {
             .unwrap();
         js_context
             .delete_key_value(ot_bucket_name_v2.to_string())
+            .await
+            .unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_isb_publisher_idle_flag() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let ot_bucket_name = "isb_publisher_idle_flag_OT";
+        let hb_bucket_name = "isb_publisher_idle_flag_PROCESSORS";
+
+        let bucket_configs = vec![BucketConfig {
+            vertex: "v1",
+            partitions: 1,
+            ot_bucket: ot_bucket_name,
+            hb_bucket: hb_bucket_name,
+        }];
+
+        // create key value stores
+        js_context
+            .create_key_value(Config {
+                bucket: ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        js_context
+            .create_key_value(Config {
+                bucket: hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut publisher = ISBWatermarkPublisher::new(
+            "processor1".to_string(),
+            js_context.clone(),
+            &bucket_configs,
+        )
+        .await
+        .expect("Failed to create publisher");
+
+        let stream = Stream {
+            name: "v1-0",
+            vertex: "v1",
+            partition: 0,
+        };
+
+        // Publish watermark with idle flag set to true
+        publisher.publish_watermark(&stream, 1, 100, true).await;
+
+        let ot_bucket = js_context
+            .get_key_value(ot_bucket_name)
+            .await
+            .expect("Failed to get ot bucket");
+
+        let wmb = ot_bucket
+            .get("processor1")
+            .await
+            .expect("Failed to get wmb");
+        assert!(wmb.is_some());
+
+        let wmb: WMB = wmb.unwrap().try_into().unwrap();
+        assert_eq!(wmb.offset, 1);
+        assert_eq!(wmb.watermark, 100);
+        assert!(wmb.idle);
+
+        // delete the stores
+        js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(ot_bucket_name.to_string())
             .await
             .unwrap();
     }

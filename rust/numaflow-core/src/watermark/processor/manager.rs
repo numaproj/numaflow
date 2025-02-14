@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::time::Duration;
 use std::time::SystemTime;
 
@@ -12,9 +13,8 @@ use async_nats::jetstream::kv::Watch;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt};
 use prost::Message as ProtoMessage;
-use std::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 use crate::config::pipeline::watermark::BucketConfig;
@@ -112,7 +112,8 @@ impl Drop for ProcessorManager {
 }
 
 impl ProcessorManager {
-    /// Creates a new ProcessorManager.
+    /// Creates a new ProcessorManager. It prepopulates the processor-map with previous data
+    /// fetched from the OT and HB buckets.
     pub(crate) async fn new(
         js_context: async_nats::jetstream::Context,
         bucket_config: &BucketConfig,
@@ -137,8 +138,12 @@ impl ProcessorManager {
                 ))
             })?;
 
-        let processors = Arc::new(RwLock::new(HashMap::new()));
-        let heartbeats = Arc::new(RwLock::new(HashMap::new()));
+        // fetch old data
+        let (processors_map, heartbeats_map) =
+            Self::prepopulate_processors(&hb_bucket, &ot_bucket, bucket_config).await;
+        // point to populated data
+        let processors = Arc::new(RwLock::new(processors_map));
+        let heartbeats = Arc::new(RwLock::new(heartbeats_map));
 
         // start the ot watcher, to listen to the OT bucket and update the timelines
         let ot_handle = tokio::spawn(Self::start_ot_watcher(ot_bucket, Arc::clone(&processors)));
@@ -164,6 +169,80 @@ impl ProcessorManager {
             processors,
             handles: vec![ot_handle, hb_handle, refresh_handle],
         })
+    }
+
+    /// Prepopulate processors and timelines from the hb and ot buckets.
+    async fn prepopulate_processors(
+        hb_bucket: &async_nats::jetstream::kv::Store,
+        ot_bucket: &async_nats::jetstream::kv::Store,
+        bucket_config: &BucketConfig,
+    ) -> (HashMap<Bytes, Processor>, HashMap<Bytes, i64>) {
+        let mut processors = HashMap::new();
+        let mut heartbeats = HashMap::new();
+
+        // Get all existing keys from the hb bucket and create processors
+        let hb_keys = match hb_bucket.keys().await {
+            Ok(keys) => keys
+                .try_collect::<Vec<String>>()
+                .await
+                .unwrap_or_else(|_| Vec::new()),
+            Err(e) => {
+                error!(?e, "Failed to get keys from hb bucket");
+                Vec::new()
+            }
+        };
+
+        for key in hb_keys {
+            let processor_name = Bytes::from(key.clone());
+            let processor = Processor::new(
+                processor_name.clone(),
+                Status::Active,
+                bucket_config.partitions as usize,
+            );
+            processors.insert(processor_name.clone(), processor);
+
+            let Ok(Some(value)) = hb_bucket.get(&key).await else {
+                continue;
+            };
+
+            let hb = numaflow_pb::objects::watermark::Heartbeat::decode(value)
+                .expect("Failed to decode heartbeat")
+                .heartbeat;
+            heartbeats.insert(processor_name, hb);
+        }
+
+        // Get all existing entries from the ot bucket and store them in the timeline
+        let ot_keys = match ot_bucket.keys().await {
+            Ok(keys) => keys
+                .try_collect::<Vec<String>>()
+                .await
+                .unwrap_or_else(|_| Vec::new()),
+            Err(e) => {
+                warn!(?e, "Failed to get keys from ot bucket");
+                Vec::new()
+            }
+        };
+
+        for ot_key in ot_keys {
+            let processor_name = Bytes::from(ot_key.clone());
+            let processor = match processors.get_mut(&processor_name) {
+                Some(processor) => processor,
+                None => {
+                    warn!(?processor_name, "Processor not found, skipping");
+                    continue;
+                }
+            };
+
+            let Ok(Some(ot_value)) = ot_bucket.get(&ot_key).await else {
+                continue;
+            };
+            let wmb: WMB = ot_value.try_into().expect("Failed to decode WMB");
+
+            let timeline = &mut processor.timelines[wmb.partition as usize];
+            timeline.put(wmb);
+        }
+
+        (processors, heartbeats)
     }
 
     /// Starts refreshing the processors status based on the last heartbeat, if the last heartbeat
@@ -227,7 +306,7 @@ impl ProcessorManager {
                     let processor_name = Bytes::from(kv.key);
                     let wmb: WMB = kv.value.try_into().expect("Failed to decode WMB");
 
-                    info!(wmb = ?wmb, processor = ?processor_name, "Received wmb from watcher");
+                    debug!(wmb = ?wmb, processor = ?processor_name, "Received wmb from watcher");
                     if let Some(processor) = processors
                         .write()
                         .expect("failed to acquire lock")
@@ -284,7 +363,7 @@ impl ProcessorManager {
                         .expect("failed to acquire lock")
                         .insert(processor_name.clone(), hb);
 
-                    info!(hb = ?hb, processor = ?processor_name, "Received heartbeat from watcher");
+                    debug!(hb = ?hb, processor = ?processor_name, "Received heartbeat from watcher");
                     // if the processor is not in the processors map, add it
                     // or if processor status is not active, set it to active
                     let mut processors = processors.write().expect("failed to acquire lock");

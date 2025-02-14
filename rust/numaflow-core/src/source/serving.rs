@@ -16,6 +16,7 @@ impl TryFrom<serving::Message> for Message {
 
         Ok(Message {
             // we do not support keys from HTTP client
+            typ: Default::default(),
             keys: Arc::from(vec![]),
             tags: None,
             value: message.value,
@@ -54,8 +55,8 @@ impl super::SourceReader for ServingSource {
             .collect()
     }
 
-    fn partitions(&self) -> Vec<u16> {
-        vec![*get_vertex_replica()]
+    async fn partitions(&mut self) -> Result<Vec<u16>> {
+        Ok(vec![*get_vertex_replica()])
     }
 }
 
@@ -148,7 +149,7 @@ mod tests {
             ..Default::default()
         };
         let settings = Arc::new(settings);
-        // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
+        // Set up the CryptoProvider (controls core cryptography used by rustls) for the process
         // ServingSource starts an Axum HTTPS server in the background. Rustls is used to generate
         // self-signed certs when starting the server.
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();

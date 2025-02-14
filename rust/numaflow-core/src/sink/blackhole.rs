@@ -33,6 +33,7 @@ mod tests {
         let mut sink = BlackholeSink;
         let messages = vec![
             Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
@@ -48,6 +49,7 @@ mod tests {
                 metadata: None,
             },
             Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),

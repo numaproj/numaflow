@@ -9,7 +9,7 @@ use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
 use async_nats::jetstream::Context;
-use bytes::{Bytes, BytesMut};
+use bytes::BytesMut;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, Instant};
@@ -59,12 +59,12 @@ impl JetstreamWriter {
         cancel_token: CancellationToken,
         watermark_handle: Option<WatermarkHandle>,
     ) -> Self {
-        let streams = config
+        let to_vertex_streams = config
             .iter()
             .flat_map(|c| c.writer_config.streams.clone())
             .collect::<Vec<Stream>>();
 
-        let is_full = streams
+        let is_full = to_vertex_streams
             .iter()
             .map(|stream| (stream.name, Arc::new(AtomicBool::new(false))))
             .collect::<HashMap<_, _>>();
@@ -224,6 +224,7 @@ impl JetstreamWriter {
                         .get(partition as usize)
                         .expect("stream should be present")
                         .clone();
+
                     if let Some(paf) = this
                         .write(
                             stream.clone(),
@@ -232,7 +233,7 @@ impl JetstreamWriter {
                         )
                         .await
                     {
-                        pafs.push((stream.clone(), paf));
+                        pafs.push((stream, paf));
                     }
                 }
 
@@ -274,8 +275,7 @@ impl JetstreamWriter {
         message: Message,
         on_full: BufferFullStrategy,
     ) -> Option<PublishAckFuture> {
-        let mut counter = 500u16;
-
+        let mut log_counter = 500u16;
         let offset = message.offset.clone();
         let payload: BytesMut = message
             .try_into()
@@ -291,11 +291,11 @@ impl JetstreamWriter {
             {
                 Some(true) => {
                     // FIXME: add metrics
-                    if counter >= 500 {
+                    if log_counter >= 500 {
                         warn!(stream=?stream, "stream is full (throttled logging)");
-                        counter = 0;
+                        log_counter = 0;
                     }
-                    counter += 1;
+                    log_counter += 1;
                     match on_full {
                         BufferFullStrategy::DiscardLatest => {
                             // delete the entry from tracker
@@ -310,23 +310,19 @@ impl JetstreamWriter {
                 }
                 Some(false) => match self
                     .js_ctx
-                    .publish(stream.name, Bytes::from(payload.clone()))
+                    .publish(stream.name, payload.clone().freeze())
                     .await
                 {
-                    Ok(paf) => {
-                        break paf;
-                    }
-                    Err(e) => {
-                        error!(?e, "publishing failed, retrying");
-                    }
+                    Ok(paf) => break paf,
+                    Err(e) => error!(?e, "publishing failed, retrying"),
                 },
-                None => {
-                    error!("Stream {} not found in is_full map", stream);
-                }
+                None => error!("Stream {} not found in is_full map", stream),
             }
+
             // short-circuit out in failure mode if shutdown has been initiated
             if self.cancel_token.is_cancelled() {
                 error!("Shutdown signal received, exiting write loop");
+                return None;
             }
 
             // sleep to avoid busy looping
@@ -350,10 +346,7 @@ impl JetstreamWriter {
             .await
             .map_err(|_e| Error::ISB("Failed to acquire semaphore permit".to_string()))?;
 
-        let js_ctx = self.js_ctx.clone();
-        let cancel_token = self.cancel_token.clone();
-        let tracker_handle = self.tracker_handle.clone();
-        let watermark_handle = self.watermark_handle.clone();
+        let this = self.clone();
 
         tokio::spawn(async move {
             let _permit = permit;
@@ -361,99 +354,55 @@ impl JetstreamWriter {
 
             // resolve the pafs
             for (stream, paf) in pafs {
-                match paf.await {
+                let ack = match paf.await {
+                    Ok(ack) => Ok(ack),
+                    Err(e) => {
+                        error!(
+                            ?e, stream = ?stream,
+                            "Failed to resolve the future trying blocking write",
+                        );
+                        this.blocking_write(stream.clone(), message.clone()).await
+                    }
+                };
+
+                match ack {
                     Ok(ack) => {
                         if ack.duplicate {
                             warn!(
-                                "Duplicate message detected for stream {}, ignoring {:?}",
-                                stream, ack
+                                stream = ?stream,
+                                ack = ?ack,
+                                "Duplicate message detected"
                             );
                         }
                         offsets.push((
                             stream.clone(),
                             Offset::Int(IntOffset::new(ack.sequence as i64, stream.partition)),
                         ));
-                        tracker_handle
-                            .delete(message.offset.clone())
-                            .await
-                            .expect("Failed to delete offset from tracker");
                     }
                     Err(e) => {
-                        error!(
-                            ?e,
-                            "Failed to resolve the future for stream {}, trying blocking write",
-                            stream
-                        );
-                        match JetstreamWriter::blocking_write(
-                            stream.clone(),
-                            message.value.clone(),
-                            js_ctx.clone(),
-                            cancel_token.clone(),
-                        )
-                        .await
-                        {
-                            Ok(ack) => {
-                                if ack.duplicate {
-                                    warn!(
-                                        "Duplicate message detected for stream {}, ignoring {:?}",
-                                        stream, ack
-                                    );
-                                }
-                                offsets.push((
-                                    stream.clone(),
-                                    Offset::Int(IntOffset::new(
-                                        ack.sequence as i64,
-                                        stream.partition,
-                                    )),
-                                ));
-                                tracker_handle
-                                    .delete(message.offset.clone())
-                                    .await
-                                    .expect("Failed to delete offset from tracker");
-                            }
-                            Err(e) => {
-                                error!(?e, "Blocking write failed for stream {}", stream);
-                                // Since we failed to write to the stream, we need to send a NAK to the reader
-                                tracker_handle
-                                    .discard(message.offset.clone())
-                                    .await
-                                    .expect("Failed to discard offset from the tracker");
-                                return;
-                            }
-                        }
+                        error!(?e, stream = ?stream, "Blocking write failed");
+                        // Since we failed to write to the stream, we need to send a NAK to the reader
+                        this.tracker_handle
+                            .discard(message.offset.clone())
+                            .await
+                            .expect("Failed to discard offset from the tracker");
+                        return;
                     }
                 }
             }
 
             // now the pafs have resolved, lets use the offsets to send watermark
             for (stream, offset) in offsets {
-                if let Some(watermark_handle) = watermark_handle.as_ref() {
-                    match watermark_handle {
-                        WatermarkHandle::ISB(handle) => {
-                            handle
-                                .publish_watermark(stream, offset)
-                                .await
-                                .map_err(|e| {
-                                    Error::ISB(format!("Failed to update watermark: {:?}", e))
-                                })
-                                .expect("Failed to publish watermark");
-                        }
-                        WatermarkHandle::Source(handle) => {
-                            let input_partition = match &message.offset {
-                                Offset::Int(offset) => offset.partition_idx,
-                                Offset::String(offset) => offset.partition_idx,
-                            };
-                            handle
-                                .publish_source_isb_watermark(stream, offset, input_partition)
-                                .await
-                                .map_err(|e| {
-                                    Error::ISB(format!("Failed to update watermark: {:?}", e))
-                                })
-                                .expect("Failed to publish watermark");
-                        }
-                    }
+                if let Some(watermark_handle) = this.watermark_handle.as_ref() {
+                    JetstreamWriter::publish_watermark(watermark_handle, stream, offset, &message)
+                        .await;
                 }
             }
+
+            this.tracker_handle
+                .delete(message.offset.clone())
+                .await
+                .expect("Failed to delete offset from tracker");
 
             pipeline_metrics()
                 .isb
@@ -464,26 +413,28 @@ impl JetstreamWriter {
 
         Ok(())
     }
-
     /// Writes the message to the JetStream ISB and returns the PublishAck. It will do
     /// infinite retries until the message gets published successfully. If it returns
     /// an error it means it is fatal non-retryable error.
-    async fn blocking_write(
+    pub(crate) async fn blocking_write(
+        &self,
         stream: Stream,
-        payload: Bytes,
-        js_ctx: Context,
-        cln_token: CancellationToken,
+        message: Message,
     ) -> Result<PublishAck> {
         let start_time = Instant::now();
-        info!("Blocking write for stream {}", stream);
+        let payload: BytesMut = message
+            .try_into()
+            .expect("message serialization should not fail");
+
         loop {
-            match js_ctx.publish(stream.name, payload.clone()).await {
+            match self
+                .js_ctx
+                .publish(stream.name, payload.clone().freeze())
+                .await
+            {
                 Ok(paf) => match paf.await {
                     Ok(ack) => {
                         if ack.duplicate {
-                            // should we return an error here? Because duplicate messages are not fatal
-                            // But it can mess up the watermark progression because the offset will be
-                            // same as the previous message offset
                             warn!(?ack, "Duplicate message detected, ignoring");
                         }
                         debug!(
@@ -502,8 +453,32 @@ impl JetstreamWriter {
                     sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
                 }
             }
-            if cln_token.is_cancelled() {
+
+            if self.cancel_token.is_cancelled() {
                 return Err(Error::ISB("Shutdown signal received".to_string()));
+            }
+        }
+    }
+
+    /// publishes the watermark for the given stream and offset
+    async fn publish_watermark(
+        watermark_handle: &WatermarkHandle,
+        stream: Stream,
+        offset: Offset,
+        message: &Message,
+    ) {
+        match watermark_handle {
+            WatermarkHandle::ISB(handle) => {
+                handle.publish_watermark(stream, offset).await;
+            }
+            WatermarkHandle::Source(handle) => {
+                let input_partition = match &message.offset {
+                    Offset::Int(offset) => offset.partition_idx,
+                    Offset::String(offset) => offset.partition_idx,
+                };
+                handle
+                    .publish_source_isb_watermark(stream, offset, input_partition)
+                    .await;
             }
         }
     }
@@ -517,7 +492,7 @@ mod tests {
     use async_nats::jetstream;
     use async_nats::jetstream::consumer::{Config, Consumer};
     use async_nats::jetstream::{consumer, stream};
-    use bytes::BytesMut;
+    use bytes::Bytes;
     use chrono::Utc;
     use numaflow_models::models::ForwardConditions;
     use numaflow_models::models::TagConditions;
@@ -562,7 +537,7 @@ mod tests {
 
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
-                name: "test-vertex".to_string(),
+                name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
@@ -578,6 +553,7 @@ mod tests {
         );
 
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["key_0".to_string()]),
             tags: None,
             value: "message 0".as_bytes().to_vec().into(),
@@ -639,6 +615,7 @@ mod tests {
             .unwrap();
 
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["key_0".to_string()]),
             tags: None,
             value: "message 0".as_bytes().to_vec().into(),
@@ -654,14 +631,24 @@ mod tests {
             metadata: None,
         };
 
-        let message_bytes: BytesMut = message.try_into().unwrap();
-        let result = JetstreamWriter::blocking_write(
-            stream.clone(),
-            message_bytes.into(),
+        let writer = JetstreamWriter::new(
+            vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config: BufferWriterConfig {
+                    streams: vec![stream.clone()],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
             context.clone(),
+            100,
+            TrackerHandle::new(None, None),
             cln_token.clone(),
-        )
-        .await;
+            None,
+        );
+
+        let result = writer.blocking_write(stream.clone(), message).await;
         assert!(result.is_ok());
 
         let publish_ack = result.unwrap();
@@ -708,7 +695,7 @@ mod tests {
 
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
-                name: "test-vertex".to_string(),
+                name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
@@ -727,6 +714,7 @@ mod tests {
         // Publish 10 messages successfully
         for i in 0..10 {
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
@@ -754,6 +742,7 @@ mod tests {
         // Attempt to publish a message which has a payload size greater than the max_message_size
         // so that it fails and sync write will be attempted and it will be blocked
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["key_11".to_string()]),
             tags: None,
             value: vec![0; 1025].into(),
@@ -914,7 +903,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
-                name: "test-vertex".to_string(),
+                name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
@@ -1006,7 +995,7 @@ mod tests {
 
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
-                name: "test-vertex".to_string(),
+                name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
@@ -1027,6 +1016,7 @@ mod tests {
         // Publish 500 messages
         for i in 0..500 {
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
@@ -1096,7 +1086,7 @@ mod tests {
         let cancel_token = CancellationToken::new();
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
-                name: "test-vertex".to_string(),
+                name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
@@ -1116,6 +1106,7 @@ mod tests {
         // Publish 100 messages successfully
         for i in 0..100 {
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
@@ -1142,6 +1133,7 @@ mod tests {
         // Attempt to publish the 101st message, which should get stuck in the retry loop
         // because the max message size is set to 1024
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["key_101".to_string()]),
             tags: None,
             value: vec![0; 1025].into(),
@@ -1208,7 +1200,7 @@ mod tests {
         let writer = JetstreamWriter::new(
             vec![
                 ToVertexConfig {
-                    name: "vertex1".to_string(),
+                    name: "vertex1",
                     partitions: 2,
                     writer_config: BufferWriterConfig {
                         streams: vertex1_streams.clone(),
@@ -1220,7 +1212,7 @@ mod tests {
                     }))),
                 },
                 ToVertexConfig {
-                    name: "vertex2".to_string(),
+                    name: "vertex2",
                     partitions: 2,
                     writer_config: BufferWriterConfig {
                         streams: vertex2_streams.clone(),
@@ -1232,7 +1224,7 @@ mod tests {
                     }))),
                 },
                 ToVertexConfig {
-                    name: "vertex3".to_string(),
+                    name: "vertex3",
                     partitions: 2,
                     writer_config: BufferWriterConfig {
                         streams: vertex3_streams.clone(),
@@ -1255,6 +1247,7 @@ mod tests {
         let mut ack_rxs = vec![];
         for i in 0..10 {
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: Some(Arc::from(vec!["tag1".to_string(), "tag2".to_string()])),
                 value: format!("message {}", i).as_bytes().to_vec().into(),

@@ -6,6 +6,7 @@ use base64::Engine;
 use numaflow_models::models::{MonoVertex, Vertex};
 use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 use crate::{
     pipeline::PipelineDCG,
@@ -20,6 +21,7 @@ const ENV_MONOVERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 
 pub const DEFAULT_ID_HEADER: &str = "X-Numaflow-Id";
 pub const DEFAULT_CALLBACK_URL_HEADER_KEY: &str = "X-Numaflow-Callback-Url";
+pub const DEFAULT_REDIS_TTL_IN_SECS: u32 = 86400;
 
 pub fn generate_certs() -> std::result::Result<(Certificate, KeyPair), String> {
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
@@ -44,7 +46,7 @@ impl Default for RedisConfig {
             retries: 5,
             retries_duration_millis: 100,
             // TODO: we might need an option type here. Zero value of u32 can be used instead of None
-            ttl_secs: Some(86400),
+            ttl_secs: Some(DEFAULT_REDIS_TTL_IN_SECS),
         }
     }
 }
@@ -209,7 +211,10 @@ impl TryFrom<HashMap<String, String>> for Settings {
 
         // Update redis.addr from source_spec, currently we only support redis as callback storage
         settings.redis.addr = serving_spec.store.url;
-        settings.redis.ttl_secs = settings.redis.ttl_secs;
+        settings.redis.ttl_secs = match serving_spec.store.ttl {
+            Some(ttl) => Some(Duration::from(ttl).as_secs() as u32),
+            None => Some(DEFAULT_REDIS_TTL_IN_SECS),
+        };
 
         if let Some(auth) = serving_spec.auth {
             let token = auth.token.unwrap();
@@ -280,7 +285,7 @@ mod tests {
                 max_tasks: 50,
                 retries: 5,
                 retries_duration_millis: 100,
-                ttl_secs: Some(86400),
+                ttl_secs: Some(DEFAULT_REDIS_TTL_IN_SECS),
             },
             host_ip: "10.2.3.5".into(),
             api_auth_token: None,

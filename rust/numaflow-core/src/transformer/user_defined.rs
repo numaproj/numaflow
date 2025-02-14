@@ -129,6 +129,7 @@ impl UserDefinedTransformer {
                 let mut response_messages = vec![];
                 for (i, result) in resp.results.into_iter().enumerate() {
                     let message = Message {
+                        typ: Default::default(),
                         id: MessageID {
                             vertex_name: get_vertex_name().to_string().into(),
                             index: i as i32,
@@ -234,6 +235,7 @@ mod tests {
         .await?;
 
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
@@ -277,6 +279,7 @@ mod tests {
     #[test]
     fn test_message_to_source_transform_request() {
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),
