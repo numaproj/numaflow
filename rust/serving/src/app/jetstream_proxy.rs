@@ -122,9 +122,9 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
         );
     }
 
-    let (tx, rx) = oneshot::channel();
+    let (confirm_save_tx, confirm_save_rx) = oneshot::channel();
     let message = MessageWrapper {
-        confirm_save: tx,
+        confirm_save: confirm_save_tx,
         message: Message {
             value: body,
             id: id.clone(),
@@ -136,7 +136,7 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
     let notify = proxy_state.callback.clone().register(id.clone()).await;
     proxy_state.message.send(message).await.unwrap(); // FIXME:
 
-    if let Err(e) = rx.await {
+    if let Err(e) = confirm_save_rx.await {
         // Deregister the ID in the callback proxy state if waiting for ack fails
         let _ = proxy_state.callback.clone().deregister(&id).await;
         error!(error = ?e, "Publishing message to Jetstream for sync request");
@@ -209,9 +209,9 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
         );
     }
 
-    let (tx, rx) = oneshot::channel();
+    let (confirm_save_tx, confirm_save_rx) = oneshot::channel();
     let message = MessageWrapper {
-        confirm_save: tx,
+        confirm_save: confirm_save_tx,
         message: Message {
             value: body,
             id: id.clone(),
@@ -225,7 +225,7 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
 
     proxy_state.message.send(message).await.unwrap(); // FIXME:
     if proxy_state.monovertex {
-        tokio::spawn(rx);
+        tokio::spawn(confirm_save_rx);
         return Ok(Json(ServeResponse::new(
             "Successfully published message".to_string(),
             id,
@@ -233,7 +233,7 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
         )));
     }
 
-    match rx.await {
+    match confirm_save_rx.await {
         Ok(_) => Ok(Json(ServeResponse::new(
             "Successfully published message".to_string(),
             id,

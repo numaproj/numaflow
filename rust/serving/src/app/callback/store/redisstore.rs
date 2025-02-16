@@ -90,7 +90,7 @@ async fn handle_write_requests(
             let value = serde_json::to_vec(&*value)
                 .map_err(|e| Error::StoreWrite(format!("Serializing payload - {}", e)))?;
 
-            let key = format!("requests:{key}:callbacks");
+            let key = format!("request:{key}:callbacks");
             redis_conn.write_to_redis(&key, &value).await
         }
 
@@ -98,7 +98,7 @@ async fn handle_write_requests(
         PayloadToSave::DatumFromPipeline { key, value } => {
             // we have to differentiate between the saved responses and the callback requests
             // saved responses are stored in "id_SAVED", callback requests are stored in "id"
-            let key = format!("requests:{key}:results");
+            let key = format!("request:{key}:results");
             let value: Vec<u8> = value.into();
 
             redis_conn.write_to_redis(&key, &value).await
@@ -147,7 +147,7 @@ impl super::Store for RedisConnection {
     }
 
     async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<Callback>>, Error> {
-        let redis_key = format!("requests:{id}:callbacks");
+        let redis_key = format!("request:{id}:callbacks");
         let result: Result<Vec<Vec<u8>>, RedisError> = redis::cmd(LRANGE)
             .arg(redis_key)
             .arg(0)
@@ -181,7 +181,7 @@ impl super::Store for RedisConnection {
     }
 
     async fn retrieve_datum(&mut self, id: &str) -> Result<PipelineResult, Error> {
-        let redis_status_key = format!("requests:{id}:status");
+        let redis_status_key = format!("request:{id}:status");
         let status: String = self
             .conn_manager
             .get(redis_status_key)
@@ -192,7 +192,7 @@ impl super::Store for RedisConnection {
             return Ok(PipelineResult::Processing);
         }
 
-        let key = format!("requests:{id}:results");
+        let key = format!("request:{id}:results");
         let result: Result<Vec<Vec<u8>>, RedisError> = redis::cmd(LRANGE)
             .arg(key)
             .arg(0)
