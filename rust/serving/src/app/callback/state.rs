@@ -195,6 +195,8 @@ where
             ));
         };
 
+        self.store.deregister(id.to_string()).await.unwrap(); // FIXME:
+
         state
             .tx
             .send(Ok(id.to_string()))

@@ -38,6 +38,7 @@ const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
 struct ProxyState<T> {
     message: mpsc::Sender<MessageWrapper>,
     tid_header: String,
+    monovertex: bool,
     callback: state::State<T>,
 }
 
@@ -47,6 +48,7 @@ pub(crate) async fn serving_public_routes<T: Clone + Send + Sync + Store + 'stat
     let proxy_state = Arc::new(ProxyState {
         message: state.message.clone(),
         tid_header: state.settings.tid_header.clone(),
+        monovertex: state.settings.pipeline_spec.edges.is_empty(), // FIXME:
         callback: state.callback_state.clone(),
     });
 
@@ -229,7 +231,20 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
         },
     };
 
+    // Register request in Redis
+    let notify = proxy_state.callback.clone().register(id.clone()).await;
+    tokio::spawn(notify);
+
     proxy_state.message.send(message).await.unwrap(); // FIXME:
+    if proxy_state.monovertex {
+        tokio::spawn(rx);
+        return Ok(Json(ServeResponse::new(
+            "Successfully published message".to_string(),
+            id,
+            StatusCode::OK,
+        )));
+    }
+
     match rx.await {
         Ok(_) => Ok(Json(ServeResponse::new(
             "Successfully published message".to_string(),
