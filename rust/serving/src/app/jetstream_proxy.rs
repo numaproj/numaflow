@@ -5,14 +5,17 @@ use axum::{
     extract::State,
     http::{HeaderMap, HeaderValue, StatusCode},
     response::IntoResponse,
-    routing::post,
+    routing::{get, post},
     Json, Router,
 };
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 use uuid::Uuid;
 
-use super::{callback::store::Store, AppState};
+use super::{
+    callback::store::{PipelineResult, Store},
+    AppState,
+};
 use crate::app::response::{ApiError, ServeResponse};
 use crate::{app::callback::state, Message, MessageWrapper};
 
@@ -55,63 +58,18 @@ pub(crate) async fn serving_public_routes<T: Clone + Send + Sync + Store + 'stat
     let router = Router::new()
         .route("/async", post(async_publish))
         .route("/sync", post(sync_publish))
-        .route("/sync_serve", post(sync_publish_serve))
+        .route("/serve", get(serve))
         .with_state(proxy_state);
     Ok(router)
 }
 
-async fn sync_publish_serve<T: Send + Sync + Clone + Store>(
+async fn serve<T: Send + Sync + Clone + Store>(
     State(proxy_state): State<Arc<ProxyState<T>>>,
     headers: HeaderMap,
-    body: Bytes,
 ) -> impl IntoResponse {
     let id = extract_id_from_headers(&proxy_state.tid_header, &headers);
 
-    // Register the ID in the callback proxy state
-    let notify = proxy_state.callback.clone().register(id.clone()).await;
-
-    let mut msg_headers: HashMap<String, String> = HashMap::new();
-    for (key, value) in headers.iter() {
-        msg_headers.insert(
-            key.to_string(),
-            String::from_utf8_lossy(value.as_bytes()).to_string(),
-        );
-    }
-
-    let (tx, rx) = oneshot::channel();
-    let message = MessageWrapper {
-        confirm_save: tx,
-        message: Message {
-            value: body,
-            id: id.clone(),
-            headers: msg_headers,
-        },
-    };
-
-    proxy_state
-        .message
-        .send(message)
-        .await
-        .expect("Failed to send request payload to Serving channel");
-
-    if let Err(e) = rx.await {
-        // Deregister the ID in the callback proxy state if writing to Jetstream fails
-        let _ = proxy_state.callback.clone().deregister(&id).await;
-        error!(error = ?e, "Waiting for acknowledgement for message");
-        return Err(ApiError::BadGateway(
-            "Failed to write message to Jetstream".to_string(),
-        ));
-    }
-
-    // TODO: add a timeout for waiting on rx. make sure deregister is called if timeout branch is invoked.
-    if let Err(e) = notify.await {
-        error!(error = ?e, "Waiting for the pipeline output");
-        return Err(ApiError::InternalServerError(
-            "Failed while waiting on pipeline output".to_string(),
-        ));
-    }
-
-    let result = match proxy_state.callback.clone().retrieve_saved(&id).await {
+    let pipeline_result = match proxy_state.callback.clone().retrieve_saved(&id).await {
         Ok(result) => result,
         Err(e) => {
             error!(error = ?e, "Failed to retrieve from redis");
@@ -119,6 +77,11 @@ async fn sync_publish_serve<T: Send + Sync + Clone + Store>(
                 "Failed to retrieve from redis".to_string(),
             ));
         }
+    };
+
+    let PipelineResult::Completed(result) = pipeline_result else {
+        let body = r#"{'status': 'processing'}"#.as_bytes().to_vec();
+        return Ok((HeaderMap::new(), body));
     };
 
     // The response can be a binary array of elements as single chunk. For the user to process the blob, we return the array len and
@@ -148,7 +111,7 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
     State(proxy_state): State<Arc<ProxyState<T>>>,
     headers: HeaderMap,
     body: Bytes,
-) -> Result<Json<ServeResponse>, ApiError> {
+) -> impl IntoResponse {
     let id = extract_id_from_headers(&proxy_state.tid_header, &headers);
 
     let mut msg_headers: HashMap<String, String> = HashMap::new();
@@ -183,24 +146,49 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
     }
 
     // TODO: add a timeout for waiting on rx. make sure deregister is called if timeout branch is invoked.
-    match notify.await {
-        Ok(result) => match result {
-            Ok(value) => Ok(Json(ServeResponse::new(
-                "Successfully processed the message".to_string(),
-                value,
-                StatusCode::OK,
-            ))),
-            Err(_) => Err(ApiError::InternalServerError(
-                "Failed while waiting for the pipeline output".to_string(),
-            )),
-        },
-        Err(e) => {
-            error!(error=?e, "Waiting for the pipeline output");
-            Err(ApiError::BadGateway(
-                "Failed while waiting for the pipeline output".to_string(),
-            ))
-        }
+    if let Err(e) = notify.await {
+        error!(error = ?e, "Waiting for the pipeline output");
+        return Err(ApiError::InternalServerError(
+            "Failed while waiting on pipeline output".to_string(),
+        ));
     }
+
+    let result = match proxy_state.callback.clone().retrieve_saved(&id).await {
+        Ok(result) => result,
+        Err(e) => {
+            error!(error = ?e, "Failed to retrieve from redis");
+            return Err(ApiError::InternalServerError(
+                "Failed to retrieve from redis".to_string(),
+            ));
+        }
+    };
+
+    let PipelineResult::Completed(result) = result else {
+        let body = r#"{'status': 'processing'}"#.as_bytes().to_vec();
+        return Ok((HeaderMap::new(), body));
+    };
+
+    // The response can be a binary array of elements as single chunk. For the user to process the blob, we return the array len and
+    // length of each element in the array. This will help the user to decompose the binary response chunk into individual
+    // elements.
+    let mut header_map = HeaderMap::new();
+    let response_arr_len: String = result
+        .iter()
+        .map(|x| x.len().to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    header_map.insert(NUMAFLOW_RESP_ARRAY_LEN, result.len().into());
+    header_map.insert(
+        NUMAFLOW_RESP_ARRAY_IDX_LEN,
+        HeaderValue::from_str(response_arr_len.as_str()).map_err(|e| {
+            ApiError::InternalServerError(format!("Encoding response array len failed: {}", e))
+        })?,
+    );
+
+    // concatenate as single result, should use header values to decompose based on the len
+    let body = result.concat();
+
+    Ok((header_map, body))
 }
 
 async fn async_publish<T: Send + Sync + Clone + Store>(
@@ -306,8 +294,8 @@ mod tests {
         async fn retrieve_callbacks(&mut self, _id: &str) -> Result<Vec<Arc<Callback>>, Error> {
             Ok(vec![])
         }
-        async fn retrieve_datum(&mut self, _id: &str) -> Result<Vec<Vec<u8>>, Error> {
-            Ok(vec![])
+        async fn retrieve_datum(&mut self, _id: &str) -> Result<PipelineResult, Error> {
+            Ok(PipelineResult::Completed(vec![]))
         }
         async fn ready(&mut self) -> bool {
             true

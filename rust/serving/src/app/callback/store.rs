@@ -17,6 +17,12 @@ pub(crate) enum PayloadToSave {
     },
 }
 
+#[derive(Debug, PartialEq)]
+pub(crate) enum PipelineResult {
+    Processing,
+    Completed(Vec<Vec<u8>>),
+}
+
 /// Store trait to store the callback information.
 #[trait_variant::make(Store: Send)]
 #[allow(dead_code)]
@@ -26,6 +32,6 @@ pub(crate) trait LocalStore {
     async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()>;
     /// retrieve the callback payloads
     async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<Callback>>, crate::Error>;
-    async fn retrieve_datum(&mut self, id: &str) -> Result<Vec<Vec<u8>>, crate::Error>;
+    async fn retrieve_datum(&mut self, id: &str) -> Result<PipelineResult, crate::Error>;
     async fn ready(&mut self) -> bool;
 }

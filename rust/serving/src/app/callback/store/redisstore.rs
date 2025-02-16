@@ -6,7 +6,7 @@ use redis::aio::ConnectionManager;
 use redis::{AsyncCommands, RedisError};
 use tokio::sync::Semaphore;
 
-use super::PayloadToSave;
+use super::{PayloadToSave, PipelineResult};
 use crate::app::callback::Callback;
 use crate::config::RedisConfig;
 use crate::Error;
@@ -180,8 +180,18 @@ impl super::Store for RedisConnection {
         }
     }
 
-    async fn retrieve_datum(&mut self, id: &str) -> Result<Vec<Vec<u8>>, Error> {
-        // saved responses are stored in "id_SAVED"
+    async fn retrieve_datum(&mut self, id: &str) -> Result<PipelineResult, Error> {
+        let redis_status_key = format!("requests:{id}:status");
+        let status: String = self
+            .conn_manager
+            .get(redis_status_key)
+            .await
+            .map_err(|e| Error::StoreRead(format!("Reading request status: {e:?}")))?;
+
+        if status == "processing" {
+            return Ok(PipelineResult::Processing);
+        }
+
         let key = format!("requests:{id}:results");
         let result: Result<Vec<Vec<u8>>, RedisError> = redis::cmd(LRANGE)
             .arg(key)
@@ -196,7 +206,7 @@ impl super::Store for RedisConnection {
                     return Err(Error::StoreRead(format!("No entry found for id: {}", id)));
                 }
 
-                Ok(result)
+                Ok(PipelineResult::Completed(result))
             }
             Err(e) => Err(Error::StoreRead(format!(
                 "Failed to read from redis: {:?}",
@@ -222,7 +232,7 @@ mod tests {
     use redis::AsyncCommands;
 
     use super::*;
-    use crate::app::callback::store::LocalStore;
+    use crate::app::callback::store::{LocalStore, PipelineResult};
     use crate::callback::Response;
 
     #[tokio::test]
@@ -283,6 +293,9 @@ mod tests {
         assert!(datums.is_ok());
 
         let datums = datums.unwrap();
+        let PipelineResult::Completed(datums) = datums else {
+            panic!("Expected completed results");
+        };
         assert_eq!(datums.len(), 1);
 
         let datum = datums.first().unwrap();

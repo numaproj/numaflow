@@ -5,7 +5,7 @@ use std::{
 
 use tokio::sync::oneshot;
 
-use super::store::Store;
+use super::store::{PipelineResult, Store};
 use crate::app::callback::{store::PayloadToSave, Callback};
 use crate::app::tracker::MessageGraph;
 use crate::Error;
@@ -65,7 +65,7 @@ where
     }
 
     /// Retrieves the output of the numaflow pipeline
-    pub(crate) async fn retrieve_saved(&mut self, id: &str) -> Result<Vec<Vec<u8>>, Error> {
+    pub(crate) async fn retrieve_saved(&mut self, id: &str) -> Result<PipelineResult, Error> {
         self.store.retrieve_datum(id).await
     }
 
@@ -269,7 +269,10 @@ mod tests {
 
         // Test retrieve_saved
         let saved = state.retrieve_saved(&id).await.unwrap();
-        assert_eq!(saved, vec!["Test Message".as_bytes()]);
+        assert_eq!(
+            saved,
+            PipelineResult::Completed(vec!["Test Message".as_bytes().to_vec()])
+        );
 
         // Test insert_callback_requests
         let cbs = vec![

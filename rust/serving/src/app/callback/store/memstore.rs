@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::PayloadToSave;
+use super::{PayloadToSave, PipelineResult};
 use crate::app::callback::Callback;
 use crate::Error;
 
@@ -83,11 +83,11 @@ impl super::Store for InMemoryStore {
 
     /// Retrieves data for a given id from the `HashMap`.
     /// Each piece of data is deserialized from bytes into a `String`.
-    async fn retrieve_datum(&mut self, id: &str) -> Result<Vec<Vec<u8>>, Error> {
+    async fn retrieve_datum(&mut self, id: &str) -> Result<PipelineResult, Error> {
         let id = format!("{}_{}", id, "saved");
         let data = self.data.lock().unwrap();
         match data.get(&id) {
-            Some(result) => Ok(result.to_vec()),
+            Some(result) => Ok(PipelineResult::Completed(result.to_vec())),
             None => Err(Error::StoreRead(format!("No entry found for id: {}", id))),
         }
     }
@@ -151,6 +151,9 @@ mod tests {
 
         // Retrieve the datum
         let retrieved = store.retrieve_datum(&key).await.unwrap();
+        let PipelineResult::Completed(retrieved) = retrieved else {
+            panic!("Expected pipeline processing to be completed");
+        };
 
         // Check that the retrieved datum is the same as the one we saved
         assert_eq!(retrieved.len(), 1);
