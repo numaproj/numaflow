@@ -2,14 +2,14 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
-use crate::pipeline::isb::jetstream::reader::JetstreamReader;
+use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::Result;
 
 /// Map forwarder is a component which starts a streaming reader, a mapper, and a writer
 /// and manages the lifecycle of these components.
 pub(crate) struct MapForwarder {
-    jetstream_reader: JetstreamReader,
+    jetstream_reader: JetStreamReader,
     mapper: MapHandle,
     jetstream_writer: JetstreamWriter,
     cln_token: CancellationToken,
@@ -17,7 +17,7 @@ pub(crate) struct MapForwarder {
 
 impl MapForwarder {
     pub(crate) async fn new(
-        jetstream_reader: JetstreamReader,
+        jetstream_reader: JetStreamReader,
         mapper: MapHandle,
         jetstream_writer: JetstreamWriter,
         cln_token: CancellationToken,

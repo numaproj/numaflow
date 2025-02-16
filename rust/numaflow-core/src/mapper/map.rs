@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use bytes::Bytes;
 use numaflow_pb::clients::map::map_client::MapClient;
 use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
@@ -15,7 +14,7 @@ use crate::error::Error;
 use crate::mapper::map::user_defined::{
     UserDefinedBatchMap, UserDefinedStreamMap, UserDefinedUnaryMap,
 };
-use crate::message::Message;
+use crate::message::{Message, Offset};
 use crate::tracker::TrackerHandle;
 pub(super) mod user_defined;
 
@@ -328,7 +327,7 @@ impl MapHandle {
         tokio::spawn(async move {
             let _permit = permit;
 
-            let offset = read_msg.id.offset.clone();
+            let offset = read_msg.offset.clone();
             let (sender, receiver) = oneshot::channel();
             let msg = UnaryActorMessage {
                 message: read_msg.clone(),
@@ -403,13 +402,13 @@ impl MapHandle {
         for receiver in receivers {
             match receiver.await {
                 Ok(Ok(mapped_messages)) => {
-                    let mut offset: Option<Bytes> = None;
+                    let mut offset: Option<Offset> = None;
                     for message in mapped_messages.iter() {
                         if offset.is_none() {
-                            offset = Some(message.id.offset.clone());
+                            offset = Some(message.offset.clone());
                         }
                         tracker_handle
-                            .update(message.id.offset.clone(), message.tags.clone())
+                            .update(message.offset.clone(), message.tags.clone())
                             .await?;
                     }
                     if let Some(offset) = offset {
@@ -471,10 +470,7 @@ impl MapHandle {
                 match result {
                     Ok(mapped_message) => {
                         if let Err(e) = tracker_handle
-                            .update(
-                                mapped_message.id.offset.clone(),
-                                mapped_message.tags.clone(),
-                            )
+                            .update(mapped_message.offset.clone(), mapped_message.tags.clone())
                             .await
                         {
                             error_tx.send(e).await.expect("failed to send error");
@@ -495,7 +491,7 @@ impl MapHandle {
                 }
             }
 
-            if let Err(e) = tracker_handle.update_eof(read_msg.id.offset).await {
+            if let Err(e) = tracker_handle.update_eof(read_msg.offset).await {
                 error_tx.send(e).await.expect("failed to send error");
             }
         });
@@ -550,7 +546,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
@@ -564,14 +560,13 @@ mod tests {
         .await?;
 
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Some(Offset::String(crate::message::StringOffset::new(
-                "0".to_string(),
-                0,
-            ))),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
@@ -643,7 +638,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
             MapMode::Unary,
@@ -660,11 +655,13 @@ mod tests {
 
         for i in 0..5 {
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("value_{}", i).into(),
-                offset: Some(Offset::String(StringOffset::new(i.to_string(), 0))),
+                offset: Offset::String(StringOffset::new(i.to_string(), 0)),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: i.to_string().into(),
@@ -734,7 +731,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
             MapMode::Unary,
@@ -750,11 +747,13 @@ mod tests {
         let input_stream = ReceiverStream::new(input_rx);
 
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
@@ -794,7 +793,7 @@ mod tests {
     impl batchmap::BatchMapper for SimpleBatchMap {
         async fn batchmap(
             &self,
-            mut input: tokio::sync::mpsc::Receiver<batchmap::Datum>,
+            mut input: mpsc::Receiver<batchmap::Datum>,
         ) -> Vec<batchmap::BatchResponse> {
             let mut responses: Vec<batchmap::BatchResponse> = Vec::new();
             while let Some(datum) = input.recv().await {
@@ -812,7 +811,7 @@ mod tests {
 
     #[tokio::test]
     async fn batch_mapper_operations() -> Result<()> {
-        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("batch_map.sock");
         let server_info_file = tmp_dir.path().join("batch_map-server-info");
@@ -830,7 +829,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
@@ -845,11 +844,13 @@ mod tests {
 
         let messages = vec![
             Message {
+                typ: Default::default(),
                 keys: Arc::from(vec!["first".into()]),
                 tags: None,
                 value: "hello".into(),
-                offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+                offset: Offset::String(StringOffset::new("0".to_string(), 0)),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "0".to_string().into(),
@@ -859,11 +860,13 @@ mod tests {
                 metadata: None,
             },
             Message {
+                typ: Default::default(),
                 keys: Arc::from(vec!["second".into()]),
                 tags: None,
                 value: "world".into(),
-                offset: Some(Offset::String(StringOffset::new("1".to_string(), 1))),
+                offset: Offset::String(StringOffset::new("1".to_string(), 1)),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "1".to_string().into(),
@@ -943,7 +946,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
             MapMode::Batch,
@@ -957,11 +960,13 @@ mod tests {
 
         let messages = vec![
             Message {
+                typ: Default::default(),
                 keys: Arc::from(vec!["first".into()]),
                 tags: None,
                 value: "hello".into(),
-                offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+                offset: Offset::String(StringOffset::new("0".to_string(), 0)),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "0".to_string().into(),
@@ -971,11 +976,13 @@ mod tests {
                 metadata: None,
             },
             Message {
+                typ: Default::default(),
                 keys: Arc::from(vec!["second".into()]),
                 tags: None,
                 value: "world".into(),
-                offset: Some(Offset::String(StringOffset::new("1".to_string(), 1))),
+                offset: Offset::String(StringOffset::new("1".to_string(), 1)),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "1".to_string().into(),
@@ -1055,7 +1062,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
         let mapper = MapHandle::new(
@@ -1069,11 +1076,13 @@ mod tests {
         .await?;
 
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "test,map,stream".into(),
-            offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
@@ -1154,7 +1163,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = MapClient::new(create_rpc_channel(sock_file).await?);
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let mapper = MapHandle::new(
             MapMode::Stream,
             500,
@@ -1166,11 +1175,13 @@ mod tests {
         .await?;
 
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "panic".into(),
-            offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),

@@ -4,22 +4,25 @@ use std::time::Duration;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use numaflow_models::models::{ForwardConditions, Vertex};
+use numaflow_models::models::{ForwardConditions, Vertex, Watermark};
 use serde_json::from_slice;
+use tracing::info;
 
+use super::{DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED};
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
 use crate::config::components::source::SourceConfig;
 use crate::config::components::transformer::{TransformerConfig, TransformerType};
 use crate::config::get_vertex_replica;
-use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
+use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig, Stream};
 use crate::config::pipeline::map::MapMode;
 use crate::config::pipeline::map::MapVtxConfig;
+use crate::config::pipeline::watermark::WatermarkConfig;
+use crate::config::pipeline::watermark::{BucketConfig, EdgeWatermarkConfig};
+use crate::config::pipeline::watermark::{IdleConfig, SourceWatermarkConfig};
 use crate::error::Error;
 use crate::Result;
-
-use super::{DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED};
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
@@ -35,11 +38,12 @@ pub(crate) const DEFAULT_STREAM_MAP_SOCKET: &str = "/var/run/numaflow/mapstream.
 const DEFAULT_MAP_SERVER_INFO_FILE: &str = "/var/run/numaflow/mapper-server-info";
 
 pub(crate) mod isb;
+pub(crate) mod watermark;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct PipelineConfig {
-    pub(crate) pipeline_name: String,
-    pub(crate) vertex_name: String,
+    pub(crate) pipeline_name: &'static str,
+    pub(crate) vertex_name: &'static str,
     pub(crate) replica: u16,
     pub(crate) batch_size: usize,
     // FIXME(cr): we cannot leak this as a paf, we need to use a different terminology.
@@ -48,8 +52,9 @@ pub(crate) struct PipelineConfig {
     pub(crate) js_client_config: isb::jetstream::ClientConfig, // TODO: make it enum, since we can have different ISB implementations
     pub(crate) from_vertex_config: Vec<FromVertexConfig>,
     pub(crate) to_vertex_config: Vec<ToVertexConfig>,
-    pub(crate) vertex_config: VertexType,
+    pub(crate) vertex_type_config: VertexType,
     pub(crate) metrics_config: MetricsConfig,
+    pub(crate) watermark_config: Option<WatermarkConfig>,
     pub(crate) callback_config: Option<ServingCallbackConfig>,
 }
 
@@ -61,8 +66,8 @@ pub(crate) struct ServingCallbackConfig {
 impl Default for PipelineConfig {
     fn default() -> Self {
         PipelineConfig {
-            pipeline_name: "default-pl".to_string(),
-            vertex_name: "default-vtx".to_string(),
+            pipeline_name: Default::default(),
+            vertex_name: Default::default(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
             paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
@@ -70,11 +75,12 @@ impl Default for PipelineConfig {
             js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
             to_vertex_config: vec![],
-            vertex_config: VertexType::Source(SourceVtxConfig {
+            vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: Default::default(),
                 transformer_config: None,
             }),
             metrics_config: Default::default(),
+            watermark_config: None,
             callback_config: None,
         }
     }
@@ -130,7 +136,7 @@ pub(crate) mod map {
 
     impl TryFrom<Box<Udf>> for MapType {
         type Error = Error;
-        fn try_from(udf: Box<Udf>) -> std::result::Result<Self, Self::Error> {
+        fn try_from(udf: Box<Udf>) -> Result<Self, Self::Error> {
             if let Some(builtin) = udf.builtin {
                 Ok(MapType::Builtin(BuiltinConfig {
                     name: builtin.name,
@@ -189,14 +195,15 @@ impl std::fmt::Display for VertexType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct FromVertexConfig {
-    pub(crate) name: String,
+    pub(crate) name: &'static str,
     pub(crate) reader_config: BufferReaderConfig,
     pub(crate) partitions: u16,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ToVertexConfig {
-    pub(crate) name: String,
+    pub(crate) name: &'static str,
+    pub(crate) partitions: u16,
     pub(crate) writer_config: BufferWriterConfig,
     pub(crate) conditions: Option<Box<ForwardConditions>>,
 }
@@ -213,6 +220,8 @@ impl PipelineConfig {
 
         let vertex_obj: Vertex = from_slice(&decoded_spec)
             .map_err(|e| Error::Config(format!("Failed to parse pipeline spec: {:?}", e)))?;
+
+        info!("Loaded pipeline spec: {:?}", vertex_obj);
 
         let pipeline_name = vertex_obj.spec.pipeline_name;
         let vertex_name = vertex_obj.spec.name;
@@ -307,6 +316,8 @@ impl PipelineConfig {
             })
             .collect();
 
+        info!("Env vars found - {:#?}", env_vars);
+
         let get_var = |var: &str| -> Result<String> {
             Ok(env_vars
                 .get(var)
@@ -323,42 +334,49 @@ impl PipelineConfig {
         let mut from_vertex_config = vec![];
         for edge in from_edges {
             let partition_count = edge.to_vertex_partition_count.unwrap_or_default() as u16;
-            let buffer_name = format!("{}-{}-{}", namespace, pipeline_name, edge.to);
 
-            let streams: Vec<(&'static str, u16)> = (0..partition_count)
+            let streams: Vec<Stream> = (0..partition_count)
                 .map(|i| {
-                    let stream: &'static str =
-                        Box::leak(Box::new(format!("{}-{}", buffer_name, i)));
-                    (stream, i)
+                    let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
+                    let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
+                    let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
+                    let name: &'static str =
+                        Box::leak(format!("{}-{}-{}-{}", ns, pl, to, i).into_boxed_str());
+                    Stream::new(name, to, i)
                 })
                 .collect();
 
             from_vertex_config.push(FromVertexConfig {
-                name: edge.from,
+                name: Box::leak(edge.from.clone().into_boxed_str()),
                 reader_config: BufferReaderConfig {
-                    partitions: partition_count,
                     streams,
                     ..Default::default()
                 },
-                partitions: 0,
+                partitions: partition_count,
             });
         }
 
         let mut to_vertex_config = vec![];
         for edge in to_edges {
             let partition_count = edge.to_vertex_partition_count.unwrap_or_default() as u16;
-            let buffer_name = format!("{}-{}-{}", namespace, pipeline_name, edge.to);
 
-            let streams: Vec<(String, u16)> = (0..partition_count)
-                .map(|i| (format!("{}-{}", buffer_name, i), i))
+            let streams: Vec<Stream> = (0..partition_count)
+                .map(|i| {
+                    let ns: &'static str = Box::leak(namespace.clone().into_boxed_str());
+                    let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
+                    let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
+                    let name: &'static str =
+                        Box::leak(format!("{}-{}-{}-{}", ns, pl, to, i).into_boxed_str());
+                    Stream::new(name, to, i)
+                })
                 .collect();
 
             let default_writer_config = BufferWriterConfig::default();
             to_vertex_config.push(ToVertexConfig {
-                name: edge.to,
+                name: Box::leak(edge.to.clone().into_boxed_str()),
+                partitions: partition_count,
                 writer_config: BufferWriterConfig {
                     streams,
-                    partitions: partition_count,
                     max_length: edge
                         .to_vertex_limits
                         .as_ref()
@@ -381,6 +399,25 @@ impl PipelineConfig {
             });
         }
 
+        let watermark_config = if vertex_obj
+            .spec
+            .watermark
+            .clone()
+            .map_or(true, |w| w.disabled.unwrap_or(true))
+        {
+            Self::create_watermark_config(
+                vertex_obj.spec.watermark.clone(),
+                &namespace,
+                &pipeline_name,
+                &vertex_name,
+                &vertex,
+                &from_vertex_config,
+                &to_vertex_config,
+            )
+        } else {
+            None
+        };
+
         let look_back_window = vertex_obj
             .spec
             .scale
@@ -389,7 +426,10 @@ impl PipelineConfig {
             .unwrap_or(DEFAULT_LOOKBACK_WINDOW_IN_SECS);
 
         let mut callback_config = None;
-        if get_var(ENV_CALLBACK_ENABLED).is_ok() {
+        if get_var(ENV_CALLBACK_ENABLED)
+            .map(|v| v == "true")
+            .unwrap_or(false)
+        {
             let callback_concurrency: usize = get_var(ENV_CALLBACK_CONCURRENCY)
                 .unwrap_or_else(|_| format!("{DEFAULT_CALLBACK_CONCURRENCY}"))
                 .parse()
@@ -410,16 +450,130 @@ impl PipelineConfig {
                 .parse()
                 .unwrap(),
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
-            pipeline_name,
-            vertex_name,
+            pipeline_name: Box::leak(pipeline_name.into_boxed_str()),
+            vertex_name: Box::leak(vertex_name.into_boxed_str()),
             replica: *replica,
             js_client_config,
             from_vertex_config,
             to_vertex_config,
-            vertex_config: vertex,
+            vertex_type_config: vertex,
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
+            watermark_config,
             callback_config,
         })
+    }
+
+    fn create_watermark_config(
+        watermark_spec: Option<Box<Watermark>>,
+        namespace: &str,
+        pipeline_name: &str,
+        vertex_name: &str,
+        vertex: &VertexType,
+        from_vertex_config: &[FromVertexConfig],
+        to_vertex_config: &[ToVertexConfig],
+    ) -> Option<WatermarkConfig> {
+        let max_delay = watermark_spec
+            .as_ref()
+            .and_then(|w| w.max_delay.map(|x| Duration::from(x).as_millis() as u64))
+            .unwrap_or(0);
+
+        let idle_config = watermark_spec
+            .as_ref()
+            .and_then(|w| w.idle_source.as_ref())
+            .map(|idle| IdleConfig {
+                increment_by: idle.increment_by.map(Duration::from).unwrap_or_default(),
+                step_interval: idle.step_interval.map(Duration::from).unwrap_or_default(),
+                threshold: idle.threshold.map(Duration::from).unwrap_or_default(),
+            });
+
+        match vertex {
+            VertexType::Source(_) => Some(WatermarkConfig::Source(SourceWatermarkConfig {
+                max_delay: Duration::from_millis(max_delay),
+                source_bucket_config: BucketConfig {
+                    vertex: Box::leak(vertex_name.to_string().into_boxed_str()),
+                    partitions: 1, // source will have only one partition
+                    ot_bucket: Box::leak(
+                        format!("{}-{}-{}_SOURCE_OT", namespace, pipeline_name, vertex_name)
+                            .into_boxed_str(),
+                    ),
+                    hb_bucket: Box::leak(
+                        format!(
+                            "{}-{}-{}_SOURCE_PROCESSORS",
+                            namespace, pipeline_name, vertex_name
+                        )
+                        .into_boxed_str(),
+                    ),
+                },
+                to_vertex_bucket_config: to_vertex_config
+                    .iter()
+                    .map(|to| BucketConfig {
+                        vertex: to.name,
+                        partitions: to.partitions,
+                        ot_bucket: Box::leak(
+                            format!(
+                                "{}-{}-{}-{}_OT",
+                                namespace, pipeline_name, vertex_name, &to.name
+                            )
+                            .into_boxed_str(),
+                        ),
+                        hb_bucket: Box::leak(
+                            format!(
+                                "{}-{}-{}-{}_PROCESSORS",
+                                namespace, pipeline_name, vertex_name, &to.name
+                            )
+                            .into_boxed_str(),
+                        ),
+                    })
+                    .collect(),
+                idle_config,
+            })),
+            VertexType::Sink(_) | VertexType::Map(_) => {
+                Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
+                    from_vertex_config: from_vertex_config
+                        .iter()
+                        .map(|from| BucketConfig {
+                            vertex: from.name,
+                            partitions: from.partitions,
+                            ot_bucket: Box::leak(
+                                format!(
+                                    "{}-{}-{}-{}_OT",
+                                    namespace, pipeline_name, &from.name, vertex_name
+                                )
+                                .into_boxed_str(),
+                            ),
+                            hb_bucket: Box::leak(
+                                format!(
+                                    "{}-{}-{}-{}_PROCESSORS",
+                                    namespace, pipeline_name, &from.name, vertex_name
+                                )
+                                .into_boxed_str(),
+                            ),
+                        })
+                        .collect(),
+                    to_vertex_config: to_vertex_config
+                        .iter()
+                        .map(|to| BucketConfig {
+                            vertex: to.name,
+                            partitions: to.partitions,
+                            ot_bucket: Box::leak(
+                                format!(
+                                    "{}-{}-{}-{}_OT",
+                                    namespace, pipeline_name, vertex_name, &to.name
+                                )
+                                .into_boxed_str(),
+                            ),
+                            hb_bucket: Box::leak(
+                                format!(
+                                    "{}-{}-{}-{}_PROCESSORS",
+                                    namespace, pipeline_name, vertex_name, &to.name
+                                )
+                                .into_boxed_str(),
+                            ),
+                        })
+                        .collect(),
+                }))
+            }
+        }
     }
 }
 
@@ -436,8 +590,8 @@ mod tests {
     #[test]
     fn test_default_pipeline_config() {
         let expected = PipelineConfig {
-            pipeline_name: "default-pl".to_string(),
-            vertex_name: "default-vtx".to_string(),
+            pipeline_name: Default::default(),
+            vertex_name: Default::default(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
             paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
@@ -445,11 +599,12 @@ mod tests {
             js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
             to_vertex_config: vec![],
-            vertex_config: VertexType::Source(SourceVtxConfig {
+            vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: Default::default(),
                 transformer_config: None,
             }),
             metrics_config: Default::default(),
+            watermark_config: None,
             callback_config: None,
         };
 
@@ -483,8 +638,8 @@ mod tests {
         let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
 
         let expected = PipelineConfig {
-            pipeline_name: "simple-pipeline".to_string(),
-            vertex_name: "out".to_string(),
+            pipeline_name: "simple-pipeline",
+            vertex_name: "out",
             replica: 0,
             batch_size: 500,
             paf_concurrency: 1000,
@@ -495,16 +650,15 @@ mod tests {
                 password: None,
             },
             from_vertex_config: vec![FromVertexConfig {
-                name: "in".to_string(),
+                name: "in",
                 reader_config: BufferReaderConfig {
-                    partitions: 1,
-                    streams: vec![("default-simple-pipeline-out-0", 0)],
+                    streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
                     wip_ack_interval: Duration::from_secs(1),
                 },
-                partitions: 0,
+                partitions: 1,
             }],
             to_vertex_config: vec![],
-            vertex_config: VertexType::Sink(SinkVtxConfig {
+            vertex_type_config: VertexType::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::Blackhole(BlackholeConfig {}),
                     retry_config: None,
@@ -517,6 +671,15 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            watermark_config: Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
+                from_vertex_config: vec![BucketConfig {
+                    vertex: "in",
+                    partitions: 1,
+                    ot_bucket: "default-simple-pipeline-in-out_OT",
+                    hb_bucket: "default-simple-pipeline-in-out_PROCESSORS",
+                }],
+                to_vertex_config: vec![],
+            })),
             ..Default::default()
         };
         assert_eq!(pipeline_config, expected);
@@ -531,8 +694,8 @@ mod tests {
             PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
 
         let expected = PipelineConfig {
-            pipeline_name: "simple-pipeline".to_string(),
-            vertex_name: "in".to_string(),
+            pipeline_name: "simple-pipeline",
+            vertex_name: "in",
             replica: 0,
             batch_size: 1000,
             paf_concurrency: 1000,
@@ -544,17 +707,17 @@ mod tests {
             },
             from_vertex_config: vec![],
             to_vertex_config: vec![ToVertexConfig {
-                name: "out".to_string(),
+                name: "out",
+                partitions: 1,
                 writer_config: BufferWriterConfig {
-                    streams: vec![("default-simple-pipeline-out-0".to_string(), 0)],
-                    partitions: 1,
+                    streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
                     max_length: 150000,
                     usage_limit: 0.85,
                     ..Default::default()
                 },
                 conditions: None,
             }],
-            vertex_config: VertexType::Source(SourceVtxConfig {
+            vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Generator(GeneratorConfig {
@@ -569,6 +732,23 @@ mod tests {
                 },
                 transformer_config: None,
             }),
+            metrics_config: Default::default(),
+            watermark_config: Some(WatermarkConfig::Source(SourceWatermarkConfig {
+                max_delay: Default::default(),
+                source_bucket_config: BucketConfig {
+                    vertex: "in",
+                    partitions: 1,
+                    ot_bucket: "default-simple-pipeline-in_SOURCE_OT",
+                    hb_bucket: "default-simple-pipeline-in_SOURCE_PROCESSORS",
+                },
+                to_vertex_bucket_config: vec![BucketConfig {
+                    vertex: "out",
+                    partitions: 1,
+                    ot_bucket: "default-simple-pipeline-in-out_OT",
+                    hb_bucket: "default-simple-pipeline-in-out_PROCESSORS",
+                }],
+                idle_config: None,
+            })),
             ..Default::default()
         };
 
@@ -584,8 +764,8 @@ mod tests {
             PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
 
         let expected = PipelineConfig {
-            pipeline_name: "simple-pipeline".to_string(),
-            vertex_name: "in".to_string(),
+            pipeline_name: "simple-pipeline",
+            vertex_name: "in",
             replica: 0,
             batch_size: 50,
             paf_concurrency: 1000,
@@ -597,17 +777,17 @@ mod tests {
             },
             from_vertex_config: vec![],
             to_vertex_config: vec![ToVertexConfig {
-                name: "out".to_string(),
+                name: "out",
+                partitions: 1,
                 writer_config: BufferWriterConfig {
-                    streams: vec![("default-simple-pipeline-out-0".to_string(), 0)],
-                    partitions: 1,
+                    streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
                     max_length: 30000,
                     usage_limit: 0.8,
                     ..Default::default()
                 },
                 conditions: None,
             }],
-            vertex_config: VertexType::Source(SourceVtxConfig {
+            vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Pulsar(PulsarSourceConfig {
@@ -621,6 +801,23 @@ mod tests {
                 },
                 transformer_config: None,
             }),
+            metrics_config: Default::default(),
+            watermark_config: Some(WatermarkConfig::Source(SourceWatermarkConfig {
+                max_delay: Default::default(),
+                source_bucket_config: BucketConfig {
+                    vertex: "in",
+                    partitions: 1,
+                    ot_bucket: "default-simple-pipeline-in_SOURCE_OT",
+                    hb_bucket: "default-simple-pipeline-in_SOURCE_PROCESSORS",
+                },
+                to_vertex_bucket_config: vec![BucketConfig {
+                    vertex: "out",
+                    partitions: 1,
+                    ot_bucket: "default-simple-pipeline-in-out_OT",
+                    hb_bucket: "default-simple-pipeline-in-out_PROCESSORS",
+                }],
+                idle_config: None,
+            })),
             ..Default::default()
         };
 
@@ -707,8 +904,8 @@ mod tests {
             PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
 
         let expected = PipelineConfig {
-            pipeline_name: "simple-pipeline".to_string(),
-            vertex_name: "map".to_string(),
+            pipeline_name: "simple-pipeline",
+            vertex_name: "map",
             replica: 0,
             batch_size: 500,
             paf_concurrency: 1000,
@@ -719,16 +916,15 @@ mod tests {
                 password: None,
             },
             from_vertex_config: vec![FromVertexConfig {
-                name: "in".to_string(),
+                name: "in",
                 reader_config: BufferReaderConfig {
-                    partitions: 1,
-                    streams: vec![("default-simple-pipeline-map-0", 0)],
+                    streams: vec![Stream::new("default-simple-pipeline-map-0", "map", 0)],
                     wip_ack_interval: Duration::from_secs(1),
                 },
-                partitions: 0,
+                partitions: 1,
             }],
             to_vertex_config: vec![],
-            vertex_config: VertexType::Map(MapVtxConfig {
+            vertex_type_config: VertexType::Map(MapVtxConfig {
                 concurrency: 500,
                 map_type: MapType::UserDefined(UserDefinedConfig {
                     grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
@@ -737,6 +933,16 @@ mod tests {
                 }),
                 map_mode: MapMode::Unary,
             }),
+            metrics_config: MetricsConfig::default(),
+            watermark_config: Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
+                from_vertex_config: vec![BucketConfig {
+                    vertex: "in",
+                    partitions: 1,
+                    ot_bucket: "default-simple-pipeline-in-map_OT",
+                    hb_bucket: "default-simple-pipeline-in-map_PROCESSORS",
+                }],
+                to_vertex_config: vec![],
+            })),
             ..Default::default()
         };
 

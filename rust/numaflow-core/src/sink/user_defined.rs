@@ -27,8 +27,8 @@ impl From<Message> for SinkRequest {
             request: Some(numaflow_pb::clients::sink::sink_request::Request {
                 keys: message.keys.to_vec(),
                 value: message.value.to_vec(),
-                event_time: prost_timestamp_from_utc(message.event_time),
-                watermark: None,
+                event_time: Some(prost_timestamp_from_utc(message.event_time)),
+                watermark: message.watermark.map(prost_timestamp_from_utc),
                 id: message.id.to_string(),
                 headers: message.headers,
             }),
@@ -115,7 +115,7 @@ impl Sink for UserDefinedSink {
                 .await?
                 .ok_or(Error::Sink("failed to receive response".to_string()))?;
 
-            if response.status.map_or(false, |s| s.eot) {
+            if response.status.is_some_and(|s| s.eot) {
                 if responses.len() != num_requests {
                     error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
                 } else {
@@ -147,7 +147,7 @@ mod tests {
 
     use super::*;
     use crate::error::Result;
-    use crate::message::{Message, MessageID};
+    use crate::message::{IntOffset, Message, MessageID, Offset};
     use crate::shared::grpc::create_rpc_channel;
     use crate::sink::user_defined::UserDefinedSink;
 
@@ -201,10 +201,11 @@ mod tests {
 
         let messages = vec![
             Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
-                offset: None,
+                offset: Offset::Int(IntOffset::new(0, 0)),
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
@@ -212,13 +213,15 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 0,
                 },
+                watermark: None,
                 metadata: None,
             },
             Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
-                offset: None,
+                offset: Offset::Int(IntOffset::new(0, 0)),
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
@@ -226,6 +229,7 @@ mod tests {
                     offset: "2".to_string().into(),
                     index: 1,
                 },
+                watermark: None,
                 metadata: None,
             },
         ];

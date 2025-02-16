@@ -55,6 +55,9 @@ pub enum Error {
 
     #[error("Task Error - {0}")]
     Tracker(String),
+
+    #[error("Watermark Error - {0}")]
+    Watermark(String),
 }
 
 impl From<tonic::Status> for Error {

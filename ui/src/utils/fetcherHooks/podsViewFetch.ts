@@ -57,12 +57,19 @@ export const usePodsViewFetch = (
             const containers: string[] = [];
             const containerSpecMap = new Map<string, PodContainerSpec>();
 
-            const containersList = JSON.parse(
+            const containersList: any[] = [];
+            pod?.spec?.initContainers
+              ?.filter(
+                (initContainer: any) =>
+                  initContainer?.restartPolicy === "Always"
+              )
+              ?.forEach((container: any) => containersList.push(container));
+
+            const specContainers = JSON.parse(
               JSON.stringify(pod?.spec?.containers)
             );
-            pod?.spec?.initContainers
-              ?.filter((initContainer: any) => initContainer?.restartPolicy === "Always")
-              ?.forEach((container: any) => containersList.push(container));
+
+            containersList.push(...specContainers);
 
             containersList?.forEach((container: any) => {
               const cpu = container?.resources?.requests?.cpu;
@@ -130,7 +137,7 @@ export const usePodsViewFetch = (
 
   useEffect(() => {
     fetchPods();
-  },[vertexId, requestKey, host]);
+  }, [vertexId, requestKey, host]);
 
   useEffect(() => {
     if (pods?.length) {
@@ -243,10 +250,10 @@ export const usePodsViewFetch = (
   // Retry fetching pods details if there is an error
   useEffect(() => {
     const currentTime = Date.now();
-    if (podsDetailsErr && (currentTime - lastRetryTime > 5000)) {
+    if (podsDetailsErr && currentTime - lastRetryTime > 5000) {
       const retryFetch = setTimeout(() => {
-        fetchPodDetails(); 
-        setLastRetryTime(currentTime); 
+        fetchPodDetails();
+        setLastRetryTime(currentTime);
       }, 5000);
 
       return () => clearTimeout(retryFetch);

@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use numaflow_pulsar::source::{PulsarMessage, PulsarSource, PulsarSourceConfig};
 
-use crate::config::get_vertex_name;
+use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, Offset};
 use crate::source;
@@ -12,14 +12,16 @@ impl TryFrom<PulsarMessage> for Message {
     type Error = Error;
 
     fn try_from(message: PulsarMessage) -> crate::Result<Self> {
-        let offset = Offset::Int(IntOffset::new(message.offset, 1)); // FIXME: partition id
+        let offset = Offset::Int(IntOffset::new(message.offset as i64, *get_vertex_replica()));
 
         Ok(Message {
+            typ: Default::default(),
             keys: Arc::from(vec![message.key]),
             tags: None,
             value: message.payload,
-            offset: Some(offset.clone()),
+            offset: offset.clone(),
             event_time: message.event_time,
+            watermark: None,
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: offset.to_string().into(),
@@ -51,8 +53,9 @@ pub(crate) async fn new_pulsar_source(
     cfg: PulsarSourceConfig,
     batch_size: usize,
     timeout: Duration,
+    vertex_replica: u16,
 ) -> crate::Result<PulsarSource> {
-    Ok(PulsarSource::new(cfg, batch_size, timeout).await?)
+    Ok(PulsarSource::new(cfg, batch_size, timeout, vertex_replica).await?)
 }
 
 impl source::SourceReader for PulsarSource {
@@ -68,8 +71,8 @@ impl source::SourceReader for PulsarSource {
             .collect()
     }
 
-    fn partitions(&self) -> Vec<u16> {
-        Self::partitions(self)
+    async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
+        Ok(self.partitions_vec())
     }
 }
 
@@ -82,7 +85,7 @@ impl source::SourceAcker for PulsarSource {
                     "Expected Offset::Int type for Pulsar. offset={offset:?}"
                 )));
             };
-            pulsar_offsets.push(int_offset.offset);
+            pulsar_offsets.push(int_offset.offset as u64);
         }
         self.ack_offsets(pulsar_offsets).await.map_err(Into::into)
     }
@@ -114,7 +117,7 @@ mod tests {
             max_unack: 100,
             auth: None,
         };
-        let mut pulsar = new_pulsar_source(cfg, 10, Duration::from_millis(200)).await?;
+        let mut pulsar = new_pulsar_source(cfg, 10, Duration::from_millis(200), 0).await?;
         assert_eq!(pulsar.name(), "Pulsar");
 
         // Read should return before the timeout
@@ -154,7 +157,7 @@ mod tests {
         let messages = pulsar.read().await?;
         assert_eq!(messages.len(), 10);
 
-        let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset.unwrap()).collect();
+        let offsets: Vec<Offset> = messages.into_iter().map(|m| m.offset).collect();
 
         pulsar.ack(offsets).await?;
 

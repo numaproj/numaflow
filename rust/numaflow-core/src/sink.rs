@@ -1,3 +1,8 @@
+//! The [Sink] serves as the endpoint for processed data that has been outputted from the platform,
+//! which is then sent to an external system or application.
+//!
+//! [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
+
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -27,7 +32,7 @@ use crate::metrics::{
 use crate::tracker::TrackerHandle;
 use crate::Result;
 
-/// A [blackhole] sink which reads but never writes to anywhere, semantic equivalent of `/dev/null`.
+/// A [Blackhole] sink which reads but never writes to anywhere, semantic equivalent of `/dev/null`.
 ///
 /// [Blackhole]: https://numaflow.numaproj.io/user-guide/sinks/blackhole/
 mod blackhole;
@@ -281,7 +286,7 @@ impl SinkWriter {
 
                     let offsets = batch
                         .iter()
-                        .map(|msg| msg.id.offset.clone())
+                        .map(|msg| msg.offset.clone())
                         .collect::<Vec<_>>();
 
                     let total_msgs = batch.len();
@@ -325,12 +330,12 @@ impl SinkWriter {
                         pipeline_metrics()
                             .forwarder
                             .write_time
-                            .get_or_create(pipeline_forward_metric_labels("Sink", None))
+                            .get_or_create(pipeline_forward_metric_labels("Sink"))
                             .observe(sink_start.elapsed().as_micros() as f64);
                         pipeline_metrics()
                             .forwarder
                             .dropped_total
-                            .get_or_create(pipeline_forward_metric_labels("Sink", None))
+                            .get_or_create(pipeline_forward_metric_labels("Sink"))
                             .inc_by((total_msgs - total_valid_msgs) as u64);
                     }
 
@@ -447,7 +452,7 @@ impl SinkWriter {
             pipeline_metrics()
                 .forwarder
                 .write_total
-                .get_or_create(pipeline_forward_metric_labels("Sink", None))
+                .get_or_create(pipeline_forward_metric_labels("Sink"))
                 .inc_by(total_msgs as u64);
         }
 
@@ -608,7 +613,7 @@ impl SinkWriter {
                     // construct the error map for the failed messages
                     messages_to_send.retain(|msg| {
                         if let Some(result) = result_map.get(&msg.id.to_string()) {
-                            return match result {
+                            match result {
                                 ResponseStatusFromSink::Success => false,
                                 ResponseStatusFromSink::Failed(err_msg) => {
                                     *fallback_error_map.entry(err_msg.clone()).or_insert(0) += 1;
@@ -618,7 +623,7 @@ impl SinkWriter {
                                     contains_fallback_status = true;
                                     false
                                 }
-                            };
+                            }
                         } else {
                             false
                         }
@@ -721,7 +726,7 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use super::*;
-    use crate::message::{Message, MessageID, Offset, ReadAck, StringOffset};
+    use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
     use crate::shared::grpc::create_rpc_channel;
 
     struct SimpleSink;
@@ -752,7 +757,7 @@ mod tests {
             10,
             Duration::from_secs(1),
             SinkClientType::Log,
-            TrackerHandle::new(None),
+            TrackerHandle::new(None, None),
         )
         .build()
         .await
@@ -760,15 +765,17 @@ mod tests {
 
         let messages: Vec<Message> = (0..5)
             .map(|i| Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
                 metadata: None,
@@ -783,7 +790,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_streaming_write() {
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
@@ -796,15 +803,17 @@ mod tests {
 
         let messages: Vec<Message> = (0..10)
             .map(|i| Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
                 metadata: None,
@@ -836,7 +845,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_streaming_write_error() {
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
@@ -872,15 +881,17 @@ mod tests {
 
         let messages: Vec<Message> = (0..10)
             .map(|i| Message {
+                typ: Default::default(),
                 keys: Arc::from(vec!["error".to_string()]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
                 metadata: None,
@@ -919,7 +930,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fallback_write() {
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
 
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -957,15 +968,17 @@ mod tests {
 
         let messages: Vec<Message> = (0..20)
             .map(|i| Message {
+                typ: Default::default(),
                 keys: Arc::from(vec!["fallback".to_string()]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::Int(IntOffset::new(i, 0)),
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
                 metadata: None,
@@ -999,14 +1012,13 @@ mod tests {
     #[test]
     fn test_message_to_sink_request() {
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),
-            offset: Some(Offset::String(StringOffset {
-                offset: "123".to_string().into(),
-                partition_idx: 0,
-            })),
+            offset: Offset::Int(IntOffset::new(0, 0)),
             event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex".to_string().into(),
                 offset: "123".to_string().into(),

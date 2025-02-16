@@ -68,7 +68,7 @@ mod tests {
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
-    use crate::config::pipeline::isb::BufferWriterConfig;
+    use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::ToVertexConfig;
     use crate::pipeline::forwarder::source_forwarder::SourceForwarder;
     use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
@@ -163,7 +163,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_source_forwarder() {
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
 
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
@@ -226,6 +226,7 @@ mod tests {
             tracker_handle.clone(),
             true,
             Some(transformer),
+            None,
         );
 
         // create a js writer
@@ -234,13 +235,13 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream_name = "test_source_forwarder";
+        let stream = Stream::new("test_source_forwarder", "test", 0);
         // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
+        let _ = context.delete_stream(stream.name).await;
         let _stream = context
             .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.into()],
                 max_message_size: 1024,
                 ..Default::default()
             })
@@ -250,28 +251,30 @@ mod tests {
         let _consumer = context
             .create_consumer_on_stream(
                 consumer::Config {
-                    name: Some(stream_name.to_string()),
+                    name: Some(stream.name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
                 },
-                stream_name,
+                stream.name,
             )
             .await
             .unwrap();
 
         let writer = JetstreamWriter::new(
             vec![ToVertexConfig {
+                partitions: 1,
                 writer_config: BufferWriterConfig {
-                    streams: vec![(stream_name.to_string(), 0)],
+                    streams: vec![stream.clone()],
                     ..Default::default()
                 },
                 conditions: None,
-                name: "test-vertex".to_string(),
+                name: "test-vertex",
             }],
             context.clone(),
             100,
             tracker_handle.clone(),
             cln_token.clone(),
+            None,
         );
 
         // create the forwarder with the source, transformer, and writer

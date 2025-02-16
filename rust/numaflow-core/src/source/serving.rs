@@ -16,11 +16,13 @@ impl TryFrom<serving::Message> for Message {
 
         Ok(Message {
             // we do not support keys from HTTP client
+            typ: Default::default(),
             keys: Arc::from(vec![]),
             tags: None,
             value: message.value,
-            offset: Some(offset.clone()),
+            offset: offset.clone(),
             event_time: Default::default(),
+            watermark: None,
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: offset.to_string().into(),
@@ -53,8 +55,8 @@ impl super::SourceReader for ServingSource {
             .collect()
     }
 
-    fn partitions(&self) -> Vec<u16> {
-        vec![*get_vertex_replica()]
+    async fn partitions(&mut self) -> Result<Vec<u16>> {
+        Ok(vec![*get_vertex_replica()])
     }
 }
 
@@ -91,10 +93,8 @@ mod tests {
     use serving::{ServingSource, Settings};
 
     use super::get_vertex_replica;
-    use crate::{
-        message::{Message, MessageID, Offset, StringOffset},
-        source::{SourceAcker, SourceReader},
-    };
+    use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::source::{SourceAcker, SourceReader};
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -114,7 +114,7 @@ mod tests {
         assert_eq!(message.value, Bytes::from_static(b"test"));
         assert_eq!(
             message.offset,
-            Some(Offset::String(StringOffset::new(MSG_ID.into(), 0)))
+            Offset::String(StringOffset::new(MSG_ID.into(), 0))
         );
         assert_eq!(
             message.id,
@@ -149,7 +149,7 @@ mod tests {
             ..Default::default()
         };
         let settings = Arc::new(settings);
-        // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
+        // Set up the CryptoProvider (controls core cryptography used by rustls) for the process
         // ServingSource starts an Axum HTTPS server in the background. Rustls is used to generate
         // self-signed certs when starting the server.
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
@@ -192,7 +192,7 @@ mod tests {
                 }
                 assert_eq!(messages.len(), 1);
                 let msg = messages.remove(0);
-                serving_source.ack(vec![msg.offset.unwrap()]).await.unwrap();
+                serving_source.ack(vec![msg.offset]).await.unwrap();
                 break;
             }
         });

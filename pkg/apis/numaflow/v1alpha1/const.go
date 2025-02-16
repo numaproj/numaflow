@@ -183,6 +183,7 @@ const (
 	DefaultTargetProcessingSeconds  = 20  // Default targeted time in seconds to finish processing all the pending messages for a source
 	DefaultTargetBufferAvailability = 50  // Default targeted percentage of buffer availability
 	DefaultReplicasPerScale         = 2   // Default maximum replicas to be scaled up or down at once
+	MaxLookbackSeconds              = 600 // Max lookback seconds for calculating avg rate and pending
 
 	// Default persistent buffer queue options
 	DefaultPBQChannelBufferSize = 100             // Default channel size in int (what should be right value?)

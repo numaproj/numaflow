@@ -21,14 +21,21 @@ export const useMetricsFetch = ({
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
-      if ( Object.keys(filters).length > 0 && metricReq?.dimension !== undefined) {
+      if (
+        Object.keys(filters).length > 0 &&
+        metricReq?.dimension !== undefined
+      ) {
         try {
           const response = await fetch(urlPath, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ ...metricReq, filters }),
+            body: JSON.stringify({
+              ...metricReq,
+              filters,
+              display_name: undefined,
+            }),
           });
           const data = await response.json();
           if (data?.data === null) {
@@ -48,7 +55,7 @@ export const useMetricsFetch = ({
         } finally {
           setIsLoading(false);
         }
-      } else{
+      } else {
         setIsLoading(false);
       }
     };

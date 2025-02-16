@@ -7,18 +7,24 @@ use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+use crate::config::is_mono_vertex;
+use crate::config::pipeline;
+use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
+use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
-use crate::config::{is_mono_vertex, pipeline};
 use crate::metrics::{LagReader, PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::forwarder::source_forwarder;
-use crate::pipeline::isb::jetstream::reader::JetstreamReader;
+use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::pipeline::pipeline::isb::BufferReaderConfig;
 use crate::shared::create_components;
 use crate::shared::create_components::create_sink_writer;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
+use crate::watermark::isb::ISBWatermarkHandle;
+use crate::watermark::source::SourceWatermarkHandle;
+use crate::watermark::WatermarkHandle;
 use crate::{error, shared, Result};
 
 mod forwarder;
@@ -29,18 +35,111 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: PipelineConfig,
 ) -> Result<()> {
-    match &config.vertex_config {
+    let js_context = create_js_context(config.js_client_config.clone()).await?;
+
+    match &config.vertex_type_config {
         pipeline::VertexType::Source(source) => {
             info!("Starting source forwarder");
-            start_source_forwarder(cln_token, config.clone(), source.clone()).await?;
+
+            // create watermark handle, if watermark is enabled
+            let source_watermark_handle = match &config.watermark_config {
+                Some(wm_config) => {
+                    if let WatermarkConfig::Source(source_config) = wm_config {
+                        Some(
+                            SourceWatermarkHandle::new(
+                                config.read_timeout,
+                                js_context.clone(),
+                                &config.to_vertex_config,
+                                source_config,
+                                cln_token.clone(),
+                            )
+                            .await?,
+                        )
+                    } else {
+                        None
+                    }
+                }
+                None => None,
+            };
+
+            start_source_forwarder(
+                cln_token,
+                js_context,
+                config.clone(),
+                source.clone(),
+                source_watermark_handle,
+            )
+            .await?;
         }
         pipeline::VertexType::Sink(sink) => {
             info!("Starting sink forwarder");
-            start_sink_forwarder(cln_token, config.clone(), sink.clone()).await?;
+
+            // create watermark handle, if watermark is enabled
+            let edge_watermark_handle = match &config.watermark_config {
+                Some(wm_config) => {
+                    if let WatermarkConfig::Edge(edge_config) = wm_config {
+                        Some(
+                            ISBWatermarkHandle::new(
+                                config.vertex_name,
+                                config.replica,
+                                config.read_timeout,
+                                js_context.clone(),
+                                edge_config,
+                                &config.to_vertex_config,
+                                cln_token.clone(),
+                            )
+                            .await?,
+                        )
+                    } else {
+                        None
+                    }
+                }
+                None => None,
+            };
+
+            start_sink_forwarder(
+                cln_token,
+                js_context,
+                config.clone(),
+                sink.clone(),
+                edge_watermark_handle,
+            )
+            .await?;
         }
         pipeline::VertexType::Map(map) => {
             info!("Starting map forwarder");
-            start_map_forwarder(cln_token, config.clone(), map.clone()).await?;
+
+            // create watermark handle, if watermark is enabled
+            let edge_watermark_handle = match &config.watermark_config {
+                Some(wm_config) => {
+                    if let WatermarkConfig::Edge(edge_config) = wm_config {
+                        Some(
+                            ISBWatermarkHandle::new(
+                                config.vertex_name,
+                                config.replica,
+                                config.read_timeout,
+                                js_context.clone(),
+                                edge_config,
+                                &config.to_vertex_config,
+                                cln_token.clone(),
+                            )
+                            .await?,
+                        )
+                    } else {
+                        None
+                    }
+                }
+                None => None,
+            };
+
+            start_map_forwarder(
+                cln_token,
+                js_context,
+                config.clone(),
+                map.clone(),
+                edge_watermark_handle,
+            )
+            .await?;
         }
     }
     Ok(())
@@ -48,20 +147,22 @@ pub(crate) async fn start_forwarder(
 
 async fn start_source_forwarder(
     cln_token: CancellationToken,
+    js_context: Context,
     config: PipelineConfig,
     source_config: SourceVtxConfig,
+    source_watermark_handle: Option<SourceWatermarkHandle>,
 ) -> Result<()> {
-    let callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
-        CallbackHandler::new(config.vertex_name.clone(), cb_cfg.callback_concurrency)
+    let serving_callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
+        CallbackHandler::new(config.vertex_name.to_string(), cb_cfg.callback_concurrency)
     });
-    let tracker_handle = TrackerHandle::new(callback_handler);
-    let js_context = create_js_context(config.js_client_config.clone()).await?;
+    let tracker_handle = TrackerHandle::new(None, serving_callback_handler);
 
     let buffer_writer = create_buffer_writer(
         &config,
         js_context.clone(),
         tracker_handle.clone(),
         cln_token.clone(),
+        source_watermark_handle.clone().map(WatermarkHandle::Source),
     )
     .await;
 
@@ -79,6 +180,7 @@ async fn start_source_forwarder(
         &source_config.source_config,
         tracker_handle,
         transformer,
+        source_watermark_handle,
         cln_token.clone(),
     )
     .await?;
@@ -108,11 +210,11 @@ async fn start_source_forwarder(
 
 async fn start_map_forwarder(
     cln_token: CancellationToken,
+    js_context: Context,
     config: PipelineConfig,
     map_vtx_config: MapVtxConfig,
+    watermark_handle: Option<ISBWatermarkHandle>,
 ) -> Result<()> {
-    let js_context = create_js_context(config.js_client_config.clone()).await?;
-
     // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
     // to a common buffer, in the case of a join.
     let reader_config = &config
@@ -126,19 +228,23 @@ async fn start_map_forwarder(
     let mut mapper_grpc_client = None;
     let mut isb_lag_readers = vec![];
 
-    let callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
-        CallbackHandler::new(config.vertex_name.clone(), cb_cfg.callback_concurrency)
+    let serving_callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
+        CallbackHandler::new(config.vertex_name.to_string(), cb_cfg.callback_concurrency)
     });
 
     for stream in reader_config.streams.clone() {
-        let tracker_handle = TrackerHandle::new(callback_handler.clone());
+        let tracker_handle =
+            TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
 
+        info!("Creating buffer reader for stream {:?}", stream);
         let buffer_reader = create_buffer_reader(
+            config.vertex_type_config.to_string(),
             stream,
             reader_config.clone(),
             js_context.clone(),
             tracker_handle.clone(),
             config.batch_size,
+            watermark_handle.clone(),
         )
         .await?;
 
@@ -162,6 +268,7 @@ async fn start_map_forwarder(
             js_context.clone(),
             tracker_handle.clone(),
             cln_token.clone(),
+            watermark_handle.clone().map(WatermarkHandle::ISB),
         )
         .await;
         forwarder_components.push((buffer_reader, buffer_writer, mapper));
@@ -209,11 +316,11 @@ async fn start_map_forwarder(
 
 async fn start_sink_forwarder(
     cln_token: CancellationToken,
+    js_context: Context,
     config: PipelineConfig,
     sink: SinkVtxConfig,
+    watermark_handle: Option<ISBWatermarkHandle>,
 ) -> Result<()> {
-    let js_context = create_js_context(config.js_client_config.clone()).await?;
-
     // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
     // to a common buffer, in the case of a join.
     let reader_config = &config
@@ -222,22 +329,25 @@ async fn start_sink_forwarder(
         .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
         .reader_config;
 
-    let callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
-        CallbackHandler::new(config.vertex_name.clone(), cb_cfg.callback_concurrency)
+    let serving_callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
+        CallbackHandler::new(config.vertex_name.to_string(), cb_cfg.callback_concurrency)
     });
 
     // Create sink writers and buffer readers for each stream
     let mut sink_writers = vec![];
     let mut buffer_readers = vec![];
     for stream in reader_config.streams.clone() {
-        let tracker_handle = TrackerHandle::new(callback_handler.clone());
+        let tracker_handle =
+            TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
 
         let buffer_reader = create_buffer_reader(
+            config.vertex_type_config.to_string(),
             stream,
             reader_config.clone(),
             js_context.clone(),
             tracker_handle.clone(),
             config.batch_size,
+            watermark_handle.clone(),
         )
         .await?;
         buffer_readers.push(buffer_reader);
@@ -306,6 +416,7 @@ async fn create_buffer_writer(
     js_context: Context,
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
+    watermark_handle: Option<WatermarkHandle>,
 ) -> JetstreamWriter {
     JetstreamWriter::new(
         config.to_vertex_config.clone(),
@@ -313,23 +424,27 @@ async fn create_buffer_writer(
         config.paf_concurrency,
         tracker_handle,
         cln_token,
+        watermark_handle,
     )
 }
 
 async fn create_buffer_reader(
-    stream: (&'static str, u16),
+    vertex_type: String,
+    stream: Stream,
     reader_config: BufferReaderConfig,
     js_context: Context,
     tracker_handle: TrackerHandle,
     batch_size: usize,
-) -> Result<JetstreamReader> {
-    JetstreamReader::new(
-        stream.0,
-        stream.1,
+    watermark_handle: Option<ISBWatermarkHandle>,
+) -> Result<JetStreamReader> {
+    JetStreamReader::new(
+        vertex_type,
+        stream,
         js_context,
         reader_config,
         tracker_handle,
         batch_size,
+        watermark_handle,
     )
     .await
 }
@@ -390,11 +505,11 @@ mod tests {
     async fn test_forwarder_for_source_vertex() {
         // Unique names for the streams we use in this test
         let streams = vec![
-            "default-test-forwarder-for-source-vertex-out-0",
-            "default-test-forwarder-for-source-vertex-out-1",
-            "default-test-forwarder-for-source-vertex-out-2",
-            "default-test-forwarder-for-source-vertex-out-3",
-            "default-test-forwarder-for-source-vertex-out-4",
+            Stream::new("default-test-forwarder-for-source-vertex-out-0", "test", 0),
+            Stream::new("default-test-forwarder-for-source-vertex-out-1", "test", 1),
+            Stream::new("default-test-forwarder-for-source-vertex-out-2", "test", 2),
+            Stream::new("default-test-forwarder-for-source-vertex-out-3", "test", 3),
+            Stream::new("default-test-forwarder-for-source-vertex-out-4", "test", 4),
         ];
 
         let js_url = "localhost:4222";
@@ -405,14 +520,13 @@ mod tests {
         // Create streams to which the generator source vertex we create later will forward
         // messages to. The consumers created for the corresponding streams will be used to ensure
         // that messages were actually written to the streams.
-        for stream_name in &streams {
-            let stream_name = *stream_name;
+        for stream in &streams {
             // Delete stream if it exists
-            let _ = context.delete_stream(stream_name).await;
+            let _ = context.delete_stream(stream.name).await;
             let _stream = context
                 .get_or_create_stream(stream::Config {
-                    name: stream_name.into(),
-                    subjects: vec![stream_name.into()],
+                    name: stream.name.to_string(),
+                    subjects: vec![stream.name.into()],
                     max_message_size: 64 * 1024,
                     max_messages: 10000,
                     ..Default::default()
@@ -423,20 +537,20 @@ mod tests {
             let c: consumer::PullConsumer = context
                 .create_consumer_on_stream(
                     consumer::pull::Config {
-                        name: Some(stream_name.to_string()),
+                        name: Some(stream.to_string()),
                         ack_policy: consumer::AckPolicy::Explicit,
                         ..Default::default()
                     },
-                    stream_name,
+                    stream.name,
                 )
                 .await
                 .unwrap();
-            consumers.push((stream_name.to_string(), c));
+            consumers.push((stream.to_string(), c));
         }
 
         let pipeline_config = PipelineConfig {
-            pipeline_name: "simple-pipeline".to_string(),
-            vertex_name: "in".to_string(),
+            pipeline_name: "simple-pipeline",
+            vertex_name: "in",
             replica: 0,
             batch_size: 1000,
             paf_concurrency: 30000,
@@ -448,21 +562,17 @@ mod tests {
             },
             from_vertex_config: vec![],
             to_vertex_config: vec![ToVertexConfig {
-                name: "out".to_string(),
+                name: "out",
+                partitions: 5,
                 writer_config: BufferWriterConfig {
-                    streams: streams
-                        .iter()
-                        .enumerate()
-                        .map(|(i, stream_name)| ((*stream_name).to_string(), i as u16))
-                        .collect(),
-                    partitions: 5,
+                    streams: streams.clone(),
                     max_length: 30000,
                     usage_limit: 0.8,
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
             }],
-            vertex_config: VertexType::Source(SourceVtxConfig {
+            vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Generator(GeneratorConfig {
@@ -483,6 +593,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            watermark_config: None,
             callback_config: None,
         };
 
@@ -520,8 +631,8 @@ mod tests {
         }
 
         // Delete all streams created in this test
-        for stream_name in streams {
-            context.delete_stream(stream_name).await.unwrap();
+        for stream in streams {
+            context.delete_stream(stream.name).await.unwrap();
         }
     }
 
@@ -532,11 +643,11 @@ mod tests {
     async fn test_forwarder_for_sink_vertex() {
         // Unique names for the streams we use in this test
         let streams = vec![
-            "default-test-forwarder-for-sink-vertex-out-0",
-            "default-test-forwarder-for-sink-vertex-out-1",
-            "default-test-forwarder-for-sink-vertex-out-2",
-            "default-test-forwarder-for-sink-vertex-out-3",
-            "default-test-forwarder-for-sink-vertex-out-4",
+            Stream::new("default-test-forwarder-for-sink-vertex-out-0", "test", 0),
+            Stream::new("default-test-forwarder-for-sink-vertex-out-1", "test", 1),
+            Stream::new("default-test-forwarder-for-sink-vertex-out-2", "test", 2),
+            Stream::new("default-test-forwarder-for-sink-vertex-out-3", "test", 3),
+            Stream::new("default-test-forwarder-for-sink-vertex-out-4", "test", 4),
         ];
 
         let js_url = "localhost:4222";
@@ -545,14 +656,13 @@ mod tests {
 
         const MESSAGE_COUNT: usize = 10;
         let mut consumers = vec![];
-        for stream_name in &streams {
-            let stream_name = *stream_name;
+        for stream in &streams {
             // Delete stream if it exists
-            let _ = context.delete_stream(stream_name).await;
+            let _ = context.delete_stream(stream.name).await;
             let _stream = context
                 .get_or_create_stream(stream::Config {
-                    name: stream_name.into(),
-                    subjects: vec![stream_name.into()],
+                    name: stream.name.into(),
+                    subjects: vec![stream.name.into()],
                     max_message_size: 64 * 1024,
                     max_messages: 10000,
                     ..Default::default()
@@ -565,11 +675,13 @@ mod tests {
 
             use crate::message::{Message, MessageID, Offset, StringOffset};
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec!["key1".to_string()]),
                 tags: None,
                 value: vec![1, 2, 3].into(),
-                offset: Some(Offset::String(StringOffset::new("123".to_string(), 0))),
+                offset: Offset::String(StringOffset::new("123".to_string(), 0)),
                 event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: "123".to_string().into(),
@@ -582,7 +694,7 @@ mod tests {
 
             for _ in 0..MESSAGE_COUNT {
                 context
-                    .publish(stream_name.to_string(), message.clone().into())
+                    .publish(stream.name, message.clone().into())
                     .await
                     .unwrap()
                     .await
@@ -592,20 +704,20 @@ mod tests {
             let c: consumer::PullConsumer = context
                 .create_consumer_on_stream(
                     consumer::pull::Config {
-                        name: Some(stream_name.to_string()),
+                        name: Some(stream.name.to_string()),
                         ack_policy: consumer::AckPolicy::Explicit,
                         ..Default::default()
                     },
-                    stream_name,
+                    stream.name,
                 )
                 .await
                 .unwrap();
-            consumers.push((stream_name.to_string(), c));
+            consumers.push((stream.name.to_string(), c));
         }
 
         let pipeline_config = PipelineConfig {
-            pipeline_name: "simple-pipeline".to_string(),
-            vertex_name: "in".to_string(),
+            pipeline_name: "simple-pipeline",
+            vertex_name: "in",
             replica: 0,
             batch_size: 1000,
             paf_concurrency: 1000,
@@ -617,19 +729,14 @@ mod tests {
             },
             to_vertex_config: vec![],
             from_vertex_config: vec![FromVertexConfig {
-                name: "in".to_string(),
+                name: "in",
                 reader_config: BufferReaderConfig {
-                    partitions: 5,
-                    streams: streams
-                        .iter()
-                        .enumerate()
-                        .map(|(i, key)| (*key, i as u16))
-                        .collect(),
+                    streams: streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
             }],
-            vertex_config: VertexType::Sink(SinkVtxConfig {
+            vertex_type_config: VertexType::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::Blackhole(BlackholeConfig::default()),
                     retry_config: None,
@@ -642,6 +749,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            watermark_config: None,
             callback_config: None,
         };
 
@@ -679,8 +787,8 @@ mod tests {
         }
 
         // Delete all streams created in this test
-        for stream_name in streams {
-            context.delete_stream(stream_name).await.unwrap();
+        for stream in streams {
+            context.delete_stream(stream.name).await.unwrap();
         }
     }
 
@@ -721,19 +829,19 @@ mod tests {
 
         // Unique names for the streams we use in this test
         let input_streams = vec![
-            "default-test-forwarder-for-map-vertex-in-0",
-            "default-test-forwarder-for-map-vertex-in-1",
-            "default-test-forwarder-for-map-vertex-in-2",
-            "default-test-forwarder-for-map-vertex-in-3",
-            "default-test-forwarder-for-map-vertex-in-4",
+            Stream::new("default-test-forwarder-for-map-vertex-in-0", "test", 0),
+            Stream::new("default-test-forwarder-for-map-vertex-in-1", "test", 1),
+            Stream::new("default-test-forwarder-for-map-vertex-in-2", "test", 2),
+            Stream::new("default-test-forwarder-for-map-vertex-in-3", "test", 3),
+            Stream::new("default-test-forwarder-for-map-vertex-in-4", "test", 4),
         ];
 
         let output_streams = vec![
-            "default-test-forwarder-for-map-vertex-out-0",
-            "default-test-forwarder-for-map-vertex-out-1",
-            "default-test-forwarder-for-map-vertex-out-2",
-            "default-test-forwarder-for-map-vertex-out-3",
-            "default-test-forwarder-for-map-vertex-out-4",
+            Stream::new("default-test-forwarder-for-map-vertex-out-0", "test", 0),
+            Stream::new("default-test-forwarder-for-map-vertex-out-1", "test", 1),
+            Stream::new("default-test-forwarder-for-map-vertex-out-2", "test", 2),
+            Stream::new("default-test-forwarder-for-map-vertex-out-3", "test", 3),
+            Stream::new("default-test-forwarder-for-map-vertex-out-4", "test", 4),
         ];
 
         let js_url = "localhost:4222";
@@ -743,14 +851,13 @@ mod tests {
         const MESSAGE_COUNT: usize = 10;
         let mut input_consumers = vec![];
         let mut output_consumers = vec![];
-        for stream_name in &input_streams {
-            let stream_name = *stream_name;
+        for stream in &input_streams {
             // Delete stream if it exists
-            let _ = context.delete_stream(stream_name).await;
+            let _ = context.delete_stream(stream.name).await;
             let _stream = context
                 .get_or_create_stream(stream::Config {
-                    name: stream_name.into(),
-                    subjects: vec![stream_name.into()],
+                    name: stream.name.to_string(),
+                    subjects: vec![stream.name.to_string()],
                     max_message_size: 64 * 1024,
                     max_messages: 10000,
                     ..Default::default()
@@ -763,11 +870,13 @@ mod tests {
 
             use crate::message::{Message, MessageID, Offset, StringOffset};
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec!["key1".to_string()]),
                 tags: None,
                 value: vec![1, 2, 3].into(),
-                offset: Some(Offset::String(StringOffset::new("123".to_string(), 0))),
+                offset: Offset::String(StringOffset::new("123".to_string(), 0)),
                 event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: "123".to_string().into(),
@@ -780,7 +889,7 @@ mod tests {
 
             for _ in 0..MESSAGE_COUNT {
                 context
-                    .publish(stream_name.to_string(), message.clone().into())
+                    .publish(stream.name, message.clone().into())
                     .await
                     .unwrap()
                     .await
@@ -790,27 +899,26 @@ mod tests {
             let c: consumer::PullConsumer = context
                 .create_consumer_on_stream(
                     consumer::pull::Config {
-                        name: Some(stream_name.to_string()),
+                        name: Some(stream.name.to_string()),
                         ack_policy: consumer::AckPolicy::Explicit,
                         ..Default::default()
                     },
-                    stream_name,
+                    stream.name,
                 )
                 .await
                 .unwrap();
 
-            input_consumers.push((stream_name.to_string(), c));
+            input_consumers.push((stream.name.to_string(), c));
         }
 
         // Create output streams and consumers
-        for stream_name in &output_streams {
-            let stream_name = *stream_name;
+        for stream in &output_streams {
             // Delete stream if it exists
-            let _ = context.delete_stream(stream_name).await;
+            let _ = context.delete_stream(stream.name).await;
             let _stream = context
                 .get_or_create_stream(stream::Config {
-                    name: stream_name.into(),
-                    subjects: vec![stream_name.into()],
+                    name: stream.name.to_string(),
+                    subjects: vec![stream.name.into()],
                     max_message_size: 64 * 1024,
                     max_messages: 1000,
                     ..Default::default()
@@ -821,20 +929,20 @@ mod tests {
             let c: consumer::PullConsumer = context
                 .create_consumer_on_stream(
                     consumer::pull::Config {
-                        name: Some(stream_name.to_string()),
+                        name: Some(stream.name.to_string()),
                         ack_policy: consumer::AckPolicy::Explicit,
                         ..Default::default()
                     },
-                    stream_name,
+                    stream.name,
                 )
                 .await
                 .unwrap();
-            output_consumers.push((stream_name.to_string(), c));
+            output_consumers.push((stream.name.to_string(), c));
         }
 
         let pipeline_config = PipelineConfig {
-            pipeline_name: "simple-map-pipeline".to_string(),
-            vertex_name: "in".to_string(),
+            pipeline_name: "simple-map-pipeline",
+            vertex_name: "in",
             replica: 0,
             batch_size: 1000,
             paf_concurrency: 1000,
@@ -845,14 +953,10 @@ mod tests {
                 password: None,
             },
             to_vertex_config: vec![ToVertexConfig {
-                name: "map-out".to_string(),
+                name: "map-out",
+                partitions: 5,
                 writer_config: BufferWriterConfig {
-                    streams: output_streams
-                        .iter()
-                        .enumerate()
-                        .map(|(i, stream_name)| ((*stream_name).to_string(), i as u16))
-                        .collect(),
-                    partitions: 5,
+                    streams: output_streams.clone(),
                     max_length: 30000,
                     usage_limit: 0.8,
                     buffer_full_strategy: RetryUntilSuccess,
@@ -860,19 +964,14 @@ mod tests {
                 conditions: None,
             }],
             from_vertex_config: vec![FromVertexConfig {
-                name: "map-in".to_string(),
+                name: "map-in",
                 reader_config: BufferReaderConfig {
-                    partitions: 5,
-                    streams: input_streams
-                        .iter()
-                        .enumerate()
-                        .map(|(i, key)| (*key, i as u16))
-                        .collect(),
+                    streams: input_streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
                 },
                 partitions: 0,
             }],
-            vertex_config: VertexType::Map(MapVtxConfig {
+            vertex_type_config: VertexType::Map(MapVtxConfig {
                 concurrency: 10,
                 map_type: MapType::UserDefined(UserDefinedConfig {
                     grpc_max_message_size: 4 * 1024 * 1024,
@@ -887,6 +986,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
+            watermark_config: None,
             callback_config: None,
         };
 
@@ -924,8 +1024,8 @@ mod tests {
         }
 
         // Delete all streams created in this test
-        for stream_name in input_streams.iter().chain(output_streams.iter()) {
-            context.delete_stream(stream_name).await.unwrap();
+        for stream in input_streams.iter().chain(output_streams.iter()) {
+            context.delete_stream(stream.name).await.unwrap();
         }
     }
 }

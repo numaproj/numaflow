@@ -20,7 +20,7 @@ package wmb
 import (
 	"google.golang.org/protobuf/proto"
 
-	wmbpb "github.com/numaproj/numaflow/pkg/apis/proto/wmb"
+	wmbpb "github.com/numaproj/numaflow/pkg/apis/proto/watermark"
 )
 
 // WMB is used in the KV offset timeline bucket as the value for the given processor entity key.

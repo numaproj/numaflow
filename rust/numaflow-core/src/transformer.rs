@@ -1,15 +1,16 @@
 use std::sync::Arc;
 
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use tokio::sync::{mpsc, oneshot, Semaphore};
+use tonic::transport::Channel;
+use tracing::info;
+
 use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{monovertex_metrics, mvtx_forward_metric_labels};
 use crate::tracker::TrackerHandle;
 use crate::transformer::user_defined::UserDefinedTransformer;
 use crate::Result;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use tokio::sync::{mpsc, oneshot, Semaphore};
-use tonic::transport::Channel;
-use tracing::info;
 
 /// User-Defined Transformer is a custom transformer that can be built by the user.
 ///
@@ -148,12 +149,10 @@ impl Transformer {
                     // update the tracker with the number of responses for each message
                     for message in transformed_messages.iter() {
                         tracker_handle
-                            .update(read_msg.id.offset.clone(), message.tags.clone())
+                            .update(read_msg.offset.clone(), message.tags.clone())
                             .await?;
                     }
-                    tracker_handle
-                        .update_eof(read_msg.id.offset.clone())
-                        .await?;
+                    tracker_handle.update_eof(read_msg.offset.clone()).await?;
 
                     Ok::<Vec<Message>, Error>(transformed_messages)
                 })
@@ -221,17 +220,19 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
 
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
@@ -245,7 +246,7 @@ mod tests {
             Transformer::transform(transformer.sender.clone(), message).await;
 
         assert!(transformed_messages.is_ok());
-        let transformed_messages = transformed_messages.unwrap();
+        let transformed_messages = transformed_messages?;
         assert_eq!(transformed_messages.len(), 1);
         assert_eq!(transformed_messages[0].value, "hello");
 
@@ -285,18 +286,20 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
 
         let mut messages = vec![];
         for i in 0..5 {
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("value_{}", i).into(),
-                offset: Some(Offset::String(StringOffset::new(i.to_string(), 0))),
+                offset: Offset::String(StringOffset::new(i.to_string(), 0)),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: i.to_string().into(),
@@ -361,16 +364,18 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None);
+        let tracker_handle = TrackerHandle::new(None, None);
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
 
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
