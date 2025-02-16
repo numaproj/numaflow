@@ -3,13 +3,12 @@ use std::sync::Arc;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use redis::aio::ConnectionManager;
-use redis::RedisError;
+use redis::{AsyncCommands, RedisError};
 use tokio::sync::Semaphore;
 
 use super::PayloadToSave;
 use crate::app::callback::Callback;
 use crate::config::RedisConfig;
-use crate::consts::SAVED;
 use crate::Error;
 use crate::Error::Connection;
 
@@ -91,6 +90,7 @@ async fn handle_write_requests(
             let value = serde_json::to_vec(&*value)
                 .map_err(|e| Error::StoreWrite(format!("Serializing payload - {}", e)))?;
 
+            let key = format!("requests:{key}:callbacks");
             redis_conn.write_to_redis(&key, &value).await
         }
 
@@ -98,7 +98,7 @@ async fn handle_write_requests(
         PayloadToSave::DatumFromPipeline { key, value } => {
             // we have to differentiate between the saved responses and the callback requests
             // saved responses are stored in "id_SAVED", callback requests are stored in "id"
-            let key = format!("{}_{}", key, SAVED);
+            let key = format!("requests:{key}:results");
             let value: Vec<u8> = value.into();
 
             redis_conn.write_to_redis(&key, &value).await
@@ -109,6 +109,12 @@ async fn handle_write_requests(
 // It is possible to move the methods defined here to be methods on the Redis actor and communicate through channels.
 // With that, all public APIs defined on RedisConnection can be on &self (immutable).
 impl super::Store for RedisConnection {
+    async fn register(&mut self, id: String) -> crate::Result<()> {
+        self.conn_manager
+            .set_nx(format!("request:{id}:status"), "processing")
+            .await
+            .map_err(|e| Error::StoreWrite(format!("Registering request_id in Redis: {e:?}")))
+    }
     // Attempt to save all payloads. Returns error if we fail to save at least one message.
     async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()> {
         let mut tasks = vec![];
@@ -131,8 +137,9 @@ impl super::Store for RedisConnection {
     }
 
     async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<Callback>>, Error> {
+        let redis_key = format!("requests:{id}:callbacks");
         let result: Result<Vec<Vec<u8>>, RedisError> = redis::cmd(LRANGE)
-            .arg(id)
+            .arg(redis_key)
             .arg(0)
             .arg(-1)
             .query_async(&mut self.conn_manager)
@@ -165,7 +172,7 @@ impl super::Store for RedisConnection {
 
     async fn retrieve_datum(&mut self, id: &str) -> Result<Vec<Vec<u8>>, Error> {
         // saved responses are stored in "id_SAVED"
-        let key = format!("{}_{}", id, SAVED);
+        let key = format!("requests:{id}:results");
         let result: Result<Vec<Vec<u8>>, RedisError> = redis::cmd(LRANGE)
             .arg(key)
             .arg(0)

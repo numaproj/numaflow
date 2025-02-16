@@ -43,18 +43,24 @@ where
 
     /// register a new connection
     /// The oneshot receiver will be notified when all callbacks for this connection is received from the numaflow pipeline
-    pub(crate) fn register(&mut self, id: String) -> oneshot::Receiver<Result<String, Error>> {
+    pub(crate) async fn register(
+        &mut self,
+        id: String,
+    ) -> oneshot::Receiver<Result<String, Error>> {
         // TODO: add an entry in Redis to note that the entry has been registered
 
         let (tx, rx) = oneshot::channel();
-        let mut guard = self.callbacks.lock().expect("Getting lock on State");
-        guard.insert(
-            id.clone(),
-            RequestState {
-                tx,
-                vtx_visited: Vec::new(),
-            },
-        );
+        {
+            let mut guard = self.callbacks.lock().expect("Getting lock on State");
+            guard.insert(
+                id.clone(),
+                RequestState {
+                    tx,
+                    vtx_visited: Vec::new(),
+                },
+            );
+        }
+        self.store.register(id).await.unwrap(); // FIXME:
         rx
     }
 
@@ -243,7 +249,7 @@ mod tests {
 
         // Test register
         let id = "test_id".to_string();
-        let rx = state.register(id.clone());
+        let rx = state.register(id.clone()).await;
 
         let xid = id.clone();
 

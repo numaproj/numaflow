@@ -21,6 +21,7 @@ pub(crate) enum PayloadToSave {
 #[trait_variant::make(Store: Send)]
 #[allow(dead_code)]
 pub(crate) trait LocalStore {
+    async fn register(&mut self, id: String) -> crate::Result<()>;
     async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()>;
     /// retrieve the callback payloads
     async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<Callback>>, crate::Error>;

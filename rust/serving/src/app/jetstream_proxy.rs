@@ -66,7 +66,7 @@ async fn sync_publish_serve<T: Send + Sync + Clone + Store>(
     let id = extract_id_from_headers(&proxy_state.tid_header, &headers);
 
     // Register the ID in the callback proxy state
-    let notify = proxy_state.callback.clone().register(id.clone());
+    let notify = proxy_state.callback.clone().register(id.clone()).await;
 
     let mut msg_headers: HashMap<String, String> = HashMap::new();
     for (key, value) in headers.iter() {
@@ -168,7 +168,7 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
     };
 
     // Register the ID in the callback proxy state
-    let notify = proxy_state.callback.clone().register(id.clone());
+    let notify = proxy_state.callback.clone().register(id.clone()).await;
     proxy_state.message.send(message).await.unwrap(); // FIXME:
 
     if let Err(e) = rx.await {
@@ -279,6 +279,9 @@ mod tests {
     struct MockStore;
 
     impl Store for MockStore {
+        async fn register(&mut self, _id: String) -> crate::Result<()> {
+            Ok(())
+        }
         async fn save(&mut self, _messages: Vec<PayloadToSave>) -> crate::Result<()> {
             Ok(())
         }

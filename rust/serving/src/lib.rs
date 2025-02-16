@@ -17,7 +17,6 @@ mod app;
 mod config;
 pub use {config::Settings, config::DEFAULT_CALLBACK_URL_HEADER_KEY, config::DEFAULT_ID_HEADER};
 
-mod consts;
 mod error;
 mod metrics;
 mod pipeline;

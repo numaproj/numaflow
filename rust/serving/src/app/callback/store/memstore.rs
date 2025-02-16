@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use super::PayloadToSave;
 use crate::app::callback::Callback;
-use crate::consts::SAVED;
 use crate::Error;
 
 /// `InMemoryStore` is an in-memory implementation of the `Store` trait.
@@ -26,6 +25,9 @@ impl InMemoryStore {
 }
 
 impl super::Store for InMemoryStore {
+    async fn register(&mut self, _id: String) -> crate::Result<()> {
+        Ok(())
+    }
     /// Saves a vector of `PayloadToSave` into the `HashMap`.
     /// Each `PayloadToSave` is serialized into bytes and stored in the `HashMap` under its key.
     async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()> {
@@ -44,7 +46,7 @@ impl super::Store for InMemoryStore {
                     if key.is_empty() {
                         return Err(Error::StoreWrite("Key cannot be empty".to_string()));
                     }
-                    data.entry(format!("{}_{}", key, SAVED))
+                    data.entry(format!("{}_{}", key, "saved"))
                         .or_default()
                         .push(value.into());
                 }
@@ -79,7 +81,7 @@ impl super::Store for InMemoryStore {
     /// Retrieves data for a given id from the `HashMap`.
     /// Each piece of data is deserialized from bytes into a `String`.
     async fn retrieve_datum(&mut self, id: &str) -> Result<Vec<Vec<u8>>, Error> {
-        let id = format!("{}_{}", id, SAVED);
+        let id = format!("{}_{}", id, "saved");
         let data = self.data.lock().unwrap();
         match data.get(&id) {
             Some(result) => Ok(result.to_vec()),
