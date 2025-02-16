@@ -126,7 +126,7 @@ mod tests {
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec).unwrap();
         let mut state = CallbackState::new(msg_graph, store).await.unwrap();
 
-        let x = state.register("test_id".to_string());
+        let x = state.register("test_id".to_string()).await;
         // spawn a task which will be awaited later
         let handle = tokio::spawn(async move {
             let _ = x.await.unwrap();

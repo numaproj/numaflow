@@ -5,7 +5,7 @@ use std::{
 
 use tokio::sync::oneshot;
 
-use super::store::Store;
+use super::store::{PipelineResult, Store};
 use crate::app::callback::{store::PayloadToSave, Callback};
 use crate::app::tracker::MessageGraph;
 use crate::Error;
@@ -43,23 +43,29 @@ where
 
     /// register a new connection
     /// The oneshot receiver will be notified when all callbacks for this connection is received from the numaflow pipeline
-    pub(crate) fn register(&mut self, id: String) -> oneshot::Receiver<Result<String, Error>> {
+    pub(crate) async fn register(
+        &mut self,
+        id: String,
+    ) -> oneshot::Receiver<Result<String, Error>> {
         // TODO: add an entry in Redis to note that the entry has been registered
 
         let (tx, rx) = oneshot::channel();
-        let mut guard = self.callbacks.lock().expect("Getting lock on State");
-        guard.insert(
-            id.clone(),
-            RequestState {
-                tx,
-                vtx_visited: Vec::new(),
-            },
-        );
+        {
+            let mut guard = self.callbacks.lock().expect("Getting lock on State");
+            guard.insert(
+                id.clone(),
+                RequestState {
+                    tx,
+                    vtx_visited: Vec::new(),
+                },
+            );
+        }
+        self.store.register(id).await.unwrap(); // FIXME:
         rx
     }
 
     /// Retrieves the output of the numaflow pipeline
-    pub(crate) async fn retrieve_saved(&mut self, id: &str) -> Result<Vec<Vec<u8>>, Error> {
+    pub(crate) async fn retrieve_saved(&mut self, id: &str) -> Result<PipelineResult, Error> {
         self.store.retrieve_datum(id).await
     }
 
@@ -104,13 +110,11 @@ where
             let id = cbr.id.clone();
             {
                 let mut guard = self.callbacks.lock().expect("Getting lock on State");
-                guard
-                    .get_mut(&cbr.id)
-                    .ok_or(Error::IDNotFound(
-                        "Connection for the received callback is not present in the in-memory store",
-                    ))?
-                    .vtx_visited
-                    .push(cbr);
+                let Some(req_state) = guard.get_mut(&id) else {
+                    tracing::debug!(id, "Request is not found in in-memory store");
+                    continue;
+                };
+                req_state.vtx_visited.push(cbr);
             }
 
             // check if the sub graph can be generated
@@ -125,7 +129,8 @@ where
                             // if the sub graph is not generated, then we can continue
                             continue;
                         }
-                        _ => {
+                        err => {
+                            tracing::error!(?err, "Failed to generate subgraph");
                             // if there is an error, deregister with the error
                             self.deregister(&id).await?
                         }
@@ -190,6 +195,8 @@ where
             ));
         };
 
+        self.store.deregister(id.to_string()).await.unwrap(); // FIXME:
+
         state
             .tx
             .send(Ok(id.to_string()))
@@ -244,7 +251,7 @@ mod tests {
 
         // Test register
         let id = "test_id".to_string();
-        let rx = state.register(id.clone());
+        let rx = state.register(id.clone()).await;
 
         let xid = id.clone();
 
@@ -262,7 +269,10 @@ mod tests {
 
         // Test retrieve_saved
         let saved = state.retrieve_saved(&id).await.unwrap();
-        assert_eq!(saved, vec!["Test Message".as_bytes()]);
+        assert_eq!(
+            saved,
+            PipelineResult::Completed(vec!["Test Message".as_bytes().to_vec()])
+        );
 
         // Test insert_callback_requests
         let cbs = vec![

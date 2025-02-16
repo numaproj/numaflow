@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::PayloadToSave;
+use super::{PayloadToSave, PipelineResult};
 use crate::app::callback::Callback;
-use crate::consts::SAVED;
 use crate::Error;
 
 /// `InMemoryStore` is an in-memory implementation of the `Store` trait.
@@ -26,6 +25,12 @@ impl InMemoryStore {
 }
 
 impl super::Store for InMemoryStore {
+    async fn register(&mut self, _id: String) -> crate::Result<()> {
+        Ok(())
+    }
+    async fn deregister(&mut self, _id: String) -> crate::Result<()> {
+        Ok(())
+    }
     /// Saves a vector of `PayloadToSave` into the `HashMap`.
     /// Each `PayloadToSave` is serialized into bytes and stored in the `HashMap` under its key.
     async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()> {
@@ -44,7 +49,7 @@ impl super::Store for InMemoryStore {
                     if key.is_empty() {
                         return Err(Error::StoreWrite("Key cannot be empty".to_string()));
                     }
-                    data.entry(format!("{}_{}", key, SAVED))
+                    data.entry(format!("{}_{}", key, "saved"))
                         .or_default()
                         .push(value.into());
                 }
@@ -78,11 +83,11 @@ impl super::Store for InMemoryStore {
 
     /// Retrieves data for a given id from the `HashMap`.
     /// Each piece of data is deserialized from bytes into a `String`.
-    async fn retrieve_datum(&mut self, id: &str) -> Result<Vec<Vec<u8>>, Error> {
-        let id = format!("{}_{}", id, SAVED);
+    async fn retrieve_datum(&mut self, id: &str) -> Result<PipelineResult, Error> {
+        let id = format!("{}_{}", id, "saved");
         let data = self.data.lock().unwrap();
         match data.get(&id) {
-            Some(result) => Ok(result.to_vec()),
+            Some(result) => Ok(PipelineResult::Completed(result.to_vec())),
             None => Err(Error::StoreRead(format!("No entry found for id: {}", id))),
         }
     }
@@ -146,6 +151,9 @@ mod tests {
 
         // Retrieve the datum
         let retrieved = store.retrieve_datum(&key).await.unwrap();
+        let PipelineResult::Completed(retrieved) = retrieved else {
+            panic!("Expected pipeline processing to be completed");
+        };
 
         // Check that the retrieved datum is the same as the one we saved
         assert_eq!(retrieved.len(), 1);
