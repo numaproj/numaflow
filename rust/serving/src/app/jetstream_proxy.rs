@@ -282,6 +282,9 @@ mod tests {
         async fn register(&mut self, _id: String) -> crate::Result<()> {
             Ok(())
         }
+        async fn deregister(&mut self, _id: String) -> crate::Result<()> {
+            Ok(())
+        }
         async fn save(&mut self, _messages: Vec<PayloadToSave>) -> crate::Result<()> {
             Ok(())
         }

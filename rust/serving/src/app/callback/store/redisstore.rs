@@ -113,7 +113,17 @@ impl super::Store for RedisConnection {
         self.conn_manager
             .set_nx(format!("request:{id}:status"), "processing")
             .await
-            .map_err(|e| Error::StoreWrite(format!("Registering request_id in Redis: {e:?}")))
+            .map_err(|e| Error::StoreWrite(format!("Registering request_id={id} in Redis: {e:?}")))
+    }
+    async fn deregister(&mut self, id: String) -> crate::Result<()> {
+        self.conn_manager
+            .set(format!("request:{id}:status"), "completed")
+            .await
+            .map_err(|e| {
+                Error::StoreWrite(format!(
+                    "Setting processing status as completed in Redis for request_id={id}: {e:?}"
+                ))
+            })
     }
     // Attempt to save all payloads. Returns error if we fail to save at least one message.
     async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()> {

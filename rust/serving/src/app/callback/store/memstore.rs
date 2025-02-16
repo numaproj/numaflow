@@ -28,6 +28,9 @@ impl super::Store for InMemoryStore {
     async fn register(&mut self, _id: String) -> crate::Result<()> {
         Ok(())
     }
+    async fn deregister(&mut self, _id: String) -> crate::Result<()> {
+        Ok(())
+    }
     /// Saves a vector of `PayloadToSave` into the `HashMap`.
     /// Each `PayloadToSave` is serialized into bytes and stored in the `HashMap` under its key.
     async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()> {
