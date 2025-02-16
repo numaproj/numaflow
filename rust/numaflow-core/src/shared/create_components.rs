@@ -26,6 +26,7 @@ use crate::source::user_defined::new_source;
 use crate::source::Source;
 use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
+use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
 
 /// Creates a sink writer based on the configuration
@@ -272,6 +273,7 @@ pub async fn create_source(
     source_config: &SourceConfig,
     tracker_handle: TrackerHandle,
     transformer: Option<Transformer>,
+    watermark_handle: Option<SourceWatermarkHandle>,
     cln_token: CancellationToken,
 ) -> error::Result<(Source, Option<SourceClient<Channel>>)> {
     match &source_config.source_type {
@@ -285,6 +287,7 @@ pub async fn create_source(
                     tracker_handle,
                     source_config.read_ahead,
                     transformer,
+                    watermark_handle,
                 ),
                 None,
             ))
@@ -324,12 +327,19 @@ pub async fn create_source(
                     tracker_handle,
                     source_config.read_ahead,
                     transformer,
+                    watermark_handle,
                 ),
                 Some(source_grpc_client),
             ))
         }
         SourceType::Pulsar(pulsar_config) => {
-            let pulsar = new_pulsar_source(pulsar_config.clone(), batch_size, read_timeout).await?;
+            let pulsar = new_pulsar_source(
+                pulsar_config.clone(),
+                batch_size,
+                read_timeout,
+                *get_vertex_replica(),
+            )
+            .await?;
             Ok((
                 Source::new(
                     batch_size,
@@ -337,6 +347,7 @@ pub async fn create_source(
                     tracker_handle,
                     source_config.read_ahead,
                     transformer,
+                    watermark_handle,
                 ),
                 None,
             ))
@@ -356,6 +367,7 @@ pub async fn create_source(
                     tracker_handle,
                     source_config.read_ahead,
                     transformer,
+                    watermark_handle,
                 ),
                 None,
             ))

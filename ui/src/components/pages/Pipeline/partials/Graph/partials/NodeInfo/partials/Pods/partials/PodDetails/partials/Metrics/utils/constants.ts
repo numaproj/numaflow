@@ -1,9 +1,9 @@
-export const durationOptions = ["1m", "5m", "10m"];
+export const durationOptions = ["1m", "5m", "15m"];
 
 export const durationMap: { [p: string]: string } = {
   "1m": "1 min",
   "5m": "5 mins",
-  "10m": "10 mins",
+  "15m": "15 mins",
 };
 
 export const quantileOptions = ["0.50", "0.90", "0.95", "0.99"];
@@ -20,6 +20,7 @@ export const dimensionMap: { [p: string]: string } = {
   pod: "Pod",
   pipeline: "Pipeline",
   vertex: "Vertex",
+  container: "Container",
 };
 
 export const dimensionReverseMap: { [p: string]: string } = {
@@ -29,18 +30,18 @@ export const dimensionReverseMap: { [p: string]: string } = {
   sink: "vertex",
   pipeline: "pipeline",
   pod: "pod",
+  container: "container",
 };
 
-export const metricNameMap: { [p: string]: string } = {
-  monovtx_ack_time_bucket: "Mono Vertex Ack Time Latency",
-  monovtx_read_time_bucket: "Mono Vertex Read Time Latency",
-  monovtx_processing_time_bucket:
-    "Mono Vertex Processing Time Latency",
-  monovtx_sink_time_bucket:
-    "Mono Vertex Sink Write Time Latency",
-  forwarder_data_read_total:
-    "Vertex Read Processing Rate",
-  monovtx_read_total: "Mono Vertex Read Processing Rate",
-  monovtx_pending: "Mono Vertex Pending Messages",
-  vertex_pending_messages: "Vertex Pending Messages",
-};
+export const VERTEX_PENDING_MESSAGES = "Vertex Pending Messages";
+export const VERTEX_PROCESSING_RATE = "Vertex Read Processing Rate";
+export const MONO_VERTEX_PENDING_MESSAGES = "MonoVertex Pending Messages";
+export const MONO_VERTEX_PROCESSING_RATE = "MonoVertex Read Processing Rate";
+export const MONO_VERTEX_PROCESSING_TIME_LATENCY =
+  "MonoVertex Processing Time Latency";
+export const MONO_VERTEX_SINK_WRITE_TIME_LATENCY =
+  "MonoVertex Sink Write Time Latency";
+export const POD_CPU_UTILIZATION = "Pod CPU Utilization";
+export const POD_MEMORY_UTILIZATION = "Pod Memory Utilization";
+export const CONTAINER_CPU_UTILIZATION = "Container CPU Utilization";
+export const CONTAINER_MEMORY_UTILIZATION = "Container Memory Utilization";

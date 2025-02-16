@@ -97,7 +97,6 @@ export interface PodDetailProps {
   type: string;
   containerName: string;
   pod: Pod;
-  podDetails: PodDetail;
   vertexId: string;
 }
 export interface ContainerInfoProps {
@@ -126,6 +125,10 @@ export interface PodSpecificInfoProps {
   totalMemory: string;
 }
 export interface PodInfoProps {
+  namespaceId: string;
+  pipelineId: string;
+  vertexId: string;
+  type: string;
   pod: Pod;
   podDetails: PodDetail;
   containerName: string;

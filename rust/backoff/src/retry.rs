@@ -17,11 +17,11 @@ use crate::{Condition, Operation};
 ///     /
 /// (op)            (Ok) -> [Return(Ok)]*
 ///    \           /
-///     (Ready) ---       (Non-retriable) -> [Return(Err)]*
+///     (Ready) ---       (Non-retryable) -> [Return(Err)]*
 ///                \     /
 ///                 (Err)                            (None) -> [Return(Err)]*
 ///                      \                          /
-///                       (Retriable) ---> (Backoff)          (Pending)
+///                       (Retryable) ---> (Backoff)          (Pending)
 ///                                                \        /
 ///                                                  (Sleep)
 ///                                                        \

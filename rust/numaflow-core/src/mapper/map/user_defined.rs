@@ -33,11 +33,11 @@ impl From<Message> for MapRequest {
             request: Some(map::map_request::Request {
                 keys: message.keys.to_vec(),
                 value: message.value.to_vec(),
-                event_time: prost_timestamp_from_utc(message.event_time),
-                watermark: None,
+                event_time: Some(prost_timestamp_from_utc(message.event_time)),
+                watermark: message.watermark.map(prost_timestamp_from_utc),
                 headers: message.headers,
             }),
-            id: message.offset.unwrap().to_string(),
+            id: message.offset.to_string(),
             handshake: None,
             status: None,
         }
@@ -114,9 +114,9 @@ impl UserDefinedUnaryMap {
         message: Message,
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
     ) {
-        let key = message.offset.clone().unwrap().to_string();
+        let key = message.offset.clone().to_string();
         let msg_info = ParentMessageInfo {
-            offset: message.offset.clone().expect("offset can never be none"),
+            offset: message.offset.clone(),
             event_time: message.event_time,
             headers: message.headers.clone(),
         };
@@ -212,9 +212,9 @@ impl UserDefinedBatchMap {
         respond_to: Vec<oneshot::Sender<Result<Vec<Message>>>>,
     ) {
         for (message, respond_to) in messages.into_iter().zip(respond_to) {
-            let key = message.offset.clone().unwrap().to_string();
+            let key = message.offset.clone().to_string();
             let msg_info = ParentMessageInfo {
-                offset: message.offset.clone().expect("offset can never be none"),
+                offset: message.offset.clone(),
                 event_time: message.event_time,
                 headers: message.headers.clone(),
             };
@@ -250,6 +250,7 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
         let mut response_messages = vec![];
         for (i, result) in resp.results.into_iter().enumerate() {
             let message = Message {
+                typ: Default::default(),
                 id: MessageID {
                     vertex_name: get_vertex_name().to_string().into(),
                     index: i as i32,
@@ -258,9 +259,10 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
                 keys: Arc::from(result.keys),
                 tags: Some(Arc::from(result.tags)),
                 value: result.value.into(),
-                offset: Some(msg_info.offset.clone()),
+                offset: msg_info.offset.clone(),
                 event_time: msg_info.event_time,
                 headers: msg_info.headers.clone(),
+                watermark: None,
                 metadata: None,
             };
             response_messages.push(message);
@@ -377,6 +379,7 @@ impl UserDefinedStreamMap {
 
             for (i, result) in resp.results.into_iter().enumerate() {
                 let message = Message {
+                    typ: Default::default(),
                     id: MessageID {
                         vertex_name: get_vertex_name().to_string().into(),
                         index: i as i32,
@@ -385,9 +388,10 @@ impl UserDefinedStreamMap {
                     keys: Arc::from(result.keys),
                     tags: Some(Arc::from(result.tags)),
                     value: result.value.into(),
-                    offset: None,
+                    offset: message_info.offset.clone(),
                     event_time: message_info.event_time,
                     headers: message_info.headers.clone(),
+                    watermark: None,
                     metadata: None,
                 };
                 response_sender
@@ -411,9 +415,9 @@ impl UserDefinedStreamMap {
         message: Message,
         respond_to: mpsc::Sender<Result<Message>>,
     ) {
-        let key = message.offset.clone().unwrap().to_string();
+        let key = message.offset.clone().to_string();
         let msg_info = ParentMessageInfo {
-            offset: message.offset.clone().expect("offset can never be none"),
+            offset: message.offset.clone(),
             event_time: message.event_time,
             headers: message.headers.clone(),
         };
@@ -484,14 +488,13 @@ mod tests {
                 .await?;
 
         let message = crate::message::Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Some(crate::message::Offset::String(StringOffset::new(
-                "0".to_string(),
-                0,
-            ))),
+            offset: crate::message::Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
@@ -575,14 +578,13 @@ mod tests {
 
         let messages = vec![
             crate::message::Message {
+                typ: Default::default(),
                 keys: Arc::from(vec!["first".into()]),
                 tags: None,
                 value: "hello".into(),
-                offset: Some(crate::message::Offset::String(StringOffset::new(
-                    "0".to_string(),
-                    0,
-                ))),
+                offset: crate::message::Offset::String(StringOffset::new("0".to_string(), 0)),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "0".to_string().into(),
@@ -592,14 +594,13 @@ mod tests {
                 metadata: None,
             },
             crate::message::Message {
+                typ: Default::default(),
                 keys: Arc::from(vec!["second".into()]),
                 tags: None,
                 value: "world".into(),
-                offset: Some(crate::message::Offset::String(StringOffset::new(
-                    "1".to_string(),
-                    1,
-                ))),
+                offset: crate::message::Offset::String(StringOffset::new("1".to_string(), 1)),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: "1".to_string().into(),
@@ -692,14 +693,13 @@ mod tests {
                 .await?;
 
         let message = crate::message::Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "test,map,stream".into(),
-            offset: Some(crate::message::Offset::String(StringOffset::new(
-                "0".to_string(),
-                0,
-            ))),
+            offset: crate::message::Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),

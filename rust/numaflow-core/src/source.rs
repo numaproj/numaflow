@@ -1,6 +1,24 @@
+//! [Source] vertex is responsible for reliable reading data from an unbounded source into Numaflow
+//! and also assigning [Watermark].
+//!
+//! [Source]: https://numaflow.numaproj.io/user-guide/sources/overview/
+//! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
+
 use std::sync::Arc;
 
+use numaflow_pulsar::source::PulsarSource;
+use numaflow_sqs::source::SQSSource;
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
+use tokio::time::Instant;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info};
+
 use crate::config::{get_vertex_name, is_mono_vertex};
+use crate::error::{Error, Result};
 use crate::message::ReadAck;
 use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
@@ -9,19 +27,9 @@ use crate::metrics::{
 use crate::tracker::TrackerHandle;
 use crate::{
     message::{Message, Offset},
+    metrics,
     reader::LagReader,
 };
-use crate::{Error, Result};
-use numaflow_pulsar::source::PulsarSource;
-use tokio::sync::OwnedSemaphorePermit;
-use tokio::sync::Semaphore;
-use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinHandle;
-use tokio::time;
-use tokio::time::Instant;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -39,8 +47,12 @@ pub(crate) mod generator;
 pub(crate) mod pulsar;
 
 pub(crate) mod serving;
-use crate::transformer::Transformer;
+pub(crate) mod sqs;
+
 use serving::ServingSource;
+
+use crate::transformer::Transformer;
+use crate::watermark::source::SourceWatermarkHandle;
 
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
@@ -50,9 +62,8 @@ pub(crate) trait SourceReader {
 
     async fn read(&mut self) -> Result<Vec<Message>>;
 
-    #[allow(dead_code)]
     /// number of partitions processed by this source.
-    fn partitions(&self) -> Vec<u16>;
+    async fn partitions(&mut self) -> Result<Vec<u16>>;
 }
 
 /// Set of Ack related items that has to be implemented to become a Source.
@@ -73,6 +84,9 @@ pub(crate) enum SourceType {
         generator::GeneratorLagReader,
     ),
     Pulsar(PulsarSource),
+    #[allow(clippy::upper_case_acronyms)]
+    #[allow(dead_code)] // TODO(SQS): remove it when integrated with controller
+    SQS(SQSSource),
     Serving(ServingSource),
 }
 
@@ -90,6 +104,9 @@ enum ActorMessage {
     },
     Pending {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
+    },
+    Partitions {
+        respond_to: oneshot::Sender<Result<Vec<u16>>>,
     },
 }
 
@@ -136,6 +153,10 @@ where
                 let pending = self.lag_reader.pending().await;
                 let _ = respond_to.send(pending);
             }
+            ActorMessage::Partitions { respond_to } => {
+                let partitions = self.reader.partitions().await;
+                let _ = respond_to.send(partitions);
+            }
         }
     }
 
@@ -156,6 +177,7 @@ pub(crate) struct Source {
     read_ahead: bool,
     /// Transformer handler for transforming messages from Source.
     transformer: Option<Transformer>,
+    watermark_handle: Option<SourceWatermarkHandle>,
 }
 
 impl Source {
@@ -166,6 +188,7 @@ impl Source {
         tracker_handle: TrackerHandle,
         read_ahead: bool,
         transformer: Option<Transformer>,
+        watermark_handle: Option<SourceWatermarkHandle>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
         match src_type {
@@ -192,6 +215,17 @@ impl Source {
                     actor.run().await;
                 });
             }
+            SourceType::SQS(sqs_source) => {
+                tokio::spawn(async move {
+                    let actor = SourceActor::new(
+                        receiver,
+                        sqs_source.clone(),
+                        sqs_source.clone(),
+                        sqs_source,
+                    );
+                    actor.run().await;
+                });
+            }
             SourceType::Serving(serving) => {
                 tokio::spawn(async move {
                     let actor =
@@ -206,6 +240,7 @@ impl Source {
             tracker_handle,
             read_ahead,
             transformer,
+            watermark_handle,
         }
     }
 
@@ -218,7 +253,7 @@ impl Source {
         let _ = source_handle.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// ack the offsets by communicating with the ack actor.
@@ -233,7 +268,7 @@ impl Source {
         let _ = source_handle.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// get the pending messages count by communicating with the pending actor.
@@ -245,7 +280,19 @@ impl Source {
         let _ = self.sender.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
+    }
+
+    /// get the source partitions from which the source is reading from.
+    async fn partitions(source_handle: mpsc::Sender<ActorMessage>) -> Result<Vec<u16>> {
+        let (sender, receiver) = oneshot::channel();
+        let msg = ActorMessage::Partitions { respond_to: sender };
+        // Ignore send errors. If send fails, so does the recv.await below. There's no reason
+        // to check for the same failure twice.
+        let _ = source_handle.send(msg).await;
+        receiver
+            .await
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// Starts streaming messages from the source. It returns a stream of messages and
@@ -260,8 +307,14 @@ impl Source {
         let tracker_handle = self.tracker_handle.clone();
         let read_ahead_enabled = self.read_ahead;
         let mut transformer = self.transformer.clone();
+        let mut watermark_handle = self.watermark_handle.clone();
 
-        let pipeline_labels = pipeline_forward_metric_labels("Source", Some(get_vertex_name()));
+        let mut pipeline_labels = pipeline_forward_metric_labels("Source").clone();
+        pipeline_labels.push((
+            metrics::PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            get_vertex_name().to_string(),
+        ));
+
         let mvtx_labels = mvtx_forward_metric_labels();
 
         info!(?batch_size, "Started streaming source with batch size");
@@ -285,7 +338,7 @@ impl Source {
                         .expect("acquiring permit should not fail");
                 }
 
-                let read_start_time = time::Instant::now();
+                let read_start_time = Instant::now();
                 let messages = match Self::read(source_handle.clone()).await {
                     Ok(messages) => messages,
                     Err(e) => {
@@ -295,17 +348,24 @@ impl Source {
                 };
 
                 let msgs_len = messages.len();
+                Self::send_read_metrics(&pipeline_labels, mvtx_labels, read_start_time, msgs_len);
 
-                Self::send_read_metrics(pipeline_labels, mvtx_labels, read_start_time, msgs_len);
-
+                // attempt to publish idle watermark since we are not able to read any message from
+                // the source.
                 if msgs_len == 0 {
-                    continue;
+                    if let Some(watermark_handle) = watermark_handle.as_mut() {
+                        watermark_handle
+                            .publish_source_idle_watermark(
+                                Self::partitions(source_handle.clone()).await?,
+                            )
+                            .await;
+                    }
                 }
 
                 let mut ack_batch = Vec::with_capacity(msgs_len);
                 for message in messages.iter() {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
-                    let offset = message.offset.clone().expect("offset can never be none");
+                    let offset = message.offset.clone();
 
                     // insert the offset and the ack one shot in the tracker.
                     tracker_handle.insert(message, resp_ack_tx).await?;
@@ -334,6 +394,12 @@ impl Source {
                     None => messages,
                     Some(transformer) => transformer.transform_batch(messages).await?,
                 };
+
+                if let Some(watermark_handle) = watermark_handle.as_mut() {
+                    watermark_handle
+                        .generate_and_publish_source_watermark(&messages)
+                        .await;
+                }
 
                 // write the messages to downstream.
                 for message in messages {
@@ -373,10 +439,7 @@ impl Source {
         let start = Instant::now();
         if !offsets_to_ack.is_empty() {
             Self::ack(source_handle, offsets_to_ack).await?;
-        } else {
-            warn!("no messages to ack, perhaps all are to be `nack'ed`");
         }
-
         Self::send_ack_metrics(e2e_start_time, n, start);
 
         Ok(())
@@ -567,8 +630,9 @@ mod tests {
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
-            TrackerHandle::new(None),
+            TrackerHandle::new(None, None),
             true,
+            None,
             None,
         );
 
@@ -580,7 +644,7 @@ mod tests {
         for _ in 0..100 {
             let message = stream.next().await.unwrap();
             assert_eq!(message.value, "hello".as_bytes());
-            offsets.push(message.offset.clone().unwrap());
+            offsets.push(message.offset.clone());
         }
 
         // ack all the messages
@@ -589,6 +653,9 @@ mod tests {
         // since we acked all the messages, pending should be 0
         let pending = source.pending().await.unwrap();
         assert_eq!(pending, Some(0));
+
+        let partitions = Source::partitions(source.sender.clone()).await.unwrap();
+        assert_eq!(partitions, vec![1, 2]);
 
         cln_token.cancel();
         let _ = handle.await.unwrap();
