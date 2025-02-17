@@ -152,12 +152,12 @@ export function PodLogs({
               let isErrorMessage = false;
               try{
                 const jsonResponse = JSON.parse(value);
-                if (jsonResponse.errMsg) {
+                if (jsonResponse?.errMsg) {
                   // If there's an error message, set value to errMsg
                   value = jsonResponse.errMsg;
                   isErrorMessage = true;
                 }
-              }catch(e){
+              } catch {
                 //do nothing
               }
               setLogs((logs) => {
@@ -211,12 +211,12 @@ export function PodLogs({
                 let isErrorMessage = false;
                 try{
                   const jsonResponse = JSON.parse(value);
-                  if (jsonResponse.errMsg) {
+                  if (jsonResponse?.errMsg) {
                     // If there's an error message, set value to errMsg
                     value = jsonResponse.errMsg;
                     isErrorMessage = true;
                   }
-                }catch(e){
+                } catch {
                   //do nothing
                 }
                 setPreviousLogs((prevLogs) => {
@@ -263,15 +263,10 @@ export function PodLogs({
       return;
     }
     const searchLowerCase = search.toLowerCase();
-    const filtered = showPreviousLogs ? previousLogs.filter((log) =>
+    const filtered = (showPreviousLogs ? previousLogs : logs)?.filter((log) =>
       negateSearch
         ? !log.toLowerCase().includes(searchLowerCase)
-        : log.toLowerCase().includes(searchLowerCase)) :
-     logs.filter((log) =>
-      negateSearch
-        ? !log.toLowerCase().includes(searchLowerCase)
-        : log.toLowerCase().includes(searchLowerCase)
-    );
+        : log.toLowerCase().includes(searchLowerCase));
     
     if (!filtered.length) {
       filtered.push("No logs matching search.");
