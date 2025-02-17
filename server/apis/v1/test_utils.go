@@ -141,8 +141,9 @@ func fakeVertex(name string, phase dfv1.VertexPhase) *dfv1.Vertex {
 			Namespace: testNamespace,
 		},
 		Status: dfv1.VertexStatus{
-			Phase:    phase,
-			Replicas: 1,
+			Phase:           phase,
+			Replicas:        1,
+			DesiredReplicas: 1,
 		},
 		Spec: dfv1.VertexSpec{
 			Replicas: ptr.To[int32](1),

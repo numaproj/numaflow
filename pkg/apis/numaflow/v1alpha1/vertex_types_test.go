@@ -149,7 +149,12 @@ func TestGetVertexReplicas(t *testing.T) {
 	v.Spec.Replicas = ptr.To[int32](1000)
 	assert.Equal(t, 1, v.GetReplicas())
 	v.Spec.UDF.GroupBy = nil
-	assert.Equal(t, 1000, v.GetReplicas())
+	v.Spec.Scale.Max = ptr.To[int32](40)
+	v.Spec.Scale.Min = ptr.To[int32](20)
+	v.Spec.Replicas = ptr.To[int32](300)
+	assert.Equal(t, 40, v.GetReplicas())
+	v.Spec.Replicas = ptr.To[int32](10)
+	assert.Equal(t, 20, v.GetReplicas())
 }
 
 func TestGetHeadlessSvcSpec(t *testing.T) {

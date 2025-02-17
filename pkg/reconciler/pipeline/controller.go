@@ -357,9 +357,15 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 			r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateVertexSuccess", "Created vertex %s successfully", vertexName)
 		} else {
 			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] { // need to update
-				originalReplicas := oldObj.Spec.Replicas
+				originalReplicas := int32(0)
+				if x := oldObj.Spec.Replicas; x != nil {
+					originalReplicas = *x
+				}
 				oldObj.Spec = newObj.Spec
-				oldObj.Spec.Replicas = originalReplicas
+				// Keep the original replicas as much as possible
+				if originalReplicas >= newObj.Spec.Scale.GetMinReplicas() && originalReplicas <= newObj.Spec.Scale.GetMaxReplicas() {
+					oldObj.Spec.Replicas = &originalReplicas
+				}
 				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
 				if err := r.client.Update(ctx, &oldObj); err != nil {
 					r.recorder.Eventf(pl, corev1.EventTypeWarning, "UpdateVertexFailed", "Failed to update vertex: %w", err.Error())
@@ -962,11 +968,12 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 			// for a reducer, we scale up to the partition count
 			// for a non-reducer, if min is set, we scale up to min
 			if replicas == 1 {
-				if !vertex.Scalable() {
-					if vertex.IsReduceUDF() {
-						scaleTo = int32(vertex.GetPartitionCount())
-					} else if vertex.Spec.Scale.Min != nil && *vertex.Spec.Scale.Min > 1 {
-						scaleTo = *vertex.Spec.Scale.Min
+				if vertex.IsReduceUDF() {
+					scaleTo = int32(vertex.GetPartitionCount())
+				} else {
+					scaleTo = vertex.Spec.Scale.GetMinReplicas()
+					if scaleTo < 1 {
+						scaleTo = 1
 					}
 				}
 			}
